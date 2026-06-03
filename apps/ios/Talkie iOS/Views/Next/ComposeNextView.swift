@@ -191,6 +191,7 @@ private struct TalkieKeyboardHost: UIViewRepresentable {
         keyboard.preferredInitialLayout = .compact
         keyboard.preferredInitialModeId = KeyboardMode.abc.id
         keyboard.resetToPreferredInitialLayout()
+        keyboard.overrideUserInterfaceStyle = Self.keyboardStyle()
         keyboard.inputHost = controller.inputHost
         keyboard.onRequestCollapse = { [weak controller] in
             withAnimation(.easeOut(duration: 0.22)) { controller?.isVisible = false }
@@ -202,6 +203,19 @@ private struct TalkieKeyboardHost: UIViewRepresentable {
     func updateUIView(_ keyboard: HostedTalkieKeyboardView, context: Context) {
         // Keep the host pointer fresh if the editor coordinator was recreated.
         keyboard.inputHost = controller.inputHost
+        keyboard.overrideUserInterfaceStyle = Self.keyboardStyle()
+    }
+
+    /// The keyboard's keycap palette is UIKit trait-driven (light/dark).
+    /// Pin it to the *Talkie theme's* luminance, not the device's system
+    /// appearance — otherwise a dark Talkie theme on a light-mode phone
+    /// paints pale keycaps on the dark editor (and vice-versa).
+    private static func keyboardStyle() -> UIUserInterfaceStyle {
+        let bg = UIColor(ThemeManager.shared.colors.background)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard bg.getRed(&r, green: &g, blue: &b, alpha: &a) else { return .dark }
+        let luminance = 0.299 * r + 0.587 * g + 0.114 * b
+        return luminance < 0.5 ? .dark : .light
     }
 }
 
@@ -212,6 +226,7 @@ private struct TalkieKeyboardHost: UIViewRepresentable {
 private struct ComposeNextDocumentEditor: UIViewRepresentable {
     @Binding var text: String
     @Binding var isKeyboardFocused: Bool
+    @Binding var isMicVisible: Bool
     let keyboardController: ComposeKeyboardController
     let isEditable: Bool
     let textColor: UIColor
@@ -219,7 +234,12 @@ private struct ComposeNextDocumentEditor: UIViewRepresentable {
     let contentBottomInset: CGFloat
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text, isKeyboardFocused: $isKeyboardFocused, keyboardController: keyboardController)
+        Coordinator(
+            text: $text,
+            isKeyboardFocused: $isKeyboardFocused,
+            isMicVisible: $isMicVisible,
+            keyboardController: keyboardController
+        )
     }
 
     func makeUIView(context: Context) -> UITextView {
@@ -236,6 +256,7 @@ private struct ComposeNextDocumentEditor: UIViewRepresentable {
     func updateUIView(_ textView: UITextView, context: Context) {
         context.coordinator.text = $text
         context.coordinator.isKeyboardFocused = $isKeyboardFocused
+        context.coordinator.isMicVisible = $isMicVisible
         textView.isEditable = isEditable
         textView.isSelectable = true
         textView.tintColor = accentColor
@@ -274,13 +295,21 @@ private struct ComposeNextDocumentEditor: UIViewRepresentable {
 
         var text: Binding<String>
         var isKeyboardFocused: Binding<Bool>
+        var isMicVisible: Binding<Bool>
         let keyboardController: ComposeKeyboardController
         var isUpdatingFromTextView = false
         weak var textView: UITextView?
+        private var lastScrollOffset: CGFloat = 0
 
-        init(text: Binding<String>, isKeyboardFocused: Binding<Bool>, keyboardController: ComposeKeyboardController) {
+        init(
+            text: Binding<String>,
+            isKeyboardFocused: Binding<Bool>,
+            isMicVisible: Binding<Bool>,
+            keyboardController: ComposeKeyboardController
+        ) {
             self.text = text
             self.isKeyboardFocused = isKeyboardFocused
+            self.isMicVisible = isMicVisible
             self.keyboardController = keyboardController
             super.init()
 
@@ -498,6 +527,30 @@ private struct ComposeNextDocumentEditor: UIViewRepresentable {
             text.wrappedValue = textView.text
             isUpdatingFromTextView = false
             updatePlaceholderVisibility(in: textView)
+        }
+
+        // Scroll-aware inline mic: it sinks away as you scroll down into
+        // the text (so it stops sitting over what you're reading) and
+        // glides back when you scroll up or reach the top.
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            let offset = scrollView.contentOffset.y
+            defer { lastScrollOffset = offset }
+            // Always show near the very top — nothing to get out of the way of.
+            if offset <= 12 {
+                setMicVisible(true)
+                return
+            }
+            let delta = offset - lastScrollOffset
+            if delta > 4 {
+                setMicVisible(false)        // scrolling down → tuck away
+            } else if delta < -4 {
+                setMicVisible(true)         // scrolling up → bring back
+            }
+        }
+
+        private func setMicVisible(_ visible: Bool) {
+            guard isMicVisible.wrappedValue != visible else { return }
+            isMicVisible.wrappedValue = visible
         }
 
         func performKeyboardAction(_ action: KeyboardAction) {
@@ -929,6 +982,7 @@ private struct DocumentBody: View {
     let onMic: () -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
+    @State private var isMicVisible = true
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -944,11 +998,12 @@ private struct DocumentBody: View {
                     ComposeNextDocumentEditor(
                         text: $documentText,
                         isKeyboardFocused: $isKeyboardFocused,
+                        isMicVisible: $isMicVisible,
                         keyboardController: keyboardController,
                         isEditable: state == .idle || state == .dictating,
                         textColor: UIColor(theme.colors.textPrimary),
                         accentColor: UIColor(theme.currentTheme.chrome.accent),
-                        contentBottomInset: 56
+                        contentBottomInset: 44
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     // Win the card's full height ahead of the trailing
@@ -956,7 +1011,8 @@ private struct DocumentBody: View {
                     // ~50/50 and the editor only ever shows the top half,
                     // clipping (and stranding) everything below the fold.
                     .layoutPriority(1)
-                    .padding(16)
+                    .padding(.horizontal, 14)
+                    .padding(.top, 12)
 
                     if state == .dictating, let dictationPreview {
                         DictationPreviewStrip(preview: dictationPreview)
@@ -978,12 +1034,19 @@ private struct DocumentBody: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
             // Inline mic — floats over the bottom of the card; only
-            // active outside of the AI loop (idle/diff states).
+            // active outside of the AI loop (idle/diff states). Sinks
+            // out of the way while scrolling down so it stops covering
+            // the text you're reading, glides back on scroll-up.
             if state == .idle || state == .dictating {
                 InlineMicButton(state: state, action: onMic)
+                    .opacity(isMicVisible ? 1 : 0)
+                    .scaleEffect(isMicVisible ? 1 : 0.85, anchor: .bottom)
+                    .offset(y: isMicVisible ? 0 : 16)
+                    .allowsHitTesting(isMicVisible)
+                    .animation(.easeOut(duration: 0.2), value: isMicVisible)
             }
         }
-        .padding(.top, 8)
+        .padding(.top, 6)
     }
 
     private var cardSurface: some View {
