@@ -1,0 +1,31 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- Talkie "t" — crossword-grid mark. Single-color (template) asset.
+       Connectivity guarantee: a 40%-alpha solid base keeps the glyph joined at
+       small sizes; full-alpha cells on top give the crossword grid at large sizes. -->
+  <g transform="translate(305.75,200.75) scale(1.25)" fill="#111111">
+    <g opacity="0.4">
+      <path d="M112,0 h50 v476 a22,22 0 0 1 -22,22 h-28 z" />
+      <rect x="0" y="112" width="330" height="50" />
+      <path d="M112,448 h218 v50 h-196 a22,22 0 0 1 -22,-22 z" />
+    </g>
+    <g opacity="1">
+      <rect x="112" y="0" width="50" height="50" rx="5" />
+      <rect x="112" y="56" width="50" height="50" rx="5" />
+      <rect x="112" y="112" width="50" height="50" rx="5" />
+      <rect x="112" y="168" width="50" height="50" rx="5" />
+      <rect x="112" y="224" width="50" height="50" rx="5" />
+      <rect x="112" y="280" width="50" height="50" rx="5" />
+      <rect x="112" y="336" width="50" height="50" rx="5" />
+      <rect x="112" y="392" width="50" height="50" rx="5" />
+      <path d="M112,448 h50 v50 h-28 a22,22 0 0 1 -22,-22 z" />
+      <rect x="0" y="112" width="50" height="50" rx="5" />
+      <rect x="56" y="112" width="50" height="50" rx="5" />
+      <rect x="168" y="112" width="50" height="50" rx="5" />
+      <rect x="224" y="112" width="50" height="50" rx="5" />
+      <rect x="280" y="112" width="50" height="50" rx="5" />
+      <rect x="168" y="448" width="50" height="50" rx="5" />
+      <rect x="224" y="448" width="50" height="50" rx="5" />
+      <rect x="280" y="448" width="50" height="50" rx="5" />
+    </g>
+  </g>
+</svg>
