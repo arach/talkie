@@ -99,26 +99,38 @@ struct PersistenceController {
     let container: NSPersistentContainer
 
     init(inMemory: Bool = false) {
-        if inMemory {
+        let cloudKitUnavailableReason = inMemory ? nil : CloudKitContainerProvider.unavailableReason
+
+        if inMemory || cloudKitUnavailableReason != nil {
             let localContainer = NSPersistentContainer(name: "talkie")
             if let description = localContainer.persistentStoreDescriptions.first {
-                description.url = URL(fileURLWithPath: "/dev/null")
+                if inMemory {
+                    description.url = URL(fileURLWithPath: "/dev/null")
+                }
                 description.setOption(true as NSNumber, forKey: NSMigratePersistentStoresAutomaticallyOption)
                 description.setOption(true as NSNumber, forKey: NSInferMappingModelAutomaticallyOption)
             }
             container = localContainer
+
+            if inMemory {
+                AppLogger.persistence.info("Core Data using ephemeral local store")
+            } else if let cloudKitUnavailableReason {
+                AppLogger.persistence.info("Core Data using persistent local store: \(cloudKitUnavailableReason)")
+            }
         } else {
-            // Always use CloudKit container - it handles iCloud unavailability gracefully
-            // (stores locally, syncs when available). No need to block on iCloud status check.
+            // Signed builds with a valid CloudKit configuration can use CloudKit;
+            // simulator and other unsigned/dev contexts stay local-only.
             let cloudContainer = NSPersistentCloudKitContainer(name: "talkie")
             if let description = cloudContainer.persistentStoreDescriptions.first {
+                let containerIdentifier = TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier
                 description.cloudKitContainerOptions = NSPersistentCloudKitContainerOptions(
-                    containerIdentifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier
+                    containerIdentifier: containerIdentifier
                 )
                 description.setOption(true as NSNumber, forKey: NSMigratePersistentStoresAutomaticallyOption)
                 description.setOption(true as NSNumber, forKey: NSInferMappingModelAutomaticallyOption)
                 description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
                 description.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
+                AppLogger.persistence.info("Core Data using CloudKit store: \(containerIdentifier)")
             }
             container = cloudContainer
         }
@@ -127,6 +139,7 @@ struct PersistenceController {
             if let error = error as NSError? {
                 AppLogger.persistence.error("Core Data failed: \(error.localizedDescription)")
             } else {
+                AppLogger.persistence.info("Core Data loaded store: \(storeDescription.url?.lastPathComponent ?? "unknown")")
                 PersistenceController.isReady = true
             }
         }
@@ -135,7 +148,7 @@ struct PersistenceController {
         container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
 
         // In-memory screenshot/preview stores are intentionally local-only.
-        if !inMemory {
+        if !inMemory && cloudKitUnavailableReason == nil {
             setupCloudKitSyncMonitoring()
         }
 
