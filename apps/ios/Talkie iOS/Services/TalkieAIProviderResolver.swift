@@ -62,7 +62,7 @@ struct TalkieAIProviderResolver {
 
     private func keychainBackedProvider(providerId: String, modelId: String?) -> ComposeBorrowedProvider? {
         let providerId = providerId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard Self.directProviderIDs.contains(providerId),
+        guard AIProviderCatalog.ids.contains(providerId),
               let apiKey = AICredentialStore.shared.key(for: providerId) else {
             return nil
         }
@@ -91,6 +91,4 @@ struct TalkieAIProviderResolver {
             fallbackReason: "Using the iPhone OpenAI speech key for AI commands."
         )
     }
-
-    private static let directProviderIDs: Set<String> = ["openai", "groq"]
 }
