@@ -48,6 +48,7 @@ import {
   cleanupLocalAuthToken,
 } from "./auth/local";
 import { setAutoApprove } from "./bridge/routes/pair";
+import { decryptRequestBody, encryptResponse } from "./bridge/transport-encryption";
 import { startBonjourAdvertisement } from "./bonjour";
 import { log, clearLog } from "./log";
 import { PID_FILE, LOCAL_AUTH_TOKEN_FILE, ensureDirectories } from "./paths";
@@ -135,6 +136,13 @@ const app = new Elysia()
     mode: SERVER_MODE,
     instanceId: SERVER_INSTANCE_ID,
   }))
+
+  // Transport encryption (talkie-bridge v2): decrypt opted-in request bodies so
+  // route handlers receive plaintext. No-op for old/plaintext clients. Reads a
+  // clone, leaving the original body intact for HMAC verification.
+  .onParse(async ({ request }) => {
+    return await decryptRequestBody(request);
+  })
 
   // CORS for local development - manual implementation
   .onBeforeHandle(({ request, set }) => {
@@ -271,6 +279,13 @@ const app = new Elysia()
       log.warn(`Auth failed: ${authResult.error} for ${path}`);
       return authErrorResponse(authResult);
     }
+  })
+
+  // Transport encryption (talkie-bridge v2): seal the response body for clients
+  // that opted in. Only 200s are sealed; error bodies stay plaintext.
+  .mapResponse(async ({ request, response, set }) => {
+    const status = typeof set.status === "number" ? set.status : 200;
+    return await encryptResponse(request, response, status);
   })
 
   // Error handler

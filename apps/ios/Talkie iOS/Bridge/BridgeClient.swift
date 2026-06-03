@@ -19,6 +19,15 @@ actor BridgeClient {
     private var authKey: SymmetricKey?
     private var clockOffset: TimeInterval = 0
 
+    // Transport encryption (talkie-bridge v2). Negotiated from /health.
+    private var serverSupportsEncryption = false
+
+    /// Whether outgoing traffic should be sealed: server advertised support and we
+    /// hold the derived encryption key.
+    private var shouldEncrypt: Bool {
+        serverSupportsEncryption && encryptionKey != nil
+    }
+
     // MARK: - Configuration
 
     func configure(hostname: String, port: Int) {
@@ -47,6 +56,7 @@ actor BridgeClient {
         self.encryptionKey = nil
         self.baseURL = nil
         self.clockOffset = 0
+        self.serverSupportsEncryption = false
     }
 
     var isConfigured: Bool {
@@ -66,6 +76,8 @@ actor BridgeClient {
     /// Call this after configureAuth() before making authenticated requests
     func connect() async throws {
         let health = try await healthUnauthenticated()
+        // Negotiate transport encryption: only seal traffic if the server advertises it.
+        serverSupportsEncryption = (health.enc == true)
         if let serverTimeValue = health.time {
             let localTime = Date().timeIntervalSince1970
             clockOffset = Double(serverTimeValue) - localTime
@@ -596,6 +608,12 @@ actor BridgeClient {
         request.httpMethod = "GET"
         request.timeoutInterval = timeout
 
+        // Ask the server to seal the response (v2). No request body to encrypt for GET.
+        let encrypted = shouldEncrypt
+        if encrypted {
+            request.setValue("2", forHTTPHeaderField: "X-Enc")
+        }
+
         // Sign request if authenticated
         signRequest(&request)
 
@@ -605,7 +623,7 @@ actor BridgeClient {
             throw BridgeError.invalidResponse
         }
 
-        // Handle 401 with clock recalibration
+        // Handle 401 with clock recalibration (error bodies are always plaintext)
         if httpResponse.statusCode == 401 && allowRetry {
             if let serverTime = try? extractServerTime(from: data) {
                 recalibrateClockFrom(serverTime: serverTime)
@@ -617,7 +635,7 @@ actor BridgeClient {
             throw BridgeError.httpError(httpResponse.statusCode)
         }
 
-        return data
+        return encrypted ? try open(data) : data
     }
 
     /// Authenticated POST with HMAC signing
@@ -635,6 +653,14 @@ actor BridgeClient {
         request.timeoutInterval = timeout
         request.httpBody = try JSONEncoder().encode(body)
 
+        // Seal the request body and ask the server to seal its response (v2).
+        // Encrypt before signing so the HMAC covers the ciphertext that is sent.
+        let encrypted = shouldEncrypt
+        if encrypted, let plaintextBody = request.httpBody {
+            request.httpBody = try seal(plaintextBody)
+            request.setValue("2", forHTTPHeaderField: "X-Enc")
+        }
+
         // Sign request if authenticated
         signRequest(&request)
 
@@ -644,7 +670,7 @@ actor BridgeClient {
             throw BridgeError.invalidResponse
         }
 
-        // Handle 401 with clock recalibration
+        // Handle 401 with clock recalibration (error bodies are always plaintext)
         if httpResponse.statusCode == 401 && allowRetry {
             if let serverTime = try? extractServerTime(from: data) {
                 recalibrateClockFrom(serverTime: serverTime)
@@ -656,7 +682,7 @@ actor BridgeClient {
             throw BridgeError.httpError(httpResponse.statusCode)
         }
 
-        return data
+        return encrypted ? try open(data) : data
     }
 
     // MARK: - Signing Helpers
@@ -680,6 +706,28 @@ actor BridgeClient {
         }
         let response = try JSONDecoder().decode(ErrorResponse.self, from: data)
         return response.serverTime
+    }
+
+    // MARK: - Transport Encryption (v2)
+
+    /// Seal a plaintext body into a v2 envelope (`{ enc, ciphertext }`).
+    private func seal(_ plaintext: Data) throws -> Data {
+        guard let encryptionKey else { throw BridgeError.notConfigured }
+        let sealed = try AES.GCM.seal(plaintext, using: encryptionKey)
+        guard let combined = sealed.combined else { throw BridgeError.invalidResponse }
+        let envelope = EncEnvelope(enc: 2, ciphertext: combined.base64EncodedString())
+        return try JSONEncoder().encode(envelope)
+    }
+
+    /// Open a v2 envelope back into plaintext bytes.
+    private func open(_ data: Data) throws -> Data {
+        guard let encryptionKey else { throw BridgeError.notConfigured }
+        let envelope = try JSONDecoder().decode(EncEnvelope.self, from: data)
+        guard let combined = Data(base64Encoded: envelope.ciphertext) else {
+            throw BridgeError.invalidResponse
+        }
+        let sealedBox = try AES.GCM.SealedBox(combined: combined)
+        return try AES.GCM.open(sealedBox, using: encryptionKey)
     }
 
     private func decryptPayload<T: Decodable>(
@@ -708,6 +756,13 @@ struct HealthResponse: Codable {
     let hostname: String
     let port: Int
     let time: Int?  // Unix epoch seconds for clock sync
+    let enc: Bool?  // Server advertises transport encryption (talkie-bridge v2)
+}
+
+/// Sealed request/response body for talkie-bridge v2 transport encryption.
+struct EncEnvelope: Codable {
+    let enc: Int
+    let ciphertext: String
 }
 
 struct SessionsResponse: Codable {

@@ -51,6 +51,7 @@ final class BridgeManager {
 
     private let log = Log(.system)
     private let configurationStore = TalkieAppConfigurationStore.shared
+    private let privateKeyStore = BridgePrivateKeyStore()
 
     // MARK: - State
 
@@ -170,8 +171,9 @@ final class BridgeManager {
 
     var activePairedMac: PairedMac? {
         let bridgeConfiguration = configurationStore.configuration.bridge
-        return bridgeConfiguration.pairedMacs.first(where: { $0.id == bridgeConfiguration.activePairedMacID })
+        let mac = bridgeConfiguration.pairedMacs.first(where: { $0.id == bridgeConfiguration.activePairedMacID })
             ?? bridgeConfiguration.pairedMacs.first
+        return hydratePrivateKey(mac)
     }
 
     var pairedHostname: String? {
@@ -246,8 +248,49 @@ final class BridgeManager {
     // MARK: - Init
 
     private init() {
+        migratePrivateKeysToKeychainIfNeeded()
         loadPairing()
         setupAutoReconnectObservers()
+    }
+
+    /// One-time migration: move any bridge private keys still stored in
+    /// config.json / legacy UserDefaults into the keychain, then blank the
+    /// plaintext copies. Idempotent — a no-op once everything lives in the keychain.
+    private func migratePrivateKeysToKeychainIfNeeded() {
+        let defaults = UserDefaults.standard
+        var migratedAny = false
+
+        configurationStore.update { configuration in
+            for index in configuration.bridge.pairedMacs.indices {
+                let mac = configuration.bridge.pairedMacs[index]
+                let plaintextKey = mac.privateKey.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !plaintextKey.isEmpty else { continue }
+                privateKeyStore.save(id: mac.id, privateKeyBase64: plaintextKey)
+                configuration.bridge.pairedMacs[index].privateKey = ""
+                migratedAny = true
+            }
+        }
+
+        // Drop the legacy plaintext UserDefaults copy regardless (it is mirrored
+        // into config.json on bootstrap, so the key is already preserved above).
+        if defaults.object(forKey: "bridge.privateKey") != nil {
+            defaults.removeObject(forKey: "bridge.privateKey")
+            migratedAny = true
+        }
+
+        if migratedAny {
+            TalkieAppSettings.shared.reloadFromDisk()
+        }
+    }
+
+    /// Fill in a paired Mac's private key from the keychain (the field is no
+    /// longer persisted in config.json).
+    private func hydratePrivateKey(_ mac: PairedMac?) -> PairedMac? {
+        guard var mac else { return nil }
+        if mac.privateKey.isEmpty, let stored = privateKeyStore.load(id: mac.id) {
+            mac.privateKey = stored
+        }
+        return mac
     }
 
 
@@ -576,6 +619,9 @@ final class BridgeManager {
     func unpair() {
         guard let activePairedMacID else {
             disconnect()
+            for mac in configurationStore.configuration.bridge.pairedMacs {
+                privateKeyStore.delete(id: mac.id)
+            }
             configurationStore.update { configuration in
                 configuration.bridge = .init()
             }
@@ -642,6 +688,7 @@ final class BridgeManager {
         let wasActive = activePairedMacID == id
         disconnect()
 
+        privateKeyStore.delete(id: id)
         configurationStore.update { configuration in
             configuration.bridge.pairedMacs.removeAll(where: { $0.id == id })
             if configuration.bridge.pairedMacs.isEmpty {
@@ -1692,11 +1739,14 @@ final class BridgeManager {
             let existingIndex = matchingHostIndex ?? matchingActiveKeyIndex
 
             if let existingIndex {
+                let macID = configuration.bridge.pairedMacs[existingIndex].id
+                // Private key lives in the keychain, never in config.json.
+                privateKeyStore.save(id: macID, privateKeyBase64: privateKey)
                 configuration.bridge.pairedMacs[existingIndex].hostname = hostname
                 configuration.bridge.pairedMacs[existingIndex].port = port
                 configuration.bridge.pairedMacs[existingIndex].pairedMacName = pairedMacName
                 configuration.bridge.pairedMacs[existingIndex].serverPublicKey = serverPublicKey
-                configuration.bridge.pairedMacs[existingIndex].privateKey = privateKey
+                configuration.bridge.pairedMacs[existingIndex].privateKey = ""
                 if activate {
                     configuration.bridge.pairedMacs[existingIndex].lastSelectedAt = now
                     configuration.bridge.activePairedMacID = configuration.bridge.pairedMacs[existingIndex].id
@@ -1707,8 +1757,10 @@ final class BridgeManager {
                     port: port,
                     pairedMacName: pairedMacName,
                     serverPublicKey: serverPublicKey,
-                    privateKey: privateKey
+                    privateKey: ""
                 )
+                // Private key lives in the keychain, never in config.json.
+                privateKeyStore.save(id: pairedMac.id, privateKeyBase64: privateKey)
                 if activate {
                     pairedMac.lastSelectedAt = now
                 }

@@ -69,11 +69,31 @@ class DeepLinkManager: ObservableObject {
 
     private init() {}
 
+    /// Query parameter names whose values may carry secret material and must
+    /// never be retained or logged in cleartext.
+    private static let sensitiveQueryKeys: Set<String> = ["payload", "key", "privateKey", "secret", "token"]
+
+    /// Returns the URL string with any sensitive query values replaced by `<redacted>`.
+    static func redactedURLString(_ url: URL) -> String {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let items = components.queryItems, !items.isEmpty else {
+            return url.absoluteString
+        }
+        components.queryItems = items.map { item in
+            sensitiveQueryKeys.contains(item.name)
+                ? URLQueryItem(name: item.name, value: "<redacted>")
+                : item
+        }
+        return components.string ?? url.absoluteString
+    }
+
     /// Supported audio file extensions for import
     private static let audioExtensions = ["m4a", "mp3", "wav", "aiff", "aif", "caf", "mp4", "3gp"]
 
     func handle(url: URL) {
-        lastDeepLinkURL = url.absoluteString
+        // Never retain secret-bearing query values (e.g. an SSH private key passed
+        // as ?payload=...). Redact before storing in a published/observable property.
+        lastDeepLinkURL = Self.redactedURLString(url)
         // Handle file:// URLs for audio import
         if url.isFileURL {
             let ext = url.pathExtension.lowercased()

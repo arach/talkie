@@ -16,6 +16,7 @@ export interface HealthResponse {
   instanceId: string;
   time: number;      // Unix epoch seconds
   timestamp: string; // ISO 8601
+  enc: boolean;      // Transport encryption supported (talkie-bridge v2)
 }
 
 // ===== Handlers =====
@@ -40,5 +41,6 @@ export function healthRoute(
     instanceId,
     time: Math.floor(Date.now() / 1000),
     timestamp: new Date().toISOString(),
+    enc: true,
   };
 }
