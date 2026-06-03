@@ -932,10 +932,10 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
 .layer-row .dot.agent { background: var(--amber); }
 .layer-row .dot.user { background: var(--ink-faint); }
 .layer-row .grip {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--ink-faint);
   opacity: 0.5;
-  cursor: grab;
+  cursor: pointer; /* click-to-add toggle, not a drag handle */
   flex-shrink: 0;
 }
 .layer-row:hover .grip { opacity: 0.9; }

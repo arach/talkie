@@ -1,21 +1,26 @@
-# TLK-020 — Mac Walkie Mode
+# TLK-020 — Talking to Agents (formerly Mac Walkie Mode)
 
 **Status**: In progress — v1 shell and multi-provider orchestration wired
 **Owner**: arach
 **Design source**: `design/studio/components/studies/MacWalkieScope.tsx` (route: `/mac-walkie`)
 **Related**: iPhone Ask AI (`apps/ios/Talkie iOS/Views/Next/AskAINext.swift`) — vocabulary harmonization, not code reuse
 
+> Naming update (2026-06-01): "Walkie" is retired as product language. The
+> user-facing idea is simply talking to agents. Existing `Walkie*` code names,
+> `walkie.*` settings keys, and stored session ids remain transitional
+> implementation details until a compatibility-safe rename is scheduled.
+
 ## Summary
 
-A press-and-hold agent surface on macOS, bound by default to **Hyper+T** (`⇧⌃⌥⌘T`). Pressing the chord blooms a floating modal in the center of the screen — a single instrument panel dominated by an oscilloscope display. The user speaks while holding the key, releases to send, and the agent responds verbally (TTS to default audio device) with a short caption underneath. The modal dismisses on tap or after a brief idle.
+A press-and-hold "talk to agents" surface on macOS, bound by default to **Hyper+T** (`⇧⌃⌥⌘T`). Pressing the chord blooms a floating modal in the center of the screen. The user speaks while holding the key, releases to send, and the agent responds verbally (TTS to default audio device) with a short caption underneath. The modal dismisses on tap or after a brief idle.
 
 Three things make this distinct from iPhone Ask AI, which is also a turn-based agent surface:
 
-1. **Live surface is ephemeral, not a panel.** The walkie is a *moment*, invoked by a hotkey, dismissed when done. Durable activity belongs in Agent Home, not a new Walkie-branded place.
-2. **Always-on, walkie-talkie pace.** The agent voice is conversational and brief ("Alright, we gotcha…"), not assistant-formal. The interaction is short by design.
-3. **Two transmission modes, routed automatically.** Every TALKIE turn lands as either VERBAL (immediate spoken answer) or ASYNC (long-running computer-use job that acks now and reports later via the notch). The model decides which, the user doesn't choose.
+1. **Live surface is ephemeral, not a panel.** Talking to an agent is a *moment*, invoked by a hotkey and dismissed when done. Durable activity belongs in Agent Home.
+2. **Conversational pace.** The agent voice is brief and natural, not assistant-formal. The interaction is short by design.
+3. **Two work paths, routed automatically.** Every turn lands as either an immediate spoken answer or longer agent work that acks now and reports later via Agent Home. The model decides which, the user doesn't choose.
 
-Non-goal: replacing the existing dictation / compose / selection-readout flows. Those stay. Walkie is a new surface alongside them, with its own hotkey and its own session model.
+Non-goal: replacing the existing dictation / compose / selection-readout flows. Those stay. Talking to agents is a new surface alongside them, with its own hotkey and its own session model.
 
 ## What exists today
 

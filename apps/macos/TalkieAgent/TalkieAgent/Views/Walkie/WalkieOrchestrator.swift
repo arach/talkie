@@ -64,9 +64,9 @@ actor WalkieOrchestrator {
                 let runtimeResult = try await runtime.invoke(invocation)
                 transmission.talkieBody = runtimeResult.ack
                 transmission.executorRuntimeId = runtime.id
-                transmission.executorRuntimeName = runtime.name
                 transmission.executorProviderId = runtimeResult.providerId
                 transmission.executorModelId = runtimeResult.modelId
+                transmission.executorRuntimeName = walkieAgentDisplayName(for: runtimeResult.providerId) ?? runtime.name
                 transmission.executorSessionId = runtimeResult.sessionId
                 transmission.jobState = runtimeResult.jobState
             } else {
@@ -158,20 +158,20 @@ actor WalkieOrchestrator {
         """
         \(channel.systemPrompt)
 
-        You are the top-level Walkie model. You are not the long-running executor.
-        Decide whether the user's spoken turn should be answered immediately or handed to an executor runtime.
+        You are the top-level agent router. You are not the long-running agent worker.
+        Decide whether the user's spoken turn should be answered immediately or handed to an agent runtime.
 
         Return one JSON object and nothing else:
         {
           "mode": "verbal" | "async",
           "reply": "short spoken answer or immediate ack",
-          "executorInstruction": "specific instruction for the executor, or null",
+          "executorInstruction": "specific instruction for the agent, or null",
           "confidence": 0.0,
           "rationale": "short private routing note"
         }
 
         Use "verbal" for short answers, quick explanations, small facts, and anything that can be handled in a few seconds.
-        Use "async" for code changes, file edits, multi-step computer use, research, ambiguous outcomes, or work that should report back later.
+        Use "async" for code changes, file edits, multi-step computer use, research, ambiguous outcomes, or work that an agent should report back on later.
         If using "verbal", answer directly in "reply" in 1-3 short sentences.
         If using "async", make "reply" a brief spoken ack and put the actionable task in "executorInstruction".
         """
@@ -241,8 +241,8 @@ actor WalkieOrchestrator {
     private func fallbackAsyncReply(_ ack: String) -> String {
         let trimmed = ack.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            return "I know this wants an executor, but no agent runtime is connected yet."
+            return "I know this wants an agent, but no agent runtime is connected yet."
         }
-        return "\(trimmed) I do not have an executor runtime connected yet."
+        return "\(trimmed) I do not have an agent runtime connected yet."
     }
 }

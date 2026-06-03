@@ -41,7 +41,7 @@ struct WalkieChannel: Identifiable, Codable, Sendable {
         id: UUID(uuidString: "A33C8089-8F07-4E29-AE55-DF0697736420") ?? UUID(),
         code: "CH-01",
         label: "NIGHTOPS",
-        systemPrompt: "You are Talkie: brief, direct, useful, and comfortable handing longer work to an executor.",
+        systemPrompt: "You are Talkie: brief, direct, useful, and comfortable handing longer work to an agent.",
         topLevelProviderId: nil,
         topLevelModelId: nil,
         executorRuntimeId: nil,
@@ -127,9 +127,9 @@ enum WalkieOrchestratorError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .noTopLevelModelConfigured:
-            return "No LLM provider is configured for Walkie."
+            return "No LLM provider is configured for talking to agents."
         case .emptyRouteReply:
-            return "Walkie returned an empty reply."
+            return "The agent returned an empty reply."
         }
     }
 }

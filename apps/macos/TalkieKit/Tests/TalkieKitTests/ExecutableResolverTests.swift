@@ -3,6 +3,13 @@ import XCTest
 @testable import TalkieKit
 
 final class ExecutableResolverTests: XCTestCase {
+    func testKnownCandidatesIncludeCodexAppBundle() {
+        let candidates = ExecutableResolver.knownCandidates["codex"] ?? []
+
+        XCTAssertTrue(candidates.contains("/Applications/Codex.app/Contents/Resources/codex"))
+        XCTAssertTrue(candidates.contains("\(FileManager.default.homeDirectoryForCurrentUser.path)/Applications/Codex.app/Contents/Resources/codex"))
+    }
+
     func testEnrichedPATHDirectoriesKeepsOnlyActiveFNMMultishellPath() throws {
         let fileManager = FileManager.default
         let homeURL = fileManager.temporaryDirectory

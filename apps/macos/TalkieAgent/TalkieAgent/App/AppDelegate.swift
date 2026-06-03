@@ -989,7 +989,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             ("Queue Picker", queuePickerHotKeyManager),
             ("Compose", composeHotKeyManager),
             ("Speak Selection", speakSelectionHotKeyManager),
-            ("Walkie", walkieHotKeyManager),
+            ("Talk to Agents", walkieHotKeyManager),
         ]
 
         if TalkieSharedSettings.bool(forKey: AgentSettingsKey.featureCaptureEnabled) {
@@ -1083,7 +1083,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 }
             }
         )
-        log.info("Walkie hotkey registered: ⇧⌃⌥⌘T")
+        log.info("Talk-to-agents hotkey registered: ⇧⌃⌥⌘T")
 
         // Track what we registered to avoid needless re-registration
         lastHotkey = settings.hotkey

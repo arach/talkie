@@ -27,33 +27,39 @@ final class ScreenCaptureOverlay {
         freezesDesktop: Bool = true,
         onModeSwitch: ((CaptureBarMode) -> Void)? = nil
     ) async -> CGRect? {
-        OverlayView.cursor(for: .region).set()
+        let prearmedCursor = CursorLease(cursor: OverlayView.cursor(for: .region))
+        prearmedCursor.activate()
 
-        // Freeze-the-desktop: snapshot the screen BEFORE the overlay shows
-        // so the user crops a still image, not a live target. The actual
-        // capture on mouseUp still goes through SCScreenshotManager fresh
-        // (caller's path) — this snapshot is for visual stability only,
-        // so the short window between snapshot and mouseUp keeps WYSIWYG
-        // honest enough.
+        // Freeze-the-desktop: snapshot the screen as soon as the overlay is
+        // armed so the cursor and drag target are available immediately. The
+        // actual capture on mouseUp still goes through SCScreenshotManager
+        // fresh (caller's path) — this snapshot is for visual stability only.
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) })
             ?? NSScreen.main
             ?? NSScreen.screens[0]
-        let snapshot = freezesDesktop ? await Self.captureDesktopSnapshot(for: screen) : nil
 
         return await withCheckedContinuation { continuation in
             let view = OverlayView(mode: .region)
-            view.frozenSnapshot = snapshot
             var didResume = false
             let resume: (CGRect?) -> Void = { result in
                 guard !didResume else { return }
                 didResume = true
+                prearmedCursor.deactivate()
                 continuation.resume(returning: result)
             }
             view.onRegionSelected = { resume($0) }
             view.onCancelled = { resume(nil) }
             view.onModeSwitch = onModeSwitch
-            showOverlay(with: view)
+            showOverlay(with: view, on: screen)
+            prearmedCursor.deactivate()
+
+            if freezesDesktop {
+                Task { @MainActor [weak view] in
+                    let snapshot = await Self.captureDesktopSnapshot(for: screen)
+                    view?.installFrozenSnapshot(snapshot)
+                }
+            }
         }
     }
 
@@ -95,7 +101,8 @@ final class ScreenCaptureOverlay {
     }
 
     func selectWindow() async -> CGWindowID? {
-        OverlayView.cursor(for: .window).set()
+        let prearmedCursor = CursorLease(cursor: OverlayView.cursor(for: .window))
+        prearmedCursor.activate()
 
         return await withCheckedContinuation { continuation in
             let view = OverlayView(mode: .window)
@@ -103,17 +110,20 @@ final class ScreenCaptureOverlay {
             let resume: (CGWindowID?) -> Void = { result in
                 guard !didResume else { return }
                 didResume = true
+                prearmedCursor.deactivate()
                 continuation.resume(returning: result)
             }
             view.onWindowSelected = { resume($0) }
             view.onCancelled = { resume(nil) }
             showOverlay(with: view)
+            prearmedCursor.deactivate()
         }
     }
 
-    private func showOverlay(with view: OverlayView) {
+    private func showOverlay(with view: OverlayView, on targetScreen: NSScreen? = nil) {
         let mouse = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) })
+        let screen = targetScreen
+            ?? NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) })
             ?? NSScreen.main
             ?? NSScreen.screens[0]
 
@@ -196,6 +206,35 @@ private final class OverlayPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
+private final class CursorLease {
+    private let cursor: NSCursor
+    private var isActive = false
+
+    init(cursor: NSCursor) {
+        self.cursor = cursor
+    }
+
+    func activate() {
+        guard !isActive else {
+            cursor.set()
+            return
+        }
+        cursor.push()
+        cursor.set()
+        isActive = true
+    }
+
+    func deactivate() {
+        guard isActive else { return }
+        isActive = false
+        NSCursor.pop()
+    }
+
+    deinit {
+        deactivate()
+    }
+}
+
 private final class OverlayView: NSView {
     private struct WindowCandidate: Sendable {
         let id: CGWindowID
@@ -216,8 +255,8 @@ private final class OverlayView: NSView {
     /// Pre-captured still of the desktop the overlay is sitting on. When
     /// present (region mode), it's painted as the view background so the
     /// user crops a frozen image — windows can't reflow under them, the
-    /// menu bar clock can't tick mid-drag. Captured by the parent before
-    /// `showOverlay`; nil falls back to live-desktop behavior.
+    /// menu bar clock can't tick mid-drag. Loaded just after the overlay is
+    /// armed; nil falls back to live-desktop behavior.
     var frozenSnapshot: NSImage?
 
     private var dragStart: NSPoint?
@@ -241,8 +280,42 @@ private final class OverlayView: NSView {
     }
 
     fileprivate static func cursor(for mode: OverlayMode) -> NSCursor {
-        mode == .region ? .crosshair : cameraCursor
+        mode == .region ? regionCursor : cameraCursor
     }
+
+    private static let regionCursor: NSCursor = {
+        let size = NSSize(width: 28, height: 28)
+        let center = NSPoint(x: size.width / 2, y: size.height / 2)
+        let image = NSImage(size: size)
+        image.lockFocus()
+
+        func strokeCrosshair(color: NSColor, lineWidth: CGFloat) {
+            color.setStroke()
+            let path = NSBezierPath()
+            path.lineWidth = lineWidth
+            path.lineCapStyle = .round
+
+            path.move(to: NSPoint(x: center.x, y: 3))
+            path.line(to: NSPoint(x: center.x, y: 10))
+            path.move(to: NSPoint(x: center.x, y: 18))
+            path.line(to: NSPoint(x: center.x, y: 25))
+            path.move(to: NSPoint(x: 3, y: center.y))
+            path.line(to: NSPoint(x: 10, y: center.y))
+            path.move(to: NSPoint(x: 18, y: center.y))
+            path.line(to: NSPoint(x: 25, y: center.y))
+            path.stroke()
+
+            let ring = NSBezierPath(ovalIn: NSRect(x: center.x - 3, y: center.y - 3, width: 6, height: 6))
+            ring.lineWidth = lineWidth
+            ring.stroke()
+        }
+
+        strokeCrosshair(color: NSColor.black.withAlphaComponent(0.55), lineWidth: 3)
+        strokeCrosshair(color: NSColor.white.withAlphaComponent(0.96), lineWidth: 1.2)
+
+        image.unlockFocus()
+        return NSCursor(image: image, hotSpot: center)
+    }()
 
     private static let cameraCursor: NSCursor = {
         let size = NSSize(width: 24, height: 24)
@@ -309,13 +382,20 @@ private final class OverlayView: NSView {
         }
     }
 
+    func installFrozenSnapshot(_ snapshot: NSImage?) {
+        guard mode == .region, !completed, dragStart == nil, dragCurrent == nil else { return }
+        frozenSnapshot = snapshot
+        if snapshot != nil {
+            needsDisplay = true
+        }
+    }
+
     /// Paints the frozen desktop snapshot as the view background for
-    /// the entire region-selection session. The moment the overlay
-    /// appears, the desktop visually freezes; animations stop scrubbing,
-    /// the clock stops ticking, windows can't reflow underneath. The
-    /// user crops against a still image and never has to time the
-    /// motion. (Window-mode keeps the live behaviour — it relies on
-    /// hovering real windows, not cropping pixels.)
+    /// the region-selection session once it is available. If the user
+    /// starts dragging before the snapshot returns, region mode keeps the
+    /// live desktop rather than changing the background mid-drag. Window
+    /// mode keeps live behaviour because it relies on hovering real windows,
+    /// not cropping pixels.
     private func paintFrozenSnapshot() {
         guard mode == .region, let snapshot = frozenSnapshot else { return }
         snapshot.draw(in: bounds, from: .zero, operation: .copy, fraction: 1.0)

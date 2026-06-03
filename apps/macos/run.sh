@@ -416,7 +416,11 @@ EOF
 
     /bin/launchctl bootstrap "gui/$(id -u)" "$plist_path" >/dev/null 2>&1 || true
     /bin/launchctl kickstart "gui/$(id -u)/$bundle_id" >/dev/null 2>&1 || true
-    /bin/launchctl print "gui/$(id -u)/$bundle_id" >/dev/null 2>&1
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        /bin/launchctl print "gui/$(id -u)/$bundle_id" >/dev/null 2>&1 && return 0
+        sleep 0.1
+    done
+    return 1
 }
 
 launch_app() {

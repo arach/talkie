@@ -475,4 +475,37 @@ struct PerfHUD: View {
         return .red
     }
 }
+
+/// Compact FPS readout sized to live INLINE in the status bar (alongside
+/// PID / git branch), rather than as a floating capsule that overlaps
+/// content. Same CVDisplayLink source; just stripped to status-bar
+/// typography. Mounts/starts the monitor on appear.
+struct PerfStatusReadout: View {
+    @ObservedObject private var monitor = FrameRateMonitor.shared
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(fpsColor)
+                .frame(width: 5, height: 5)
+            Text(String(format: "%.0f FPS", monitor.fps))
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .foregroundColor(.secondary)
+
+            if monitor.worstFrameMs > 33 {
+                Text(String(format: "·%.0fms", monitor.worstFrameMs))
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .foregroundColor(monitor.worstFrameMs > 66 ? Color.red.opacity(0.9) : Color.orange.opacity(0.9))
+            }
+        }
+        .help("Frame rate (dev) · CVDisplayLink-driven main-thread responsiveness gauge")
+        .onAppear { FrameRateMonitor.shared.start() }
+    }
+
+    private var fpsColor: Color {
+        if monitor.fps >= 55 { return .green }
+        if monitor.fps >= 30 { return .yellow }
+        return .red
+    }
+}
 #endif

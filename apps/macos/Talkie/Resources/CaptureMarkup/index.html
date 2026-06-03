@@ -9,14 +9,9 @@
 <body>
   <div id="app">
     <header class="tool-toolbar" id="tool-toolbar">
-      <!-- Global edit commands, then canvas modes and drawing tools. -->
-      <div class="toolbar-tools history-tools" aria-label="Edit history">
-        <button type="button" class="history-btn" data-action="undo" title="Undo (⌘Z)" aria-label="Undo">↶</button>
-        <button type="button" class="history-btn" data-action="redo" title="Redo (⇧⌘Z)" aria-label="Redo">↷</button>
-      </div>
-
-      <span class="toolbar-divider" aria-hidden="true"></span>
-
+      <!-- Canvas modes, then drawing tools. Undo/redo moved to the RIGHT,
+           next to Save — they're state changes (closer to "save") rather
+           than active drawing tools. -->
       <div class="toolbar-tools viewport-tools" aria-label="Canvas modes">
         <button type="button" class="tool-btn mode-tool" data-tool="select" title="Select (V)"><span class="glyph">↖</span><span class="label">Select</span></button>
         <button type="button" class="tool-btn mode-tool" data-tool="hand" title="Hand · pan (H / Space)"><span class="glyph">✋</span><span class="label">Hand</span></button>
@@ -145,6 +140,13 @@
             <button type="button" class="style-btn labelbg" data-style="plain" data-value="1" title="Plain text">T</button>
           </div>
         </div>
+      </div>
+      <span class="toolbar-divider" aria-hidden="true"></span>
+      <!-- Undo/redo sit here (right side) with Save — state changes, grouped
+           away from the active draw tools on the left. -->
+      <div class="toolbar-tools history-tools" aria-label="Edit history">
+        <button type="button" class="history-btn" data-action="undo" title="Undo (⌘Z)" aria-label="Undo">↶</button>
+        <button type="button" class="history-btn" data-action="redo" title="Redo (⇧⌘Z)" aria-label="Redo">↷</button>
       </div>
       <button type="button" class="top-save-btn" data-action="save" title="Save markup (⌘S)">Save</button>
     </header>
