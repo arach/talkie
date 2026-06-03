@@ -57,21 +57,9 @@ struct ChromeOverlay: View {
             }
 
             if showCreateTray {
-                // Bottom-right keyboard pill: open a fresh Compose
-                // document with the embedded Talkie keyboard already
-                // up. Goes to the typing surface, not the keyboard-
-                // extension status/learning surface.
-                CornerSlot(
-                    zone: .bottomTrailing,
-                    glyph: AnyView(
-                        Image(systemName: "keyboard")
-                            .font(.system(size: 15, weight: .regular))
-                    ),
-                    label: "Keyboard"
-                ) {
-                    AppShellRouter.shared.openComposeWithKeyboard()
-                }
-
+                // Keyboard now lives as the right-most slot inside the
+                // full-width LiquidGlassTray (see below), so it no longer
+                // needs its own bottom-trailing corner pill.
                 LiquidGlassTray()
             }
         }
@@ -123,107 +111,140 @@ private struct CornerSlot: View {
     }
 }
 
-/// Bottom-center liquid-glass nav: Camera · Browse · Mic FAB · Ask AI
-/// · Terminal. Left of the FAB groups capture-source inputs (Camera
-/// + Browse); right pairs intelligence (Ask AI) with the power-user
-/// dev affordance (Terminal). The FAB stays the visual center —
-/// slot count is kept odd by convention.
+/// Full-width liquid-glass nav band that encompasses every bottom-row
+/// complication equally: Voice · Home · Capture · Mic FAB · Ask AI ·
+/// Terminal · Keyboard. The band spans edge-to-edge (matching the 20pt
+/// chrome inset) with the seven slots distributed evenly, so the Mic
+/// FAB stays the geometric center with three satellites on each side.
+///
+/// Voice (left end) and Mic (center) are show-through gaps: the
+/// always-visible VoicePivotButton and persistent MicFAB are rendered
+/// standalone by AppShellNext and sit *inside* this band at its left
+/// end and center. Keeping them standalone preserves the summon
+/// affordance, the listening-bubble origin, and the hero FAB sizing.
+/// The band reserves matching gaps so they read as in-band slots.
 private struct LiquidGlassTray: View {
     @ObservedObject private var theme = ThemeManager.shared
     @EnvironmentObject private var chrome: ShellChrome
     @EnvironmentObject private var router: AppShellRouter
 
     var body: some View {
-        GeometryReader { proxy in
-            // Pro Max-class phones (≥400pt) get a relaxed tray —
-            // more spacing between slots and more capsule h-padding —
-            // so the extra horizontal real estate isn't wasted. Mini
-            // and base iPhones stay tight (no overlap with corner
-            // pills on a 375pt screen).
-            let isWide = proxy.size.width >= 400
-            let slotSpacing: CGFloat = isWide ? 14 : 8
-            let capsulePadH: CGFloat = isWide ? 14 : 10
-            let micGapSize: CGFloat = router.surface == .home ? 56 : 48
+        // End slots are 48pt wide to match the 48pt Voice/Keyboard
+        // circles and keep the band symmetric about center; mid slots
+        // stay 32pt. The center reserves room for whichever mic is
+        // active (56pt hero on home, 48pt inline elsewhere).
+        let micGapSize: CGFloat = router.surface == .home ? 56 : 48
 
-            HStack(spacing: slotSpacing) {
-                TraySlot(
-                    glyph: AnyView(
-                        Image("TalkieBowtie")
-                            .renderingMode(.template)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 26, height: 26)
-                    ),
-                    label: "Home"
-                ) {
-                    AppShellRouter.shared.openHome()
-                    chrome.dismissChrome()
-                }
+        HStack(spacing: 0) {
+            // Left end — VoicePivotButton shows through (standalone).
+            Color.clear.frame(width: 48, height: 36)
 
-                TraySlot(
-                    glyph: AnyView(Image(systemName: "plus.viewfinder").font(.system(size: 15, weight: .regular))),
-                    label: "Capture"
-                ) {
-                    AppShellRouter.shared.openCaptureCompose()
-                    chrome.dismissChrome()
-                }
+            Spacer(minLength: 0)
 
-                // Tray center: on home the standalone MicFAB (rendered by
-                // AppShellNext) is always visible — leave a matching
-                // gap so it shows through AND the capsule height is fixed
-                // by the FAB (HStack's max-child-height determines the
-                // capsule shape). Without the gap the capsule would
-                // shrink to the 32pt slot height and the slot row would
-                // sit below the standalone FAB's center.
-                // On sub-surfaces the persistent FAB is gone, so the tray
-                // itself carries the FAB inline.
-                if router.surface == .home {
-                    Color.clear.frame(width: micGapSize, height: micGapSize)
-                } else {
-                    MicFAB()
-                }
-
-                TraySlot(
-                    glyph: AnyView(Image(systemName: "sparkles").font(.system(size: 13, weight: .regular))),
-                    label: "Ask AI"
-                ) {
-                    AppShellRouter.shared.openAskAI()
-                    chrome.dismissChrome()
-                }
-
-                TraySlot(
-                    glyph: AnyView(Image(systemName: "terminal").font(.system(size: 13, weight: .regular))),
-                    label: "Terminal"
-                ) {
-                    AppShellRouter.shared.openTerminal()
-                    chrome.dismissChrome()
-                }
+            TraySlot(
+                glyph: AnyView(
+                    Image("TalkieT")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 26, height: 26)
+                ),
+                label: "Home"
+            ) {
+                AppShellRouter.shared.openHome()
+                chrome.dismissChrome()
             }
-            .padding(.horizontal, capsulePadH)
-            .padding(.vertical, 6)
-            .background(
-                ZStack {
-                    Capsule()
-                        .fill(theme.colors.cardBackground.opacity(0.70))
-                        .background(.ultraThinMaterial, in: Capsule())
-                    Capsule()
-                        .strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: theme.currentTheme.chrome.hairlineWidth)
-                }
-            )
-            .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-            // 20pt outer padding matches the corner-pill horizontal inset.
-            // Bottom padding keeps the capsule center aligned with the
-            // corner pills and whichever mic size is active on this surface.
-            .padding(.horizontal, 20)
-            .padding(.bottom, router.surface == .home ? 6 : 10)
+
+            Spacer(minLength: 0)
+
+            TraySlot(
+                glyph: AnyView(Image(systemName: "plus.viewfinder").font(.system(size: 15, weight: .regular))),
+                label: "Capture"
+            ) {
+                AppShellRouter.shared.openCaptureCompose()
+                chrome.dismissChrome()
+            }
+
+            Spacer(minLength: 0)
+
+            // Center — on home the standalone MicFAB (rendered by
+            // AppShellNext) shows through this gap; on sub-surfaces the
+            // band carries the FAB inline.
+            if router.surface == .home {
+                Color.clear.frame(width: micGapSize, height: 36)
+            } else {
+                MicFAB()
+            }
+
+            Spacer(minLength: 0)
+
+            TraySlot(
+                glyph: AnyView(Image(systemName: "sparkles").font(.system(size: 13, weight: .regular))),
+                label: "Ask AI"
+            ) {
+                AppShellRouter.shared.openAskAI()
+                chrome.dismissChrome()
+            }
+
+            Spacer(minLength: 0)
+
+            TraySlot(
+                glyph: AnyView(Image(systemName: "terminal").font(.system(size: 13, weight: .regular))),
+                label: "Terminal"
+            ) {
+                AppShellRouter.shared.openTerminal()
+                chrome.dismissChrome()
+            }
+
+            Spacer(minLength: 0)
+
+            // Right end — Keyboard, moved in from the old corner pill.
+            // Opens a fresh Compose document with the embedded Talkie
+            // keyboard already up.
+            TraySlot(
+                glyph: AnyView(Image(systemName: "keyboard").font(.system(size: 14, weight: .regular))),
+                label: "Keyboard",
+                width: 48
+            ) {
+                AppShellRouter.shared.openComposeWithKeyboard()
+            }
         }
+        // Pin the band's content height so the capsule shape is the same
+        // on every surface. Without this, sub-surfaces (which carry the
+        // 48pt MicFAB inline) grew a taller capsule than home (which only
+        // reserves a gap), pushing the band's center ~6pt higher there.
+        // The inline MicFAB now overhangs this fixed height by ~1pt —
+        // visually centered — instead of dictating it.
+        .frame(height: 36)
+        // Zero internal horizontal padding so the 48pt end slots align
+        // their centers to the standalone Voice circle (20pt leading
+        // inset → 44pt center) and a mirrored Keyboard on the right.
+        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity)
+        .background(
+            ZStack {
+                Capsule()
+                    .fill(theme.colors.cardBackground.opacity(0.70))
+                    .background(.ultraThinMaterial, in: Capsule())
+                Capsule()
+                    .strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: theme.currentTheme.chrome.hairlineWidth)
+            }
+        )
+        .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        // 20pt outer inset matches the Voice button's leading inset, so
+        // the band's left edge and the Voice circle share an origin.
+        .padding(.horizontal, 20)
+        // Bottom inset keeps the band's center-Y (~40pt above the safe
+        // area) aligned with the Voice circle and the standalone MicFAB.
+        .padding(.bottom, 17)
     }
 }
 
 private struct TraySlot: View {
     let glyph: AnyView
     let label: String
+    var width: CGFloat = 32
     let action: () -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
@@ -232,7 +253,7 @@ private struct TraySlot: View {
         Button(action: action) {
             glyph
                 .foregroundStyle(theme.colors.textSecondary)
-                .frame(width: 32, height: 32)
+                .frame(width: width, height: 32)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
