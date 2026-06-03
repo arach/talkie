@@ -109,6 +109,14 @@ const STUDIES: Study[] = [
       "Leveled-up run feedback: a Work Thread (the right rail streams the agent's run log-style — a line per step as each mark lands — then settles into a pass summary with a single undo) and Speak Strip v2 (the prompt lane becomes a magnetic-tape waveform while recording). Ports to CaptureMarkupPanelChrome.swift.",
   },
   {
+    slug: "mac-capture-markup-strip",
+    name: "Capture Markup · Speak Strip",
+    kind: "Component study",
+    platform: "macOS",
+    blurb:
+      "Redesign of the bottom band: a coding-agent identity line (agent ▸ model · scope ▸ target · pass/saved), the mic + field + run as one tight composer cluster, and a single adaptive footer (try-examples / attachment / listening — never stacked). Brings the bar back to warm-amber canon. Ports to CaptureMarkupPanelChrome.swift.",
+  },
+  {
     slug: "mac-capture-detail",
     name: "Capture Detail",
     kind: "Composition study",

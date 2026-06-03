@@ -57,6 +57,8 @@ struct AgentHomeView: View {
                 newConversationButton
 
                 AgentHomeRuntimeBadge(ping: store.runtimePing)
+
+                AgentHomeAgentRuntimexyx(agentRuntimexyx: store.agentRuntimexyx)
             }
             .padding(.horizontal, 16)
             .padding(.top, 18)
@@ -489,6 +491,119 @@ private struct AgentHomeRuntimeBadge: View {
     }
 }
 
+private struct AgentHomeAgentRuntimexyx: View {
+    let agentRuntimexyx: [WalkieRuntimeAgentSnapshot]
+
+    private var availableCount: Int {
+        agentRuntimexyx.filter(\.isAvailable).count
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 6) {
+                Text("AGENTS")
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .foregroundStyle(ScopeInk.subtle)
+
+                Spacer(minLength: 4)
+
+                Text(agentRuntimexyx.isEmpty ? "checking" : "\(availableCount)/\(agentRuntimexyx.count)")
+                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                    .foregroundStyle(ScopeInk.subtle)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                if agentRuntimexyx.isEmpty {
+                    AgentHomeAgentRuntimexyxPlaceholder()
+                } else {
+                    ForEach(agentRuntimexyx) { agent in
+                        AgentHomeAgentRow(agent: agent)
+                    }
+                }
+            }
+        }
+        .padding(.top, 4)
+    }
+}
+
+private struct AgentHomeAgentRuntimexyxPlaceholder: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(ScopeInk.subtle.opacity(0.35))
+                .frame(width: 6, height: 6)
+
+            Text("Checking agent sessions")
+                .font(.system(size: 11))
+                .foregroundStyle(ScopeInk.subtle)
+        }
+        .frame(height: 20)
+    }
+}
+
+private struct AgentHomeAgentRow: View {
+    let agent: WalkieRuntimeAgentSnapshot
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(statusColor)
+                .frame(width: 6, height: 6)
+
+            Text(agent.name)
+                .font(.system(size: 11.5, weight: agent.isPreferred == true ? .semibold : .medium))
+                .foregroundStyle(agent.isAvailable ? ScopeInk.primary : ScopeInk.subtle)
+                .lineLimit(1)
+
+            Spacer(minLength: 4)
+
+            if agent.isPreferred == true {
+                Text("default")
+                    .font(.system(size: 9.5, weight: .medium))
+                    .foregroundStyle(ScopeInk.subtle)
+            } else if let count = agent.activeSessions, count > 0 {
+                Text("\(count) live")
+                    .font(.system(size: 9.5, weight: .medium))
+                    .foregroundStyle(ScopeAmber.solid)
+            } else {
+                Text(statusLabel)
+                    .font(.system(size: 9.5, weight: .medium))
+                    .foregroundStyle(ScopeInk.subtle)
+            }
+        }
+        .frame(height: 20)
+        .help(helpText)
+    }
+
+    private var statusColor: Color {
+        if agent.isAvailable {
+            return (agent.activeSessions ?? 0) > 0 ? ScopeAmber.solid : .green
+        }
+
+        switch agent.status {
+        case "misconfigured":
+            return .orange
+        case "missing", "unavailable":
+            return .red
+        default:
+            return ScopeInk.subtle.opacity(0.45)
+        }
+    }
+
+    private var statusLabel: String {
+        if agent.isAvailable { return "ready" }
+        if agent.status == "misconfigured" { return "setup" }
+        if agent.status == "unavailable" { return "offline" }
+        return "missing"
+    }
+
+    private var helpText: String {
+        let detail = agent.detail?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
+        let path = agent.executablePath?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
+        return [detail, path].compactMap { $0 }.joined(separator: "\n")
+    }
+}
+
 // MARK: - Sidebar atoms
 
 private struct AgentHomeGroupLabel: View {
@@ -713,7 +828,9 @@ private struct AgentHomeTurnBlock: View {
     }
 
     private var talkieBody: String {
-        if isLive { return turn.ack ?? "Working on it…" }
+        if isLive {
+            return turn.response?.nonEmpty ?? turn.ack ?? "Working on it…"
+        }
         return turn.spokenBody ?? turn.ack ?? "—"
     }
 
@@ -973,13 +1090,13 @@ private struct AgentHomeWorkBlock: View {
     private var identityLine: String {
         switch turn.status {
         case .waiting:
-            return "Talkie · queued"
+            return "\(turn.agentDisplayName) · queued"
         case .running:
-            return "Talkie · working"
+            return "\(turn.agentDisplayName) · working"
         case .failed:
-            return "Talkie · needs attention"
+            return "\(turn.agentDisplayName) · needs attention"
         case .done:
-            return "Talkie · \(turn.latencyLabel ?? "done")"
+            return "\(turn.agentDisplayName) · \(turn.latencyLabel ?? "done")"
         }
     }
 }

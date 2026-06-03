@@ -258,6 +258,11 @@ struct StatusBar: View {
                         .help("Open About settings")
 
                         #if DEBUG
+                        // FPS — relocated here from a floating overlay that
+                        // overlapped content. Dev-only (DEBUG), sits with the
+                        // other dev readouts.
+                        PerfStatusReadout()
+
                         // PID always visible in debug
                         Text(verbatim: "PID \(ProcessInfo.processInfo.processIdentifier)")
                             .font(Theme.current.fontXSMedium)

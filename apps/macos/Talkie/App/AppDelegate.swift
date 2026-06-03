@@ -2254,7 +2254,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             return
         }
 
-        writeScreenshotPasteboard(data: data, fileURL: durableURL, imageMarkdown: false)
+        writeScreenshotPasteboard(data: data, fileURL: durableURL)
 
         if let prev = previousApp, prev.bundleIdentifier != Bundle.main.bundleIdentifier {
             prev.activate()
@@ -2320,7 +2320,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             if case .screenshot(let screenshot) = item,
                let data = screenshot.loadData(),
                let durableURL = durablePasteURL(for: screenshot, data: data) {
-                writeScreenshotPasteboard(data: data, fileURL: durableURL, imageMarkdown: true)
+                writeScreenshotPasteboard(data: data, fileURL: durableURL)
                 Log(.system).info("Quick Paste: screenshot image + markdown → clipboard")
                 return true
             }
@@ -2405,8 +2405,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         )
     }
 
-    private func writeScreenshotPasteboard(data: Data, fileURL: URL, imageMarkdown: Bool) {
-        let markdown = "\(imageMarkdown ? "!" : "")[Talkie Capture](<\(fileURL.path)>)"
+    private func writeScreenshotPasteboard(data: Data, fileURL: URL) {
+        // Plain markdown link (no leading `!`). The `![…]` image form reads as
+        // an embed and trips up coding agents that pastes land in — they try to
+        // fetch/render it. A link carries the same path while staying inert text;
+        // the PNG is still on the pasteboard for rich targets that prefer it.
+        let markdown = "[Talkie Capture](<\(fileURL.path)>)"
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(markdown, forType: .string)

@@ -6,12 +6,22 @@
 //  drawing toolbar live in the ephemeral WKWebView (visuals/content
 //  only). The native side owns:
 //
-//    · Speak Strip  — bottom band · Mic + Prompt + Run
+//    · Speak Strip  — bottom band · Identity line + Composer + Status.
 //    · Pass Verdict — accept / cancel cluster floating top-right on
 //                     the canvas itself (was a footer commit bar).
 //
-//  Vocabulary mirrors design/studio/components/studies/MacCaptureMarkup
-//  (the "names · marginalia" block on section 1c).
+//  Redesign (2026-06) ports design/studio · /mac-capture-markup-strip:
+//
+//    ┌ IDENTITY LINE ─ agent ▸ GPT-5.4 · openai   scope ▸ whole image ┐
+//    ├ COMPOSER ────── [ tell the agent what to mark up…  (mic) ] [▸] ┤
+//    └ STATUS ──────── try  chip · chip · chip   /  attached  /  rec  ┘
+//
+//  Identity line is the coding-agent "where am I running" header. The
+//  composer rides the mic INSIDE the field's trailing edge with the
+//  amber paperplane send as a squared button outside. The status line
+//  is one adaptive slot — try-examples / attachment / listening — never
+//  stacked. Palette is canonical warm amber (was blue); matches the
+//  studio mock the port leads from.
 //
 
 import AppKit
@@ -38,22 +48,34 @@ private struct CaptureMarkupAgentChoice: Equatable {
     let modelId: String
     let modelDisplayName: String
 
+    /// Badge title — "GPT-5.4 · openai". The "agent ▸" prefix is drawn by
+    /// the static label beside the picker, so it's omitted here.
     var menuTitle: String {
-        "AGENT · \(providerName) · \(modelDisplayName)"
+        "\(modelDisplayName) · \(providerName.lowercased())"
     }
 }
 
-// MARK: - Mic (narrow circular tap-to-toggle control)
+// MARK: - Warm amber palette (shared)
+//
+// Canonical Scope warm amber (#C47D1C). Was blue (rgb 0.31,0.49,1.0) —
+// that override is the "studio doesn't match the app" gap; the redesign
+// brings the chrome back to canon.
+
+private enum CaptureMarkupPalette {
+    static let amber = NSColor(red: 0.769, green: 0.490, blue: 0.110, alpha: 1)
+    static let amberDeep = NSColor(red: 0.478, green: 0.322, blue: 0.102, alpha: 1)
+    static let amberFaint = NSColor(red: 0.965, green: 0.940, blue: 0.890, alpha: 1)
+    static let amberSoft = NSColor(red: 0.769, green: 0.490, blue: 0.110, alpha: 0.30)
+    static let alert = NSColor(red: 0.77, green: 0.227, blue: 0.110, alpha: 1)
+}
+
+// MARK: - Mic (in-field ghost icon · tap-to-toggle)
 
 @MainActor
 private final class CaptureMarkupMicButton: NSButton {
     var onToggle: (() -> Void)?
 
-    private let diameter: CGFloat = 32
-    /// Thin white sliver at the top edge — clipped to the circular bounds
-    /// by `masksToBounds`, so only the curved arc shows. Matches the
-    /// studio's `box-shadow: inset 0 1px 0 rgba(255,255,255,0.55)` cap.
-    private let topHighlight = CALayer()
+    private let side: CGFloat = 26
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -62,19 +84,15 @@ private final class CaptureMarkupMicButton: NSButton {
         isBordered = false
         title = ""
         bezelStyle = .recessed
-        layer?.cornerRadius = diameter / 2
-        layer?.borderWidth = 0.5
+        imageScaling = .scaleNone
+        layer?.cornerRadius = 6
         layer?.masksToBounds = true
-
-        topHighlight.backgroundColor = NSColor.white.withAlphaComponent(0.55).cgColor
-        topHighlight.zPosition = 10  // above bg fill / border, below glyph
-        layer?.addSublayer(topHighlight)
 
         target = self
         action = #selector(handleClick)
         NSLayoutConstraint.activate([
-            widthAnchor.constraint(equalToConstant: diameter),
-            heightAnchor.constraint(equalToConstant: diameter),
+            widthAnchor.constraint(equalToConstant: side),
+            heightAnchor.constraint(equalToConstant: side),
         ])
     }
 
@@ -82,142 +100,87 @@ private final class CaptureMarkupMicButton: NSButton {
     required init?(coder: NSCoder) { nil }
 
     override var intrinsicContentSize: NSSize {
-        NSSize(width: diameter, height: diameter)
-    }
-
-    override func layout() {
-        super.layout()
-        // y = bounds.maxY - 1 places the sliver at the visible top edge
-        // for a non-flipped NSButton layer. The rounded corner clip turns
-        // a flat 1pt strip into a centered top arc.
-        topHighlight.frame = CGRect(x: 0, y: bounds.maxY - 1, width: bounds.width, height: 1)
+        NSSize(width: side, height: side)
     }
 
     @objc private func handleClick() {
         onToggle?()
     }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .pointingHand)
+    }
 }
 
-// MARK: - Mag-tape waveform (recording state of the prompt lane)
-//
-// While the mic is hot the prompt lane becomes a magnetic-tape transport —
-// VU bars riding an accent centerline, newest sample at the right under a
-// tape-head marker, an elapsed readout on the left. Bars are sampled from
-// EphemeralTranscriber.shared.audioLevel (live RMS) on a ~24fps timer.
+// MARK: - Send button (squared · amber · paperplane)
 
 @MainActor
-private final class CaptureMarkupWaveformView: NSView {
-    private var levels: [CGFloat] = []
-    private var timer: Timer?
-    private var startedAt: Date?
+private final class CaptureMarkupSendButton: NSView {
+    var onClick: (() -> Void)?
 
-    private static let amber = NSColor(red: 0.31, green: 0.49, blue: 1.0, alpha: 1)
-    private static let amberDeep = NSColor(red: 0.14, green: 0.29, blue: 0.65, alpha: 1)
-    private static let ink = NSColor(white: 0.14, alpha: 0.55)
-    private static let alert = NSColor(red: 0.82, green: 0.23, blue: 0.11, alpha: 1)
+    private let icon = NSImageView()
+    private var enabledForClick = true
 
-    override var isFlipped: Bool { false }
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { false }
+    init() {
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+        wantsLayer = true
+        layer?.cornerRadius = 8
+        layer?.borderWidth = 0.5
 
-    func start() {
-        levels.removeAll()
-        startedAt = Date()
-        timer?.invalidate()
-        let t = Timer(timeInterval: 1.0 / 24.0, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.tick() }
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        icon.imageScaling = .scaleNone
+        if let plane = NSImage(systemSymbolName: "paperplane.fill", accessibilityDescription: "Run") {
+            let cfg = NSImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
+            icon.image = plane.withSymbolConfiguration(cfg)
         }
-        RunLoop.main.add(t, forMode: .common)
-        timer = t
-        needsDisplay = true
+        addSubview(icon)
+
+        NSLayoutConstraint.activate([
+            widthAnchor.constraint(equalToConstant: 38),
+            heightAnchor.constraint(equalToConstant: 38),
+            icon.centerXAnchor.constraint(equalTo: centerXAnchor),
+            icon.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+        applyEnabledAppearance()
+        toolTip = "Run · ⌘↵"
     }
 
-    func stop() {
-        timer?.invalidate()
-        timer = nil
-        levels.removeAll()
-        startedAt = nil
-        needsDisplay = true
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { nil }
+
+    func setEnabledForClick(_ enabled: Bool) {
+        enabledForClick = enabled
+        applyEnabledAppearance()
     }
 
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        if window == nil { stop() }
-    }
-
-    private func tick() {
-        let raw = CGFloat(EphemeralTranscriber.shared.audioLevel)
-        // RMS is small; sqrt-shape it for liveliness and keep a faint floor
-        // so the tape always reads as "running," not flatlined.
-        let norm = min(1, max(0.07, sqrt(max(0, raw)) * 1.9))
-        levels.append(norm)
-        let maxBars = max(56, Int(bounds.width / 4))
-        if levels.count > maxBars { levels.removeFirst(levels.count - maxBars) }
-        needsDisplay = true
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        let b = bounds
-        let elapsed = startedAt.map { Date().timeIntervalSince($0) } ?? 0
-        let timeStr = String(format: "%d:%02d", Int(elapsed) / 60, Int(elapsed) % 60)
-        let timeAttrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .regular),
-            .foregroundColor: Self.amberDeep,
-        ]
-        let timeSize = (timeStr as NSString).size(withAttributes: timeAttrs)
-        (timeStr as NSString).draw(at: NSPoint(x: 10, y: b.midY - timeSize.height / 2), withAttributes: timeAttrs)
-
-        let leftInset: CGFloat = 44
-        let rightInset: CGFloat = 36 // room for the REC tag
-        let track = NSRect(x: b.minX + leftInset, y: b.minY + 4, width: b.width - leftInset - rightInset, height: b.height - 8)
-        guard track.width > 8 else { return }
-
-        // accent centerline
-        Self.amber.withAlphaComponent(0.5).setStroke()
-        let center = NSBezierPath()
-        center.move(to: NSPoint(x: track.minX, y: track.midY))
-        center.line(to: NSPoint(x: track.maxX, y: track.midY))
-        center.lineWidth = 1
-        center.stroke()
-
-        // VU bars — newest sample nearest the tape head (right)
-        let barW: CGFloat = 2
-        let stride = barW + 2
-        let slotCount = max(1, Int(track.width / stride))
-        let count = levels.count
-        for i in 0..<slotCount {
-            let level = i < count ? levels[count - 1 - i] : 0.07
-            let x = track.maxX - CGFloat(i + 1) * stride
-            if x < track.minX { break }
-            let h = max(2, level * (track.height - 2))
-            let rect = NSRect(x: x, y: track.midY - h / 2, width: barW, height: h)
-            (i < 3 ? Self.amber : Self.ink).setFill()
-            NSBezierPath(roundedRect: rect, xRadius: 1, yRadius: 1).fill()
+    private func applyEnabledAppearance() {
+        if enabledForClick {
+            layer?.backgroundColor = CaptureMarkupPalette.amber.cgColor
+            layer?.borderColor = CaptureMarkupPalette.amber.cgColor
+            icon.contentTintColor = .white
+        } else {
+            layer?.backgroundColor = NSColor(red: 0.945, green: 0.945, blue: 0.937, alpha: 1).cgColor
+            layer?.borderColor = NSColor(white: 0.10, alpha: 0.16).cgColor
+            icon.contentTintColor = .tertiaryLabelColor
         }
+    }
 
-        // tape head marker at the write point (right edge of the track)
-        Self.amberDeep.setStroke()
-        let head = NSBezierPath()
-        head.move(to: NSPoint(x: track.maxX, y: track.minY))
-        head.line(to: NSPoint(x: track.maxX, y: track.maxY))
-        head.lineWidth = 1.5
-        head.stroke()
+    override func mouseDown(with event: NSEvent) {
+        guard enabledForClick else { return }
+        onClick?()
+    }
 
-        let recAttrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 8.5, weight: .semibold),
-            .foregroundColor: Self.alert,
-        ]
-        let recSize = ("REC" as NSString).size(withAttributes: recAttrs)
-        ("REC" as NSString).draw(at: NSPoint(x: b.maxX - recSize.width - 12, y: b.midY - recSize.height / 2), withAttributes: recAttrs)
+    override func resetCursorRects() {
+        if enabledForClick { addCursorRect(bounds, cursor: .pointingHand) }
     }
 }
 
 // MARK: - Example chip
 //
-// Dashed-pill action chip used in the "· TRY" suggestions row. Replaces
-// the previous NSButton(.recessed) bezel — that style read as a system
-// control and broke the documentary feel of the surrounding chrome.
-// Built as an NSView (text field + custom layers) rather than NSButton
-// so we get a clean dashed CAShapeLayer stroke and pill-pinned radius.
+// Dashed-pill action chip used in the "try" suggestions row. Built as an
+// NSView (text field + custom layers) rather than NSButton so we get a
+// clean dashed CAShapeLayer stroke and pill-pinned radius.
 
 @MainActor
 private final class CaptureMarkupExampleChip: NSView {
@@ -228,7 +191,7 @@ private final class CaptureMarkupExampleChip: NSView {
 
     private static let pane = NSColor(red: 0.945, green: 0.945, blue: 0.937, alpha: 1)
     private static let strokeColor = NSColor(white: 0.10, alpha: 0.22).cgColor
-    private static let hoverStrokeColor = NSColor(red: 0.14, green: 0.29, blue: 0.65, alpha: 0.55).cgColor
+    private static let hoverStrokeColor = NSColor(red: 0.769, green: 0.490, blue: 0.110, alpha: 0.55).cgColor
 
     init(text: String) {
         super.init(frame: .zero)
@@ -311,8 +274,7 @@ private final class CaptureMarkupExampleChip: NSView {
 // MARK: - Prompt container
 //
 // NSView subclass for the prompt's pane so we can pin a 1pt white inset
-// highlight at the top edge (clipped to the 5pt corner radius). Same
-// `box-shadow: inset 0 1px 0` treatment as the mic and the studio mock.
+// highlight at the top edge (clipped to the corner radius).
 
 @MainActor
 private final class CaptureMarkupPromptContainerView: NSView {
@@ -388,10 +350,10 @@ private final class CaptureMarkupDragHandleView: NSView, NSDraggingSource {
     private var isHovering = false { didSet { needsDisplay = true } }
     private var isPressed = false { didSet { needsDisplay = true } }
 
-    private static let amber = NSColor(red: 0.31, green: 0.49, blue: 1.0, alpha: 1)
-    private static let amberDeep = NSColor(red: 0.14, green: 0.29, blue: 0.65, alpha: 1)
-    private static let amberFaint = NSColor(red: 0.93, green: 0.95, blue: 1.0, alpha: 0.98)
-    private static let amberSoft = NSColor(red: 0.72, green: 0.80, blue: 1.0, alpha: 1)
+    private static let amber = CaptureMarkupPalette.amber
+    private static let amberDeep = CaptureMarkupPalette.amberDeep
+    private static let amberFaint = CaptureMarkupPalette.amberFaint
+    private static let amberSoft = NSColor(red: 0.769, green: 0.490, blue: 0.110, alpha: 0.55)
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -525,6 +487,11 @@ final class CaptureMarkupPanelRootView: NSView {
 
         // webHost and inputBar fill the panel top-to-bottom. Canvas undo/redo
         // now lives inside the WKWebView toolbar with the rest of the tools.
+        webHost.setContentHuggingPriority(.defaultLow, for: .vertical)
+        webHost.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+        inputBar.setContentHuggingPriority(.required, for: .vertical)
+        inputBar.setContentCompressionResistancePriority(.required, for: .vertical)
+
         [webHost, inputBar, dragHandle].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             addSubview($0)
@@ -565,153 +532,57 @@ final class CaptureMarkupPanelRootView: NSView {
     }
 }
 
-// MARK: - Pill button (Save / Run)
-//
-// Custom-drawn pills so the fills, radius, and keycaps are fully under our
-// control. The keycap (⌘S / ⌘↵ / ✓) is rendered in the SYSTEM font — the
-// monospaced font tofus those glyphs, which was the garbled "X" in the
-// shipped bar. Label stays mono uppercase to match the chrome.
-
-@MainActor
-private final class CaptureMarkupPillButton: NSView {
-    enum Kind { case primary, faint }
-
-    var onClick: (() -> Void)?
-
-    private let kind: Kind
-    private let labelField = NSTextField(labelWithString: "")
-    private let keycapField = NSTextField(labelWithString: "")
-    private var enabledForClick = true
-
-    private static let amber = NSColor(red: 0.31, green: 0.49, blue: 1.0, alpha: 1)
-    private static let amberDeep = NSColor(red: 0.14, green: 0.29, blue: 0.65, alpha: 1)
-    private static let amberFaint = NSColor(red: 0.93, green: 0.95, blue: 1.0, alpha: 1)
-    private static let amberSoft = NSColor(red: 0.72, green: 0.80, blue: 1.0, alpha: 1)
-
-    init(kind: Kind) {
-        self.kind = kind
-        super.init(frame: .zero)
-        translatesAutoresizingMaskIntoConstraints = false
-        wantsLayer = true
-        layer?.cornerRadius = 7
-        layer?.borderWidth = 0.5
-
-        labelField.font = NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold)
-        keycapField.font = NSFont.systemFont(ofSize: 10.5, weight: .medium)
-        for field in [labelField, keycapField] {
-            field.translatesAutoresizingMaskIntoConstraints = false
-            field.isEditable = false
-            field.isSelectable = false
-            field.drawsBackground = false
-            field.isBordered = false
-            addSubview(field)
-        }
-
-        NSLayoutConstraint.activate([
-            heightAnchor.constraint(equalToConstant: 32),
-            labelField.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            labelField.centerYAnchor.constraint(equalTo: centerYAnchor),
-            keycapField.leadingAnchor.constraint(equalTo: labelField.trailingAnchor, constant: 6),
-            keycapField.centerYAnchor.constraint(equalTo: centerYAnchor),
-            trailingAnchor.constraint(equalTo: keycapField.trailingAnchor, constant: 12),
-        ])
-        applyDefaultColors()
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { nil }
-
-    func configure(label: String, keycap: String?) {
-        labelField.stringValue = label
-        keycapField.stringValue = keycap ?? ""
-        keycapField.isHidden = (keycap == nil)
-        applyDefaultColors()
-    }
-
-    func setEnabledForClick(_ enabled: Bool) {
-        enabledForClick = enabled
-        alphaValue = enabled ? 1 : 0.45
-    }
-
-    func applyDefaultColors() {
-        switch kind {
-        case .primary:
-            layer?.backgroundColor = Self.amber.cgColor
-            layer?.borderColor = Self.amber.cgColor
-            labelField.textColor = .white
-            keycapField.textColor = NSColor.white.withAlphaComponent(0.85)
-        case .faint:
-            layer?.backgroundColor = Self.amberFaint.cgColor
-            layer?.borderColor = Self.amberSoft.cgColor
-            labelField.textColor = Self.amberDeep
-            keycapField.textColor = Self.amberDeep.withAlphaComponent(0.7)
-        }
-    }
-
-    /// Override the palette for transient states (e.g. the "SAVED ✓" flash).
-    func setColors(background: NSColor, border: NSColor, label: NSColor, keycap: NSColor) {
-        layer?.backgroundColor = background.cgColor
-        layer?.borderColor = border.cgColor
-        labelField.textColor = label
-        keycapField.textColor = keycap
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        guard enabledForClick else { return }
-        onClick?()
-    }
-
-    override func resetCursorRects() {
-        addCursorRect(bounds, cursor: .pointingHand)
-    }
-}
-
 // MARK: - Input bar
 
 @MainActor
 final class CaptureMarkupInputBarView: NSView {
     weak var delegate: CaptureMarkupPanelChromeDelegate?
 
-    private static let chrome = NSColor(red: 0.945, green: 0.945, blue: 0.941, alpha: 1)
-    private static let pane = NSColor(red: 0.945, green: 0.945, blue: 0.937, alpha: 1)
-    private static let amber = NSColor(red: 0.31, green: 0.49, blue: 1.0, alpha: 1)
-    private static let amberDeep = NSColor(red: 0.14, green: 0.29, blue: 0.65, alpha: 1)
-    private static let amberFaint = NSColor(red: 0.93, green: 0.95, blue: 1.0, alpha: 1)
-    private static let amberSoft = NSColor(red: 0.72, green: 0.80, blue: 1.0, alpha: 1)
-    private static let fieldBorder = NSColor(white: 0.10, alpha: 0.20)
-    private static let fieldBorderActive = NSColor(red: 0.82, green: 0.23, blue: 0.11, alpha: 0.45)
+    private static let band = NSColor(red: 0.925, green: 0.925, blue: 0.922, alpha: 1)
+    private static let amber = CaptureMarkupPalette.amber
+    private static let amberDeep = CaptureMarkupPalette.amberDeep
+    private static let amberFaint = CaptureMarkupPalette.amberFaint
+    private static let amberSoft = CaptureMarkupPalette.amberSoft
+    private static let alert = CaptureMarkupPalette.alert
+    private static let fieldBorder = NSColor(white: 0.10, alpha: 0.16)
+    private static let fieldBorderActive = NSColor(red: 0.77, green: 0.227, blue: 0.11, alpha: 0.45)
 
-    private let examplesStack = NSStackView()
-    private let tryLabel = NSTextField(labelWithString: "· TRY")
-    private let scopeBadge = NSTextField(labelWithString: "GLOBAL · WHOLE IMAGE")
+    // Identity line — left stack (suggestions / listening) + right stack
+    // (scope-or-selected-item, then the agent picker pinned far right,
+    // sitting directly above the send button).
+    private let leftStack = NSStackView()
+    private let rightStack = NSStackView()
+    private let agentPrefix = NSTextField(labelWithString: "agent ▸")
     private let agentPicker = NSPopUpButton(frame: .zero, pullsDown: false)
-    private let voiceButton = CaptureMarkupMicButton()
-    private let attachmentChipsStack = NSStackView()
-    private let promptTextView = CaptureMarkupPromptTextView()
-    private let waveform = CaptureMarkupWaveformView()
-    private let runButton = CaptureMarkupPillButton(kind: .primary)
-    private let promptContainer = CaptureMarkupPromptContainerView()
-    private var saveFeedbackResetWork: DispatchWorkItem?
+    private let scopePrefix = NSTextField(labelWithString: "scope ▸")
+    private let scopeValue = NSTextField(labelWithString: "whole image")
 
-    // Attachments row. Hidden when empty; shows the selection chip(s)
-    // between the TRY row and the composer row, so things you've pulled
-    // into the message don't pollute the prompt's text area.
-    private let attachmentsRow = NSStackView()
-    private let attachmentsLabel = NSTextField(labelWithString: "· ATTACHED")
-    private var attachmentsRowHeightConstraint: NSLayoutConstraint?
-    private var attachmentsRowTopConstraint: NSLayoutConstraint?
+    // Composer
+    private let promptContainer = CaptureMarkupPromptContainerView()
+    private let promptTextView = CaptureMarkupPromptTextView()
+    private let voiceButton = CaptureMarkupMicButton()
+    private let sendButton = CaptureMarkupSendButton()
+
+    // Status line (one adaptive slot)
+    private let tryLabel = NSTextField(labelWithString: "try")
+    private let examplesStack = NSStackView()
+    private let attachmentsLabel = NSTextField(labelWithString: "attached")
+    private let attachmentChipsStack = NSStackView()
+    private let listeningLabel = NSTextField(labelWithString: "● listening · tap mic to stop")
+
+    private var saveFeedbackResetWork: DispatchWorkItem?
 
     private var isVoiceRecording = false
     private var isVoiceTranscribing = false
     private var isRunning = false
     private var agentChoices: [CaptureMarkupAgentChoice] = []
     private var agentPreferencesObserver: NSObjectProtocol?
+    private var attachmentsVisible = false
 
     private var askExamples = [
         "circle the error and label it",
-        "draw a horizontal guide from the first word",
         "blur the email address",
-        "arrow from the title to the failed line",
+        "arrow to the failed line",
     ]
     private var touchUpExamples = [
         "move down 6 px",
@@ -724,18 +595,15 @@ final class CaptureMarkupInputBarView: NSView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
-        layer?.backgroundColor = Self.chrome.cgColor
+        layer?.backgroundColor = Self.band.cgColor
 
-        tryLabel.font = NSFont.monospacedSystemFont(ofSize: 9, weight: .semibold)
-        tryLabel.textColor = .tertiaryLabelColor
+        // ── Identity line ───────────────────────────────────────────────
+        agentPrefix.font = NSFont.monospacedSystemFont(ofSize: 9, weight: .semibold)
+        agentPrefix.textColor = .tertiaryLabelColor
 
-        scopeBadge.font = NSFont.monospacedSystemFont(ofSize: 9, weight: .regular)
-        scopeBadge.textColor = .tertiaryLabelColor
-        scopeBadge.alignment = .right
-
-        agentPicker.font = NSFont.monospacedSystemFont(ofSize: 9, weight: .semibold)
+        agentPicker.font = NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold)
         agentPicker.controlSize = .small
-        agentPicker.bezelStyle = .rounded
+        agentPicker.isBordered = false
         agentPicker.toolTip = "Choose markup agent"
         agentPicker.target = self
         agentPicker.action = #selector(agentPickerChanged)
@@ -743,19 +611,19 @@ final class CaptureMarkupInputBarView: NSView {
         agentPicker.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
         setAgentPickerLoading()
 
-        examplesStack.orientation = .horizontal
-        examplesStack.spacing = 8
-        examplesStack.alignment = .centerY
+        scopePrefix.font = NSFont.monospacedSystemFont(ofSize: 9, weight: .semibold)
+        scopePrefix.textColor = .tertiaryLabelColor
+        scopeValue.font = NSFont.monospacedSystemFont(ofSize: 9, weight: .regular)
+        scopeValue.textColor = .secondaryLabelColor
+        scopeValue.alignment = .right
 
+        // ── Composer ────────────────────────────────────────────────────
         promptContainer.wantsLayer = true
         promptContainer.layer?.backgroundColor = NSColor.white.cgColor
         promptContainer.layer?.borderColor = Self.fieldBorder.cgColor
         promptContainer.layer?.borderWidth = 0.5
-        // Rounder field harmonizes with the circular mic sitting beside it —
-        // a boxy r7 lane read square next to the round tap-target.
-        promptContainer.layer?.cornerRadius = 12
+        promptContainer.layer?.cornerRadius = 10
 
-        // Mic affordance is the shape. Glyph + colors swap with state.
         voiceButton.toolTip = "Tap to record · tap again to stop"
         voiceButton.onToggle = { [weak self] in self?.toggleVoiceCapture() }
 
@@ -765,7 +633,7 @@ final class CaptureMarkupInputBarView: NSView {
         promptTextView.isRichText = false
         promptTextView.importsGraphics = false
         promptTextView.allowsUndo = true
-        promptTextView.textContainerInset = NSSize(width: 0, height: 7)
+        promptTextView.textContainerInset = NSSize(width: 0, height: 6)
         promptTextView.textContainer?.lineFragmentPadding = 0
         promptTextView.textContainer?.widthTracksTextView = true
         promptTextView.textContainer?.heightTracksTextView = false
@@ -776,99 +644,92 @@ final class CaptureMarkupInputBarView: NSView {
         promptTextView.delegate = self
         promptTextView.onCommandReturn = { [weak self] in self?.runTapped() }
 
-        // Run — custom pill button. Keyboard shortcuts (⌘S / ⌘↵)
-        // are handled in performKeyEquivalent below; the pill carries the
-        // run keycap as a visible hint.
-        runButton.onClick = { [weak self] in self?.runTapped() }
+        sendButton.onClick = { [weak self] in self?.runTapped() }
+
+        // ── Status line ─────────────────────────────────────────────────
+        tryLabel.font = NSFont.monospacedSystemFont(ofSize: 9, weight: .semibold)
+        tryLabel.textColor = .tertiaryLabelColor
+
+        examplesStack.orientation = .horizontal
+        examplesStack.spacing = 8
+        examplesStack.alignment = .centerY
 
         attachmentsLabel.font = NSFont.monospacedSystemFont(ofSize: 9, weight: .semibold)
         attachmentsLabel.textColor = .tertiaryLabelColor
+        attachmentsLabel.isHidden = true
 
         attachmentChipsStack.orientation = .horizontal
         attachmentChipsStack.spacing = 6
         attachmentChipsStack.alignment = .centerY
+        attachmentChipsStack.isHidden = true
 
-        attachmentsRow.orientation = .horizontal
-        attachmentsRow.spacing = 8
-        attachmentsRow.alignment = .centerY
-        attachmentsRow.addArrangedSubview(attachmentsLabel)
-        attachmentsRow.addArrangedSubview(attachmentChipsStack)
-        attachmentsRow.isHidden = true
+        listeningLabel.font = NSFont.monospacedSystemFont(ofSize: 9, weight: .semibold)
+        listeningLabel.textColor = Self.alert
+        listeningLabel.isHidden = true
 
-        // Speak Strip composition:
-        //   · TRY  [chips…]                     GLOBAL · WHOLE IMAGE
-        //   · ATTACHED  ↳ LAYER chip          ← hidden when empty
-        //   [──── multi-line prompt ────] [🎤] [ RUN ⌘↵ ]
-        [tryLabel, examplesStack, agentPicker, scopeBadge, attachmentsRow, promptContainer, voiceButton, runButton].forEach {
+        // ── Assembly ────────────────────────────────────────────────────
+        // Identity line is two horizontal stacks. LEFT keeps the suggestions
+        // visible at all times (so "speak on this item" — submit with the
+        // selected items attached — still shows the touch-up prompts). RIGHT
+        // carries the run target (scope text, OR the selected-item chips with
+        // their × when items are attached for submission) and then the agent
+        // picker pinned far right, directly above the send button.
+        leftStack.orientation = .horizontal
+        leftStack.spacing = 8
+        leftStack.alignment = .centerY
+        [tryLabel, examplesStack, listeningLabel].forEach { leftStack.addArrangedSubview($0) }
+        leftStack.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        leftStack.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+        rightStack.orientation = .horizontal
+        rightStack.spacing = 8
+        rightStack.alignment = .centerY
+        [scopePrefix, scopeValue, attachmentsLabel, attachmentChipsStack, agentPrefix, agentPicker]
+            .forEach { rightStack.addArrangedSubview($0) }
+        rightStack.setCustomSpacing(16, after: scopeValue)
+        rightStack.setCustomSpacing(16, after: attachmentChipsStack)
+        rightStack.setContentHuggingPriority(.required, for: .horizontal)
+        rightStack.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        [leftStack, rightStack, promptContainer, sendButton].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             addSubview($0)
         }
-        promptContainer.addSubview(promptTextView)
-        promptTextView.translatesAutoresizingMaskIntoConstraints = false
+        [promptTextView, voiceButton].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+            promptContainer.addSubview($0)
+        }
 
-        // Waveform overlays the prompt lane and only shows while recording —
-        // the lane is the prompt at rest, the tape transport when hot.
-        waveform.translatesAutoresizingMaskIntoConstraints = false
-        waveform.isHidden = true
-        promptContainer.addSubview(waveform)
-
-        let attachmentsTop = attachmentsRow.topAnchor.constraint(equalTo: tryLabel.bottomAnchor, constant: 8)
-        let attachmentsHeight = attachmentsRow.heightAnchor.constraint(equalToConstant: 0)
-        attachmentsHeight.priority = .defaultHigh
-        attachmentsHeight.isActive = false  // active only when row is hidden
-        attachmentsRowTopConstraint = attachmentsTop
-        attachmentsRowHeightConstraint = attachmentsHeight
-
-        // Strip padding matches the studio mock: 8pt top, 14pt sides,
-        // 10pt bottom. Was 10/12/10 — felt cramped at the leading edge
-        // and a touch tall at the top.
+        // Two rows: identity (row 1) + composer (row 2).
         NSLayoutConstraint.activate([
-            tryLabel.topAnchor.constraint(equalTo: topAnchor, constant: 8),
-            tryLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            leftStack.topAnchor.constraint(equalTo: topAnchor, constant: 12),
+            leftStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
 
-            examplesStack.centerYAnchor.constraint(equalTo: tryLabel.centerYAnchor),
-            examplesStack.leadingAnchor.constraint(equalTo: tryLabel.trailingAnchor, constant: 8),
+            rightStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+            rightStack.centerYAnchor.constraint(equalTo: leftStack.centerYAnchor),
+            rightStack.leadingAnchor.constraint(greaterThanOrEqualTo: leftStack.trailingAnchor, constant: 12),
 
-            agentPicker.centerYAnchor.constraint(equalTo: tryLabel.centerYAnchor),
-            agentPicker.leadingAnchor.constraint(greaterThanOrEqualTo: examplesStack.trailingAnchor, constant: 12),
-            agentPicker.trailingAnchor.constraint(equalTo: scopeBadge.leadingAnchor, constant: -8),
-            agentPicker.widthAnchor.constraint(greaterThanOrEqualToConstant: 190),
-            agentPicker.widthAnchor.constraint(lessThanOrEqualToConstant: 280),
-            agentPicker.heightAnchor.constraint(equalToConstant: 24),
-
-            scopeBadge.centerYAnchor.constraint(equalTo: tryLabel.centerYAnchor),
-            scopeBadge.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-
-            attachmentsTop,
-            attachmentsRow.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
-            attachmentsRow.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -14),
-
+            // Composer
             promptContainer.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
-            promptContainer.trailingAnchor.constraint(equalTo: voiceButton.leadingAnchor, constant: -8),
-            promptContainer.topAnchor.constraint(equalTo: attachmentsRow.bottomAnchor, constant: 7),
-            promptContainer.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10),
-            promptContainer.heightAnchor.constraint(greaterThanOrEqualToConstant: 58),
+            promptContainer.trailingAnchor.constraint(equalTo: sendButton.leadingAnchor, constant: -8),
+            promptContainer.topAnchor.constraint(equalTo: leftStack.bottomAnchor, constant: 9),
+            promptContainer.heightAnchor.constraint(equalToConstant: 40),
 
-            promptTextView.leadingAnchor.constraint(equalTo: promptContainer.leadingAnchor, constant: 12),
-            promptTextView.trailingAnchor.constraint(equalTo: promptContainer.trailingAnchor, constant: -12),
-            promptTextView.topAnchor.constraint(equalTo: promptContainer.topAnchor, constant: 4),
-            promptTextView.bottomAnchor.constraint(equalTo: promptContainer.bottomAnchor, constant: -4),
+            sendButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+            sendButton.centerYAnchor.constraint(equalTo: promptContainer.centerYAnchor),
 
-            waveform.leadingAnchor.constraint(equalTo: promptContainer.leadingAnchor),
-            waveform.trailingAnchor.constraint(equalTo: promptContainer.trailingAnchor),
-            waveform.topAnchor.constraint(equalTo: promptContainer.topAnchor),
-            waveform.bottomAnchor.constraint(equalTo: promptContainer.bottomAnchor),
-
-            voiceButton.trailingAnchor.constraint(equalTo: runButton.leadingAnchor, constant: -8),
+            voiceButton.trailingAnchor.constraint(equalTo: promptContainer.trailingAnchor, constant: -7),
             voiceButton.centerYAnchor.constraint(equalTo: promptContainer.centerYAnchor),
 
-            runButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-            runButton.centerYAnchor.constraint(equalTo: promptContainer.centerYAnchor),
+            promptTextView.leadingAnchor.constraint(equalTo: promptContainer.leadingAnchor, constant: 12),
+            promptTextView.trailingAnchor.constraint(equalTo: voiceButton.leadingAnchor, constant: -6),
+            promptTextView.topAnchor.constraint(equalTo: promptContainer.topAnchor, constant: 4),
+            promptTextView.bottomAnchor.constraint(equalTo: promptContainer.bottomAnchor, constant: -4),
         ])
 
-        setAttachmentsRowVisible(false)
         setTouchUpMode(false)
         updateVoiceButtonAppearance()
+        updateStatusRow()
         agentPreferencesObserver = NotificationCenter.default.addObserver(
             forName: LLMAgentModelPreferences.didChangeNotification,
             object: nil,
@@ -884,6 +745,11 @@ final class CaptureMarkupInputBarView: NSView {
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         nil
+    }
+
+    override var intrinsicContentSize: NSSize {
+        // Two rows: 12 top + 20 identity (chip row) + 9 + 40 composer + 12 bottom
+        NSSize(width: NSView.noIntrinsicMetric, height: 94)
     }
 
     override func layout() {
@@ -902,6 +768,7 @@ final class CaptureMarkupInputBarView: NSView {
         set {
             promptTextView.string = newValue
             promptTextView.needsDisplay = true
+            updateSendButtonAppearance()
         }
     }
 
@@ -924,6 +791,7 @@ final class CaptureMarkupInputBarView: NSView {
     func clearPrompt() {
         promptTextView.string = ""
         promptTextView.needsDisplay = true
+        updateSendButtonAppearance()
     }
 
     func setRunning(_ running: Bool) {
@@ -932,7 +800,7 @@ final class CaptureMarkupInputBarView: NSView {
         promptTextView.isSelectable = !running
         voiceButton.isEnabled = !running
         agentPicker.isEnabled = !running && !agentChoices.isEmpty
-        updateRunButtonAppearance()
+        updateSendButtonAppearance()
     }
 
     /// Flash the composer outline after a top-toolbar or keyboard save.
@@ -953,9 +821,6 @@ final class CaptureMarkupInputBarView: NSView {
         isTouchUpMode = touchUp
         let examples = touchUp ? touchUpExamples : askExamples
         promptTextView.placeholderString = touchUp ? "speak or type another pass…" : "tell the agent what to mark up…"
-        if !touchUp || attachmentsRow.isHidden {
-            scopeBadge.stringValue = "GLOBAL · WHOLE IMAGE"
-        }
         rebuildExampleChips(examples)
     }
 
@@ -982,19 +847,27 @@ final class CaptureMarkupInputBarView: NSView {
             attachmentChipsStack.addArrangedSubview(overflow)
         }
 
-        let hasAttachments = !selections.isEmpty
-        setAttachmentsRowVisible(hasAttachments)
-        scopeBadge.stringValue = hasAttachments
-            ? "TAGGED · \(selections.count) ITEM\(selections.count == 1 ? "" : "S")"
-            : "GLOBAL · WHOLE IMAGE"
+        // Items attached here are submitted to the engine with the prompt.
+        // The chips carry the names + a × to drop them; the scope text is
+        // hidden while they show (see updateStatusRow).
+        attachmentsVisible = !selections.isEmpty
+        updateStatusRow()
     }
 
-    private func setAttachmentsRowVisible(_ visible: Bool) {
-        attachmentsRow.isHidden = !visible
-        // When hidden, collapse the row to 0pt + drop the top gap so the
-        // strip shrinks back to its idle height.
-        attachmentsRowHeightConstraint?.isActive = !visible
-        attachmentsRowTopConstraint?.constant = visible ? 8 : 0
+    /// Left stack: suggestions stay up so you can still "speak on this item"
+    /// while items are attached — only recording swaps them for "listening".
+    /// Right stack: the selected-item chips (submitted to the engine) replace
+    /// the plain scope text when items are attached.
+    private func updateStatusRow() {
+        let recording = isVoiceRecording
+        listeningLabel.isHidden = !recording
+        tryLabel.isHidden = recording
+        examplesStack.isHidden = recording
+
+        attachmentsLabel.isHidden = !attachmentsVisible
+        attachmentChipsStack.isHidden = !attachmentsVisible
+        scopePrefix.isHidden = attachmentsVisible
+        scopeValue.isHidden = attachmentsVisible
     }
 
     private func rebuildExampleChips(_ examples: [String]) {
@@ -1012,7 +885,7 @@ final class CaptureMarkupInputBarView: NSView {
     private func setAgentPickerLoading() {
         agentChoices = []
         agentPicker.removeAllItems()
-        agentPicker.addItem(withTitle: "AGENT · loading")
+        agentPicker.addItem(withTitle: "loading…")
         agentPicker.isEnabled = false
     }
 
@@ -1071,10 +944,10 @@ final class CaptureMarkupInputBarView: NSView {
         agentPicker.removeAllItems()
 
         guard !choices.isEmpty else {
-            agentPicker.addItem(withTitle: "AGENT · none enabled")
+            agentPicker.addItem(withTitle: "no agent enabled")
             agentPicker.isEnabled = false
             agentPicker.toolTip = "Enable a markup agent in Settings → Models → LLM"
-            updateRunButtonAppearance()
+            updateSendButtonAppearance()
             return
         }
 
@@ -1083,7 +956,7 @@ final class CaptureMarkupInputBarView: NSView {
         agentPicker.selectItem(at: index)
         agentPicker.isEnabled = !isRunning
         updateAgentPickerToolTip()
-        updateRunButtonAppearance()
+        updateSendButtonAppearance()
     }
 
     private func updateAgentPickerToolTip() {
@@ -1103,8 +976,7 @@ final class CaptureMarkupInputBarView: NSView {
     }
 
     /// Mic is tap-to-toggle. First tap starts capture, second tap stops
-    /// and transcribes. Tapping while transcribing is a no-op (next tap
-    /// available once the transcript lands).
+    /// and transcribes. Tapping while transcribing is a no-op.
     private func toggleVoiceCapture() {
         if isVoiceRecording {
             stopVoiceCapture()
@@ -1154,6 +1026,7 @@ final class CaptureMarkupInputBarView: NSView {
             promptTextView.string = existing + (needsSpace ? " " : "") + text
         }
         promptTextView.needsDisplay = true
+        updateSendButtonAppearance()
         window?.makeFirstResponder(promptTextView)
     }
 
@@ -1161,71 +1034,57 @@ final class CaptureMarkupInputBarView: NSView {
         let symbolName: String
         let glyphColor: NSColor
         let bg: NSColor
-        let border: NSColor
         let tip: String
 
         if isVoiceTranscribing {
             symbolName = "ellipsis"
             glyphColor = .secondaryLabelColor
-            bg = NSColor.quaternaryLabelColor.withAlphaComponent(0.35)
-            border = NSColor.separatorColor
+            bg = .clear
             tip = "Transcribing…"
         } else if isVoiceRecording {
             symbolName = "stop.fill"
-            glyphColor = NSColor.systemRed.withAlphaComponent(0.92)
-            bg = NSColor.systemRed.withAlphaComponent(0.14)
-            border = NSColor.systemRed.withAlphaComponent(0.45)
+            glyphColor = Self.alert
+            bg = NSColor(red: 0.77, green: 0.227, blue: 0.11, alpha: 0.12)
             tip = "Tap to stop"
         } else {
             symbolName = "mic.fill"
-            glyphColor = Self.amberDeep
-            bg = Self.amberFaint
-            border = Self.amberSoft
+            glyphColor = .tertiaryLabelColor
+            bg = .clear
             tip = "Tap to record"
         }
 
         voiceButton.title = ""
         voiceButton.attributedTitle = NSAttributedString(string: "")
         if let symbol = NSImage(systemSymbolName: symbolName, accessibilityDescription: tip) {
-            let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .semibold)
+            let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
             voiceButton.image = symbol.withSymbolConfiguration(config)
         }
         voiceButton.imageScaling = .scaleNone
         voiceButton.contentTintColor = glyphColor
         voiceButton.layer?.backgroundColor = bg.cgColor
-        voiceButton.layer?.borderColor = border.cgColor
         voiceButton.toolTip = tip
-        updateRunButtonAppearance()
         updateComposerRecordingState()
+        updateStatusRow()
+        updateSendButtonAppearance()
     }
 
-    /// While the mic is hot, the prompt lane becomes the tape transport:
-    /// hide the text field, reveal + run the waveform, flush the lane border
-    /// to alert-red. At rest it's the prompt again.
+    /// While the mic is hot the field reads "listening…" and the outline
+    /// flushes alert-red. No VU transport — the status line carries the
+    /// recording state (openscout-simple).
     private func updateComposerRecordingState() {
         let recording = isVoiceRecording
-        waveform.isHidden = !recording
-        promptTextView.isHidden = recording
-        if recording {
-            waveform.start()
-        } else {
-            waveform.stop()
-            promptTextView.needsDisplay = true
-        }
-        let border = recording ? Self.fieldBorderActive : Self.fieldBorder
-        promptContainer.layer?.borderColor = border.cgColor
+        promptTextView.placeholderString = recording
+            ? "listening…"
+            : (isTouchUpMode ? "speak or type another pass…" : "tell the agent what to mark up…")
+        promptTextView.needsDisplay = true
+        promptContainer.layer?.borderColor = (recording ? Self.fieldBorderActive : Self.fieldBorder).cgColor
     }
 
-    private func updateRunButtonAppearance() {
-        let enabled = !isRunning && !isVoiceRecording && !isVoiceTranscribing && !agentChoices.isEmpty
-        if isRunning {
-            runButton.configure(label: "RUNNING", keycap: nil)
-        } else if agentChoices.isEmpty {
-            runButton.configure(label: "NO AGENT", keycap: nil)
-        } else {
-            runButton.configure(label: "RUN", keycap: "⌘↵")
-        }
-        runButton.setEnabledForClick(enabled)
+    private func updateSendButtonAppearance() {
+        let hasText = !promptTextView.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let enabled = !isRunning && !isVoiceRecording && !isVoiceTranscribing && !agentChoices.isEmpty && hasText
+        sendButton.setEnabledForClick(enabled)
+        sendButton.toolTip = isRunning ? "Running…" : (agentChoices.isEmpty ? "No agent enabled" : "Run · ⌘↵")
     }
 
     /// ⌘↵ runs, ⌘S saves — works whether the prompt field or the bar has
@@ -1263,6 +1122,7 @@ extension CaptureMarkupInputBarView: NSTextViewDelegate {
     func textDidChange(_ notification: Notification) {
         syncPromptTextGeometry()
         promptTextView.needsDisplay = true
+        updateSendButtonAppearance()
     }
 }
 
@@ -1276,22 +1136,23 @@ final class CaptureMarkupSelectionChipView: NSView {
     private let nameLabel = NSTextField(labelWithString: "")
     private let dismissButton = NSButton(title: "×", target: nil, action: nil)
 
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
+    init() {
+        super.init(frame: .zero)
         wantsLayer = true
-        layer?.backgroundColor = NSColor(red: 0.93, green: 0.95, blue: 1.0, alpha: 1).cgColor
-        layer?.borderColor = NSColor(red: 0.72, green: 0.80, blue: 1.0, alpha: 1).cgColor
+        layer?.backgroundColor = CaptureMarkupPalette.amberFaint.cgColor
+        layer?.borderColor = NSColor(red: 0.769, green: 0.490, blue: 0.110, alpha: 0.30).cgColor
         layer?.borderWidth = 0.5
-        layer?.cornerRadius = 3
+        layer?.cornerRadius = 999
 
         idLabel.font = NSFont.monospacedSystemFont(ofSize: 9, weight: .semibold)
-        idLabel.textColor = NSColor(red: 0.14, green: 0.29, blue: 0.65, alpha: 1)
+        idLabel.textColor = CaptureMarkupPalette.amberDeep
         nameLabel.font = NSFont.systemFont(ofSize: 11)
-        nameLabel.textColor = NSColor(red: 0.14, green: 0.29, blue: 0.65, alpha: 1)
+        nameLabel.textColor = CaptureMarkupPalette.amberDeep
 
         dismissButton.isBordered = false
         dismissButton.bezelStyle = .inline
         dismissButton.font = NSFont.systemFont(ofSize: 10)
+        dismissButton.contentTintColor = CaptureMarkupPalette.amberDeep
         dismissButton.target = self
         dismissButton.action = #selector(dismissTapped)
 
@@ -1301,21 +1162,26 @@ final class CaptureMarkupSelectionChipView: NSView {
         }
 
         NSLayoutConstraint.activate([
-            heightAnchor.constraint(equalToConstant: 24),
-            idLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            heightAnchor.constraint(equalToConstant: 22),
+            idLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 9),
             idLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
             nameLabel.leadingAnchor.constraint(equalTo: idLabel.trailingAnchor, constant: 6),
             nameLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
             dismissButton.leadingAnchor.constraint(equalTo: nameLabel.trailingAnchor, constant: 4),
-            dismissButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            dismissButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -5),
             dismissButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            dismissButton.widthAnchor.constraint(equalToConstant: 16),
+            dismissButton.widthAnchor.constraint(equalToConstant: 14),
         ])
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         nil
+    }
+
+    override func layout() {
+        super.layout()
+        layer?.cornerRadius = bounds.height / 2
     }
 
     func configure(id: String, label: String, kind: String) {

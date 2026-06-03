@@ -419,54 +419,30 @@ final class FrameRateMonitor: ObservableObject {
     }
 }
 
-/// On-screen pill that shows FPS + (optionally) the top body
-/// invalidation source. Mount via `.overlay(alignment: .bottomLeading)`
-/// in DEBUG when Design Mode is on.
-struct PerfHUD: View {
+/// Compact FPS readout sized to live INLINE in the status bar (alongside
+/// PID / git branch), rather than as a floating capsule that overlaps
+/// content. Same CVDisplayLink source; just stripped to status-bar
+/// typography. Mounts/starts the monitor on appear.
+struct PerfStatusReadout: View {
     @ObservedObject private var monitor = FrameRateMonitor.shared
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 4) {
             Circle()
                 .fill(fpsColor)
-                .frame(width: 6, height: 6)
+                .frame(width: 5, height: 5)
             Text(String(format: "%.0f FPS", monitor.fps))
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .foregroundColor(.white)
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .foregroundColor(.secondary)
 
-            // Surface worst-frame whenever a frame exceeded ~33ms
-            // (= a dropped frame on 60Hz). Stays hidden during smooth
-            // periods so the HUD doesn't clutter.
             if monitor.worstFrameMs > 33 {
                 Text(String(format: "·%.0fms", monitor.worstFrameMs))
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(monitor.worstFrameMs > 66 ? Color.red.opacity(0.95) : Color.orange.opacity(0.95))
-            }
-
-            if let hottest = hottestBody {
-                Text("·")
-                    .foregroundColor(.white.opacity(0.45))
-                Text("\(hottest.0) \(hottest.1)/s")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.85))
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .foregroundColor(monitor.worstFrameMs > 66 ? Color.red.opacity(0.9) : Color.orange.opacity(0.9))
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(Color.black.opacity(0.72))
-        .clipShape(Capsule())
-        .overlay(
-            Capsule()
-                .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
-        )
-        .allowsHitTesting(false)
-    }
-
-    private var hottestBody: (String, Int)? {
-        guard let top = monitor.bodyInvalidationsPerSec.max(by: { $0.value < $1.value }) else {
-            return nil
-        }
-        return (top.key, top.value)
+        .help("Frame rate (dev) · CVDisplayLink-driven main-thread responsiveness gauge")
+        .onAppear { FrameRateMonitor.shared.start() }
     }
 
     private var fpsColor: Color {

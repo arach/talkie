@@ -202,6 +202,14 @@ public enum ExecutableResolver {
                 "/opt/homebrew/bin/opencode",
                 "/usr/local/bin/opencode",
             ],
+            "codex": [
+                "/Applications/Codex.app/Contents/Resources/codex",
+                "\(home)/Applications/Codex.app/Contents/Resources/codex",
+                "\(home)/.local/bin/codex",
+                "\(home)/.bun/bin/codex",
+                "/opt/homebrew/bin/codex",
+                "/usr/local/bin/codex",
+            ],
             "tmux": [
                 "/opt/homebrew/bin/tmux",
                 "/usr/local/bin/tmux",

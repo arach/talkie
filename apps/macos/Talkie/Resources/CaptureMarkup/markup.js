@@ -1475,10 +1475,13 @@
       // of the row is a normal select click. File drag-out is owned by
       // the small native "DRAG PNG" handle over the canvas so it can
       // start an AppKit drag without stealing layer-move drags here.
-      const attachTitle = state.messageLayerIds.has(layer.id)
-        ? "Remove from next message"
-        : "Add to next message";
-      row.innerHTML = `<span class="grip" aria-hidden="true" title="${attachTitle}">⠿</span><span class="dot ${layer.author || "agent"}"></span><span class="layer-row-label">${layer.kind}${layer.label ? " · " + layer.label : ""}</span>`;
+      const isAttached = state.messageLayerIds.has(layer.id);
+      const attachTitle = isAttached ? "Remove from next message" : "Add to next message";
+      // ⊕ / ⊖ reads as a click-to-add toggle. (Was ⠿ with a grab cursor —
+      // that looked like a drag handle and invited a drag that did nothing.)
+      const attachGlyph = isAttached ? "⊖" : "⊕";
+      row.dataset.layerId = layer.id;
+      row.innerHTML = `<span class="grip" title="${attachTitle}">${attachGlyph}</span><span class="dot ${layer.author || "agent"}"></span><span class="layer-row-label">${layer.kind}${layer.label ? " · " + layer.label : ""}</span>`;
       const grip = row.querySelector(".grip");
       if (grip) {
         grip.onclick = (e) => {
@@ -2721,6 +2724,20 @@
     }
   });
 
+  function showLayerPopover(clientX, clientY) {
+    const layer = selectedLayer();
+    if (!layer) return;
+    const attachButton = popover.querySelector('[data-action="attach"]');
+    if (attachButton) {
+      attachButton.textContent = state.messageLayerIds.has(layer.id)
+        ? "Remove from next message"
+        : "Add to next message";
+    }
+    popover.classList.remove("hidden");
+    popover.style.left = clientX + "px";
+    popover.style.top = clientY + "px";
+  }
+
   canvas.addEventListener("contextmenu", (e) => {
     e.preventDefault();
     const hit = hitTest(eventToNorm(e));
@@ -2730,16 +2747,23 @@
       render();
     }
     if (!state.selectedLayerId) return;
-    const layer = selectedLayer();
-    const attachButton = popover.querySelector('[data-action="attach"]');
-    if (attachButton && layer) {
-      attachButton.textContent = state.messageLayerIds.has(layer.id)
-        ? "Remove from next message"
-        : "Add to next message";
-    }
-    popover.classList.remove("hidden");
-    popover.style.left = e.clientX + "px";
-    popover.style.top = e.clientY + "px";
+    showLayerPopover(e.clientX, e.clientY);
+  });
+
+  // Right-click on a layer ROW in the sidebar opens the same menu — and we
+  // suppress WebKit's default context menu (Reload / Inspect Element / the
+  // text-edit menu) everywhere else, so the custom layer menu is the only
+  // thing a right-click ever surfaces.
+  document.addEventListener("contextmenu", (e) => {
+    if (e.defaultPrevented) return; // canvas handler already handled this one
+    e.preventDefault();
+    const row = e.target.closest ? e.target.closest(".layer-row") : null;
+    const id = row && row.dataset ? row.dataset.layerId : null;
+    if (!id) return;
+    state.selectedLayerId = id;
+    setActiveTool(null);
+    render();
+    showLayerPopover(e.clientX, e.clientY);
   });
 
   popover.addEventListener("click", (e) => {

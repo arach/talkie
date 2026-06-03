@@ -150,10 +150,10 @@ struct WalkieScopeView: View {
             graticule
             scanlines
             scopeTrace
-            cornerLabel("CH-01", alignment: .topLeading)
-            cornerLabel(session.phase == .receiving ? "OUT" : "IN", alignment: .topTrailing)
-            cornerLabel("1.00 V/div", alignment: .bottomLeading)
-            cornerLabel("500 ms/div", alignment: .bottomTrailing)
+            cornerLabel("AGENT", alignment: .topLeading)
+            cornerLabel(session.phase == .receiving ? "REPLY" : "VOICE", alignment: .topTrailing)
+            cornerLabel("listening", alignment: .bottomLeading)
+            cornerLabel("live", alignment: .bottomTrailing)
         }
         .frame(height: 200)
     }
@@ -416,7 +416,7 @@ struct WalkieScopeView: View {
     private func talkieBlock(_ reply: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                Text("TALKIE")
+                Text("AGENT")
                     .font(.system(size: 9, weight: .semibold, design: .monospaced))
                     .tracking(2.4)
                     .foregroundStyle(amberTrace)
@@ -523,22 +523,22 @@ struct WalkieScopeView: View {
 
     private var voiceFollowUpLabel: String {
         if executorBranchIsWorking { return "AGENT WORKING" }
-        return isRecordingFollowUp ? "STOP & SEND" : "SPEAK FOLLOW-UP"
+        return isRecordingFollowUp ? "STOP & SEND" : "TALK FOLLOW-UP"
     }
 
     private var voiceFollowUpBadge: String {
-        if executorBranchIsWorking { return "ASYNC" }
+        if executorBranchIsWorking { return "AGENT" }
         return isRecordingFollowUp ? session.formattedElapsed : "T"
     }
 
     private var voiceFollowUpHelp: String {
-        if executorBranchIsWorking { return "The agent branch is still working" }
+        if executorBranchIsWorking { return "The agent is still working" }
         return isRecordingFollowUp ? "Stop recording and send" : "Record a voice follow-up"
     }
 
     private var followUpComposer: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            TextField("Follow up in this session", text: $followUpText, axis: .vertical)
+            TextField("Talk to the agent", text: $followUpText, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12, weight: .regular, design: .monospaced))
                 .foregroundStyle(ink)
@@ -679,7 +679,7 @@ struct WalkieScopeView: View {
             if session.isLatchedTransmission && session.phase == .transmitting {
                 actionChip(label: "SEND", systemImage: "paperplane.fill", action: sendLatchedTransmission)
             } else {
-                Text("auto · ♪ verbal / ⟳ async")
+                Text("auto · talk now / agents later")
                     .font(.system(size: 9, weight: .medium, design: .monospaced))
                     .tracking(1.8)
                     .foregroundStyle(inkSubtle)
@@ -772,8 +772,8 @@ struct WalkieScopeView: View {
         switch session.phase {
         case .ready: return "READY"
         case .arming: return "ARMING MIC"
-        case .transmitting: return "TRANSMITTING"
-        case .over: return "OVER"
+        case .transmitting: return "TALKING"
+        case .over: return "SENT"
         case .thinking: return "PROCESSING"
         case .receiving:
             switch session.executorBranchState {
@@ -789,7 +789,7 @@ struct WalkieScopeView: View {
                 break
             }
             if session.routeMode == .async {
-                return session.continuationSessionId == nil ? "ACK · ASYNC" : "AGENT · READY"
+                return session.continuationSessionId == nil ? "AGENT · WORKING" : "AGENT · READY"
             }
             if let model = session.topLevelModelId, !model.isEmpty {
                 return "OUT · \(shortModelLabel(model))"
@@ -831,11 +831,11 @@ struct WalkieScopeView: View {
 
     private var footerHint: String {
         switch session.phase {
-        case .ready: return "HOLD TO TRANSMIT"
+        case .ready: return "HOLD TO TALK"
         case .arming: return "KEEP HOLDING"
-        case .transmitting: return session.isLatchedTransmission ? "SPEAK THEN SEND" : "RELEASE TO SEND"
+        case .transmitting: return session.isLatchedTransmission ? "TALK THEN SEND" : "RELEASE TO SEND"
         case .over: return "PROCESSING…"
-        case .thinking: return "ASKING THE NET…"
+        case .thinking: return "ASKING AGENT…"
         case .receiving:
             return executorBranchIsWorking ? "WAITING ON AGENT" : "FOLLOW UP OR DONE"
         case .followUpRecording: return "STOP TO SEND"

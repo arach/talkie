@@ -224,6 +224,15 @@ export const STUDIO_PAGES: StudioPage[] = [
     blurb: "Leveled-up run feedback · Work Thread (right rail streams the agent's run log-style → pass summary + undo) + Speak Strip v2 (mag-tape waveform while recording). Ports to CaptureMarkupPanelChrome.swift.",
   },
   {
+    href: "/mac-capture-markup-strip",
+    label: "Markup · Speak Strip",
+    bucket: "surfaces",
+    platform: "mac",
+    family: "capture",
+    status: "concept",
+    blurb: "Redesigned bottom band · coding-agent identity line (agent ▸ model · scope ▸ target · pass/saved) + mic·field·run as one composer cluster + single adaptive footer. Warm-amber canon. Ports to CaptureMarkupPanelChrome.swift.",
+  },
+  {
     href: "/mac-capture-flow",
     label: "Capture Flow",
     bucket: "surfaces",

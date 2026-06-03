@@ -1663,18 +1663,10 @@ struct DebugOverlaysModifier: ViewModifier {
                     .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .bottomTrailing)))
                 }
             }
-            .overlay(alignment: .bottomLeading) {
-                // FPS HUD — always-on in DEBUG. CVDisplayLink-driven, so
-                // the readout doubles as a main-thread responsiveness
-                // gauge (queued callbacks fall behind when the main
-                // thread blocks). Was originally gated by Design Mode
-                // but we want perf telemetry visible during every dev
-                // run, not just when explicitly inspecting design.
-                PerfHUD()
-                    .padding(.leading, Spacing.sm)
-                    .padding(.bottom, Spacing.sm)
-                    .onAppear { FrameRateMonitor.shared.start() }
-            }
+            // FPS readout moved off this floating bottomLeading overlay
+            // (it overlapped content like the capture-markup speak strip)
+            // and into the status bar's dev cluster — see PerfStatusReadout
+            // in StatusBar.swift. CVDisplayLink monitor is started there.
             .overlay {
                 DesignToolsOverlay()
             }

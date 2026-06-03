@@ -75,7 +75,7 @@ actor WalkieRuntimeRegistry {
 
 struct WalkieNodeDispatcherRuntime: WalkieAgentRuntime {
     let id = "walkie-node-dispatcher"
-    let name = "Walkie Runtime Dispatcher"
+    let name = "Agent Runtime Dispatcher"
     let capabilities: Set<WalkieRuntimeCapability> = [
         .readOnlyData,
         .longRunningJobs,
@@ -89,7 +89,7 @@ struct WalkieNodeDispatcherRuntime: WalkieAgentRuntime {
 
     func invoke(_ invocation: WalkieAgentInvocation) async throws -> WalkieAgentRuntimeResult {
         runtimeLog.info(
-            "Walkie node dispatcher invoking agent session",
+            "Agent runtime dispatcher invoking agent session",
             detail: "invocation=\(invocation.id.uuidString) channel=\(invocation.channel.code)"
         )
         return try await WalkieNodeRuntimeClient.shared.invoke(invocation)
@@ -102,7 +102,7 @@ struct WalkieNodeDispatcherRuntime: WalkieAgentRuntime {
 
 struct WalkieScoutAgentSessionRuntime: WalkieAgentRuntime {
     let id = "scout-agent-session"
-    let name = "Scout Agent Session"
+    let name = "Scout Agent"
     let capabilities: Set<WalkieRuntimeCapability> = [
         .codeExecution,
         .computerUse,
@@ -122,7 +122,7 @@ struct WalkieScoutAgentSessionRuntime: WalkieAgentRuntime {
 
     func invoke(_ invocation: WalkieAgentInvocation) async throws -> WalkieAgentRuntimeResult {
         runtimeLog.info(
-            "Walkie Scout runtime invoking agent session",
+            "Scout runtime invoking agent session",
             detail: "invocation=\(invocation.id.uuidString) channel=\(invocation.channel.code)"
         )
 
@@ -131,5 +131,23 @@ struct WalkieScoutAgentSessionRuntime: WalkieAgentRuntime {
 
     func cancel(sessionId: String) async {
         await WalkieNodeRuntimeClient.shared.cancel(sessionId: sessionId)
+    }
+}
+
+func walkieAgentDisplayName(for adapterId: String?) -> String? {
+    switch adapterId?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+    case "codex":
+        return "Codex"
+    case "claude-code", "claude":
+        return "Claude Code"
+    case "opencode", "open-code":
+        return "OpenCode"
+    case "pi":
+        return "Pi"
+    case "echo":
+        return "Echo"
+    default:
+        let trimmed = adapterId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
     }
 }

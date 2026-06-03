@@ -2,7 +2,7 @@
 
 **Status**: Draft
 **Owner**: arach
-**Related**: TLK-020 Mac Walkie Mode
+**Related**: TLK-020 Talking to Agents
 **Influences**: Lattices unified window, HudsonKit shell primitives
 **Studio**: /eng/tlk-021
 **Surface**: /mac-agent-home
@@ -11,12 +11,12 @@
 ## Summary
 
 Talkie Agent needs a real home surface: one place to see what the local agent
-is doing, what it heard, what it handed to an executor, and what needs follow-up.
-This should not become a separate "Walkie" app or another gimmicky destination.
-Walkie is an input mode. Agent Home is the durable place.
+is doing, what it heard, what it handed to an agent, and what needs follow-up.
+This should not become a separate branded app or another gimmicky destination.
+Talking to agents is an input mode. Agent Home is the durable place.
 
 The current first pass proves the product shape: a normal Talkie Agent window
-with Now, Activity, Voice, and Executor sections. The next architectural pass is
+with Now, Activity, Voice, and Agents sections. The next architectural pass is
 not just a page split. It must first firm up the runtime/activity boundary so the
 home surface does not multiply expensive status reads or depend on a private
 `jobs.json` backchannel.
@@ -25,22 +25,22 @@ home surface does not multiply expensive status reads or depend on a private
 
 - Give Talkie Agent a first-class home window, reachable from the menu bar,
   keyboard shortcuts, and deep links.
-- Treat voice, executor sessions, routines, and future agent work as activity inside
+- Treat voice, agent sessions, routines, and future agent work as activity inside
   one Agent surface.
-- Keep the live Walkie scope ephemeral. It handles press-to-talk and immediate
+- Keep the live talking-to-agents scope ephemeral. It handles press-to-talk and immediate
   acknowledgement, then returns durable work to Agent Home.
 - Preserve multi-LLM and multi-agent boundaries. The home UI displays runtime,
-  provider, model, and session identity without coupling itself to one executor.
+  provider, model, and session identity without coupling itself to one worker.
 - Reuse proven architecture patterns from Lattices and HudsonKit without
   importing their visual identity wholesale.
-- Make agent activity a typed projection over voice captures, executor sessions,
+- Make agent activity a typed projection over voice captures, agent sessions,
   routines, and future work.
 
 ## Non-Goals
 
-- Rebrand Talkie Agent as Walkie.
-- Build a second standalone app surface for async work.
-- Move executor orchestration into SwiftUI views.
+- Bring back Walkie as product language.
+- Build a second standalone app surface for long-running agent work.
+- Move agent orchestration into SwiftUI views.
 - Copy HudsonKit or Lattices component code directly before there is a clear
   package boundary.
 - Make Agent Home the default activation posture for the menu bar helper.
@@ -54,10 +54,10 @@ Initial sections:
 - **Now** — active work, current runtime status, latest meaningful event, and a
   compact digest. It is a dashboard, not a second full feed.
 - **Activity** — completed and in-progress agent work across voice, routines,
-  and executor sessions.
+  and agent sessions.
 - **Voice** — recent captures and voice-mode health.
-- **Executor** — a conversation trace where voice turns are the trunk and
-  executor/action threads branch from those turns. Dispatcher, Scout bridge,
+- **Agents** — a conversation trace where voice turns are the trunk and
+  agent/action threads branch from those turns. Dispatcher, Scout bridge,
   provider/model, and open session state remain visible inside each thread.
 
 Future sections can include **Routines**, **Agent Context**, or **Settings**,
@@ -98,7 +98,7 @@ The `status` operation returns runtime identity plus public activity records:
   "ok": true,
   "runtime": {
     "id": "walkie-node-dispatcher",
-    "name": "Walkie Runtime Dispatcher",
+    "name": "Agent Runtime Dispatcher",
     "capabilities": ["readOnlyData", "longRunningJobs"],
     "scoutBridge": "configured"
   },
@@ -108,7 +108,7 @@ The `status` operation returns runtime identity plus public activity records:
       "sessionId": "walkie-UUID",
       "state": "running",
       "ack": "spoken acknowledgement",
-      "instruction": "executor-ready instruction",
+      "instruction": "agent-ready instruction",
       "transcript": "raw source transcript",
       "providerId": "openai",
       "modelId": "gpt-5.5",
@@ -127,7 +127,7 @@ The file can remain an implementation detail of the runtime, but it is not the U
 contract. If the runtime writes a file, writes should be atomic.
 
 First pass status: `WalkieNodeRuntimeClient.status()` now drives Agent Home
-executor activity through the runtime boundary. Persistent child-process transport
+agent activity through the runtime boundary. Persistent child-process transport
 and richer output/progress fields are still pending.
 
 ### Activity Projection
@@ -138,7 +138,7 @@ multiple sources into one typed stream:
 ```swift
 struct AgentHomeActivityItem: Identifiable {
     enum Kind {
-        case executorSession(AgentHomeExecutorJob)
+        case agentSession(AgentHomeExecutorJob)
         case dictation(LiveRecording)
         case routine(AgentHomeRoutineSnapshot)
         case voiceCapture(AgentHomeVoiceCapture)
@@ -159,14 +159,14 @@ Pages filter or summarize this projection; they do not each reach into
 
 ### Source of Truth for Completed Output
 
-For v1, executor session state and output are exposed through the runtime `status` IPC
+For v1, agent session state and output are exposed through the runtime `status` IPC
 operation. The Node store is an operational cache with rotation/eviction, not a
-forever product database. If executor output becomes user-visible history beyond
+forever product database. If agent output becomes user-visible history beyond
 the Agent Home activity window, promote it into a proper Agent activity store in
 Talkie-owned persistence before broadening the UI.
 
-Every async invocation must carry a stable `originId` that joins back to the source
-Walkie transmission or dictation. Without that, the inspector cannot reliably
+Every longer-running invocation must carry a stable `originId` that joins back to the source
+voice turn or dictation. Without that, the inspector cannot reliably
 show transcript, instruction, and output together.
 
 ### Conversation Loop and Trace
@@ -182,20 +182,20 @@ Every invocation should carry:
 - `source` — the input surface, for example `voice` or `agent-home`.
 
 The top-level LLM remains focused on the immediate conversational loop. Side work
-runs through Agent Sessions and reports back into the trace. When the runtime
+runs through agents and reports back into the trace. When the runtime
 starts a follow-up session, it can include a compact recent context from prior
 turns in the same `conversationId`, using user text plus concise returned output.
-That gives the executor enough continuity without making the UI responsible for
+That gives the agent enough continuity without making the UI responsible for
 prompt assembly or agent-session internals.
 
 Continuing a completed turn should create a new visible conversation turn, but it
-should not force a fresh underlying Agent Session when the previous one can be
+should not force a fresh underlying agent session when the previous one can be
 resumed. If the parent activity has an `agentSessionId`, the runtime should reuse
 that id for the follow-up so adapters such as Codex can resume their persisted
 thread.
 
-Executor output should also produce a short returned summary that Talkie can show
-or speak as the post-executor turn. The full executor result remains available,
+Agent output should also produce a short returned summary that Talkie can show
+or speak as the returned turn. The full agent result remains available,
 but the loop needs a compact "what came back" object for voice playback, trace
 scanning, and future compaction.
 
@@ -222,7 +222,7 @@ AgentHome pages
   NowPage
   ActivityPage
   VoicePage
-  ExecutorPage
+  AgentsPage
 
 AgentHome stores
   ActivityStore
@@ -268,7 +268,7 @@ enum AgentHomeSection: String, CaseIterable, Hashable {
     case now
     case activity
     case voice
-    case executor
+    case agents
 }
 ```
 
@@ -288,12 +288,12 @@ Suggested split:
 - `AgentHomeNowPage`
 - `AgentHomeActivityPage`
 - `AgentHomeVoicePage`
-- `AgentHomeExecutorPage`
+- `AgentHomeAgentsPage`
 - `AgentHomeInspector`
 - `AgentHomePrimitives`
 
 The pages consume stores and selection state; they do not read files, ping
-runtimes, or make executor decisions directly.
+runtimes, or make agent-routing decisions directly.
 
 ### Inspector
 
@@ -303,7 +303,7 @@ Clicking an activity item, capture, or runtime entry should be able to reveal de
 right-side inspector without navigating away from the feed. Good first inspector
 payloads:
 
-- executor session details;
+- agent session details;
 - raw transcript/instruction;
 - runtime/provider/model identity;
 - errors and bridge status;
@@ -323,8 +323,8 @@ for local Agent actions:
 - open settings;
 - copy latest transcript;
 - retry or cancel selected invocation;
-- reveal executor logs;
-- start Walkie / voice input;
+- reveal agent logs;
+- start talking-to-agents voice input;
 - open diagnostics.
 
 This should be command metadata plus actions, not view-specific button glue.
@@ -343,19 +343,19 @@ Keep state split. Avoid a monolithic surface object.
 | Activity projection | `AgentHomeActivityFeed` | typed `[AgentHomeActivityItem]` |
 | Runtime health | `AgentHomeRuntimeStatusStore` | Node dispatcher, Scout bridge, provider availability |
 | Window lifecycle | `AgentHomeController` | NSWindow only |
-| Executor work | `WalkieAgentRuntime` / Node dispatcher | never SwiftUI-owned |
+| Agent work | `WalkieAgentRuntime` / Node dispatcher | never SwiftUI-owned |
 
 The current `AgentHomeActivityStore` is acceptable as a first proof. Before the
 surface grows, split runtime pinging and activity projection out of it.
 
 ## Data Flow
 
-Async Walkie turn:
+Long-running voice turn:
 
 ```text
-Walkie hotkey
-  -> WalkieOrchestrator routes verbal vs async
-  -> async invocation starts through WalkieAgentRuntime
+Talk-to-agents hotkey
+  -> WalkieOrchestrator routes immediate reply vs longer agent work
+  -> agent invocation starts through WalkieAgentRuntime
   -> Node dispatcher persists operational invocation/session status
   -> AgentHomeActivityStore reads via typed runtime IPC
   -> AgentHomeActivityFeed projects sessions + captures into activity items
@@ -398,7 +398,7 @@ project build settings for both production and dev schemes.
 3. Add persistent Node runtime transport. No view changes.
 4. Define `AgentHomeActivityItem` and `AgentHomeActivityFeed`.
 5. Extract `AgentHomeShell`, sidebar, and reusable row/status primitives.
-6. Split Now, Activity, Voice, and Executor into page views.
+6. Split Now, Activity, Voice, and Agents into page views.
 7. Add inspector and explicit selection-state lifetime.
 8. Register deep links and handle them through Apple Events.
 9. Add command palette once runtime actions such as cancel/retry exist.
