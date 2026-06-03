@@ -8,7 +8,7 @@ app_identifier(ENV.fetch("TALKIE_IOS_APP_BUNDLE_ID", "to.talkie.app"))
 screenshots_path("./fastlane/screenshots")
 
 # Only upload screenshots, skip metadata and binary
-skip_metadata(false)
+skip_metadata(true)
 skip_binary_upload(true)
 
 # Don't submit for review automatically

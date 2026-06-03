@@ -123,6 +123,19 @@ extension TalkieTypeStyle {
         tracking: -0.1
     )
 
+    /// Startup brand mark. Kept sans and untracked so launch reads
+    /// contemporary instead of as a technical channel label.
+    static let splashWordmark = TalkieTypeStyle(
+        font: .system(size: 42, weight: .semibold, design: .default),
+        tracking: 0
+    )
+
+    /// Quiet boot status under the splash wordmark.
+    static let splashStatus = TalkieTypeStyle(
+        font: .system(size: 12, weight: .medium, design: .default),
+        tracking: 0
+    )
+
     /// Quieter headline — fallback / empty state ("Nothing recent").
     /// Sans, lighter weight. Serif here would feel mismatched against
     /// the empty/quiet tone.

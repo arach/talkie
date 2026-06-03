@@ -308,6 +308,7 @@ private struct ComposeNextDocumentEditor: UIViewRepresentable {
             textView.smartQuotesType = .yes
             textView.inputAssistantItem.leadingBarButtonGroups = []
             textView.inputAssistantItem.trailingBarButtonGroups = []
+            textView.accessibilityIdentifier = "keyboard.compose"
             applyTypingAttributes(to: textView)
             setDocumentText(text.wrappedValue, on: textView)
 
@@ -1462,7 +1463,12 @@ private struct ActionTray: View {
                     }
                 }
                 Spacer(minLength: 8)
-                trayButton(systemImage: "keyboard", accessibilityLabel: "Keyboard", action: onKeyboard)
+                trayButton(
+                    systemImage: "keyboard",
+                    accessibilityLabel: "Keyboard",
+                    accessibilityID: "compose.keyboard.toggle",
+                    action: onKeyboard
+                )
             }
             .padding(.horizontal, 16)
             .padding(.top, 4)
@@ -1520,7 +1526,12 @@ private struct ActionTray: View {
     }
 
     @ViewBuilder
-    private func trayButton(systemImage: String, accessibilityLabel: String, action: @escaping () -> Void) -> some View {
+    private func trayButton(
+        systemImage: String,
+        accessibilityLabel: String,
+        accessibilityID: String? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 17, weight: .regular))
@@ -1535,5 +1546,6 @@ private struct ActionTray: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
+        .accessibilityIdentifier(accessibilityID ?? "compose.tray.\(accessibilityLabel.lowercased().replacing(" ", with: "-"))")
     }
 }

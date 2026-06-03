@@ -652,6 +652,7 @@ struct RecordingSheetNext: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
+        .accessibilityIdentifier(label == "Stop" ? "recording.stop" : "recording.\(label.lowercased())")
     }
 }
 

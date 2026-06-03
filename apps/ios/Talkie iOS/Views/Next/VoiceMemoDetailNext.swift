@@ -835,6 +835,7 @@ struct VoiceMemoDetailNext: View {
         .task(id: store.memo.id) {
             await pollWorkflowRuns()
         }
+        .accessibilityIdentifier("memo.detail.screen")
     }
 
     private var header: some View {

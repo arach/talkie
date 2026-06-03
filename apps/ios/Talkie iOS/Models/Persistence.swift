@@ -16,18 +16,26 @@ import AppKit
 #endif
 
 struct PersistenceController {
-    static let shared = PersistenceController()
+    private static var processUsesLocalStore: Bool {
+        let processInfo = ProcessInfo.processInfo
+        return processInfo.arguments.contains("-FASTLANE_SNAPSHOT")
+            || processInfo.environment["FASTLANE_SNAPSHOT"] == "1"
+    }
+
+    static let shared = PersistenceController(inMemory: processUsesLocalStore)
 
     /// True when persistent stores have finished loading
     static var isReady: Bool = false
 
     /// Load persistence controller asynchronously (non-blocking)
     /// Use this instead of `shared` during app startup to avoid blocking the main thread
-    static func loadAsync() async -> PersistenceController {
+    static func loadAsync(inMemory: Bool = false) async -> PersistenceController {
         await withCheckedContinuation { continuation in
             // Dispatch to background to avoid blocking main thread during init
             DispatchQueue.global(qos: .userInitiated).async {
-                // Use the singleton - don't create a new instance!
+                // The singleton chooses a local-only store when the process
+                // is launched for screenshots/UI tests, so every caller sees
+                // the same seeded context.
                 let controller = PersistenceController.shared
                 DispatchQueue.main.async {
                     continuation.resume(returning: controller)
@@ -91,22 +99,28 @@ struct PersistenceController {
     let container: NSPersistentContainer
 
     init(inMemory: Bool = false) {
-        // Always use CloudKit container - it handles iCloud unavailability gracefully
-        // (stores locally, syncs when available). No need to block on iCloud status check.
-        let cloudContainer = NSPersistentCloudKitContainer(name: "talkie")
-        if let description = cloudContainer.persistentStoreDescriptions.first {
-            description.cloudKitContainerOptions = NSPersistentCloudKitContainerOptions(
-                containerIdentifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier
-            )
-            description.setOption(true as NSNumber, forKey: NSMigratePersistentStoresAutomaticallyOption)
-            description.setOption(true as NSNumber, forKey: NSInferMappingModelAutomaticallyOption)
-            description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
-            description.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
-        }
-        container = cloudContainer
-
         if inMemory {
-            container.persistentStoreDescriptions.first!.url = URL(fileURLWithPath: "/dev/null")
+            let localContainer = NSPersistentContainer(name: "talkie")
+            if let description = localContainer.persistentStoreDescriptions.first {
+                description.url = URL(fileURLWithPath: "/dev/null")
+                description.setOption(true as NSNumber, forKey: NSMigratePersistentStoresAutomaticallyOption)
+                description.setOption(true as NSNumber, forKey: NSInferMappingModelAutomaticallyOption)
+            }
+            container = localContainer
+        } else {
+            // Always use CloudKit container - it handles iCloud unavailability gracefully
+            // (stores locally, syncs when available). No need to block on iCloud status check.
+            let cloudContainer = NSPersistentCloudKitContainer(name: "talkie")
+            if let description = cloudContainer.persistentStoreDescriptions.first {
+                description.cloudKitContainerOptions = NSPersistentCloudKitContainerOptions(
+                    containerIdentifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier
+                )
+                description.setOption(true as NSNumber, forKey: NSMigratePersistentStoresAutomaticallyOption)
+                description.setOption(true as NSNumber, forKey: NSInferMappingModelAutomaticallyOption)
+                description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
+                description.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
+            }
+            container = cloudContainer
         }
 
         container.loadPersistentStores { storeDescription, error in
@@ -120,8 +134,10 @@ struct PersistenceController {
         container.viewContext.automaticallyMergesChangesFromParent = true
         container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
 
-        // Always set up CloudKit monitoring - it handles failures gracefully
-        setupCloudKitSyncMonitoring()
+        // In-memory screenshot/preview stores are intentionally local-only.
+        if !inMemory {
+            setupCloudKitSyncMonitoring()
+        }
 
         // Log memo count after store is ready
         let viewContext = container.viewContext

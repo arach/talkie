@@ -131,7 +131,7 @@ struct talkieApp: App {
             .task {
                 // Load database
                 let loadStart = Date()
-                let controller = await PersistenceController.loadAsync()
+                let controller = await PersistenceController.loadAsync(inMemory: Self.isScreenshotMode)
                 let loadDuration = Date().timeIntervalSince(loadStart)
                 AppLogger.app.info("📱 Database loaded in \(String(format: "%.0f", loadDuration * 1000))ms (async, non-blocking)")
 
