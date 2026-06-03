@@ -30,8 +30,14 @@ struct ComposeNextView: View {
     @EnvironmentObject private var chrome: ShellChrome
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var compose: ComposeStore
+    // Reflects whether the embedded Talkie keyboard is up. Focus itself is driven
+    // imperatively (button → notification → becomeFirstResponder on the real text
+    // view); this flag is only updated *by* the editor's begin/end editing so the
+    // rest of the SwiftUI tree can observe keyboard state without racing it.
     @State private var isTalkieKeyboardFocused = false
     @State private var showingNotesList = false
+    // Owns presentation of the Talkie keyboard (our view, not iOS's inputView).
+    @StateObject private var keyboardController = ComposeKeyboardController()
 
     init(documentID: String = "mock", store: ComposeStore? = nil) {
         self.documentID = documentID
@@ -72,6 +78,7 @@ struct ComposeNextView: View {
                     set: { compose.updateDocumentBodyText($0) }
                 ),
                 isKeyboardFocused: $isTalkieKeyboardFocused,
+                keyboardController: keyboardController,
                 onMic: { compose.toggleDictation() }
             )
             .padding(.horizontal, 12)
@@ -101,13 +108,22 @@ struct ComposeNextView: View {
                 onVoice: { compose.toggleVoiceCommand() },
                 onKeyboard: {
                     NotificationCenter.default.post(name: .composeNextEditorToggleKeyboard, object: nil)
-                },
-                cursorParagraphIndex: Binding(
-                    get: { compose.cursorParagraphIndex },
-                    set: { compose.cursorParagraphIndex = $0 }
-                ),
-                paragraphCount: compose.document.paragraphs.count
+                }
             )
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if keyboardController.isVisible {
+                TalkieKeyboardHost(controller: keyboardController)
+                    .frame(height: 230)
+                    .frame(maxWidth: .infinity)
+                    .transition(.move(edge: .bottom))
+            }
+        }
+        .onChange(of: keyboardController.isVisible) { _, up in
+            AppShellRouter.shared.isEditorKeyboardUp = up
+        }
+        .onDisappear {
+            AppShellRouter.shared.isEditorKeyboardUp = false
         }
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .inactive || newPhase == .background else { return }
@@ -119,7 +135,8 @@ struct ComposeNextView: View {
             // Talkie keyboard slides up immediately.
             if AppShellRouter.shared.pendingComposeFocus {
                 AppShellRouter.shared.pendingComposeFocus = false
-                isTalkieKeyboardFocused = true
+                withAnimation(.easeOut(duration: 0.22)) { keyboardController.isVisible = true }
+                NotificationCenter.default.post(name: .composeRequestEditorFocus, object: nil)
             }
         }
         .sheet(isPresented: $showingNotesList) {
@@ -139,21 +156,70 @@ extension Notification.Name {
     /// reading the text view's real first-responder state, so the tray
     /// button can't desync into a dead toggle.
     static let composeNextEditorToggleKeyboard = Notification.Name("composeNextEditorToggleKeyboard")
+    /// Move the text caret one step in a cardinal direction. `userInfo["direction"]`
+    /// is "up" | "down" | "left" | "right". Posted repeatedly by the cursor joystick.
+    static let composeNextEditorMoveCursor = Notification.Name("composeNextEditorMoveCursor")
+}
+
+// MARK: - Talkie keyboard presentation (NOT iOS inputView)
+
+/// Shared bridge between the document editor and the Talkie keyboard. The
+/// keyboard is OUR view — it is presented as an ordinary bottom-anchored
+/// subview of the Compose layout, never handed to iOS as a `UITextView.inputView`.
+/// Doing it this way sidesteps the entire system-keyboard presentation path
+/// (and its hardware-keyboard suppression): when we want the keyboard, we just
+/// put it on screen.
+@MainActor
+final class ComposeKeyboardController: ObservableObject {
+    /// Drives the slide-in/out of the bottom keyboard.
+    @Published var isVisible = false
+    /// The editor coordinator — receives key taps via `performKeyboardAction`.
+    weak var inputHost: KeyboardInputHost?
+    /// Set by the editor so a swipe-down collapse can resign the caret too.
+    var onCollapse: (() -> Void)?
+}
+
+/// Renders `HostedTalkieKeyboardView` as a normal SwiftUI-hosted view. This is
+/// the in-app keyboard the user sees — it does not depend on first-responder
+/// key routing; taps flow through `controller.inputHost`.
+private struct TalkieKeyboardHost: UIViewRepresentable {
+    @ObservedObject var controller: ComposeKeyboardController
+
+    func makeUIView(context: Context) -> HostedTalkieKeyboardView {
+        let keyboard = HostedTalkieKeyboardView()
+        keyboard.allowsMinimalLayout = false
+        keyboard.preferredInitialLayout = .compact
+        keyboard.preferredInitialModeId = KeyboardMode.abc.id
+        keyboard.resetToPreferredInitialLayout()
+        keyboard.inputHost = controller.inputHost
+        keyboard.onRequestCollapse = { [weak controller] in
+            withAnimation(.easeOut(duration: 0.22)) { controller?.isVisible = false }
+            controller?.onCollapse?()
+        }
+        return keyboard
+    }
+
+    func updateUIView(_ keyboard: HostedTalkieKeyboardView, context: Context) {
+        // Keep the host pointer fresh if the editor coordinator was recreated.
+        keyboard.inputHost = controller.inputHost
+    }
 }
 
 /// Full-document editor backed by UITextView so the system caret,
 /// double-tap word selection, and drag handles behave natively.
-/// The in-app Talkie keyboard mounts as `inputView`.
+/// The Talkie keyboard is presented separately (see `TalkieKeyboardHost`);
+/// the system keyboard is suppressed with an empty `inputView`.
 private struct ComposeNextDocumentEditor: UIViewRepresentable {
     @Binding var text: String
     @Binding var isKeyboardFocused: Bool
+    let keyboardController: ComposeKeyboardController
     let isEditable: Bool
     let textColor: UIColor
     let accentColor: UIColor
     let contentBottomInset: CGFloat
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text, isKeyboardFocused: $isKeyboardFocused)
+        Coordinator(text: $text, isKeyboardFocused: $isKeyboardFocused, keyboardController: keyboardController)
     }
 
     func makeUIView(context: Context) -> UITextView {
@@ -184,12 +250,11 @@ private struct ComposeNextDocumentEditor: UIViewRepresentable {
             textView.selectedRange = NSRange(location: clampedLocation, length: clampedLength)
             context.coordinator.updatePlaceholderVisibility(in: textView)
         }
-
-        if isKeyboardFocused {
-            context.coordinator.requestFocus(for: textView)
-        } else if textView.isFirstResponder {
-            textView.resignFirstResponder()
-        }
+        // NOTE: focus is intentionally NOT driven from here. Auto-focusing /
+        // resigning inside updateUIView raced on every SwiftUI render and
+        // resigned the keyboard the instant the bound flag read false — the
+        // bug behind the "dead" keyboard button. Focus is now purely imperative
+        // (toggle/focus/blur notifications → becomeFirstResponder on the text view).
     }
 
     static func dismantleUIView(_ uiView: UITextView, coordinator: Coordinator) {
@@ -209,13 +274,14 @@ private struct ComposeNextDocumentEditor: UIViewRepresentable {
 
         var text: Binding<String>
         var isKeyboardFocused: Binding<Bool>
+        let keyboardController: ComposeKeyboardController
         var isUpdatingFromTextView = false
         weak var textView: UITextView?
-        weak var keyboard: HostedTalkieKeyboardView?
 
-        init(text: Binding<String>, isKeyboardFocused: Binding<Bool>) {
+        init(text: Binding<String>, isKeyboardFocused: Binding<Bool>, keyboardController: ComposeKeyboardController) {
             self.text = text
             self.isKeyboardFocused = isKeyboardFocused
+            self.keyboardController = keyboardController
             super.init()
 
             NotificationCenter.default.addObserver(
@@ -260,6 +326,12 @@ private struct ComposeNextDocumentEditor: UIViewRepresentable {
                 name: .composeNextEditorToggleKeyboard,
                 object: nil
             )
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(handleMoveCursorRequest(_:)),
+                name: .composeNextEditorMoveCursor,
+                object: nil
+            )
         }
 
         deinit {
@@ -272,19 +344,17 @@ private struct ComposeNextDocumentEditor: UIViewRepresentable {
             accentColor: UIColor,
             bottomInset: CGFloat
         ) {
-            let keyboard = HostedTalkieKeyboardView()
-            keyboard.preferredInitialLayout = .compact
-            keyboard.preferredInitialModeId = KeyboardMode.abc.id
-            keyboard.inputHost = self
-            keyboard.onLayoutHeightChange = { [weak textView] in
-                textView?.reloadInputViews()
-            }
-            keyboard.onRequestCollapse = { [weak textView] in
+            // Suppress the iOS system keyboard entirely. A non-nil empty
+            // inputView keeps the caret/selection working while presenting
+            // nothing — the Talkie keyboard is shown separately as a normal
+            // view (see TalkieKeyboardHost), so iOS never gets a chance to
+            // suppress, resize, or otherwise interfere with it.
+            textView.inputView = UIView()
+            // Route key taps from the Talkie keyboard back into this editor.
+            keyboardController.inputHost = self
+            keyboardController.onCollapse = { [weak textView] in
                 textView?.resignFirstResponder()
             }
-
-            textView.inputView = keyboard
-            self.keyboard = keyboard
 
             textView.delegate = self
             textView.backgroundColor = .clear
@@ -328,10 +398,10 @@ private struct ComposeNextDocumentEditor: UIViewRepresentable {
         }
 
         func teardown() {
-            keyboard?.inputHost = nil
-            keyboard?.onRequestCollapse = nil
-            keyboard?.onLayoutHeightChange = nil
-            keyboard = nil
+            if keyboardController.inputHost === self {
+                keyboardController.inputHost = nil
+                keyboardController.onCollapse = nil
+            }
             textView = nil
         }
 
@@ -341,19 +411,39 @@ private struct ComposeNextDocumentEditor: UIViewRepresentable {
         }
 
         @objc private func handleBlurRequest() {
+            withAnimation(.easeOut(duration: 0.22)) { keyboardController.isVisible = false }
             textView?.resignFirstResponder()
         }
 
         @objc private func handleToggleKeyboardRequest() {
             guard let textView else { return }
-            // Toggle off the *actual* responder state — not a mirrored
-            // SwiftUI flag that can drift out of sync and leave the button
-            // posting blur-on-blur (so the keyboard never reappears).
-            if textView.isFirstResponder {
-                textView.resignFirstResponder()
-            } else {
+            // Show/hide OUR keyboard view — not iOS's. When showing, also take
+            // first responder so the caret blinks (the system keyboard stays
+            // suppressed via the empty inputView). When hiding, drop the caret.
+            let willShow = !keyboardController.isVisible
+            withAnimation(.easeOut(duration: 0.22)) { keyboardController.isVisible = willShow }
+            if willShow {
                 requestFocus(for: textView)
+            } else {
+                textView.resignFirstResponder()
             }
+            isKeyboardFocused.wrappedValue = willShow
+        }
+
+        @objc private func handleMoveCursorRequest(_ note: Notification) {
+            guard let textView,
+                  let raw = note.userInfo?["direction"] as? String else { return }
+            let movement: KeyboardCursorMovement
+            switch raw {
+            case "up": movement = .up
+            case "down": movement = .down
+            case "left": movement = .left
+            case "right": movement = .right
+            default: return
+            }
+            // The caret only moves visibly once the editor is first responder.
+            if !textView.isFirstResponder { requestFocus(for: textView) }
+            moveCursor(movement, in: textView)
         }
 
         @objc private func handlePasteRequest() {
@@ -396,7 +486,6 @@ private struct ComposeNextDocumentEditor: UIViewRepresentable {
         }
 
         func textViewDidBeginEditing(_ textView: UITextView) {
-            keyboard?.resetToPreferredInitialLayout()
             isKeyboardFocused.wrappedValue = true
         }
 
@@ -436,6 +525,7 @@ private struct ComposeNextDocumentEditor: UIViewRepresentable {
             case .tab:
                 replaceSelection(with: "\t")
             case .escape, .dismissKeyboard:
+                withAnimation(.easeOut(duration: 0.22)) { keyboardController.isVisible = false }
                 textView.resignFirstResponder()
             case .enter:
                 replaceSelection(with: "\n")
@@ -835,6 +925,7 @@ private struct DocumentBody: View {
     let diff: ComposeStore.Diff?
     @Binding var documentText: String
     @Binding var isKeyboardFocused: Bool
+    let keyboardController: ComposeKeyboardController
     let onMic: () -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
@@ -853,12 +944,18 @@ private struct DocumentBody: View {
                     ComposeNextDocumentEditor(
                         text: $documentText,
                         isKeyboardFocused: $isKeyboardFocused,
+                        keyboardController: keyboardController,
                         isEditable: state == .idle || state == .dictating,
                         textColor: UIColor(theme.colors.textPrimary),
                         accentColor: UIColor(theme.currentTheme.chrome.accent),
                         contentBottomInset: 56
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    // Win the card's full height ahead of the trailing
+                    // Spacer — otherwise the two flexible views split it
+                    // ~50/50 and the editor only ever shows the top half,
+                    // clipping (and stranding) everything below the fold.
+                    .layoutPriority(1)
                     .padding(16)
 
                     if state == .dictating, let dictationPreview {
@@ -1335,44 +1432,147 @@ private struct ComposeNotesListSheet: View {
 
 // MARK: - Cursor joystick
 
-private struct CursorJoystickPopover: View {
-    @Binding var cursorParagraphIndex: Int
-    let paragraphCount: Int
+private enum JoystickDirection: Equatable {
+    case up, down, left, right
 
+    /// userInfo value for `.composeNextEditorMoveCursor`.
+    var value: String {
+        switch self {
+        case .up: return "up"
+        case .down: return "down"
+        case .left: return "left"
+        case .right: return "right"
+        }
+    }
+}
+
+/// Drives repeated caret moves while the joystick is held. A steady tick + a
+/// velocity accumulator gives smooth acceleration: the further the knob is
+/// dragged from center, the faster the caret travels.
+@MainActor
+private final class CursorJoystickDriver: ObservableObject {
+    /// Active cardinal direction (nil when centered) — published for the ring highlight.
+    @Published private(set) var direction: JoystickDirection?
+
+    private var norm: CGFloat = 0          // 0…1 drag extension past the deadzone
+    private var accumulator: Double = 0    // fractional caret steps owed
+    private var timer: Timer?
+
+    private let tickInterval = 1.0 / 60.0
+    private let deadzone: CGFloat = 8
+    private let maxRadius: CGFloat = 64
+    private let minSpeed = 3.0   // caret steps / sec just past the deadzone
+    private let maxSpeed = 38.0  // caret steps / sec at full extension
+
+    func update(translation: CGSize) {
+        let dx = translation.width
+        let dy = translation.height
+        let magnitude = (dx * dx + dy * dy).squareRoot()
+        guard magnitude > deadzone else { reset(); return }
+
+        let newDirection: JoystickDirection = abs(dx) >= abs(dy)
+            ? (dx >= 0 ? .right : .left)
+            : (dy >= 0 ? .down : .up)
+        norm = min(1, (magnitude - deadzone) / (maxRadius - deadzone))
+
+        if newDirection != direction {
+            direction = newDirection
+            accumulator = 1  // emit one step immediately on engage / direction flip
+            UISelectionFeedbackGenerator().selectionChanged()
+        }
+        if timer == nil { startTimer() }
+    }
+
+    func reset() {
+        direction = nil
+        norm = 0
+        accumulator = 0
+        timer?.invalidate()
+        timer = nil
+    }
+
+    private func startTimer() {
+        timer = Timer.scheduledTimer(withTimeInterval: tickInterval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.tick() }
+        }
+    }
+
+    private func tick() {
+        guard let direction else { return }
+        let speed = minSpeed + (maxSpeed - minSpeed) * Double(norm)
+        accumulator += speed * tickInterval
+        while accumulator >= 1 {
+            accumulator -= 1
+            NotificationCenter.default.post(
+                name: .composeNextEditorMoveCursor,
+                object: nil,
+                userInfo: ["direction": direction.value]
+            )
+        }
+    }
+}
+
+/// Keeps the original popover presentation — a framed pad with the scope target
+/// ringed by directional chevrons — but the target is now a live drag joystick:
+/// drag it toward a cardinal edge to walk the caret that way, faster the further
+/// you pull from center.
+private struct CursorJoystickPopover: View {
+    @StateObject private var driver = CursorJoystickDriver()
     @ObservedObject private var theme = ThemeManager.shared
+    @State private var knobOffset: CGSize = .zero
+
+    private let knobTravel: CGFloat = 16  // visual clamp; input range is larger
 
     var body: some View {
         VStack(spacing: 8) {
-            Button(action: moveUp) {
-                joystickGlyph("chevron.up")
-            }
-            .disabled(cursorParagraphIndex <= 0)
-
-            HStack(spacing: 8) {
-                joystickGlyph("chevron.left")
-                    .opacity(0.35)
+            ZStack {
+                joystickGlyph("chevron.up", active: driver.direction == .up)
+                    .offset(y: -38)
+                joystickGlyph("chevron.down", active: driver.direction == .down)
+                    .offset(y: 38)
+                joystickGlyph("chevron.left", active: driver.direction == .left)
+                    .offset(x: -38)
+                joystickGlyph("chevron.right", active: driver.direction == .right)
+                    .offset(x: 38)
 
                 Image(systemName: "scope")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(theme.currentTheme.chrome.accent)
                     .frame(width: 34, height: 34)
                     .background(Circle().fill(theme.currentTheme.chrome.accentTint))
-
-                joystickGlyph("chevron.right")
-                    .opacity(0.35)
+                    .overlay(Circle().strokeBorder(theme.currentTheme.chrome.accent.opacity(0.35),
+                                                   lineWidth: theme.currentTheme.chrome.hairlineWidth))
+                    .offset(knobOffset)
             }
+            .frame(width: 96, height: 96)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        driver.update(translation: value.translation)
+                        let dx = value.translation.width
+                        let dy = value.translation.height
+                        let magnitude = (dx * dx + dy * dy).squareRoot()
+                        if magnitude > 0 {
+                            let clamped = min(magnitude, knobTravel)
+                            knobOffset = CGSize(width: dx / magnitude * clamped,
+                                                height: dy / magnitude * clamped)
+                        } else {
+                            knobOffset = .zero
+                        }
+                    }
+                    .onEnded { _ in
+                        driver.reset()
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.6)) {
+                            knobOffset = .zero
+                        }
+                    }
+            )
 
-            Button(action: moveDown) {
-                joystickGlyph("chevron.down")
-            }
-            .disabled(cursorParagraphIndex >= max(0, paragraphCount - 1))
-
-            Text("Paragraph \(min(cursorParagraphIndex + 1, max(1, paragraphCount))) of \(max(1, paragraphCount))")
+            Text("Drag to move cursor")
                 .talkieType(.channelLabelTiny)
                 .foregroundStyle(theme.colors.textTertiary)
-                .monospacedDigit()
         }
-        .buttonStyle(.plain)
         .padding(12)
         .frame(width: 140, height: 140)
         .background(
@@ -1385,30 +1585,17 @@ private struct CursorJoystickPopover: View {
                 )
         )
         .presentationCompactAdaptation(.popover)
+        .accessibilityElement()
+        .accessibilityLabel("Cursor joystick")
+        .accessibilityHint("Drag up, down, left, or right to move the cursor")
     }
 
-    private func moveUp() {
-        cursorParagraphIndex = max(0, cursorParagraphIndex - 1)
-    }
-
-    private func moveDown() {
-        cursorParagraphIndex = min(max(0, paragraphCount - 1), cursorParagraphIndex + 1)
-    }
-
-    private func joystickGlyph(_ systemImage: String) -> some View {
+    private func joystickGlyph(_ systemImage: String, active: Bool) -> some View {
         Image(systemName: systemImage)
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(theme.colors.textSecondary)
-            .frame(width: 34, height: 28)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(theme.colors.background)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .strokeBorder(theme.currentTheme.chrome.edgeFaint,
-                                          lineWidth: theme.currentTheme.chrome.hairlineWidth)
-                    )
-            )
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(active
+                ? theme.currentTheme.chrome.accent
+                : theme.colors.textSecondary.opacity(0.5))
     }
 }
 
@@ -1421,8 +1608,6 @@ private struct ActionTray: View {
     let onRefine: () -> Void
     let onVoice: () -> Void
     let onKeyboard: () -> Void
-    @Binding var cursorParagraphIndex: Int
-    let paragraphCount: Int
 
     @State private var showJoystick = false
     @ObservedObject private var theme = ThemeManager.shared
@@ -1518,10 +1703,7 @@ private struct ActionTray: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Cursor")
         .popover(isPresented: $showJoystick) {
-            CursorJoystickPopover(
-                cursorParagraphIndex: $cursorParagraphIndex,
-                paragraphCount: paragraphCount
-            )
+            CursorJoystickPopover()
         }
     }
 
