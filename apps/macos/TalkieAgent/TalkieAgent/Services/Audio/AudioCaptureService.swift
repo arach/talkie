@@ -800,26 +800,21 @@ final class AudioCaptureService: AgentAudioCapture {
 
             logSetupTiming("inputNode initialized (HAL warmup)")
 
-            // Log which device the engine is using (should match our system default switch)
-            if let audioUnit = inputNode.audioUnit {
-                var currentDeviceID: AudioDeviceID = 0
-                var size = UInt32(MemoryLayout<AudioDeviceID>.size)
-                let status = AudioUnitGetProperty(
-                    audioUnit,
-                    kAudioOutputUnitProperty_CurrentDevice,
-                    kAudioUnitScope_Global,
-                    0,
-                    &currentDeviceID,
-                    &size
-                )
-                if status == noErr {
-                    let currentName = self.getDeviceName(currentDeviceID) ?? "unknown"
-                    let matches = currentDeviceID == deviceSelection.deviceID
-                    log.info("🎤 Engine using device: \(currentName) (ID: \(currentDeviceID))",
-                             detail: matches ? "✅ matches selection" : "⚠️ mismatch with \(deviceSelection.name)")
+            // Bind the selected device on the audio unit itself. Changing the
+            // system default is not enough on setups where AVAudioEngine opens
+            // a synthetic default aggregate device.
+            guard self.bindSelectedInputDeviceIfNeeded(
+                inputNode: inputNode,
+                selection: deviceSelection
+            ) else {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, self.captureToken == token else { return }
+                    newEngine.stop()
+                    self.handleError("Failed to select microphone: \(deviceSelection.name)")
                 }
+                return
             }
-            logSetupTiming("device verified")
+            logSetupTiming("device bound")
 
             // CRITICAL: Prepare engine after setting device
             // This forces the audio graph to reinitialize with the correct device format.
@@ -1201,6 +1196,81 @@ final class AudioCaptureService: AgentAudioCapture {
     private enum DeviceResolution {
         case selection(DeviceSelection)
         case missingFixed(uid: String?, name: String?)
+    }
+
+    private func bindSelectedInputDeviceIfNeeded(
+        inputNode: AVAudioInputNode,
+        selection: DeviceSelection
+    ) -> Bool {
+        guard let audioUnit = inputNode.audioUnit else {
+            log.warning("Could not inspect audio input device", detail: "No audio unit")
+            return !selection.isFixedDevice
+        }
+
+        guard let currentDeviceID = currentInputDeviceID(for: audioUnit) else {
+            log.warning("Could not inspect audio input device", detail: "Current device unavailable")
+            return !selection.isFixedDevice
+        }
+
+        let currentName = getDeviceName(currentDeviceID) ?? "unknown"
+        if currentDeviceID == selection.deviceID {
+            log.info("🎤 Engine using device: \(currentName) (ID: \(currentDeviceID))",
+                     detail: "✅ matches selection")
+            return true
+        }
+
+        guard selection.isFixedDevice else {
+            log.info("🎤 Engine using device: \(currentName) (ID: \(currentDeviceID))",
+                     detail: "system default")
+            return true
+        }
+
+        log.warning(
+            "Engine input mismatch; binding selected microphone",
+            detail: "current=\(currentName) (ID: \(currentDeviceID)), selected=\(selection.name) (ID: \(selection.deviceID))"
+        )
+
+        var mutableDeviceID = selection.deviceID
+        let status = AudioUnitSetProperty(
+            audioUnit,
+            kAudioOutputUnitProperty_CurrentDevice,
+            kAudioUnitScope_Global,
+            0,
+            &mutableDeviceID,
+            UInt32(MemoryLayout<AudioDeviceID>.size)
+        )
+
+        guard status == noErr else {
+            log.error("Failed to bind selected microphone", detail: "status=\(status), device=\(selection.name)")
+            return false
+        }
+
+        guard let verifiedDeviceID = currentInputDeviceID(for: audioUnit) else {
+            log.warning("Selected microphone bound but could not verify", detail: selection.name)
+            return true
+        }
+
+        let verifiedName = getDeviceName(verifiedDeviceID) ?? "unknown"
+        let matches = verifiedDeviceID == selection.deviceID
+        log.info(
+            "🎤 Engine using device: \(verifiedName) (ID: \(verifiedDeviceID))",
+            detail: matches ? "✅ bound selected microphone" : "⚠️ still mismatch with \(selection.name)"
+        )
+        return matches
+    }
+
+    private func currentInputDeviceID(for audioUnit: AudioUnit) -> AudioDeviceID? {
+        var currentDeviceID: AudioDeviceID = 0
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        let status = AudioUnitGetProperty(
+            audioUnit,
+            kAudioOutputUnitProperty_CurrentDevice,
+            kAudioUnitScope_Global,
+            0,
+            &currentDeviceID,
+            &size
+        )
+        return status == noErr ? currentDeviceID : nil
     }
 
     private func resolveDevice() -> DeviceResolution {
