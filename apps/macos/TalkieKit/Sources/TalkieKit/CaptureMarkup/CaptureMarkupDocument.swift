@@ -149,9 +149,33 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
     /// When true, the label draws as plain colored text instead of the default
     /// white-on-dark pill. `.label` layers only.
     public var plain: Bool?
+    /// Label contrast preset: "on-light" | "on-dark" | "accent" | "plain".
+    /// Optional so older sidecars keep the historical pill rendering.
+    public var textPreset: String?
+    /// Optional explicit label colors. New presets write these so the web
+    /// canvas and headless exporter stay in lockstep; older labels leave them
+    /// nil and use renderer defaults.
+    public var textColor: String?
+    public var backgroundColor: String?
+    public var backgroundAlpha: Double?
+    public var borderColor: String?
+    public var borderAlpha: Double?
+    /// Arrow endpoint styling. Values are "none" | "open" | "filled" | "dot"
+    /// | "bar". Optional preserves legacy arrows: end pointer only unless
+    /// `label == "line"`.
+    public var pointerStart: String?
+    public var pointerEnd: String?
+    public var pointerStyle: String?
     public var label: String?
     public var orientation: String?
     public var interval: Double?
+    /// Agent turn provenance for layers produced by capture markup runs.
+    /// Optional so older sidecars and hand-drawn layers remain unchanged.
+    public var turnPass: Int?
+    public var turnInstruction: String?
+    public var turnModel: String?
+    public var turnSummary: String?
+    public var turnElapsed: Double?
     public var visible: Bool
     public var author: CaptureMarkupAuthor
 
@@ -170,9 +194,23 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         case bold
         case italic
         case plain
+        case textPreset
+        case textColor
+        case backgroundColor
+        case backgroundAlpha
+        case borderColor
+        case borderAlpha
+        case pointerStart
+        case pointerEnd
+        case pointerStyle
         case label
         case orientation
         case interval
+        case turnPass
+        case turnInstruction
+        case turnModel
+        case turnSummary
+        case turnElapsed
         case visible
         case author
     }
@@ -185,16 +223,30 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         from: CaptureMarkupPoint? = nil,
         to: CaptureMarkupPoint? = nil,
         text: String? = nil,
-        color: String = "#C47D1C",
+        color: String = "#4F7DFF",
         strokeWidth: Double? = nil,
         fontSize: Double? = nil,
         fontFamily: String? = nil,
         bold: Bool? = nil,
         italic: Bool? = nil,
         plain: Bool? = nil,
+        textPreset: String? = nil,
+        textColor: String? = nil,
+        backgroundColor: String? = nil,
+        backgroundAlpha: Double? = nil,
+        borderColor: String? = nil,
+        borderAlpha: Double? = nil,
+        pointerStart: String? = nil,
+        pointerEnd: String? = nil,
+        pointerStyle: String? = nil,
         label: String? = nil,
         orientation: String? = nil,
         interval: Double? = nil,
+        turnPass: Int? = nil,
+        turnInstruction: String? = nil,
+        turnModel: String? = nil,
+        turnSummary: String? = nil,
+        turnElapsed: Double? = nil,
         visible: Bool = true,
         author: CaptureMarkupAuthor = .agent
     ) {
@@ -212,9 +264,23 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         self.bold = bold
         self.italic = italic
         self.plain = plain
+        self.textPreset = textPreset
+        self.textColor = textColor
+        self.backgroundColor = backgroundColor
+        self.backgroundAlpha = backgroundAlpha
+        self.borderColor = borderColor
+        self.borderAlpha = borderAlpha
+        self.pointerStart = pointerStart
+        self.pointerEnd = pointerEnd
+        self.pointerStyle = pointerStyle
         self.label = label
         self.orientation = orientation
         self.interval = interval
+        self.turnPass = turnPass
+        self.turnInstruction = turnInstruction
+        self.turnModel = turnModel
+        self.turnSummary = turnSummary
+        self.turnElapsed = turnElapsed
         self.visible = visible
         self.author = author
     }
@@ -228,16 +294,30 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         from = try container.decodeIfPresent(CaptureMarkupPoint.self, forKey: .from)
         to = try container.decodeIfPresent(CaptureMarkupPoint.self, forKey: .to)
         text = try container.decodeIfPresent(String.self, forKey: .text)
-        color = try container.decodeIfPresent(String.self, forKey: .color) ?? "#C47D1C"
+        color = try container.decodeIfPresent(String.self, forKey: .color) ?? "#4F7DFF"
         strokeWidth = try container.decodeIfPresent(Double.self, forKey: .strokeWidth)
         fontSize = try container.decodeIfPresent(Double.self, forKey: .fontSize)
         fontFamily = try container.decodeIfPresent(String.self, forKey: .fontFamily)
         bold = try container.decodeIfPresent(Bool.self, forKey: .bold)
         italic = try container.decodeIfPresent(Bool.self, forKey: .italic)
         plain = try container.decodeIfPresent(Bool.self, forKey: .plain)
+        textPreset = try container.decodeIfPresent(String.self, forKey: .textPreset)
+        textColor = try container.decodeIfPresent(String.self, forKey: .textColor)
+        backgroundColor = try container.decodeIfPresent(String.self, forKey: .backgroundColor)
+        backgroundAlpha = try container.decodeIfPresent(Double.self, forKey: .backgroundAlpha)
+        borderColor = try container.decodeIfPresent(String.self, forKey: .borderColor)
+        borderAlpha = try container.decodeIfPresent(Double.self, forKey: .borderAlpha)
+        pointerStart = try container.decodeIfPresent(String.self, forKey: .pointerStart)
+        pointerEnd = try container.decodeIfPresent(String.self, forKey: .pointerEnd)
+        pointerStyle = try container.decodeIfPresent(String.self, forKey: .pointerStyle)
         label = try container.decodeIfPresent(String.self, forKey: .label)
         orientation = try container.decodeIfPresent(String.self, forKey: .orientation)
         interval = try container.decodeIfPresent(Double.self, forKey: .interval)
+        turnPass = try container.decodeIfPresent(Int.self, forKey: .turnPass)
+        turnInstruction = try container.decodeIfPresent(String.self, forKey: .turnInstruction)
+        turnModel = try container.decodeIfPresent(String.self, forKey: .turnModel)
+        turnSummary = try container.decodeIfPresent(String.self, forKey: .turnSummary)
+        turnElapsed = try container.decodeIfPresent(Double.self, forKey: .turnElapsed)
         visible = try container.decodeIfPresent(Bool.self, forKey: .visible) ?? true
         author = try container.decodeIfPresent(CaptureMarkupAuthor.self, forKey: .author) ?? .agent
     }

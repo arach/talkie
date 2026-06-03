@@ -476,8 +476,11 @@ private let scopeChrome = ChromeTokens(
     trace: ScopeMobile.trace,
     traceFaint: ScopeMobile.traceFaint,
     edgeStrong: ScopeMobile.edgeStrong,
-    edge: ScopeMobile.edge,
-    edgeFaint: ScopeMobile.edgeFaint,
+    // Card stroke firmed (0.10→0.13 / 0.06→0.085) so panels read on the warm
+    // paper canvas instead of melting into it. Isolated to chrome — the
+    // shared ScopeMobile.edge* decorative tokens stay gentle.
+    edge: ScopeMobile.ink.opacity(0.13),
+    edgeFaint: ScopeMobile.ink.opacity(0.085),
     edgeSubtle: ScopeMobile.edgeSubtle,
     glowRadius: 2,
     chromeCorner: 3,
@@ -485,32 +488,34 @@ private let scopeChrome = ChromeTokens(
     hairlineWidth: 0.5
 )
 
+// "Linear" approach — flat indigo dark. No halo, generous 8pt rounding,
+// subtle 1pt borders that read via surface elevation (Linear's signature).
 private let midnightChrome: ChromeTokens = {
-    let accent = Color(hex: "0084FF")
-    let ink = Color(hex: "FAFAFA")
+    let accent = Color(hex: "5E6AD2")   // Linear indigo
+    let ink = Color(hex: "F7F8F8")
     return ChromeTokens(
         accent: accent,
-        accentTint: accent.opacity(0.10),
-        accentGlow: accent.opacity(0.28),
-        accentStrong: accent.opacity(0.42),
-        action: ink.opacity(0.65),
+        accentTint: accent.opacity(0.14),
+        accentGlow: accent.opacity(0.22),
+        accentStrong: accent.opacity(0.45),
+        action: ink.opacity(0.70),
         actionTint: ink.opacity(0.06),
-        panel: Color(hex: "0F0F0F", darkHex: "000000"),
-        panelAlt: Color(hex: "151515", darkHex: "070707"),
-        panelInk: Color(hex: "F5F5F5"),
-        panelInkFaint: Color(hex: "8A8A8A"),
-        panelAccent: Color(hex: "0084FF"),
-        panelEdge: Color(hex: "0084FF").opacity(0.18),
-        trace: ink.opacity(0.75),
-        traceFaint: ink.opacity(0.08),
-        edgeStrong: ink.opacity(0.30),
+        panel: Color(hex: "131417"),
+        panelAlt: Color(hex: "1A1B1F"),
+        panelInk: Color(hex: "F7F8F8"),
+        panelInkFaint: Color(hex: "9097A1"),
+        panelAccent: accent,
+        panelEdge: accent.opacity(0.30),
+        trace: ink.opacity(0.70),
+        traceFaint: ink.opacity(0.10),
+        edgeStrong: ink.opacity(0.28),
         edge: ink.opacity(0.18),
-        edgeFaint: ink.opacity(0.10),
-        edgeSubtle: ink.opacity(0.05),
-        glowRadius: 3,
-        chromeCorner: 2,
-        eyebrowLeader: "—",
-        hairlineWidth: 0.5
+        edgeFaint: ink.opacity(0.12),
+        edgeSubtle: ink.opacity(0.06),
+        glowRadius: 0,      // flat — no halo
+        chromeCorner: 8,    // generous rounding
+        eyebrowLeader: "·",
+        hairlineWidth: 1.0
     )
 }()
 
@@ -532,10 +537,10 @@ private let tacticalChrome: ChromeTokens = {
         panelEdge: Color(hex: "FF9020").opacity(0.22),
         trace: ink.opacity(0.80),
         traceFaint: ink.opacity(0.10),
-        edgeStrong: ink.opacity(0.34),
-        edge: ink.opacity(0.22),
-        edgeFaint: ink.opacity(0.14),
-        edgeSubtle: ink.opacity(0.08),
+        edgeStrong: ink.opacity(0.44),
+        edge: ink.opacity(0.30),
+        edgeFaint: ink.opacity(0.20),
+        edgeSubtle: ink.opacity(0.10),
         glowRadius: 1,      // matte — barely any halo
         chromeCorner: 0,    // square corners, no rounding
         eyebrowLeader: "›",
@@ -562,8 +567,8 @@ private let ghostChrome: ChromeTokens = {
         trace: ink.opacity(0.60),
         traceFaint: ink.opacity(0.06),
         edgeStrong: ink.opacity(0.24),
-        edge: ink.opacity(0.16),
-        edgeFaint: ink.opacity(0.10),
+        edge: ink.opacity(0.18),
+        edgeFaint: ink.opacity(0.12),   // 0.10→0.12: card separation on frost
         edgeSubtle: ink.opacity(0.05),
         glowRadius: 7,      // diffuse, vapory halo
         chromeCorner: 5,    // softer rounding
@@ -590,10 +595,13 @@ private let liftChrome: ChromeTokens = {
         panelEdge: Color(hex: "A5B4FC").opacity(0.22),
         trace: ink.opacity(0.45),
         traceFaint: ink.opacity(0.04),
-        edgeStrong: ink.opacity(0.10),
-        edge: ink.opacity(0.06),
-        edgeFaint: ink.opacity(0.04),
-        edgeSubtle: ink.opacity(0.02),
+        // Lift leaned hardest on near-invisible edges (0.04 faint) + light
+        // shadow, so white-on-white cards vanished — the biggest "muted"
+        // offender. Firmed the stroke; the lifted bezel shadow does the rest.
+        edgeStrong: ink.opacity(0.14),
+        edge: ink.opacity(0.10),
+        edgeFaint: ink.opacity(0.07),
+        edgeSubtle: ink.opacity(0.03),
         glowRadius: 0,
         chromeCorner: 8,
         eyebrowLeader: "·",
@@ -601,36 +609,73 @@ private let liftChrome: ChromeTokens = {
     )
 }()
 
-// Graphite: sober black-family. Slate blue-gray accent, near-zero
-// halo, lightest hairlines, quiet `·` eyebrow. The accent at ~10%
-// chroma vs Midnight's 100%-saturated `#0084FF` — visible enough to
-// register as "the accent" without competing with the layout.
+// "Vercel" approach — Geist monochrome. WHITE accent (so every accent-driven
+// icon/control renders white = no hue, no view refactor), neutral elevated
+// panels, flat, 6pt rounding. The one permitted pop is the universal
+// recording red, which isn't the theme accent.
 private let graphiteChrome: ChromeTokens = {
-    let accent = Color(hex: "7B8E9E")
-    let ink = Color(hex: "EDEDEE")
+    let accent = Color(hex: "FAFAFA")   // white — the monochrome "signal"
+    let ink = Color(hex: "EDEDED")
     return ChromeTokens(
         accent: accent,
         accentTint: accent.opacity(0.10),
-        accentGlow: accent.opacity(0.20),
-        accentStrong: accent.opacity(0.40),
-        action: ink.opacity(0.65),
-        actionTint: ink.opacity(0.05),
-        panel: Color(hex: "18181A"),
-        panelAlt: Color(hex: "1C1C1E"),
-        panelInk: Color(hex: "EDEDEE"),
-        panelInkFaint: Color(hex: "7E7E80"),
+        accentGlow: accent.opacity(0.0),
+        accentStrong: accent.opacity(0.22),
+        action: ink.opacity(0.72),
+        actionTint: ink.opacity(0.06),
+        panel: Color(hex: "0E0E0E"),
+        panelAlt: Color(hex: "171717"),
+        panelInk: Color(hex: "EDEDED"),
+        panelInkFaint: Color(hex: "8F8F8F"),
         panelAccent: accent,
-        panelEdge: accent.opacity(0.18),
-        trace: ink.opacity(0.70),
-        traceFaint: ink.opacity(0.07),
-        edgeStrong: ink.opacity(0.28),
-        edge: ink.opacity(0.18),
-        edgeFaint: ink.opacity(0.10),
-        edgeSubtle: ink.opacity(0.05),
+        panelEdge: ink.opacity(0.18),
+        trace: ink.opacity(0.75),
+        traceFaint: ink.opacity(0.10),
+        edgeStrong: ink.opacity(0.30),
+        edge: ink.opacity(0.20),
+        edgeFaint: ink.opacity(0.14),
+        edgeSubtle: ink.opacity(0.08),
         glowRadius: 0,       // no halo
-        chromeCorner: 4,
+        chromeCorner: 6,
         eyebrowLeader: "·",
-        hairlineWidth: 0.5
+        hairlineWidth: 1.0
+    )
+}()
+
+// Carbon: monochrome terminal chrome. Near-square corners (1pt — tactical
+// owns the fully-square 0), firm 0.75pt hairlines so structure reads, and a
+// single cold signal-green accent reserved for live/active. Ink flips
+// black↔white with the mode so the whole vocabulary stays true-monochrome.
+private let carbonChrome: ChromeTokens = {
+    let signal = Color(hex: "0E8F4F", darkHex: "3DE08A")
+    let ink = Color(hex: "0A0A0A", darkHex: "FAFAFA")
+    return ChromeTokens(
+        accent: signal,
+        accentTint: signal.opacity(0.10),
+        accentGlow: signal.opacity(0.22),
+        accentStrong: signal.opacity(0.40),
+        action: ink.opacity(0.72),
+        actionTint: ink.opacity(0.06),
+        panel: Color(hex: "0A0A0A", darkHex: "000000"),
+        panelAlt: Color(hex: "121212", darkHex: "070707"),
+        panelInk: Color(hex: "FAFAFA"),
+        panelInkFaint: Color(hex: "8A8A8A"),
+        panelAccent: signal,
+        panelEdge: signal.opacity(0.20),
+        trace: ink.opacity(0.80),
+        traceFaint: ink.opacity(0.10),
+        // Mode-aware (AARRGGBB): light = black at low alpha, dark = WHITE at
+        // ~2× alpha — white-on-black reads far fainter than black-on-white at
+        // the same value, so the ladders can't be symmetric. Light stays
+        // subtle (it was never the problem); dark gets the heavy hand.
+        edgeStrong: Color(hex: "2E000000", darkHex: "5CFFFFFF"),
+        edge:       Color(hex: "24000000", darkHex: "42FFFFFF"),
+        edgeFaint:  Color(hex: "1A000000", darkHex: "30FFFFFF"),
+        edgeSubtle: Color(hex: "0F000000", darkHex: "1CFFFFFF"),
+        glowRadius: 2,
+        chromeCorner: 1,    // near-square — terminal, not soft
+        eyebrowLeader: "›",
+        hairlineWidth: 1.0  // 0.5–0.75pt hairlines vanish on black
     )
 }()
 
@@ -643,6 +688,7 @@ extension AppTheme {
         case .ghost:    return ghostChrome
         case .lift:     return liftChrome
         case .graphite: return graphiteChrome
+        case .carbon:   return carbonChrome
         }
     }
 }
@@ -1159,8 +1205,11 @@ private struct BezelChassisModifier: ViewModifier {
             .overlay {
                 shape.stroke(stroke, lineWidth: chrome.hairlineWidth)
             }
-            .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
-            .shadow(color: Color.black.opacity(0.06), radius: 12, x: 0, y: 8)
+            // Lifted from 0.04/0.06 → 0.06/0.10: the original whisper shadow
+            // let cards melt into light canvases (the "muted / not alive"
+            // read). Still a composite two-drop, just enough presence now.
+            .shadow(color: Color.black.opacity(0.06), radius: 3, x: 0, y: 1)
+            .shadow(color: Color.black.opacity(0.10), radius: 14, x: 0, y: 8)
     }
 }
 

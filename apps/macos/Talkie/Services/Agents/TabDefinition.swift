@@ -40,7 +40,8 @@ struct TabDefinition: Identifiable, Hashable, Sendable {
     var symbolName: String {
         switch icon {
         case "sparkles", "terminal", "chevron.left.forwardslash.chevron.right",
-             "apple.terminal", "wand.and.stars", "bolt", "gear":
+             "apple.terminal", "wand.and.stars", "bolt", "gear",
+             "doc.text.magnifyingglass":
             return icon
         default:
             return TabHarnessIcon.symbolName(for: harness)

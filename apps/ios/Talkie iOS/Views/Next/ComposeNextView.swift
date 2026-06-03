@@ -52,9 +52,12 @@ struct ComposeNextView: View {
                 backLabel: backTitle,
                 modelDisplay: compose.modelDisplay,
                 revisionPath: compose.revisionPath,
+                modelOptions: compose.configuredModelOptions,
+                activeProviderId: compose.activeDirectProviderId,
                 state: compose.state,
                 onBack: { AppShellRouter.shared.openHome() },
                 onSelectRevisionPath: { compose.selectRevisionPath($0) },
+                onSelectModel: { compose.selectDirectModel($0) },
                 onShowNotes: { showingNotesList = true }
             )
 
@@ -97,11 +100,7 @@ struct ComposeNextView: View {
                 onRefine: { compose.discardDiff() },
                 onVoice: { compose.toggleVoiceCommand() },
                 onKeyboard: {
-                    if isTalkieKeyboardFocused {
-                        NotificationCenter.default.post(name: .composeRequestEditorBlur, object: nil)
-                    } else {
-                        NotificationCenter.default.post(name: .composeRequestEditorFocus, object: nil)
-                    }
+                    NotificationCenter.default.post(name: .composeNextEditorToggleKeyboard, object: nil)
                 },
                 cursorParagraphIndex: Binding(
                     get: { compose.cursorParagraphIndex },
@@ -134,6 +133,12 @@ struct ComposeNextView: View {
 extension Notification.Name {
     static let composeNextEditorPaste = Notification.Name("composeNextEditorPaste")
     static let composeNextEditorCut = Notification.Name("composeNextEditorCut")
+    static let composeNextEditorCopy = Notification.Name("composeNextEditorCopy")
+    static let composeNextEditorSelectAll = Notification.Name("composeNextEditorSelectAll")
+    /// Show/hide the embedded keyboard. The Coordinator decides which by
+    /// reading the text view's real first-responder state, so the tray
+    /// button can't desync into a dead toggle.
+    static let composeNextEditorToggleKeyboard = Notification.Name("composeNextEditorToggleKeyboard")
 }
 
 /// Full-document editor backed by UITextView so the system caret,
@@ -237,6 +242,24 @@ private struct ComposeNextDocumentEditor: UIViewRepresentable {
                 name: .composeNextEditorCut,
                 object: nil
             )
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(handleCopyRequest),
+                name: .composeNextEditorCopy,
+                object: nil
+            )
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(handleSelectAllRequest),
+                name: .composeNextEditorSelectAll,
+                object: nil
+            )
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(handleToggleKeyboardRequest),
+                name: .composeNextEditorToggleKeyboard,
+                object: nil
+            )
         }
 
         deinit {
@@ -277,11 +300,15 @@ private struct ComposeNextDocumentEditor: UIViewRepresentable {
             textView.keyboardDismissMode = .none
             textView.autocapitalizationType = .sentences
             textView.autocorrectionType = .yes
-            textView.spellCheckingType = .yes
+            // The system spellcheck squiggle is a hard red dotted underline
+            // that fights the monochrome canvas — turn it off for a clean
+            // writing surface (autocorrect stays on).
+            textView.spellCheckingType = .no
             textView.smartDashesType = .yes
             textView.smartQuotesType = .yes
             textView.inputAssistantItem.leadingBarButtonGroups = []
             textView.inputAssistantItem.trailingBarButtonGroups = []
+            textView.accessibilityIdentifier = "keyboard.compose"
             applyTypingAttributes(to: textView)
             setDocumentText(text.wrappedValue, on: textView)
 
@@ -317,6 +344,18 @@ private struct ComposeNextDocumentEditor: UIViewRepresentable {
             textView?.resignFirstResponder()
         }
 
+        @objc private func handleToggleKeyboardRequest() {
+            guard let textView else { return }
+            // Toggle off the *actual* responder state — not a mirrored
+            // SwiftUI flag that can drift out of sync and leave the button
+            // posting blur-on-blur (so the keyboard never reappears).
+            if textView.isFirstResponder {
+                textView.resignFirstResponder()
+            } else {
+                requestFocus(for: textView)
+            }
+        }
+
         @objc private func handlePasteRequest() {
             performKeyboardAction(.paste)
         }
@@ -326,6 +365,17 @@ private struct ComposeNextDocumentEditor: UIViewRepresentable {
             guard textView.selectedRange.length > 0 else { return }
             UIPasteboard.general.string = (textView.text as NSString).substring(with: textView.selectedRange)
             replaceSelection(with: "")
+        }
+
+        @objc private func handleCopyRequest() {
+            guard let textView else { return }
+            copySelection(from: textView)
+        }
+
+        @objc private func handleSelectAllRequest() {
+            guard let textView else { return }
+            if !textView.isFirstResponder { textView.becomeFirstResponder() }
+            textView.selectAll(nil)
         }
 
         func requestFocus(for textView: UITextView) {
@@ -378,6 +428,9 @@ private struct ComposeNextDocumentEditor: UIViewRepresentable {
             case .paste:
                 guard let clipboardText = UIPasteboard.general.string, !clipboardText.isEmpty else { return }
                 replaceSelection(with: clipboardText)
+            case .selectAll:
+                if !textView.isFirstResponder { textView.becomeFirstResponder() }
+                textView.selectAll(nil)
             case .toggleShift, .toggleControl, .interrupt:
                 break
             case .tab:
@@ -454,7 +507,7 @@ private struct ComposeNextDocumentEditor: UIViewRepresentable {
 
             let label = UILabel()
             label.tag = Constants.placeholderTag
-            label.text = "Tap to write…"
+            label.text = "Start writing, or tap the mic to dictate…"
             label.font = Self.bodyFont
             label.textColor = textView.textColor?.withAlphaComponent(0.35)
             label.numberOfLines = 0
@@ -476,12 +529,16 @@ private struct ComposeNextDocumentEditor: UIViewRepresentable {
         }
 
         private static var bodyFont: UIFont {
-            UIFont.preferredFont(forTextStyle: .body)
+            // Comfortable reading size (18pt), Dynamic-Type aware. Clean sans —
+            // a writing canvas, not a dense form field.
+            UIFontMetrics(forTextStyle: .body)
+                .scaledFont(for: .systemFont(ofSize: 18, weight: .regular))
         }
 
         private static func typingAttributes(textColor: UIColor, font: UIFont) -> [NSAttributedString.Key: Any] {
             let style = NSMutableParagraphStyle()
-            style.lineSpacing = 4
+            style.lineSpacing = 6          // ~1.4 line-height for readability
+            style.paragraphSpacing = 2
             return [
                 .font: font,
                 .foregroundColor: textColor,
@@ -497,10 +554,17 @@ private struct ComposeHeader: View {
     let backLabel: String
     let modelDisplay: ComposeStore.ModelDisplay
     let revisionPath: ComposeStore.RevisionPath
+    let modelOptions: [ComposeStore.ModelOption]
+    let activeProviderId: String
     let state: ComposeState
     let onBack: () -> Void
     let onSelectRevisionPath: (ComposeStore.RevisionPath) -> Void
+    let onSelectModel: (ComposeStore.ModelOption) -> Void
     let onShowNotes: () -> Void
+
+    private func isActiveModel(_ option: ComposeStore.ModelOption) -> Bool {
+        revisionPath == .direct && option.providerId == activeProviderId
+    }
 
     @ObservedObject private var theme = ThemeManager.shared
 
@@ -532,28 +596,42 @@ private struct ComposeHeader: View {
 
                 if state != .diff {
                     Menu {
-                        Section("Revision path") {
-                            ForEach(ComposeStore.RevisionPath.allCases) { path in
+                        // Model picker — "what can I actually run." Each
+                        // configured API key becomes a pickable model; the
+                        // Mac bridge sits alongside as another route. A
+                        // checkmark marks the active model. When nothing is
+                        // set up the section collapses to the setup CTA.
+                        Section("Model") {
+                            ForEach(modelOptions) { option in
                                 Button {
-                                    onSelectRevisionPath(path)
+                                    onSelectModel(option)
                                 } label: {
-                                    Label(path.title, systemImage: path.systemImage)
+                                    Label(
+                                        option.menuLabel,
+                                        systemImage: isActiveModel(option) ? "checkmark" : "sparkles"
+                                    )
                                 }
                             }
-                        }
 
-                        Section("Provider") {
                             Button {
-                                AppShellRouter.shared.openAICredentials()
+                                onSelectRevisionPath(.mac)
                             } label: {
-                                Label("Manage AI keys", systemImage: "key.fill")
+                                Label(
+                                    "Mac Bridge",
+                                    systemImage: revisionPath == .mac ? "checkmark" : "desktopcomputer"
+                                )
                             }
                         }
 
+                        Divider()
+
                         Button {
-                            onShowNotes()
+                            AppShellRouter.shared.openAICredentials()
                         } label: {
-                            Label("Open notes", systemImage: "list.bullet.rectangle")
+                            Label(
+                                modelOptions.isEmpty ? "Set up a model…" : "Manage AI keys…",
+                                systemImage: "key.fill"
+                            )
                         }
                     } label: {
                         HStack(spacing: 6) {
@@ -1359,33 +1437,40 @@ private struct ActionTray: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
         } else {
-            HStack {
+            // Joystick is the centerpiece: the cursor pad sits dead-center
+            // as the hero, flanked by the two clipboard pairs — select·cut
+            // to its left, copy·paste to its right (copy/paste being the
+            // everyday wins). Voice and keyboard bookend the row at the
+            // extremes.
+            HStack(spacing: 0) {
                 trayButton(systemImage: "dot.radiowaves.left.and.right", accessibilityLabel: "Voice command", action: onVoice)
-                Spacer()
-                // Edit cluster — cut · cursor · paste. Cursor button
-                // still useful for jumping around the doc; cut/paste
-                // are the real wins on mobile edits.
-                HStack(spacing: 14) {
+                Spacer(minLength: 8)
+                HStack(spacing: 12) {
+                    trayButton(systemImage: "selection.pin.in.out", accessibilityLabel: "Select all") {
+                        NotificationCenter.default.post(name: .composeNextEditorSelectAll, object: nil)
+                    }
                     trayButton(systemImage: "scissors", accessibilityLabel: "Cut") {
                         NotificationCenter.default.post(name: .composeNextEditorCut, object: nil)
                     }
-                    trayButton(systemImage: "arrow.up.and.down.and.arrow.left.and.right", accessibilityLabel: "Cursor") {
-                        showJoystick = true
-                    }
-                    .popover(isPresented: $showJoystick) {
-                        CursorJoystickPopover(
-                            cursorParagraphIndex: $cursorParagraphIndex,
-                            paragraphCount: paragraphCount
-                        )
+
+                    joystickButton
+
+                    trayButton(systemImage: "doc.on.doc", accessibilityLabel: "Copy") {
+                        NotificationCenter.default.post(name: .composeNextEditorCopy, object: nil)
                     }
                     trayButton(systemImage: "doc.on.clipboard", accessibilityLabel: "Paste") {
                         NotificationCenter.default.post(name: .composeNextEditorPaste, object: nil)
                     }
                 }
-                Spacer()
-                trayButton(systemImage: "keyboard", accessibilityLabel: "Keyboard", action: onKeyboard)
+                Spacer(minLength: 8)
+                trayButton(
+                    systemImage: "keyboard",
+                    accessibilityLabel: "Keyboard",
+                    accessibilityID: "compose.keyboard.toggle",
+                    action: onKeyboard
+                )
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, 16)
             .padding(.top, 4)
             .padding(.bottom, 18)
         }
@@ -1413,8 +1498,40 @@ private struct ActionTray: View {
         .buttonStyle(.plain)
     }
 
+    // The hero cursor pad — accent-tinted and a touch larger than the
+    // flanking clipboard buttons so it reads as the row's centerpiece.
+    private var joystickButton: some View {
+        Button {
+            showJoystick = true
+        } label: {
+            Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
+                .font(.system(size: 19, weight: .medium))
+                .foregroundStyle(theme.currentTheme.chrome.accent)
+                .frame(width: 46, height: 46)
+                .background(
+                    Circle()
+                        .fill(theme.currentTheme.chrome.accentTint)
+                        .overlay(Circle().strokeBorder(theme.currentTheme.chrome.accent.opacity(0.35),
+                                                       lineWidth: theme.currentTheme.chrome.hairlineWidth))
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Cursor")
+        .popover(isPresented: $showJoystick) {
+            CursorJoystickPopover(
+                cursorParagraphIndex: $cursorParagraphIndex,
+                paragraphCount: paragraphCount
+            )
+        }
+    }
+
     @ViewBuilder
-    private func trayButton(systemImage: String, accessibilityLabel: String, action: @escaping () -> Void) -> some View {
+    private func trayButton(
+        systemImage: String,
+        accessibilityLabel: String,
+        accessibilityID: String? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 17, weight: .regular))
@@ -1429,5 +1546,6 @@ private struct ActionTray: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
+        .accessibilityIdentifier(accessibilityID ?? "compose.tray.\(accessibilityLabel.lowercased().replacing(" ", with: "-"))")
     }
 }

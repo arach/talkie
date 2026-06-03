@@ -37,14 +37,17 @@ public enum ScreenshotInserter {
         text: String,
         timedTranscription: TimedTranscription?,
         screenshots: [RecordingScreenshot],
-        screenshotDirectory: URL? = nil
+        screenshotDirectory: URL? = nil,
+        visualContexts: [RecordingVisualContext] = []
     ) -> String {
-        guard !screenshots.isEmpty else { return text }
+        guard !screenshots.isEmpty else {
+            return appendVisualContextReferences(to: text, visualContexts: visualContexts)
+        }
 
         if let timedTranscription,
            !timedTranscription.words.isEmpty,
            deliveryTextMatchesTimedTranscript(text, timedTranscription.text) {
-            return interleave(
+            let markdown = interleave(
                 timedTranscription: TimedTranscription(
                     text: text,
                     words: timedTranscription.words
@@ -52,6 +55,7 @@ public enum ScreenshotInserter {
                 screenshots: screenshots,
                 screenshotDirectory: screenshotDirectory
             ).markdown
+            return appendVisualContextReferences(to: markdown, visualContexts: visualContexts)
         }
 
         let links = screenshots
@@ -62,9 +66,10 @@ public enum ScreenshotInserter {
             }
             .joined(separator: "\n")
 
-        return [text.trimmingCharacters(in: .whitespacesAndNewlines), links]
+        let markdown = [text.trimmingCharacters(in: .whitespacesAndNewlines), links]
             .filter { !$0.isEmpty }
             .joined(separator: "\n\n")
+        return appendVisualContextReferences(to: markdown, visualContexts: visualContexts)
     }
 
     /// Interleave screenshots into a timed transcription by timestamp.
@@ -268,6 +273,58 @@ public enum ScreenshotInserter {
             return dir.appendingPathComponent(ss.filename).path
         }
         return ss.filename
+    }
+
+    private static func appendVisualContextReferences(
+        to text: String,
+        visualContexts: [RecordingVisualContext]
+    ) -> String {
+        guard !visualContexts.isEmpty else { return text }
+
+        let references = visualContexts
+            .sorted { $0.timestampMs < $1.timestampMs }
+            .enumerated()
+            .map { index, context in
+                visualContextReference(context, index: index, total: visualContexts.count)
+            }
+            .joined(separator: "\n")
+
+        return [
+            text.trimmingCharacters(in: .whitespacesAndNewlines),
+            "Visual context captured:\n\(references)"
+        ]
+        .filter { !$0.isEmpty }
+        .joined(separator: "\n\n")
+    }
+
+    private static func visualContextReference(
+        _ context: RecordingVisualContext,
+        index: Int,
+        total: Int
+    ) -> String {
+        let bundleURL = VisualContextStorage.bundleURL(for: context)
+        let label = total > 1 ? "Visual context \(index + 1)" : "Visual context"
+        var lines = ["- \(label): [bundle](\(markdownDestination(bundleURL.path)))"]
+
+        if let summaryFilename = context.summaryFilename {
+            let summaryPath = bundleURL.appendingPathComponent(summaryFilename).path
+            lines.append("  Summary: [\(summaryFilename)](\(markdownDestination(summaryPath)))")
+        }
+
+        let sourcePath = bundleURL.appendingPathComponent(context.sourceClipFilename).path
+        lines.append("  Source clip: [\(context.sourceClipFilename)](\(markdownDestination(sourcePath)))")
+
+        if let contactSheetFilename = context.contactSheetFilename {
+            let contactSheetPath = bundleURL.appendingPathComponent(contactSheetFilename).path
+            lines.append("  Contact sheet: [\(contactSheetFilename)](\(markdownDestination(contactSheetPath)))")
+        }
+
+        if context.frameCount != nil {
+            let framesPath = bundleURL.appendingPathComponent("frames", isDirectory: true).path
+            lines.append("  Frames: [frames](\(markdownDestination(framesPath)))")
+        }
+
+        return lines.joined(separator: "\n")
     }
 
     private static func deliveryTextMatchesTimedTranscript(_ deliveryText: String, _ timedText: String) -> Bool {

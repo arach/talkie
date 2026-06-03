@@ -49,7 +49,7 @@ func captureMarkupLayerDecodeDefaults() throws {
     """.data(using: .utf8)!
 
     let layer = try JSONDecoder().decode(CaptureMarkupLayer.self, from: data)
-    #expect(layer.color == "#C47D1C")
+    #expect(layer.color == "#4F7DFF")
     #expect(layer.visible)
     #expect(layer.author == .agent)
     // Older sidecars carry no stroke/font — they stay nil and the renderer
@@ -80,6 +80,29 @@ func captureMarkupLayerStyleRoundTrip() throws {
     #expect(decoded == document)
     #expect(decoded.layers[0].strokeWidth == 5)
     #expect(decoded.layers[1].fontSize == 22)
+}
+
+@Test("Capture markup layer persists turn provenance")
+func captureMarkupLayerTurnProvenanceRoundTrip() throws {
+    let layer = CaptureMarkupLayer(
+        kind: .rect,
+        frame: CaptureMarkupRect(x: 0.1, y: 0.2, width: 0.3, height: 0.1),
+        turnPass: 2,
+        turnInstruction: "circle the error",
+        turnModel: "OpenAI · gpt-4.1",
+        turnSummary: "circled error row · 1 op",
+        turnElapsed: 1.4
+    )
+    let document = CaptureMarkupDocument(imageWidth: 800, imageHeight: 600, layers: [layer])
+
+    let data = try JSONEncoder().encode(document)
+    let decoded = try JSONDecoder().decode(CaptureMarkupDocument.self, from: data)
+    #expect(decoded == document)
+    #expect(decoded.layers[0].turnPass == 2)
+    #expect(decoded.layers[0].turnInstruction == "circle the error")
+    #expect(decoded.layers[0].turnModel == "OpenAI · gpt-4.1")
+    #expect(decoded.layers[0].turnSummary == "circled error row · 1 op")
+    #expect(decoded.layers[0].turnElapsed == 1.4)
 }
 
 @Test("Capture markup label persists font family / weight / style / plain")
@@ -116,6 +139,38 @@ func captureMarkupLabelTypographyDefaults() throws {
     #expect(layer.bold == nil)
     #expect(layer.italic == nil)
     #expect(layer.plain == nil)
+}
+
+@Test("Capture markup persists arrow pointers and text presets")
+func captureMarkupPointerAndTextPresetRoundTrip() throws {
+    let arrow = CaptureMarkupLayer(
+        kind: .arrow,
+        from: CaptureMarkupPoint(x: 0.1, y: 0.2),
+        to: CaptureMarkupPoint(x: 0.8, y: 0.6),
+        pointerStart: "dot",
+        pointerEnd: "bar",
+        pointerStyle: "dot"
+    )
+    let label = CaptureMarkupLayer(
+        kind: .label,
+        frame: CaptureMarkupRect(x: 0.1, y: 0.2, width: 0.3, height: 0.1),
+        text: "On dark",
+        textPreset: "on-dark",
+        textColor: "#232423",
+        backgroundColor: "#F4E8D4",
+        backgroundAlpha: 0.94,
+        borderColor: "#4F7DFF",
+        borderAlpha: 0.34
+    )
+    let document = CaptureMarkupDocument(imageWidth: 800, imageHeight: 600, layers: [arrow, label])
+
+    let data = try JSONEncoder().encode(document)
+    let decoded = try JSONDecoder().decode(CaptureMarkupDocument.self, from: data)
+    #expect(decoded == document)
+    #expect(decoded.layers[0].pointerStart == "dot")
+    #expect(decoded.layers[0].pointerEnd == "bar")
+    #expect(decoded.layers[1].textPreset == "on-dark")
+    #expect(decoded.layers[1].backgroundAlpha == 0.94)
 }
 
 @Test("Capture markup patch (clone) round-trips source + frame")

@@ -1,0 +1,350 @@
+name: Release App macOS
+
+on:
+  push:
+    tags:
+      - 'app-macos-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version, for example 2.5.15'
+        required: true
+        type: string
+      component:
+        description: 'Release component to build'
+        required: false
+        default: all
+        type: choice
+        options:
+          - all
+          - talkiesync
+      publish:
+        description: 'Publish the DMG to this repository as a GitHub Release'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  release:
+    name: Build, notarize, and optionally publish
+    runs-on: macos-26
+    environment: release
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    env:
+      TALKIE_TEAM_ID: ${{ vars.TALKIE_TEAM_ID }}
+      TALKIE_DEVELOPER_ID_APP: ${{ vars.TALKIE_DEVELOPER_ID_APP }}
+      TALKIE_APP_IDENTIFIER: ${{ vars.TALKIE_APP_IDENTIFIER }}
+      TALKIE_MAC_CORE_BUNDLE_ID: ${{ vars.TALKIE_MAC_CORE_BUNDLE_ID }}
+      TALKIE_MAC_AGENT_BUNDLE_ID: ${{ vars.TALKIE_MAC_AGENT_BUNDLE_ID }}
+      TALKIE_MAC_SYNC_BUNDLE_ID: ${{ vars.TALKIE_MAC_SYNC_BUNDLE_ID }}
+      TALKIE_MAC_APP_GROUP: ${{ vars.TALKIE_MAC_APP_GROUP }}
+      TALKIE_MAC_SHARED_SETTINGS_SUITE: ${{ vars.TALKIE_MAC_SHARED_SETTINGS_SUITE }}
+      TALKIE_CLOUDKIT_CONTAINER: ${{ vars.TALKIE_CLOUDKIT_CONTAINER }}
+      TALKIE_MAC_CORE_PROFILE_NAME: ${{ vars.TALKIE_MAC_CORE_PROFILE_NAME }}
+      TALKIE_MAC_SYNC_PROFILE_NAME: ${{ vars.TALKIE_MAC_SYNC_PROFILE_NAME }}
+      TALKIE_NOTARY_PROFILE: notarytool
+      TALKIE_PUBLISH_PUBLIC_RELEASE: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish == true) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Select Xcode
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -d /Applications/Xcode_26.4.0.app ]; then
+            sudo xcode-select -s /Applications/Xcode_26.4.0.app
+          else
+            sudo xcode-select -s /Applications/Xcode.app
+          fi
+
+          xcodebuild -version
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            tag="${GITHUB_REF_NAME}"
+            if [[ "$tag" == app-macos-v* ]]; then
+              version="${tag#app-macos-v}"
+            else
+              version="${tag#v}"
+            fi
+          else
+            version="${{ inputs.version }}"
+          fi
+
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid version: $version" >&2
+            exit 1
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Validate release signing configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          missing=()
+          for name in \
+            TALKIE_TEAM_ID \
+            TALKIE_DEVELOPER_ID_APP \
+            TALKIE_APP_IDENTIFIER \
+            TALKIE_MAC_CORE_BUNDLE_ID \
+            TALKIE_MAC_AGENT_BUNDLE_ID \
+            TALKIE_MAC_SYNC_BUNDLE_ID \
+            TALKIE_MAC_APP_GROUP \
+            TALKIE_MAC_SHARED_SETTINGS_SUITE \
+            TALKIE_CLOUDKIT_CONTAINER \
+            TALKIE_MAC_CORE_PROFILE_NAME \
+            TALKIE_MAC_SYNC_PROFILE_NAME; do
+            if [ -z "${!name:-}" ]; then
+              missing+=("$name")
+            fi
+          done
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf 'Missing release environment variable: %s\n' "${missing[@]}" >&2
+            exit 1
+          fi
+
+      - name: Validate release secrets
+        env:
+          CERT_BASE64: ${{ secrets.DEVELOPER_ID_APPLICATION_CERT_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_APPLICATION_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          APP_STORE_CONNECT_API_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          APP_STORE_CONNECT_KEY_ID: ${{ vars.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ vars.APP_STORE_CONNECT_ISSUER_ID }}
+          PROFILES_BASE64: ${{ secrets.TALKIE_PROVISIONING_PROFILES_BASE64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          missing=()
+          for name in \
+            CERT_BASE64 \
+            CERT_PASSWORD \
+            KEYCHAIN_PASSWORD \
+            APP_STORE_CONNECT_API_KEY_P8 \
+            APP_STORE_CONNECT_KEY_ID \
+            APP_STORE_CONNECT_ISSUER_ID; do
+            if [ -z "${!name:-}" ]; then
+              missing+=("$name")
+            fi
+          done
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf 'Missing release secret or variable: %s\n' "${missing[@]}" >&2
+            exit 1
+          fi
+
+      - name: Import Developer ID certificate
+        env:
+          CERT_BASE64: ${{ secrets.DEVELOPER_ID_APPLICATION_CERT_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_APPLICATION_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          keychain="$RUNNER_TEMP/talkie-release.keychain-db"
+          cert_path="$RUNNER_TEMP/developer-id-application.p12"
+
+          cert_password="$(printf '%s' "$CERT_PASSWORD" | tr -d '\r\n')"
+          keychain_password="$(printf '%s' "$KEYCHAIN_PASSWORD" | tr -d '\r\n')"
+
+          printf '%s' "$CERT_BASE64" | tr -d '[:space:]' | base64 -D > "$cert_path"
+          cert_base64_chars="$(printf '%s' "$CERT_BASE64" | tr -d '[:space:]' | wc -c | tr -d ' ')"
+          cert_bytes="$(wc -c < "$cert_path" | tr -d ' ')"
+          cert_sha="$(shasum -a 256 "$cert_path" | cut -d ' ' -f 1)"
+          cert_password_chars="$(printf '%s' "$cert_password" | wc -c | tr -d ' ')"
+          echo "Certificate import diagnostics: base64_chars=$cert_base64_chars bytes=$cert_bytes sha256=$cert_sha password_chars=$cert_password_chars"
+
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$cert_path" \
+            -k "$keychain" \
+            -P "$cert_password" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security \
+            -T /usr/bin/productbuild \
+            -T /usr/bin/productsign
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "$keychain_password" \
+            "$keychain"
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          security default-keychain -d user -s "$keychain"
+          security find-identity -v -p codesigning "$keychain"
+
+      - name: Configure notarization API key
+        env:
+          APP_STORE_CONNECT_API_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          APP_STORE_CONNECT_KEY_ID: ${{ vars.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ vars.APP_STORE_CONNECT_ISSUER_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          key_path="$RUNNER_TEMP/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
+          printf '%s' "$APP_STORE_CONNECT_API_KEY_P8" > "$key_path"
+          chmod 600 "$key_path"
+
+          xcrun notarytool store-credentials notarytool \
+            --key-id "$APP_STORE_CONNECT_KEY_ID" \
+            --issuer "$APP_STORE_CONNECT_ISSUER_ID" \
+            --key "$key_path"
+
+          echo "APP_STORE_CONNECT_API_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+          echo "APP_STORE_CONNECT_KEY_ID=$APP_STORE_CONNECT_KEY_ID" >> "$GITHUB_ENV"
+          echo "APP_STORE_CONNECT_ISSUER_ID=$APP_STORE_CONNECT_ISSUER_ID" >> "$GITHUB_ENV"
+
+      - name: Install provisioning profiles
+        env:
+          PROFILES_BASE64: ${{ secrets.TALKIE_PROVISIONING_PROFILES_BASE64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${PROFILES_BASE64:-}" ]; then
+            echo "No profile archive configured; xcodebuild will use App Store Connect API auth with -allowProvisioningUpdates."
+            exit 0
+          fi
+
+          profiles_dir="$HOME/Library/MobileDevice/Provisioning Profiles"
+          xcode_profiles_dir="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
+          profiles_archive="$RUNNER_TEMP/talkie-profiles.tar.gz"
+          extracted_profiles="$RUNNER_TEMP/talkie-profiles"
+          mkdir -p "$profiles_dir" "$xcode_profiles_dir" "$extracted_profiles"
+
+          printf '%s' "$PROFILES_BASE64" | tr -d '[:space:]' | base64 -D > "$profiles_archive"
+          tar -xzf "$profiles_archive" -C "$extracted_profiles"
+          for profile in "$extracted_profiles"/*.provisionprofile; do
+            uuid="$(security cms -D -i "$profile" | plutil -extract UUID raw -o - -)"
+            cp "$profile" "$profiles_dir/$uuid.provisionprofile"
+            cp "$profile" "$xcode_profiles_dir/$uuid.provisionprofile"
+          done
+          find "$profiles_dir" -maxdepth 1 -name '*.provisionprofile' -print
+
+      - name: Build signed and notarized DMG
+        if: ${{ github.event_name == 'push' || inputs.component == 'all' }}
+        shell: bash
+        run: ./packaging/macos/build.sh --version "$VERSION" unified
+
+      - name: Build TalkieSync export only
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.component == 'talkiesync' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          build_number="$(tr -d '[:space:]' < BUILD_NUMBER)"
+          archive_path="$PWD/build/Archives/TalkieSync.xcarchive"
+          export_path="$PWD/build/Exports/TalkieSync"
+          export_options_path="$RUNNER_TEMP/exportOptions-developer-id-provisioned.plist"
+          auth_args=()
+          if [ -n "${APP_STORE_CONNECT_API_KEY_PATH:-}" ] && \
+             [ -n "${APP_STORE_CONNECT_KEY_ID:-}" ] && \
+             [ -n "${APP_STORE_CONNECT_ISSUER_ID:-}" ]; then
+            auth_args=(
+              -authenticationKeyPath "$APP_STORE_CONNECT_API_KEY_PATH"
+              -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID"
+              -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID"
+            )
+          fi
+
+          sed -e "s|__TALKIE_TEAM_ID__|${TALKIE_TEAM_ID}|g" \
+            -e "s|__TALKIE_MAC_CORE_BUNDLE_ID__|${TALKIE_MAC_CORE_BUNDLE_ID}|g" \
+            -e "s|__TALKIE_MAC_SYNC_BUNDLE_ID__|${TALKIE_MAC_SYNC_BUNDLE_ID}|g" \
+            -e "s|__TALKIE_MAC_CORE_PROFILE_NAME__|${TALKIE_MAC_CORE_PROFILE_NAME}|g" \
+            -e "s|__TALKIE_MAC_SYNC_PROFILE_NAME__|${TALKIE_MAC_SYNC_PROFILE_NAME}|g" \
+            packaging/macos/exportOptions-developer-id-provisioned.plist.in > "$export_options_path"
+
+          ./scripts/sync-version.sh "$VERSION" --build "$build_number"
+          rm -rf "$archive_path" "$export_path"
+
+          xcodebuild -project apps/macos/TalkieSync/TalkieSync.xcodeproj \
+            -scheme TalkieSync \
+            -configuration Release \
+            -archivePath "$archive_path" \
+            -arch arm64 \
+            -allowProvisioningUpdates \
+            "${auth_args[@]}" \
+            DEVELOPMENT_TEAM="$TALKIE_TEAM_ID" \
+            TALKIE_DEVELOPMENT_TEAM="$TALKIE_TEAM_ID" \
+            TALKIE_APP_IDENTIFIER="$TALKIE_APP_IDENTIFIER" \
+            TALKIE_MAC_SYNC_BUNDLE_ID="$TALKIE_MAC_SYNC_BUNDLE_ID" \
+            TALKIE_MAC_APP_GROUP="$TALKIE_MAC_APP_GROUP" \
+            TALKIE_MAC_SHARED_SETTINGS_SUITE="$TALKIE_MAC_SHARED_SETTINGS_SUITE" \
+            TALKIE_CLOUDKIT_CONTAINER="$TALKIE_CLOUDKIT_CONTAINER" \
+            TALKIE_MAC_SYNC_PROFILE_NAME="$TALKIE_MAC_SYNC_PROFILE_NAME" \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="$build_number" \
+            archive
+
+          xcodebuild -exportArchive \
+            -archivePath "$archive_path" \
+            -exportPath "$export_path" \
+            -exportOptionsPlist "$export_options_path" \
+            -allowProvisioningUpdates \
+            "${auth_args[@]}"
+
+      - name: Verify DMG
+        if: ${{ github.event_name == 'push' || inputs.component == 'all' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          codesign --verify --verbose packaging/macos/Talkie-for-Mac.dmg
+          spctl --assess --type open --context context:primary-signature --verbose packaging/macos/Talkie-for-Mac.dmg
+
+      - name: Upload workflow artifact
+        if: ${{ github.event_name == 'push' || inputs.component == 'all' }}
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: Talkie-${{ steps.version.outputs.version }}-dmg
+          path: packaging/macos/Talkie-for-Mac.dmg
+          if-no-files-found: error
+
+      - name: Publish public release
+        if: ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish == true)) && (github.event_name == 'push' || inputs.component == 'all') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          release_tag="v$VERSION"
+          dmg_path="$RUNNER_TEMP/Talkie-for-Mac-$VERSION.dmg"
+          notes_path="$RUNNER_TEMP/release-notes.md"
+          cp packaging/macos/Talkie-for-Mac.dmg "$dmg_path"
+          cat > "$notes_path" <<EOF
+          Release $VERSION
+
+          Download and install Talkie for Mac.
+          EOF
+
+          if gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$release_tag" "$dmg_path" \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+            gh release edit "$release_tag" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Talkie $VERSION" \
+              --notes-file "$notes_path"
+          else
+            gh release create "$release_tag" "$dmg_path" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Talkie $VERSION" \
+              --notes-file "$notes_path"
+          fi

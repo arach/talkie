@@ -1,21 +1,26 @@
-# TLK-020 — Mac Walkie Mode
+# TLK-020 — Talking to Agents (formerly Mac Walkie Mode)
 
 **Status**: In progress — v1 shell and multi-provider orchestration wired
 **Owner**: arach
 **Design source**: `design/studio/components/studies/MacWalkieScope.tsx` (route: `/mac-walkie`)
 **Related**: iPhone Ask AI (`apps/ios/Talkie iOS/Views/Next/AskAINext.swift`) — vocabulary harmonization, not code reuse
 
+> Naming update (2026-06-01): "Walkie" is retired as product language. The
+> user-facing idea is simply talking to agents. Existing `Walkie*` code names,
+> `walkie.*` settings keys, and stored session ids remain transitional
+> implementation details until a compatibility-safe rename is scheduled.
+
 ## Summary
 
-A press-and-hold agent surface on macOS, bound by default to **Hyper+T** (`⇧⌃⌥⌘T`). Pressing the chord blooms a floating modal in the center of the screen — a single instrument panel dominated by an oscilloscope display. The user speaks while holding the key, releases to send, and the agent responds verbally (TTS to default audio device) with a short caption underneath. The modal dismisses on tap or after a brief idle.
+A press-and-hold "talk to agents" surface on macOS, bound by default to **Hyper+T** (`⇧⌃⌥⌘T`). Pressing the chord blooms a floating modal in the center of the screen. The user speaks while holding the key, releases to send, and the agent responds verbally (TTS to default audio device) with a short caption underneath. The modal dismisses on tap or after a brief idle.
 
 Three things make this distinct from iPhone Ask AI, which is also a turn-based agent surface:
 
-1. **Live surface is ephemeral, not a panel.** The walkie is a *moment*, invoked by a hotkey, dismissed when done. Durable activity belongs in Agent Home, not a new Walkie-branded place.
-2. **Always-on, walkie-talkie pace.** The agent voice is conversational and brief ("Alright, we gotcha…"), not assistant-formal. The interaction is short by design.
-3. **Two transmission modes, routed automatically.** Every TALKIE turn lands as either VERBAL (immediate spoken answer) or ASYNC (long-running computer-use job that acks now and reports later via the notch). The model decides which, the user doesn't choose.
+1. **Live surface is ephemeral, not a panel.** Talking to an agent is a *moment*, invoked by a hotkey and dismissed when done. Durable activity belongs in Agent Home.
+2. **Conversational pace.** The agent voice is brief and natural, not assistant-formal. The interaction is short by design.
+3. **Two work paths, routed automatically.** Every turn lands as either an immediate spoken answer or longer agent work that acks now and reports later via Agent Home. The model decides which, the user doesn't choose.
 
-Non-goal: replacing the existing dictation / compose / selection-readout flows. Those stay. Walkie is a new surface alongside them, with its own hotkey and its own session model.
+Non-goal: replacing the existing dictation / compose / selection-readout flows. Those stay. Talking to agents is a new surface alongside them, with its own hotkey and its own session model.
 
 ## What exists today
 
@@ -28,7 +33,7 @@ We're not starting from zero. Existing pieces compose into walkie; this spec is 
 | Selection readout (LLM → TTS) | `SelectionSpeechPlaybackController.speakSelection` (AppDelegate.swift:2128) | Walkie reuses the OpenAI/ElevenLabs/Apple fallback chain for verbal-out |
 | LLM provider stack | `TalkieKit` `LLMProviderRegistry` + shared LLM settings | Top-level Walkie model is provider-agnostic and can route through OpenAI, Anthropic, Gemini, Groq, or the configured default |
 | Agent runtime boundary | `WalkieAgentRuntime` in `TalkieAgent/Views/Walkie/` | Async mode hands work to a swappable executor runtime; Scout Agent Session is the intended first adapter |
-| Node runtime shim | `TalkieAgent/Runtime/node/` | Thin stdio dispatcher for future Scout / agent-session work that should not live in the SwiftUI process |
+| Node runtime shim | `TalkieAgent/Runtime/node/` | Bundled stdio dispatcher only; Talkie agent runtime packages are CLI-managed post-install tools under the user's runtime directory |
 | iOS Ask AI vocabulary | `apps/ios/Talkie iOS/Views/Next/AskAINext.swift` | T01/T02 turn codes, USER/TALKIE speaker labels, model · latency · tokens meta — same words, different surface |
 
 ## The four phases
@@ -129,6 +134,12 @@ The first concrete bridge is a local Node stdio dispatcher at
 `TalkieAgent/Runtime/node/index.mjs`. It is deliberately small: one
 JSON request per line, one JSON response per line.
 
+The app bundle intentionally does **not** vendor `node_modules` or run `npm ci`
+as part of Xcode archive. The dispatcher can report `scoutBridge: "pending"`
+without failing the app. The Talkie Agent Runtime package is installed later by
+an explicit CLI command, currently `Runtime/node/install-agent-runtime.sh`,
+which hydrates `@talkie/agent-runtime` into `~/.talkie/agent-runtime`.
+
 Supported operations:
 
 ```json
@@ -180,9 +191,10 @@ The dispatcher returns a runtime descriptor and an activity descriptor:
 
 `walkie-node-dispatcher` is the local contract holder. It can accept an
 invocation and preserve the executor/session shape even before Scout is live.
-`scout-agent-session` remains the intended code/computer-use executor,
-but it only advertises availability once `walkie.scoutRuntimeEnabled`
-is set and the Node dispatcher reports `scoutBridge: "configured"`.
+`talkie-agent-runtime` remains the intended code/computer-use executor package,
+backed by Scout Agent Sessions internally, but it only advertises availability
+once the user-space CLI runtime exists and the Node dispatcher reports
+`scoutBridge: "configured"`.
 
 ## Agent Home return path
 

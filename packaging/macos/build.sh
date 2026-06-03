@@ -231,6 +231,34 @@ process_entitlements() {
         "$SOURCE_FILE" > "$OUTPUT_FILE"
 }
 
+run_xcodebuild_logged() {
+    local LABEL="$1"
+    shift
+
+    local LOG_DIR="$BUILD_DIR/logs"
+    mkdir -p "$LOG_DIR"
+
+    local SAFE_LABEL
+    SAFE_LABEL="$(printf '%s' "$LABEL" | tr -c '[:alnum:]_.-' '_')"
+    local LOG_FILE="$LOG_DIR/$SAFE_LABEL.log"
+
+    echo "  🧾 Log: $LOG_FILE"
+
+    set +e
+    "$@" > "$LOG_FILE" 2>&1
+    local STATUS=$?
+    set -e
+
+    grep -E "(error:|warning:|ARCHIVE|EXPORT|FAILED|failed|CodeSign|errSec|Provisioning|provisioning|No profiles|requires a provisioning profile|No signing certificate)" "$LOG_FILE" || true
+
+    if [ "$STATUS" -ne 0 ]; then
+        echo "❌ $LABEL failed with exit code $STATUS"
+        echo "Last 120 lines from $LOG_FILE:"
+        tail -n 120 "$LOG_FILE"
+        return "$STATUS"
+    fi
+}
+
 # ═══════════════════════════════════════════════════════════
 # FUNCTION: Sign an app bundle with processed entitlements
 # ═══════════════════════════════════════════════════════════
@@ -298,7 +326,8 @@ if [ "$SKIP_CLEAN" = "1" ] && [ -d "$LIVE_EXPORT/TalkieAgent.app" ]; then
 else
     rm -rf "$LIVE_ARCHIVE" "$LIVE_EXPORT"
 
-    xcodebuild -project TalkieAgent.xcodeproj \
+    run_xcodebuild_logged "TalkieAgent archive" \
+        xcodebuild -project TalkieAgent.xcodeproj \
         -scheme TalkieAgent \
         -configuration Release \
         -archivePath "$LIVE_ARCHIVE" \
@@ -309,7 +338,7 @@ else
         MARKETING_VERSION="$VERSION" \
         CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
         'OTHER_SWIFT_FLAGS=$(inherited) -swift-version 5' \
-        archive 2>&1 | grep -E "(error:|warning:|ARCHIVE)" || true
+        archive
 
     if [ ! -d "$LIVE_ARCHIVE" ]; then
         echo "❌ TalkieAgent archive failed"
@@ -317,13 +346,13 @@ else
     fi
 
     echo "  📤 Exporting with Developer ID..."
-    xcodebuild -exportArchive \
+    run_xcodebuild_logged "TalkieAgent export" \
+        xcodebuild -exportArchive \
         -archivePath "$LIVE_ARCHIVE" \
         -exportPath "$LIVE_EXPORT" \
         -exportOptionsPlist "$EXPORT_OPTIONS_CORE_PLIST" \
         -allowProvisioningUpdates \
-        "${XCODE_AUTH_ARGS[@]}" \
-        2>&1 | grep -E "(error:|warning:|EXPORT)" || true
+        "${XCODE_AUTH_ARGS[@]}"
 fi
 
 LIVE_APP="$LIVE_EXPORT/TalkieAgent.app"
@@ -348,7 +377,8 @@ if [ "$SKIP_CLEAN" = "1" ] && [ -d "$SYNC_EXPORT/TalkieSync.app" ]; then
 else
     rm -rf "$SYNC_ARCHIVE" "$SYNC_EXPORT"
 
-    xcodebuild -project TalkieSync.xcodeproj \
+    run_xcodebuild_logged "TalkieSync archive" \
+        xcodebuild -project TalkieSync.xcodeproj \
         -scheme TalkieSync \
         -configuration Release \
         -archivePath "$SYNC_ARCHIVE" \
@@ -359,7 +389,7 @@ else
         TALKIE_MAC_SYNC_PROFILE_NAME="$SYNC_PROFILE_NAME" \
         MARKETING_VERSION="$VERSION" \
         CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
-        archive 2>&1 | grep -E "(error:|warning:|ARCHIVE)" || true
+        archive
 
     if [ ! -d "$SYNC_ARCHIVE" ]; then
         echo "❌ TalkieSync archive failed"
@@ -367,13 +397,13 @@ else
     fi
 
     echo "  📤 Exporting with Developer ID..."
-    xcodebuild -exportArchive \
+    run_xcodebuild_logged "TalkieSync export" \
+        xcodebuild -exportArchive \
         -archivePath "$SYNC_ARCHIVE" \
         -exportPath "$SYNC_EXPORT" \
         -exportOptionsPlist "$EXPORT_OPTIONS_PROVISIONED_PLIST" \
         -allowProvisioningUpdates \
-        "${XCODE_AUTH_ARGS[@]}" \
-        2>&1 | grep -E "(error:|warning:|EXPORT)" || true
+        "${XCODE_AUTH_ARGS[@]}"
 fi
 
 SYNC_APP="$SYNC_EXPORT/TalkieSync.app"
@@ -398,7 +428,8 @@ if [ "$SKIP_CLEAN" = "1" ] && [ -d "$CORE_EXPORT/Talkie.app" ]; then
 else
     rm -rf "$CORE_ARCHIVE" "$CORE_EXPORT"
 
-    xcodebuild -project Talkie.xcodeproj \
+    run_xcodebuild_logged "Talkie archive" \
+        xcodebuild -project Talkie.xcodeproj \
         -scheme Talkie \
         -configuration Release \
         -archivePath "$CORE_ARCHIVE" \
@@ -410,7 +441,7 @@ else
         MARKETING_VERSION="$VERSION" \
         CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
         'OTHER_SWIFT_FLAGS=$(inherited) -swift-version 5' \
-        archive 2>&1 | grep -E "(error:|warning:|ARCHIVE)" || true
+        archive
 
     if [ ! -d "$CORE_ARCHIVE" ]; then
         echo "❌ Talkie archive failed"
@@ -418,13 +449,13 @@ else
     fi
 
     echo "  📤 Exporting with Developer ID..."
-    xcodebuild -exportArchive \
+    run_xcodebuild_logged "Talkie export" \
+        xcodebuild -exportArchive \
         -archivePath "$CORE_ARCHIVE" \
         -exportPath "$CORE_EXPORT" \
         -exportOptionsPlist "$EXPORT_OPTIONS_PROVISIONED_PLIST" \
         -allowProvisioningUpdates \
-        "${XCODE_AUTH_ARGS[@]}" \
-        2>&1 | grep -E "(error:|warning:|EXPORT)" || true
+        "${XCODE_AUTH_ARGS[@]}"
 fi
 
 CORE_APP="$CORE_EXPORT/Talkie.app"

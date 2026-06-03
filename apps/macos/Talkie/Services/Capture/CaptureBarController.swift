@@ -97,6 +97,12 @@ final class CaptureBarController {
                 let key = event.charactersIgnoringModifiers?.lowercased()
                 let currentMode = self.panel.state.mode
 
+                if event.keyCode == 123 || event.keyCode == 124 { // Left / Right Arrow
+                    self.panel.state.mode = event.keyCode == 123 ? .screenshot : .video
+                    resetTimeout()
+                    return
+                }
+
                 switch key {
                 case "a":
                     timeout.cancel()
@@ -135,7 +141,7 @@ final class CaptureBarController {
                         resetTimeout()
                     }
 
-                case "f":
+                case "v", "f":
                     if hasTrayItems {
                         timeout.cancel()
                         resume(.pasteLastTray)
@@ -143,7 +149,7 @@ final class CaptureBarController {
                         resetTimeout()
                     }
 
-                case "w":
+                case "t", "w":
                     if hasTrayItems {
                         timeout.cancel()
                         resume(.viewTray)

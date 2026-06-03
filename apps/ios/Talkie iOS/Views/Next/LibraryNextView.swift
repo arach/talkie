@@ -243,7 +243,7 @@ private struct LibraryListCard: View {
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
                 .scrollDisabled(true)
-                .frame(height: CGFloat(items.count) * 62)
+                .frame(height: CGFloat(items.count) * 56)
 
                 HStack(spacing: 6) {
                     Text("· EARLIER · THIS WEEK")
@@ -297,47 +297,39 @@ private struct LibraryRow: View {
 
     var body: some View {
         VStack(spacing: 0) {
-                if showDivider {
-                    Rectangle()
-                        .fill(theme.currentTheme.chrome.edgeSubtle)
-                        .frame(height: theme.currentTheme.chrome.hairlineWidth)
-                        .padding(.leading, 36)
-                }
-                HStack(alignment: .top, spacing: 8) {
-                    sourceGlyph
-                        .foregroundStyle(theme.colors.textTertiary)
-                        .frame(width: 16, height: 16)
-                        .padding(.top, 2)
+            if showDivider {
+                Rectangle()
+                    .fill(theme.currentTheme.chrome.edgeSubtle)
+                    .frame(height: theme.currentTheme.chrome.hairlineWidth)
+                    .padding(.leading, 36)
+            }
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(item.title)
-                                .talkieType(.listTitle)
-                                .foregroundStyle(theme.colors.textPrimary)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            Text(item.relativeTime)
-                                .talkieType(.channelLabel)
-                                .foregroundStyle(theme.colors.textTertiary)
-                            if let syncStatus = item.syncStatus {
-                                Image(systemName: syncIcon(for: syncStatus))
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(syncColor(for: syncStatus))
-                                    .accessibilityLabel(syncAccessibilityLabel(for: syncStatus))
-                            }
-                        }
-                        if let preview = item.preview {
-                            Text(preview)
-                                .talkieType(.preview)
-                                .foregroundStyle(theme.colors.textSecondary)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                        }
+            HStack(alignment: .center, spacing: 8) {
+                sourceGlyph
+                    .foregroundStyle(theme.colors.textTertiary)
+                    .frame(width: 16, height: 16)
+
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(item.title)
+                        .talkieType(.listTitle)
+                        .foregroundStyle(theme.colors.textPrimary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(item.relativeTime)
+                        .talkieType(.channelLabel)
+                        .foregroundStyle(theme.colors.textTertiary)
+                        .lineLimit(1)
+                    if let syncStatus = item.syncStatus {
+                        Image(systemName: syncIcon(for: syncStatus))
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(syncColor(for: syncStatus))
+                            .accessibilityLabel(syncAccessibilityLabel(for: syncStatus))
                     }
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
         }
     }
 

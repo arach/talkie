@@ -34,6 +34,7 @@ struct TrayClip: Identifiable, Codable {
     let windowTitle: String?
     let appName: String?
     let displayName: String?
+    let metadataEvents: [RecordingVisualContextEvent]
     /// Whether this item is pinned to the tray (won't drain into the next recording)
     var pinned: Bool
     /// First-frame thumbnail, generated eagerly on buffer add
@@ -45,13 +46,14 @@ struct TrayClip: Identifiable, Codable {
 
     // Codable — exclude thumbnail (regenerated on restore)
     enum CodingKeys: String, CodingKey {
-        case id, capturedAt, durationMs, filename, width, height, captureMode, windowTitle, appName, displayName, pinned
+        case id, capturedAt, durationMs, filename, width, height, captureMode, windowTitle, appName, displayName, metadataEvents, pinned
     }
 
     init(id: UUID, capturedAt: Date, durationMs: Int, filename: String,
          width: Int, height: Int, captureMode: String = "camera",
          windowTitle: String? = nil, appName: String? = nil,
-         displayName: String? = nil, pinned: Bool = false, thumbnail: NSImage? = nil) {
+         displayName: String? = nil, metadataEvents: [RecordingVisualContextEvent] = [],
+         pinned: Bool = false, thumbnail: NSImage? = nil) {
         self.id = id
         self.capturedAt = capturedAt
         self.durationMs = durationMs
@@ -62,6 +64,7 @@ struct TrayClip: Identifiable, Codable {
         self.windowTitle = windowTitle
         self.appName = appName
         self.displayName = displayName
+        self.metadataEvents = metadataEvents
         self.pinned = pinned
         self.thumbnail = thumbnail
     }
@@ -78,6 +81,7 @@ struct TrayClip: Identifiable, Codable {
         windowTitle = try c.decodeIfPresent(String.self, forKey: .windowTitle)
         appName = try c.decodeIfPresent(String.self, forKey: .appName)
         displayName = try c.decodeIfPresent(String.self, forKey: .displayName)
+        metadataEvents = try c.decodeIfPresent([RecordingVisualContextEvent].self, forKey: .metadataEvents) ?? []
         pinned = try c.decodeIfPresent(Bool.self, forKey: .pinned) ?? false
         thumbnail = nil
     }
@@ -152,16 +156,17 @@ final class ClipTray {
     /// Add a captured clip to the buffer. Moves the file from the provided URL to the persistent buffer directory.
     func add(
         tempURL: URL,
+        capturedAt: Date = Date(),
         durationMs: Int,
         width: Int,
         height: Int,
         captureMode: String = "camera",
         windowTitle: String? = nil,
         appName: String? = nil,
-        displayName: String? = nil
+        displayName: String? = nil,
+        metadataEvents: [RecordingVisualContextEvent] = []
     ) {
         let itemId = UUID()
-        let capturedAt = Date()
         var filename = CaptureFilenameFormatter.clipFilename(
             id: itemId,
             capturedAt: capturedAt,
@@ -197,7 +202,8 @@ final class ClipTray {
             captureMode: captureMode,
             windowTitle: windowTitle,
             appName: appName,
-            displayName: displayName
+            displayName: displayName,
+            metadataEvents: metadataEvents
         )
 
         items.append(item)
@@ -294,6 +300,7 @@ final class ClipTray {
 
         let noteId = UUID()
         var clips: [RecordingClip] = []
+        var visualContexts: [RecordingVisualContext] = []
 
         let baseTime = items.first!.capturedAt
         for (index, item) in items.enumerated() {
@@ -326,6 +333,23 @@ final class ClipTray {
                 appName: item.appName,
                 displayName: item.displayName
             ))
+
+            if let visualContext = VisualContextStorage.createBundle(
+                sourceClipURL: savedURL,
+                recordingId: noteId,
+                timestampMs: timestampMs,
+                capturedAt: item.capturedAt,
+                durationMs: item.durationMs,
+                captureMode: item.captureMode,
+                width: item.width,
+                height: item.height,
+                windowTitle: item.windowTitle,
+                appName: item.appName,
+                displayName: item.displayName,
+                metadataEvents: item.metadataEvents
+            ) {
+                visualContexts.append(visualContext)
+            }
         }
 
         guard !clips.isEmpty else { return nil }
@@ -336,6 +360,9 @@ final class ClipTray {
         )
         var assets = note.assets ?? TalkieObjectAssets()
         assets.clips = clips
+        if !visualContexts.isEmpty {
+            assets.visualContexts = visualContexts
+        }
         note.assetsJSON = assets.toJSON()
 
         do {

@@ -14,64 +14,27 @@
                         <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <!-- Talkie logo image -->
-                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" image="TalkieLogo" translatesAutoresizingMaskIntoConstraints="NO" id="logo-text">
-                                <rect key="frame" x="136.5" y="316" width="120" height="120"/>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" image="TalkieLogo" translatesAutoresizingMaskIntoConstraints="NO" id="logo-mark">
+                                <rect key="frame" x="148.5" y="351" width="96" height="96"/>
                                 <constraints>
-                                    <constraint firstAttribute="width" constant="120" id="logo-w"/>
-                                    <constraint firstAttribute="height" constant="120" id="logo-h"/>
+                                    <constraint firstAttribute="width" constant="96" id="logo-w"/>
+                                    <constraint firstAttribute="height" constant="96" id="logo-h"/>
                                 </constraints>
                             </imageView>
-                            <!-- Horizontal stack for "VOICE + AI" inline -->
-                            <stackView opaque="NO" contentMode="scaleToFill" axis="horizontal" spacing="8" translatesAutoresizingMaskIntoConstraints="NO" id="title-stack">
-                                <rect key="frame" x="72" y="456" width="249" height="43"/>
-                                <subviews>
-                                    <!-- "VOICE" -->
-                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="VOICE" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="title-voice">
-                                        <rect key="frame" x="0" y="0" width="119" height="43"/>
-                                        <fontDescription key="fontDescription" type="system" weight="black" pointSize="36"/>
-                                        <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-                                        <nil key="highlightedColor"/>
-                                    </label>
-                                    <!-- "+ AI" -->
-                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="+ AI" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="title-ai">
-                                        <rect key="frame" x="127" y="0" width="122" height="43"/>
-                                        <fontDescription key="fontDescription" type="system" weight="black" pointSize="36"/>
-                                        <color key="textColor" red="0.13333333333333333" green="0.77254901960784317" blue="0.36862745098039218" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
-                                        <nil key="highlightedColor"/>
-                                    </label>
-                                </subviews>
-                            </stackView>
-                            <!-- Tagline -->
-                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="CAPTURE ON iPHONE | PROCESS ON MAC" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="tagline">
-                                <rect key="frame" x="47" y="519" width="299" height="15"/>
-                                <fontDescription key="fontDescription" name="Menlo-Bold" family="Menlo" pointSize="11"/>
-                                <color key="textColor" red="0.60392156862745094" green="0.60392156862745094" blue="0.60392156862745094" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
-                                <nil key="highlightedColor"/>
-                            </label>
-                            <!-- Footer - website -->
-                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="usetalkie.com" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="footer-url">
-                                <rect key="frame" x="147" y="752" width="99" height="14"/>
-                                <fontDescription key="fontDescription" name="Menlo-Regular" family="Menlo" pointSize="10"/>
-                                <color key="textColor" red="0.35294117647058826" green="0.35294117647058826" blue="0.35294117647058826" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Talkie" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="wordmark">
+                                <rect key="frame" x="145.5" y="471" width="102" height="41"/>
+                                <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="34"/>
+                                <color key="textColor" red="0.96862745098039216" green="0.97254901960784312" blue="0.97254901960784312" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                                 <nil key="highlightedColor"/>
                             </label>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="6Tk-OE-BBY"/>
-                        <color key="backgroundColor" red="0.039215686274509803" green="0.039215686274509803" blue="0.039215686274509803" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                        <color key="backgroundColor" red="0.031372549019607843" green="0.035294117647058823" blue="0.043137254901960784" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
-                            <!-- Logo centered horizontally, above title stack -->
-                            <constraint firstItem="logo-text" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c1"/>
-                            <constraint firstItem="logo-text" firstAttribute="bottom" secondItem="title-stack" secondAttribute="top" constant="-20" id="c2"/>
-                            <!-- Title stack centered, moved down slightly -->
-                            <constraint firstItem="title-stack" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c3"/>
-                            <constraint firstItem="title-stack" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" constant="30" id="c4"/>
-                            <!-- Tagline centered below title stack -->
-                            <constraint firstItem="tagline" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c7"/>
-                            <constraint firstItem="tagline" firstAttribute="top" secondItem="title-stack" secondAttribute="bottom" constant="20" id="c8"/>
-                            <!-- Footer at bottom -->
-                            <constraint firstItem="footer-url" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c9"/>
-                            <constraint firstItem="footer-url" firstAttribute="bottom" secondItem="6Tk-OE-BBY" secondAttribute="bottom" constant="-40" id="c10"/>
+                            <constraint firstItem="logo-mark" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="logo-center-x"/>
+                            <constraint firstItem="logo-mark" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" constant="-48" id="logo-center-y"/>
+                            <constraint firstItem="wordmark" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="wordmark-center-x"/>
+                            <constraint firstItem="wordmark" firstAttribute="top" secondItem="logo-mark" secondAttribute="bottom" constant="24" id="wordmark-top"/>
                         </constraints>
                     </view>
                 </viewController>

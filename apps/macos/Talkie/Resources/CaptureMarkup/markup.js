@@ -9,10 +9,14 @@
     imageURL: null,
     document: { version: 1, imageWidth: 1, imageHeight: 1, layers: [] },
     selectedLayerId: null,
+    /** Layer ids explicitly tagged into the next agent message. */
+    messageLayerIds: new Set(),
     activeTool: null,
     image: null,
     /** Existing-layer move drag (the original behaviour) — frame-based layers */
     drag: null,
+    /** Frame resize drag — a selected rect/label/highlight/patch handle. */
+    frameResize: null,
     /** Segment (arrow / line) edit drag — move an endpoint or the whole thing.
      *  `handle` is "from" | "to" (reshape one end) or "both" (move the segment). */
     segDrag: null,
@@ -32,13 +36,21 @@
     /** Per-tool defaults. Picked via the style stack on the toolbar.
      *  Applied at layer creation; selected-layer live-edit is a follow-up. */
     style: {
-      color: "#C47D1C",
+      color: "#4F7DFF",
+      textColor: "#FFFFFF",
+      backgroundColor: "#14181E",
+      backgroundAlpha: 0.86,
+      borderColor: "#FFFFFF",
+      borderAlpha: 0.22,
       strokeWidth: 2,
+      arrowHeads: "end", // none | start | end | both
+      pointerStyle: "open", // open | filled | dot | bar
       fontSize: 16,
       fontFamily: "mono", // sans | serif | mono — mono preserves the legacy tag look
       bold: false,
       italic: false,
       plain: false, // false = white-on-dark pill (default); true = plain colored text
+      textPreset: "on-light",
     },
   };
 
@@ -54,17 +66,50 @@
   const styleStack = document.getElementById("style-stack");
   const zoomCluster = document.getElementById("canvas-zoom-cluster");
   const zoomDisplay = document.getElementById("zoom-display");
-  // Undo / redo live in the floating canvas zoom cluster now. Query both
-  // surfaces so a future relocation doesn't silently lose the enabled-state
-  // wiring.
-  const undoButton =
-    (zoomCluster && zoomCluster.querySelector('[data-action="undo"]')) ||
-    toolToolbar.querySelector('[data-action="undo"]');
-  const redoButton =
-    (zoomCluster && zoomCluster.querySelector('[data-action="redo"]')) ||
-    toolToolbar.querySelector('[data-action="redo"]');
+  const undoButton = toolToolbar.querySelector('[data-action="undo"]');
+  const redoButton = toolToolbar.querySelector('[data-action="redo"]');
 
-  const DEFAULT_COLOR = "#C47D1C";
+  const DEFAULT_COLOR = "#4F7DFF";
+  const DEFAULT_POINTER_STYLE = "open";
+  const DEFAULT_ARROW_HEADS = "end";
+  const DEFAULT_TEXT_PRESET = "on-light";
+  const POINTER_STYLES = new Set(["none", "open", "filled", "dot", "bar"]);
+  const ARROW_HEADS = new Set(["none", "start", "end", "both"]);
+  const TEXT_PRESETS = {
+    // Names describe the capture/background the label is placed on.
+    "on-light": {
+      plain: false,
+      textColor: "#FFFFFF",
+      backgroundColor: "#14181E",
+      backgroundAlpha: 0.86,
+      borderColor: "#FFFFFF",
+      borderAlpha: 0.22,
+    },
+    "on-dark": {
+      plain: false,
+      textColor: "#232423",
+      backgroundColor: "#F4E8D4",
+      backgroundAlpha: 0.94,
+      borderColor: "#4F7DFF",
+      borderAlpha: 0.34,
+    },
+    accent: {
+      plain: false,
+      textColor: "#101A33",
+      backgroundColor: "#AFC5FF",
+      backgroundAlpha: 0.96,
+      borderColor: "#2D5BDB",
+      borderAlpha: 0.34,
+    },
+    plain: {
+      plain: true,
+      textColor: "#4F7DFF",
+      backgroundColor: "#FFFFFF",
+      backgroundAlpha: 0,
+      borderColor: "#4F7DFF",
+      borderAlpha: 0,
+    },
+  };
   // Tools that create a new layer by click-dragging on the canvas
   const DRAG_TOOLS = new Set(["rect", "arrow", "line", "blur", "clone"]);
   // Tools that fire on a single click instead of a drag
@@ -86,6 +131,52 @@
     return layer
       ? { id: layer.id, label: layer.label || layer.text || layer.kind, kind: layer.kind }
       : null;
+  }
+
+  function layerSelectionPayload(layer) {
+    return {
+      id: layer.id,
+      kind: layer.kind,
+      label: layer.label || layer.text || layer.kind,
+    };
+  }
+
+  function messageLayerSelections() {
+    return state.document.layers
+      .filter((layer) => state.messageLayerIds.has(layer.id))
+      .map(layerSelectionPayload);
+  }
+
+  function postMessageLayers() {
+    post("markup.attachments", {
+      sessionId: state.sessionId,
+      selections: messageLayerSelections(),
+    });
+  }
+
+  function toggleMessageLayer(layer) {
+    if (!layer) return;
+    if (state.messageLayerIds.has(layer.id)) {
+      state.messageLayerIds.delete(layer.id);
+    } else {
+      state.messageLayerIds.add(layer.id);
+    }
+    postMessageLayers();
+    render();
+  }
+
+  function removeTaggedMessageLayer(id) {
+    if (!id || !state.messageLayerIds.has(id)) return;
+    state.messageLayerIds.delete(id);
+    postMessageLayers();
+    render();
+  }
+
+  function clearTaggedMessageLayers() {
+    if (!state.messageLayerIds.size) return;
+    state.messageLayerIds.clear();
+    postMessageLayers();
+    render();
   }
 
   function debouncedUpdate() {
@@ -191,6 +282,137 @@
     return `rgba(${r},${g},${b},${alpha == null ? 1 : alpha})`;
   }
 
+  function normalizePointerStyle(value) {
+    return POINTER_STYLES.has(value) ? value : DEFAULT_POINTER_STYLE;
+  }
+
+  function normalizeArrowHeads(value) {
+    return ARROW_HEADS.has(value) ? value : DEFAULT_ARROW_HEADS;
+  }
+
+  function normalizeTextPreset(value) {
+    return TEXT_PRESETS[value] ? value : DEFAULT_TEXT_PRESET;
+  }
+
+  function pointerPairForHeads(heads, pointerStyle) {
+    const h = normalizeArrowHeads(heads);
+    const p = normalizePointerStyle(pointerStyle);
+    return {
+      start: h === "start" || h === "both" ? p : "none",
+      end: h === "end" || h === "both" ? p : "none",
+    };
+  }
+
+  function hasExplicitPointers(layer) {
+    return layer && (layer.pointerStart != null || layer.pointerEnd != null);
+  }
+
+  function pointerForLayer(layer, endpoint) {
+    if (!layer) return "none";
+    const raw = endpoint === "start" ? layer.pointerStart : layer.pointerEnd;
+    if (raw != null) return normalizePointerStyle(raw);
+    if (hasExplicitPointers(layer)) return "none";
+    if (layer.label === "line") return "none";
+    return endpoint === "end" ? normalizePointerStyle(layer.pointerStyle) : "none";
+  }
+
+  function arrowHeadsForLayer(layer) {
+    const start = pointerForLayer(layer, "start");
+    const end = pointerForLayer(layer, "end");
+    if (start !== "none" && end !== "none") return "both";
+    if (start !== "none") return "start";
+    if (end !== "none") return "end";
+    return "none";
+  }
+
+  function calloutLabelForLayer(layer) {
+    if (!layer || layer.label === "line" || layer.label === "BLUR") return "";
+    return layer.label || "";
+  }
+
+  function pointerStyleForLayer(layer) {
+    const start = pointerForLayer(layer, "start");
+    if (start !== "none") return start;
+    const end = pointerForLayer(layer, "end");
+    if (end !== "none") return end;
+    return normalizePointerStyle(layer && layer.pointerStyle);
+  }
+
+  function applyArrowStyleToLayer(layer, heads, pointerStyle) {
+    const pair = pointerPairForHeads(heads, pointerStyle);
+    layer.pointerStart = pair.start;
+    layer.pointerEnd = pair.end;
+    layer.pointerStyle = normalizePointerStyle(pointerStyle);
+    if (pair.start === "none" && pair.end === "none") {
+      layer.label = "line";
+    } else if (layer.label === "line") {
+      delete layer.label;
+    }
+  }
+
+  function textPresetForLayer(layer) {
+    if (layer && layer.textPreset && TEXT_PRESETS[layer.textPreset]) return layer.textPreset;
+    if (layer && layer.plain) return "plain";
+    return DEFAULT_TEXT_PRESET;
+  }
+
+  function labelStyle(layer) {
+    const presetName = textPresetForLayer(layer);
+    const preset = TEXT_PRESETS[presetName];
+    const plain = !!(layer && layer.plain) || preset.plain;
+    return {
+      preset: presetName,
+      plain,
+      textColor: (layer && layer.textColor) || (plain && layer && layer.color) || preset.textColor,
+      backgroundColor: (layer && layer.backgroundColor) || preset.backgroundColor,
+      backgroundAlpha: layer && typeof layer.backgroundAlpha === "number" ? layer.backgroundAlpha : preset.backgroundAlpha,
+      borderColor: (layer && layer.borderColor) || preset.borderColor,
+      borderAlpha: layer && typeof layer.borderAlpha === "number" ? layer.borderAlpha : preset.borderAlpha,
+    };
+  }
+
+  function applyTextPresetToStyle(presetName) {
+    const name = normalizeTextPreset(presetName);
+    const preset = TEXT_PRESETS[name];
+    state.style.textPreset = name;
+    state.style.plain = preset.plain;
+    state.style.textColor = preset.textColor;
+    state.style.backgroundColor = preset.backgroundColor;
+    state.style.backgroundAlpha = preset.backgroundAlpha;
+    state.style.borderColor = preset.borderColor;
+    state.style.borderAlpha = preset.borderAlpha;
+  }
+
+  function applyTextPresetToLayer(layer, presetName) {
+    const name = normalizeTextPreset(presetName);
+    const preset = TEXT_PRESETS[name];
+    layer.textPreset = name;
+    layer.plain = preset.plain;
+    layer.textColor = preset.textColor;
+    layer.backgroundColor = preset.backgroundColor;
+    layer.backgroundAlpha = preset.backgroundAlpha;
+    layer.borderColor = preset.borderColor;
+    layer.borderAlpha = preset.borderAlpha;
+    layer.color = preset.textColor;
+  }
+
+  function roundRectPath(context, x, y, w, h, r) {
+    const radius = Math.max(0, Math.min(r, w / 2, h / 2));
+    if (typeof context.roundRect === "function") {
+      context.roundRect(x, y, w, h, radius);
+      return;
+    }
+    context.moveTo(x + radius, y);
+    context.lineTo(x + w - radius, y);
+    context.quadraticCurveTo(x + w, y, x + w, y + radius);
+    context.lineTo(x + w, y + h - radius);
+    context.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+    context.lineTo(x + radius, y + h);
+    context.quadraticCurveTo(x, y + h, x, y + h - radius);
+    context.lineTo(x, y + radius);
+    context.quadraticCurveTo(x, y, x + radius, y);
+  }
+
   function framePx(layer, w, h) {
     const f = layer.frame;
     if (!f) return null;
@@ -252,6 +474,76 @@
     const width = Math.abs(b.nx - a.nx);
     const height = Math.abs(b.ny - a.ny);
     return { x, y, width, height };
+  }
+
+  const FRAME_HANDLE_GRAB = 9;
+  const FRAME_MIN_SIZE_PX = 14;
+
+  function frameHandlePoints(layer) {
+    if (!layer || !layer.frame) return [];
+    const f = layer.frame;
+    const size = viewportSize();
+    const left = f.x * size.w;
+    const top = f.y * size.h;
+    const right = (f.x + f.width) * size.w;
+    const bottom = (f.y + f.height) * size.h;
+    const midX = (left + right) / 2;
+    const midY = (top + bottom) / 2;
+    return [
+      { name: "nw", x: left, y: top },
+      { name: "n", x: midX, y: top },
+      { name: "ne", x: right, y: top },
+      { name: "e", x: right, y: midY },
+      { name: "se", x: right, y: bottom },
+      { name: "s", x: midX, y: bottom },
+      { name: "sw", x: left, y: bottom },
+      { name: "w", x: left, y: midY },
+    ];
+  }
+
+  function frameHandleAt(norm, layer) {
+    const grab = FRAME_HANDLE_GRAB / Math.max(0.25, state.viewport.zoom || 1);
+    for (const handle of frameHandlePoints(layer)) {
+      if (Math.abs(norm.px - handle.x) <= grab && Math.abs(norm.py - handle.y) <= grab) {
+        return handle.name;
+      }
+    }
+    return null;
+  }
+
+  function frameBodyHit(norm, layer) {
+    if (!layer || !layer.frame) return false;
+    const f = layer.frame;
+    return norm.nx >= f.x && norm.nx <= f.x + f.width && norm.ny >= f.y && norm.ny <= f.y + f.height;
+  }
+
+  function cursorForFrameHandle(handle) {
+    if (handle === "n" || handle === "s") return "ns-resize";
+    if (handle === "e" || handle === "w") return "ew-resize";
+    if (handle === "nw" || handle === "se") return "nwse-resize";
+    if (handle === "ne" || handle === "sw") return "nesw-resize";
+    return "default";
+  }
+
+  function resizeFrameFromHandle(orig, handle, dx, dy, size) {
+    const minW = FRAME_MIN_SIZE_PX / Math.max(1, size.w);
+    const minH = FRAME_MIN_SIZE_PX / Math.max(1, size.h);
+    let left = orig.x;
+    let top = orig.y;
+    let right = orig.x + orig.width;
+    let bottom = orig.y + orig.height;
+
+    if (handle.includes("w")) left = Math.min(orig.x + dx, right - minW);
+    if (handle.includes("e")) right = Math.max(orig.x + orig.width + dx, left + minW);
+    if (handle.includes("n")) top = Math.min(orig.y + dy, bottom - minH);
+    if (handle.includes("s")) bottom = Math.max(orig.y + orig.height + dy, top + minH);
+
+    return {
+      x: left,
+      y: top,
+      width: right - left,
+      height: bottom - top,
+    };
   }
 
   /**
@@ -435,6 +727,15 @@
     }
 
     state.document = incoming;
+    const incomingIds = new Set((state.document.layers || []).map((layer) => layer.id));
+    let prunedMessageLayers = false;
+    state.messageLayerIds.forEach((id) => {
+      if (!incomingIds.has(id)) {
+        state.messageLayerIds.delete(id);
+        prunedMessageLayers = true;
+      }
+    });
+    if (prunedMessageLayers) postMessageLayers();
     if (viewport) {
       const oldZoom = state.viewport.zoom || 1;
       const oldPanX = state.viewport.panX || 0;
@@ -490,6 +791,8 @@
   function updateCursor() {
     if (state.panDrag) {
       canvas.style.cursor = "grabbing";
+    } else if (state.frameResize) {
+      canvas.style.cursor = cursorForFrameHandle(state.frameResize.handle);
     } else if (state.isSpaceDown || state.activeTool === "hand") {
       canvas.style.cursor = "grab";
     } else {
@@ -503,6 +806,18 @@
   function updateSelectionHoverCursor(e) {
     if (state.activeTool != null || state.isSpaceDown) return;
     const sel = selectedLayer();
+    if (sel && sel.frame) {
+      const norm = eventToNorm(e);
+      const handle = frameHandleAt(norm, sel);
+      if (handle) {
+        canvas.style.cursor = cursorForFrameHandle(handle);
+        return;
+      }
+      if (frameBodyHit(norm, sel)) {
+        canvas.style.cursor = "move";
+        return;
+      }
+    }
     if (sel && sel.from && sel.to) {
       const norm = eventToNorm(e);
       if (segmentEndpointAt(norm, sel)) {
@@ -533,6 +848,8 @@
   }
 
   function newArrowLayer(from, to, asLine) {
+    const heads = asLine ? "none" : state.style.arrowHeads;
+    const pair = pointerPairForHeads(heads, state.style.pointerStyle);
     return {
       id: uuid(),
       kind: "arrow",
@@ -540,26 +857,37 @@
       to,
       color: state.style.color,
       strokeWidth: state.style.strokeWidth,
-      // `label: "line"` is the sentinel the renderer reads to skip the arrowhead.
-      // Schema-compliant — `label` is an optional string on CaptureMarkupLayer.
-      label: asLine ? "line" : undefined,
+      pointerStart: pair.start,
+      pointerEnd: pair.end,
+      pointerStyle: state.style.pointerStyle,
+      // Legacy sentinel for older sidecars/renderers. New renderers prefer
+      // pointerStart/pointerEnd, but keeping this for plain lines is harmless.
+      label: pair.start === "none" && pair.end === "none" ? "line" : undefined,
       visible: true,
       author: "user",
     };
   }
 
   function newLabelLayer(frame, text) {
+    const preset = TEXT_PRESETS[normalizeTextPreset(state.style.textPreset)];
+    const textColor = state.style.textColor || preset.textColor;
     return {
       id: uuid(),
       kind: "label",
       frame,
       text,
-      color: state.style.color,
+      color: textColor,
       fontSize: state.style.fontSize,
       fontFamily: state.style.fontFamily,
       bold: state.style.bold,
       italic: state.style.italic,
-      plain: state.style.plain,
+      plain: state.style.plain || preset.plain,
+      textPreset: normalizeTextPreset(state.style.textPreset),
+      textColor,
+      backgroundColor: state.style.backgroundColor || preset.backgroundColor,
+      backgroundAlpha: typeof state.style.backgroundAlpha === "number" ? state.style.backgroundAlpha : preset.backgroundAlpha,
+      borderColor: state.style.borderColor || preset.borderColor,
+      borderAlpha: typeof state.style.borderAlpha === "number" ? state.style.borderAlpha : preset.borderAlpha,
       visible: true,
       author: "user",
     };
@@ -648,7 +976,7 @@
     if (!layer) return null;
     if (layer.kind === "rect") return "rect";
     if (layer.kind === "highlight") return layer.label === "BLUR" ? "blur" : null;
-    if (layer.kind === "arrow") return layer.label === "line" ? "line" : "arrow";
+    if (layer.kind === "arrow") return arrowHeadsForLayer(layer) === "none" ? "line" : "arrow";
     return null; // label (text), guide — not shape-convertible
   }
 
@@ -695,11 +1023,11 @@
         break;
       case "arrow":
         layer.kind = "arrow";
-        delete layer.label; // arrowhead on
+        applyArrowStyleToLayer(layer, DEFAULT_ARROW_HEADS, state.style.pointerStyle);
         break;
       case "line":
         layer.kind = "arrow";
-        layer.label = "line"; // arrowhead off
+        applyArrowStyleToLayer(layer, "none", state.style.pointerStyle);
         break;
     }
     layer.author = "user";
@@ -716,6 +1044,7 @@
     snapshotForUndo();
     if (kind === "color") {
       layer.color = value;
+      if (layer.kind === "label") layer.textColor = value;
     } else if (kind === "stroke") {
       layer.strokeWidth = Number(value) || 2;
     } else if (kind === "font-size") {
@@ -727,12 +1056,36 @@
     } else if (kind === "italic") {
       layer.italic = !!value;
     } else if (kind === "plain") {
-      layer.plain = value === "1" || value === true;
+      applyTextPresetToLayer(layer, value === "1" || value === true ? "plain" : DEFAULT_TEXT_PRESET);
+    } else if (kind === "text-preset") {
+      applyTextPresetToLayer(layer, value);
+    } else if (kind === "arrow-heads") {
+      applyArrowStyleToLayer(layer, value, pointerStyleForLayer(layer));
+    } else if (kind === "pointer-style") {
+      const heads = arrowHeadsForLayer(layer);
+      const style = normalizePointerStyle(value);
+      layer.pointerStyle = style;
+      if (heads !== "none") applyArrowStyleToLayer(layer, heads, style);
+    } else if (kind === "swap-arrow") {
+      if (!layer.from || !layer.to) {
+        state.history.past.pop();
+        updateHistoryButtons();
+        return false;
+      }
+      const from = layer.from;
+      layer.from = layer.to;
+      layer.to = from;
     } else if (kind === "text") {
       layer.text = typeof value === "string" ? value : String(value ?? "");
     } else if (kind === "label") {
       const next = typeof value === "string" ? value : String(value ?? "");
-      layer.label = next.length ? next : undefined;
+      if (next.length) {
+        layer.label = next;
+      } else if (layer.from && layer.to && arrowHeadsForLayer(layer) === "none") {
+        layer.label = "line";
+      } else {
+        layer.label = undefined;
+      }
     } else {
       state.history.past.pop(); // nothing changed; drop the speculative snapshot
       updateHistoryButtons();
@@ -747,15 +1100,93 @@
   // ---------------------------------------------------------------------------
   // Rendering
   // ---------------------------------------------------------------------------
-  function drawArrowhead(x1, y1, x2, y2, w) {
+  function drawPointer(tipX, tipY, tailX, tailY, w, pointerStyle) {
+    const style = normalizePointerStyle(pointerStyle);
+    if (style === "none") return;
     const headLen = Math.max(8, w / 90);
-    const angle = Math.atan2(y2 - y1, x2 - x1);
+    const angle = Math.atan2(tipY - tailY, tipX - tailX);
+    const left = {
+      x: tipX - headLen * Math.cos(angle - Math.PI / 6),
+      y: tipY - headLen * Math.sin(angle - Math.PI / 6),
+    };
+    const right = {
+      x: tipX - headLen * Math.cos(angle + Math.PI / 6),
+      y: tipY - headLen * Math.sin(angle + Math.PI / 6),
+    };
+    const stroke = ctx.strokeStyle;
+
+    if (style === "filled") {
+      ctx.beginPath();
+      ctx.moveTo(tipX, tipY);
+      ctx.lineTo(left.x, left.y);
+      ctx.lineTo(right.x, right.y);
+      ctx.closePath();
+      ctx.fillStyle = stroke;
+      ctx.fill();
+      return;
+    }
+
+    if (style === "dot") {
+      ctx.beginPath();
+      ctx.fillStyle = stroke;
+      ctx.arc(tipX, tipY, Math.max(3.5, headLen * 0.32), 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+
+    if (style === "bar") {
+      const len = headLen * 0.74;
+      const px = Math.cos(angle + Math.PI / 2) * len;
+      const py = Math.sin(angle + Math.PI / 2) * len;
+      ctx.beginPath();
+      ctx.moveTo(tipX - px, tipY - py);
+      ctx.lineTo(tipX + px, tipY + py);
+      ctx.stroke();
+      return;
+    }
+
     ctx.beginPath();
-    ctx.moveTo(x2, y2);
-    ctx.lineTo(x2 - headLen * Math.cos(angle - Math.PI / 6), y2 - headLen * Math.sin(angle - Math.PI / 6));
-    ctx.moveTo(x2, y2);
-    ctx.lineTo(x2 - headLen * Math.cos(angle + Math.PI / 6), y2 - headLen * Math.sin(angle + Math.PI / 6));
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(left.x, left.y);
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(right.x, right.y);
     ctx.stroke();
+  }
+
+  function messageTagAnchor(layer, w, h) {
+    const r = framePx(layer, w, h);
+    if (r) return { x: r.x + r.w, y: r.y };
+    if (layer.from && layer.to) {
+      return {
+        x: ((layer.from.x + layer.to.x) / 2) * w,
+        y: ((layer.from.y + layer.to.y) / 2) * h,
+      };
+    }
+    return null;
+  }
+
+  function drawMessageTag(layer, w, h) {
+    const anchor = messageTagAnchor(layer, w, h);
+    if (!anchor) return;
+    const zoom = Math.max(0.25, state.viewport.zoom || 1);
+    const label = "@";
+    const padX = 5 / zoom;
+    const tagH = 16 / zoom;
+    ctx.save();
+    ctx.font = `${10 / zoom}px ui-monospace, monospace`;
+    const tagW = ctx.measureText(label).width + padX * 2;
+    const x = Math.min(w - tagW - 2 / zoom, Math.max(2 / zoom, anchor.x - tagW / 2));
+    const y = Math.min(h - tagH - 2 / zoom, Math.max(2 / zoom, anchor.y - tagH - 4 / zoom));
+    roundRectPath(ctx, x, y, tagW, tagH, 4 / zoom);
+    ctx.fillStyle = "rgba(79,125,255,0.95)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.85)";
+    ctx.lineWidth = 1 / zoom;
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, x + padX, y + tagH / 2);
+    ctx.restore();
   }
 
   function drawLayer(layer, w, h) {
@@ -794,7 +1225,7 @@
         if (state.selectedLayerId === layer.id) {
           ctx.save();
           ctx.setLineDash([4, 3]);
-          ctx.strokeStyle = "rgba(196,125,28,0.7)";
+          ctx.strokeStyle = "rgba(79,125,255,0.7)";
           ctx.lineWidth = baseUnit;
           ctx.strokeRect(s.x * w, s.y * h, s.width * w, s.height * h);
           ctx.restore();
@@ -834,10 +1265,8 @@
         ctx.moveTo(x1, y1);
         ctx.lineTo(x2, y2);
         ctx.stroke();
-        // Arrowhead unless the layer is flagged as a line (label === "line").
-        if (layer.label !== "line") {
-          drawArrowhead(x1, y1, x2, y2, w);
-        }
+        drawPointer(x1, y1, x2, y2, w, pointerForLayer(layer, "start"));
+        drawPointer(x2, y2, x1, y1, w, pointerForLayer(layer, "end"));
         break;
       }
       case "label": {
@@ -847,19 +1276,29 @@
         const scale = (typeof layer.fontSize === "number" ? layer.fontSize : 16) / 16;
         const px = Math.max(11, (w / 140) * scale);
         ctx.font = labelFontString(layer, px);
-        ctx.textBaseline = "alphabetic";
-        if (layer.plain) {
+        const style = labelStyle(layer);
+        const padX = 7;
+        const padY = 5;
+        const textW = ctx.measureText(text).width;
+        const bgW = Math.max(r.w, textW + padX * 2);
+        const bgH = Math.max(r.h, px + padY * 2);
+        ctx.textBaseline = "middle";
+        if (style.plain) {
           // Plain mode: colored text, no background chip.
-          ctx.fillStyle = hexColor(layer.color);
-          ctx.fillText(text, r.x + 2, r.y + r.h - 6);
+          ctx.fillStyle = hexColor(style.textColor);
+          ctx.fillText(text, r.x + 2, r.y + bgH / 2);
         } else {
-          // Pill mode: white text on a dark chip, widened to fit the text.
-          const textW = ctx.measureText(text).width;
-          const bgW = Math.max(r.w, textW + 12);
-          ctx.fillStyle = "rgba(20,24,30,0.84)";
-          ctx.fillRect(r.x, r.y, bgW, r.h);
-          ctx.fillStyle = "#fff";
-          ctx.fillText(text, r.x + 6, r.y + r.h - 6);
+          ctx.beginPath();
+          roundRectPath(ctx, r.x, r.y, bgW, bgH, Math.min(7, bgH / 2));
+          ctx.fillStyle = hexColor(style.backgroundColor, style.backgroundAlpha);
+          ctx.fill();
+          if (style.borderAlpha > 0) {
+            ctx.strokeStyle = hexColor(style.borderColor, style.borderAlpha);
+            ctx.lineWidth = Math.max(1, w / 1200);
+            ctx.stroke();
+          }
+          ctx.fillStyle = hexColor(style.textColor);
+          ctx.fillText(text, r.x + padX, r.y + bgH / 2);
         }
         break;
       }
@@ -891,9 +1330,20 @@
       const r = framePx(layer, w, h);
       if (r) {
         ctx.setLineDash([4, 3]);
-        ctx.strokeStyle = "#C47D1C";
+        ctx.strokeStyle = "#4F7DFF";
         ctx.strokeRect(r.x - 2, r.y - 2, r.w + 4, r.h + 4);
         ctx.setLineDash([]);
+        ctx.fillStyle = "#fff";
+        ctx.strokeStyle = "#4F7DFF";
+        const zoom = Math.max(0.25, state.viewport.zoom || 1);
+        ctx.lineWidth = 1.25 / zoom;
+        const handleSize = 7 / zoom;
+        frameHandlePoints(layer).forEach((handle) => {
+          ctx.beginPath();
+          ctx.rect(handle.x - handleSize / 2, handle.y - handleSize / 2, handleSize, handleSize);
+          ctx.fill();
+          ctx.stroke();
+        });
       } else if (layer.from && layer.to) {
         // Selection markers for line/arrow: filled round grab handles at each
         // endpoint. Drag a handle to reshape that end; drag the body to move
@@ -903,7 +1353,7 @@
         ctx.setLineDash([]);
         ctx.lineWidth = 1.5;
         ctx.fillStyle = "#fff";
-        ctx.strokeStyle = "#C47D1C";
+        ctx.strokeStyle = "#4F7DFF";
         [[x1, y1], [x2, y2]].forEach(([hx, hy]) => {
           ctx.beginPath();
           ctx.arc(hx, hy, 4.5, 0, Math.PI * 2);
@@ -911,6 +1361,9 @@
           ctx.stroke();
         });
       }
+    }
+    if (state.messageLayerIds.has(layer.id)) {
+      drawMessageTag(layer, w, h);
     }
     ctx.restore();
   }
@@ -938,7 +1391,9 @@
       ctx.stroke();
       if (c.tool === "arrow") {
         ctx.setLineDash([]);
-        drawArrowhead(x1, y1, x2, y2, w);
+        const pair = pointerPairForHeads(state.style.arrowHeads, state.style.pointerStyle);
+        drawPointer(x1, y1, x2, y2, w, pair.start);
+        drawPointer(x2, y2, x1, y1, w, pair.end);
       }
     }
     ctx.setLineDash([]);
@@ -960,19 +1415,10 @@
     });
   }
 
-  /** Fire when the user clicks a layer-row's grip — Swift appends
-   *  the layer as an attachment chip in the composer's
-   *  attachments row. Explicit user gesture; selection alone
-   *  does NOT attach. */
+  /** Toggle a layer into the next agent message. Explicit user gesture;
+   *  selection alone does NOT attach. */
   function postAttach(layer) {
-    post("markup.attach", {
-      sessionId: state.sessionId,
-      selection: {
-        id: layer.id,
-        kind: layer.kind,
-        label: layer.label || layer.text || layer.kind,
-      },
-    });
+    toggleMessageLayer(layer);
   }
 
   function render() {
@@ -1019,14 +1465,23 @@
     layerCount.textContent = String(state.document.layers.length);
     state.document.layers.forEach((layer) => {
       const row = document.createElement("div");
-      row.className = "layer-row" + (layer.id === state.selectedLayerId ? " selected" : "");
+      const rowClasses = ["layer-row"];
+      if (layer.id === state.selectedLayerId) rowClasses.push("selected");
+      if (state.messageLayerIds.has(layer.id)) rowClasses.push("attached");
+      row.className = rowClasses.join(" ");
       // ⠿ grip is the explicit "attach this layer to the composer"
       // affordance. Click sends a `markup.attach` bridge message
       // (Swift inputBar appends it to the attachments row). The rest
       // of the row is a normal select click. File drag-out is owned by
       // the small native "DRAG PNG" handle over the canvas so it can
       // start an AppKit drag without stealing layer-move drags here.
-      row.innerHTML = `<span class="grip" aria-hidden="true" title="Attach to message">⠿</span><span class="dot ${layer.author || "agent"}"></span><span class="layer-row-label">${layer.kind}${layer.label ? " · " + layer.label : ""}</span>`;
+      const isAttached = state.messageLayerIds.has(layer.id);
+      const attachTitle = isAttached ? "Remove from next message" : "Add to next message";
+      // ⊕ / ⊖ reads as a click-to-add toggle. (Was ⠿ with a grab cursor —
+      // that looked like a drag handle and invited a drag that did nothing.)
+      const attachGlyph = isAttached ? "⊖" : "⊕";
+      row.dataset.layerId = layer.id;
+      row.innerHTML = `<span class="grip" title="${attachTitle}">${attachGlyph}</span><span class="dot ${layer.author || "agent"}"></span><span class="layer-row-label">${layer.kind}${layer.label ? " · " + layer.label : ""}</span>`;
       const grip = row.querySelector(".grip");
       if (grip) {
         grip.onclick = (e) => {
@@ -1051,6 +1506,56 @@
     return String(value == null ? "" : value).replace(/[&<>"]/g, (c) => (
       { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]
     ));
+  }
+
+  function hasLayerTurn(layer) {
+    return !!layer && (
+      layer.turnPass != null ||
+      layer.turnInstruction ||
+      layer.turnModel ||
+      layer.turnSummary ||
+      layer.turnElapsed != null
+    );
+  }
+
+  function turnDetailsForInspector(layer) {
+    if (hasLayerTurn(layer)) {
+      const elapsed = Number(layer.turnElapsed);
+      return {
+        title: "turn",
+        pass: layer.turnPass,
+        model: layer.turnModel,
+        summary: layer.turnSummary,
+        elapsed: Number.isFinite(elapsed) ? `${elapsed.toFixed(1)}s` : "",
+        instruction: layer.turnInstruction,
+      };
+    }
+    const t = state.thread;
+    if (!t) return null;
+    return {
+      title: "latest turn",
+      pass: t.pass,
+      model: t.model,
+      summary: t.live ? (t.statusText || "running") : (t.summary || "done"),
+      elapsed: t.elapsed,
+      instruction: t.instruction,
+    };
+  }
+
+  function renderTurnDetails(turn) {
+    if (!turn) return "";
+    const rows = [];
+    if (turn.pass != null) rows.push(["PASS", turn.pass]);
+    if (turn.model) rows.push(["MODEL", turn.model]);
+    if (turn.summary) rows.push(["STATUS", turn.summary]);
+    if (turn.elapsed) rows.push(["TIME", turn.elapsed]);
+    const rowHTML = rows.map(([k, v]) =>
+      `<div class="insp-turn-row"><span class="insp-turn-k">${escHtml(k)}</span><span class="insp-turn-v">${escHtml(v)}</span></div>`
+    ).join("");
+    const prompt = turn.instruction
+      ? `<div class="insp-turn-prompt">${escHtml(turn.instruction)}</div>`
+      : "";
+    return `<div class="insp-section"><div class="insp-kicker">${escHtml(turn.title)}</div><div class="insp-turn">${rowHTML}${prompt}</div></div>`;
   }
 
   // Convert a layer's viewport-normalized geometry into SOURCE-IMAGE pixels —
@@ -1088,7 +1593,9 @@
 
     const shape = layerShape(sel) || sel.kind;
     const author = sel.author || "agent";
-    const color = sel.color || "#C47D1C";
+    const color = sel.kind === "label"
+      ? (labelStyle(sel).textColor || sel.color || "#4F7DFF")
+      : (sel.color || "#4F7DFF");
     const sections = [];
 
     // Identity — author chip + shape name.
@@ -1098,6 +1605,11 @@
         `<span class="insp-title">${escHtml(shape)}</span>` +
       `</div>`
     );
+
+    const turnDetails = turnDetailsForInspector(sel);
+    if (turnDetails) {
+      sections.push(renderTurnDetails(turnDetails));
+    }
 
     // Geometry — image pixels, in a small card grid. Frame layers get X/Y/W/H;
     // segment layers (arrow/line) get start/end points + length.
@@ -1147,7 +1659,7 @@
     // applies it to the selected layer via applyStyleToSelection.
     const escAttr = (s) => escHtml(String(s == null ? "" : s)).replace(/"/g, "&quot;");
     const sameHex = (a, b) => String(a || "").toUpperCase() === String(b || "").toUpperCase();
-    const COLORS = [["#232423", "Ink"], ["#D03A1C", "Alert"], ["#C47D1C", "Amber"], ["#9A6A22", "Brass"], ["#FFFFFF", "White"]];
+    const COLORS = [["#232423", "Ink"], ["#D03A1C", "Alert"], ["#4F7DFF", "Accent"], ["#12A594", "Teal"], ["#FFFFFF", "White"]];
     const ctrl = (label, inner) => `<div class="insp-ctrl"><span class="insp-ctrl-k">${label}</span><div class="insp-ctrl-row">${inner}</div></div>`;
     const ctrlText = (label, inner) => `<div class="insp-ctrl insp-ctrl-text"><span class="insp-ctrl-k">${label}</span>${inner}</div>`;
     const ctrls = [];
@@ -1165,8 +1677,43 @@
       ).join("")));
     }
 
+    // Arrow endpoints — segment layers can be plain lines, one-ended arrows,
+    // two-ended arrows, or diagram-ish dot/bar pointers.
+    if (sel.from && sel.to) {
+      const heads = arrowHeadsForLayer(sel);
+      const tip = pointerStyleForLayer(sel);
+      ctrls.push(ctrl("heads", [
+        ["none", "--", "No pointers"],
+        ["start", "<-", "Pointer at start"],
+        ["end", "->", "Pointer at end"],
+        ["both", "<>", "Pointers at both ends"],
+      ].map(([v, glyph, title]) =>
+        `<button type="button" class="style-btn arrow-head${v === heads ? " active" : ""}" data-insp-style="arrow-heads" data-insp-value="${v}" title="${title}">${glyph}</button>`
+      ).join("")));
+      ctrls.push(ctrl("tip", [
+        ["open", "V", "Open arrow"],
+        ["filled", "F", "Filled arrow"],
+        ["dot", "O", "Dot pointer"],
+        ["bar", "|", "Bar pointer"],
+      ].map(([v, glyph, title]) =>
+        `<button type="button" class="style-btn pointer-pick${v === tip ? " active" : ""}" data-insp-style="pointer-style" data-insp-value="${v}" title="${title}">${glyph}</button>`
+      ).join("")));
+      ctrls.push(ctrl("dir",
+        `<button type="button" class="style-btn segment-action" data-insp-style="swap-arrow" data-insp-value="1" title="Reverse direction">swap</button>`
+      ));
+    }
+
     // Text typography — labels only.
     if (sel.kind === "label") {
+      const preset = textPresetForLayer(sel);
+      ctrls.push(ctrl("preset", [
+        ["on-light", "L", "For light backgrounds"],
+        ["on-dark", "D", "For dark backgrounds"],
+        ["accent", "A", "Amber accent"],
+        ["plain", "T", "Plain text"],
+      ].map(([v, glyph, title]) =>
+        `<button type="button" class="style-btn text-preset${v === preset ? " active" : ""}" data-insp-style="text-preset" data-insp-value="${v}" title="${title}">${glyph}</button>`
+      ).join("")));
       const fs = typeof sel.fontSize === "number" ? sel.fontSize : 16;
       ctrls.push(ctrl("size", [[12, "S"], [16, "M"], [22, "L"]].map(([v, l]) =>
         `<button type="button" class="style-btn font-pick${v === fs ? " active" : ""}" data-insp-style="font-size" data-insp-value="${v}" title="${l}">${l}</button>`
@@ -1190,9 +1737,9 @@
     }
 
     // Optional callout label — shapes that can carry one (arrow / rect / line).
-    if (sel.kind !== "label" && sel.kind !== "patch" && shape !== "blur" && sel.label !== "line" && sel.label !== "BLUR") {
+    if (sel.kind !== "label" && sel.kind !== "patch" && shape !== "blur" && sel.label !== "BLUR") {
       ctrls.push(ctrlText("label",
-        `<input type="text" class="insp-text-input" data-insp-text data-insp-style="label" value="${escAttr(sel.label)}" placeholder="callout label" />`
+        `<input type="text" class="insp-text-input" data-insp-text data-insp-style="label" value="${escAttr(calloutLabelForLayer(sel))}" placeholder="callout label" />`
       ));
     }
 
@@ -1286,7 +1833,8 @@
   function syncStyleStackActive() {
     if (!styleStack) return;
     const layer = isEditingSelection() ? selectedLayer() : null;
-    const color = layer ? layer.color : state.style.color;
+    const textToolColor = state.style.textColor || TEXT_PRESETS[normalizeTextPreset(state.style.textPreset)].textColor;
+    const color = layer ? layer.color : (state.activeTool === "text" ? textToolColor : state.style.color);
     const stroke = layer
       ? (typeof layer.strokeWidth === "number" ? layer.strokeWidth : 2)
       : state.style.strokeWidth;
@@ -1302,8 +1850,14 @@
     // italic are independent toggles.
     const family = layer ? (layer.fontFamily || "mono") : state.style.fontFamily;
     const plain = layer ? !!layer.plain : !!state.style.plain;
+    const textPreset = layer ? textPresetForLayer(layer) : normalizeTextPreset(state.style.textPreset);
+    const arrowHeads = layer && layer.from && layer.to ? arrowHeadsForLayer(layer) : state.style.arrowHeads;
+    const pointerStyle = layer && layer.from && layer.to ? pointerStyleForLayer(layer) : state.style.pointerStyle;
     setGroupActiveByValue("font-family", family, false);
     setGroupActiveByValue("plain", plain ? "1" : "0", false);
+    setGroupActiveByValue("text-preset", textPreset, false);
+    setGroupActiveByValue("arrow-heads", arrowHeads, false);
+    setGroupActiveByValue("pointer-style", pointerStyle, false);
     setToggleActive("bold", layer ? !!layer.bold : !!state.style.bold);
     setToggleActive("italic", layer ? !!layer.italic : !!state.style.italic);
   }
@@ -1334,8 +1888,9 @@
   // The style stack lives on the right half of the top toolbar. Groups
   // are hidden/shown based on the active tool:
   //   · shape tools (rect/arrow/line/blur) → stroke + color
-  //   · text tool                          → font-size + color
-  //   · null tool (select mode)            → all groups visible
+  //   · arrow tool                         → stroke + heads + tip + color
+  //   · text tool                          → text color + text presets
+  //   · null tool (select mode)            → compact stroke + color defaults
   //
   // Clicking a swatch / pip updates `state.style`, which is the source
   // of truth used by the layer factories when a new layer is created.
@@ -1347,7 +1902,7 @@
     // active create-tool. (Selected-layer editing lives in the inspector now.)
     const tool = state.activeTool;
     const isText = tool === "text";
-    const isShape = tool === "rect" || tool === "arrow" || tool === "line" || tool === "blur";
+    const isArrow = tool === "arrow";
 
     // Clone tool has no style controls — hide the whole stack.
     if (tool === "clone") {
@@ -1357,12 +1912,16 @@
 
     const strokeGroup = styleStack.querySelector('[data-group="stroke"]');
     const colorGroup = styleStack.querySelector('[data-group="color"]');
-    // Stroke is meaningless for text; text-only groups (font/deco/bg) are
-    // meaningless for shapes. Null tool (defaults panel) shows everything.
+    // Stroke is meaningless for text; text-only groups belong to the Text
+    // tool, and arrow endpoint controls belong to the Arrow tool. Select mode
+    // stays compact so the toolbar does not horizontally overflow.
     if (strokeGroup) strokeGroup.classList.toggle("hidden", isText);
     if (colorGroup) colorGroup.classList.remove("hidden");
     styleStack.querySelectorAll(".style-group.text-only").forEach((el) => {
-      el.classList.toggle("hidden", isShape);
+      el.classList.toggle("hidden", !isText);
+    });
+    styleStack.querySelectorAll(".style-group.arrow-only").forEach((el) => {
+      el.classList.toggle("hidden", !isArrow);
     });
 
     collapseDividers();
@@ -1397,7 +1956,8 @@
     if (kind === "stroke") {
       state.style.strokeWidth = Number(value) || 2;
     } else if (kind === "color") {
-      state.style.color = value;
+      if (state.activeTool === "text") state.style.textColor = value;
+      else state.style.color = value;
     } else if (kind === "font-size") {
       state.style.fontSize = Number(value) || 16;
     } else if (kind === "font-family") {
@@ -1407,7 +1967,13 @@
     } else if (kind === "italic") {
       state.style.italic = !!value;
     } else if (kind === "plain") {
-      state.style.plain = value === "1" || value === true;
+      applyTextPresetToStyle(value === "1" || value === true ? "plain" : DEFAULT_TEXT_PRESET);
+    } else if (kind === "text-preset") {
+      applyTextPresetToStyle(value);
+    } else if (kind === "arrow-heads") {
+      state.style.arrowHeads = normalizeArrowHeads(value);
+    } else if (kind === "pointer-style") {
+      state.style.pointerStyle = normalizePointerStyle(value);
     }
   }
 
@@ -1451,6 +2017,7 @@
         applyStyleToSelection(kind, value);
       }
       markStyleButtonActive(btn);
+      syncStyleStackActive();
       e.preventDefault();
     });
   }
@@ -1469,7 +2036,7 @@
     const rail = document.getElementById("inspector-rail");
     const wt = document.getElementById("work-thread");
     if (!rail || !wt) return;
-    const showThread = !!state.thread && !state.selectedLayerId;
+    const showThread = !!state.thread && (state.thread.live || !state.selectedLayerId);
     rail.classList.toggle("thread-active", showThread);
     wt.classList.toggle("hidden", !showThread);
   }
@@ -1487,13 +2054,20 @@
 
     const entries = t.entries || [];
     body.innerHTML = "";
-    // Which model is doing this — pinned at the top of the thread.
-    if (t.model) {
+    // Which pass/model is doing this — pinned at the top of the thread.
+    if (t.model || t.pass != null || t.attachments) {
       const model = document.createElement("div");
       model.className = "wt-model";
-      model.innerHTML =
-        '<span class="wt-model-k">model</span>' +
-        '<span class="wt-model-v">' + escHtml(t.model) + "</span>";
+      const passHTML = t.pass != null
+        ? '<span class="wt-model-k">pass</span><span class="wt-model-v">' + escHtml(t.pass) + "</span>"
+        : "";
+      const modelHTML = t.model
+        ? '<span class="wt-model-k">model</span><span class="wt-model-v">' + escHtml(t.model) + "</span>"
+        : "";
+      const taggedHTML = t.attachments
+        ? '<span class="wt-model-k">tagged</span><span class="wt-model-v">' + escHtml(t.attachments) + "</span>"
+        : "";
+      model.innerHTML = passHTML + modelHTML + taggedHTML;
       body.appendChild(model);
     }
     if (t.instruction) {
@@ -1587,15 +2161,20 @@
     push(payload) {
       if (payload.document) {
         // Agent passes are mutations too — snapshot so the user can
-        // undo the whole pass with one ⌘Z (or one tap on the canvas
-        // back button).
+        // undo the whole pass with one ⌘Z (or one tap on the global history
+        // control).
         snapshotForUndo();
         installDocument(payload.document, { convertNewImageBasisLayers: true });
       }
       render();
     },
     exportDocument() { return attachViewportToDocument(state.document); },
+    exportMessageLayers() {
+      return state.document.layers.filter((layer) => state.messageLayerIds.has(layer.id));
+    },
     clearSelection() { state.selectedLayerId = null; render(); },
+    clearMessageLayers() { clearTaggedMessageLayers(); },
+    removeMessageLayer(id) { removeTaggedMessageLayer(id); },
     save() { requestSave(); },
     undo() { return undo(); },
     redo() { return redo(); },
@@ -1616,6 +2195,19 @@
       }
       if (applyStyleToSelection(kind, value)) renderInspector();
     });
+    inspectorBodyEl.addEventListener("keydown", (e) => {
+      const input = e.target.closest("input[data-insp-text]");
+      if (!input) return;
+      e.stopPropagation();
+      if (e.key === "Enter") {
+        e.preventDefault();
+        applyStyleToSelection(input.getAttribute("data-insp-style") || "text", input.value);
+        input.blur();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        renderInspector();
+      }
+    });
     // Text fields commit on change (blur / enter) so editing doesn't snapshot
     // per keystroke or steal focus on every character.
     inspectorBodyEl.addEventListener("change", (e) => {
@@ -1626,9 +2218,25 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Toolbar — tool selection
+  // Toolbar — global history + tool selection
   // ---------------------------------------------------------------------------
   toolToolbar.addEventListener("click", (e) => {
+    const saveButton = e.target.closest('[data-action="save"]');
+    if (saveButton) {
+      requestSave();
+      e.preventDefault();
+      return;
+    }
+
+    const historyButton = e.target.closest(".history-btn");
+    if (historyButton && !historyButton.disabled) {
+      const action = historyButton.getAttribute("data-action");
+      if (action === "undo") undo();
+      else if (action === "redo") redo();
+      e.preventDefault();
+      return;
+    }
+
     const btn = e.target.closest(".tool-btn");
     if (!btn || btn.disabled) return;
     const tool = btn.getAttribute("data-tool");
@@ -1665,10 +2273,9 @@
   });
 
   // ---------------------------------------------------------------------------
-  // Canvas zoom cluster — viewport + history actions
+  // Canvas zoom cluster — viewport actions
   //
-  // Lives over the canvas (floating bottom-right). Handles zoom in / out /
-  // fit + undo + redo.
+  // Lives over the canvas (floating bottom-right). Handles zoom in / out / fit.
   // ---------------------------------------------------------------------------
   if (zoomCluster) {
     zoomCluster.addEventListener("click", (e) => {
@@ -1676,9 +2283,7 @@
       if (!btn) return;
       const action = btn.getAttribute("data-action");
       if (!action) return;
-      if (action === "undo") undo();
-      else if (action === "redo") redo();
-      else if (action === "zoom-in") zoomAt(null, null, 1.2);
+      if (action === "zoom-in") zoomAt(null, null, 1.2);
       else if (action === "zoom-out") zoomAt(null, null, 1 / 1.2);
       else if (action === "zoom-fit") {
         fitViewportToCanvas();
@@ -1707,6 +2312,7 @@
     input.value = layer.text || "";
     input.setAttribute("data-inline-text", "1");
     const fs = typeof layer.fontSize === "number" ? layer.fontSize : 16;
+    const textStyle = labelStyle(layer);
     Object.assign(input.style, {
       position: "fixed",
       left: Math.round(screenX) + "px",
@@ -1718,9 +2324,11 @@
         (layer.italic ? "italic " : "") +
         fs +
         "px " +
-        (layer.fontFamily || "system-ui, sans-serif"),
-      color: layer.color || "#111",
-      background: "rgba(255,255,255,0.97)",
+        fontFamilyCSS(layer.fontFamily),
+      color: textStyle.textColor || layer.color || "#111",
+      background: textStyle.plain
+        ? "rgba(255,255,255,0.97)"
+        : hexColor(textStyle.backgroundColor, Math.max(0.92, textStyle.backgroundAlpha)),
       border: "1px solid rgba(0,0,0,0.28)",
       borderRadius: "6px",
       boxShadow: "0 2px 10px rgba(0,0,0,0.18)",
@@ -1862,6 +2470,15 @@
     }
 
     const already = selectedLayer();
+    if (already && already.frame) {
+      const handle = frameHandleAt(norm, already);
+      if (handle) {
+        state.frameResize = makeFrameResize(already, handle, e, size);
+        canvas.style.cursor = cursorForFrameHandle(handle);
+        e.preventDefault();
+        return;
+      }
+    }
     if (already && already.from && already.to) {
       const handle = segmentEndpointAt(norm, already);
       if (handle) {
@@ -1896,6 +2513,22 @@
     }
     render();
   });
+
+  /** Build the frame-resize descriptor. Snapshot is lazy so clicking a handle
+   *  without moving does not add an undo step. */
+  function makeFrameResize(layer, handle, e, size) {
+    return {
+      layerId: layer.id,
+      handle,
+      startX: e.clientX,
+      startY: e.clientY,
+      zoom: state.viewport.zoom,
+      w: size.w,
+      h: size.h,
+      orig: Object.assign({}, layer.frame),
+      didSnapshot: false,
+    };
+  }
 
   /** Build the segment-edit drag descriptor. Snapshot is taken lazily on the
    *  first actual move (see mousemove) so a plain select-click on a segment
@@ -1960,6 +2593,28 @@
         norm = snapToAxis(state.creating.start, norm);
       }
       state.creating.current = norm;
+      render();
+      return;
+    }
+    if (state.frameResize) {
+      const resize = state.frameResize;
+      const layer = state.document.layers.find((l) => l.id === resize.layerId);
+      if (!layer || !layer.frame) return;
+      if (!resize.didSnapshot) {
+        snapshotForUndo();
+        resize.didSnapshot = true;
+      }
+      const dx = (e.clientX - resize.startX) / resize.zoom / resize.w;
+      const dy = (e.clientY - resize.startY) / resize.zoom / resize.h;
+      layer.frame = resizeFrameFromHandle(
+        resize.orig,
+        resize.handle,
+        dx,
+        dy,
+        { w: resize.w, h: resize.h }
+      );
+      layer.author = "user";
+      canvas.style.cursor = cursorForFrameHandle(resize.handle);
       render();
       return;
     }
@@ -2050,6 +2705,13 @@
       }
       return;
     }
+    if (state.frameResize) {
+      const moved = state.frameResize.didSnapshot;
+      state.frameResize = null;
+      if (moved) debouncedUpdate();
+      updateCursor();
+      return;
+    }
     if (state.segDrag) {
       const moved = state.segDrag.didSnapshot;
       state.segDrag = null;
@@ -2062,15 +2724,46 @@
     }
   });
 
-  // ---------------------------------------------------------------------------
-  // Context menu (existing — kept intact)
-  // ---------------------------------------------------------------------------
+  function showLayerPopover(clientX, clientY) {
+    const layer = selectedLayer();
+    if (!layer) return;
+    const attachButton = popover.querySelector('[data-action="attach"]');
+    if (attachButton) {
+      attachButton.textContent = state.messageLayerIds.has(layer.id)
+        ? "Remove from next message"
+        : "Add to next message";
+    }
+    popover.classList.remove("hidden");
+    popover.style.left = clientX + "px";
+    popover.style.top = clientY + "px";
+  }
+
   canvas.addEventListener("contextmenu", (e) => {
     e.preventDefault();
+    const hit = hitTest(eventToNorm(e));
+    if (hit) {
+      state.selectedLayerId = hit.id;
+      setActiveTool(null);
+      render();
+    }
     if (!state.selectedLayerId) return;
-    popover.classList.remove("hidden");
-    popover.style.left = e.clientX + "px";
-    popover.style.top = e.clientY + "px";
+    showLayerPopover(e.clientX, e.clientY);
+  });
+
+  // Right-click on a layer ROW in the sidebar opens the same menu — and we
+  // suppress WebKit's default context menu (Reload / Inspect Element / the
+  // text-edit menu) everywhere else, so the custom layer menu is the only
+  // thing a right-click ever surfaces.
+  document.addEventListener("contextmenu", (e) => {
+    if (e.defaultPrevented) return; // canvas handler already handled this one
+    e.preventDefault();
+    const row = e.target.closest ? e.target.closest(".layer-row") : null;
+    const id = row && row.dataset ? row.dataset.layerId : null;
+    if (!id) return;
+    state.selectedLayerId = id;
+    setActiveTool(null);
+    render();
+    showLayerPopover(e.clientX, e.clientY);
   });
 
   popover.addEventListener("click", (e) => {
@@ -2078,10 +2771,17 @@
     if (!action || !state.selectedLayerId) return;
     const idx = state.document.layers.findIndex((l) => l.id === state.selectedLayerId);
     if (idx < 0) return;
+    if (action === "attach") {
+      toggleMessageLayer(state.document.layers[idx]);
+      popover.classList.add("hidden");
+      return;
+    }
     snapshotForUndo();
     if (action === "delete") {
+      const removedAttachment = state.messageLayerIds.delete(state.document.layers[idx].id);
       state.document.layers.splice(idx, 1);
       state.selectedLayerId = null;
+      if (removedAttachment) postMessageLayers();
     } else if (action === "toggle") {
       state.document.layers[idx].visible = !state.document.layers[idx].visible;
     }
@@ -2107,9 +2807,9 @@
       return;
     }
 
-    // ⌘Z / ⌘⇧Z (and control variants) — universal undo/redo. Handled before the modifier guard
-    // since this is the one bound shortcut that uses a modifier.
-    if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === "z" || e.key === "Z")) {
+    // Standard macOS ⌘Z / ⇧⌘Z — universal undo/redo. Handled before the
+    // modifier guard since this is the one bound shortcut that uses a modifier.
+    if (e.metaKey && !e.ctrlKey && !e.altKey && (e.key === "z" || e.key === "Z")) {
       if (e.shiftKey) redo();
       else undo();
       e.preventDefault();
@@ -2289,6 +2989,7 @@
   // safe to call before init() — they read live state but write only
   // to the DOM, and start with a sane null-tool / 100% zoom default.
   updateStyleStackVisibility();
+  updateHistoryButtons();
   updateZoomDisplay();
 
 })();

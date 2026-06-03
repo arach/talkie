@@ -15,6 +15,7 @@ struct SSHTerminalView: View {
 
     private let initialSavedHost: SSHTerminalSavedHost?
     private let initialRoutePreference: TalkieNetworkRoute?
+    private let initialOneShotStartupCommand: String?
     private let onClose: (() -> Void)?
 
     private static let startupCommandResetVersion = 8
@@ -120,10 +121,12 @@ struct SSHTerminalView: View {
     init(
         initialSavedHost: SSHTerminalSavedHost? = nil,
         initialRoutePreference: TalkieNetworkRoute? = nil,
+        initialOneShotStartupCommand: String? = nil,
         onClose: (() -> Void)? = nil
     ) {
         self.initialSavedHost = initialSavedHost
         self.initialRoutePreference = initialRoutePreference
+        self.initialOneShotStartupCommand = initialOneShotStartupCommand
         self.onClose = onClose
     }
 
@@ -3181,7 +3184,8 @@ struct SSHTerminalView: View {
 
     private func connect(
         to savedHost: SSHTerminalSavedHost,
-        preferredRoute: TalkieNetworkRoute? = nil
+        preferredRoute: TalkieNetworkRoute? = nil,
+        oneShotStartupCommand: String? = nil
     ) {
         AppLogger.ui.info(
             "Connecting to saved SSH host",
@@ -3197,7 +3201,8 @@ struct SSHTerminalView: View {
             for: connectionStartupProfile,
             startupCommandOverride: savedHost.startupCommandOverride
         )
-        pendingOneShotStartupCommand = nil
+        let trimmedOneShotCommand = oneShotStartupCommand?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        pendingOneShotStartupCommand = trimmedOneShotCommand.isEmpty ? nil : trimmedOneShotCommand
         pendingRoutePreference = preferredRoute
 
         guard hasReusableCredential else {
@@ -3410,7 +3415,11 @@ struct SSHTerminalView: View {
                 "Consuming initial SSH saved host",
                 detail: "host=\(initialSavedHost.host) username=\(initialSavedHost.username) profile=\(initialSavedHost.startupProfile.rawValue) preferredRoute=\(initialRoutePreference?.displayName ?? "classic")"
             )
-            connect(to: initialSavedHost, preferredRoute: initialRoutePreference)
+            connect(
+                to: initialSavedHost,
+                preferredRoute: initialRoutePreference,
+                oneShotStartupCommand: initialOneShotStartupCommand
+            )
             return
         }
 

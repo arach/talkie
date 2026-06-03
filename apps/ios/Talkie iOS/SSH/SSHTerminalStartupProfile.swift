@@ -67,6 +67,54 @@ enum SSHTerminalStartupProfile: String, Codable, CaseIterable, Sendable {
         nativePersistentShellCommand
     }
 
+    static func bridgeLogTailCommand() -> String {
+        #"""
+/bin/zsh -lc 'export PATH="$HOME/bin:$HOME/.local/bin:$HOME/.opencode/bin:$HOME/.bun/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin";
+clear;
+printf "[Talkie] Bridge + agent log tail\n";
+printf "Press Ctrl-C to stop.\n\n";
+today="$(date +%F)";
+log_candidates=(
+  "/tmp/talkie-bridge-hyper-scan.log"
+  "/tmp/talkie-bridge-dev.log"
+  "/tmp/talkie-bridge.log"
+  "$HOME/Library/Logs/TalkieBridge/bridge-dev.log"
+  "$HOME/Library/Logs/TalkieBridge/bridge.log"
+  "$HOME/Library/Application Support/Talkie/Bridge/bridge.log"
+  "$HOME/Library/Application Support/Talkie/Bridge/bridge.dev.log"
+  "$HOME/Library/Application Support/Talkie/logs/talkie-$today.log"
+  "$HOME/Library/Application Support/TalkieAgent/logs/talkie-$today.log"
+  "/tmp/talkie-agent-debug.log"
+  "/tmp/to.talkie.app.agent.dev.stdout.log"
+  "/tmp/to.talkie.app.agent.dev.stderr.log"
+  "/tmp/to.talkie.app.agent.xpc.dev.stdout.log"
+  "/tmp/to.talkie.app.agent.xpc.dev.stderr.log"
+);
+existing=();
+for file in "${log_candidates[@]}"; do
+  [[ -f "$file" ]] && existing+=("$file");
+done;
+if (( ${#existing[@]} > 0 )); then
+  printf "Tailing logs:\n";
+  printf "  %s\n" "${existing[@]}";
+  printf "\n";
+  exec tail -n 80 -F "${existing[@]}";
+fi;
+printf "No Talkie bridge or agent log found yet.\nChecked:\n";
+printf "  %s\n" "${log_candidates[@]}";
+printf "\nWaiting for a bridge log to appear...\n";
+while true; do
+  for file in "${log_candidates[@]}"; do
+    if [[ -f "$file" ]]; then
+      printf "\nTailing logs from first available file: %s\n\n" "$file";
+      exec tail -n 120 -F "$file";
+    fi;
+  done;
+  sleep 2;
+done'
+"""#
+    }
+
     static func normalizedStartupCommandOverride(
         _ command: String?,
         for profile: SSHTerminalStartupProfile

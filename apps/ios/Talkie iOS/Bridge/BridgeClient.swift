@@ -369,9 +369,9 @@ actor BridgeClient {
         return try JSONDecoder().decode(HyperScanUploadResponse.self, from: data)
     }
 
-    // MARK: - Headless Claude (AI Agent)
+    // MARK: - Headless Agent
 
-    /// Send a message to a Claude Code session in headless mode.
+    /// Send a message to the paired Mac's Codex agent in headless mode.
     /// Returns the assistant's text response.
     func headless(message: String, sessionId: String? = nil, projectDir: String? = nil) async throws -> HeadlessResponse {
         let body = HeadlessRequest(sessionId: sessionId, message: message, projectDir: projectDir)
@@ -379,14 +379,14 @@ actor BridgeClient {
         return try JSONDecoder().decode(HeadlessResponse.self, from: data)
     }
 
-    /// Result from a streaming headless call, including the Claude session ID for follow-ups.
+    /// Result from a streaming headless call, including the remote agent session ID for follow-ups.
     struct HeadlessStreamResult: Sendable {
         let sessionId: String?
     }
 
-    /// Stream a headless Claude response via SSE.
+    /// Stream a headless agent response via SSE.
     /// Calls `onChunk` with each text fragment as it arrives.
-    /// Returns the Claude session ID for multi-turn follow-ups.
+    /// Returns the remote agent session ID for multi-turn follow-ups.
     func headlessStream(
         message: String,
         sessionId: String? = nil,
@@ -429,6 +429,10 @@ actor BridgeClient {
             guard let jsonData = payload.data(using: .utf8),
                   let chunk = try? JSONDecoder().decode(SSEChunk.self, from: jsonData) else {
                 continue
+            }
+
+            if chunk.type == "error" {
+                throw BridgeError.messageFailed(chunk.error ?? "Agent stream failed")
             }
 
             // Capture session_id from session metadata event
@@ -1173,14 +1177,14 @@ struct MessageResponse: Codable {
     let success: Bool
     let error: String?
     let transcript: String?      // Included when sending audio
-    let deliveredAt: String?     // ISO timestamp when delivered to Claude
+    let deliveredAt: String?     // ISO timestamp when delivered to the remote agent
     let insertedText: String?    // The actual text that was inserted
 
     // Mode info (smart routing)
     let mode: String?            // "ui" or "headless"
     let modeReason: String?      // Why this mode was chosen
     let screenLocked: Bool?      // Was Mac screen locked?
-    let response: String?        // Claude's response (headless mode only)
+    let response: String?        // Remote agent response (headless mode only)
     let verified: Bool?          // UI mode: did message appear in logs?
     let verifyAttempts: Int?     // How many log checks were needed
 }

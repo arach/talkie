@@ -282,7 +282,7 @@ private struct HomeHeader: View {
             Spacer()
             Text("TALKIE")
                 .talkieType(.wordmark)
-                .foregroundStyle(theme.colors.textPrimary.opacity(0.78))
+                .foregroundStyle(theme.colors.textPrimary)
             Spacer()
             Button(action: { AppShellRouter.shared.openSettings() }) {
                 ZStack {
@@ -300,6 +300,7 @@ private struct HomeHeader: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Settings")
+            .accessibilityIdentifier("dock.settings")
         }
         .padding(.horizontal, 20)
         .padding(.top, 6)
@@ -580,7 +581,7 @@ private struct HomeFrequentActionsStrip: View {
                 .padding(.leading, 4)
 
             HStack(spacing: 0) {
-                actionCell(label: "RECORD", icon: "waveform") {
+                actionCell(label: "RECORD", icon: "waveform", accessibilityID: "dock.record") {
                     RecordingSheetController.shared.isPresented = true
                 }
                 divider
@@ -610,7 +611,12 @@ private struct HomeFrequentActionsStrip: View {
         }
     }
 
-    private func actionCell(label: String, icon: String, action: @escaping () -> Void) -> some View {
+    private func actionCell(
+        label: String,
+        icon: String,
+        accessibilityID: String? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             VStack(spacing: 4) {
                 Image(systemName: icon)
@@ -618,7 +624,8 @@ private struct HomeFrequentActionsStrip: View {
                     .foregroundStyle(theme.currentTheme.chrome.accent)
                 Text(label)
                     .talkieType(.channelLabelTiny)
-                    .foregroundStyle(theme.colors.textTertiary)
+                    // Primary action labels — secondary ink, not the quietest tier.
+                    .foregroundStyle(theme.colors.textSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
             }
@@ -627,6 +634,7 @@ private struct HomeFrequentActionsStrip: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label.capitalized)
+        .accessibilityIdentifier(accessibilityID ?? "home.quick.\(label.lowercased().replacing(" ", with: "-"))")
     }
 
     private var divider: some View {
@@ -726,6 +734,7 @@ private struct HomeSuggestionsStrip: View {
                             )
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier(suggestion.accessibilityIdentifier)
                     }
                 }
             }
@@ -738,6 +747,10 @@ private struct HomeSuggestion: Identifiable {
     let title: String
     let icon: String
     let action: () -> Void
+
+    var accessibilityIdentifier: String {
+        title == "Keyboard" ? "dock.keyboard" : "home.suggestion.\(title.lowercased().replacing(" ", with: "-"))"
+    }
 }
 
 // MARK: - RECENT
@@ -802,9 +815,12 @@ private struct RecentSection: View {
                 } else {
                     List {
                         ForEach(items.enumerated(), id: \.element.id) { idx, item in
-                            RecentRow(item: item, showDivider: idx > 0)
-                                .contentShape(Rectangle())
-                                .onTapGesture { open(item) }
+                            Button(action: { open(item) }) {
+                                RecentRow(item: item, showDivider: idx > 0)
+                                    .contentShape(Rectangle())
+                            }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("memo.row")
                                 .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                     if item.canPromoteToMemo {
                                         Button {
@@ -830,7 +846,7 @@ private struct RecentSection: View {
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
                     .scrollDisabled(true)
-                    .frame(height: CGFloat(items.count) * 72)
+                    .frame(height: CGFloat(items.count) * 56)
 
                     if hasMore {
                         Button(action: {
@@ -920,51 +936,34 @@ private struct RecentRow: View {
 
     var body: some View {
         VStack(spacing: 0) {
-                if showDivider {
-                    Rectangle()
-                        .fill(theme.currentTheme.chrome.edgeSubtle)
-                        .frame(height: theme.currentTheme.chrome.hairlineWidth)
-                        .padding(.leading, 36)
-                }
-                HStack(alignment: .top, spacing: 8) {
-                    sourceGlyph
+            if showDivider {
+                Rectangle()
+                    .fill(theme.currentTheme.chrome.edgeSubtle)
+                    .frame(height: theme.currentTheme.chrome.hairlineWidth)
+                    .padding(.leading, 36)
+            }
+
+            HStack(alignment: .center, spacing: 8) {
+                sourceGlyph
+                    .foregroundStyle(theme.colors.textTertiary)
+                    .frame(width: 16, height: 16)
+
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(item.title)
+                        .talkieType(.listTitle)
+                        .foregroundStyle(theme.colors.textPrimary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Text(item.relativeTime)
+                        .talkieType(.timestamp)
                         .foregroundStyle(theme.colors.textTertiary)
-                        .frame(width: 16, height: 16)
-                        .padding(.top, 2)
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(item.title)
-                                .talkieType(.listTitle)
-                                .foregroundStyle(theme.colors.textPrimary)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-
-                            Text(item.relativeTime)
-                                .talkieType(.timestamp)
-                                .foregroundStyle(theme.colors.textTertiary)
-                        }
-
-                        if let preview = item.preview {
-                            Text(preview)
-                                .talkieType(.preview)
-                                .foregroundStyle(theme.colors.textSecondary)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                        }
-
-                        if let meta = item.meta {
-                            Text(meta)
-                                .talkieType(.hint)
-                                .foregroundStyle(theme.colors.textTertiary)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                        }
-                    }
+                        .lineLimit(1)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
         }
     }
 

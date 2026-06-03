@@ -16,33 +16,32 @@ the app (settings), and uses the custom keyboard (keyboard).
 | 04   | Settings | Settings screen — themes, keyboard, engine, sync             | Tap gear icon                      |
 | 05   | Keyboard | Talkie keyboard visible in a text field with shortcut row    | Open keyboard settings, show keys  |
 
-## Devices (3 required)
+## Devices
 
-- iPhone 17 Pro (6.3") — `iPhone 17 Pro-XX_Name.png`
-- iPhone 17 Pro Max (6.9") — `iPhone 17 Pro Max-XX_Name.png`
-- iPad Pro 13-inch (M5) — `iPad Pro 13-inch (M5)-XX_Name.png`
+- iPhone 17 Pro Max (6.9") — `apps/ios/fastlane/screenshots/iPhone 17 Pro Max/XX_Name.png`
+- iPad Pro 13-inch (M5) — `apps/ios/fastlane/screenshots/iPad Pro 13-inch (M5)/XX_Name.png`
+- Apple Watch Ultra 3 (49mm) — `apps/ios/fastlane/screenshots/Apple Watch Ultra 3 (49mm)/00_WatchHome.png`
 
 ## Current status
 
-### Pro Max (reference set from UI tests)
-- 00_Splash: ❌ Shows Home, not Splash — NEEDS REDO
-- 01_Home: ❌ Duplicate of 00 — same home screen
-- 02_Recording: ✅ Good — recording sheet with waveform
-- 03_MemoDetail: ✅ Good — transcript, player, actions
-- 04_Settings: ✅ Good — full settings visible
-- 05_Keyboard: ❌ Shows "Keyboard Mode" dictation view, not actual keyboard layout
+### iPhone 17 Pro Max
+- 00_Splash: ✅ Modern splash screen
+- 01_Home: ✅ Seeded home screen
+- 02_Recording: ✅ Recording sheet with waveform
+- 03_MemoDetail: ✅ Seeded memo detail
+- 04_Settings: ✅ Direct settings route
+- 05_Keyboard: ✅ Compose keyboard surface
 
-### Pro (broken set)
-- 00_Splash: ❌ Was VOICE+AI branding (actually correct content, wrong in old test)
-                Now overwritten with bad home screen during debugging
-- 01_Home: ❌ Has ugly "Quick memo" test data
-- 02_Recording: ❓ Need to verify
-- 03_MemoDetail: ❓ Need to verify
-- 04_Settings: ❓ Need to verify
-- 05_Keyboard: ❓ Need to verify
+### iPad Pro 13-inch (M5)
+- 00_Splash: ✅ Modern splash screen
+- 01_Home: ✅ Seeded home screen
+- 02_Recording: ✅ Recording sheet with waveform
+- 03_MemoDetail: ✅ Seeded memo detail
+- 04_Settings: ✅ Direct settings route
+- 05_Keyboard: ✅ Compose keyboard surface
 
-### iPad (from UI tests)
-- All slots: ❓ Need to audit
+### Apple Watch Ultra 3 (49mm)
+- 00_WatchHome: ✅ Watch home screen
 
 ## Keyboard extension setup
 
@@ -56,11 +55,6 @@ Installing the app automatically installs the keyboard — but you must **enable
 
 There is no `simctl` command to automate this. Keyboard settings persist across app reinstalls
 but reset if you erase the simulator.
-
-### Simulator UDIDs
-- iPhone 17 Pro: `2C26F160-15C8-4AA4-BC67-5EC8194AA1AB`
-- iPhone 17 Pro Max: `8400B4A8-C924-44F9-8314-83CDEDF25E6A`
-- iPad Pro 13-inch (M5): `4C4EB9A9-B408-4221-9DA9-23009825408F`
 
 ### Quick install (if not using Xcode Run)
 ```bash
@@ -77,18 +71,28 @@ xcrun simctl launch <UDID> "$TALKIE_IOS_APP_BUNDLE_ID"
 ```
 
 ## Prerequisites
-- All 3 simulators need the SAME seed data (nice memo titles, not "Quick memo")
-- Status bar should show 9:41 (Apple standard) — use `xcrun simctl status_bar`
+- iPhone and iPad screenshots use screenshot-mode seeded data.
+- iPhone and iPad status bars should show 9:41, charged battery, and full signal.
 - No dialogs, no alerts, no charging indicator artifacts
-- Talkie keyboard must be enabled on each simulator (see above)
+- The compose keyboard screenshot uses the in-app keyboard surface, so the keyboard extension does not need to be enabled for this set.
+- Watch screenshots are captured with `simctl io`; watchOS Simulator does not support `simctl status_bar` overrides.
 
 ## Capture method
-For each device:
-1. `xcrun simctl status_bar <UDID> override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4`
-2. Navigate to screen
-3. `xcrun simctl io <UDID> screenshot <path>`
-4. Verify with Read tool
-5. Move to next screen
+```bash
+./scripts/screenshots.sh iphone
+./scripts/screenshots.sh ipad
+```
+
+The script resolves simulator UDIDs by name, builds the screenshot UI test target,
+runs the six App Store screenshot tests, copies images from the SnapshotHelper
+cache, and verifies dimensions.
+
+Watch screenshots are currently captured manually after building and installing
+the `TalkieWatch Watch App` scheme on an Apple Watch Ultra 3 simulator:
+
+```bash
+xcrun simctl io <WATCH_UDID> screenshot "apps/ios/fastlane/screenshots/Apple Watch Ultra 3 (49mm)/00_WatchHome.png"
+```
 
 ## Principle
 Nothing is more than 2 clicks away. If spinning > 2 minutes, stop and reassess.

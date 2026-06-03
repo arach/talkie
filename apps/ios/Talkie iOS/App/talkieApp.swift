@@ -20,7 +20,7 @@ struct talkieApp: App {
     @State private var mainInterfaceVisible = false
     @ObservedObject private var deepLinkManager = DeepLinkManager.shared
     @State private var appSettings = TalkieAppSettings.shared
-    private let themeManager = ThemeManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
 
     // First launch detection
     private static let isScreenshotMode = ProcessInfo.processInfo.arguments.contains("-FASTLANE_SNAPSHOT")
@@ -131,7 +131,7 @@ struct talkieApp: App {
             .task {
                 // Load database
                 let loadStart = Date()
-                let controller = await PersistenceController.loadAsync()
+                let controller = await PersistenceController.loadAsync(inMemory: Self.isScreenshotMode)
                 let loadDuration = Date().timeIntervalSince(loadStart)
                 AppLogger.app.info("📱 Database loaded in \(String(format: "%.0f", loadDuration * 1000))ms (async, non-blocking)")
 
@@ -158,6 +158,9 @@ struct talkieApp: App {
                     AppLogger.app.info("📱 BOOT COMPLETE in \(String(format: "%.2f", bootDuration))s")
                 }
             }
+            // Drive the whole app's light/dark from the in-app Appearance
+            // setting. nil (= .system / "Auto") defers to the OS appearance.
+            .preferredColorScheme(themeManager.appearanceMode.colorScheme)
         }
     }
 

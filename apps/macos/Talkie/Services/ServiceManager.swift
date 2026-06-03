@@ -2151,8 +2151,18 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
             let recordingStart = Date(timeIntervalSince1970: recordingStartedAt)
             let recordingEnd = Date(timeIntervalSince1970: recordingEndedAt)
 
+            if ScreenRecordingController.shared.state == .recording {
+                logger.info("[Tray] Stopping active screen recording before fetching dictation tray assets")
+                await ScreenRecordingController.shared.stopRecording()
+            }
+
             func timestampMs(for capturedAt: Date) -> Int {
                 return max(0, Int(capturedAt.timeIntervalSince(recordingStart) * 1000))
+            }
+
+            func overlapsRecordingWindow(_ clip: TrayClip) -> Bool {
+                let clipEnd = clip.capturedAt.addingTimeInterval(Double(max(0, clip.durationMs)) / 1000.0)
+                return clip.capturedAt <= recordingEnd && clipEnd >= recordingStart
             }
 
             let allScreenshotItems = includeScreenshots ? ScreenshotTray.shared.unpinnedItems : []
@@ -2160,9 +2170,7 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
             let screenshotItems = allScreenshotItems.filter {
                 $0.capturedAt >= recordingStart && $0.capturedAt <= recordingEnd
             }
-            let clipItems = allClipItems.filter {
-                $0.capturedAt >= recordingStart && $0.capturedAt <= recordingEnd
-            }
+            let clipItems = allClipItems.filter(overlapsRecordingWindow)
             let deferredScreenshotCount = allScreenshotItems.count - screenshotItems.count
             let deferredClipCount = allClipItems.count - clipItems.count
             if !includeScreenshots {
@@ -2221,6 +2229,7 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
             }
 
             var clips: [RecordingClip] = []
+            var visualContexts: [RecordingVisualContext] = []
             for (index, item) in clipItems.enumerated() {
                 let timestamp = timestampMs(for: item.capturedAt)
                 guard let savedURL = VideoClipStorage.save(
@@ -2251,11 +2260,31 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
                     appName: item.appName,
                     displayName: item.displayName
                 ))
+
+                if let visualContext = VisualContextStorage.createBundle(
+                    sourceClipURL: savedURL,
+                    recordingId: recordingUUID,
+                    timestampMs: timestamp,
+                    capturedAt: item.capturedAt,
+                    durationMs: item.durationMs,
+                    captureMode: item.captureMode,
+                    width: item.width,
+                    height: item.height,
+                    windowTitle: item.windowTitle,
+                    appName: item.appName,
+                    displayName: item.displayName,
+                    metadataEvents: item.metadataEvents
+                ) {
+                    visualContexts.append(visualContext)
+                } else if RecordingVisualContext.isScreenCaptureMode(item.captureMode) {
+                    logger.warning("[Tray] Failed to create visual context bundle for tray clip")
+                }
             }
 
             let assets = TalkieObjectAssets(
                 screenshots: screenshots.isEmpty ? nil : screenshots,
-                clips: clips.isEmpty ? nil : clips
+                clips: clips.isEmpty ? nil : clips,
+                visualContexts: visualContexts.isEmpty ? nil : visualContexts
             )
 
             guard !assets.isEmpty, let json = assets.toJSON() else {
@@ -2264,7 +2293,7 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
                 return
             }
 
-            logger.info("[Tray] Saved \(screenshots.count) screenshots and \(clips.count) clips, returning assets JSON to Agent")
+            logger.info("[Tray] Saved \(screenshots.count) screenshots, \(clips.count) clips, and \(visualContexts.count) visual contexts, returning assets JSON to Agent")
             reply(json)
         }
     }

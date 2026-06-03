@@ -71,6 +71,7 @@ final class TabDefinitionRegistry {
 
     func prepareForAppLaunch() {
         loadGlobalConfig()
+        seedConsoleSupportScriptsIfNeeded()
         migrateLegacyClaudeAuthBridgeIfNeeded()
     }
 
@@ -254,14 +255,7 @@ final class TabDefinitionRegistry {
     private func seedIfNeeded() {
         let dir = tabsDirectoryURL
 
-        if !fileManager.fileExists(atPath: dir.path) {
-            do {
-                try fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
-            } catch {
-                log.error("Failed to create tabs directory", error: error)
-                return
-            }
-        }
+        guard ensureTabsDirectory() else { return }
 
         let existing = (try? fileManager.contentsOfDirectory(
             at: dir,
@@ -277,9 +271,30 @@ final class TabDefinitionRegistry {
         }
 
         seedGlobalRCIfNeeded()
-        seedShellInitIfNeeded()
+        seedConsoleSupportScriptsIfNeeded()
 
         log.info("Seeded starter tab presets", detail: "\(TabPresets.bundled.count) tabs")
+    }
+
+    private func ensureTabsDirectory() -> Bool {
+        let dir = tabsDirectoryURL
+
+        if fileManager.fileExists(atPath: dir.path) {
+            return true
+        }
+
+        do {
+            try fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
+            return true
+        } catch {
+            log.error("Failed to create tabs directory", error: error)
+            return false
+        }
+    }
+
+    private func seedConsoleSupportScriptsIfNeeded() {
+        seedShellInitIfNeeded()
+        seedBridgeLogsInitIfNeeded()
     }
 
     private func seedGlobalRCIfNeeded() {
@@ -305,6 +320,7 @@ final class TabDefinitionRegistry {
     }
 
     private func seedShellInitIfNeeded() {
+        guard ensureTabsDirectory() else { return }
         let dir = tabsDirectoryURL
         let initURL = dir.appending(path: "talkie-shell.init.zsh")
         guard !fileManager.fileExists(atPath: initURL.path) else { return }
@@ -328,6 +344,64 @@ final class TabDefinitionRegistry {
         cd "${TALKIE_WORKSPACE:-$HOME/dev/talkie}" 2>/dev/null || true
 
         exec /bin/zsh -i
+        """
+        try? content.write(to: initURL, atomically: true, encoding: .utf8)
+    }
+
+    private func seedBridgeLogsInitIfNeeded() {
+        guard ensureTabsDirectory() else { return }
+        let initURL = URL(fileURLWithPath: (TabPresets.bridgeLogsInitScriptPath as NSString).expandingTildeInPath)
+        guard !fileManager.fileExists(atPath: initURL.path) else { return }
+
+        let content = """
+        #!/bin/zsh
+        # bridge-logs.init.zsh - Tail Mac Bridge + TalkieAgent logs in Console.
+
+        export PATH="$HOME/bin:$HOME/.local/bin:$HOME/.opencode/bin:$HOME/.bun/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin"
+        clear
+        printf '[Talkie] Bridge + agent log tail\\n'
+        printf 'Press Ctrl-C to stop.\\n\\n'
+
+        today="$(date +%F)"
+        log_candidates=(
+          "/tmp/talkie-bridge-hyper-scan.log"
+          "/tmp/talkie-bridge-dev.log"
+          "/tmp/talkie-bridge.log"
+          "$HOME/Library/Logs/TalkieBridge/bridge-dev.log"
+          "$HOME/Library/Logs/TalkieBridge/bridge.log"
+          "$HOME/Library/Application Support/Talkie/Bridge/bridge.log"
+          "$HOME/Library/Application Support/Talkie/Bridge/bridge.dev.log"
+          "$HOME/Library/Application Support/Talkie/logs/talkie-$today.log"
+          "$HOME/Library/Application Support/TalkieAgent/logs/talkie-$today.log"
+          "/tmp/talkie-agent-debug.log"
+          "/tmp/to.talkie.app.agent.dev.stdout.log"
+          "/tmp/to.talkie.app.agent.dev.stderr.log"
+          "/tmp/to.talkie.app.agent.xpc.dev.stdout.log"
+          "/tmp/to.talkie.app.agent.xpc.dev.stderr.log"
+        )
+
+        existing=()
+        for file in "${log_candidates[@]}"; do
+          [[ -f "$file" ]] && existing+=("$file")
+        done
+
+        if (( ${#existing[@]} > 0 )); then
+          printf 'Tailing logs:\\n'
+          printf '  %s\\n' "${existing[@]}"
+          printf '\\n'
+          exec tail -n 100 -F "${existing[@]}"
+        fi
+
+        printf 'No Talkie bridge or agent log found yet. Waiting...\\n'
+        while true; do
+          for file in "${log_candidates[@]}"; do
+            if [[ -f "$file" ]]; then
+              printf '\\nTailing %s\\n\\n' "$file"
+              exec tail -n 120 -F "$file"
+            fi
+          done
+          sleep 2
+        done
         """
         try? content.write(to: initURL, atomically: true, encoding: .utf8)
     }

@@ -305,7 +305,7 @@ final class WalkieSession: ObservableObject {
 
         guard !transcript.isEmpty else {
             await fail(
-                "Didn't catch any speech. Want to try Talkie again?",
+                "Didn't catch any speech. Want to talk to the agent again?",
                 offersWalkieRetry: !isFollowUp
             )
             return
@@ -416,7 +416,7 @@ final class WalkieSession: ObservableObject {
             if let sessionId = result.sessionId {
                 continuationSessionId = sessionId
             }
-            executorRuntimeName = "Walkie Runtime Dispatcher"
+            executorRuntimeName = walkieAgentDisplayName(for: result.providerId) ?? "Agent Runtime Dispatcher"
             routeMode = .async
             replyText = result.ack
             executorBranchState = result.sessionId == nil ? .done : .working
@@ -455,7 +455,7 @@ final class WalkieSession: ObservableObject {
             guard !Task.isCancelled else { return }
 
             guard let activity else { return }
-            let applied = await applyExecutorResult(activity, fallbackError: "The executor did not finish cleanly.")
+            let applied = await applyExecutorResult(activity, fallbackError: "The agent did not finish cleanly.")
             guard applied else { return }
             log.info("Walkie executor branch returned", detail: "session=\(activity.sessionId)")
         } catch {
@@ -472,7 +472,9 @@ final class WalkieSession: ObservableObject {
         continuationSessionId = activity.sessionId
         topLevelProviderName = activity.topLevelProviderName ?? topLevelProviderName
         topLevelModelId = activity.topLevelModelId ?? topLevelModelId
-        executorRuntimeName = activity.runtimeName ?? executorRuntimeName
+        executorRuntimeName = walkieAgentDisplayName(for: activity.providerId)
+            ?? activity.runtimeName
+            ?? executorRuntimeName
         routeMode = .async
 
         let state = activity.state.lowercased()
@@ -486,7 +488,7 @@ final class WalkieSession: ObservableObject {
         let fullOutput = activity.output?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
         replyText = spokenSummary
             ?? fullOutput
-            ?? "The agent branch returned."
+            ?? "The agent replied."
         executorBranchState = .done
         phase = .receiving
         notifyReportBack(activity: activity, spokenSummary: spokenSummary, fullOutput: fullOutput)

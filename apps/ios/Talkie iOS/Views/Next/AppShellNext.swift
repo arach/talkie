@@ -389,7 +389,10 @@ final class AppShellRouter: ObservableObject {
 
     private init() {
         let args = ProcessInfo.processInfo.arguments
-        if args.contains("--composeState") {
+        if args.contains("--composeKeyboard") {
+            pendingComposeFocus = true
+            surface = .compose(documentID: "mock")
+        } else if args.contains("--composeState") {
             openCompose(documentID: "mock")
         } else if args.contains("--library") {
             openLibrary()

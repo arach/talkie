@@ -7,17 +7,20 @@ import XCTest
 struct ScreenshotSpec {
     let name: String
     let skipSplash: Bool
+    let launchArguments: [String]
     let readyCondition: @MainActor (XCUIApplication) -> XCUIElement
     let navigate: (@MainActor (XCUIApplication) -> Void)?
 
     init(
         _ name: String,
         skipSplash: Bool = true,
+        launchArguments: [String] = [],
         readyWhen readyCondition: @MainActor @escaping (XCUIApplication) -> XCUIElement,
         navigate: (@MainActor (XCUIApplication) -> Void)? = nil
     ) {
         self.name = name
         self.skipSplash = skipSplash
+        self.launchArguments = launchArguments
         self.readyCondition = readyCondition
         self.navigate = navigate
     }
@@ -55,49 +58,24 @@ extension ScreenshotSpec {
 
     static let memoDetail = ScreenshotSpec(
         "03_MemoDetail",
-        readyWhen: { $0.navigationBars.firstMatch },
-        navigate: { app in
-            let row = app.buttons["memo.row"].firstMatch
-            XCTAssertTrue(row.waitForExistence(timeout: 10), "Seeded memo should appear")
-            row.tap()
+        launchArguments: ["--memo"],
+        readyWhen: {
+            $0.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "TRANSCRIPT")).firstMatch
         }
     )
 
     static let settings = ScreenshotSpec(
         "04_Settings",
-        readyWhen: { $0.navigationBars.firstMatch },
-        navigate: { app in
-            let gear = app.buttons["dock.settings"].firstMatch
-            XCTAssertTrue(gear.waitForExistence(timeout: 10), "Settings button should appear")
-            gear.tap()
+        launchArguments: ["--settings"],
+        readyWhen: {
+            $0.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "SETTINGS")).firstMatch
         }
     )
 
     static let keyboard = ScreenshotSpec(
         "05_Keyboard",
-        readyWhen: { $0.textViews["keyboard.compose"].firstMatch },
-        navigate: { app in
-            let kb = app.buttons["dock.keyboard"].firstMatch
-            XCTAssertTrue(kb.waitForExistence(timeout: 10), "Keyboard button should appear")
-            kb.tap()
-
-            // Tap compose field to raise keyboard
-            let compose = app.textViews["keyboard.compose"].firstMatch
-            if compose.waitForExistence(timeout: 5) {
-                compose.tap()
-            }
-
-            // Cycle to Talkie keyboard if not already active
-            let joystick = app.buttons["Cursor Joystick"].firstMatch
-            if !joystick.waitForExistence(timeout: 2) {
-                for _ in 0..<3 {
-                    let next = app.buttons["Next keyboard"].firstMatch
-                    guard next.waitForExistence(timeout: 1) else { break }
-                    next.tap()
-                    if joystick.waitForExistence(timeout: 1) { break }
-                }
-            }
-        }
+        launchArguments: ["--composeKeyboard"],
+        readyWhen: { $0.buttons["compose.keyboard.toggle"].firstMatch }
     )
 }
 
@@ -118,6 +96,7 @@ final class TalkieUITestsScreenshots: XCTestCase {
         if spec.skipSplash {
             app.launchArguments += ["--screenshotSkipSplash"]
         }
+        app.launchArguments += spec.launchArguments
         app.launch()
 
         // Navigate to the target screen (if the spec requires taps)

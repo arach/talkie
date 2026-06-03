@@ -1,0 +1,39 @@
+{
+  "name": "@talkie/agent-runtime",
+  "version": "0.1.0",
+  "description": "Talkie wrapper for background agent session runtime adapters",
+  "type": "module",
+  "exports": {
+    ".": "./index.mjs"
+  },
+  "bin": {
+    "talkie-agent-runtime": "./bin/talkie-agent-runtime.mjs"
+  },
+  "files": [
+    "index.mjs",
+    "bin",
+    "README.md"
+  ],
+  "scripts": {
+    "doctor": "node ./bin/talkie-agent-runtime.mjs doctor"
+  },
+  "keywords": [
+    "talkie",
+    "agent",
+    "runtime",
+    "sessions"
+  ],
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/arach/talkie",
+    "directory": "packages/npm/agent-runtime"
+  },
+  "homepage": "https://usetalkie.com",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@openscout/agent-sessions": "0.2.64"
+  }
+}

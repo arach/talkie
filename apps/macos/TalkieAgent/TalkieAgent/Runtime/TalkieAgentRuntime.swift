@@ -16,7 +16,7 @@ private let talkieAgentRuntimeLog = Logger(
 
 private enum TalkieAgentRuntimeError: LocalizedError {
     case missingNodeExecutable(searchedPaths: [String])
-    case missingRuntimeScript(String)
+    case missingRuntimeScript(searchedPaths: [String])
     case invalidRequest(String)
     case invalidResponse(String)
     case processNotRunning
@@ -27,8 +27,8 @@ private enum TalkieAgentRuntimeError: LocalizedError {
         switch self {
         case .missingNodeExecutable(let searchedPaths):
             return "Node.js was not found. Checked executable paths: \(searchedPaths.joined(separator: ", ")), then `which node` via /bin/bash -lc."
-        case .missingRuntimeScript(let path):
-            return "TalkieAgent runtime script was not found at \(path). Run Task #1 setup or update the runtime path."
+        case .missingRuntimeScript(let searchedPaths):
+            return "TalkieAgent runtime script was not found. Checked: \(searchedPaths.joined(separator: ", "))."
         case .invalidRequest(let detail):
             return "TalkieAgent runtime request is not JSON-serializable: \(detail)"
         case .invalidResponse(let detail):
@@ -69,7 +69,7 @@ final class TalkieAgentRuntime {
         "/usr/bin/node",
     ]
 
-    // TODO(Task #4): Replace this dev path with ~/.talkie/runtime/index.mjs.
+    private static let bundledScriptRelativePath = "Runtime/node/index.mjs"
     private static let developmentScriptPath = "~/dev/talkie/apps/macos/TalkieAgent/TalkieAgent/Runtime/node/index.mjs"
 
     private let newlineData = Data([0x0A])
@@ -258,11 +258,32 @@ private extension TalkieAgentRuntime {
     }
 
     func resolveScriptURL() throws -> URL {
-        let path = (Self.developmentScriptPath as NSString).expandingTildeInPath
-        guard FileManager.default.fileExists(atPath: path) else {
-            throw TalkieAgentRuntimeError.missingRuntimeScript(path)
+        let fileManager = FileManager.default
+        let candidates = Self.runtimeScriptCandidateURLs()
+
+        for candidate in candidates where fileManager.fileExists(atPath: candidate.path) {
+            return candidate
         }
-        return URL(fileURLWithPath: path)
+
+        throw TalkieAgentRuntimeError.missingRuntimeScript(
+            searchedPaths: candidates.map(\.path)
+        )
+    }
+
+    static func runtimeScriptCandidateURLs() -> [URL] {
+        var candidates: [URL] = []
+
+        if let configuredPath = ProcessInfo.processInfo.environment["TALKIE_AGENT_RUNTIME_SCRIPT"],
+           !configuredPath.isEmpty {
+            candidates.append(URL(fileURLWithPath: (configuredPath as NSString).expandingTildeInPath))
+        }
+
+        if let resourceURL = Bundle.main.resourceURL {
+            candidates.append(resourceURL.appending(path: bundledScriptRelativePath))
+        }
+
+        candidates.append(URL(fileURLWithPath: (developmentScriptPath as NSString).expandingTildeInPath))
+        return candidates
     }
 
     func installStdoutHandler(_ handle: FileHandle) {

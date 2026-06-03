@@ -354,10 +354,12 @@ struct LiveRecording: Identifiable {
         segmentsJSON: String? = nil,
         screenshotsJSON: String? = nil,
         clipsJSON: String? = nil,
+        visualContexts: [RecordingVisualContext]? = nil,
         textProvenance: [ProvenanceSegment]? = nil
     ) -> String? {
         let screenshots = RecordingScreenshot.fromArray(json: screenshotsJSON)
         let clips = RecordingClip.fromArray(json: clipsJSON)
+        let visualContexts = visualContexts?.isEmpty == false ? visualContexts : nil
         let provenance = textProvenance?.isEmpty == false ? textProvenance : nil
 
         let assets = TalkieObjectAssets(
@@ -365,6 +367,7 @@ struct LiveRecording: Identifiable {
             screenshots: screenshots,
             clips: clips,
             attachments: [],
+            visualContexts: visualContexts,
             textProvenance: provenance
         )
 
@@ -376,12 +379,14 @@ struct LiveRecording: Identifiable {
         segmentsJSON: String? = nil,
         screenshotsJSON: String? = nil,
         clipsJSON: String? = nil,
+        visualContexts: [RecordingVisualContext]? = nil,
         textProvenance: [ProvenanceSegment]? = nil
     ) {
         self.assetsJSON = Self.buildAssetsJSON(
             segmentsJSON: segmentsJSON,
             screenshotsJSON: screenshotsJSON,
             clipsJSON: clipsJSON,
+            visualContexts: visualContexts,
             textProvenance: textProvenance
         )
     }
@@ -555,7 +560,8 @@ extension UnifiedDatabase {
                 var assets = TalkieObjectAssets.from(json: existingJSON) ?? TalkieObjectAssets(
                     screenshots: [],
                     clips: [],
-                    attachments: []
+                    attachments: [],
+                    visualContexts: []
                 )
                 var existingProvenance = assets.textProvenance ?? []
                 existingProvenance.append(contentsOf: segments)
@@ -608,6 +614,11 @@ extension UnifiedDatabase {
                     existing: assets.attachments,
                     incoming: incoming.attachments,
                     key: { $0.filename }
+                )
+                assets.visualContexts = mergedUnique(
+                    existing: assets.visualContexts,
+                    incoming: incoming.visualContexts,
+                    key: { $0.id }
                 )
                 assets.textProvenance = mergedUnique(
                     existing: assets.textProvenance,

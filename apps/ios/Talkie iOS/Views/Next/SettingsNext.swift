@@ -82,6 +82,12 @@ struct SettingsNext: View {
         SettingsChoice(id: "48000", title: "48 kHz")
     ]
 
+    private static let appearanceModeChoices: [SettingsChoice] = [
+        SettingsChoice(id: "light", title: "Light"),
+        SettingsChoice(id: "dark", title: "Dark"),
+        SettingsChoice(id: "system", title: "Auto")
+    ]
+
     private static let appearanceDensityChoices: [SettingsChoice] = [
         SettingsChoice(id: "standard", title: "Standard"),
         SettingsChoice(id: "compact", title: "Compact"),
@@ -150,8 +156,9 @@ struct SettingsNext: View {
             }
         }
         .sheet(isPresented: $showingLogViewer) {
-            DebugLogsView()
+            SettingsLogViewer()
         }
+        .accessibilityIdentifier("settings.screen")
     }
 
     // MARK: - Header
@@ -160,18 +167,23 @@ struct SettingsNext: View {
         HStack {
             Text("TALKIE · SETTINGS")
                 .talkieType(.wordmark)
-                .foregroundStyle(theme.colors.textPrimary.opacity(0.78))
+                .foregroundStyle(theme.colors.textPrimary)
 
             Spacer()
 
             Button(action: { AppShellRouter.shared.openHome() }) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 13))
-                    .foregroundStyle(theme.colors.textTertiary)
+                    .font(.system(size: 13, weight: .medium))
+                    // A dismiss control, not passive meta — reads at secondary
+                    // ink on a real chip surface (matches the home top-bar
+                    // buttons), so it stays legible on true-black Carbon.
+                    .foregroundStyle(theme.colors.textSecondary)
                     .frame(width: 28, height: 28)
-                    .background(
+                    .background(Circle().fill(theme.colors.cardBackground))
+                    .overlay(
                         Circle()
-                            .fill(theme.currentTheme.chrome.edgeFaint.opacity(0.5))
+                            .stroke(theme.currentTheme.chrome.edge,
+                                    lineWidth: theme.currentTheme.chrome.hairlineWidth)
                     )
             }
             .buttonStyle(.plain)
@@ -222,9 +234,11 @@ struct SettingsNext: View {
                                   design: .monospaced))
                     .tracking(3.2)
                     .foregroundStyle(
+                        // Inactive tabs are still navigation controls — secondary
+                        // ink, not tertiary, so the rail stays readable.
                         isActive
                             ? theme.colors.textPrimary
-                            : theme.colors.textTertiary
+                            : theme.colors.textSecondary
                     )
                     .fixedSize()
                     .rotationEffect(.degrees(-90))
@@ -572,6 +586,15 @@ struct SettingsNext: View {
         VStack(alignment: .leading, spacing: 0) {
             field("Theme", theme.currentTheme.displayName)
             cycleRow(
+                "Appearance",
+                selection: Binding(
+                    get: { theme.appearanceMode.rawValue },
+                    set: { theme.appearanceMode = AppearanceMode(rawValue: $0) ?? .system }
+                ),
+                choices: Self.appearanceModeChoices,
+                hint: "Light · Dark · Auto"
+            )
+            cycleRow(
                 "Density",
                 selection: Binding(
                     get: { appSettings.appearanceDensity },
@@ -606,7 +629,7 @@ struct SettingsNext: View {
                 ),
                 valueOn: "Reduced",
                 valueOff: "Standard",
-                hint: theme.appearanceMode.displayName
+                hint: "Trim animations"
             )
 
             // Theme picker — labeled chip swatches under a THEMES eyebrow.
@@ -1374,5 +1397,181 @@ private extension Bundle {
 
     var buildNumber: String {
         (object(forInfoDictionaryKey: "CFBundleVersion") as? String) ?? "—"
+    }
+}
+
+private struct SettingsLogViewer: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var theme = ThemeManager.shared
+    @ObservedObject private var logStore = LogStore.shared
+    @State private var selectedFilter: LogFilter = .all
+
+    private enum LogFilter: String, CaseIterable, Identifiable {
+        case all = "ALL"
+        case debug = "DEBUG"
+        case info = "INFO"
+        case warning = "WARN"
+        case error = "ERROR"
+
+        var id: String { rawValue }
+
+        var level: LogEntry.LogLevel? {
+            switch self {
+            case .all: return nil
+            case .debug: return .debug
+            case .info: return .info
+            case .warning: return .warning
+            case .error: return .error
+            }
+        }
+    }
+
+    private var filteredEntries: [LogEntry] {
+        guard let level = selectedFilter.level else { return logStore.entries }
+        return logStore.entries.filter { $0.level == level }
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                filterBar
+
+                if filteredEntries.isEmpty {
+                    emptyState
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(filteredEntries) { entry in
+                                SettingsLogRow(entry: entry)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 10)
+
+                                Rectangle()
+                                    .fill(theme.currentTheme.chrome.edgeFaint)
+                                    .frame(height: theme.currentTheme.chrome.hairlineWidth)
+                            }
+                        }
+                    }
+                }
+            }
+            .background(theme.colors.background)
+            .navigationTitle("Logs")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Close", systemImage: "xmark") {
+                        dismiss()
+                    }
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Clear", systemImage: "trash") {
+                        logStore.clear()
+                    }
+                    .disabled(logStore.entries.isEmpty)
+                }
+            }
+        }
+    }
+
+    private var filterBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(LogFilter.allCases) { filter in
+                    Button(action: { selectedFilter = filter }) {
+                        Text(filter.rawValue)
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(selectedFilter == filter ? theme.colors.background : theme.colors.textSecondary)
+                            .padding(.horizontal, 10)
+                            .frame(height: 26)
+                            .background(
+                                Capsule()
+                                    .fill(selectedFilter == filter ? theme.colors.textPrimary : theme.colors.cardBackground)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+        }
+        .background(theme.colors.cardBackground.opacity(0.72))
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(theme.currentTheme.chrome.edgeFaint)
+                .frame(height: theme.currentTheme.chrome.hairlineWidth)
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Spacer()
+
+            Image(systemName: "doc.text")
+                .font(.system(size: 28, weight: .light))
+                .foregroundStyle(theme.colors.textTertiary)
+
+            Text("No logs")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(theme.colors.textTertiary)
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct SettingsLogRow: View {
+    @ObservedObject private var theme = ThemeManager.shared
+    let entry: LogEntry
+    @State private var isExpanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text(entry.formattedTime)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(theme.colors.textTertiary)
+
+                Text(entry.level.rawValue)
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundStyle(entry.level.color)
+
+                Text(entry.category)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(theme.colors.textSecondary)
+                    .lineLimit(1)
+
+                Spacer()
+
+                if entry.detail != nil {
+                    Button(action: { isExpanded.toggle() }) {
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(theme.colors.textTertiary)
+                            .frame(width: 24, height: 24)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(isExpanded ? "Collapse log detail" : "Expand log detail")
+                }
+            }
+
+            Text(entry.message)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(theme.colors.textPrimary)
+                .lineLimit(isExpanded ? nil : 3)
+                .textSelection(.enabled)
+
+            if isExpanded, let detail = entry.detail {
+                Text(detail)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(theme.colors.textSecondary)
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(theme.colors.cardBackground)
+                    .clipShape(.rect(cornerRadius: 6))
+                    .textSelection(.enabled)
+            }
+        }
     }
 }

@@ -319,6 +319,7 @@ final class TrayViewer {
         let noteId = UUID()
         var screenshots: [RecordingScreenshot] = []
         var clips: [RecordingClip] = []
+        var visualContexts: [RecordingVisualContext] = []
         var selectionSections: [String] = []
 
         if tray.isNotEmpty {
@@ -384,6 +385,23 @@ final class TrayViewer {
                     appName: item.appName,
                     displayName: item.displayName
                 ))
+
+                if let visualContext = VisualContextStorage.createBundle(
+                    sourceClipURL: savedURL,
+                    recordingId: noteId,
+                    timestampMs: timestampMs,
+                    capturedAt: item.capturedAt,
+                    durationMs: item.durationMs,
+                    captureMode: item.captureMode,
+                    width: item.width,
+                    height: item.height,
+                    windowTitle: item.windowTitle,
+                    appName: item.appName,
+                    displayName: item.displayName,
+                    metadataEvents: item.metadataEvents
+                ) {
+                    visualContexts.append(visualContext)
+                }
             }
         }
 
@@ -423,6 +441,7 @@ final class TrayViewer {
         var assets = TalkieObjectAssets()
         if !screenshots.isEmpty { assets.screenshots = screenshots }
         if !clips.isEmpty { assets.clips = clips }
+        if !visualContexts.isEmpty { assets.visualContexts = visualContexts }
         if !assets.isEmpty {
             note.assetsJSON = assets.toJSON()
         }

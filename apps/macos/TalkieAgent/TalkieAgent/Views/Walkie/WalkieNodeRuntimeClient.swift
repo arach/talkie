@@ -20,6 +20,22 @@ struct WalkieRuntimePing: Sendable {
     let runtimeName: String
     let capabilities: Set<WalkieRuntimeCapability>
     let scoutBridge: WalkieScoutBridgeStatus
+    let agentRuntimexyx: [WalkieRuntimeAgentSnapshot]
+}
+
+struct WalkieRuntimeAgentSnapshot: Identifiable, Decodable, Sendable {
+    let id: String
+    let name: String
+    let adapterType: String
+    let status: String
+    let isAvailable: Bool
+    let isPreferred: Bool?
+    let executable: String?
+    let executablePath: String?
+    let detail: String?
+    let capabilities: [String]
+    let activeSessions: Int?
+    let lastSeenAt: String?
 }
 
 struct WalkieRuntimeActivitySnapshot: Decodable, Sendable {
@@ -68,15 +84,15 @@ enum WalkieNodeRuntimeError: LocalizedError, Sendable {
     var errorDescription: String? {
         switch self {
         case .missingNodeRuntime:
-            return "Walkie node runtime was not found."
+            return "Agent node runtime was not found."
         case .missingNodeExecutable:
             return "Bun or Node.js was not found."
         case .runtimeFailed(let detail):
-            return "Walkie node runtime failed: \(detail)"
+            return "Agent node runtime failed: \(detail)"
         case .runtimeTimedOut:
-            return "Walkie node runtime timed out."
+            return "Agent node runtime timed out."
         case .invalidResponse(let detail):
-            return "Walkie node runtime returned an invalid response: \(detail)"
+            return "Agent node runtime returned an invalid response: \(detail)"
         }
     }
 }
@@ -150,6 +166,7 @@ private extension WalkieNodeRuntimeClient {
         let pid: Int?
         let version: String?
         let runtime: RuntimeInfo?
+        let agentRuntimexyx: [WalkieRuntimeAgentSnapshot]?
         let activity: WalkieRuntimeActivitySnapshot?
         let activities: [WalkieRuntimeActivitySnapshot]?
         let job: WalkieRuntimeActivitySnapshot?
@@ -161,6 +178,7 @@ private extension WalkieNodeRuntimeClient {
         let name: String
         let capabilities: [String]
         let scoutBridge: WalkieScoutBridgeStatus?
+        let agentRuntimexyx: [WalkieRuntimeAgentSnapshot]?
     }
 
     struct Invocation: Sendable {
@@ -254,7 +272,8 @@ private extension WalkieNodeRuntimeClient {
             runtimeId: runtime.id,
             runtimeName: runtime.name,
             capabilities: Set(runtime.capabilities.compactMap(WalkieRuntimeCapability.init(rawValue:))),
-            scoutBridge: runtime.scoutBridge ?? .pending
+            scoutBridge: runtime.scoutBridge ?? .pending,
+            agentRuntimexyx: runtime.agentRuntimexyx ?? response.agentRuntimexyx ?? []
         )
     }
 
@@ -296,6 +315,11 @@ private extension WalkieNodeRuntimeClient {
         if environment["TALKIE_WALKIE_EXECUTOR_CWD"] == nil,
            let workspaceURL = resolveSourceWorkspaceURL() {
             environment["TALKIE_WALKIE_EXECUTOR_CWD"] = workspaceURL.path(percentEncoded: false)
+        }
+
+        if let codexPath = ExecutableResolver.resolvePath("codex") {
+            environment["OPENSCOUT_CODEX_BIN"] = environment["OPENSCOUT_CODEX_BIN"] ?? codexPath
+            environment["CODEX_BIN"] = environment["CODEX_BIN"] ?? codexPath
         }
 
         return environment

@@ -282,6 +282,12 @@ struct AgentHomeExecutorTurn: Identifiable {
         transcript?.nonEmpty ?? instruction?.nonEmpty
     }
 
+    var agentDisplayName: String {
+        walkieAgentDisplayName(for: executorProvider)
+            ?? topLevelProvider?.nonEmpty
+            ?? "Talkie"
+    }
+
     init(job: AgentHomeExecutorJob, runtimePing: WalkieRuntimePing?) {
         let turnTranscript = job.transcript?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
             ?? job.instruction?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
@@ -353,9 +359,11 @@ struct AgentHomeExecutorTurn: Identifiable {
         if let output = job.output?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty {
             responseDetail = output
         } else if job.status == .failed {
-            responseDetail = "No reply was saved for this turn."
+            responseDetail = job.error?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
+                ?? "The agent did not return a reply."
         } else {
-            responseDetail = "I'll pin the reply here when it's ready."
+            responseDetail = job.ack.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
+                ?? executorDetail
         }
 
         let branchLabel: String
@@ -410,6 +418,7 @@ final class AgentHomeActivityStore: ObservableObject {
     @Published private(set) var executorJobs: [AgentHomeExecutorJob] = []
     @Published private(set) var recentDictations: [LiveRecording] = []
     @Published private(set) var runtimePing: WalkieRuntimePing?
+    @Published private(set) var agentRuntimexyx: [WalkieRuntimeAgentSnapshot] = []
     @Published private(set) var lastRefreshed: Date?
     @Published private(set) var isInvokingAgent = false
     @Published private(set) var invokeError: String?
@@ -577,11 +586,13 @@ final class AgentHomeActivityStore: ObservableObject {
         do {
             let status = try await WalkieNodeRuntimeClient.shared.status()
             runtimePing = status.ping
+            agentRuntimexyx = status.ping.agentRuntimexyx
             executorJobs = status.activities
                 .map(AgentHomeExecutorJob.init(snapshot:))
                 .sorted { $0.updatedDate > $1.updatedDate }
         } catch {
             runtimePing = nil
+            agentRuntimexyx = []
             executorJobs = []
             agentHomeLog.warning(
                 "Agent Home could not refresh runtime status",

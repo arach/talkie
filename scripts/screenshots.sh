@@ -28,13 +28,11 @@ NC='\033[0m'
 # ─── Device Config ────────────────────────────────────────────────────
 
 IPHONE_NAME="iPhone 17 Pro Max"
-IPHONE_UDID="8400B4A8-C924-44F9-8314-83CDEDF25E6A"
 IPHONE_W=1320
 IPHONE_H=2868
 IPHONE_CLASS="6.9\" iPhone"
 
 IPAD_NAME="iPad Pro 13-inch (M5)"
-IPAD_UDID="4C4EB9A9-B408-4221-9DA9-23009825408F"
 IPAD_W=2064
 IPAD_H=2752
 IPAD_CLASS="13\" iPad"
@@ -45,6 +43,8 @@ CACHE_SCREENSHOTS="$CACHE_DIR/screenshots"
 
 # Output
 OUTPUT_DIR="$ROOT_DIR/apps/ios/fastlane/screenshots"
+BUILD_CACHE_DIR="$HOME/Library/Caches/codex-builds"
+DERIVED_DATA_DIR="${TALKIE_SCREENSHOTS_DERIVED_DATA_DIR:-$BUILD_CACHE_DIR/deriveddata-ios-screenshots}"
 
 # ─── Helpers ──────────────────────────────────────────────────────────
 
@@ -59,7 +59,7 @@ device_attr() {
     case "$device" in
         "$IPHONE_NAME")
             case "$attr" in
-                udid)  echo "$IPHONE_UDID" ;;
+                udid)  resolve_udid "$IPHONE_NAME" || true ;;
                 w)     echo "$IPHONE_W" ;;
                 h)     echo "$IPHONE_H" ;;
                 class) echo "$IPHONE_CLASS" ;;
@@ -67,7 +67,7 @@ device_attr() {
             ;;
         "$IPAD_NAME")
             case "$attr" in
-                udid)  echo "$IPAD_UDID" ;;
+                udid)  resolve_udid "$IPAD_NAME" || true ;;
                 w)     echo "$IPAD_W" ;;
                 h)     echo "$IPAD_H" ;;
                 class) echo "$IPAD_CLASS" ;;
@@ -79,13 +79,24 @@ device_attr() {
     esac
 }
 
+resolve_udid() {
+    local name="$1"
+    xcrun simctl list devices available -j | /usr/bin/ruby -rjson -e '
+      name = ARGV[0]
+      devices = JSON.parse(STDIN.read)["devices"].values.flatten
+      match = devices.find { |device| device["name"] == name && device["isAvailable"] }
+      exit 1 unless match
+      puts match["udid"]
+    ' "$name"
+}
+
 validate_device() {
     local name="$1"
     local udid
     udid=$(device_attr "$name" udid)
 
-    if ! xcrun simctl list devices | grep -q "$udid"; then
-        fail "Simulator not found: $name ($udid)\n   Create it in Xcode → Window → Devices and Simulators"
+    if [ -z "$udid" ]; then
+        fail "Simulator not found: $name\n   Create it in Xcode → Window → Devices and Simulators"
     fi
 }
 
@@ -133,13 +144,14 @@ clear_cache_screenshots() {
 
 build_tests() {
     info "Building tests..."
-    local log_file="/tmp/talkie-screenshots-build.log"
+    mkdir -p "$BUILD_CACHE_DIR"
+    local log_file="$BUILD_CACHE_DIR/talkie-screenshots-build-$(date +%Y%m%d-%H%M%S).log"
 
     xcodebuild build-for-testing \
         -project "$ROOT_DIR/apps/ios/Talkie-iOS.xcodeproj" \
         -scheme TalkieUITests \
         -destination "generic/platform=iOS Simulator" \
-        -derivedDataPath "$ROOT_DIR/.build/DerivedData" \
+        -derivedDataPath "$DERIVED_DATA_DIR" \
         2>&1 | tee "$log_file" | while IFS= read -r line; do
             # Show compilation progress and errors
             if echo "$line" | grep -qE "^(Compiling|Linking|Build Succeeded|BUILD SUCCEEDED|error:|warning:.*error)"; then
@@ -156,15 +168,21 @@ build_tests() {
 
 run_tests() {
     local udid="$1"
-    local log_file="/tmp/talkie-screenshots-test.log"
+    mkdir -p "$BUILD_CACHE_DIR"
+    local log_file="$BUILD_CACHE_DIR/talkie-screenshots-test-$(date +%Y%m%d-%H%M%S).log"
 
     xcodebuild test-without-building \
         -project "$ROOT_DIR/apps/ios/Talkie-iOS.xcodeproj" \
         -scheme TalkieUITests \
         -destination "platform=iOS Simulator,id=$udid" \
-        -only-testing:TalkieUITests/TalkieUITestsScreenshots/testScreenshots \
+        -only-testing:TalkieUITests/TalkieUITestsScreenshots/test00_Splash \
+        -only-testing:TalkieUITests/TalkieUITestsScreenshots/test01_Home \
+        -only-testing:TalkieUITests/TalkieUITestsScreenshots/test02_Recording \
+        -only-testing:TalkieUITests/TalkieUITestsScreenshots/test03_MemoDetail \
+        -only-testing:TalkieUITests/TalkieUITestsScreenshots/test04_Settings \
+        -only-testing:TalkieUITests/TalkieUITestsScreenshots/test05_Keyboard \
         -parallel-testing-enabled NO \
-        -derivedDataPath "$ROOT_DIR/.build/DerivedData" \
+        -derivedDataPath "$DERIVED_DATA_DIR" \
         2>&1 | tee "$log_file" | while IFS= read -r line; do
             if echo "$line" | grep -qE "(snapshot:|Test Case|Test Suite|Tests? (passed|failed)|TEST SUCCEEDED|TEST FAILED|error:)"; then
                 echo -e "   ${DIM}$line${NC}"
@@ -183,6 +201,7 @@ collect_screenshots() {
     local dest="$OUTPUT_DIR/$device_name"
 
     mkdir -p "$dest"
+    rm -f "$dest"/*.png
 
     local count=0
     for file in "$CACHE_SCREENSHOTS"/*.png; do
@@ -191,7 +210,7 @@ collect_screenshots() {
         basename=$(basename "$file")
         # SnapshotHelper format: "{SimulatorName}-{snapshotName}.png"
         # Strip the simulator name prefix
-        local shot_name="${basename#*-}"
+        local shot_name="${basename#"$device_name"-}"
         cp "$file" "$dest/$shot_name"
         count=$((count + 1))
     done
@@ -284,7 +303,7 @@ show_list() {
         eh=$(device_attr "$name" h)
 
         local status="✓"
-        if ! xcrun simctl list devices 2>/dev/null | grep -q "$udid"; then
+        if [ -z "$udid" ]; then
             status="✗ not found"
         fi
 

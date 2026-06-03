@@ -21,7 +21,7 @@ enum TabPresets {
 
     /// Templates exposed to the picker. Each entry's id is treated as
     /// a *family* name; clones get a unique id with a numeric suffix.
-    static let templates: [TabDefinition] = [claude, pi, talkieShell]
+    static let templates: [TabDefinition] = [claude, pi, talkieShell, bridgeLogs]
 
     static let claude = TabDefinition(
         id: "claude",
@@ -83,6 +83,29 @@ enum TabPresets {
         ),
         sourceURL: nil
     )
+
+    static let bridgeLogs = TabDefinition(
+        id: "bridge-logs",
+        label: "Bridge Logs",
+        icon: "doc.text.magnifyingglass",
+        order: 40,
+        harness: .shell,
+        model: nil,
+        systemPrompt: "",
+        cwd: "~",
+        launchArgs: [],
+        readOnly: false,
+        useTmux: false,
+        tmuxSessionName: nil,
+        env: [:],
+        shell: TabDefinition.ShellConfig(
+            program: "/bin/zsh",
+            initScript: bridgeLogsInitScriptPath
+        ),
+        sourceURL: nil
+    )
+
+    static let bridgeLogsInitScriptPath = "~/.talkie/tabs/bridge-logs.init.zsh"
 
     private static var mergedClaudeSystemPrompt: String {
         let bundled = TabPresetAssetLoader.text(

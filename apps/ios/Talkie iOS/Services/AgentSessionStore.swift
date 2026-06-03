@@ -3,7 +3,7 @@
 //  Talkie iOS
 //
 //  Persists agent conversations tied to memos.
-//  Stores Claude Code session IDs for multi-turn follow-ups.
+//  Stores remote agent session IDs for multi-turn follow-ups.
 //  JSON-based persistence in App Group, similar to BrowseHistory.
 //
 
@@ -28,7 +28,7 @@ struct AgentSession: Codable, Identifiable {
     let id: UUID
     let memoId: String
     let memoTitle: String
-    var claudeSessionId: String?
+    var claudeSessionId: String?  // Historical key; now stores the Codex thread id for Ask Agent.
     var turns: [AgentTurn]
     let createdAt: Date
     var updatedAt: Date
@@ -93,7 +93,7 @@ final class AgentSessionStore: ObservableObject {
         save()
     }
 
-    /// Store the Claude session ID for follow-ups
+    /// Store the remote agent session ID for follow-ups.
     func setClaudeSessionId(_ sessionId: String, forMemoId memoId: String) {
         guard let index = sessions.firstIndex(where: { $0.memoId == memoId }) else { return }
         sessions[index].claudeSessionId = sessionId

@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
 import {
+  accessSync,
+  constants,
   closeSync,
   existsSync,
   mkdirSync,
@@ -11,7 +13,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const runtimeDir = dirname(fileURLToPath(import.meta.url));
@@ -19,12 +21,79 @@ const version = readPackageVersion();
 const jobStorePath = process.env.TALKIE_AGENT_ACTIVITY_STORE
   ?? process.env.TALKIE_WALKIE_JOB_STORE
   ?? join(homedir(), 'Library', 'Application Support', 'Talkie', 'Walkie', 'jobs.json');
+const agentRuntimeHome = process.env.TALKIE_AGENT_RUNTIME_HOME
+  ?? join(homedir(), '.talkie', 'agent-runtime');
 const runtimeBase = {
   id: 'walkie-node-dispatcher',
-  name: 'Walkie Runtime Dispatcher',
+  name: 'Agent Runtime Dispatcher',
   version,
-  capabilities: ['readOnlyData', 'longRunningJobs', 'codeExecution'],
+  capabilities: ['readOnlyData', 'longRunningJobs', 'codeExecution', 'externalNodeTools'],
 };
+const agentCatalog = [
+  {
+    id: 'codex',
+    name: 'Codex',
+    adapterType: 'codex',
+    command: 'codex',
+    envKeys: ['OPENSCOUT_CODEX_BIN', 'CODEX_BIN'],
+    candidates: [
+      '/Applications/Codex.app/Contents/Resources/codex',
+      join(homedir(), 'Applications', 'Codex.app', 'Contents', 'Resources', 'codex'),
+      join(homedir(), '.local', 'bin', 'codex'),
+      join(homedir(), '.bun', 'bin', 'codex'),
+      '/opt/homebrew/bin/codex',
+      '/usr/local/bin/codex',
+    ],
+    capabilities: ['codeExecution', 'computerUse', 'longRunningJobs'],
+  },
+  {
+    id: 'claude-code',
+    name: 'Claude Code',
+    adapterType: 'claude-code',
+    command: 'claude',
+    candidates: [
+      join(homedir(), '.local', 'bin', 'claude'),
+      join(homedir(), '.claude', 'local', 'claude'),
+      '/opt/homebrew/bin/claude',
+      '/usr/local/bin/claude',
+    ],
+    capabilities: ['codeExecution', 'computerUse', 'longRunningJobs'],
+  },
+  {
+    id: 'opencode',
+    name: 'OpenCode',
+    adapterType: 'opencode',
+    command: 'opencode',
+    candidates: [
+      join(homedir(), '.opencode', 'bin', 'opencode'),
+      '/opt/homebrew/bin/opencode',
+      '/usr/local/bin/opencode',
+    ],
+    capabilities: ['codeExecution', 'longRunningJobs'],
+  },
+  {
+    id: 'pi',
+    name: 'Pi',
+    adapterType: 'pi',
+    command: 'pi',
+    candidates: [
+      join(homedir(), '.local', 'bin', 'pi'),
+      join(homedir(), '.bun', 'bin', 'pi'),
+      '/opt/homebrew/bin/pi',
+      '/usr/local/bin/pi',
+    ],
+    capabilities: ['codeExecution', 'longRunningJobs'],
+  },
+  {
+    id: 'echo',
+    name: 'Echo',
+    adapterType: 'echo',
+    command: null,
+    candidates: [],
+    builtIn: true,
+    capabilities: ['readOnlyData', 'longRunningJobs'],
+  },
+];
 const jobs = loadJobs();
 let pending = '';
 let queue = Promise.resolve();
@@ -90,12 +159,20 @@ async function handleLine(line) {
     const runtime = await runtimeInfo();
     switch (request?.op) {
       case 'ping':
-        writeResponse({ ok: true, pid: process.pid, version, runtime });
+        writeResponse({ ok: true, pid: process.pid, version, runtime, agentRuntimexyx: runtime.agentRuntimexyx });
         break;
       case 'status':
         {
           const activities = listActivities();
-          writeResponse({ ok: true, pid: process.pid, version, runtime, activities, jobs: activities });
+          writeResponse({
+            ok: true,
+            pid: process.pid,
+            version,
+            runtime,
+            agentRuntimexyx: runtime.agentRuntimexyx,
+            activities,
+            jobs: activities,
+          });
         }
         break;
       case 'invoke':
@@ -155,45 +232,241 @@ async function handleLine(line) {
 }
 
 async function runtimeInfo() {
+  const agentRuntime = await agentRuntimeStatus();
+  const agentRuntimexyx = buildAgentRuntimexyx(agentRuntime);
   return {
     ...runtimeBase,
-    scoutBridge: await agentSessionsAvailable() ? 'configured' : 'pending',
+    scoutBridge: agentRuntime.available ? 'configured' : 'pending',
+    agentRuntimeHome,
+    agentRuntimeModule: agentRuntime.modulePath,
+    agentRuntimexyx,
   };
 }
 
 async function agentSessionsAvailable() {
+  return (await agentRuntimeStatus()).available;
+}
+
+async function agentRuntimeStatus() {
   try {
-    await loadAgentSessionsPackage();
+    const result = await resolveAgentRuntimePackage();
+    return { available: true, modulePath: result.modulePath };
+  } catch {
+    return { available: false, modulePath: null };
+  }
+}
+
+async function loadAgentSessionsPackage() {
+  return (await resolveAgentRuntimePackage()).packageModule;
+}
+
+function buildAgentRuntimexyx(agentRuntime) {
+  const preferredAdapter = resolveAdapterType({});
+  const now = new Date().toISOString();
+
+  return agentCatalog.map((agent) => {
+    const activeSessions = activeSessionCountForAdapter(agent.adapterType);
+    const base = {
+      id: agent.id,
+      name: agent.name,
+      adapterType: agent.adapterType,
+      capabilities: agent.capabilities,
+      activeSessions,
+      isPreferred: agent.adapterType === preferredAdapter,
+      lastSeenAt: now,
+      executable: agent.command,
+      executablePath: null,
+      detail: null,
+    };
+
+    if (!agentRuntime.available) {
+      return {
+        ...base,
+        status: 'unavailable',
+        isAvailable: false,
+        detail: 'Agent runtime package unavailable.',
+      };
+    }
+
+    if (agent.builtIn) {
+      return {
+        ...base,
+        status: 'available',
+        isAvailable: true,
+        detail: 'Built-in session adapter.',
+      };
+    }
+
+    const executable = resolveAgentExecutable(agent);
+    if (executable?.executable) {
+      return {
+        ...base,
+        status: 'available',
+        isAvailable: true,
+        executablePath: executable.path,
+        detail: executable.source.startsWith('env:')
+          ? `Ready via ${executable.source}.`
+          : `Ready at ${executable.path}.`,
+      };
+    }
+
+    if (executable?.explicit) {
+      return {
+        ...base,
+        status: 'misconfigured',
+        isAvailable: false,
+        executablePath: executable.path,
+        detail: `${executable.source} is not executable.`,
+      };
+    }
+
+    return {
+      ...base,
+      status: 'missing',
+      isAvailable: false,
+      detail: `Install ${agent.command} or add it to PATH.`,
+    };
+  });
+}
+
+function activeSessionCountForAdapter(adapterType) {
+  return Array.from(jobs.values())
+    .filter((record) => ['acked', 'working', 'running', 'started'].includes(String(record.state ?? '').toLowerCase()))
+    .filter((record) => {
+      const recordAdapter = normalizeAdapterType(record.executorAdapterType ?? record.providerId);
+      return recordAdapter === adapterType;
+    })
+    .length;
+}
+
+function resolveAgentExecutable(agent, env = process.env) {
+  for (const key of agent.envKeys ?? []) {
+    const value = normalizeString(env[key]);
+    if (value) {
+      return {
+        path: value,
+        source: `env:${key}`,
+        executable: isExecutable(value),
+        explicit: true,
+      };
+    }
+  }
+
+  for (const candidate of uniqueStrings([
+    ...(agent.candidates ?? []),
+    ...pathExecutableCandidates(agent.command, env),
+  ])) {
+    if (isExecutable(candidate)) {
+      return {
+        path: candidate,
+        source: 'path',
+        executable: true,
+        explicit: false,
+      };
+    }
+  }
+
+  return null;
+}
+
+function pathExecutableCandidates(command, env = process.env) {
+  if (!command) {
+    return [];
+  }
+
+  return (env.PATH ?? '')
+    .split(delimiter)
+    .filter(Boolean)
+    .map((directory) => join(directory, command));
+}
+
+function isExecutable(filePath) {
+  try {
+    accessSync(filePath, constants.X_OK);
     return true;
   } catch {
     return false;
   }
 }
 
-async function loadAgentSessionsPackage() {
-  const configuredModule = process.env.TALKIE_AGENT_SESSIONS_MODULE;
+function uniqueStrings(values) {
+  const seen = new Set();
+  const unique = [];
+  for (const value of values) {
+    if (typeof value !== 'string' || value.length === 0 || seen.has(value)) {
+      continue;
+    }
+    seen.add(value);
+    unique.push(value);
+  }
+  return unique;
+}
+
+async function resolveAgentRuntimePackage() {
+  const configuredRuntimeModule = process.env.TALKIE_AGENT_RUNTIME_MODULE;
+  const configuredAgentSessionsModule = process.env.TALKIE_AGENT_SESSIONS_MODULE;
   const workspace = workspaceCwd();
   const workspaceParent = dirname(workspace);
-  const candidates = [
-    configuredModule,
+  const talkieCandidates = [
+    configuredRuntimeModule,
+    join(agentRuntimeHome, 'node_modules', '@talkie', 'agent-runtime', 'index.mjs'),
+    join(homedir(), '.talkie-shell', 'runtime', 'lib', 'node_modules', '@talkie', 'agent-runtime', 'index.mjs'),
+    join(workspace, 'packages', 'npm', 'agent-runtime', 'index.mjs'),
+  ].filter(Boolean);
+  const compatibilityCandidates = [
+    configuredAgentSessionsModule,
+    join(agentRuntimeHome, 'node_modules', '@openscout', 'agent-sessions', 'dist', 'index.js'),
+    join(homedir(), '.talkie-shell', 'runtime', 'lib', 'node_modules', '@openscout', 'agent-sessions', 'dist', 'index.js'),
     join(workspace, 'node_modules', '@openscout', 'agent-sessions', 'dist', 'index.js'),
     join(workspaceParent, 'openscout', 'packages', 'agent-sessions', 'dist', 'index.js'),
     join(workspaceParent, 'openscout', 'packages', 'agent-sessions', 'src', 'index.ts'),
   ].filter(Boolean);
 
   try {
-    return await import('@openscout/agent-sessions');
+    return {
+      packageModule: await import('@talkie/agent-runtime'),
+      modulePath: '@talkie/agent-runtime',
+    };
   } catch {
     // Fall through to explicit local candidates.
   }
 
-  for (const candidate of candidates) {
+  for (const candidate of talkieCandidates) {
     if (typeof candidate === 'string' && existsSync(candidate)) {
-      return import(pathToFileURL(candidate).href);
+      try {
+        return {
+          packageModule: await import(pathToFileURL(candidate).href),
+          modulePath: candidate,
+        };
+      } catch {
+        // Keep probing; a local wrapper checkout may exist before npm install.
+      }
     }
   }
 
-  throw new Error('Could not load @openscout/agent-sessions.');
+  try {
+    return {
+      packageModule: await import('@openscout/agent-sessions'),
+      modulePath: '@openscout/agent-sessions',
+    };
+  } catch {
+    // Compatibility only: local OpenScout checkouts can still satisfy the adapter.
+  }
+
+  for (const candidate of compatibilityCandidates) {
+    if (typeof candidate === 'string' && existsSync(candidate)) {
+      try {
+        return {
+          packageModule: await import(pathToFileURL(candidate).href),
+          modulePath: candidate,
+        };
+      } catch {
+        // Keep probing other compatibility paths.
+      }
+    }
+  }
+
+  throw new Error(`Could not load @talkie/agent-runtime. Run install-agent-runtime.sh or set TALKIE_AGENT_RUNTIME_MODULE. Runtime home: ${agentRuntimeHome}`);
 }
 
 function writeResponse(response) {
@@ -211,6 +484,7 @@ async function invoke(invocation, runtime) {
   const parentRecord = continuationRecordFor(invocation, conversationId);
   const agentSessionId = parentRecord?.agentSessionId ?? `${sessionId}-agent`;
   const isContinuation = parentRecord != null;
+  const isAgentHome = normalizeString(invocation.source) === 'agent-home';
   const record = {
     id: invocation.id,
     sessionId,
@@ -220,10 +494,14 @@ async function invoke(invocation, runtime) {
     source: normalizeString(invocation.source) ?? 'voice',
     state: bridgeReady ? 'working' : 'failed',
     ack: bridgeReady
-      ? isContinuation
-        ? 'Continuing in the same Agent Session. I will report back here.'
-        : 'On it. I sent that to an Agent Session and will report back here.'
-      : 'I captured that executor request, but the Scout agent session package is not installed for this runtime.',
+      ? isAgentHome
+        ? isContinuation
+          ? 'Continuing from the earlier reply.'
+          : 'Working on the answer now.'
+        : isContinuation
+          ? 'Continuing with the same agent. I will report back here.'
+          : 'On it. I am asking an agent and will report back here.'
+      : 'I captured that agent request, but the Talkie Agent Runtime CLI package is not installed yet.',
     providerId: invocation.channel?.executorProviderId ?? adapterType,
     modelId: invocation.channel?.executorModelId ?? null,
     channelCode: invocation.channel?.code ?? null,
@@ -239,7 +517,7 @@ async function invoke(invocation, runtime) {
     bridgeStatus: runtime.scoutBridge,
     createdAt: now,
     updatedAt: now,
-    error: bridgeReady ? null : 'Missing @openscout/agent-sessions dependency.',
+    error: bridgeReady ? null : 'Talkie Agent Runtime CLI package is not installed.',
   };
 
   jobs.set(sessionId, record);
@@ -261,12 +539,12 @@ async function retryInvocation(sessionId, runtime) {
   record.runtimeName = runtime.name;
   record.bridgeStatus = runtime.scoutBridge;
   record.updatedAt = new Date().toISOString();
-  record.error = bridgeReady ? null : 'Missing @openscout/agent-sessions dependency.';
+  record.error = bridgeReady ? null : 'Talkie Agent Runtime CLI package is not installed.';
   record.output = null;
   record.state = bridgeReady ? 'working' : 'failed';
   record.ack = bridgeReady
-    ? 'On it. I restarted this in an Agent Session.'
-    : 'I could not restart this because the Scout agent session package is not installed for this runtime.';
+    ? 'On it. I restarted this with the agent.'
+    : 'I could not restart this because the Talkie Agent Runtime CLI package is not installed yet.';
   persistRecord(record);
 
   if (bridgeReady) {
@@ -355,7 +633,7 @@ async function runInvocationWorker(sessionId) {
   try {
     await registry.createSession(adapterType, {
       sessionId: agentSessionId,
-      name: `Talkie ${record.channelCode ?? 'executor'} ${record.id}`,
+      name: `Talkie agent ${record.channelCode ?? 'work'} ${record.id}`,
       cwd: workspace,
       env: process.env,
       options: adapterOptions(record, workspace),
@@ -393,7 +671,7 @@ function adapterFactories(sessionPackage) {
 function adapterOptions(record, workspace) {
   const model = process.env.TALKIE_AGENT_SESSION_MODEL ?? record.modelId ?? undefined;
   const systemPrompt = [
-    'You are the Talkie executor running inside an OpenScout Agent Session.',
+    'You are the Talkie agent running inside the OpenScout agent runtime.',
     'You receive one user request that was routed to background work.',
     'Be direct, report what you did, and do not modify files unless the request explicitly asks for changes.',
     `Workspace: ${workspace}`,
@@ -410,7 +688,7 @@ function adapterOptions(record, workspace) {
 function promptForRecord(record, workspace) {
   const context = conversationContextFor(record);
   return [
-    'Talkie executor request',
+    'Talkie agent request',
     '',
     `Workspace: ${workspace}`,
     `Channel: ${record.channelCode ?? 'CH-01'}`,
@@ -423,7 +701,7 @@ function promptForRecord(record, workspace) {
     'User transcript:',
     record.transcript ?? '',
     '',
-    'Executor instruction:',
+    'Agent instruction:',
     record.instruction,
     '',
     'Return a concise result that Talkie can show in Agent Home.',

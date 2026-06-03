@@ -52,6 +52,7 @@ final class TalkieAgentServerSupervisor {
     // Guards
     private var isStarting = false
     private let maxConsecutiveFailures = 10
+    private let healthyProbeInterval: TimeInterval = 30
     private let minBackoff: TimeInterval = 10
     private let maxBackoff: TimeInterval = 300
 
@@ -315,7 +316,8 @@ final class TalkieAgentServerSupervisor {
 
     private func startHealthTimer() {
         stopHealthTimer()
-        healthTimer = Timer.scheduledTimer(withTimeInterval: backoffInterval, repeats: false) { [weak self] _ in
+        let interval = consecutiveFailures == 0 ? healthyProbeInterval : backoffInterval
+        healthTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
             Task { @MainActor in
                 await self?.performHealthCheck()
             }
