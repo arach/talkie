@@ -91,25 +91,38 @@ struct PersistenceController {
     let container: NSPersistentContainer
 
     init(inMemory: Bool = false) {
-        // Always use CloudKit container - it handles iCloud unavailability gracefully
-        // (stores locally, syncs when available). No need to block on iCloud status check.
-        let cloudContainer = NSPersistentCloudKitContainer(name: "talkie")
-        if let description = cloudContainer.persistentStoreDescriptions.first {
-            description.cloudKitContainerOptions = NSPersistentCloudKitContainerOptions(
-                containerIdentifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier
-            )
-            description.setOption(true as NSNumber, forKey: NSMigratePersistentStoresAutomaticallyOption)
-            description.setOption(true as NSNumber, forKey: NSInferMappingModelAutomaticallyOption)
-            description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
-            description.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
+        let cloudKitUnavailableReason = inMemory ? "in-memory store requested" : CloudKitContainerProvider.unavailableReason
+        let cloudKitEnabled = cloudKitUnavailableReason == nil
+        let persistentContainer: NSPersistentContainer
+
+        if cloudKitEnabled {
+            let cloudContainer = NSPersistentCloudKitContainer(name: "talkie")
+            if let description = cloudContainer.persistentStoreDescriptions.first {
+                Self.configureStoreDescription(description)
+                description.cloudKitContainerOptions = NSPersistentCloudKitContainerOptions(
+                    containerIdentifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier
+                )
+            }
+            persistentContainer = cloudContainer
+        } else {
+            if let cloudKitUnavailableReason {
+                AppLogger.persistence.info("CloudKit disabled for local Core Data store: \(cloudKitUnavailableReason)")
+            }
+
+            let localContainer = NSPersistentContainer(name: "talkie")
+            if let description = localContainer.persistentStoreDescriptions.first {
+                Self.configureStoreDescription(description)
+            }
+            persistentContainer = localContainer
         }
-        container = cloudContainer
+
+        container = persistentContainer
 
         if inMemory {
             container.persistentStoreDescriptions.first!.url = URL(fileURLWithPath: "/dev/null")
         }
 
-        container.loadPersistentStores { storeDescription, error in
+        container.loadPersistentStores { _, error in
             if let error = error as NSError? {
                 AppLogger.persistence.error("Core Data failed: \(error.localizedDescription)")
             } else {
@@ -120,14 +133,22 @@ struct PersistenceController {
         container.viewContext.automaticallyMergesChangesFromParent = true
         container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
 
-        // Always set up CloudKit monitoring - it handles failures gracefully
-        setupCloudKitSyncMonitoring()
+        if cloudKitEnabled {
+            setupCloudKitSyncMonitoring()
+        }
 
         // Log memo count after store is ready
         let viewContext = container.viewContext
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             PersistenceController.logMemoCount(context: viewContext)
         }
+    }
+
+    private static func configureStoreDescription(_ description: NSPersistentStoreDescription) {
+        description.setOption(true as NSNumber, forKey: NSMigratePersistentStoresAutomaticallyOption)
+        description.setOption(true as NSNumber, forKey: NSInferMappingModelAutomaticallyOption)
+        description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
+        description.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
     }
 
     /// Monitor CloudKit sync events to update cloudSyncedAt on memos
