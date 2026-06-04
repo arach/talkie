@@ -332,3 +332,28 @@ html, body {
   0%, 100% { opacity: 1; transform: scale(1); }
   50%      { opacity: 0.45; transform: scale(0.85); }
 }
+
+/* ──────────────────────────────────────────────────────────────────
+ * Tape Transport — milled amber slider thumb for the tuning rack.
+ * (the `tape-range` inputs in components/studies/TapeTransport.tsx)
+ * ────────────────────────────────────────────────────────────────── */
+.tape-range { cursor: pointer; }
+.tape-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 13px;
+  width: 13px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 30%, #F6C277 0%, #E89A3C 55%, #B97516 100%);
+  border: 0.5px solid rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 5px rgba(232, 154, 60, 0.55);
+}
+.tape-range::-moz-range-thumb {
+  height: 13px;
+  width: 13px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 30%, #F6C277 0%, #E89A3C 55%, #B97516 100%);
+  border: 0.5px solid rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 5px rgba(232, 154, 60, 0.55);
+}
+.tape-range:disabled { cursor: default; }

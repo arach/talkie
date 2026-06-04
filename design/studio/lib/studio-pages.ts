@@ -99,6 +99,14 @@ export const STUDIO_PAGES: StudioPage[] = [
     ],
     blurb: "One top-band component — wordmark · title · TALKIE · complications — with a variant per view.",
   },
+  {
+    href: "/tape-transport",
+    label: "Tape Transport",
+    bucket: "foundations",
+    status: "concept",
+    swift: ["apps/ios/Talkie iOS/Views/WaveformView.swift"],
+    blurb: "Signature voice-waveform gesture — amber centerline + travelling tape-head needle across record / transcribe / playback, with crossing ticks. Tune before the iOS waveform port (replaces the particle cloud).",
+  },
 
   // ── Surfaces · Mac ──────────────────────────────────────────────
   {
