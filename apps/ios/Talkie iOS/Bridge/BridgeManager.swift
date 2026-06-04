@@ -138,6 +138,9 @@ final class BridgeManager {
     private var pendingPairingApprovalTask: Task<Void, Never>?
     private var companionEventTask: Task<Void, Never>?
     private var companionEventSocket: URLSessionWebSocketTask?
+    // Captured per stream connection: when true, each companion event frame is a
+    // sealed envelope opened fail-closed (drop frames that can't be opened).
+    private var companionEventStreamEncrypted = false
     private var lastReportedSetupState: DeviceSetupStateRequest?
     private var isRefreshingCompanionState = false
     private var pendingCompanionRefresh = false
@@ -1370,6 +1373,7 @@ final class BridgeManager {
                     deviceId: deviceId,
                     deviceClass: currentDeviceClass
                 )
+                companionEventStreamEncrypted = await client.streamsAreEncrypted
 
                 let socket = URLSession.shared.webSocketTask(with: request)
                 companionEventSocket = socket
@@ -1395,16 +1399,28 @@ final class BridgeManager {
     }
 
     private func handleCompanionEventMessage(_ message: URLSessionWebSocketTask.Message) async {
-        let data: Data
+        let raw: Data
 
         switch message {
         case .string(let text):
             guard let textData = text.data(using: .utf8) else { return }
-            data = textData
+            raw = textData
         case .data(let bytes):
-            data = bytes
+            raw = bytes
         @unknown default:
             return
+        }
+
+        // Encrypted stream: every frame is a sealed envelope. Open it and drop
+        // fail-closed if it can't be opened (never accept a plaintext frame).
+        let data: Data
+        if companionEventStreamEncrypted {
+            guard let opened = try? await client.openStreamFrame(raw) else {
+                return
+            }
+            data = opened
+        } else {
+            data = raw
         }
 
         guard let envelope = try? JSONDecoder().decode(CompanionEventEnvelope.self, from: data) else {

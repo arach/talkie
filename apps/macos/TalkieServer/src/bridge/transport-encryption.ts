@@ -85,6 +85,23 @@ export async function decryptRequestBody(request: Request): Promise<unknown | un
 }
 
 /**
+ * Read a route's JSON body, transparently decrypting an X-Enc:2 envelope first.
+ *
+ * Many routes parse the body themselves (`await request.json()`) instead of
+ * using Elysia's `body` context, to keep the original stream intact for HMAC.
+ * But `request.json()` returns the RAW transmitted bytes — which, for an
+ * encrypted client, is the `{ enc, ciphertext }` envelope, not the plaintext.
+ * Those routes must call this instead so they receive the decrypted body. For a
+ * plaintext (old/local) client this is just `request.json()`, so it is fully
+ * backward compatible.
+ */
+export async function readJsonBody(request: Request): Promise<any> {
+  const decrypted = await decryptRequestBody(request);
+  if (decrypted !== undefined) return decrypted;
+  return await request.json();
+}
+
+/**
  * For a request that opted into stream encryption (`X-Enc: 2`), return a sealer
  * that wraps one stream frame (e.g. a single SSE `data:` payload) into the v2
  * envelope `{ enc, ciphertext }` — each frame gets its own GCM nonce. Returns
@@ -98,6 +115,37 @@ export async function prepareStreamSealer(
   // the client can ask for sealed response frames without sealing its request.
   if (request.headers.get("x-enc-stream") !== ENC_VERSION) return null;
   const key = await deviceKey(request);
+  if (!key) return null;
+  return async (plaintext: string): Promise<string> => {
+    const ciphertext = await sealBytes(new TextEncoder().encode(plaintext), key);
+    const envelope: Envelope = { enc: 2, ciphertext };
+    return JSON.stringify(envelope);
+  };
+}
+
+/**
+ * WebSocket variant of the stream sealer. The ws open()/message() handlers do
+ * not have a `Request`, so negotiation rides on the upgrade URL query instead of
+ * a header: the client appends `encStream=2` and `deviceId=<id>` (both covered
+ * by the HMAC signature over path+query, so they are integrity-protected on the
+ * authenticated upgrade). Returns a per-frame sealer, or `null` for an un-opted
+ * or un-keyed socket so the route streams plaintext exactly as before (old
+ * clients are unaffected). Note: sealing to the query deviceId's key is safe —
+ * a different paired device that lies about deviceId only seals frames it cannot
+ * itself decrypt, so it gains nothing.
+ */
+export async function prepareWsFrameSealer(
+  query: Record<string, string | undefined>
+): Promise<((plaintext: string) => Promise<string>) | null> {
+  if (query.encStream !== ENC_VERSION) return null;
+  const deviceId = query.deviceId;
+  if (!deviceId) return null;
+  let key: CryptoKey | null;
+  try {
+    key = await getDeviceEncryptionKey(deviceId);
+  } catch {
+    key = null;
+  }
   if (!key) return null;
   return async (plaintext: string): Promise<string> => {
     const ciphertext = await sealBytes(new TextEncoder().encode(plaintext), key);

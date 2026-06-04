@@ -309,11 +309,18 @@ actor BridgeClient {
 
         components.scheme = components.scheme == "https" ? "wss" : "ws"
         components.path = "/companion/screen"
-        components.queryItems = [
+        var queryItems = [
             URLQueryItem(name: "fps", value: "\(max(1, fps))"),
             URLQueryItem(name: "maxDimension", value: "\(max(320, maxDimension))"),
             URLQueryItem(name: "quality", value: String(quality)),
         ]
+        // Opt the frame stream into per-frame sealing. The server resolves the
+        // key from `deviceId`; both ride under the HMAC signature over the query.
+        if shouldEncryptStreams, let deviceId, !deviceId.isEmpty {
+            queryItems.append(URLQueryItem(name: "deviceId", value: deviceId))
+            queryItems.append(URLQueryItem(name: "encStream", value: "2"))
+        }
+        components.queryItems = queryItems
 
         guard let url = components.url else {
             throw BridgeError.invalidResponse
@@ -341,11 +348,18 @@ actor BridgeClient {
         components.path = "/companion/events"
 
         var queryItems: [URLQueryItem] = []
+        var hasDeviceId = false
         if let deviceId, !deviceId.isEmpty {
             queryItems.append(URLQueryItem(name: "deviceId", value: deviceId))
+            hasDeviceId = true
         }
         if let deviceClass, !deviceClass.isEmpty {
             queryItems.append(URLQueryItem(name: "deviceClass", value: deviceClass))
+        }
+        // The server keys the per-frame sealer off `deviceId`, so only opt in
+        // when one is present (it always is for a paired companion subscription).
+        if shouldEncryptStreams, hasDeviceId {
+            queryItems.append(URLQueryItem(name: "encStream", value: "2"))
         }
         components.queryItems = queryItems.isEmpty ? nil : queryItems
 
@@ -763,6 +777,17 @@ actor BridgeClient {
         guard let combined = sealed.combined else { throw BridgeError.invalidResponse }
         let envelope = EncEnvelope(enc: 2, ciphertext: combined.base64EncodedString())
         return try JSONEncoder().encode(envelope)
+    }
+
+    /// Whether stream requests built now negotiate per-frame encryption. The WS
+    /// stream consumers read this to decide whether to open each frame.
+    var streamsAreEncrypted: Bool { shouldEncryptStreams }
+
+    /// Open a sealed WS stream frame (`{enc,ciphertext}`) back into plaintext
+    /// bytes. Throws on failure — callers MUST drop the frame, never fall back to
+    /// treating it as plaintext (fail-closed, matching the SSE path).
+    func openStreamFrame(_ data: Data) throws -> Data {
+        try open(data)
     }
 
     /// Open a v2 envelope back into plaintext bytes.
