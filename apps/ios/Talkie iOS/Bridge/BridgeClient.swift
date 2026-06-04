@@ -22,10 +22,23 @@ actor BridgeClient {
     // Transport encryption (talkie-bridge v2). Negotiated from /health.
     private var serverSupportsEncryption = false
 
-    /// Whether outgoing traffic should be sealed: server advertised support and we
-    /// hold the derived encryption key.
+    /// Pinned per-Mac: once a paired Mac has advertised encryption, the app
+    /// requires it forever after. Prevents a MITM from stripping `enc` from the
+    /// unauthenticated /health response to silently force a plaintext downgrade.
+    private var encryptionRequired = false
+
+    /// Whether the most recent connect negotiated transport encryption — read by
+    /// BridgeManager to persist the per-Mac pin.
+    var didNegotiateEncryption: Bool { serverSupportsEncryption }
+
+    func setEncryptionRequired(_ required: Bool) {
+        encryptionRequired = required
+    }
+
+    /// Whether outgoing traffic should be sealed: we hold the derived key and
+    /// either the server advertised support this session or it's pinned-required.
     private var shouldEncrypt: Bool {
-        serverSupportsEncryption && encryptionKey != nil
+        encryptionKey != nil && (serverSupportsEncryption || encryptionRequired)
     }
 
     // MARK: - Configuration
@@ -57,6 +70,7 @@ actor BridgeClient {
         self.baseURL = nil
         self.clockOffset = 0
         self.serverSupportsEncryption = false
+        self.encryptionRequired = false
     }
 
     var isConfigured: Bool {
@@ -78,6 +92,12 @@ actor BridgeClient {
         let health = try await healthUnauthenticated()
         // Negotiate transport encryption: only seal traffic if the server advertises it.
         serverSupportsEncryption = (health.enc == true)
+        // Downgrade guard: if this Mac is pinned to encryption but the (plaintext,
+        // unauthenticated) /health no longer advertises it, refuse — a network
+        // attacker may have stripped the flag to force cleartext.
+        if encryptionRequired && !serverSupportsEncryption {
+            throw BridgeError.encryptionDowngrade
+        }
         if let serverTimeValue = health.time {
             let localTime = Date().timeIntervalSince1970
             clockOffset = Double(serverTimeValue) - localTime
@@ -115,12 +135,10 @@ actor BridgeClient {
         // Use longer timeout for mobile network + Tailscale latency
         let data = try await get(path, timeout: deepSync ? 60 : 30)
         let response = try JSONDecoder().decode(SessionsResponse.self, from: data)
-
-        // Log the full response for debugging
-        if let jsonString = String(data: data, encoding: .utf8) {
-            AppLogger.app.info("[Bridge] sessions() returned \(response.sessions.count) sessions - deepSync: \(deepSync)", detail: jsonString)
-        }
-
+        // Never log the decrypted body — session JSON carries message previews
+        // and project paths; logging it would persist plaintext to the device
+        // log store and defeat transport encryption. Counts only.
+        AppLogger.app.info("[Bridge] sessions() returned \(response.sessions.count) sessions - deepSync: \(deepSync)")
         return response
     }
 
@@ -129,12 +147,8 @@ actor BridgeClient {
         // Use longer timeout for mobile network + Tailscale latency
         let data = try await get(path, timeout: deepSync ? 60 : 30)
         let response = try JSONDecoder().decode(PathsResponse.self, from: data)
-
-        // Log the full response for debugging
-        if let jsonString = String(data: data, encoding: .utf8) {
-            AppLogger.app.info("[Bridge] paths() returned \(response.paths.count) paths - deepSync: \(deepSync)", detail: jsonString)
-        }
-
+        // Counts only — never log the decrypted body (carries project paths).
+        AppLogger.app.info("[Bridge] paths() returned \(response.paths.count) paths - deepSync: \(deepSync)")
         return response
     }
 
@@ -1410,6 +1424,7 @@ enum BridgeError: LocalizedError {
     case connectionFailed
     case pairingRejected
     case messageFailed(String)
+    case encryptionDowngrade
 
     var errorDescription: String? {
         switch self {
@@ -1425,6 +1440,8 @@ enum BridgeError: LocalizedError {
             return "Pairing was rejected"
         case .messageFailed(let reason):
             return "Could not send message: \(reason)"
+        case .encryptionDowngrade:
+            return "This Mac previously used an encrypted connection but is now offering an unencrypted one. Refusing to connect — this can indicate a network attacker. Re-pair on a trusted network if your Mac server genuinely changed."
         }
     }
 }

@@ -501,6 +501,27 @@ final class BridgeManager {
     }
 
     /// Connect using saved pairing with auto-retry
+    // MARK: - Encryption pin (per-Mac downgrade protection)
+
+    private static func encryptionPinKey(_ macId: String) -> String {
+        "bridge.encryptionRequired.\(macId)"
+    }
+
+    static func isEncryptionPinned(_ macId: String) -> Bool {
+        guard !macId.isEmpty else { return false }
+        return UserDefaults.standard.bool(forKey: encryptionPinKey(macId))
+    }
+
+    static func pinEncryption(_ macId: String) {
+        guard !macId.isEmpty else { return }
+        UserDefaults.standard.set(true, forKey: encryptionPinKey(macId))
+    }
+
+    static func clearEncryptionPin(_ macId: String) {
+        guard !macId.isEmpty else { return }
+        UserDefaults.standard.removeObject(forKey: encryptionPinKey(macId))
+    }
+
     func connect() async {
         retryTask?.cancel()
         retryTask = nil
@@ -515,6 +536,8 @@ final class BridgeManager {
         let privateKeyBase64 = bridgeConfiguration.privateKey
         let serverPublicKeyBase64 = bridgeConfiguration.serverPublicKey
         let deviceClass = currentDeviceClass
+        let macId = bridgeConfiguration.id
+        let encryptionPinned = Self.isEncryptionPinned(macId)
 
         status = .connecting
         errorMessage = nil
@@ -529,6 +552,9 @@ final class BridgeManager {
                     privateKeyBase64: privateKeyBase64,
                     serverPublicKeyBase64: serverPublicKeyBase64
                 )
+                // Apply the per-Mac encryption pin so client.connect() refuses a
+                // plaintext downgrade if this Mac has used encryption before.
+                await client.setEncryptionRequired(encryptionPinned)
                 try await client.connect()
                 _ = try await client.companionState(
                     deviceId: configuredDeviceId,
@@ -545,6 +571,11 @@ final class BridgeManager {
             awaitingPairingApproval = false
             lastSuccessfulContactAt = .now
             updateActiveMacContactDate(.now)
+            // Pin encryption for this Mac the first time it negotiates a sealed
+            // connection — future connects then refuse a plaintext downgrade.
+            if await client.didNegotiateEncryption {
+                Self.pinEncryption(macId)
+            }
             status = .connected
             retryCount = 0
             startCompanionPolling()
@@ -689,6 +720,9 @@ final class BridgeManager {
         disconnect()
 
         privateKeyStore.delete(id: id)
+        // Drop the encryption pin so re-pairing this Mac on a trusted network
+        // can re-negotiate cleanly.
+        Self.clearEncryptionPin(id)
         configurationStore.update { configuration in
             configuration.bridge.pairedMacs.removeAll(where: { $0.id == id })
             if configuration.bridge.pairedMacs.isEmpty {
@@ -1685,6 +1719,8 @@ final class BridgeManager {
                 return "The Mac returned an invalid credential response."
             case .pairingRejected:
                 return "The Mac rejected this iPhone's pairing request."
+            case .encryptionDowngrade:
+                return "The Mac offered an unencrypted connection after previously using encryption. Refused for safety."
             }
         }
 

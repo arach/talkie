@@ -45,7 +45,10 @@ struct ComposeProviderCredentialStore {
     }
 
     func deleteAll() {
-        for account in [lastProviderAccount, account(for: "openai"), account(for: "groq")] {
+        // Cover every catalog provider — a hardcoded openai/groq pair used to
+        // leave Anthropic/OpenRouter keys behind in the Keychain on "clear".
+        let accounts = [lastProviderAccount] + AIProviderCatalog.ids.map { account(for: $0) }
+        for account in accounts {
             let query: [CFString: Any] = [
                 kSecClass: kSecClassGenericPassword,
                 kSecAttrService: service,

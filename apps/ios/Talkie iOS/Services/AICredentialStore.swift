@@ -39,7 +39,12 @@ final class AICredentialStore: ObservableObject {
 
         do {
             try set(legacyKey, for: "openai")
-            AppLogger.ai.info("Migrated legacy TTS OpenAI key into the Keychain")
+            // Wipe the plaintext copy now that the Keychain holds it. Safe only
+            // because the OpenAI TTS path resolves the key via the resolver
+            // (Keychain) — ElevenLabs keeps its own key in ttsApiKey, which is
+            // why the migration is gated on ttsProvider == "openai".
+            settings.ttsApiKey = ""
+            AppLogger.ai.info("Migrated legacy TTS OpenAI key into the Keychain and cleared plaintext copy")
         } catch {
             AppLogger.ai.warning(
                 "Legacy TTS key migration failed",
