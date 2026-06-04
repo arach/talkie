@@ -332,6 +332,12 @@ html, body {
   0%, 100% { opacity: 1; transform: scale(1); }
   50%      { opacity: 0.45; transform: scale(0.85); }
 }
+/* Text-edit caret blink — the memo detail editing state. */
+@keyframes memo-caret-blink {
+  0%, 49%   { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+.memo-caret { animation: memo-caret-blink 1.05s steps(1) infinite; }
 
 /* ──────────────────────────────────────────────────────────────────
  * Tape Transport — milled amber slider thumb for the tuning rack.

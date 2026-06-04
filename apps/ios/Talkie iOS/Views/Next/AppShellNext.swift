@@ -83,8 +83,10 @@ struct AppShellNext<Content: View>: View {
             // Ambient voice button — always visible, bottom-left. Pure
             // summon affordance now (tap = chrome, long-press = voice
             // command); recording moved to the always-visible MicFAB.
-            // Tucks away while the Compose keyboard is raised so it
-            // doesn't sit on the keyboard's bottom-left keys.
+            // Tucks away while the Compose keyboard is raised so it doesn't
+            // sit on the keyboard's bottom-left keys. On Compose with the
+            // keyboard down it stays put — the Compose tool row reserves a
+            // matching bottom-left gap so the summon sits cleanly in it.
             VoicePivotButton()
                 .opacity(router.isEditorKeyboardUp ? 0 : 1)
                 .allowsHitTesting(!router.isEditorKeyboardUp)

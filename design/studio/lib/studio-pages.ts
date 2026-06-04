@@ -408,6 +408,16 @@ export const STUDIO_PAGES: StudioPage[] = [
     status: "shipped",
   },
   {
+    href: "/ios-memo-connected",
+    label: "Memo · Connected",
+    bucket: "surfaces",
+    platform: "iphone",
+    family: "memo",
+    status: "concept",
+    swift: ["apps/ios/Talkie iOS/Views/Next/VoiceMemoDetailNext.swift"],
+    blurb: "Memo detail IA rebuild — audio bound to the transcript, action wall collapsed to hero + rail.",
+  },
+  {
     href: "/agent-bay",
     label: "Agent Bay",
     bucket: "surfaces",
