@@ -280,6 +280,19 @@ const app = new Elysia()
       log.warn(`Auth failed: ${authResult.error} for ${path}`);
       return authErrorResponse(authResult);
     }
+
+    // Per-device scope. A paired device may only act as ITSELF: if it carries a
+    // `deviceId` query param it must equal its HMAC-verified identity. Without
+    // this, a malicious paired device (authenticated as itself) could pass
+    // `?deviceId=<victim>` to read another device's companion state / scope
+    // (and over WS receive victim-scoped frames). Local-bearer callers (the
+    // macOS app) skip HMAC entirely and are unaffected — they may query any
+    // device. iOS always sends its own id, so honest clients are unaffected.
+    const claimedDeviceId = url.searchParams.get("deviceId");
+    if (claimedDeviceId && authResult.deviceId && claimedDeviceId !== authResult.deviceId) {
+      log.warn(`Device scope mismatch: ${authResult.deviceId} requested deviceId=${claimedDeviceId} on ${path}`);
+      return Response.json({ error: "Device scope mismatch" }, { status: 403 });
+    }
   })
 
   // Transport encryption (talkie-bridge v2): seal the response body for clients

@@ -98,6 +98,13 @@ export async function decryptRequestBody(request: Request): Promise<unknown | un
 export async function readJsonBody(request: Request): Promise<any> {
   const decrypted = await decryptRequestBody(request);
   if (decrypted !== undefined) return decrypted;
+  // If the client explicitly marked the body encrypted (X-Enc:2) but it did not
+  // decrypt, do NOT fall back to parsing the raw bytes. This runs AFTER HMAC
+  // auth, so rejecting here is safe (no pre-auth oracle) and prevents accepting
+  // a plaintext/malformed body for a request that claimed to be sealed.
+  if (isEncryptedRequest(request)) {
+    throw new Error("Encrypted body could not be decrypted");
+  }
   return await request.json();
 }
 
