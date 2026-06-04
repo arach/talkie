@@ -60,6 +60,7 @@ const LOCAL_MODE = args.includes("--local") || args.includes("-l");
 const NEARBY_MODE = args.includes("--nearby");
 const ALLOW_LAN = args.includes("--allow-lan") || process.env.TALKIE_SERVER_ALLOW_LAN === "1";
 const REQUIRE_APPROVAL = args.includes("--require-approval");
+const ALLOW_AUTO_APPROVE = args.includes("--auto-approve");
 type ServerMode = "pairing" | "nearby" | "local_dev";
 const SERVER_MODE: ServerMode = LOCAL_MODE ? "local_dev" : NEARBY_MODE ? "nearby" : "pairing";
 const SERVER_INSTANCE_ID = process.env.TALKIE_SERVER_INSTANCE_ID || "standalone";
@@ -322,10 +323,11 @@ async function main() {
   const bindAddress = LOCAL_MODE ? "127.0.0.1" : NEARBY_MODE ? "0.0.0.0" : await getTailscaleBindAddress();
   await initLocalAuthToken();
 
-  // Configure pairing approval mode
-  if (REQUIRE_APPROVAL) {
-    setAutoApprove(false);
-  }
+  // Pairing approval: manual approval is the safe default. Auto-approve only on
+  // a loopback bind (LOCAL_MODE) or with an explicit --auto-approve opt-in, and
+  // never when --require-approval is passed. This stops a LAN attacker in NEARBY
+  // mode (0.0.0.0) from self-pairing a fully trusted device with no user action.
+  setAutoApprove(!REQUIRE_APPROVAL && (LOCAL_MODE || ALLOW_AUTO_APPROVE));
 
   if (LOCAL_MODE) {
     log.info("Running in LOCAL mode (Tailscale check skipped)");

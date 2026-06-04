@@ -73,9 +73,14 @@ export async function decryptRequestBody(request: Request): Promise<unknown | un
     const plaintext = await openBytes(envelope.ciphertext, key);
     const text = new TextDecoder().decode(plaintext);
     return text.length ? JSON.parse(text) : {};
-  } catch (err) {
-    log.warn(`Transport decrypt failed: ${String(err)}`);
-    throw new Error("Decryption failed");
+  } catch {
+    // Do NOT throw. onParse runs BEFORE the HMAC auth hook, so a thrown 500
+    // here would hand an unauthenticated LAN attacker a 500-vs-401 oracle on
+    // GCM validity. Return undefined and let the auth layer reject the request
+    // with a uniform 401 — a forger without the device key cannot produce a
+    // valid signature anyway, so no legitimately-decryptable body is lost.
+    log.warn("Transport decrypt failed (deferring to auth layer)");
+    return undefined;
   }
 }
 

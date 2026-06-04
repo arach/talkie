@@ -125,12 +125,12 @@ function attachSettingsWatcher(ws: CompanionEventsSocket) {
     });
 
     watcher.on("error", (error) => {
-      log.warning(`Companion events settings watcher failed: ${error}`);
+      log.warn(`Companion events settings watcher failed: ${error}`);
     });
 
     state.settingsWatcher = watcher;
   } catch (error) {
-    log.warning(`Companion events could not watch settings: ${error}`);
+    log.warn(`Companion events could not watch settings: ${error}`);
   }
 }
 
@@ -170,12 +170,12 @@ function attachRuntimeWatchers(ws: CompanionEventsSocket) {
       });
 
       watcher.on("error", (error) => {
-        log.warning(`Companion events runtime watcher failed: ${error}`);
+        log.warn(`Companion events runtime watcher failed: ${error}`);
       });
 
       state.runtimeWatchers.push(watcher);
     } catch (error) {
-      log.warning(`Companion events could not watch runtime signals: ${error}`);
+      log.warn(`Companion events could not watch runtime signals: ${error}`);
     }
   }
 }
@@ -259,7 +259,7 @@ async function publishSnapshot(ws: CompanionEventsSocket, reason: string) {
 
     scheduleNextPoll(ws, snapshot);
   } catch (error) {
-    log.warning(`Companion events snapshot failed: ${error}`);
+    log.warn(`Companion events snapshot failed: ${error}`);
     sendEnvelope(ws, {
       type: "companion:error",
       error: error instanceof Error ? error.message : String(error),
@@ -284,7 +284,7 @@ function sendEnvelope(ws: CompanionEventsSocket, payload: CompanionEventEnvelope
   try {
     ws.send(JSON.stringify(payload));
   } catch (error) {
-    log.warning(`Companion events send failed: ${error}`);
+    log.warn(`Companion events send failed: ${error}`);
     teardownSocket(ws);
 
     try {

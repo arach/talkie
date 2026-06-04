@@ -82,12 +82,24 @@ export class NonceStore {
     // Time-based cleanup
     if (now - this.lastCleanup > this.cleanupIntervalMs) {
       this.cleanup(now);
-      return;
     }
 
-    // Size-based cleanup (emergency)
+    // Size-based hard cap. Removing only EXPIRED entries is not enough — under a
+    // flood of fresh, unexpired nonces the map would still grow without bound,
+    // so once we are still over capacity after expiry-pruning we evict the
+    // OLDEST entries (Map preserves insertion order) down to the cap. This
+    // bounds memory against a nonce-flooding DoS.
     if (this.seen.size > this.maxSize) {
       this.cleanup(now);
+      if (this.seen.size > this.maxSize) {
+        const overflow = this.seen.size - this.maxSize;
+        let removed = 0;
+        for (const nonce of this.seen.keys()) {
+          if (removed >= overflow) break;
+          this.seen.delete(nonce);
+          removed++;
+        }
+      }
     }
   }
 

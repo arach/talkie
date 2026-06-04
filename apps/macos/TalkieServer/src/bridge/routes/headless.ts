@@ -383,8 +383,10 @@ export async function headlessRoute(body: HeadlessRequest, request?: Request): P
   await ensureCodexProfile(policy);
   const executable = resolveCodexExecutable();
 
+  // Never log the prompt or the absolute workspace path — both are sensitive
+  // user content that would land in bridge.log (adversary C).
   log.info(
-    `Headless Codex: sessionId=${sessionId || "(new)"}, workspace=${workingDir}, sandbox=${policy.sandbox}, message=${message.slice(0, 100)}...`
+    `Headless Codex: sessionId=${sessionId || "(new)"}, sandbox=${policy.sandbox}, ${message.length} chars`
   );
 
   const args = codexArgsForRequest(message, workingDir, policy, sessionId);
@@ -529,7 +531,7 @@ export async function headlessRoute(body: HeadlessRequest, request?: Request): P
     const result = parseCodexOutput(stdout);
 
     if (result.interrupted) {
-      log.warning("Headless Codex request was interrupted before completion");
+      log.warn("Headless Codex request was interrupted before completion");
       return Response.json({
         success: false,
         error: "Codex request was interrupted before it completed.",

@@ -53,12 +53,15 @@ async function loadKeyPair(): Promise<KeyPair | null> {
  * Save key pair to disk
  */
 async function saveKeyPair(keyPair: KeyPair): Promise<void> {
-  // Ensure directory exists
-  const { mkdir } = await import("node:fs/promises");
-  await mkdir(KEYS_DIR, { recursive: true });
+  // Ensure directory exists (0700: owner-only, matches ensureDirectories)
+  const { mkdir, chmod } = await import("node:fs/promises");
+  await mkdir(KEYS_DIR, { recursive: true, mode: 0o700 });
 
-  // Write keys file
+  // Write keys file, then lock it to owner read/write only. The server private
+  // key derives every paired device's auth + encryption key, so it must never
+  // be group/other readable (defense-in-depth atop the 0700 parent dir).
   await Bun.write(KEYPAIR_FILE, JSON.stringify(keyPair, null, 2));
+  await chmod(KEYPAIR_FILE, 0o600);
 }
 
 /**

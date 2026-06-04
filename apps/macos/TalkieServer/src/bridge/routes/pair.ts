@@ -15,6 +15,7 @@ import {
   rejectPairing,
   getPendingPairings,
   isDevicePaired,
+  getDevices,
 } from "../../devices/registry";
 import { log } from "../../log";
 import { createSecurityEvent } from "../../security/events";
@@ -68,8 +69,11 @@ export interface PairRejectResponse {
 
 // ===== Handlers =====
 
-// Auto-approve setting (can be disabled via --require-approval flag)
-let autoApproveEnabled = true;
+// Auto-approve setting. Default OFF (safe): a device that POSTs /pair must be
+// explicitly approved on the Mac. server.ts only re-enables it for LOCAL_MODE
+// (127.0.0.1 bind) or an explicit --auto-approve flag, so a LAN attacker in
+// NEARBY mode (0.0.0.0) can never self-pair a trusted device without a tap.
+let autoApproveEnabled = false;
 
 export function setAutoApprove(enabled: boolean): void {
   autoApproveEnabled = enabled;
@@ -85,9 +89,16 @@ export function isAutoApproveEnabled(): boolean {
  * iOS device requests pairing
  */
 export async function pairRoute(body: PairRequest): Promise<PairResponse> {
-  const alreadyPaired = await isDevicePaired(body.deviceId);
+  const devices = await getDevices();
+  const existing = devices.find((d) => d.id === body.deviceId);
+  const alreadyPaired = existing !== undefined;
+  // A re-pair that ROTATES the public key is a trust change (an attacker who
+  // learned a victim's deviceId trying to overwrite its key). Never silently
+  // auto-approve a key rotation — force explicit Mac approval even in auto mode.
+  const keyRotated = alreadyPaired && existing!.publicKey !== body.publicKey;
+
   if (alreadyPaired) {
-    log.info(`Re-pairing request from: ${body.name} (${body.deviceId})`);
+    log.info(`Re-pairing request from: ${body.name} (${body.deviceId})${keyRotated ? " [key rotation — approval required]" : ""}`);
   } else {
     log.info(`Pairing request from: ${body.name} (${body.deviceId})`);
   }
@@ -105,8 +116,8 @@ export async function pairRoute(body: PairRequest): Promise<PairResponse> {
   // Add to pending pairings
   addPendingPairing(body.deviceId, body.name, body.publicKey);
 
-  // Auto-approve if enabled
-  if (autoApproveEnabled) {
+  // Auto-approve if enabled — but never for a key rotation (see keyRotated).
+  if (autoApproveEnabled && !keyRotated) {
     const device = await approvePairing(body.deviceId);
     if (device) {
       log.info(`${alreadyPaired ? "Auto-updated" : "Auto-approved"} device: ${device.name}`);
