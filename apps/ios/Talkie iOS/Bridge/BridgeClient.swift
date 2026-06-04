@@ -35,10 +35,20 @@ actor BridgeClient {
         encryptionRequired = required
     }
 
+    /// Per-frame stream encryption (SSE/WS), negotiated from /health.encStream.
+    private var serverSupportsStreamEncryption = false
+
     /// Whether outgoing traffic should be sealed: we hold the derived key and
     /// either the server advertised support this session or it's pinned-required.
     private var shouldEncrypt: Bool {
         encryptionKey != nil && (serverSupportsEncryption || encryptionRequired)
+    }
+
+    /// Whether stream frames should be sealed/opened — gated on the server
+    /// advertising per-frame stream support. Old servers → plaintext streams,
+    /// unchanged (fully backward compatible).
+    private var shouldEncryptStreams: Bool {
+        encryptionKey != nil && serverSupportsStreamEncryption
     }
 
     // MARK: - Configuration
@@ -70,6 +80,7 @@ actor BridgeClient {
         self.baseURL = nil
         self.clockOffset = 0
         self.serverSupportsEncryption = false
+        self.serverSupportsStreamEncryption = false
         self.encryptionRequired = false
     }
 
@@ -92,6 +103,7 @@ actor BridgeClient {
         let health = try await healthUnauthenticated()
         // Negotiate transport encryption: only seal traffic if the server advertises it.
         serverSupportsEncryption = (health.enc == true)
+        serverSupportsStreamEncryption = (health.encStream == true)
         // Downgrade guard: if this Mac is pinned to encryption but the (plaintext,
         // unauthenticated) /health no longer advertises it, refuse — a network
         // attacker may have stripped the flag to force cleartext.
@@ -434,6 +446,14 @@ actor BridgeClient {
         request.timeoutInterval = 120
         request.httpBody = try JSONEncoder().encode(body)
 
+        // Opt into per-frame response-stream encryption when the server
+        // advertises it. Dedicated header — the request body itself stays
+        // plaintext here (only the agent's streamed reply is sealed).
+        let encryptStream = shouldEncryptStreams
+        if encryptStream {
+            request.setValue("2", forHTTPHeaderField: "X-Enc-Stream")
+        }
+
         signRequest(&request)
 
         let (bytes, response) = try await URLSession.shared.bytes(for: request)
@@ -448,9 +468,21 @@ actor BridgeClient {
 
         for try await line in bytes.lines {
             guard line.hasPrefix("data: ") else { continue }
-            let payload = String(line.dropFirst(6))
+            var payload = String(line.dropFirst(6))
 
             if payload == "[DONE]" { break }
+
+            // On an encrypted stream every non-[DONE] frame is a sealed envelope;
+            // open it back to the original JSON. Fail closed if a frame can't be
+            // opened — we never silently accept a plaintext frame here.
+            if encryptStream {
+                guard let envelopeData = payload.data(using: .utf8),
+                      let opened = try? open(envelopeData),
+                      let openedString = String(data: opened, encoding: .utf8) else {
+                    throw BridgeError.invalidResponse
+                }
+                payload = openedString
+            }
 
             guard let jsonData = payload.data(using: .utf8),
                   let chunk = try? JSONDecoder().decode(SSEChunk.self, from: jsonData) else {
@@ -771,6 +803,7 @@ struct HealthResponse: Codable {
     let port: Int
     let time: Int?  // Unix epoch seconds for clock sync
     let enc: Bool?  // Server advertises transport encryption (talkie-bridge v2)
+    let encStream: Bool?  // Server advertises per-frame stream encryption (SSE/WS)
 }
 
 /// Sealed request/response body for talkie-bridge v2 transport encryption.

@@ -270,7 +270,7 @@ export const bridge = new Elysia({ name: "bridge" })
   // ===== Headless =====
   .post("/headless", async ({ request }) => {
     const body = await request.json();
-    return headlessRoute(body);
+    return headlessRoute(body, request);
   })
   .get("/headless/status", () => headlessStatusRoute())
 

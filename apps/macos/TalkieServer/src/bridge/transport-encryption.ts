@@ -79,6 +79,28 @@ export async function decryptRequestBody(request: Request): Promise<unknown | un
   }
 }
 
+/**
+ * For a request that opted into stream encryption (`X-Enc: 2`), return a sealer
+ * that wraps one stream frame (e.g. a single SSE `data:` payload) into the v2
+ * envelope `{ enc, ciphertext }` — each frame gets its own GCM nonce. Returns
+ * `null` for un-opted-in / un-keyed requests so the caller streams plaintext
+ * exactly as before (backward compatible).
+ */
+export async function prepareStreamSealer(
+  request: Request
+): Promise<((plaintext: string) => Promise<string>) | null> {
+  // Dedicated header so this is independent of request-body encryption (X-Enc):
+  // the client can ask for sealed response frames without sealing its request.
+  if (request.headers.get("x-enc-stream") !== ENC_VERSION) return null;
+  const key = await deviceKey(request);
+  if (!key) return null;
+  return async (plaintext: string): Promise<string> => {
+    const ciphertext = await sealBytes(new TextEncoder().encode(plaintext), key);
+    const envelope: Envelope = { enc: 2, ciphertext };
+    return JSON.stringify(envelope);
+  };
+}
+
 /** Serialize a handler response into raw bytes + the status code to preserve. */
 async function responseToBytes(
   response: unknown,
@@ -109,6 +131,13 @@ export async function encryptResponse(
   fallbackStatus: number
 ): Promise<Response | undefined> {
   if (!isEncryptedRequest(request)) return undefined;
+
+  // Never buffer-and-seal a streaming response — that would defeat streaming.
+  // SSE/WS streams are sealed per-frame at the route (see prepareStreamSealer).
+  if (response instanceof Response) {
+    const contentType = response.headers.get("content-type") ?? "";
+    if (contentType.startsWith("text/event-stream")) return undefined;
+  }
 
   const key = await deviceKey(request);
   if (!key) return undefined;
