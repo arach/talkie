@@ -106,6 +106,12 @@ struct PersistenceController {
             if let description = localContainer.persistentStoreDescriptions.first {
                 if inMemory {
                     description.url = URL(fileURLWithPath: "/dev/null")
+                } else {
+                    // Protect transcripts/audio at rest on the local store too.
+                    description.setOption(
+                        FileProtectionType.completeUntilFirstUserAuthentication as NSObject,
+                        forKey: NSPersistentStoreFileProtectionKey
+                    )
                 }
                 description.setOption(true as NSNumber, forKey: NSMigratePersistentStoresAutomaticallyOption)
                 description.setOption(true as NSNumber, forKey: NSInferMappingModelAutomaticallyOption)
@@ -130,6 +136,13 @@ struct PersistenceController {
                 description.setOption(true as NSNumber, forKey: NSInferMappingModelAutomaticallyOption)
                 description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
                 description.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
+                // Protect transcripts/audio metadata at rest. `untilFirstUserAuthentication`
+                // keeps the store readable for CloudKit sync + background work after first
+                // unlock while still encrypting it on a powered-off / never-unlocked device.
+                description.setOption(
+                    FileProtectionType.completeUntilFirstUserAuthentication as NSObject,
+                    forKey: NSPersistentStoreFileProtectionKey
+                )
                 AppLogger.persistence.info("Core Data using CloudKit store: \(containerIdentifier)")
             }
             container = cloudContainer

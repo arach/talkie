@@ -506,6 +506,8 @@ struct TerminalNext: View {
                 return "This iPhone is not approved by the Mac."
             case .messageFailed(let reason):
                 return reason
+            case .encryptionDowngrade:
+                return "The Mac offered an unencrypted connection after previously using encryption. Refused for safety — reconnect on a trusted network."
             }
         }
 

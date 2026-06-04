@@ -149,6 +149,12 @@ async function bridgeFetch<T>(
   const port = options.port ?? BRIDGE_PORT;
   const method = options.method ?? "GET";
   const errors: string[] = [];
+  // Mac-local management routes (/devices, /pair/pending, /pair/:id/approve,
+  // /pair/:id/reject) now require the local bearer token. Attach it when
+  // present; the server's bootstrap/health routes ignore it, so this is safe
+  // for every call. null token (file absent) => header omitted, prior behavior.
+  const token = readLocalAuthToken();
+  const authHeaders = token ? { Authorization: `Bearer ${token}` } : undefined;
 
   for (const host of bridgeCandidates(options.host)) {
     const url = `http://${host}:${port}${normalizedPath}`;
@@ -156,7 +162,7 @@ async function bridgeFetch<T>(
     const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 2500);
 
     try {
-      const response = await fetch(url, { method, signal: controller.signal });
+      const response = await fetch(url, { method, headers: authHeaders, signal: controller.signal });
       clearTimeout(timer);
 
       if (!response.ok) {

@@ -15,18 +15,41 @@ final class AICredentialStore: ObservableObject {
 
     @Published private(set) var setProviderIDs: Set<String>
 
-    private static let knownProviderIDs: Set<String> = [
-        "openai",
-        "anthropic",
-        "groq",
-        "openrouter"
-    ]
+    private static var knownProviderIDs: Set<String> { AIProviderCatalog.ids }
 
     private let account = "api-key"
 
     private init() {
         setProviderIDs = Self.knownProviderIDs.filter { providerID in
             Self.storedKey(for: providerID) != nil
+        }
+    }
+
+    /// One-time migration: the OpenAI key used to live in plaintext app config
+    /// (`TalkieAppSettings.ttsApiKey`). Lift it into the Keychain so it surfaces
+    /// in AI Keys and resolves like every other provider. No-op once an OpenAI
+    /// key already exists in the Keychain.
+    func migrateLegacyTTSKeyIfNeeded() {
+        guard key(for: "openai") == nil else { return }
+
+        let settings = TalkieAppSettings.shared
+        let legacyKey = settings.ttsApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard settings.ttsProvider == "openai",
+              AIProviderCatalog.isValidKeyFormat(legacyKey, providerId: "openai") else { return }
+
+        do {
+            try set(legacyKey, for: "openai")
+            // Wipe the plaintext copy now that the Keychain holds it. Safe only
+            // because the OpenAI TTS path resolves the key via the resolver
+            // (Keychain) — ElevenLabs keeps its own key in ttsApiKey, which is
+            // why the migration is gated on ttsProvider == "openai".
+            settings.ttsApiKey = ""
+            AppLogger.ai.info("Migrated legacy TTS OpenAI key into the Keychain and cleared plaintext copy")
+        } catch {
+            AppLogger.ai.warning(
+                "Legacy TTS key migration failed",
+                detail: error.localizedDescription
+            )
         }
     }
 

@@ -266,7 +266,9 @@ final class TalkieAppSettings {
         defaults.set(configuration.bridge.deviceId, forKey: "bridge.deviceId")
         defaults.set(activeBridge?.pairedMacName ?? "", forKey: "bridge.pairedMacName")
         defaults.set(activeBridge?.serverPublicKey ?? "", forKey: "bridge.serverPublicKey")
-        defaults.set(activeBridge?.privateKey ?? "", forKey: "bridge.privateKey")
+        // The bridge private key lives only in the keychain (BridgePrivateKeyStore);
+        // never mirror it back into UserDefaults. Clear any legacy plaintext copy.
+        defaults.removeObject(forKey: "bridge.privateKey")
     }
 
     private func synchronizeKeyboardModeOverrides(_ overrides: [String: [String: SlotConfig]]) {

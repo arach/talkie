@@ -83,7 +83,12 @@ struct AppShellNext<Content: View>: View {
             // Ambient voice button — always visible, bottom-left. Pure
             // summon affordance now (tap = chrome, long-press = voice
             // command); recording moved to the always-visible MicFAB.
+            // Tucks away while the Compose keyboard is raised so it
+            // doesn't sit on the keyboard's bottom-left keys.
             VoicePivotButton()
+                .opacity(router.isEditorKeyboardUp ? 0 : 1)
+                .allowsHitTesting(!router.isEditorKeyboardUp)
+                .animation(.easeOut(duration: 0.2), value: router.isEditorKeyboardUp)
         }
         .environmentObject(chrome)
         .environmentObject(router)
@@ -142,6 +147,11 @@ struct AppShellNext<Content: View>: View {
             deepLinkManager.clearAction()
         case .processShare(let id):
             SharedCaptureIngress.processQueuedShare(id: id, onCapture: saveAndOpenCapture)
+            deepLinkManager.clearAction()
+        case .keyboardView:
+            // talkie://keyboard → open a fresh Compose doc with the Talkie
+            // keyboard already raised.
+            router.openComposeWithKeyboard()
             deepLinkManager.clearAction()
         default:
             break
@@ -385,6 +395,10 @@ final class AppShellRouter: ObservableObject {
     /// editor on appear (popping the embedded Talkie keyboard).
     /// ComposeNextView consumes + clears this on appear.
     @Published var pendingComposeFocus: Bool = false
+    /// True while Compose has the Talkie keyboard raised. The global
+    /// bottom-left summon hides itself when this is set so it doesn't
+    /// collide with the keyboard's bottom-left keys.
+    @Published var isEditorKeyboardUp: Bool = false
     @Published var transitionDirection: TransitionDirection = .forward
 
     private init() {

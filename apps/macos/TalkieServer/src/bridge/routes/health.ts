@@ -16,6 +16,8 @@ export interface HealthResponse {
   instanceId: string;
   time: number;      // Unix epoch seconds
   timestamp: string; // ISO 8601
+  enc: boolean;      // Transport encryption supported (talkie-bridge v2)
+  encStream: boolean; // Per-frame stream encryption supported (SSE/WS, v2)
 }
 
 // ===== Handlers =====
@@ -40,5 +42,9 @@ export function healthRoute(
     instanceId,
     time: Math.floor(Date.now() / 1000),
     timestamp: new Date().toISOString(),
+    enc: true,
+    // Per-frame stream encryption is currently wired for the headless SSE
+    // stream only; WebSocket streams (screen, companion events) follow.
+    encStream: true,
   };
 }

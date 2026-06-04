@@ -106,7 +106,7 @@ export async function ingestRoute(
 
     log.info(
       `Ingested ${body.sourceType} content from ${deviceId ?? "unknown"}: ` +
-      `${objectId} (${body.text.length} chars, title: "${manifest.title}")`
+      `${objectId} (${body.text.length} chars)`
     );
 
     return {

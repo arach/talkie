@@ -7,6 +7,9 @@ import {
   resolveSettingsFilePath,
   type CompanionStateResponse,
 } from "./companion";
+import { prepareWsFrameSealer } from "../transport-encryption";
+
+type FrameSealer = (plaintext: string) => Promise<string>;
 
 type CompanionEventsSocket = {
   send(payload: string): void;
@@ -28,6 +31,9 @@ type SocketState = {
   refreshTimer?: ReturnType<typeof setTimeout>;
   settingsWatcher?: FSWatcher;
   runtimeWatchers: FSWatcher[];
+  // Per-frame sealer (null = cleartext) resolved once on open from the upgrade
+  // query, so companion snapshots aren't readable by a passive LAN sniffer.
+  sealer?: FrameSealer | null;
 };
 
 type CompanionEventEnvelope = {
@@ -46,15 +52,16 @@ const RUNTIME_REFRESH_DEBOUNCE_MS = 40;
 const socketStateByKey = new WeakMap<object, SocketState>();
 
 export const companionEventsSocket = {
-  open(ws: CompanionEventsSocket) {
+  async open(ws: CompanionEventsSocket) {
     const socketKey = rawSocketKey(ws);
-    socketStateByKey.set(socketKey, { inflight: false, runtimeWatchers: [] });
+    const sealer = await prepareWsFrameSealer(socketQuery(ws));
+    socketStateByKey.set(socketKey, { inflight: false, runtimeWatchers: [], sealer });
     attachSettingsWatcher(ws);
     attachRuntimeWatchers(ws);
     void publishSnapshot(ws, "initial");
   },
 
-  message(ws: CompanionEventsSocket, rawMessage: unknown) {
+  async message(ws: CompanionEventsSocket, rawMessage: unknown) {
     let message: { type?: string } | null = null;
 
     try {
@@ -66,7 +73,7 @@ export const companionEventsSocket = {
         message = rawMessage as { type?: string };
       }
     } catch {
-      sendEnvelope(ws, {
+      await sendEnvelope(ws, {
         type: "companion:error",
         error: "Invalid companion event message",
       });
@@ -87,8 +94,12 @@ function rawSocketKey(ws: CompanionEventsSocket): object {
   return ws.raw ?? ws;
 }
 
+function socketQuery(ws: CompanionEventsSocket): Record<string, string | undefined> {
+  return ((ws as any).data?.query ?? {}) as Record<string, string | undefined>;
+}
+
 function subscriptionOptions(ws: CompanionEventsSocket): CompanionSubscriptionOptions {
-  const query = ((ws as any).data?.query ?? {}) as Record<string, string | undefined>;
+  const query = socketQuery(ws);
   const deviceId = typeof query.deviceId === "string" && query.deviceId.trim().length > 0
     ? query.deviceId.trim()
     : undefined;
@@ -125,12 +136,12 @@ function attachSettingsWatcher(ws: CompanionEventsSocket) {
     });
 
     watcher.on("error", (error) => {
-      log.warning(`Companion events settings watcher failed: ${error}`);
+      log.warn(`Companion events settings watcher failed: ${error}`);
     });
 
     state.settingsWatcher = watcher;
   } catch (error) {
-    log.warning(`Companion events could not watch settings: ${error}`);
+    log.warn(`Companion events could not watch settings: ${error}`);
   }
 }
 
@@ -170,12 +181,12 @@ function attachRuntimeWatchers(ws: CompanionEventsSocket) {
       });
 
       watcher.on("error", (error) => {
-        log.warning(`Companion events runtime watcher failed: ${error}`);
+        log.warn(`Companion events runtime watcher failed: ${error}`);
       });
 
       state.runtimeWatchers.push(watcher);
     } catch (error) {
-      log.warning(`Companion events could not watch runtime signals: ${error}`);
+      log.warn(`Companion events could not watch runtime signals: ${error}`);
     }
   }
 }
@@ -250,7 +261,7 @@ async function publishSnapshot(ws: CompanionEventsSocket, reason: string) {
 
     if (isInitial || state.lastSerializedState !== serializedSnapshot || reason === "requested") {
       state.lastSerializedState = serializedSnapshot;
-      sendEnvelope(ws, {
+      await sendEnvelope(ws, {
         type: isInitial ? "companion:ready" : "companion:update",
         snapshot,
         reason,
@@ -259,8 +270,8 @@ async function publishSnapshot(ws: CompanionEventsSocket, reason: string) {
 
     scheduleNextPoll(ws, snapshot);
   } catch (error) {
-    log.warning(`Companion events snapshot failed: ${error}`);
-    sendEnvelope(ws, {
+    log.warn(`Companion events snapshot failed: ${error}`);
+    await sendEnvelope(ws, {
       type: "companion:error",
       error: error instanceof Error ? error.message : String(error),
       reason,
@@ -280,11 +291,13 @@ async function publishSnapshot(ws: CompanionEventsSocket, reason: string) {
   }
 }
 
-function sendEnvelope(ws: CompanionEventsSocket, payload: CompanionEventEnvelope) {
+async function sendEnvelope(ws: CompanionEventsSocket, payload: CompanionEventEnvelope) {
   try {
-    ws.send(JSON.stringify(payload));
+    const text = JSON.stringify(payload);
+    const sealer = socketStateByKey.get(rawSocketKey(ws))?.sealer;
+    ws.send(sealer ? await sealer(text) : text);
   } catch (error) {
-    log.warning(`Companion events send failed: ${error}`);
+    log.warn(`Companion events send failed: ${error}`);
     teardownSocket(ws);
 
     try {

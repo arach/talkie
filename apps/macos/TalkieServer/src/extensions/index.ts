@@ -280,9 +280,38 @@ function statusRoute(): {
 
 // ===== Elysia Plugin =====
 
+/**
+ * The extensions WS auth token (and connection status) is for LOCAL UI display
+ * only — the Mac app fetches it from http://localhost:8765. The whole
+ * /extensions prefix is exempt from HMAC auth (the WS does its own token
+ * handshake), so without this gate a LAN attacker (NEARBY mode binds 0.0.0.0)
+ * could lift the token and drive the extension WS (clipboard read, LLM calls).
+ * Gate token/status to a loopback peer. A null peer IP (unix socket / agent)
+ * is treated as local; only a concrete non-loopback address is rejected.
+ */
+function isLoopbackPeer(server: unknown, request: Request): boolean {
+  try {
+    const ip = (server as { requestIP?: (req: Request) => { address?: string } | null } | undefined)
+      ?.requestIP?.(request)?.address;
+    if (!ip) return true;
+    return ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
+  } catch {
+    return true;
+  }
+}
+
+const FORBIDDEN_REMOTE = new Response(
+  JSON.stringify({ error: "Forbidden - loopback only" }),
+  { status: 403, headers: { "Content-Type": "application/json" } }
+);
+
 export const extensions = new Elysia({ name: "extensions" })
   // HTTP routes with explicit CORS headers for local development
-  .get("/extensions/token", ({ request }) => {
+  .get("/extensions/token", ({ request, server }) => {
+    if (!isLoopbackPeer(server, request)) {
+      log.warn("Extensions: rejected non-loopback /extensions/token request");
+      return FORBIDDEN_REMOTE;
+    }
     const origin = request.headers.get("origin");
     const body = JSON.stringify(tokenRoute());
     return new Response(body, {
@@ -292,7 +321,11 @@ export const extensions = new Elysia({ name: "extensions" })
       },
     });
   })
-  .get("/extensions/status", ({ request }) => {
+  .get("/extensions/status", ({ request, server }) => {
+    if (!isLoopbackPeer(server, request)) {
+      log.warn("Extensions: rejected non-loopback /extensions/status request");
+      return FORBIDDEN_REMOTE;
+    }
     const origin = request.headers.get("origin");
     const body = JSON.stringify(statusRoute());
     return new Response(body, {

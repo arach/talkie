@@ -95,6 +95,38 @@ export async function decryptJson<T = unknown>(
   return JSON.parse(plaintext) as T;
 }
 
+/**
+ * Seal raw bytes into a base64 envelope payload (nonce | ciphertext | tag).
+ * Used for transport encryption where the plaintext may be binary (e.g. JPEG).
+ */
+export async function sealBytes(data: Uint8Array, sharedKey: CryptoKey): Promise<string> {
+  const nonce = crypto.getRandomValues(new Uint8Array(NONCE_LENGTH));
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv: nonce },
+    sharedKey,
+    data
+  );
+  const combined = new Uint8Array(NONCE_LENGTH + ciphertext.byteLength);
+  combined.set(nonce, 0);
+  combined.set(new Uint8Array(ciphertext), NONCE_LENGTH);
+  return bufferToBase64(combined.buffer);
+}
+
+/**
+ * Open a base64 envelope payload (nonce | ciphertext | tag) back into raw bytes.
+ */
+export async function openBytes(ciphertextBase64: string, sharedKey: CryptoKey): Promise<Uint8Array> {
+  const combined = new Uint8Array(base64ToBuffer(ciphertextBase64));
+  const nonce = combined.slice(0, NONCE_LENGTH);
+  const ciphertext = combined.slice(NONCE_LENGTH);
+  const plaintext = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: nonce },
+    sharedKey,
+    ciphertext
+  );
+  return new Uint8Array(plaintext);
+}
+
 // Helper functions
 function bufferToBase64(buffer: ArrayBuffer): string {
   return btoa(String.fromCharCode(...new Uint8Array(buffer)));

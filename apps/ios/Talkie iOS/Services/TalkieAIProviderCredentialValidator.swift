@@ -21,11 +21,27 @@ struct TalkieAIProviderCredentialValidator {
             throw TalkieAIProviderCredentialValidationError.providerValidationDisabled
         }
 
-        let url = try validationURL(for: payload.providerId)
-        var request = URLRequest(url: url, timeoutInterval: 12)
+        guard let entry = AIProviderCatalog.provider(payload.providerId) else {
+            throw TalkieAIProviderCredentialValidationError.unsupportedProvider(
+                TalkieAIProviderCredentialPayload.displayName(for: payload.providerId)
+            )
+        }
+
+        var request = URLRequest(url: entry.validationURL, timeoutInterval: 12)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("Bearer \(payload.apiKey)", forHTTPHeaderField: "Authorization")
+        // Auth header shape varies: Anthropic wants x-api-key + a version
+        // header; the OpenAI-compatible providers want a Bearer token.
+        switch entry.apiStyle {
+        case .anthropic:
+            request.setValue(payload.apiKey, forHTTPHeaderField: "x-api-key")
+            request.setValue(AIProviderCatalog.anthropicVersion, forHTTPHeaderField: "anthropic-version")
+        case .openAICompatible:
+            request.setValue("Bearer \(payload.apiKey)", forHTTPHeaderField: "Authorization")
+        }
+        for (field, value) in entry.extraHeaders {
+            request.setValue(value, forHTTPHeaderField: field)
+        }
 
         AppLogger.ai.info(
             "Validating imported AI credentials",
@@ -61,25 +77,6 @@ struct TalkieAIProviderCredentialValidator {
                 providerName: payload.providerName,
                 statusCode: httpResponse.statusCode,
                 message: message
-            )
-        }
-    }
-
-    private func validationURL(for providerId: String) throws -> URL {
-        switch providerId {
-        case "openai":
-            guard let url = URL(string: "https://api.openai.com/v1/models") else {
-                throw TalkieAIProviderCredentialValidationError.invalidResponse("OpenAI")
-            }
-            return url
-        case "groq":
-            guard let url = URL(string: "https://api.groq.com/openai/v1/models") else {
-                throw TalkieAIProviderCredentialValidationError.invalidResponse("Groq")
-            }
-            return url
-        default:
-            throw TalkieAIProviderCredentialValidationError.unsupportedProvider(
-                TalkieAIProviderCredentialPayload.displayName(for: providerId)
             )
         }
     }

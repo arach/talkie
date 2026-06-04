@@ -21,6 +21,7 @@
 
 import { Elysia, t } from "elysia";
 
+import { readJsonBody } from "./transport-encryption";
 import { healthRoute } from "./routes/health";
 import { pathsRoute, sessionsRoute, sessionMessagesRoute } from "./routes/sessions";
 import { sessionMetadataRoute, sessionEntryRoute } from "./routes/metadata";
@@ -209,7 +210,7 @@ export const bridge = new Elysia({ name: "bridge" })
   })
   .post("/sessions/:id/message", async ({ params, request }) => {
     // Parse body manually to avoid Elysia consuming the stream
-    const body = await request.json();
+    const body = await readJsonBody(request);
     return sendMessageRoute(params.id, body);
   }, {
     params: t.Object({
@@ -219,7 +220,7 @@ export const bridge = new Elysia({ name: "bridge" })
   .post("/memos/:memoId/attachments", async ({ params, request }) => {
     // Parse body manually to avoid consuming the request stream before HMAC
     // verification has a chance to hash it.
-    const body = await request.json();
+    const body = await readJsonBody(request);
     return memoAttachmentsUploadRoute(
       params.memoId,
       body,
@@ -231,7 +232,7 @@ export const bridge = new Elysia({ name: "bridge" })
     }),
   })
   .post("/debug/hyper-scan", async ({ request }) => {
-    const body = await request.json();
+    const body = await readJsonBody(request);
     return hyperScanUploadRoute(
       body,
       request.headers.get("X-Device-ID")
@@ -240,49 +241,49 @@ export const bridge = new Elysia({ name: "bridge" })
   .post("/compose/revision", async ({ request }) => {
     // Parse body manually to avoid consuming the request stream before HMAC
     // verification has a chance to hash it.
-    const body = await request.json();
+    const body = await readJsonBody(request);
     return composeRevisionRoute(body);
   })
   .post("/compose/command", async ({ request }) => {
-    const body = await request.json();
+    const body = await readJsonBody(request);
     return composeCommandRoute(body);
   })
   .post("/compose/options", () => {
     return composeDirectOptionsRoute();
   })
   .post("/compose/provider", async ({ request }) => {
-    const body = await request.json();
+    const body = await readJsonBody(request);
     return composeBorrowedProviderRoute(request.headers.get("X-Device-ID"), body);
   })
 
   // ===== Content Ingestion =====
   .post("/ingest", async ({ request }) => {
-    const body = await request.json();
+    const body = await readJsonBody(request);
     return ingestRoute(body, request.headers.get("X-Device-ID"));
   })
 
   // ===== Text-to-Speech =====
   .post("/tts", async ({ request }) => {
-    const body = await request.json();
+    const body = await readJsonBody(request);
     return ttsRoute(body);
   })
 
   // ===== Headless =====
   .post("/headless", async ({ request }) => {
-    const body = await request.json();
-    return headlessRoute(body);
+    const body = await readJsonBody(request);
+    return headlessRoute(body, request);
   })
   .get("/headless/status", () => headlessStatusRoute())
 
   // ===== Remote CLI =====
   .post("/cli", async ({ request }) => {
-    const body = await request.json();
+    const body = await readJsonBody(request);
     return cliRoute(body);
   })
 
   // ===== Scout Handoff =====
   .post("/handoff/scout", async ({ request }) => {
-    const body = await request.json();
+    const body = await readJsonBody(request);
     return scoutHandoffRoute(body);
   })
   .get("/handoff/scout/status", () => scoutHandoffStatusRoute())
@@ -384,7 +385,7 @@ export const bridge = new Elysia({ name: "bridge" })
   // ===== Devices =====
   .get("/devices", () => devicesListRoute())
   .post("/devices/setup-state", async ({ request }) => {
-    const body = await request.json();
+    const body = await readJsonBody(request);
     return deviceSetupStateRoute(request.headers.get("X-Device-ID"), body);
   })
   .delete("/devices/:id", ({ params }) => deviceRemoveRoute(params.id), {
@@ -407,11 +408,11 @@ export const bridge = new Elysia({ name: "bridge" })
     }),
   })
   .post("/security/events", async ({ request }) => {
-    const body = await request.json();
+    const body = await readJsonBody(request);
     return securityEventCreateRoute(body);
   })
   .post("/security/events/:id/ack", async ({ params, request }) => {
-    const body = await request.json().catch(() => ({}));
+    const body = await readJsonBody(request).catch(() => ({}));
     return securityEventAckRoute(params.id, request.headers.get("X-Device-ID"), body);
   }, {
     params: t.Object({
@@ -430,19 +431,19 @@ export const bridge = new Elysia({ name: "bridge" })
     }),
   })
   .post("/companion/trigger", async ({ request }) => {
-    const body = await request.json();
+    const body = await readJsonBody(request);
     return companionTriggerRoute(body);
   })
   .post("/companion/activate-app", async ({ request }) => {
-    const body = await request.json();
+    const body = await readJsonBody(request);
     return companionActivateAppRoute(body);
   })
   .post("/companion/trackpad", async ({ request }) => {
-    const body = await request.json();
+    const body = await readJsonBody(request);
     return companionTrackpadRoute(body);
   })
   .post("/companion/paste-image", async ({ request }) => {
-    const body = await request.json();
+    const body = await readJsonBody(request);
     return companionPasteImageRoute(body);
   })
   .ws("/companion/events", companionEventsSocket)

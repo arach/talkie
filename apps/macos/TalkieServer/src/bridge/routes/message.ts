@@ -334,7 +334,7 @@ export async function sendMessageRoute(
 
   // HEADLESS MODE
   if (useHeadless && messageText.length > 0) {
-    log.info(`Headless: session=${resolvedSessionId}, message=${messageText.slice(0, 50)}...`);
+    log.info(`Headless: session=${resolvedSessionId}, ${messageText.length} chars`);
 
     const result = await sendHeadless(resolvedSessionId, messageText, projectPath);
 

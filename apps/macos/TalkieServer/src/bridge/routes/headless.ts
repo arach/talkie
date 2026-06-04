@@ -15,6 +15,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { log } from "../../log";
+import { prepareStreamSealer } from "../transport-encryption";
 import { getSession } from "../../discovery/sessions";
 
 // ===== Types =====
@@ -373,7 +374,7 @@ async function collectStream(stream: ReadableStream<Uint8Array> | null): Promise
  * POST /headless
  * Send message to Codex in headless mode
  */
-export async function headlessRoute(body: HeadlessRequest): Promise<Response> {
+export async function headlessRoute(body: HeadlessRequest, request?: Request): Promise<Response> {
   const { sessionId, message, projectDir, stream = false } = body;
 
   const workingDir = await resolveWorkingDirectory(projectDir, sessionId);
@@ -382,8 +383,10 @@ export async function headlessRoute(body: HeadlessRequest): Promise<Response> {
   await ensureCodexProfile(policy);
   const executable = resolveCodexExecutable();
 
+  // Never log the prompt or the absolute workspace path — both are sensitive
+  // user content that would land in bridge.log (adversary C).
   log.info(
-    `Headless Codex: sessionId=${sessionId || "(new)"}, workspace=${workingDir}, sandbox=${policy.sandbox}, message=${message.slice(0, 100)}...`
+    `Headless Codex: sessionId=${sessionId || "(new)"}, sandbox=${policy.sandbox}, ${message.length} chars`
   );
 
   const args = codexArgsForRequest(message, workingDir, policy, sessionId);
@@ -401,6 +404,10 @@ export async function headlessRoute(body: HeadlessRequest): Promise<Response> {
   });
 
   if (stream) {
+    // Seal each SSE frame's JSON payload when the client opted into stream
+    // encryption (X-Enc: 2 + a known device key). Null = plaintext, unchanged.
+    const sealFrame = request ? await prepareStreamSealer(request) : null;
+
     // Return Server-Sent Events stream
     return new Response(
       new ReadableStream({
@@ -412,7 +419,13 @@ export async function headlessRoute(body: HeadlessRequest): Promise<Response> {
           let interrupted = false;
           const stderrPromise = collectStream(proc.stderr);
 
-          function processLine(line: string) {
+          // Emit one SSE event; seals the JSON payload per-frame when active.
+          async function emit(payload: string) {
+            const framed = sealFrame ? await sealFrame(payload) : payload;
+            controller.enqueue(encoder.encode(`data: ${framed}\n\n`));
+          }
+
+          async function processLine(line: string) {
             const parsed = parseCodexJSONLine(line.trim());
             if (!parsed) {
               return;
@@ -429,7 +442,7 @@ export async function headlessRoute(body: HeadlessRequest): Promise<Response> {
 
             if (parsed.content) {
               sawIncrementalContent = true;
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "assistant", content: parsed.content })}\n\n`));
+              await emit(JSON.stringify({ type: "assistant", content: parsed.content }));
             }
 
             if (parsed.completedAgentMessage) {
@@ -452,38 +465,40 @@ export async function headlessRoute(body: HeadlessRequest): Promise<Response> {
               buffer = lines.pop() || "";
 
               for (const line of lines) {
-                processLine(line);
+                await processLine(line);
               }
             }
 
             if (buffer.trim()) {
-              processLine(buffer);
+              await processLine(buffer);
             }
 
             if (interrupted) {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "error", error: "Codex request was interrupted before it completed." })}\n\n`));
+              await emit(JSON.stringify({ type: "error", error: "Codex request was interrupted before it completed." }));
             } else if (!sawIncrementalContent && completedAgentMessage) {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "assistant", content: completedAgentMessage })}\n\n`));
+              await emit(JSON.stringify({ type: "assistant", content: completedAgentMessage }));
             }
 
             const [exitCode, stderr] = await Promise.all([proc.exited, stderrPromise]);
             if (exitCode !== 0) {
               log.error(`Headless Codex error (exit ${exitCode}): ${stderr}`);
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "error", error: `Codex exited with code ${exitCode}` })}\n\n`));
+              await emit(JSON.stringify({ type: "error", error: `Codex exited with code ${exitCode}` }));
             } else if (stderr.trim()) {
               log.debug(`Headless Codex stderr: ${stderr.trim().slice(0, 500)}`);
             }
 
             // Send session_id as a metadata event before DONE
             if (capturedSessionId) {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "session", session_id: capturedSessionId })}\n\n`));
+              await emit(JSON.stringify({ type: "session", session_id: capturedSessionId }));
             }
 
+            // [DONE] sentinel stays plaintext — it carries no data and the
+            // client uses it as a literal end marker.
             controller.enqueue(encoder.encode("data: [DONE]\n\n"));
             controller.close();
           } catch (error) {
             log.error(`Headless Codex stream error: ${error}`);
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "error", error: String(error) })}\n\n`));
+            await emit(JSON.stringify({ type: "error", error: String(error) }));
             controller.close();
           }
         },
@@ -516,7 +531,7 @@ export async function headlessRoute(body: HeadlessRequest): Promise<Response> {
     const result = parseCodexOutput(stdout);
 
     if (result.interrupted) {
-      log.warning("Headless Codex request was interrupted before completion");
+      log.warn("Headless Codex request was interrupted before completion");
       return Response.json({
         success: false,
         error: "Codex request was interrupted before it completed.",

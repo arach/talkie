@@ -93,7 +93,9 @@ final class TalkieAppConfigurationStore {
 
         do {
             let data = try encoder.encode(configuration)
-            try data.write(to: fileURL, options: .atomic)
+            // Protect config at rest. `untilFirstAuthentication` (not `.complete`)
+            // so app extensions can still read settings while the device is locked.
+            try data.write(to: fileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         } catch {
             AppLogger.app.error("Failed to save app configuration: \(error.localizedDescription)")
         }

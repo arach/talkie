@@ -77,6 +77,10 @@ struct TalkieAIProviderCredentialIngestor {
         guard ComposeProviderCredentialStore.shared.save(payload) else {
             throw TalkieAIProviderCredentialImportError.saveFailed
         }
+        // Mirror the raw key into AICredentialStore — the canonical per-provider
+        // key store the AI Keys UI renders from. Without this, a QR/handshake
+        // import works but the AI Keys list shows the provider as "NOT SET".
+        try? AICredentialStore.shared.set(payload.apiKey, for: payload.providerId)
         TalkieAppSettings.shared.composeDirectProviderId = payload.providerId
         TalkieAppSettings.shared.composeDirectModelId = payload.modelId
 
