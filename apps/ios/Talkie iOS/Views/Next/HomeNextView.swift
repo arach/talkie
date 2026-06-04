@@ -620,10 +620,14 @@ private struct HomeFrequentActionsStrip: View {
         Button(action: action) {
             VStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(.system(size: 14, weight: .regular))
+                    // One notch lighter than the labels — a finer instrument glyph.
+                    .font(.system(size: 14, weight: .light))
                     .foregroundStyle(theme.currentTheme.chrome.accent)
                 Text(label)
                     .talkieType(.channelLabelTiny)
+                    // One notch down from the style's .semibold → .medium, scoped
+                    // to the deck so the shared channelLabelTiny stays unchanged.
+                    .fontWeight(.medium)
                     // Primary action labels — secondary ink, not the quietest tier.
                     .foregroundStyle(theme.colors.textSecondary)
                     .lineLimit(1)

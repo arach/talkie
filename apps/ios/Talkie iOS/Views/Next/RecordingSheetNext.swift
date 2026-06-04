@@ -66,9 +66,14 @@ struct RecordingSheetNext: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.horizontal, 20)
-        .presentationDetents([.height(280), .height(560)], selection: $detent)
+        .presentationDetents([.height(280), .height(460), .height(560)], selection: $detent)
         .presentationDragIndicator(.hidden)
-        .presentationBackground(.regularMaterial)
+        // Theme-true sheet: the app's palette is fixed-dark per theme, but
+        // `.regularMaterial` follows the SYSTEM appearance — on a light-mode
+        // device it rendered light while every text color stayed dark-theme,
+        // washing the sheet out. Back it with the theme's own base so the
+        // inner cards (cardBackground) still read as elevated above it.
+        .presentationBackground(theme.colors.background)
         .photosPicker(
             isPresented: $showingAttachmentPhotoPicker,
             selection: $selectedAttachmentItems,
@@ -78,6 +83,8 @@ struct RecordingSheetNext: View {
         .onAppear {
             startedAt = Date()
             recorder.startRecording()
+            Haptics.confirm.fire()        // gentle "go" the frame capture engages
+            Haptics.prepare(.transition)  // warm the stop thunk so it lands instantly
             phase = .recording
         }
         .onDisappear {
@@ -229,7 +236,11 @@ struct RecordingSheetNext: View {
             .padding(.bottom, 22)
         }
         .padding(.top, 4)
-        .onAppear { detent = .height(560) }
+        // Content-fit height: title + metadata + context pills sit snug with
+        // a small button gap, not a tall empty void. Grows to 560 only when
+        // attachments/sidecars are queued (see addPendingAttachment /
+        // queueSidecarRequest, which bump the detent).
+        .onAppear { detent = .height(460) }
     }
 
     // MARK: - Saving / Saved
@@ -421,6 +432,7 @@ struct RecordingSheetNext: View {
     // MARK: - Actions
 
     private func cancelRecording() {
+        Haptics.toggle.fire()  // neutral dismiss — nothing kept
         recorder.stopRecording()
         recorder.finalizeRecording()
         // Delete the temp file
@@ -431,6 +443,7 @@ struct RecordingSheetNext: View {
     }
 
     private func stopRecording() {
+        Haptics.transition.fire()  // firm "caught it" the instant capture ends
         // Snapshot duration + levels BEFORE finalizing — the recorder
         // resets isRecording and may clear state on finalize.
         savedDuration = recorder.recordingDuration
@@ -443,6 +456,7 @@ struct RecordingSheetNext: View {
     }
 
     private func discardRecording() {
+        Haptics.toggle.fire()  // neutral dismiss — nothing kept
         if let url = savedURL {
             try? FileManager.default.removeItem(at: url)
         }
@@ -507,6 +521,7 @@ struct RecordingSheetNext: View {
                 }
             }
 
+            Haptics.success.fire()  // earned: you made something and it's safe
             phase = .saved
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(700))

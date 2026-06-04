@@ -57,7 +57,10 @@ struct MinimalDictationOverlayNext: View {
                     .frame(maxWidth: 200, alignment: .leading)
             }
 
-            Button(action: { controller.isVisible = false }) {
+            Button(action: {
+                Haptics.toggle.fire()
+                controller.isVisible = false
+            }) {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(theme.colors.textTertiary)

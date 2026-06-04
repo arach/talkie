@@ -1088,44 +1088,30 @@ struct VoiceMemoDetailNext: View {
             }
             .padding(.horizontal, 4)
 
-            VStack(alignment: .leading, spacing: 0) {
+            // Pure reading surface — the captured words, not a control.
+            // A leading accent "leader" rule marks it as source content
+            // (block-quote idiom) and visually separates it from the
+            // bordered action cards below. Refine now lives in the
+            // actions section as a peer of Share, not nested here.
+            HStack(alignment: .top, spacing: 0) {
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(theme.currentTheme.chrome.accent.opacity(0.5))
+                    .frame(width: 3)
+                    .padding(.vertical, 14)
+                    .padding(.leading, 14)
+
                 Text(store.memo.transcript)
                     .talkieType(.listTitle)
                     .lineSpacing(5)
                     .foregroundStyle(theme.colors.textPrimary)
                     .padding(14)
                     .frame(maxWidth: .infinity, alignment: .leading)
-
-                Rectangle()
-                    .fill(theme.currentTheme.chrome.edgeFaint)
-                    .frame(height: theme.currentTheme.chrome.hairlineWidth)
-                    .padding(.horizontal, 14)
-
-                Button(action: openMemoInCompose) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "square.and.pencil")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text("Refine in Compose")
-                            .talkieType(.fieldLabel)
-                        Spacer(minLength: 0)
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(theme.colors.textTertiary)
-                    }
-                    .foregroundStyle(theme.currentTheme.chrome.accent)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(!canRefineMemo)
-                .opacity(canRefineMemo ? 1 : 0.45)
             }
             .background(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: 12)
                     .fill(theme.colors.cardBackground)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 10)
+                        RoundedRectangle(cornerRadius: 12)
                             .strokeBorder(
                                 theme.currentTheme.chrome.edgeFaint,
                                 lineWidth: theme.currentTheme.chrome.hairlineWidth
@@ -1147,39 +1133,24 @@ struct VoiceMemoDetailNext: View {
 
     private var memoActionsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Button(action: { showingShareSheet = true }) {
-                HStack(spacing: 10) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 15, weight: .semibold))
-                        .frame(width: 30, height: 30)
-                        .foregroundStyle(theme.currentTheme.chrome.accent)
-                        .background(
-                            RoundedRectangle(cornerRadius: 7)
-                                .fill(theme.currentTheme.chrome.accent.opacity(0.12))
-                        )
-                    Text("Share Memo")
-                        .talkieType(.fieldLabel)
-                        .foregroundStyle(theme.colors.textPrimary)
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(theme.colors.textTertiary)
-                }
-                .padding(12)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(theme.colors.cardBackground)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .strokeBorder(
-                                    theme.currentTheme.chrome.edgeFaint,
-                                    lineWidth: theme.currentTheme.chrome.hairlineWidth
-                                )
-                        )
-                )
-            }
-            .buttonStyle(.plain)
+            // Primary action rows — Share and Refine are peers, both
+            // siblings of the utility grid below. Refine used to hang
+            // off the transcript card; it's a memo-level action like
+            // the rest, so it belongs here.
+            memoPrimaryAction(
+                label: "Share Memo",
+                systemImage: "square.and.arrow.up",
+                action: { showingShareSheet = true }
+            )
             .accessibilityLabel("Share memo")
+
+            memoPrimaryAction(
+                label: "Refine in Compose",
+                systemImage: "square.and.pencil",
+                isEnabled: canRefineMemo,
+                action: openMemoInCompose
+            )
+            .accessibilityLabel("Refine in Compose")
 
             LazyVGrid(
                 columns: [
@@ -1210,6 +1181,51 @@ struct VoiceMemoDetailNext: View {
                 )
             }
         }
+    }
+
+    // Full-width primary action row (Share Memo, Refine in Compose).
+    // Shared styling so the two read as peers above the utility grid.
+    private func memoPrimaryAction(
+        label: String,
+        systemImage: String,
+        isEnabled: Bool = true,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(width: 30, height: 30)
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                    .background(
+                        RoundedRectangle(cornerRadius: 7)
+                            .fill(theme.currentTheme.chrome.accent.opacity(0.12))
+                    )
+                Text(label)
+                    .talkieType(.fieldLabel)
+                    .foregroundStyle(theme.colors.textPrimary)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(theme.colors.textTertiary)
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(theme.colors.cardBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .strokeBorder(
+                                theme.currentTheme.chrome.edgeFaint,
+                                lineWidth: theme.currentTheme.chrome.hairlineWidth
+                            )
+                    )
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.45)
     }
 
     private func memoUtilityAction(label: String, systemImage: String, action: @escaping () -> Void) -> some View {

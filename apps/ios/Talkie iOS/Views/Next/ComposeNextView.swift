@@ -1215,7 +1215,11 @@ private struct InlineMicButton: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        Button(action: action) {
+        Button(action: {
+            // Light "go" when starting dictation, firm "caught it" when stopping.
+            Haptics.play(state == .dictating ? .transition : .confirm)
+            action()
+        }) {
             ZStack {
                 Circle()
                     .fill(state == .dictating ? theme.currentTheme.chrome.accent : theme.colors.cardBackground)
