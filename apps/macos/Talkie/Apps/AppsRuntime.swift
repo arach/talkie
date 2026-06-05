@@ -204,8 +204,8 @@ final class AppsRuntime: NSObject {
 
         contexts.removeAll()
 
-        for (_, webView) in uiWebViews {
-            webView.stopLoading()
+        for webView in uiWebViews.values {
+            tearDownWebView(webView)
         }
         uiWebViews.removeAll()
 
@@ -284,9 +284,8 @@ final class AppsRuntime: NSObject {
 
         contexts.removeValue(forKey: appId)
 
-        // Clean up any UI WebView
         if let webView = uiWebViews.removeValue(forKey: appId) {
-            webView.stopLoading()
+            tearDownWebView(webView)
         }
 
         app.isLoaded = false
@@ -528,6 +527,10 @@ final class AppsRuntime: NSObject {
             return
         }
 
+        if let existingWebView = uiWebViews.removeValue(forKey: appId) {
+            tearDownWebView(existingWebView)
+        }
+
         // Create WebView only when needed
         let config = WKWebViewConfiguration()
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
@@ -540,6 +543,15 @@ final class AppsRuntime: NSObject {
         // TODO: Present the WebView in a popover or sheet
         // For now, just log that we created it
         log.info("Created UI panel for app \(appId): \(htmlFile) (\(width)x\(height))")
+    }
+
+    private func tearDownWebView(_ webView: WKWebView) {
+        webView.stopLoading()
+        webView.navigationDelegate = nil
+        webView.uiDelegate = nil
+        webView.configuration.userContentController.removeAllUserScripts()
+        webView.loadHTMLString("", baseURL: nil)
+        webView.removeFromSuperview()
     }
 
     // MARK: - Widget Apps

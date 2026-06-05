@@ -2,8 +2,8 @@
 //  PasteBarPanel.swift
 //  Talkie
 //
-//  Floating panel for Quick Paste (Hyper+V).
-//  Shows 1-5 most recent tray items as thumbnails with format legend.
+//  Top-attached panel for Quick Paste (Hyper+V).
+//  Shows 1-5 most recent paste candidates as thumbnails with format legend.
 //  Modifier keys (Shift/Option/Control) change the paste format.
 //
 
@@ -16,7 +16,7 @@ import TalkieKit
 @MainActor
 @Observable
 final class PasteBarState {
-    var items: [TrayItem] = []
+    var items: [PasteCandidate] = []
     var activeFormat: PasteFormat = .image
     var onAction: ((PasteBarResult?) -> Void)?
 }
@@ -31,7 +31,7 @@ final class PasteBarPanel {
 
     var frame: NSRect? { panel?.frame }
 
-    func show(items: [TrayItem]) {
+    func show(items: [PasteCandidate]) {
         dismiss()
 
         state.items = items
@@ -62,19 +62,19 @@ final class PasteBarPanel {
         p.hidesOnDeactivate = false
         p.canHide = false
 
-        // Position near cursor, clamped to screen
+        // Position in the same top-attached lane as the capture HUD.
         let mouseLocation = NSEvent.mouseLocation
         guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouseLocation, $0.frame, false) })
             ?? NSScreen.main
             ?? NSScreen.screens.first else { return }
 
-        let offset: CGFloat = 20
-        var x = mouseLocation.x - width / 2
-        var y = mouseLocation.y - height / 2 - offset
-
         let margin: CGFloat = 8
-        x = max(screen.frame.minX + margin, min(x, screen.frame.maxX - width - margin))
-        y = max(screen.frame.minY + margin, min(y, screen.frame.maxY - height - margin))
+        let visibleFrame = screen.visibleFrame
+        let x = max(
+            visibleFrame.minX + margin,
+            min(visibleFrame.midX - width / 2, visibleFrame.maxX - width - margin)
+        )
+        let y = visibleFrame.maxY - height - 8
 
         p.setFrameOrigin(NSPoint(x: x, y: y))
 
@@ -90,14 +90,24 @@ final class PasteBarPanel {
     }
 
     func dismiss() {
-        guard let p = panel else { return }
+        state.onAction = nil
+
+        guard let p = panel else {
+            state.items = []
+            return
+        }
         panel = nil
+        let state = self.state
         NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = 0.1
             ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
             p.animator().alphaValue = 0
         }, completionHandler: {
-            p.orderOut(nil)
+            MainActor.assumeIsolated {
+                p.orderOut(nil)
+                p.contentView = nil
+                state.items = []
+            }
         })
     }
 }
@@ -141,10 +151,7 @@ private struct PasteBarView: View {
 
                 HStack {
                     formatLegend
-
                     Spacer()
-
-                    browseHint
                 }
                     .padding(.horizontal, 12)
                     .padding(.top, 7)
@@ -196,7 +203,7 @@ private struct PasteBarView: View {
             Text("No captures yet")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(.white.opacity(0.76))
-            Text("Hyper+S to start")
+            Text("Hyper+S to capture")
                 .font(.system(size: 10, weight: .medium, design: .monospaced))
                 .foregroundColor(.white.opacity(0.42))
         }
@@ -214,7 +221,7 @@ private struct PasteBarView: View {
         }
     }
 
-    private func thumbnailCell(item: TrayItem, index: Int) -> some View {
+    private func thumbnailCell(item: PasteCandidate, index: Int) -> some View {
         let isHovered = hoveredIndex == index
         let number = index + 1
 
@@ -236,7 +243,7 @@ private struct PasteBarView: View {
                             .lineLimit(3)
                             .padding(3)
                     } else {
-                        Image(systemName: item.isClip ? "video.fill" : "photo")
+                        Image(systemName: "photo")
                             .font(.system(size: 12, weight: .light))
                             .foregroundStyle(.white.opacity(0.38))
                     }
@@ -284,15 +291,6 @@ private struct PasteBarView: View {
             formatPill("⌃", label: "base64", active: state.activeFormat == .base64)
             formatPill("⇧⌥", label: "describe", active: state.activeFormat == .visionDescription)
             formatPill("⌘", label: "drag", active: state.activeFormat == .dragFile)
-        }
-    }
-
-    private var browseHint: some View {
-        HStack(spacing: 4) {
-            keyBadge("W", active: false)
-            Text("browse")
-                .font(.system(size: 9, weight: .medium))
-                .foregroundColor(.white.opacity(0.42))
         }
     }
 

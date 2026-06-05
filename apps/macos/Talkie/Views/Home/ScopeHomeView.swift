@@ -13,6 +13,7 @@
 //
 
 import SwiftUI
+import AppKit
 import TalkieKit
 
 // Display + mono font lookups centralized in `ScopeType` (TalkieKit/UI/ScopeDesign.swift).
@@ -51,9 +52,6 @@ struct ScopeHomeView: View {
     @State private var dictationStore = DictationStore.shared
     @State private var recordingsVM = RecordingsViewModel.shared
     @State private var workflowExecutor = WorkflowExecutor.shared
-    @State private var screenshotTray = ScreenshotTray.shared
-    @State private var clipTray = ClipTray.shared
-    @State private var selectionTray = SelectionTray.shared
     // In-window markup takeover target (vs. the old floating panel).
     @State private var markupURL: URL?
 
@@ -66,12 +64,7 @@ struct ScopeHomeView: View {
     private var todayMemos: Int { memosStore.todayCount }
     private var todayDictations: Int { dictationStore.todayCount }
     private var todayTotal: Int { todayMemos + todayDictations }
-    private var trayItemCount: Int {
-        _ = screenshotTray.items
-        _ = clipTray.items
-        _ = selectionTray.items
-        return TrayItem.allItems().count
-    }
+    private var savedCaptureCount: Int { recentCaptures.count }
 
     var body: some View {
         #if DEBUG
@@ -190,7 +183,7 @@ struct ScopeHomeView: View {
                     glyph: .crosshair,
                     eyebrow: "Capture",
                     channel: "CH-03",
-                    state: captureStateTray,
+                    state: captureStateScreenshots,
                     action: "CAPTURE",
                     hint: "⌃⇧⌘ S",
                     onTap: triggerCapture
@@ -211,10 +204,10 @@ struct ScopeHomeView: View {
         if todayDictations == 1 { return "1 today" }
         return "\(todayDictations) today"
     }
-    private var captureStateTray: String {
-        if trayItemCount == 0 { return "Hyper+S armed" }
-        if trayItemCount == 1 { return "1 in tray" }
-        return "\(trayItemCount) in tray"
+    private var captureStateScreenshots: String {
+        if savedCaptureCount == 0 { return "Hyper+S armed" }
+        if savedCaptureCount == 1 { return "1 saved" }
+        return "\(savedCaptureCount) saved"
     }
 
     // MARK: - Recent two-pane (Voice + Content)
@@ -292,8 +285,10 @@ struct ScopeHomeView: View {
                         count: countLabel(todayCount(recentCaptures), "today"),
                         libraryLabel: "ALL CAPTURES",
                         onLibrary: { NavigationState.shared.navigate(to: .screenshots) },
-                        secondaryLabel: "OPEN TRAY",
-                        onSecondary: { TrayViewer.shared.show() },
+                        secondaryLabel: "HYPER PASTE",
+                        onSecondary: {
+                            (NSApp.delegate as? AppDelegate)?.showHyperPasteSurface()
+                        },
                         rows: recentCaptures.prefix(3).enumerated().map { idx, item in
                             RecentRow(
                                 id: item.id,
@@ -508,21 +503,11 @@ struct ScopeHomeView: View {
         let cal = Calendar.current
         return items.filter { cal.isDateInToday($0.createdAt) }.count
     }
-    private func todayCount(_ items: [TrayItem]) -> Int {
-        let cal = Calendar.current
-        return items.filter { cal.isDateInToday($0.capturedAt) }.count
-    }
-    private var recentTrayItems: [TrayItem] {
-        TrayItem.allItems().sorted { $0.capturedAt > $1.capturedAt }
-    }
-
-    /// Unified screenshot-capture stream for Home. Keep this scoped to
-    /// screenshots: still-in-tray `ScreenshotTray` items and saved
+    /// Screenshot-capture stream for Home. Keep this scoped to saved
     /// `.capture` objects. It intentionally excludes text selections,
     /// camera clips, standalone notes, and iPhone/watch imports.
     private struct RecentCapture: Identifiable {
         enum Source {
-            case tray
             case savedCapture
         }
 
@@ -531,28 +516,13 @@ struct ScopeHomeView: View {
         let meta: String
         let date: Date
         let source: Source
-        /// On-disk PNG path — tray.tempURL for in-flight tray items,
-        /// the ScreenshotStorage path for saved captures. Drives the
-        /// preview / annotate / quick-copy actions for both sources.
+        /// On-disk PNG path in ScreenshotStorage. Drives the preview /
+        /// annotate / quick-copy actions.
         let fileURL: URL?
     }
 
     private var recentCaptures: [RecentCapture] {
         var out: [RecentCapture] = []
-
-        // Screenshot tray items still in flight. Clips and selected text
-        // stay available in TrayViewer, but Home's Captures list stays
-        // screenshot-specific.
-        for item in screenshotTray.items {
-            out.append(RecentCapture(
-                id: item.id,
-                line: trayLine(for: item),
-                meta: screenshotMeta(width: item.width, height: item.height),
-                date: item.capturedAt,
-                source: .tray,
-                fileURL: item.tempURL
-            ))
-        }
 
         // Saved capture objects created from screenshots. Do not pull
         // screenshots attached to notes/memos or imports from synced
@@ -577,17 +547,12 @@ struct ScopeHomeView: View {
     }
 
     private func openRecentCapture(_ item: RecentCapture) {
-        switch item.source {
-        case .tray:
-            TrayViewer.shared.show()
-        case .savedCapture:
-            NavigationState.shared.navigate(to: .screenshots)
-        }
+        _ = item
+        NavigationState.shared.navigate(to: .screenshots)
     }
 
     /// Deterministic UUID derived from a string — used so the rec-screenshot
-    /// rows keep stable identity across rerenders without colliding with
-    /// TrayItem.id (which is itself a UUID).
+    /// rows keep stable identity across rerenders.
     private func stableUUID(from string: String) -> UUID {
         var hash: UInt64 = 0xcbf29ce484222325
         for byte in string.utf8 {
@@ -736,16 +701,6 @@ struct ScopeHomeView: View {
     private func wordCountLabel(_ text: String?) -> String {
         let words = (text ?? "").split { $0.isWhitespace }.count
         return "\(words) WORDS"
-    }
-    private func trayLine(for item: TrayScreenshot) -> String {
-        if let appName = item.appName, !appName.isEmpty { return appName }
-        if let windowTitle = item.windowTitle, !windowTitle.isEmpty { return windowTitle }
-        if let displayName = item.displayName, !displayName.isEmpty { return displayName }
-        switch item.mode {
-        case .region: return "crop"
-        case .fullscreen: return "fullscreen"
-        case .window: return "macwindow"
-        }
     }
     private func screenshotMeta(width: Int?, height: Int?) -> String {
         let widthLabel = width.map(String.init) ?? "?"
@@ -926,19 +881,19 @@ struct ScopeHomeView: View {
                     glyph: .smartActions,
                     marker: "02",
                     hook: "Hyper keys",
-                    detail: "Talkie's chord layer opens capture, tray, paste, and recording tools.",
+                    detail: "Talkie's chord layer opens capture, Hyper Paste, and recording tools.",
                     action: "Learn",
                     onOpen: { NavigationState.shared.navigateToLearn(articleID: "hyper-keys") }
                 )
                 ScopeRule(.section, axis: .vertical)
                     .padding(.vertical, 14)
                 DidYouKnowCard(
-                    glyph: .tray,
+                    glyph: .hyperPaste,
                     marker: "03",
-                    hook: "Tray Shelf",
-                    detail: "Screenshots and clips collect beside the current recording for reuse.",
+                    hook: "Hyper Paste",
+                    detail: "Recent screenshots open from the top surface for quick preview, copy, and drag.",
                     action: "Learn",
-                    onOpen: { NavigationState.shared.navigateToLearn(articleID: "tray-shelf") }
+                    onOpen: { NavigationState.shared.navigateToLearn(articleID: "hyper-keys") }
                 )
             }
             .background(
@@ -2254,7 +2209,7 @@ private struct RoutinesPanel: View {
 // top, body excerpt, hairline divider, amber action with arrow.
 // Three per row in the Home midsection.
 private struct DidYouKnowCard: View {
-    enum Glyph { case voiceEdit, smartActions, tray }
+    enum Glyph { case voiceEdit, smartActions, hyperPaste }
     let glyph: Glyph
     let marker: String
     let hook: String
@@ -2354,7 +2309,7 @@ private struct DidYouKnowCard: View {
             }
             .stroke(brass, style: StrokeStyle(lineWidth: 0.85, lineCap: .round, lineJoin: .round))
             .frame(width: 22, height: 22)
-        case .tray:
+        case .hyperPaste:
             ZStack {
                 Path { p in
                     p.addRoundedRect(in: CGRect(x: 5, y: 6, width: 12, height: 8), cornerSize: CGSize(width: 2, height: 2))

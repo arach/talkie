@@ -15,7 +15,7 @@
 //    │    A              S              D                          │
 //    │  Region        Screen         Window                        │
 //    ├─ BOTTOM STRIP (stripBottom gradient) ───────────────────────┤
-//    │  Optional contextual actions: note, paste latest, tray       │
+//    │  Optional contextual actions: note, paste latest, Hyper Paste│
 //    └─────────────────────────────────────────────────────────────┘
 //
 
@@ -161,6 +161,8 @@ final class CaptureHUDPanel {
     }
 
     func dismiss() {
+        state.onAction = nil
+
         guard let p = panel else { return }
         panel = nil
         NSAnimationContext.runAnimationGroup({ ctx in
@@ -169,6 +171,7 @@ final class CaptureHUDPanel {
             p.animator().alphaValue = 0
         }, completionHandler: {
             p.orderOut(nil)
+            p.contentView = nil
         })
     }
 
@@ -505,8 +508,8 @@ private struct CaptureHUDView: View {
                 }
                 extraCell(
                     key: "T",
-                    label: "Tray",
-                    systemImage: "tray.full",
+                    label: "Hyper Paste",
+                    systemImage: "doc.on.clipboard",
                     badge: trayBadge,
                     tone: .ink
                 ) {

@@ -3,7 +3,7 @@
 //  Talkie
 //
 //  Chord controller for Quick Paste (Hyper+V).
-//  Shows PasteBarPanel near cursor, waits for digit 1-5 with optional modifier.
+//  Shows PasteBarPanel at the top of the active screen, waits for digit 1-5 with optional modifier.
 //
 //  Dismissal: Escape, valid selection (1-5), click outside panel, or 30s timeout.
 //  Panel is "sticky" — releasing Hyper keys does NOT dismiss it.
@@ -27,7 +27,7 @@ final class PasteChordController {
     private let timeoutSeconds: TimeInterval = 30
 
     func beginChord() async -> PasteBarResult? {
-        let allItems = Array(TrayItem.allItems().prefix(5))
+        let allItems = PasteCandidate.recentScreenshots(limit: 5)
 
         return await withCheckedContinuation { continuation in
             var resumed = false
@@ -93,15 +93,7 @@ final class PasteChordController {
                     return
                 }
 
-                // W or Tab — dismiss and open tray viewer
-                if key == "w" || event.keyCode == 48 /* Tab */ {
-                    timeout.cancel()
-                    resume(nil)
-                    TrayViewer.shared.show()
-                    return
-                }
-
-                // Empty tray — any key dismisses
+                // Empty paste source — any key dismisses
                 if allItems.isEmpty {
                     timeout.cancel()
                     resume(nil)

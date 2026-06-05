@@ -453,11 +453,11 @@ private final class ScreenRecordingCountdownController {
     }
 
     private func showHUD(for target: ScreenRecordingTarget) {
-        let allItems = TrayItem.allItems()
+        let pasteItems = PasteCandidate.recentScreenshots(limit: 5)
         let showCameraOption = false
-        let hasTrayItems = !allItems.isEmpty
-        let hasSelectionItems = SelectionTray.shared.isNotEmpty
-        let trayCount = allItems.count
+        let showPasteOption = true
+        let hasSelectionItems = false
+        let trayCount = pasteItems.count
         let expectedFrame = CaptureHUDPanel.expectedFrame(
             for: NSEvent.mouseLocation,
             position: SettingsManager.shared.captureHUDPosition
@@ -466,7 +466,7 @@ private final class ScreenRecordingCountdownController {
         hudPanel.show(
             mode: .video,
             showCameraOption: showCameraOption,
-            showTrayOption: hasTrayItems,
+            showTrayOption: showPasteOption,
             showSelectionOption: hasSelectionItems,
             trayCount: trayCount,
             palette: WallpaperLuminanceSampler.fallbackPalette()

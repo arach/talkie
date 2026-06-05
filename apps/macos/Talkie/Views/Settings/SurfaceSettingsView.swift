@@ -12,40 +12,17 @@ struct SurfaceSettingsView: View {
 
     private enum SurfaceTab: String, CaseIterable, Identifiable {
         case overlay = "Overlay"
-        case tray = "Tray"
-        case shelf = "Shelf"
         case hoverZone = "Hover Zone"
 
         var id: String { rawValue }
     }
     @Bindable private var notchSettings = NotchSettings.shared
-    @Bindable private var traySettings = TraySettings.shared
     @Bindable private var tuning = NotchTuning.shared
-    @Bindable private var screenshotTray = ScreenshotTray.shared
-    @Bindable private var clipTray = ClipTray.shared
-    @Bindable private var selectionTray = SelectionTray.shared
 
     @State private var notchInfo = NotchInfo.effective()
     @State private var selectedTab: SurfaceTab = .overlay
     @State private var isRecordingSelectionQuickHotkey = false
     @State private var previewState: SurfaceState = .hover
-    @State private var simulatedTrayCount: Double = 0
-
-    private var trayItemCount: Int {
-        screenshotTray.count + clipTray.count + selectionTray.count
-    }
-
-    private var unpinnedTrayCount: Int {
-        screenshotTray.unpinnedCount + clipTray.unpinnedCount + selectionTray.unpinnedCount
-    }
-
-    private var pinnedTrayCount: Int {
-        screenshotTray.pinnedCount + clipTray.pinnedCount + selectionTray.pinnedCount
-    }
-
-    private var hasTrayContent: Bool {
-        trayItemCount > 0
-    }
 
     private var overlayActive: Bool {
         notchSettings.enabled && NotchComposer.shared.isActive
@@ -117,10 +94,6 @@ struct SurfaceSettingsView: View {
                     switch selectedTab {
                     case .overlay:
                         overlayTabContent
-                    case .tray:
-                        trayTabContent
-                    case .shelf:
-                        shelfTabContent
                     case .hoverZone:
                         hoverZoneTabContent
                     }
@@ -136,24 +109,12 @@ struct SurfaceSettingsView: View {
         }
         .onChange(of: notchSettings.enabled) { _, _ in
             NotchComposer.shared.refreshVisibilityFromSettings()
-            TrayBadge.shared.refreshVisibility()
         }
         .onChange(of: notchSettings.externalEnabled) { _, _ in
             NotchComposer.shared.refreshVisibilityFromSettings()
         }
         .onChange(of: notchSettings.shellStyleRaw) { _, _ in
             NotchComposer.shared.refreshVisibilityFromSettings()
-        }
-        .onChange(of: notchSettings.trayStripEnabled) { _, _ in
-            NotchComposer.shared.refreshVisibilityFromSettings()
-            TrayBadge.shared.refreshVisibility()
-        }
-        .onChange(of: notchSettings.trayStripPlacement) { _, _ in
-            NotchComposer.shared.refreshVisibilityFromSettings()
-            TrayBadge.shared.refreshVisibility()
-        }
-        .onChange(of: traySettings.externalBadgeEnabled) { _, _ in
-            TrayBadge.shared.refreshVisibility()
         }
     }
 
@@ -205,22 +166,6 @@ struct SurfaceSettingsView: View {
                 }
 
                 Spacer()
-
-                // Tray items simulator
-                HStack(spacing: 4) {
-                    Image(systemName: "square.stack")
-                        .font(.system(size: 9))
-                        .foregroundColor(Theme.current.foregroundMuted)
-                    Text("Tray")
-                        .font(Theme.current.fontXS)
-                        .foregroundColor(Theme.current.foregroundMuted)
-                    Slider(value: $simulatedTrayCount, in: 0...5, step: 1)
-                        .frame(width: 60)
-                    Text("\(Int(simulatedTrayCount))")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundColor(Theme.current.foregroundSecondary)
-                        .frame(width: 14)
-                }
             }
 
             surfacePreviewArea
@@ -234,6 +179,7 @@ struct SurfaceSettingsView: View {
         HStack(alignment: .top, spacing: Spacing.lg) {
             VStack(alignment: .leading, spacing: Spacing.lg) {
                 overlaySection
+                shortcutsSection
             }
             .frame(minWidth: 240, maxWidth: 280)
 
@@ -243,36 +189,6 @@ struct SurfaceSettingsView: View {
                 }
             }
             .frame(minWidth: 240, maxWidth: .infinity)
-        }
-    }
-
-    private var trayTabContent: some View {
-        HStack(alignment: .top, spacing: Spacing.lg) {
-            VStack(alignment: .leading, spacing: Spacing.lg) {
-                traySection
-            }
-            .frame(minWidth: 240, maxWidth: 280)
-
-            VStack(alignment: .leading, spacing: Spacing.lg) {
-                if notchSettings.trayStripEnabled {
-                    dotStripTuningSection
-                }
-                if traySettings.externalBadgeEnabled {
-                    badgeTuningSection
-                }
-            }
-            .frame(minWidth: 240, maxWidth: .infinity)
-        }
-    }
-
-    private var shelfTabContent: some View {
-        HStack(alignment: .top, spacing: Spacing.lg) {
-            VStack(alignment: .leading, spacing: Spacing.lg) {
-                shelfSection
-            }
-            .frame(minWidth: 240, maxWidth: 280)
-
-            Spacer()
         }
     }
 
@@ -531,142 +447,6 @@ struct SurfaceSettingsView: View {
         }
     }
 
-    // MARK: - Left Column: Tray
-
-    private var traySection: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            DetailSectionHeader("TRAY", uppercase: true)
-
-            Toggle("Overlay Dot Strip", isOn: $notchSettings.trayStripEnabled)
-                .toggleStyle(.switch)
-
-            if notchSettings.trayStripEnabled {
-                Picker("Placement", selection: $notchSettings.trayStripPlacement) {
-                    Text("Inside").tag("inside")
-                    Text("Below").tag("outside")
-                    Text("Both").tag("both")
-                }
-                .pickerStyle(.segmented)
-                .frame(maxWidth: 240)
-
-                Text(trayStripPlacementHint)
-                    .font(Theme.current.fontXS)
-                    .foregroundColor(Theme.current.foregroundMuted)
-
-                Divider().padding(.vertical, 2)
-
-                Toggle("Show Preview While Recording", isOn: $notchSettings.trayPreviewWhileRecordingEnabled)
-                    .toggleStyle(.switch)
-
-                Text("When off, the tray preview drawer stays hidden during recording.")
-                    .font(Theme.current.fontXS)
-                    .foregroundColor(Theme.current.foregroundMuted)
-            } else {
-                Text("Dot indicator for tray items. Does not disable the preview, viewer, or shelf.")
-                    .font(Theme.current.fontXS)
-                    .foregroundColor(Theme.current.foregroundMuted)
-            }
-
-            Divider().padding(.vertical, 2)
-
-            Toggle("Standalone Badge", isOn: $traySettings.externalBadgeEnabled)
-                .toggleStyle(.switch)
-
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(badgeStatusColor)
-                    .frame(width: 6, height: 6)
-                Text(badgeStatusText)
-                    .font(Theme.current.fontXS)
-                    .foregroundColor(Theme.current.foregroundMuted)
-            }
-        }
-        .settingsSectionCard(padding: Spacing.md)
-    }
-
-    private var trayStripPlacementHint: String {
-        switch notchSettings.trayStripPlacement {
-        case "inside": return "Dots inside the notch. Hover notch to reveal tray."
-        case "outside": return "Strip below the notch. Hover strip to reveal tray."
-        case "both": return "Dots inside + strip below."
-        default: return ""
-        }
-    }
-
-    private var badgeStatusText: String {
-        if !traySettings.externalBadgeEnabled { return "Disabled" }
-        if notchSettings.overlayOwnsTrayDiscovery(isOverlayActive: overlayActive) {
-            return "Suppressed — overlay strip active"
-        }
-        return hasTrayContent ? "Visible" : "Hidden (no items)"
-    }
-
-    private var badgeStatusColor: Color {
-        if !traySettings.externalBadgeEnabled { return .secondary }
-        if notchSettings.overlayOwnsTrayDiscovery(isOverlayActive: overlayActive) { return .orange }
-        return hasTrayContent ? .green : .secondary
-    }
-
-    // MARK: - Left Column: Shelf
-
-    private var shelfSection: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            DetailSectionHeader("SHELF", uppercase: true)
-
-            Text("Slides down from the top to show screenshots and clips. \(HotkeyRegistry.shared.config(for: .openTrayShelf).displayString) to toggle.")
-                .font(Theme.current.fontXS)
-                .foregroundColor(Theme.current.foregroundMuted)
-
-            surfaceSlider("Height", value: $traySettings.shelfHeight, range: 120...200)
-
-            Text("The viewer (\(HotkeyRegistry.shared.config(for: .openTrayViewer).displayString)) opens a larger window for selection, copy, and drag.")
-                .font(Theme.current.fontXS)
-                .foregroundColor(Theme.current.foregroundMuted)
-
-            HStack(spacing: Spacing.sm) {
-                Button("Open Shelf") {
-                    TrayShelf.shared.show()
-                }
-                .buttonStyle(.bordered)
-                .disabled(!hasTrayContent)
-
-                Button("Open Viewer") {
-                    TrayViewer.shared.show()
-                }
-                .buttonStyle(.bordered)
-
-                Menu {
-                    Button("Clear Unpinned (\(unpinnedTrayCount))") {
-                        _ = TrayActionService.shared.clearUnpinned()
-                    }
-                    .disabled(unpinnedTrayCount == 0)
-
-                    Button(role: .destructive) {
-                        _ = TrayActionService.shared.clearAll()
-                    } label: {
-                        Text("Clear Everything (\(trayItemCount))")
-                    }
-                    .disabled(trayItemCount == 0)
-                } label: {
-                    Text("Clear Tray")
-                }
-                .buttonStyle(.bordered)
-                .disabled(!hasTrayContent)
-            }
-
-            if hasTrayContent {
-                Text(
-                    pinnedTrayCount > 0
-                        ? "Clear Unpinned keeps \(pinnedTrayCount) pinned item\(pinnedTrayCount == 1 ? "" : "s")."
-                        : "Clears screenshots, clips, and text selections from the tray."
-                )
-                .font(Theme.current.fontXS)
-                .foregroundColor(Theme.current.foregroundMuted)
-            }
-        }
-        .settingsSectionCard(padding: Spacing.md)
-    }
-
     // MARK: - Left Column: Shortcuts
 
     private var shortcutsSection: some View {
@@ -712,12 +492,11 @@ struct SurfaceSettingsView: View {
                     .frame(height: 1)
 
                 shortcutRow(HotkeyRegistry.shared.config(for: .captureChord).displayString, description: "Capture chord")
-                shortcutRow(HotkeyRegistry.shared.config(for: .openTrayViewer).displayString, description: "Open tray viewer")
-                shortcutRow(HotkeyRegistry.shared.config(for: .openTrayShelf).displayString, description: "Toggle shelf")
+                shortcutRow(HotkeyRegistry.shared.config(for: .openTrayViewer).displayString, description: "Open Hyper Paste")
                 shortcutRow(HotkeyRegistry.shared.config(for: .pasteLastScreenshot).displayString, description: "Paste last screenshot")
             }
 
-            Text("Selection action updates in TalkieAgent immediately. In viewer or shelf: arrows navigate, Space toggles, ⌘A select all, ⌘C copy, Delete removes.")
+            Text("Selection action updates in TalkieAgent immediately. Hyper Paste uses the recent screenshot candidates shown from the top surface.")
                 .font(Theme.current.fontXS)
                 .foregroundColor(Theme.current.foregroundMuted)
         }
@@ -733,8 +512,8 @@ struct SurfaceSettingsView: View {
 
     @State private var previewMode: PreviewMode = .external
 
-    /// Real-dimension preview at 1:1 pixel scale showing the overlay shape,
-    /// tray strip, and shelf. Toggle between external monitor and laptop views.
+    /// Real-dimension preview at 1:1 pixel scale showing the overlay shape.
+    /// Toggle between external monitor and laptop views.
     /// Responds to the selected lifecycle state.
     private var surfacePreviewArea: some View {
         let overlayHeight = notchInfo.notchHeight - CGFloat(tuning.heightInset)
@@ -766,12 +545,6 @@ struct SurfaceSettingsView: View {
             return min(required, upperBound)
         }()
 
-        let trayWidth = CGFloat(notchSettings.trayStripWidth)
-        let trayHeight = CGFloat(notchSettings.trayStripHeight)
-        let trayYOffset = CGFloat(notchSettings.trayStripYOffset)
-        let trayEnabled = notchSettings.trayStripEnabled
-
-        let shelfHeight = traySettings.shelfHeight
         let shellStroke = Color.white.opacity(0.24)
         let shellGlow = Color.white.opacity(0.06)
         let cutoutRadius = min(br, overlayHeight / 2)
@@ -796,7 +569,7 @@ struct SurfaceSettingsView: View {
                     switch previewState {
                     case .minimized:
                         // Minimized nub — small pill at top center
-                        previewMinimizedNub(trayCount: Int(simulatedTrayCount))
+                        previewMinimizedNub()
                             .padding(.top, previewUsesIslandShape ? 4 : 0)
 
                     case .rest:
@@ -873,41 +646,10 @@ struct SurfaceSettingsView: View {
                             )
                         }
 
-                        // Tray dots (use simulated count when > 0, else settings default)
-                        let dotCount = Int(simulatedTrayCount) > 0 ? Int(simulatedTrayCount) : (trayEnabled ? max(1, notchSettings.trayStripMaxDots) : 0)
-                        if dotCount > 0, trayEnabled {
-                            NotchTrayDotBar(
-                                count: dotCount,
-                                maxDots: notchSettings.trayStripMaxDots,
-                                dotSize: notchSettings.trayStripDotSize,
-                                dotSpacing: notchSettings.trayStripDotSize + 0.6,
-                                horizontalPadding: 6,
-                                barHeight: trayHeight,
-                                fillOpacity: 0.10,
-                                borderOpacity: notchSettings.trayStripBorderOpacity,
-                                dotOpacity: notchSettings.trayStripShowDots ? 0.92 : 0
-                            )
-                            .frame(width: trayWidth, height: trayHeight)
-                            .offset(y: trayYOffset - 2)
-                        }
                     }
                 }
                 .frame(width: max(previewShellWidth, 80), height: overlayHeight, alignment: .top)
                 .animation(.easeInOut(duration: 0.25), value: previewState)
-
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(Color.white.opacity(0.04))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 4)
-                            .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
-                    )
-                    .overlay(
-                        Text("shelf  \(Int(shelfHeight))pt")
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.2))
-                    )
-                    .frame(width: 160, height: shelfHeight * 0.4)
-                    .padding(.top, 10)
             }
             .padding(.top, 1)
 
@@ -940,25 +682,11 @@ struct SurfaceSettingsView: View {
     }
 
     /// Preview of the minimized nub — matches NotchComposerView.notchMinimizedNub
-    private func previewMinimizedNub(trayCount: Int) -> some View {
+    private func previewMinimizedNub() -> some View {
         HStack(spacing: 0) {
-            if trayCount > 0 {
-                NotchTrayDotBar(
-                    count: trayCount,
-                    maxDots: 4,
-                    dotSize: 2.4,
-                    dotSpacing: 2.4,
-                    horizontalPadding: 6,
-                    barHeight: 10,
-                    fillOpacity: 0,
-                    borderOpacity: 0,
-                    dotOpacity: 0.7
-                )
-            } else {
-                RoundedRectangle(cornerRadius: 1.5)
-                    .fill(Color.white.opacity(0.4))
-                    .frame(width: 28, height: 3)
-            }
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(Color.white.opacity(0.4))
+                .frame(width: 28, height: 3)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
@@ -1203,44 +931,6 @@ struct SurfaceSettingsView: View {
         .settingsSectionCard(padding: Spacing.md)
     }
 
-    // MARK: - Right Column: Dot Strip Tuning
-
-    private var dotStripTuningSection: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            DetailSectionHeader("DOT STRIP TUNING", uppercase: true)
-
-            surfaceStepper("Width", value: stripWidthBinding, range: 0...500)
-            surfaceStepper("Height", value: stripHeightBinding, range: 1...100)
-            surfaceStepper("Dot Size", value: stripDotSizeBinding, range: 0.5...20, step: 0.5)
-            surfaceStepper("Max Dots", value: stripMaxDotsBinding, range: 1...50)
-            surfaceStepper("Border Opacity", value: stripBorderOpacityBinding, range: 0...1, step: 0.02)
-            surfaceStepper("Y Offset", value: stripYOffsetBinding, range: -50...50)
-        }
-        .settingsSectionCard(padding: Spacing.md)
-    }
-
-    // MARK: - Right Column: Badge Tuning
-
-    private var badgeTuningSection: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            DetailSectionHeader("BADGE TUNING", uppercase: true)
-
-            Toggle("Match Overlay Width", isOn: $traySettings.badgeFollowNotchWidth)
-                .toggleStyle(.switch)
-
-            surfaceStepper("Y Offset", value: badgeYOffsetBinding, range: 0...500)
-            surfaceStepper("Hover Target Height", value: badgeHoverTargetHeightBinding, range: 0...500)
-            surfaceStepper("Thickness", value: badgeHeightBinding, range: 1...100)
-            surfaceStepper("Dot Size", value: badgeDotSizeBinding, range: 0.5...20, step: 0.5)
-            surfaceStepper("Max Dots", value: badgeMaxDotsBinding, range: 1...50)
-
-            if !traySettings.badgeFollowNotchWidth {
-                surfaceStepper("Width", value: badgeWidthBinding, range: 10...1000)
-            }
-        }
-        .settingsSectionCard(padding: Spacing.md)
-    }
-
     // MARK: - Reset
 
     /// Move the notch overlay to the screen where the Talkie settings window is,
@@ -1270,28 +960,6 @@ struct SurfaceSettingsView: View {
         notchSettings.overlayOpacity = 1.0
         notchSettings.shellStyleRaw = NotchVirtualDisplayStyle.auto.rawValue
         notchSettings.alwaysVisible = false
-        notchSettings.trayStripEnabled = false
-        notchSettings.trayStripShowDots = true
-        notchSettings.trayStripWidth = 50
-        notchSettings.trayStripHeight = 11
-        notchSettings.trayStripDotSize = 2.6
-        notchSettings.trayStripMaxDots = 5
-        notchSettings.trayStripBorderOpacity = 0.24
-        notchSettings.trayStripYOffset = 46
-
-        // Badge
-        traySettings.externalBadgeEnabled = false
-        traySettings.badgeFollowNotchWidth = false
-        traySettings.badgeWidth = 200
-        traySettings.badgeHeight = 6
-        traySettings.badgeDotSize = 3
-        traySettings.badgeMaxDots = 5
-        traySettings.badgeYOffset = 6
-        traySettings.badgeHoverTargetHeight = 12
-
-        // Shelf
-        traySettings.shelfHeight = 130
-
         // Hover Zone (global defaults + clear per-monitor overrides)
         notchSettings.hoverZoneWidthExternal = 80
         notchSettings.hoverZoneWidthNotch = 180
@@ -1440,47 +1108,6 @@ struct SurfaceSettingsView: View {
         }
     }
 
-    // MARK: - Badge Bindings (no clamping — let the renderer handle extremes)
-
-    private var badgeWidthBinding: Binding<Double> {
-        Binding(get: { traySettings.badgeWidth }, set: { traySettings.badgeWidth = $0 })
-    }
-    private var badgeHeightBinding: Binding<Double> {
-        Binding(get: { traySettings.badgeHeight }, set: { traySettings.badgeHeight = $0 })
-    }
-    private var badgeDotSizeBinding: Binding<Double> {
-        Binding(get: { traySettings.badgeDotSize }, set: { traySettings.badgeDotSize = $0 })
-    }
-    private var badgeMaxDotsBinding: Binding<Double> {
-        Binding(get: { Double(traySettings.badgeMaxDots) }, set: { traySettings.badgeMaxDots = Int($0.rounded()) })
-    }
-    private var badgeYOffsetBinding: Binding<Double> {
-        Binding(get: { traySettings.badgeYOffset }, set: { traySettings.badgeYOffset = $0 })
-    }
-    private var badgeHoverTargetHeightBinding: Binding<Double> {
-        Binding(get: { traySettings.badgeHoverTargetHeight }, set: { traySettings.badgeHoverTargetHeight = $0 })
-    }
-
-    // MARK: - Dot Strip Bindings
-
-    private var stripWidthBinding: Binding<Double> {
-        Binding(get: { notchSettings.trayStripWidth }, set: { notchSettings.trayStripWidth = $0 })
-    }
-    private var stripHeightBinding: Binding<Double> {
-        Binding(get: { notchSettings.trayStripHeight }, set: { notchSettings.trayStripHeight = $0 })
-    }
-    private var stripDotSizeBinding: Binding<Double> {
-        Binding(get: { notchSettings.trayStripDotSize }, set: { notchSettings.trayStripDotSize = $0 })
-    }
-    private var stripMaxDotsBinding: Binding<Double> {
-        Binding(get: { Double(notchSettings.trayStripMaxDots) }, set: { notchSettings.trayStripMaxDots = Int($0.rounded()) })
-    }
-    private var stripBorderOpacityBinding: Binding<Double> {
-        Binding(get: { notchSettings.trayStripBorderOpacity }, set: { notchSettings.trayStripBorderOpacity = $0 })
-    }
-    private var stripYOffsetBinding: Binding<Double> {
-        Binding(get: { notchSettings.trayStripYOffset }, set: { notchSettings.trayStripYOffset = $0 })
-    }
 }
 
 private struct SurfacePreviewPhysicalNotchShape: Shape {

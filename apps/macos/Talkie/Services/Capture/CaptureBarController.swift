@@ -33,11 +33,12 @@ final class CaptureBarController {
     /// Returns the chosen result, or nil if cancelled/timed out.
     func beginChord(initialMode: CaptureBarMode, options: CaptureChordOptions = .captureOnly) async -> CaptureBarResult? {
         CaptureChord.isActive = true
-        let allItems = TrayItem.allItems()
+        let pasteItems = PasteCandidate.recentScreenshots(limit: 5)
         let showCameraOption = options.showCameraOption && FeatureFlags.shared.enableCameraBubble
-        let hasTrayItems = options.showTrayOption && !allItems.isEmpty
-        let hasSelectionItems = options.showSelectionOption && SelectionTray.shared.isNotEmpty
-        let trayCount = allItems.count
+        let showPasteOption = options.showTrayOption
+        let hasPasteItems = !pasteItems.isEmpty
+        let hasSelectionItems = false
+        let trayCount = pasteItems.count
 
         return await withCheckedContinuation { continuation in
             var resumed = false
@@ -53,7 +54,7 @@ final class CaptureBarController {
             panel.show(
                 mode: initialMode,
                 showCameraOption: showCameraOption,
-                showTrayOption: hasTrayItems,
+                showTrayOption: showPasteOption,
                 showSelectionOption: hasSelectionItems,
                 trayCount: trayCount
             )
@@ -142,7 +143,7 @@ final class CaptureBarController {
                     }
 
                 case "v", "f":
-                    if hasTrayItems {
+                    if hasPasteItems {
                         timeout.cancel()
                         resume(.pasteLastTray)
                     } else {
@@ -150,7 +151,7 @@ final class CaptureBarController {
                     }
 
                 case "t", "w":
-                    if hasTrayItems {
+                    if showPasteOption {
                         timeout.cancel()
                         resume(.viewTray)
                     } else {

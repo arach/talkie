@@ -2043,78 +2043,10 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
     /// Legacy callback retained for compatibility. Dictation never mutates the tray.
     nonisolated public func dictationWasPasted(recordingId: String) {}
 
-    /// Saves unpinned tray screenshots to ScreenshotStorage and returns metadata
-    /// that Agent can attach to an existing recording.
+    /// Legacy screenshot tray callback retained for protocol compatibility.
+    /// Standalone and live screenshots now save directly to ScreenshotStorage.
     nonisolated public func fetchTrayScreenshots(recordingId: String, reply: @escaping (String?) -> Void) {
-        Task { @MainActor [weak self] in
-            guard self != nil else {
-                reply(nil)
-                return
-            }
-            let screenshotTray = ScreenshotTray.shared
-
-            guard let recordingUUID = UUID(uuidString: recordingId) else {
-                logger.warning("[Tray] fetchTrayScreenshots: invalid recording ID: \(recordingId)")
-                reply(nil)
-                return
-            }
-
-            let trayItems = screenshotTray.unpinnedItems
-            guard !trayItems.isEmpty else {
-                reply(nil)
-                return
-            }
-
-            logger.info("[Tray] Agent pulling \(trayItems.count) tray screenshots for recording \(recordingId.prefix(8))")
-
-            // Save unpinned screenshots to permanent ScreenshotStorage
-            // All tray items get timestampMs = 0 (captured before dictation started)
-            var screenshots: [RecordingScreenshot] = []
-            for (index, item) in trayItems.enumerated() {
-                guard let data = item.loadData() else {
-                    logger.warning("[Tray] Failed to load data for \(item.filename)")
-                    continue
-                }
-
-                guard let savedURL = ScreenshotStorage.save(
-                    data,
-                    recordingId: recordingUUID,
-                    timestampMs: 0,
-                    index: index,
-                    capturedAt: item.capturedAt,
-                    captureMode: item.mode.rawValue,
-                    width: item.width,
-                    height: item.height,
-                    windowTitle: item.windowTitle,
-                    appName: item.appName,
-                    displayName: item.displayName
-                ) else {
-                    logger.error("[Tray] Failed to save screenshot to permanent storage")
-                    continue
-                }
-
-                screenshots.append(RecordingScreenshot(
-                    filename: savedURL.lastPathComponent,
-                    timestampMs: 0,
-                    captureMode: item.mode.rawValue,
-                    width: item.width,
-                    height: item.height,
-                    windowTitle: item.windowTitle,
-                    appName: item.appName,
-                    displayName: item.displayName
-                ))
-            }
-
-            guard !screenshots.isEmpty else {
-                logger.warning("[Tray] No screenshots saved — returning nil")
-                reply(nil)
-                return
-            }
-
-            let json = RecordingScreenshot.toJSON(screenshots)
-            logger.info("[Tray] Saved \(screenshots.count) screenshots to ScreenshotStorage, returning JSON to Agent")
-            reply(json)
-        }
+        reply(nil)
     }
 
     /// Copies in-window tray screenshots and screen clips to recording storage
@@ -2165,23 +2097,18 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
                 return clip.capturedAt <= recordingEnd && clipEnd >= recordingStart
             }
 
-            let allScreenshotItems = includeScreenshots ? ScreenshotTray.shared.unpinnedItems : []
             let allClipItems = ClipTray.shared.unpinnedItems
-            let screenshotItems = allScreenshotItems.filter {
-                $0.capturedAt >= recordingStart && $0.capturedAt <= recordingEnd
-            }
             let clipItems = allClipItems.filter(overlapsRecordingWindow)
-            let deferredScreenshotCount = allScreenshotItems.count - screenshotItems.count
             let deferredClipCount = allClipItems.count - clipItems.count
             if !includeScreenshots {
-                logger.debug("[Tray] Skipping tray screenshot merge; live screenshots already attached")
+                logger.debug("[Tray] Screenshot tray merge disabled; live screenshots attach through ScreenshotStorage")
             }
 
-            guard !screenshotItems.isEmpty || !clipItems.isEmpty else {
-                if deferredScreenshotCount > 0 || deferredClipCount > 0 {
+            guard !clipItems.isEmpty else {
+                if deferredClipCount > 0 {
                     logger.info(
                         "[Tray] No in-recording tray assets for recording \(recordingId.prefix(8)); leaving tray unchanged",
-                        detail: "outside window \(deferredScreenshotCount) screenshots, \(deferredClipCount) clips"
+                        detail: "outside window \(deferredClipCount) clips"
                     )
                 }
                 reply(nil)
@@ -2189,44 +2116,11 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
             }
 
             logger.info(
-                "[Tray] Agent pulling \(screenshotItems.count) screenshots and \(clipItems.count) clips for recording \(recordingId.prefix(8))",
-                detail: deferredScreenshotCount > 0 || deferredClipCount > 0
-                    ? "outside window \(deferredScreenshotCount) screenshots, \(deferredClipCount) clips left in tray"
+                "[Tray] Agent pulling \(clipItems.count) clips for recording \(recordingId.prefix(8))",
+                detail: deferredClipCount > 0
+                    ? "outside window \(deferredClipCount) clips left in clip buffer"
                     : nil
             )
-
-            var screenshots: [RecordingScreenshot] = []
-            for (index, item) in screenshotItems.enumerated() {
-                let timestamp = timestampMs(for: item.capturedAt)
-                guard let data = item.loadData(),
-                      let savedURL = ScreenshotStorage.save(
-                        data,
-                        recordingId: recordingUUID,
-                        timestampMs: timestamp,
-                        index: index,
-                        capturedAt: item.capturedAt,
-                        captureMode: item.mode.rawValue,
-                        width: item.width,
-                        height: item.height,
-                        windowTitle: item.windowTitle,
-                        appName: item.appName,
-                        displayName: item.displayName
-                      ) else {
-                    logger.warning("[Tray] Failed to save tray screenshot to permanent storage")
-                    continue
-                }
-
-                screenshots.append(RecordingScreenshot(
-                    filename: savedURL.lastPathComponent,
-                    timestampMs: timestamp,
-                    captureMode: item.mode.rawValue,
-                    width: item.width,
-                    height: item.height,
-                    windowTitle: item.windowTitle,
-                    appName: item.appName,
-                    displayName: item.displayName
-                ))
-            }
 
             var clips: [RecordingClip] = []
             var visualContexts: [RecordingVisualContext] = []
@@ -2282,7 +2176,7 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
             }
 
             let assets = TalkieObjectAssets(
-                screenshots: screenshots.isEmpty ? nil : screenshots,
+                screenshots: nil,
                 clips: clips.isEmpty ? nil : clips,
                 visualContexts: visualContexts.isEmpty ? nil : visualContexts
             )
@@ -2293,7 +2187,7 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
                 return
             }
 
-            logger.info("[Tray] Saved \(screenshots.count) screenshots, \(clips.count) clips, and \(visualContexts.count) visual contexts, returning assets JSON to Agent")
+            logger.info("[Tray] Saved \(clips.count) clips and \(visualContexts.count) visual contexts, returning assets JSON to Agent")
             reply(json)
         }
     }

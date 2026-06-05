@@ -48,7 +48,7 @@ extension NSEvent {
 enum CaptureHUDPosition: String, CaseIterable, Codable {
     /// Anchor the HUD near the mouse cursor (default — smart edge flip).
     case cursor
-    /// Pin the HUD to the top-center preview lane, near the tray.
+    /// Pin the HUD to the top-center preview lane.
     case fixed
 
     var label: String {
@@ -85,7 +85,7 @@ enum ScreenshotLauncher: String, CaseIterable, Codable {
 
     var detail: String? {
         switch self {
-        case .builtin: return "Capture to tray, no external editor"
+        case .builtin: return "Capture to screenshots, no external editor"
         case .screenshotX: return "Annotate & markup"
         case .cleanshotX: return "Annotate, blur, & share"
         case .system: return "macOS Preview editor"
@@ -209,8 +209,8 @@ enum CaptureBarResult {
     case screenRecord(CaptureMode)   // A/S/D in video mode
     case toggleCamera                // C key
     case saveSelection               // N key
-    case viewTray                    // T key
-    case pasteLastTray               // V key
+    case viewTray                    // T key, legacy name for Hyper Paste
+    case pasteLastTray               // V key, legacy name for paste latest
 
     /// Whether the action should keep the previous app in focus.
     /// Screenshot/record/camera are background ops; tray viewer needs Talkie foreground.
@@ -310,6 +310,8 @@ final class CaptureBarPanel {
     }
 
     func dismiss() {
+        state.onAction = nil
+
         guard let p = panel else { return }
         panel = nil
         NSAnimationContext.runAnimationGroup({ ctx in
@@ -318,6 +320,7 @@ final class CaptureBarPanel {
             p.animator().alphaValue = 0
         }, completionHandler: {
             p.orderOut(nil)
+            p.contentView = nil
         })
     }
 
@@ -522,7 +525,7 @@ private struct CaptureBarView: View {
             }
 
             if state.showTrayOption {
-                // Paste last tray item
+                // Paste latest capture
                 HStack(spacing: 3) {
                     Text("V")
                         .font(.system(size: 11, weight: .bold, design: .monospaced))
@@ -538,7 +541,7 @@ private struct CaptureBarView: View {
                         .foregroundColor(.green.opacity(0.6))
                 }
 
-                // Tray viewer
+                // Hyper Paste
                 HStack(spacing: 3) {
                     Text("T")
                         .font(.system(size: 11, weight: .bold, design: .monospaced))
@@ -549,8 +552,8 @@ private struct CaptureBarView: View {
                             RoundedRectangle(cornerRadius: 4)
                                 .strokeBorder(Color.cyan.opacity(0.3), lineWidth: 0.5)
                         )
-                    Text("\(state.trayCount)")
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    Image(systemName: "doc.on.clipboard")
+                        .font(.system(size: 9))
                         .foregroundColor(.cyan.opacity(0.7))
                 }
             }

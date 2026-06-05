@@ -2,7 +2,7 @@
 //  ScreenshotsScreen.swift
 //  Talkie macOS
 //
-//  Visual grid of all screenshots — tray captures + saved on recordings.
+//  Visual grid of saved screenshots.
 //  Click to select, resizable detail pane on the right.
 //
 
@@ -22,8 +22,6 @@ private struct ScreenshotItem: Identifiable {
     let label: String?
     let pinned: Bool
 
-    // Source tracking
-    let trayItem: TrayItem?
     let parent: TalkieObject?
     let screenshot: RecordingScreenshot?
 }
@@ -40,10 +38,6 @@ struct ScreenshotsScreen: View {
     private let repository = TalkieObjectRepository()
     private let actionRepository = LocalRepository()
     private let workflowService = WorkflowService.shared
-    @Bindable private var screenshotTray = ScreenshotTray.shared
-    @Bindable private var clipTray = ClipTray.shared
-    @Bindable private var selectionTray = SelectionTray.shared
-
     @State private var objectsWithScreenshots: [TalkieObject] = []
     @State private var libraryItems: [ScreenshotItem] = []
     @State private var selectedID: String?
@@ -89,37 +83,15 @@ struct ScreenshotsScreen: View {
     // Capture-pill keep-out. `pillKeepoutHalf` is half the resting pill's
     // footprint (≈114pt wide) plus margin; `fullHeaderControlsWidth` is the
     // rough span of the expanded header cluster (count + view toggle + search
-    // + tray + markup + folder). Used to decide when the header must collapse
+    // + markup + folder). Used to decide when the header must collapse
     // so its controls never slide under the centered pill.
     private static let pillKeepoutHalf: CGFloat = 65
     private static let fullHeaderControlsWidth: CGFloat = 470
 
     // MARK: - Derived
 
-    private var trayScreenshotItems: [ScreenshotItem] {
-        let screenshots: [TrayItem] = screenshotTray.items.map { .screenshot($0) }
-        let clips: [TrayItem] = clipTray.items.map { .clip($0) }
-        let selections: [TrayItem] = selectionTray.items.map { .selection($0) }
-
-        return (screenshots + clips + selections)
-            .sorted { $0.capturedAt > $1.capturedAt }
-            .map { item in
-                ScreenshotItem(
-                    id: "tray-\(item.id.uuidString)",
-                    fileURL: item.tempURL,
-                    date: item.capturedAt,
-                    label: item.contextLabel,
-                    pinned: item.pinned,
-                    trayItem: item,
-                    parent: nil,
-                    screenshot: nil
-                )
-            }
-    }
-
     private var allItems: [ScreenshotItem] {
-        let tray = trayScreenshotItems
-        let combined = tray + libraryItems
+        let combined = libraryItems
 
         guard !searchText.isEmpty else { return combined }
         let query = searchText.lowercased()
@@ -282,7 +254,7 @@ struct ScreenshotsScreen: View {
 
 
     // Right-side controls. Condense as the pane narrows: search shrinks and
-    // Tray Viewer collapses to an icon.
+    // Ancillary controls collapse to icons as the pane narrows.
     @ViewBuilder
     private func headerControls(compact: Bool) -> some View {
         HStack(spacing: 8) {
@@ -309,21 +281,6 @@ struct ScreenshotsScreen: View {
             .background(Theme.current.foreground.opacity(0.06))
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .frame(maxWidth: compact ? 100 : 180)
-
-            if !trayScreenshotItems.isEmpty {
-                Button {
-                    TrayViewer.shared.show()
-                } label: {
-                    if compact {
-                        Image(systemName: "tray.full")
-                    } else {
-                        Text("Tray Viewer")
-                    }
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .help("Tray Viewer")
-            }
 
             Button {
                 if let item = selectedAnnotatableItem {
@@ -503,7 +460,7 @@ struct ScreenshotsScreen: View {
             windowTitle: windowTitleLine(item),
             displayName: displayLine(item),
             recordingOffset: recordingOffsetLine(item),
-            trayOCRText: trayOCRText(item),
+            fallbackOCRText: nil,
             canMarkup: canAnnotate(item),
             showRecording: canShowRecording(item),
             onOpenPreview: { openPreview(item) },
@@ -523,7 +480,7 @@ struct ScreenshotsScreen: View {
         ContentUnavailableView {
             Label("No Screenshots", systemImage: "camera.viewfinder")
         } description: {
-            Text("Capture screenshots during memos or use Hyper+S to add them to the tray.")
+            Text("Capture screenshots during memos or use Hyper+S to save them to the library.")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -531,15 +488,7 @@ struct ScreenshotsScreen: View {
     // MARK: - Screenshot Card
 
     private func screenshotCard(_ item: ScreenshotItem, allItems: [ScreenshotItem]) -> some View {
-        Group {
-            if let trayItem = item.trayItem {
-                // Tray items use the battle-tested AdaptiveCardView
-                trayCard(item, trayItem: trayItem, allItems: allItems)
-            } else {
-                // Library items load thumbnail from disk
-                libraryCard(item, allItems: allItems)
-            }
-        }
+        libraryCard(item, allItems: allItems)
     }
 
     // MARK: - Screenshot List Row
@@ -567,13 +516,7 @@ struct ScreenshotsScreen: View {
             }
         )
 
-        return Group {
-            if let trayItem = item.trayItem {
-                row.contextMenu { trayContextMenu(item, trayItem: trayItem) }
-            } else {
-                row.contextMenu { libraryContextMenu(item) }
-            }
-        }
+        return row.contextMenu { libraryContextMenu(item) }
     }
 
     /// Title for a list row — prefers the human label, else the app name.
@@ -592,22 +535,18 @@ struct ScreenshotsScreen: View {
     }
 
     /// Aligned column values for a list row. STRICTLY in-memory metadata —
-    /// `RecordingScreenshot` / `TrayScreenshot` fields plus `item.date`. No
+    /// `RecordingScreenshot` fields plus `item.date`. No
     /// file-header decode, no sidecar load, no markup-layer load (those are
     /// per-row disk reads that would tank scroll perf on hundreds of rows).
     private func rowColumns(_ item: ScreenshotItem) -> ScreenshotRowColumns {
         // App / window context — already carried on both models.
         let app = item.screenshot?.appName
-            ?? item.trayItem?.appName
             ?? item.screenshot?.windowTitle
-            ?? item.trayItem?.windowTitle
 
         // Dimensions — width/height live on both record types in memory.
         var dimensions: String?
         if let ss = item.screenshot, let w = ss.width, let h = ss.height {
             dimensions = "\(w)×\(h)"
-        } else if let trayItem = item.trayItem, trayItem.width > 0 {
-            dimensions = "\(trayItem.width)×\(trayItem.height)"
         }
 
         return ScreenshotRowColumns(
@@ -615,68 +554,6 @@ struct ScreenshotsScreen: View {
             source: sourceLabel(item).uppercased(),
             dimensions: dimensions
         )
-    }
-
-    // MARK: - Screenshot Card
-
-    private func trayCard(_ item: ScreenshotItem, trayItem: TrayItem, allItems: [ScreenshotItem]) -> some View {
-        let selected = selectedIDs.contains(item.id)
-        return AdaptiveCardView(
-            item: trayItem,
-            isSelected: selected,
-            fontSize: 7
-        )
-        .aspectRatio(1, contentMode: .fit)
-        .overlay(selectionOverlay(isSelected: selected))
-        .contentShape(Rectangle())
-        .accessibilityLabel(itemAccessibilityLabel(item))
-        .accessibilityAddTraits(selected ? .isSelected : [])
-        .screenshotGridDrag(
-            itemID: item.id,
-            payloads: dragPayloads(from: allItems),
-            selectedIDs: selectedIDs,
-            onClick: { event in
-                handleItemClick(item, allItems: allItems, modifiers: event.modifierFlags)
-            }
-        )
-        .contextMenu { trayContextMenu(item, trayItem: trayItem) }
-    }
-
-    @ViewBuilder
-    private func trayContextMenu(_ item: ScreenshotItem, trayItem: TrayItem) -> some View {
-        Button("Copy Image") { copyItem(item) }
-
-        if case .screenshot(let ts) = trayItem {
-            Button("Annotate…") { annotateItem(item) }
-
-            workflowContextMenuItems(for: item)
-
-            if let ocrText = ts.ocrText, !ocrText.isEmpty {
-                Button("Copy Detected Text") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(ocrText, forType: .string)
-                }
-            }
-
-            Divider()
-
-            Button("Save as Capture") { promoteItem(item, runOCR: false) }
-            Button("Save as Capture with OCR…") { promoteItem(item, runOCR: true) }
-        }
-
-        Divider()
-
-        Button(item.pinned ? "Unpin" : "Pin") {
-            TrayActionService.shared.togglePinSelected(ids: [trayItem.id], in: [trayItem])
-        }
-
-        Button("Open in Preview") { openPreview(item) }
-        Button("Open in Preview.app") { NSWorkspace.shared.open(item.fileURL) }
-        Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([item.fileURL]) }
-
-        Divider()
-
-        Button("Delete", role: .destructive) { deleteItem(item) }
     }
 
     private func libraryCard(_ item: ScreenshotItem, allItems: [ScreenshotItem]) -> some View {
@@ -777,9 +654,7 @@ struct ScreenshotsScreen: View {
     }
 
     private func canAnnotate(_ item: ScreenshotItem) -> Bool {
-        guard let trayItem = item.trayItem else { return true }
-        if case .screenshot = trayItem { return true }
-        return false
+        true
     }
 
     private func annotateItem(_ item: ScreenshotItem) {
@@ -797,9 +672,7 @@ struct ScreenshotsScreen: View {
     }
 
     private func copyItem(_ item: ScreenshotItem) {
-        if let trayItem = item.trayItem {
-            _ = TrayActionService.shared.copySelected(ids: [trayItem.id], in: [trayItem])
-        } else if let data = try? Data(contentsOf: item.fileURL) {
+        if let data = try? Data(contentsOf: item.fileURL) {
             let pb = NSPasteboard.general
             pb.clearContents()
             pb.setData(data, forType: .png)
@@ -807,22 +680,12 @@ struct ScreenshotsScreen: View {
     }
 
     private func deleteItem(_ item: ScreenshotItem) {
-        if let trayItem = item.trayItem {
-            _ = TrayActionService.shared.deleteSelected(ids: [trayItem.id], in: [trayItem])
-        } else if let parent = item.parent, let ss = item.screenshot {
+        if let parent = item.parent, let ss = item.screenshot {
             Task { await removeAttachedScreenshot(ss, from: parent) }
         }
         selectedIDs.remove(item.id)
         if selectedID == item.id { selectedID = selectedIDs.first }
         if selectionAnchorID == item.id { selectionAnchorID = selectedID }
-    }
-
-    private func promoteItem(_ item: ScreenshotItem, runOCR: Bool) {
-        if let trayItem = item.trayItem, case .screenshot(let ts) = trayItem {
-            TrayActionService.shared.promoteTrayToCapture(ts, runOCR: runOCR) {
-                Task { await loadLibrary() }
-            }
-        }
     }
 
     // MARK: - Preview / Inspector actions
@@ -877,13 +740,6 @@ struct ScreenshotsScreen: View {
 
     private func sourceLabel(_ item: ScreenshotItem) -> String {
         if let mode = item.screenshot?.captureMode, !mode.isEmpty { return mode }
-        if let trayItem = item.trayItem {
-            switch trayItem {
-            case .screenshot: return "screenshot"
-            case .clip:       return "clip"
-            case .selection:  return "selection"
-            }
-        }
         return "screenshot"
     }
 
@@ -891,13 +747,9 @@ struct ScreenshotsScreen: View {
         if let ss = item.screenshot, let w = ss.width, let h = ss.height {
             return "\(w) × \(h)"
         }
-        // Tray items have no stored metadata; read true pixel dims from the
-        // file header (cheap) rather than the small in-memory thumbnail.
+        // Fall back to file-header dimensions when the record has no stored metadata.
         if let (w, h) = pixelSize(of: item.fileURL) {
             return "\(w) × \(h)"
-        }
-        if let img = item.trayItem?.image, img.size.width > 0 {
-            return "\(Int(img.size.width)) × \(Int(img.size.height))"
         }
         return nil
     }
@@ -941,32 +793,24 @@ struct ScreenshotsScreen: View {
     /// the inspector header and also for the recording-attached library row,
     /// which already carries the `RecordingScreenshot`.
     private func appBundleLine(_ item: ScreenshotItem) -> String? {
-        item.screenshot?.appName ?? item.trayItem?.appName
+        item.screenshot?.appName
     }
 
     /// Bundle id carried on the record (set at capture time). The inspector
     /// prefers the augmenter sidecar but falls back to this so the bundle row
     /// shows immediately, before the async augmentation pass completes.
     private func appBundleIDLine(_ item: ScreenshotItem) -> String? {
-        item.screenshot?.appBundleID ?? item.trayItem?.appBundleID
+        item.screenshot?.appBundleID
     }
 
     private func windowTitleLine(_ item: ScreenshotItem) -> String? {
-        let title = item.screenshot?.windowTitle ?? item.trayItem?.windowTitle
+        let title = item.screenshot?.windowTitle
         guard let title, !title.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
         return title
     }
 
     private func displayLine(_ item: ScreenshotItem) -> String? {
-        item.screenshot?.displayName ?? item.trayItem?.displayName
-    }
-
-    /// Inline OCR text for tray items (stored on the model, not the sidecar).
-    private func trayOCRText(_ item: ScreenshotItem) -> String? {
-        if let trayItem = item.trayItem, case .screenshot(let ts) = trayItem {
-            return ts.ocrText
-        }
-        return nil
+        item.screenshot?.displayName
     }
 
     /// Recording-offset for library captures — the `timestampMs` field records
@@ -1041,9 +885,6 @@ struct ScreenshotsScreen: View {
                 )
 
                 await loadLibrary()
-                if item.trayItem != nil {
-                    selectedID = target.screenshots.first.map { "lib-\($0.filename)" }
-                }
                 await notifyScreenshotActionReady(
                     workflowName: workflow.name,
                     actionRunId: actionRunId,
@@ -1135,16 +976,6 @@ struct ScreenshotsScreen: View {
     private func workflowTargetObject(for item: ScreenshotItem) async throws -> TalkieObject {
         if let parent = item.parent {
             return parent
-        }
-
-        if let trayItem = item.trayItem,
-           case .screenshot(let screenshot) = trayItem,
-           let capture = await TrayActionService.shared.saveTrayScreenshotAsCapture(
-            screenshot,
-            runOCR: false,
-            removeFromTrayOnSuccess: false
-           ) {
-            return capture
         }
 
         throw WorkflowError.executionFailed("This item cannot be used as workflow input.")
@@ -1340,13 +1171,13 @@ struct ScreenshotsScreen: View {
             ScreenshotGridDragPayload(
                 id: item.id,
                 url: item.fileURL,
-                image: item.trayItem?.image
+                image: nil
             )
         }
     }
 
     private func itemAccessibilityLabel(_ item: ScreenshotItem) -> String {
-        let source = item.trayItem == nil ? "Library screenshot" : "Tray capture"
+        let source = "Library screenshot"
         let context = item.label?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let context, !context.isEmpty {
             return "\(source), \(context)"
@@ -1377,7 +1208,6 @@ struct ScreenshotsScreen: View {
                         date: obj.createdAt,
                         label: ss.windowTitle ?? ss.appName ?? obj.title,
                         pinned: false,
-                        trayItem: nil,
                         parent: obj,
                         screenshot: ss
                     ))
@@ -1476,13 +1306,14 @@ private struct LibraryCardView: View {
             RoundedRectangle(cornerRadius: 4, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.1), lineWidth: 0.5)
         )
-        .task { thumbnail = await loadThumbnail() }
+        .task(id: item.id) { thumbnail = await loadThumbnail() }
+        .onDisappear { thumbnail = nil }
     }
 
     private func loadThumbnail() async -> NSImage? {
         let url = item.fileURL
         return await Task.detached {
-            ScreenshotTray.generateThumbnail(for: url, maxSize: 280)
+            ScreenshotLibraryThumbnail.generate(for: url, maxSize: 280)
         }.value
     }
 
@@ -1571,9 +1402,7 @@ private struct FramedScreenshot: View {
     }
 }
 
-/// Loads the screenshot image — tray items carry an in-memory NSImage;
-/// library items decode a thumbnail off the main thread (same pattern as
-/// LibraryCardView).
+/// Loads the screenshot image off the main thread.
 private struct ScreenshotImageView: View {
     let item: ScreenshotItem
     let maxSize: CGFloat
@@ -1603,33 +1432,47 @@ private struct ScreenshotImageView: View {
             }
         }
         .task(id: item.id) { image = await load() }
+        .onDisappear { image = nil }
     }
 
     private func load() async -> NSImage? {
         let url = item.fileURL
         // Full-res (Quick Look preview): always decode the original file.
-        // The tray's in-memory `image` is a small thumbnail, so using it
-        // here would show a blurry upscale even though the file is full-res.
         if fullResolution {
-            if let full = await Task.detached(operation: { NSImage(contentsOf: url) }).value {
-                return full
-            }
-            return item.trayItem?.image
+            return await Task.detached(operation: { NSImage(contentsOf: url) }).value
         }
-        // Thumbnail path (grid / small inspector preview): fast in-memory
-        // image for tray items, else a downscaled decode from disk.
-        if let img = item.trayItem?.image { return img }
+        // Thumbnail path (grid / small inspector preview): downscaled decode from disk.
         let size = maxSize
         return await Task.detached {
-            ScreenshotTray.generateThumbnail(for: url, maxSize: size)
+            ScreenshotLibraryThumbnail.generate(for: url, maxSize: size)
         }.value
+    }
+}
+
+private enum ScreenshotLibraryThumbnail {
+    nonisolated static func generate(for url: URL, maxSize: CGFloat = 400) -> NSImage? {
+        autoreleasepool {
+            guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+            let options: [CFString: Any] = [
+                kCGImageSourceThumbnailMaxPixelSize: Int(maxSize.rounded()),
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true
+            ]
+            guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+                return nil
+            }
+            return NSImage(
+                cgImage: cgImage,
+                size: NSSize(width: cgImage.width, height: cgImage.height)
+            )
+        }
     }
 }
 
 // MARK: - List Row
 
 /// In-memory column values for a list row. Built on the screen side from
-/// `RecordingScreenshot` / `TrayScreenshot` fields only — never a disk read.
+/// `RecordingScreenshot` fields only — never a disk read.
 private struct ScreenshotRowColumns {
     let app: String?
     let source: String
@@ -1773,7 +1616,7 @@ private struct InspectorDiskMetadata: Equatable {
 
     /// Reads the image file header, FileManager attrs, and the TK sidecar
     /// for `url`. Pure (no SwiftUI / main-actor needs) so it runs detached.
-    static func load(for url: URL, trayOCRText: String?) -> InspectorDiskMetadata {
+    static func load(for url: URL, fallbackOCRText: String?) -> InspectorDiskMetadata {
         var meta = InspectorDiskMetadata()
 
         if let source = CGImageSourceCreateWithURL(url as CFURL, nil) {
@@ -1816,11 +1659,9 @@ private struct InspectorDiskMetadata: Equatable {
             meta.visionDescribed = sidecar.entry(of: .visionDescription) != nil
         }
 
-        // Tray items keep OCR inline on the model (no sidecar), so fall back
-        // to that when the sidecar didn't carry text.
-        if !meta.ocrPresent, let trayOCRText, !trayOCRText.isEmpty {
+        if !meta.ocrPresent, let fallbackOCRText, !fallbackOCRText.isEmpty {
             meta.ocrPresent = true
-            applyOCR(trayOCRText, to: &meta)
+            applyOCR(fallbackOCRText, to: &meta)
         }
 
         return meta
@@ -1863,7 +1704,7 @@ private struct InspectorDiskMetadata: Equatable {
 // MARK: - Inspector
 
 /// Lightweight metadata + actions rail that replaced the full TalkieView
-/// detail pane. Shows for any selected item (tray or library) and offers
+/// detail pane. Shows for any selected item and offers
 /// the two open destinations — Preview (read-only) and Markup (annotate).
 private struct ScreenshotInspector: View {
     let item: ScreenshotItem
@@ -1879,7 +1720,7 @@ private struct ScreenshotInspector: View {
     let windowTitle: String?
     let displayName: String?
     let recordingOffset: String?
-    let trayOCRText: String?
+    let fallbackOCRText: String?
     let canMarkup: Bool
     let showRecording: Bool
     let onOpenPreview: () -> Void
@@ -2056,9 +1897,9 @@ private struct ScreenshotInspector: View {
                 showDetectedText = false
                 ocrCopied = false
                 let url = item.fileURL
-                let trayText = trayOCRText
+                let fallbackText = fallbackOCRText
                 disk = await Task.detached {
-                    InspectorDiskMetadata.load(for: url, trayOCRText: trayText)
+                    InspectorDiskMetadata.load(for: url, fallbackOCRText: fallbackText)
                 }.value
             }
         }
@@ -2077,9 +1918,9 @@ private struct ScreenshotInspector: View {
     }
 
     /// Full OCR text for the expanded disclosure — re-read from the sidecar
-    /// (or the tray model) only when the user expands it.
+    /// only when the user expands it.
     private var fullOCRText: String? {
-        if let trayOCRText, !trayOCRText.isEmpty { return trayOCRText }
+        if let fallbackOCRText, !fallbackOCRText.isEmpty { return fallbackOCRText }
         guard let sidecar = try? TKSidecarStore.read(forAsset: item.fileURL),
               let entry = sidecar.entry(of: .ocr),
               let geometry = try? entry.data.decode(OCRGeometryResult.self),
@@ -2282,9 +2123,6 @@ private struct ScreenshotPreviewOverlay: View {
     private var aspect: CGFloat {
         if let ss = item.screenshot, let w = ss.width, let h = ss.height, h > 0 {
             return CGFloat(w) / CGFloat(h)
-        }
-        if let img = item.trayItem?.image, img.size.height > 0 {
-            return img.size.width / img.size.height
         }
         return 4.0 / 3.0
     }

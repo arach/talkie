@@ -96,7 +96,9 @@ struct ScopeOnboardingView: View {
     private func refreshGrantedState() {
         didGrantMic = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
         didGrantAccessibility = AXIsProcessTrusted()
-        didGrantScreen = CGPreflightScreenCaptureAccess()
+        Task { @MainActor in
+            didGrantScreen = await ScreenCapturePermissionManager.appScreenRecordingPermissionGranted()
+        }
     }
 
     /// Starts a 90-second polling loop that checks accessibility
@@ -125,7 +127,7 @@ struct ScopeOnboardingView: View {
             let deadline = Date().addingTimeInterval(90)
             while !Task.isCancelled && Date() < deadline {
                 try? await Task.sleep(for: .milliseconds(500))
-                if CGPreflightScreenCaptureAccess() {
+                if await ScreenCapturePermissionManager.appScreenRecordingPermissionGranted() {
                     didGrantScreen = true
                     return
                 }

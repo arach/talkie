@@ -707,49 +707,6 @@ struct TalkieSettingsConfiguration: Codable {
         }
     }
 
-    struct Tray: Codable {
-        var externalBadgeEnabled: Bool
-        var badgeModeRaw: String
-        var badgeFollowNotchWidth: Bool
-        var badgeWidth: Double
-        var badgeHeight: Double
-        var badgeDotSize: Double
-        var badgeMaxDots: Int
-        var badgeYOffset: Double
-        var badgeHoverTargetHeight: Double
-        var viewerModeRaw: String
-        var shelfHeight: Double
-        var shelfHotkey: String
-
-        init(
-            externalBadgeEnabled: Bool = false,
-            badgeModeRaw: String = TrayBadgeMode.pill.rawValue,
-            badgeFollowNotchWidth: Bool = false,
-            badgeWidth: Double = 220.0,
-            badgeHeight: Double = 6.0,
-            badgeDotSize: Double = 2.0,
-            badgeMaxDots: Int = 5,
-            badgeYOffset: Double = 6.0,
-            badgeHoverTargetHeight: Double = 6.0,
-            viewerModeRaw: String = TrayViewMode.gallery.rawValue,
-            shelfHeight: Double = 130.0,
-            shelfHotkey: String = ""
-        ) {
-            self.externalBadgeEnabled = externalBadgeEnabled
-            self.badgeModeRaw = badgeModeRaw
-            self.badgeFollowNotchWidth = badgeFollowNotchWidth
-            self.badgeWidth = badgeWidth
-            self.badgeHeight = badgeHeight
-            self.badgeDotSize = badgeDotSize
-            self.badgeMaxDots = badgeMaxDots
-            self.badgeYOffset = badgeYOffset
-            self.badgeHoverTargetHeight = badgeHoverTargetHeight
-            self.viewerModeRaw = viewerModeRaw
-            self.shelfHeight = shelfHeight
-            self.shelfHotkey = shelfHotkey
-        }
-    }
-
     struct NotchLab: Codable {
         var hoverPokeOut: Double
         var activePokeOut: Double
@@ -841,7 +798,6 @@ struct TalkieSettingsConfiguration: Codable {
     var camera: Camera
     var ui: UI
     var notch: Notch
-    var tray: Tray
     var notchLab: NotchLab
     var apps: Apps
     var developer: Developer
@@ -866,7 +822,6 @@ struct TalkieSettingsConfiguration: Codable {
         camera: Camera = .init(),
         ui: UI = .init(),
         notch: Notch = .init(),
-        tray: Tray = .init(),
         notchLab: NotchLab = .init(),
         apps: Apps = .init(),
         developer: Developer = .init(),
@@ -890,7 +845,6 @@ struct TalkieSettingsConfiguration: Codable {
         self.camera = camera
         self.ui = ui
         self.notch = notch
-        self.tray = tray
         self.notchLab = notchLab
         self.apps = apps
         self.developer = developer
@@ -916,7 +870,6 @@ struct TalkieSettingsConfiguration: Codable {
         case camera
         case ui
         case notch
-        case tray
         case notchLab
         case apps
         case developer
@@ -944,7 +897,6 @@ struct TalkieSettingsConfiguration: Codable {
         camera = try container.decodeIfPresent(Camera.self, forKey: .camera) ?? .init()
         ui = try container.decodeIfPresent(UI.self, forKey: .ui) ?? .init()
         notch = try container.decodeIfPresent(Notch.self, forKey: .notch) ?? .init()
-        tray = try container.decodeIfPresent(Tray.self, forKey: .tray) ?? .init()
         notchLab = try container.decodeIfPresent(NotchLab.self, forKey: .notchLab) ?? .init()
         apps = try container.decodeIfPresent(Apps.self, forKey: .apps) ?? .init()
         developer = try container.decodeIfPresent(Developer.self, forKey: .developer) ?? .init()

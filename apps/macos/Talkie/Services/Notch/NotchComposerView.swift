@@ -83,8 +83,10 @@ struct NotchComposerView: View {
     let notchInfo: NotchInfo
 
     @Bindable private var tuning = NotchTuning.shared
-    @State private var trayItemsSnapshot: [TrayItem] = []
-    private var trayBadgeHoverActive: Bool { composer.trayBadgeHoverActive }
+    private var notchTrayDiscoveryEnabled: Bool { false }
+    private var trayBadgeHoverActive: Bool {
+        notchTrayDiscoveryEnabled && composer.trayBadgeHoverActive
+    }
     // MARK: - Settings (read from NotchSettings singleton)
     private var ns: NotchSettings { .shared }
     private var notchAggressiveDebugLogging: Bool { ns.aggressiveDebugLogging }
@@ -385,11 +387,11 @@ struct NotchComposerView: View {
     }
 
     private var isTrayExpanded: Bool {
-        isTrayWingHovered
+        notchTrayDiscoveryEnabled && isTrayWingHovered
     }
 
     private var shouldOpenTrayFromIdleTap: Bool {
-        !unified && ns.trayDotsInside && trayItemCount > 0 && isHovered && isTrayWingHovered
+        notchTrayDiscoveryEnabled && !unified && ns.trayDotsInside && trayItemCount > 0 && isHovered && isTrayWingHovered
     }
 
     private let expandDurationSeconds: Double = 0.12
@@ -589,20 +591,16 @@ struct NotchComposerView: View {
         CGFloat(min(max(notchTrayIndicatorBorderOpacity, 0), 0.8))
     }
 
-    private var trayItems: [TrayItem] {
-        trayItemsSnapshot
-    }
-
     private var trayItemCount: Int {
-        trayItems.count
+        0
     }
 
     private var shouldShowCommunicationFramework: Bool {
-        true
+        notchTrayDiscoveryEnabled
     }
 
     private var shouldShowCommunicationStrip: Bool {
-        ns.trayDotsOutside
+        notchTrayDiscoveryEnabled && ns.trayDotsOutside
     }
 
     private var communicationDockYOffset: CGFloat {
@@ -793,8 +791,6 @@ struct NotchComposerView: View {
             logTransition("trayBadgeHoverActive=\(isActive)")
         }
         .onAppear {
-            refreshTrayItemsSnapshot()
-            observeTrayChanges()
             isRecordingExpanded = false
             showRecordingLayout = recordingIntentActive
             shouldHideRecordingLayoutAfterCollapse = false
@@ -945,7 +941,7 @@ struct NotchComposerView: View {
                     if unified {
                         ServiceManager.shared.live.toggleRecording()
                     } else if hasTray {
-                        openTrayViewerFromNotch()
+                        openHyperPasteFromNotch()
                     } else {
                         ServiceManager.shared.live.toggleRecording()
                     }
@@ -1058,7 +1054,7 @@ struct NotchComposerView: View {
                     if unified {
                         ServiceManager.shared.live.toggleRecording()
                     } else if hasTray {
-                        openTrayViewerFromNotch()
+                        openHyperPasteFromNotch()
                     } else {
                         ServiceManager.shared.live.toggleRecording()
                     }
@@ -1229,13 +1225,11 @@ struct NotchComposerView: View {
     }
 
     private var communicationDock: some View {
-        let revealProgress = communicationSurfaceProgress
-
-        return VStack(spacing: 0) {
+        VStack(spacing: 0) {
             if shouldShowCommunicationStrip && communicationStripOpacity > 0.01 {
                 if trayItemCount > 0 {
                     Button {
-                        openTrayViewerFromNotch()
+                        openHyperPasteFromNotch()
                     } label: {
                         NotchTrayDotBar(
                             count: trayItemCount,
@@ -1264,7 +1258,7 @@ struct NotchComposerView: View {
                     }
                 } else {
                     Button {
-                        openTrayViewerFromNotch()
+                        openHyperPasteFromNotch()
                     } label: {
                         Capsule()
                             .fill(overlayColor)
@@ -1276,32 +1270,7 @@ struct NotchComposerView: View {
                 }
             }
 
-            if shouldShowCommunicationSurface {
-                NotchTrayExtensionSurface(
-                    trayItems: trayItems,
-                    baselineWidth: communicationDockWidth,
-                    rows: communicationRows,
-                    bottomCornerRadius: bottomRadius,
-                    surfaceColor: overlayColor,
-                    extraTopInset: communicationSurfaceContentInset,
-                    onOpenTray: {
-                        openTrayViewerFromNotch()
-                    }
-                )
-                .scaleEffect(x: 1, y: max(0.01, revealProgress), anchor: .top)
-                .opacity(Double(revealProgress))
-                .offset(y: -1 - communicationSurfaceOverlapBuffer - ((1 - revealProgress) * notchAnimatorDropDistanceClamped))
-                .transition(.opacity)
-                .onHover { hovering in
-                    if hovering {
-                        // Keep tray preview open while mouse is over it
-                        idleTrayDismissTask?.cancel()
-                        isCommunicationIndicatorHovered = true
-                    } else if !showRecordingLayout {
-                        isCommunicationIndicatorHovered = false
-                    }
-                }
-            }
+            EmptyView()
         }
         .frame(width: communicationDockWidth, alignment: .top)
         .simultaneousGesture(
@@ -1359,9 +1328,9 @@ struct NotchComposerView: View {
 
     @ViewBuilder
     private var idleTrayIndicator: some View {
-        if trayItemCount > 0 && isHovered {
-            IdleNotchButton(icon: "tray.full.fill") {
-                openTrayViewerFromNotch()
+        if isHovered {
+            IdleNotchButton(icon: "doc.on.clipboard") {
+                openHyperPasteFromNotch()
             }
             .onHover { hovering in
                 if hovering {
@@ -1386,14 +1355,14 @@ struct NotchComposerView: View {
         if isHovered {
             IdleNotchButton(icon: "camera.viewfinder") {
                 Task {
-                    await captureRegionToTrayFromNotch()
+                    await captureRegionFromNotch()
                 }
             }
             .transition(.opacity)
         }
     }
 
-    private func captureRegionToTrayFromNotch() async {
+    private func captureRegionFromNotch() async {
         guard let result = await ScreenshotCaptureService.shared.captureStandalone(mode: .region) else {
             return
         }
@@ -1404,27 +1373,18 @@ struct NotchComposerView: View {
             sourceHeight: result.height
         )
 
-        guard let item = await ScreenshotTray.shared.addReturningItem(
-            data: result.data,
-            width: result.width,
-            height: result.height,
-            mode: .region,
-            windowTitle: result.windowTitle,
-            appName: result.appName,
-            displayName: result.displayName,
-            initialThumbnail: result.previewImage
-        ) else {
+        guard let fileURL = ScreenshotCaptureService.shared.saveStandaloneCapture(result, mode: .region) else {
             return
         }
 
-        ScreenshotPreviewPanel.shared.attachFileURL(item.tempURL, to: previewID)
-        TrayActionService.shared.persistStandaloneScreenshotToLibrary(item)
+        ScreenshotPreviewPanel.shared.attachFileURL(fileURL, to: previewID)
+        StandaloneCaptureLibrary.persist(result, mode: .region, fileURL: fileURL)
     }
 
     private var idleLayout: some View {
         Group {
             if unified {
-                // Virtual display: tray · mic · capture — flanking the center.
+                // Virtual display: paste · mic · capture — flanking the center.
                 ZStack {
                     Color.clear
                         .frame(width: totalWidth, height: overlayHeight)
@@ -1436,7 +1396,7 @@ struct NotchComposerView: View {
                 }
             } else {
                 // Physical notch: two wings flanking the camera cutout.
-                let hasInsideTray = ns.trayDotsInside && trayItemCount > 0
+                let hasInsideTray = notchTrayDiscoveryEnabled && ns.trayDotsInside && trayItemCount > 0
                 ZStack {
                     HStack(spacing: 0) {
                         // Left wing — background pair shape provides the visual fill;
@@ -1468,6 +1428,8 @@ struct NotchComposerView: View {
                                             }
                                         }
                                     }
+                            } else if isHovered {
+                                idleTrayIndicator
                             } else {
                                 Circle()
                                     .fill(Color.white.opacity(0.3))
@@ -1494,7 +1456,7 @@ struct NotchComposerView: View {
         .contentShape(Rectangle())
         .onTapGesture {
             if shouldOpenTrayFromIdleTap {
-                openTrayViewerFromNotch()
+                openHyperPasteFromNotch()
             } else {
                 // Click behind notch starts recording (same as Agent)
                 ServiceManager.shared.live.toggleRecording()
@@ -1557,33 +1519,10 @@ struct NotchComposerView: View {
         SurfaceCoordinator.shared.exitHover()
     }
 
-    private func openTrayViewerFromNotch() {
-        hoverExitTask?.cancel()
-        hoverExitTask = nil
-        communicationDismissedByGesture = false
-        recordingDismissedByGesture = false
-        isCommunicationIndicatorHovered = false
-        isTrayWingHovered = false
-        isHovered = false
-        SurfaceCoordinator.shared.exitHover()
-        TrayViewer.shared.show()
-    }
-
-    private func observeTrayChanges() {
-        withObservationTracking {
-            _ = ScreenshotTray.shared.items.count
-            _ = ClipTray.shared.items.count
-            _ = SelectionTray.shared.items.count
-        } onChange: {
-            Task { @MainActor in
-                refreshTrayItemsSnapshot()
-                observeTrayChanges()
-            }
-        }
-    }
-
-    private func refreshTrayItemsSnapshot() {
-        trayItemsSnapshot = TrayItem.allItems()
+    private func openHyperPasteFromNotch() {
+        (NSApp.delegate as? AppDelegate)?.showHyperPasteSurface(
+            previousApp: NSWorkspace.shared.frontmostApplication
+        )
     }
 
     private func dismissNotchByGesture() {
@@ -2188,172 +2127,6 @@ struct NotchTrayDotBar: View {
             }
             .accessibilityLabel("Tray items")
             .accessibilityValue("\(count)")
-    }
-}
-
-private struct NotchTrayExtensionSurface: View {
-    let trayItems: [TrayItem]
-    let baselineWidth: CGFloat
-    let rows: Int
-    let bottomCornerRadius: CGFloat
-    let surfaceColor: Color
-    let extraTopInset: CGFloat
-    let onOpenTray: () -> Void
-
-    private let spacing: CGFloat = 6
-    private let horizontalPadding: CGFloat = 10
-
-    private var activeRows: Int {
-        max(1, min(2, rows))
-    }
-
-    private var clampedWidth: CGFloat {
-        max(172, baselineWidth)
-    }
-
-    private var contentWidth: CGFloat {
-        max(140, clampedWidth - (horizontalPadding * 2))
-    }
-
-    private var maxVisibleItems: Int {
-        // Fit items to available width: each card needs at least 64pt to look decent
-        let minCardWidth: CGFloat = 64
-        let maxByWidth = Int((contentWidth + spacing) / (minCardWidth + spacing))
-        let maxByMode = 3
-        return max(1, min(maxByMode, maxByWidth))
-    }
-
-    private var previewItems: [TrayItem] {
-        return Array(trayItems.prefix(maxVisibleItems))
-    }
-
-    private var previewCardHeight: CGFloat {
-        activeRows == 1 ? 60 : 72
-    }
-
-    private var previewCardWidth: CGFloat {
-        let count = max(1, previewItems.count)
-        let available = contentWidth - (CGFloat(max(0, count - 1)) * spacing)
-        return max(52, floor(available / CGFloat(count)))
-    }
-
-    private func openTray(source: String) {
-        notchDebugLog.info("Notch tray open requested from \(source)")
-        onOpenTray()
-    }
-
-    var body: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 7) {
-                Image(systemName: "tray.full.fill")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.secondary)
-
-                Text("Tray")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.secondary)
-
-                Text("\(trayItems.count)")
-                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .background(
-                        Capsule()
-                            .fill(Color.white.opacity(0.06))
-                    )
-
-                Spacer(minLength: 0)
-
-                Button {
-                    openTray(source: "header-open-button")
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.up.forward.app.fill")
-                            .font(.system(size: 8, weight: .semibold))
-                        Text("Open")
-                            .font(.system(size: 9, weight: .semibold))
-                    }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 4)
-                    .frame(minWidth: 60, minHeight: 24)
-                    .background(
-                        Capsule()
-                            .fill(Color.white.opacity(0.06))
-                    )
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
-                    )
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .contentShape(Rectangle())
-            }
-
-            if previewItems.isEmpty {
-                Button {
-                    openTray(source: "empty-state-tap")
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "sparkles.rectangle.stack")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.secondary)
-
-                        Text("Tray is empty")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.secondary)
-
-                        Spacer(minLength: 0)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
-                    .padding(.horizontal, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .fill(Color.white.opacity(0.04))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
-                    )
-                }
-                .buttonStyle(.plain)
-            } else {
-                HStack(spacing: spacing) {
-                    ForEach(previewItems) { item in
-                        DossierCardView(
-                            item: item,
-                            imageHeight: activeRows == 1 ? 42 : 50,
-                            fontSize: activeRows == 1 ? 7 : 7.5
-                        )
-                        .frame(width: previewCardWidth, height: previewCardHeight)
-                        .clipped()
-                        .trayDrag(item: item)
-                        .onTapGesture {
-                            openTray(source: "preview-card")
-                        }
-                    }
-                }
-                .frame(width: contentWidth, alignment: .leading)
-                .clipped()
-            }
-        }
-        .padding(.horizontal, horizontalPadding)
-        .padding(.top, 15 + extraTopInset)
-        .padding(.bottom, 12)
-        .frame(width: clampedWidth)
-        .clipped()
-        .background(backgroundShape)
-    }
-
-    private var backgroundShape: some View {
-        UnevenRoundedRectangle(
-            topLeadingRadius: 0,
-            bottomLeadingRadius: bottomCornerRadius,
-            bottomTrailingRadius: bottomCornerRadius,
-            topTrailingRadius: 0
-        )
-            .fill(surfaceColor)
     }
 }
 

@@ -213,9 +213,7 @@ final class ConsoleTerminalCaptureController {
     var screenshotError: String?
 
     @ObservationIgnored private var dictationStartedAt: Date?
-    @ObservationIgnored private var dictationBaselineScreenshotIDs: Set<UUID> = []
-    @ObservationIgnored private var dictationBaselineClipIDs: Set<UUID> = []
-
+    @ObservationIgnored private var dictationScreenshotURLs: [URL] = []
     func copyTerminalOutput(from session: ManagedAgentConsoleSession) {
         let status: TerminalCopyStatus = session.copyTranscriptToClipboard() ? .copied : .empty
         copyStatus = status
@@ -236,8 +234,7 @@ final class ConsoleTerminalCaptureController {
                     let transcript = try await dictation.stopAndTranscribe()
                     let prompt = terminalPrompt(
                         transcript: transcript,
-                        screenshots: screenshotsCapturedDuringDictation(),
-                        clips: clipsCapturedDuringDictation()
+                        screenshots: screenshotsCapturedDuringDictation()
                     )
                     resetDictationContext()
                     guard !prompt.isEmpty else { return }
@@ -252,8 +249,7 @@ final class ConsoleTerminalCaptureController {
 
         do {
             dictationStartedAt = Date()
-            dictationBaselineScreenshotIDs = Set(ScreenshotTray.shared.items.map(\.id))
-            dictationBaselineClipIDs = Set(ClipTray.shared.items.map(\.id))
+            dictationScreenshotURLs = []
             try dictation.startCapture(purpose: .terminalDictation)
         } catch {
             resetDictationContext()
@@ -284,9 +280,9 @@ final class ConsoleTerminalCaptureController {
                 guard FeatureFlags.shared.enableCameraBubble else { return }
                 CameraBubbleController.shared.toggle()
             case .saveSelection:
-                await TrayViewer.saveLatestSelectionToNote()
+                return
             case .viewTray:
-                TrayViewer.shared.show()
+                pasteLatestScreenshot(sendTo: session)
             case .pasteLastTray:
                 pasteLatestScreenshot(sendTo: session)
             }
@@ -294,13 +290,13 @@ final class ConsoleTerminalCaptureController {
     }
 
     private func pasteLatestScreenshot(sendTo session: ManagedAgentConsoleSession) {
-        guard let item = ScreenshotTray.shared.items.max(by: { $0.capturedAt < $1.capturedAt }) else {
-            screenshotError = "No screenshot in tray"
+        guard let url = latestStoredScreenshotURL() else {
+            screenshotError = "No screenshot available"
             return
         }
 
         guard !isTerminalDictationActive else { return }
-        session.send(screenshotPrompt(for: item))
+        session.send(screenshotPrompt(for: url))
     }
 
     private func captureSelectedScreenshot(
@@ -322,26 +318,18 @@ final class ConsoleTerminalCaptureController {
             sourceHeight: capture.height
         )
 
-        guard let item = await ScreenshotTray.shared.addReturningItem(
-            data: capture.data,
-            width: capture.width,
-            height: capture.height,
-            mode: mode,
-            windowTitle: capture.windowTitle,
-            appName: capture.appName,
-            displayName: capture.displayName,
-            initialThumbnail: capture.previewImage
-        ) else {
+        guard let fileURL = ScreenshotCaptureService.shared.saveStandaloneCapture(capture, mode: mode) else {
             screenshotError = "Could not save screenshot"
             return
         }
 
-        ScreenshotPreviewPanel.shared.attachFileURL(item.tempURL, to: previewID)
+        ScreenshotPreviewPanel.shared.attachFileURL(fileURL, to: previewID)
+        dictationScreenshotURLs.append(fileURL)
 
         guard !isTerminalDictationActive else { return }
-        session.send(screenshotPrompt(for: item))
+        session.send(screenshotPrompt(for: fileURL))
 
-        TrayActionService.shared.persistStandaloneScreenshotToLibrary(item)
+        StandaloneCaptureLibrary.persist(capture, mode: mode, fileURL: fileURL)
     }
 
     private var isTerminalDictationActive: Bool {
@@ -350,33 +338,22 @@ final class ConsoleTerminalCaptureController {
 
     private func resetDictationContext() {
         dictationStartedAt = nil
-        dictationBaselineScreenshotIDs = []
-        dictationBaselineClipIDs = []
+        dictationScreenshotURLs = []
     }
 
-    private func screenshotPrompt(for item: TrayScreenshot) -> String {
-        "Use this screenshot: \(item.tempURL.path)"
+    private func screenshotPrompt(for url: URL) -> String {
+        "Use this screenshot: \(url.path)"
     }
 
-    private func terminalPrompt(transcript: String, screenshots: [TrayScreenshot], clips: [TrayClip]) -> String {
+    private func terminalPrompt(transcript: String, screenshots: [URL]) -> String {
         let text = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         var sections: [String] = []
 
         if !screenshots.isEmpty {
-            let screenshotLines = screenshots.map { "- \($0.tempURL.path)" }
+            let screenshotLines = screenshots.map { "- \($0.path)" }
             sections.append("""
             Use these screenshots:
             \(screenshotLines.joined(separator: "\n"))
-            """)
-        }
-
-        if !clips.isEmpty {
-            let clipLines = clips.map { clip in
-                "- \(clip.tempURL.path) (\(clipDurationLabel(clip.durationMs)))"
-            }
-            sections.append("""
-            Use these screen recordings:
-            \(clipLines.joined(separator: "\n"))
             """)
         }
 
@@ -386,29 +363,29 @@ final class ConsoleTerminalCaptureController {
         return ([text] + sections).joined(separator: "\n\n")
     }
 
-    private func screenshotsCapturedDuringDictation() -> [TrayScreenshot] {
-        let startedAt = dictationStartedAt ?? .distantFuture
-        return ScreenshotTray.shared.items
-            .filter { item in
-                item.capturedAt >= startedAt && !dictationBaselineScreenshotIDs.contains(item.id)
-            }
-            .sorted { $0.capturedAt < $1.capturedAt }
+    private func screenshotsCapturedDuringDictation() -> [URL] {
+        dictationScreenshotURLs
     }
 
-    private func clipsCapturedDuringDictation() -> [TrayClip] {
-        let startedAt = dictationStartedAt ?? .distantFuture
-        return ClipTray.shared.items
-            .filter { item in
-                item.capturedAt >= startedAt && !dictationBaselineClipIDs.contains(item.id)
+    private func latestStoredScreenshotURL() -> URL? {
+        let directory = ScreenshotStorage.screenshotsDirectory
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        )) ?? []
+
+        return files
+            .filter { ["png", "jpg", "jpeg"].contains($0.pathExtension.lowercased()) }
+            .max { lhs, rhs in
+                modificationDate(for: lhs) < modificationDate(for: rhs)
             }
-            .sorted { $0.capturedAt < $1.capturedAt }
     }
 
-    private func clipDurationLabel(_ durationMs: Int) -> String {
-        let totalSeconds = max(durationMs, 0) / 1000
-        guard totalSeconds >= 60 else { return "\(totalSeconds)s" }
-        return "\(totalSeconds / 60)m \(totalSeconds % 60)s"
+    private func modificationDate(for url: URL) -> Date {
+        (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
     }
+
 }
 
 enum TerminalCopyStatus: Equatable {

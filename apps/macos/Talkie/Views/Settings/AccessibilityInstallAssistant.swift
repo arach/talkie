@@ -154,15 +154,16 @@ final class AccessibilityInstallAssistant {
                 openSettingsPane(for: permission)
             }
         case .screenRecording:
-            let wasGranted = CGPreflightScreenCaptureAccess()
-            let requestGranted = wasGranted || CGRequestScreenCaptureAccess()
-            permissionAssistantLog.debug(
-                "Screen Recording request returned",
-                detail: "wasGranted=\(wasGranted), requestGranted=\(requestGranted)"
-            )
+            Task { @MainActor in
+                let granted = await ScreenCapturePermissionManager.appScreenRecordingPermissionGranted()
+                permissionAssistantLog.debug(
+                    "Screen Recording permission probed",
+                    detail: "granted=\(granted)"
+                )
 
-            if !requestGranted {
-                openSettingsPane(for: permission)
+                if !granted {
+                    openSettingsPane(for: permission)
+                }
             }
         }
 
@@ -547,8 +548,7 @@ private struct AccessibilityInstallAssistantView: View {
     }
 
     /// Drag card — SwiftUI VStack (icon + hand-draw glyph) with `.onDrag`
-    /// attached. Uses the canonical Talkie pattern (matches
-    /// `TrayDrawer.swift:46-48`, `TrayViewer.swift`): an `NSItemProvider`
+    /// attached. Uses the canonical Talkie pattern: an `NSItemProvider`
     /// returned from `.onDrag` is the SwiftUI-native drag mechanism and
     /// works inside utility panels without any custom NSView,
     /// NSDraggingSource subclass, or first-responder dance.
@@ -649,7 +649,7 @@ private struct AccessibilityInstallAssistantView: View {
             }
         case .screenRecording:
             // Screen Recording status is per-process; only meaningful for .talkie target.
-            isGranted = CGPreflightScreenCaptureAccess()
+            isGranted = await ScreenCapturePermissionManager.appScreenRecordingPermissionGranted()
         }
     }
 }

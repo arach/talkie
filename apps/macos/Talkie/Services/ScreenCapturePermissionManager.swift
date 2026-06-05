@@ -9,6 +9,7 @@
 
 import AppKit
 import Observation
+import ScreenCaptureKit
 import TalkieKit
 
 enum ScreenCapturePermissionState: Equatable {
@@ -46,7 +47,7 @@ final class ScreenCapturePermissionManager {
         isRefreshing = true
         defer { isRefreshing = false }
 
-        appStatus = Self.status(for: CGPreflightScreenCaptureAccess())
+        appStatus = Self.status(for: await Self.appScreenRecordingPermissionGranted())
 
         if let screenRecording = await fetchAgentScreenRecordingPermission() {
             agentStatus = Self.status(for: screenRecording)
@@ -64,7 +65,7 @@ final class ScreenCapturePermissionManager {
         await refresh()
 
         if !appStatus.isGranted {
-            _ = CGRequestScreenCaptureAccess()
+            appStatus = Self.status(for: await Self.appScreenRecordingPermissionGranted())
         }
 
         if agentStatus != .granted, let granted = await requestAgentScreenRecordingPermission() {
@@ -78,6 +79,15 @@ final class ScreenCapturePermissionManager {
     func openSystemSettings() {
         guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    static func appScreenRecordingPermissionGranted() async -> Bool {
+        do {
+            _ = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            return true
+        } catch {
+            return false
+        }
     }
 
     private static func status(for granted: Bool) -> ScreenCapturePermissionState {

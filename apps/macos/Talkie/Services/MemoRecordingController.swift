@@ -840,29 +840,7 @@ final class MemoRecordingController {
 
         if let screenshot {
             capturedScreenshots.append(screenshot)
-            mirrorScreenshotToTrayIfNeeded(screenshot, fallbackMode: mode)
             Log(.system).info("Screenshot \(capturedScreenshots.count) captured at \(screenshot.timestampMs)ms mode=\(mode.rawValue)")
-        }
-    }
-
-    private func mirrorScreenshotToTrayIfNeeded(_ screenshot: RecordingScreenshot, fallbackMode: CaptureMode) {
-        guard FeatureFlags.shared.enableCapture else { return }
-
-        let fileURL = ScreenshotStorage.screenshotsDirectory.appendingPathComponent(screenshot.filename)
-        let captureMode = CaptureMode(rawValue: screenshot.captureMode) ?? fallbackMode
-
-        Task.detached(priority: .utility) {
-            guard let data = try? Data(contentsOf: fileURL) else { return }
-            await ScreenshotTray.shared.add(
-                data: data,
-                width: screenshot.width ?? 0,
-                height: screenshot.height ?? 0,
-                mode: captureMode,
-                windowTitle: screenshot.windowTitle,
-                appName: screenshot.appName,
-                appBundleID: screenshot.appBundleID,
-                displayName: screenshot.displayName
-            )
         }
     }
 

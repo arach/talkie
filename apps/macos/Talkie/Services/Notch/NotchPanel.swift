@@ -273,7 +273,7 @@ final class NotchPanel {
 
     func captureOverlaySnapshot(metadataLines: [String] = []) {
         guard let panel else { return }
-        capturePanelToClipboard(panel, metadataLines: metadataLines)
+        capturePanelSnapshotToClipboard(panel, metadataLines: metadataLines)
     }
 
     /// Reposition the panel for a new screen (tears down and recreates).
@@ -535,4 +535,27 @@ final class NotchPanel {
             perfAccumulator.flushIfNeeded(log: log, force: true)
         }
     }
+}
+
+private func capturePanelSnapshotToClipboard(_ panel: NSPanel, metadataLines: [String]) {
+    guard let contentView = panel.contentView else { return }
+    let bounds = contentView.bounds
+    guard !bounds.isEmpty,
+          let bitmap = contentView.bitmapImageRepForCachingDisplay(in: bounds) else {
+        return
+    }
+
+    contentView.cacheDisplay(in: bounds, to: bitmap)
+    let image = NSImage(size: bounds.size)
+    image.addRepresentation(bitmap)
+
+    let pasteboard = NSPasteboard.general
+    pasteboard.clearContents()
+    pasteboard.writeObjects([image])
+
+    if !metadataLines.isEmpty {
+        pasteboard.setString(metadataLines.joined(separator: "\n"), forType: .string)
+    }
+
+    log.debug("Copied notch panel snapshot to clipboard")
 }

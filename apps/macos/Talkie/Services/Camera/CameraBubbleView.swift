@@ -41,25 +41,20 @@ struct CameraBubbleView: View {
                 .stroke(borderColor, lineWidth: borderWidth)
                 .frame(width: size, height: size)
 
-            // Clip count badge (top-right) — tap to open buffer viewer
+            // Clip count badge (top-right)
             if clipTray.count > 0 && controller.state != .recording {
                 VStack {
                     HStack {
                         Spacer()
-                        Button(action: {
-                            TrayViewer.shared.show()
-                        }) {
-                            Text("\(clipTray.count)")
-                                .font(.system(size: 11, weight: .bold, design: .rounded))
-                                .foregroundColor(.white)
-                                .frame(minWidth: 20, minHeight: 20)
-                                .background(
-                                    Capsule()
-                                        .fill(Color.accentColor)
-                                        .shadow(color: Color.accentColor.opacity(0.5), radius: 3, y: 1)
-                                )
-                        }
-                        .buttonStyle(.plain)
+                        Text("\(clipTray.count)")
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                            .frame(minWidth: 20, minHeight: 20)
+                            .background(
+                                Capsule()
+                                    .fill(Color.accentColor)
+                                    .shadow(color: Color.accentColor.opacity(0.5), radius: 3, y: 1)
+                            )
                     }
                     Spacer()
                 }
@@ -107,12 +102,6 @@ struct CameraBubbleView: View {
             } else {
                 Button("Record Clip") {
                     controller.startClip()
-                }
-            }
-            if clipTray.count > 0 {
-                Divider()
-                Button("Open Tray (\(clipTray.count))") {
-                    TrayViewer.shared.show()
                 }
             }
         }

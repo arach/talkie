@@ -8,7 +8,6 @@
 import SwiftUI
 import AppKit
 import AVFoundation
-import ScreenCaptureKit
 import CoreServices
 import TalkieKit
 
@@ -318,18 +317,9 @@ class PermissionsManager {
     // MARK: - Screen Recording
 
     func checkScreenRecordingPermission(promptIfNeeded: Bool = false) {
-        guard promptIfNeeded else {
-            screenRecordingStatus = CGPreflightScreenCaptureAccess() ? .granted : .unknown
-            return
-        }
-
         Task {
-            do {
-                _ = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-                screenRecordingStatus = .granted
-            } catch {
-                screenRecordingStatus = .denied
-            }
+            let granted = await ScreenCapturePermissionManager.appScreenRecordingPermissionGranted()
+            screenRecordingStatus = granted ? .granted : (promptIfNeeded ? .denied : .unknown)
         }
     }
 

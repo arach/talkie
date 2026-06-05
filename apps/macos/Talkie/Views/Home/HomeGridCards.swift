@@ -2204,7 +2204,7 @@ private struct SetupItem: View {
 
 // MARK: - Feature Cards
 
-/// Captures feature card — shows tray capture count and last capture
+/// Captures feature card — shows saved capture count.
 @MainActor
 struct CapturesFeatureCard: HomeCard {
     let id = "feature-captures"
@@ -2218,9 +2218,6 @@ struct CapturesFeatureCard: HomeCard {
 
 @MainActor
 private struct CapturesFeatureCardView: View {
-    private let screenshotTray = ScreenshotTray.shared
-    private let clipTray = ClipTray.shared
-    private let selectionTray = SelectionTray.shared
     private let settings = SettingsManager.shared
 
     @State private var isHovered = false
@@ -2232,12 +2229,8 @@ private struct CapturesFeatureCardView: View {
         settings.accentColor.color ?? Color.accentColor
     }
 
-    private var unattachedCount: Int {
-        screenshotTray.count + clipTray.count + selectionTray.count
-    }
-
     private var totalCount: Int {
-        totalAttached + unattachedCount
+        totalAttached
     }
 
     var body: some View {
@@ -2264,29 +2257,16 @@ private struct CapturesFeatureCardView: View {
                     }
 
                     if totalCount == 0 {
-                        Text("Capture screenshots, clips, selections, and bookmarked URLs")
+                        Text("Capture screenshots and bookmarked URLs")
                             .font(.system(size: 11))
                             .foregroundColor(Theme.current.foregroundMuted)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     } else {
                         VStack(alignment: .leading, spacing: 4) {
-                            if unattachedCount > 0 {
-                                HStack(spacing: 6) {
-                                    Circle()
-                                        .fill(accent)
-                                        .frame(width: 5, height: 5)
-                                    Text("\(unattachedCount) unattached")
-                                        .font(.system(size: 11, weight: .medium))
-                                        .foregroundColor(Theme.current.foreground)
-                                }
-                            }
-
                             if topContexts.isEmpty {
-                                if unattachedCount == 0 {
-                                    Text("\(totalAttached) attached to memos")
-                                        .font(.system(size: 10))
-                                        .foregroundColor(Theme.current.foregroundMuted)
-                                }
+                                Text("\(totalAttached) saved")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(Theme.current.foregroundMuted)
                             } else {
                                 ForEach(topContexts.prefix(3), id: \.name) { ctx in
                                     HStack(spacing: 6) {
@@ -2352,15 +2332,7 @@ private struct CapturesFeatureCardView: View {
         let pngs = files.filter { $0.pathExtension.lowercased() == "png" }
         totalAttached = pngs.count
 
-        // Top contexts from the tray (where we have app metadata).
-        var tally: [String: Int] = [:]
-        for item in screenshotTray.items {
-            let name = item.appName ?? item.windowTitle ?? "Unknown"
-            tally[name, default: 0] += 1
-        }
-        topContexts = tally
-            .map { (name: $0.key, count: $0.value) }
-            .sorted { $0.count > $1.count }
+        topContexts = []
     }
 }
 

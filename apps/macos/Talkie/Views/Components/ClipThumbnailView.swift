@@ -96,7 +96,11 @@ struct ClipThumbnailView: View {
                 .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
         )
         .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
-        .task { await generateThumbnail() }
+        .task(id: clip.filename) { await generateThumbnail() }
+        .onDisappear {
+            thumbnail = nil
+            isExpanded = false
+        }
     }
 
     // MARK: - Thumbnail
@@ -194,6 +198,7 @@ struct ClipThumbnailView: View {
 
         do {
             let (cgImage, _) = try await generator.image(at: .zero)
+            guard !Task.isCancelled else { return }
             let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
             await MainActor.run { self.thumbnail = nsImage }
         } catch {

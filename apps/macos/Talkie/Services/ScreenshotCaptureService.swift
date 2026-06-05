@@ -56,7 +56,7 @@ enum ScreenshotCapturePreset: String, CaseIterable, Codable {
     }
 }
 
-enum CaptureMode: String, Sendable {
+enum CaptureMode: String, Codable, Sendable {
     case region      // User drags to select rectangle
     case fullscreen  // Entire display under cursor
     case window      // User clicks a window
@@ -77,12 +77,73 @@ struct CaptureResult {
 }
 
 @MainActor
+enum StandaloneCaptureLibrary {
+    static func persist(
+        _ result: CaptureResult,
+        mode: CaptureMode,
+        fileURL: URL,
+        runOCR: Bool = false
+    ) {
+        Task { @MainActor in
+            _ = await save(result, mode: mode, fileURL: fileURL, runOCR: runOCR)
+        }
+    }
+
+    @discardableResult
+    static func save(
+        _ result: CaptureResult,
+        mode: CaptureMode,
+        fileURL: URL,
+        runOCR: Bool = false
+    ) async -> TalkieObject? {
+        let captureId = UUID()
+        let screenshot = RecordingScreenshot(
+            filename: fileURL.lastPathComponent,
+            timestampMs: 0,
+            captureMode: mode.rawValue,
+            width: result.width,
+            height: result.height,
+            windowTitle: result.windowTitle,
+            appName: result.appName,
+            appBundleID: result.appBundleID,
+            displayName: result.displayName
+        )
+
+        var capture = TalkieObject.newCapture(id: captureId)
+        var assets = TalkieObjectAssets(screenshots: [screenshot])
+
+        if runOCR {
+            let ocrText = try? await VisionOCRService.shared.recognizeText(atURL: fileURL, quality: .accurate)
+            if let text = ocrText?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
+                assets.textProvenance = [ProvenanceSegment(
+                    source: .ocr,
+                    originalText: text,
+                    sourceAssetId: fileURL.lastPathComponent,
+                    sourceDetail: "Vision"
+                )]
+            }
+        }
+
+        capture.assetsJSON = assets.toJSON()
+
+        do {
+            let repository = TalkieObjectRepository()
+            try await repository.saveRecording(capture)
+            await RecordingsViewModel.shared.loadRecordings()
+            NotificationCenter.default.post(name: .init("NotesDidChange"), object: nil)
+            Log(.ui).info("Saved standalone screenshot to capture: \(captureId.uuidString.prefix(8))")
+            return capture
+        } catch {
+            Log(.ui).error("Failed to save standalone screenshot capture: \(error.localizedDescription)")
+            return nil
+        }
+    }
+}
+
+@MainActor
 final class ScreenshotCaptureService {
     static let shared = ScreenshotCaptureService()
     private let log = Log(.system)
-    private var lastPermissionCheckAt: Date = .distantPast
-    private var lastPermissionCheckResult = false
-    private let permissionCacheInterval: TimeInterval = 30
     private let captureHotPathLoggingEnabled = ProcessInfo.processInfo.environment["CAPTURE_PERF"] == "1"
     private var didPrewarmPipeline = false
     private var capturePreset: ScreenshotCapturePreset { SettingsManager.shared.screenshotCapturePreset }
@@ -103,19 +164,6 @@ final class ScreenshotCaptureService {
         recordingStartTime: Date,
         preselectedRegion: CGRect? = nil
     ) async -> RecordingScreenshot? {
-        // Check permission first
-        CapturePerformanceMonitor.shared.mark("permission.check.begin")
-        guard await hasScreenRecordingPermission() else {
-            CapturePerformanceMonitor.shared.mark("permission.check.denied")
-            log.warning(
-                "Screenshot capture blocked: Screen Recording permission missing",
-                detail: "mode=\(mode.rawValue), recordingId=\(recordingId.uuidString)"
-            )
-            showPermissionAlert()
-            return nil
-        }
-        CapturePerformanceMonitor.shared.mark("permission.check.complete")
-
         // Snapshot the active app before any selection overlay steals focus —
         // region/fullscreen captures otherwise carry no app context at all.
         let contextApp = Self.frontmostContextApp()
@@ -230,18 +278,6 @@ final class ScreenshotCaptureService {
     /// Capture a standalone screenshot (not tied to a recording).
     /// Returns CaptureResult with PNG data, dimensions, and contextual metadata, or nil if cancelled/failed.
     func captureStandalone(mode: CaptureMode, preselectedRegion: CGRect? = nil) async -> CaptureResult? {
-        CapturePerformanceMonitor.shared.mark("permission.check.begin")
-        guard await hasScreenRecordingPermission() else {
-            CapturePerformanceMonitor.shared.mark("permission.check.denied")
-            log.warning(
-                "Standalone screenshot blocked: Screen Recording permission missing",
-                detail: "mode=\(mode.rawValue)"
-            )
-            showPermissionAlert()
-            return nil
-        }
-        CapturePerformanceMonitor.shared.mark("permission.check.complete")
-
         // Snapshot the active app before any selection overlay steals focus —
         // region/fullscreen captures otherwise carry no app context at all.
         let contextApp = Self.frontmostContextApp()
@@ -324,23 +360,31 @@ final class ScreenshotCaptureService {
         )
     }
 
-    /// Warm screenshot + PNG encode path once so first hotkey hit avoids cold-start stalls.
+    func saveStandaloneCapture(_ result: CaptureResult, mode: CaptureMode) -> URL? {
+        ScreenshotStorage.saveStandalone(
+            result.data,
+            capturedAt: result.capturedAt,
+            captureMode: mode.rawValue,
+            width: result.width,
+            height: result.height,
+            windowTitle: result.windowTitle,
+            appName: result.appName,
+            displayName: result.displayName
+        )
+    }
+
+    /// Warm local PNG encode path once without touching ScreenCaptureKit or TCC.
     func prewarmPipelineIfNeeded() {
         guard !didPrewarmPipeline else { return }
         didPrewarmPipeline = true
 
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            try? await Task.sleep(for: .milliseconds(1200))
-            guard await self.hasScreenRecordingPermission() else { return }
-            guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
-
-            if let image = await self.captureScreenRegion(screenRect: screen.frame) {
+        Task.detached(priority: .utility) {
+            if let image = Self.makePrewarmImage() {
                 _ = Self.pngData(from: image)
             }
-            if self.captureHotPathLoggingEnabled {
-                self.log.debug("Screenshot pipeline prewarmed")
-            }
+        }
+        if captureHotPathLoggingEnabled {
+            log.debug("Screenshot encode path prewarmed")
         }
     }
 
@@ -426,21 +470,6 @@ final class ScreenshotCaptureService {
         return (image: image, windowTitle: meta.title, appName: meta.appName, appBundleID: meta.appBundleID)
     }
 
-    // MARK: - Permission
-
-    private func hasScreenRecordingPermission() async -> Bool {
-        // Fast path: CoreGraphics preflight is synchronous and much cheaper than fetching shareable content.
-        let now = Date()
-        if now.timeIntervalSince(lastPermissionCheckAt) < permissionCacheInterval {
-            return lastPermissionCheckResult
-        }
-
-        let hasPermission = CGPreflightScreenCaptureAccess()
-        lastPermissionCheckAt = now
-        lastPermissionCheckResult = hasPermission
-        return hasPermission
-    }
-
     func captureWindowImage(windowID: CGWindowID) async -> CGImage? {
         do {
             let content = try await SCShareableContent.current
@@ -463,7 +492,7 @@ final class ScreenshotCaptureService {
                 configuration: config
             )
         } catch {
-            log.error("Window capture failed: \(error.localizedDescription)")
+            handleScreenCaptureError(error, operation: "Window capture")
             return nil
         }
     }
@@ -513,9 +542,26 @@ final class ScreenshotCaptureService {
                 configuration: config
             )
         } catch {
-            log.error("Region capture failed: \(error.localizedDescription)")
+            handleScreenCaptureError(error, operation: "Region capture")
             return nil
         }
+    }
+
+    private func handleScreenCaptureError(_ error: Error, operation: String) {
+        let nsError = error as NSError
+        log.error(
+            "\(operation) failed: \(error.localizedDescription)",
+            detail: "domain=\(nsError.domain), code=\(nsError.code)"
+        )
+        guard Self.isScreenCapturePermissionError(nsError) else { return }
+        showPermissionAlert()
+    }
+
+    nonisolated private static func isScreenCapturePermissionError(_ error: NSError) -> Bool {
+        error.domain == SCStreamErrorDomain && [
+            -3801, // SCStreamErrorUserDeclined
+            -3803, // SCStreamErrorMissingEntitlements
+        ].contains(error.code)
     }
 
     private func showPermissionAlert() {
@@ -629,20 +675,38 @@ final class ScreenshotCaptureService {
     }
 
     nonisolated private static func pngData(from image: CGImage) -> Data? {
-        let data = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(
-            data,
-            UTType.png.identifier as CFString,
-            1,
-            nil
+        autoreleasepool {
+            let data = NSMutableData()
+            guard let destination = CGImageDestinationCreateWithData(
+                data,
+                UTType.png.identifier as CFString,
+                1,
+                nil
+            ) else {
+                return nil
+            }
+            CGImageDestinationAddImage(destination, image, nil)
+            guard CGImageDestinationFinalize(destination) else {
+                return nil
+            }
+            return data as Data
+        }
+    }
+
+    nonisolated private static func makePrewarmImage() -> CGImage? {
+        guard let context = CGContext(
+            data: nil,
+            width: 1,
+            height: 1,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else {
             return nil
         }
-        CGImageDestinationAddImage(destination, image, nil)
-        guard CGImageDestinationFinalize(destination) else {
-            return nil
-        }
-        return data as Data
+        context.clear(CGRect(x: 0, y: 0, width: 1, height: 1))
+        return context.makeImage()
     }
 
     nonisolated private static func downscaledImage(from image: CGImage, maxPixelLength: CGFloat) -> CGImage? {

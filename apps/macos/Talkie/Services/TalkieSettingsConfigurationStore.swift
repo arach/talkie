@@ -355,33 +355,6 @@ final class TalkieSettingsConfigurationStore {
         }
         config.notch.aggressiveDebugLogging = defaults.object(forKey: "notchAggressiveDebugLogging") as? Bool ?? config.notch.aggressiveDebugLogging
 
-        config.tray.externalBadgeEnabled = defaults.object(forKey: "externalTrayBadgeEnabled") as? Bool ?? config.tray.externalBadgeEnabled
-        config.tray.badgeModeRaw = defaults.string(forKey: "trayBadgeMode") ?? config.tray.badgeModeRaw
-        config.tray.badgeFollowNotchWidth = defaults.object(forKey: "trayBadgeStripFollowNotchWidth") as? Bool ?? config.tray.badgeFollowNotchWidth
-        if defaults.object(forKey: "trayBadgeStripWidth") != nil {
-            config.tray.badgeWidth = defaults.double(forKey: "trayBadgeStripWidth")
-        }
-        if defaults.object(forKey: "trayBadgeStripHeight") != nil {
-            config.tray.badgeHeight = defaults.double(forKey: "trayBadgeStripHeight")
-        }
-        if defaults.object(forKey: "trayBadgeStripDotSize") != nil {
-            config.tray.badgeDotSize = defaults.double(forKey: "trayBadgeStripDotSize")
-        }
-        if defaults.object(forKey: "trayBadgeStripMaxDots") != nil {
-            config.tray.badgeMaxDots = defaults.integer(forKey: "trayBadgeStripMaxDots")
-        }
-        if defaults.object(forKey: "trayBadgeStripYOffset") != nil {
-            config.tray.badgeYOffset = defaults.double(forKey: "trayBadgeStripYOffset")
-        }
-        if defaults.object(forKey: "trayBadgeStripHoverTargetHeight") != nil {
-            config.tray.badgeHoverTargetHeight = defaults.double(forKey: "trayBadgeStripHoverTargetHeight")
-        }
-        config.tray.viewerModeRaw = defaults.string(forKey: "trayViewMode") ?? config.tray.viewerModeRaw
-        if defaults.object(forKey: "trayShelfHeight") != nil {
-            config.tray.shelfHeight = defaults.double(forKey: "trayShelfHeight")
-        }
-        config.tray.shelfHotkey = defaults.string(forKey: "trayShelfHotkey") ?? config.tray.shelfHotkey
-
         let notchLiveDefaults = UserDefaults(suiteName: NotchTuning.liveSuiteName)
         if let value = notchLiveDefaults?.object(forKey: NotchTuning.liveHoverPokeOutKey) as? Double {
             config.notchLab.hoverPokeOut = value

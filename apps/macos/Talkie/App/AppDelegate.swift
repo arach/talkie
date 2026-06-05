@@ -56,6 +56,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     private var captureChordLocalMonitor: Any?
     // Direct screenshot shortcuts local monitor
     private var screenshotDirectLocalMonitor: Any?
+    // App-wide keyboard shortcuts
+    private var singleKeyShortcutLocalMonitor: Any?
+    #if DEBUG
+    private var designModeLocalMonitor: Any?
+    #endif
 
     // MARK: - Window Restoration
 
@@ -285,20 +290,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
 
         // Capture system (gated)
         if FeatureFlags.shared.enableCapture {
-            // Start tray badge (auto-shows when tray non-empty)
-            _ = TrayBadge.shared
-
             // Screenshot shortcuts (sub-gated)
             if FeatureFlags.shared.enableScreenshots {
                 setupCaptureChord()
                 setupDirectScreenshotShortcuts()
 
-                // Warm core screenshot/tray path shortly after launch to reduce first-hit latency.
+                // Prewarm only the floating preview surface. Idle launch should
+                // never restore screenshot tray state or touch capture APIs.
                 Task { @MainActor in
                     try? await Task.sleep(for: .seconds(1))
-                    _ = ScreenshotTray.shared.count
                     ScreenshotPreviewPanel.shared.prewarmIfNeeded()
-                    ScreenshotCaptureService.shared.prewarmPipelineIfNeeded()
                 }
             }
 
@@ -307,7 +308,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                 setupCameraBubbleShortcut()
             }
 
-            setupShelfShortcut()
+            setupLegacyTrayShortcutRoutes()
         }
 
         // TLK-022 — Media Augmentation Pipeline
@@ -322,27 +323,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         #endif
     }
 
-    /// TLK-022 — register augmenters with `MediaAugmentationService`
-    /// and trigger the catch-up sweep over existing on-disk assets.
-    /// Spawns a single `Task` so registration awaits cleanly, then
-    /// fires the sweep at `.background` priority.
+    /// TLK-022 — register augmenters with `MediaAugmentationService`.
+    /// Existing on-disk assets are intentionally not swept on launch: OCR
+    /// and image decoding are user-visible capture work, not idle startup work.
     private func setupMediaAugmentation() {
         Task {
             await MediaAugmentationService.shared.register(OCRAugmenter())
             await MediaAugmentationService.shared.register(WindowMetaAugmenter())
-
-            // Catch-up: enumerate every primary asset we own and
-            // enqueue it. The service skips augmenter (kind, version)
-            // pairs already present in the sidecar, so this is cheap
-            // when everything's up to date and gradual when it's not.
-            // No MainActor — pure FileManager + nonisolated enqueue.
-            Task.detached(priority: .background) {
-                Self.runMediaAugmentationCatchUpSweep()
-            }
         }
     }
 
-    /// Walks `Audio/`, `Screenshots/`, and `Tray/screenshots/` and
+    /// Walks `Audio/` and `Screenshots/` and
     /// enqueues each primary asset for augmentation. Idempotent —
     /// already-augmented assets at current versions are skipped by
     /// the service. `nonisolated` so it runs off the main actor on
@@ -361,16 +352,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             }
         }
 
-        // Screenshots — both the saved-capture dir and the tray buffer
-        let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let imageDirs: [URL] = [
-            ScreenshotStorage.screenshotsDirectory,
-            appSupport.appendingPathComponent("Talkie/Tray/screenshots", isDirectory: true),
-        ]
-        for dir in imageDirs {
-            guard let files = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else {
-                continue
-            }
+        // Screenshots
+        if let files = try? fm.contentsOfDirectory(at: ScreenshotStorage.screenshotsDirectory, includingPropertiesForKeys: nil) {
             for url in files where url.pathExtension.lowercased() == "png" {
                 MediaAugmentationService.shared.enqueue(
                     AugmentationTask(assetURL: url, assetKind: .image)
@@ -1470,9 +1453,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        tearDownEventMonitors()
+        DistributedNotificationCenter.default().removeObserver(self)
+        NotificationCenter.default.removeObserver(self)
+        NSAppleEventManager.shared().removeEventHandler(
+            forEventClass: AEEventClass(kInternetEventClass),
+            andEventID: AEEventID(kAEGetURL)
+        )
         ConsoleSessionPool.shared.detachAll()
         ManagedAgentConsoleSession.handleApplicationWillTerminate()
         ServiceManager.shared.bootoutHelpers()
+    }
+
+    private func tearDownEventMonitors() {
+        if let singleKeyShortcutLocalMonitor {
+            NSEvent.removeMonitor(singleKeyShortcutLocalMonitor)
+            self.singleKeyShortcutLocalMonitor = nil
+        }
+        if let captureChordLocalMonitor {
+            NSEvent.removeMonitor(captureChordLocalMonitor)
+            self.captureChordLocalMonitor = nil
+        }
+        if let screenshotDirectLocalMonitor {
+            NSEvent.removeMonitor(screenshotDirectLocalMonitor)
+            self.screenshotDirectLocalMonitor = nil
+        }
+        if let cameraLocalMonitor {
+            NSEvent.removeMonitor(cameraLocalMonitor)
+            self.cameraLocalMonitor = nil
+        }
+        #if DEBUG
+        if let designModeLocalMonitor {
+            NSEvent.removeMonitor(designModeLocalMonitor)
+            self.designModeLocalMonitor = nil
+        }
+        #endif
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -1793,7 +1808,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     /// - O = Open/activate selected item
     /// - ? = Show keyboard shortcuts help (Shift+/ or typed ?)
     private func setupSingleKeyShortcuts() {
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+        if let singleKeyShortcutLocalMonitor {
+            NSEvent.removeMonitor(singleKeyShortcutLocalMonitor)
+            self.singleKeyShortcutLocalMonitor = nil
+        }
+
+        singleKeyShortcutLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             if HotkeyRecordingCoordinator.shared.isRecording {
                 return event
             }
@@ -2085,21 +2105,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             return
         }
 
-        SelectionTray.shared.add(
-            text: text,
-            appName: emptyToNil(userInfo["selectionAppName"] as? String),
-            bundleID: emptyToNil(userInfo["selectionBundleID"] as? String),
-            windowTitle: emptyToNil(userInfo["selectionWindowTitle"] as? String),
-            displayName: "Selection"
-        )
-    }
-
-    private func emptyToNil(_ value: String?) -> String? {
-        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !trimmed.isEmpty else {
-            return nil
-        }
-        return trimmed
+        Log(.system).debug("Selection context captured; tray staging disabled (\(text.count) chars)")
     }
 
     private var isCaptureChordActive = false
@@ -2201,14 +2207,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                 CapturePerformanceMonitor.shared.endSession(outcome: "toggle_camera_selected")
             }
         case .saveSelection:
-            await TrayViewer.saveLatestSelectionToNote()
+            Log(.system).info("Capture HUD selection note skipped; tray staging is disabled")
             if trackCapturePerf {
                 CapturePerformanceMonitor.shared.endSession(outcome: "save_selection_selected")
             }
         case .viewTray:
-            TrayViewer.shared.show()
+            await handlePasteChord(previousApp: previousApp)
             if trackCapturePerf {
-                CapturePerformanceMonitor.shared.endSession(outcome: "view_tray_selected")
+                CapturePerformanceMonitor.shared.endSession(outcome: "hyper_paste_selected")
             }
         case .pasteLastTray:
             await pasteLatestScreenshot(previousApp: previousApp)
@@ -2243,18 +2249,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
 
     @MainActor
     private func pasteLatestScreenshot(previousApp: NSRunningApplication?) async {
-        guard let latest = ScreenshotTray.shared.items.max(by: { $0.capturedAt < $1.capturedAt }),
-              let data = latest.loadData() else {
+        guard let latestURL = latestStoredScreenshotURL(),
+              let data = try? Data(contentsOf: latestURL) else {
             Log(.system).info("Paste latest screenshot: no screenshot available")
             return
         }
 
-        guard let durableURL = durablePasteURL(for: latest, data: data) else {
-            Log(.system).error("Paste latest screenshot: failed to create durable screenshot copy")
-            return
-        }
-
-        writeScreenshotPasteboard(data: data, fileURL: durableURL)
+        writeScreenshotPasteboard(data: data, fileURL: latestURL)
 
         if let prev = previousApp, prev.bundleIdentifier != Bundle.main.bundleIdentifier {
             prev.activate()
@@ -2262,12 +2263,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
 
         try? await Task.sleep(for: .milliseconds(80))
         simulateCmdV()
-        Log(.system).info("Pasted latest screenshot: \(durableURL.lastPathComponent)")
+        Log(.system).info("Pasted latest screenshot: \(latestURL.lastPathComponent)")
     }
 
     // MARK: - Quick Paste Chord (Hyper+V)
 
     private var isPasteChordActive = false
+
+    @MainActor
+    func showHyperPasteSurface(previousApp: NSRunningApplication? = NSWorkspace.shared.frontmostApplication) {
+        Task { @MainActor in
+            await handlePasteChord(previousApp: previousApp)
+        }
+    }
 
     @MainActor
     private func handlePasteChord(previousApp: NSRunningApplication?) async {
@@ -2308,7 +2316,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
 
     @MainActor
     private func executePaste(
-        item: TrayItem,
+        item: PasteCandidate,
         format: PasteFormat,
         targetApp: NSRunningApplication?
     ) async -> Bool {
@@ -2317,50 +2325,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
 
         switch format {
         case .image:
-            if case .screenshot(let screenshot) = item,
-               let data = screenshot.loadData(),
-               let durableURL = durablePasteURL(for: screenshot, data: data) {
-                writeScreenshotPasteboard(data: data, fileURL: durableURL)
-                Log(.system).info("Quick Paste: screenshot image + markdown → clipboard")
-                return true
-            }
-
-            guard let data = loadTrayItemData(item) else { return false }
-            pasteboard.setData(data, forType: .png)
-            Log(.system).info("Quick Paste: image → clipboard")
+            guard let data = loadPasteCandidateData(item) else { return false }
+            writeScreenshotPasteboard(data: data, fileURL: item.fileURL)
+            Log(.system).info("Quick Paste: screenshot image + markdown → clipboard")
             return true
 
         case .filePath:
-            let path = item.tempURL.path
+            let path = item.fileURL.path
             pasteboard.setString(path, forType: .string)
             Log(.system).info("Quick Paste: file path → clipboard")
             return true
 
         case .url:
-            let urlString = "http://localhost:8766/tray/\(item.id.uuidString).png"
+            let urlString = item.fileURL.absoluteString
             pasteboard.setString(urlString, forType: .string)
-            Log(.system).info("Quick Paste: URL → clipboard")
+            Log(.system).info("Quick Paste: file URL → clipboard")
             return true
 
         case .base64:
-            guard let data = loadTrayItemData(item) else { return false }
+            guard let data = loadPasteCandidateData(item) else { return false }
             let b64 = "data:image/png;base64," + data.base64EncodedString()
             pasteboard.setString(b64, forType: .string)
             Log(.system).info("Quick Paste: base64 → clipboard")
             return true
 
         case .visionDescription:
-            guard case .screenshot(let screenshot) = item else {
-                if let text = item.previewText {
-                    pasteboard.setString(text, forType: .string)
-                    Log(.system).info("Quick Paste: selection text → clipboard")
-                    return true
-                }
-                return false
-            }
             do {
                 let description = try await ScreenshotVisionPasteService.shared.descriptionText(
-                    for: screenshot,
+                    for: item,
                     targetAppName: targetApp?.localizedName,
                     targetBundleID: targetApp?.bundleIdentifier
                 )
@@ -2369,7 +2361,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                 return true
             } catch {
                 let fallback = await ScreenshotVisionPasteService.shared.fallbackDescriptionText(
-                    for: screenshot,
+                    for: item,
                     targetAppName: targetApp?.localizedName
                 )
                 pasteboard.setString(fallback, forType: .string)
@@ -2392,19 +2384,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         keyUp.post(tap: .cghidEventTap)
     }
 
-    private func durablePasteURL(for screenshot: TrayScreenshot, data: Data) -> URL? {
-        ScreenshotStorage.saveStandalone(
-            data,
-            capturedAt: screenshot.capturedAt,
-            captureMode: screenshot.mode.rawValue,
-            width: screenshot.width,
-            height: screenshot.height,
-            windowTitle: screenshot.windowTitle,
-            appName: screenshot.appName,
-            displayName: screenshot.displayName
-        )
-    }
-
     private func writeScreenshotPasteboard(data: Data, fileURL: URL) {
         // Plain markdown link (no leading `!`). The `![…]` image form reads as
         // an embed and trips up coding agents that pastes land in — they try to
@@ -2417,26 +2396,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         pasteboard.setData(data, forType: .png)
     }
 
+    private func latestStoredScreenshotURL() -> URL? {
+        let directory = ScreenshotStorage.screenshotsDirectory
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        )) ?? []
+
+        return files
+            .filter { ["png", "jpg", "jpeg"].contains($0.pathExtension.lowercased()) }
+            .max { lhs, rhs in
+                Self.modificationDate(for: lhs) < Self.modificationDate(for: rhs)
+            }
+    }
+
+    private static func modificationDate(for url: URL) -> Date {
+        (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+    }
+
     // MARK: - File Drag
 
     private var fileDragPanel: FileDragPanel?
 
     @MainActor
-    private func beginFileDrag(item: TrayItem) {
+    private func beginFileDrag(item: PasteCandidate) {
         let panel = FileDragPanel()
         panel.show(item: item)
         self.fileDragPanel = panel
     }
 
-    private func loadTrayItemData(_ item: TrayItem) -> Data? {
-        switch item {
-        case .screenshot(let s):
-            return s.loadData()
-        case .clip(let c):
-            return try? Data(contentsOf: c.tempURL)
-        case .selection:
-            return nil
-        }
+    private func loadPasteCandidateData(_ item: PasteCandidate) -> Data? {
+        try? Data(contentsOf: item.fileURL)
     }
 
     @MainActor
@@ -2451,7 +2442,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         }
         CapturePerformanceMonitor.shared.mark("capture.service.complete")
 
-        // Show preview immediately; file-backed drag/copy attaches after the tray write.
+        // Show preview immediately; file-backed drag/copy attaches after durable save.
         CapturePerformanceMonitor.shared.mark("preview.show.begin")
         let previewID = ScreenshotPreviewPanel.shared.show(
             thumbnail: result.previewImage,
@@ -2461,24 +2452,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         CapturePerformanceMonitor.shared.mark("preview.show.complete")
         recordLiveScreenshotForActiveDictationIfNeeded(result, mode: mode)
 
-        CapturePerformanceMonitor.shared.mark("tray.add.begin")
-        guard let latestItem = await ScreenshotTray.shared.addReturningItem(
-            data: result.data,
-            width: result.width,
-            height: result.height,
-            mode: mode,
-            windowTitle: result.windowTitle,
-            appName: result.appName,
-            appBundleID: result.appBundleID,
-            displayName: result.displayName,
-            initialThumbnail: result.previewImage
-        ) else {
-            CapturePerformanceMonitor.shared.mark("tray.add.complete")
+        CapturePerformanceMonitor.shared.mark("storage.save.begin")
+        guard let fileURL = ScreenshotCaptureService.shared.saveStandaloneCapture(result, mode: mode) else {
+            CapturePerformanceMonitor.shared.mark("storage.save.failed")
             return false
         }
-        CapturePerformanceMonitor.shared.mark("tray.add.complete")
-        ScreenshotPreviewPanel.shared.attachFileURL(latestItem.tempURL, to: previewID)
-        TrayActionService.shared.persistStandaloneScreenshotToLibrary(latestItem)
+        CapturePerformanceMonitor.shared.mark("storage.save.complete")
+        ScreenshotPreviewPanel.shared.attachFileURL(fileURL, to: previewID)
+        StandaloneCaptureLibrary.persist(result, mode: mode, fileURL: fileURL)
         return true
     }
 
@@ -2542,8 +2523,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             let actionMap: [HotkeyAction: String] = [
                 .captureFullscreen: "fullscreen",
                 .captureRegion:     "region",
-                .openTrayViewer:    "viewTray",
-                .openTrayShelf:     "viewShelf",
+                .openTrayViewer:    "pasteSurface",
+                .openTrayShelf:     "pasteSurface",
                 .captureWindow:     "window",
                 .pasteLastScreenshot: "pasteLastScreenshot",
             ]
@@ -2590,8 +2571,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         defer { isDirectScreenshotCaptureActive = false }
 
         let trackCapturePerfSession = capturePerfLoggingEnabled
-            && mode != "viewTray"
-            && mode != "viewShelf"
+            && mode != "pasteSurface"
             && mode != "pasteLastScreenshot"
         if trackCapturePerfSession {
             CapturePerformanceMonitor.shared.beginSession(trigger: "direct-shortcut", mode: mode)
@@ -2606,12 +2586,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             outcome = await executeCapture(mode: .region) ? "success" : "cancelled_or_failed"
         case "window":
             outcome = await executeCapture(mode: .window) ? "success" : "cancelled_or_failed"
-        case "viewTray":
-            await handleCaptureChord(initialMode: .screenshot, previousApp: NSWorkspace.shared.frontmostApplication)
-            outcome = "view_tray"
-        case "viewShelf":
-            TrayShelf.shared.toggle()
-            outcome = "view_shelf"
+        case "pasteSurface":
+            await handlePasteChord(previousApp: NSWorkspace.shared.frontmostApplication)
+            outcome = "hyper_paste"
         case "pasteLastScreenshot":
             await pasteLatestScreenshot(previousApp: NSWorkspace.shared.frontmostApplication)
             outcome = "paste_last_screenshot"
@@ -2669,10 +2646,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         }
     }
 
-    // MARK: - Tray Shortcuts (Viewer + Shelf)
+    // MARK: - Legacy Tray Shortcut Routes
 
-    private func setupShelfShortcut() {
-        // Listen for TalkieAgent forwarding shelf/viewer toggles
+    private func setupLegacyTrayShortcutRoutes() {
+        // Legacy names retained so TalkieAgent can update independently.
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(shelfToggleReceived),
@@ -2686,22 +2663,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             object: nil
         )
 
-        logger.info("Tray shelf/viewer notification observers registered; hotkeys are handled via HotkeyRegistry")
+        logger.info("Legacy tray shortcut notifications route to Hyper Paste")
     }
 
     @objc private func shelfToggleReceived(_ notification: Notification) {
         Task { @MainActor in
-            TrayShelf.shared.toggle()
+            await self.handlePasteChord(previousApp: NSWorkspace.shared.frontmostApplication)
         }
     }
 
     @objc private func trayViewerToggleReceived(_ notification: Notification) {
         Task { @MainActor in
-            if TrayViewer.shared.isVisible {
-                TrayViewer.shared.dismiss()
-            } else {
-                TrayViewer.shared.show()
-            }
+            await self.handlePasteChord(previousApp: NSWorkspace.shared.frontmostApplication)
         }
     }
 
@@ -2715,7 +2688,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     /// - R = Toggle rulers (when design mode is active, no modifiers)
     /// - B = Toggle borders (when design mode is active, no modifiers)
     private func setupDesignModeShortcut() {
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        if let designModeLocalMonitor {
+            NSEvent.removeMonitor(designModeLocalMonitor)
+            self.designModeLocalMonitor = nil
+        }
+
+        designModeLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             if HotkeyRecordingCoordinator.shared.isRecording {
                 return event
             }

@@ -81,12 +81,7 @@ final class SurfaceCoordinator {
     // MARK: - Recording
 
     /// Called when NotchComposer resolves to a recording intent.
-    /// Recording always wins — auto-dismisses shelf.
     func beginRecording(phase: RecordingPhase = .active) {
-        // Auto-dismiss shelf if it's open — recording always wins
-        if case .explicitOpen(.shelf) = state {
-            TrayShelf.shared.dismiss()
-        }
         state = .recording(phase: phase)
     }
 

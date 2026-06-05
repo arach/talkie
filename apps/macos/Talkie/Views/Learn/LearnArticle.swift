@@ -453,33 +453,33 @@ private extension LearnArticleStore {
         LearnArticle(
             id: "tray-shelf",
             eyebrow: "Capture",
-            title: "Tray Shelf and Screenshots",
-            summary: "Use the tray to keep screen captures with the work they explain, then jump into the larger viewer when you need selection, copy, or drag.",
-            tags: ["tray", "screenshots", "capture", "hyper", "shelf"],
+            title: "Hyper Paste and Screenshots",
+            summary: "Use Hyper Paste for quick recent screenshot preview, copy, and drag. Use Screenshots when you want the full capture library.",
+            tags: ["paste", "screenshots", "capture", "hyper"],
             shortcuts: [
                 LearnShortcut(keys: "Hyper+S", label: "Start a screen capture"),
-                LearnShortcut(keys: "Hyper+T", label: "Toggle Tray Shelf")
+                LearnShortcut(keys: "Hyper+T", label: "Open Hyper Paste")
             ],
             actions: [
-                LearnArticleAction(title: "Open Tray", detail: "Show the larger capture viewer", url: "talkie://tray"),
-                LearnArticleAction(title: "Open Shelf", detail: "Toggle the quick shelf", url: "talkie://tray/shelf"),
+                LearnArticleAction(title: "Open Hyper Paste", detail: "Show recent paste candidates", url: "talkie://tray"),
+                LearnArticleAction(title: "Open Screenshots", detail: "Show the full capture library", url: "talkie://screenshots"),
                 LearnArticleAction(title: "Shortcut Settings", detail: "Manage capture bindings", url: "talkie://settings/surface")
             ],
             relatedIDs: ["hyper-keys", "privacy-local-sync"],
             fileURL: nil,
             fallback: LearnArticleFallback(
                 metadata: [
-                    LearnArticleMetadata(label: "Surface", value: "Tray"),
+                    LearnArticleMetadata(label: "Surface", value: "Hyper Paste"),
                     LearnArticleMetadata(label: "Source", value: "Screenshots"),
                     LearnArticleMetadata(label: "Mode", value: "Local")
                 ],
-                lead: "The tray is the holding surface for screenshots and clips that belong with your current work. It keeps capture material close without turning every screenshot into a standalone note.",
+                lead: "Hyper Paste is the quick surface for recent screenshots. It keeps paste and drag nearby without replacing the Screenshots library.",
                 calloutTitle: "Bridge rule",
-                calloutBody: "The web article teaches the capture flow; the action rows jump back to the real tray and shortcut settings.",
+                calloutBody: "The action rows jump back to Hyper Paste, Screenshots, and shortcut settings.",
                 steps: [
                     "Press Hyper+S to start a capture chord.",
                     "Choose region, window, or fullscreen from the capture overlay.",
-                    "Use Hyper+T when you want the shelf without opening the full viewer."
+                    "Use Hyper+T when you want recent candidates without opening the full Screenshots library."
                 ]
             )
         ),
@@ -487,11 +487,11 @@ private extension LearnArticleStore {
             id: "hyper-keys",
             eyebrow: "Shortcuts",
             title: "Hyper Keys",
-            summary: "Talkie's global shortcuts are grouped around capture, dictation, paste, and tray access so muscle memory stays compact.",
+            summary: "Talkie's global shortcuts are grouped around capture, dictation, paste, and recording access so muscle memory stays compact.",
             tags: ["hotkeys", "shortcuts", "hyper", "keyboard", "surface"],
             shortcuts: [
                 LearnShortcut(keys: "Hyper+S", label: "Capture"),
-                LearnShortcut(keys: "Hyper+T", label: "Tray Shelf")
+                LearnShortcut(keys: "Hyper+T", label: "Hyper Paste")
             ],
             actions: [
                 LearnArticleAction(title: "Manage Shortcuts", detail: "Open Surface settings", url: "talkie://settings/surface")
@@ -504,13 +504,13 @@ private extension LearnArticleStore {
                     LearnArticleMetadata(label: "Scope", value: "Global"),
                     LearnArticleMetadata(label: "Status", value: "Registered")
                 ],
-                lead: "Hyper chords keep Talkie's surface controls distinct from normal app shortcuts. Capture and tray commands stay reachable even when another app is frontmost.",
+                lead: "Hyper chords keep Talkie's surface controls distinct from normal app shortcuts. Capture and paste commands stay reachable even when another app is frontmost.",
                 calloutTitle: "Keep the chord small",
                 calloutBody: "Use Hyper for Talkie-wide commands, then let the destination surface handle the detailed interaction.",
                 steps: [
                     "Open Surface settings to review registered bindings.",
-                    "Keep capture and tray shortcuts adjacent so they are easy to remember.",
-                    "Use the tray viewer when you need more space than the shelf gives you."
+                    "Keep capture and paste shortcuts adjacent so they are easy to remember.",
+                    "Use Screenshots when you need the full capture history."
                 ]
             )
         ),

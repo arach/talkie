@@ -23,6 +23,7 @@
 //    7. What's new     — recently shipped strip
 //
 
+import AppKit
 import SwiftUI
 import TalkieKit
 
@@ -109,11 +110,9 @@ struct ScopeLearnScreen: View {
                 learnLog.warning("Unhandled Learn settings bridge: \(url.absoluteString)")
             }
         case "tray":
-            if path == "shelf" {
-                TrayShelf.shared.toggle()
-            } else {
-                TrayViewer.shared.show()
-            }
+            (NSApp.delegate as? AppDelegate)?.showHyperPasteSurface()
+        case "screenshots":
+            open(.section(.screenshots))
         case "home":
             open(.section(.home))
         case "compose":

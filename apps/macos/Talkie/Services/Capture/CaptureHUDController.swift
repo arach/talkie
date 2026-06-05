@@ -21,11 +21,12 @@ final class CaptureHUDController: CaptureChordController {
     private let timeoutSeconds: TimeInterval = 30
 
     func beginChord(initialMode: CaptureBarMode, options: CaptureChordOptions = .captureOnly) async -> CaptureBarResult? {
-        let allItems = TrayItem.allItems()
+        let pasteItems = PasteCandidate.recentScreenshots(limit: 5)
         let showCameraOption = options.showCameraOption && FeatureFlags.shared.enableCameraBubble
-        let hasTrayItems = options.showTrayOption && !allItems.isEmpty
-        let hasSelectionItems = options.showSelectionOption && SelectionTray.shared.isNotEmpty
-        let trayCount = allItems.count
+        let hasPasteItems = !pasteItems.isEmpty
+        let showPasteOption = options.showTrayOption
+        let hasSelectionItems = false
+        let pasteCount = pasteItems.count
 
         return await withCheckedContinuation { continuation in
             var resumed = false
@@ -46,9 +47,9 @@ final class CaptureHUDController: CaptureChordController {
             panel.show(
                 mode: initialMode,
                 showCameraOption: showCameraOption,
-                showTrayOption: hasTrayItems,
+                showTrayOption: showPasteOption,
                 showSelectionOption: hasSelectionItems,
-                trayCount: trayCount,
+                trayCount: pasteCount,
                 palette: WallpaperLuminanceSampler.fallbackPalette()
             )
             paletteTask = Task { @MainActor [weak self] in
@@ -144,7 +145,7 @@ final class CaptureHUDController: CaptureChordController {
                     }
 
                 case "v", "f":
-                    if hasTrayItems {
+                    if hasPasteItems {
                         timeout.cancel()
                         resume(.pasteLastTray)
                     } else {
@@ -152,7 +153,7 @@ final class CaptureHUDController: CaptureChordController {
                     }
 
                 case "t", "w":
-                    if hasTrayItems {
+                    if showPasteOption {
                         timeout.cancel()
                         resume(.viewTray)
                     } else {

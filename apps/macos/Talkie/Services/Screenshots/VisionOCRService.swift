@@ -429,25 +429,25 @@ final class ScreenshotVisionPasteService {
     private init() {}
 
     func descriptionText(
-        for screenshot: TrayScreenshot,
+        for candidate: PasteCandidate,
         targetAppName: String?,
         targetBundleID: String?
     ) async throws -> String {
         let target = Self.targetKey(appName: targetAppName, bundleID: targetBundleID)
-        let sourceContext = Self.sourceContext(for: screenshot)
+        let sourceContext = Self.sourceContext(for: candidate)
 
-        if let cached = Self.cachedVariant(for: screenshot.tempURL, target: target) {
+        if let cached = Self.cachedVariant(for: candidate.fileURL, target: target) {
             return Self.renderPasteText(
                 variant: cached,
-                screenshot: screenshot,
+                candidate: candidate,
                 targetDisplayName: targetAppName ?? target,
                 sourceContext: sourceContext,
                 ocrText: nil
             )
         }
 
-        let geometry = await Self.ocrGeometry(for: screenshot.tempURL)
-        let jpeg = try Self.jpegData(for: screenshot.tempURL)
+        let geometry = await Self.ocrGeometry(for: candidate.fileURL)
+        let jpeg = try Self.jpegData(for: candidate.fileURL)
         let result = try await TalkieKit.LLMVisionService.describeScreenshotForPaste(
             jpegData: jpeg,
             ocrGeometry: geometry,
@@ -461,23 +461,23 @@ final class ScreenshotVisionPasteService {
             modelId: result.modelId,
             description: result.description
         )
-        try Self.saveVariant(variant, for: screenshot.tempURL)
+        try Self.saveVariant(variant, for: candidate.fileURL)
 
         return Self.renderPasteText(
             variant: variant,
-            screenshot: screenshot,
+            candidate: candidate,
             targetDisplayName: targetAppName ?? target,
             sourceContext: sourceContext,
             ocrText: geometry.fullText
         )
     }
 
-    func fallbackDescriptionText(for screenshot: TrayScreenshot, targetAppName: String?) async -> String {
-        let geometry = await Self.ocrGeometry(for: screenshot.tempURL)
+    func fallbackDescriptionText(for candidate: PasteCandidate, targetAppName: String?) async -> String {
+        let geometry = await Self.ocrGeometry(for: candidate.fileURL)
         return Self.renderFallbackText(
-            screenshot: screenshot,
+            candidate: candidate,
             targetDisplayName: targetAppName ?? "AI assistant",
-            sourceContext: Self.sourceContext(for: screenshot),
+            sourceContext: Self.sourceContext(for: candidate),
             ocrText: geometry.fullText
         )
     }
@@ -561,7 +561,7 @@ final class ScreenshotVisionPasteService {
 
     private static func renderPasteText(
         variant: ScreenshotVisionDescriptionVariant,
-        screenshot: TrayScreenshot,
+        candidate: PasteCandidate,
         targetDisplayName: String,
         sourceContext: String,
         ocrText: String?
@@ -569,7 +569,7 @@ final class ScreenshotVisionPasteService {
         var sections = [
             "UI screenshot context for \(targetDisplayName)",
             "Source: \(sourceContext)",
-            "Image path: \(screenshot.tempURL.path)",
+            "Image path: \(candidate.fileURL.path)",
             "",
             variant.contextString,
         ]
@@ -582,7 +582,7 @@ final class ScreenshotVisionPasteService {
     }
 
     private static func renderFallbackText(
-        screenshot: TrayScreenshot,
+        candidate: PasteCandidate,
         targetDisplayName: String,
         sourceContext: String,
         ocrText: String
@@ -590,7 +590,7 @@ final class ScreenshotVisionPasteService {
         var sections = [
             "UI screenshot context for \(targetDisplayName)",
             "Source: \(sourceContext)",
-            "Image path: \(screenshot.tempURL.path)",
+            "Image path: \(candidate.fileURL.path)",
         ]
         if !ocrText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             sections.append("")
@@ -600,13 +600,10 @@ final class ScreenshotVisionPasteService {
         return sections.joined(separator: "\n")
     }
 
-    private static func sourceContext(for screenshot: TrayScreenshot) -> String {
+    private static func sourceContext(for candidate: PasteCandidate) -> String {
         [
-            screenshot.appName,
-            screenshot.windowTitle,
-            screenshot.displayName,
-            "\(screenshot.mode.rawValue) capture",
-            "\(screenshot.width)x\(screenshot.height)",
+            candidate.displayName,
+            "\(candidate.width)x\(candidate.height)",
         ]
         .compactMap { $0 }
         .joined(separator: " · ")

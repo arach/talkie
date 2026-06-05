@@ -9,6 +9,40 @@
 
 import AppKit
 import TalkieKit
+import UniformTypeIdentifiers
+
+// MARK: - Internal Drag Marker
+
+enum TalkieInternalDrag {
+    static let typeIdentifier = "to.talkie.app.internal-drag"
+    static let pasteboardType = NSPasteboard.PasteboardType(typeIdentifier)
+
+    static func isInternal(_ providers: [NSItemProvider]) -> Bool {
+        providers.contains { provider in
+            provider.registeredTypeIdentifiers.contains(typeIdentifier)
+                || provider.hasItemConformingToTypeIdentifier(typeIdentifier)
+        }
+    }
+
+    static func mark(_ provider: NSItemProvider) -> NSItemProvider {
+        provider.registerDataRepresentation(
+            forTypeIdentifier: typeIdentifier,
+            visibility: .all
+        ) { completion in
+            completion(Data("talkie-internal-drag".utf8), nil)
+            return nil
+        }
+        return provider
+    }
+
+    static func pasteboardItem(for url: URL) -> NSPasteboardItem {
+        let item = NSPasteboardItem()
+        item.setString(url.absoluteString, forType: NSPasteboard.PasteboardType(UTType.fileURL.identifier))
+        item.setString(url.absoluteString, forType: NSPasteboard.PasteboardType(UTType.url.identifier))
+        item.setString("1", forType: pasteboardType)
+        return item
+    }
+}
 
 // MARK: - Drag Source
 
@@ -40,7 +74,7 @@ final class FileDragPanel {
     private var globalEscapeMonitor: Any?
     private var dragSource = FileDragSourceDelegate()
 
-    func show(item: TrayItem) {
+    func show(item: PasteCandidate) {
         dismiss()
 
         let fileURL = item.tempURL
@@ -139,7 +173,7 @@ final class FileDragPanel {
 private class DragInitiatorView: NSView {
     let fileURL: URL
     let dragImage: NSImage
-    let item: TrayItem
+    let item: PasteCandidate
     let dragSource: FileDragSourceDelegate
 
     private let cornerRadius: CGFloat = 6
@@ -148,7 +182,7 @@ private class DragInitiatorView: NSView {
     private let stripFont = NSFont.monospacedSystemFont(ofSize: 7, weight: .medium)
     private let stripColor = NSColor.white.withAlphaComponent(0.35)
 
-    init(fileURL: URL, dragImage: NSImage, item: TrayItem, dragSource: FileDragSourceDelegate) {
+    init(fileURL: URL, dragImage: NSImage, item: PasteCandidate, dragSource: FileDragSourceDelegate) {
         self.fileURL = fileURL
         self.dragImage = dragImage
         self.item = item

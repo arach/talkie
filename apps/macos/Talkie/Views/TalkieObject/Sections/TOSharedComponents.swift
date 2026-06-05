@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import ImageIO
 import TalkieKit
 
 // MARK: - Theme-aware Scope detail tokens
@@ -170,15 +171,23 @@ struct AttachmentThumbnail: View {
             )
         }
         .buttonStyle(.plain)
-        .task {
+        .task(id: screenshot.filename) {
             image = await loadThumbnail()
         }
+        .onDisappear { image = nil }
     }
 
     private func loadThumbnail() async -> NSImage? {
         let url = fileURL
         return await Task.detached {
-            NSImage(contentsOf: url)
+            guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+            let options = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: 320,
+            ] as CFDictionary
+            guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options) else { return nil }
+            return NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
         }.value
     }
 
@@ -253,9 +262,10 @@ struct LargeAttachmentView: View {
             )
         }
         .buttonStyle(.plain)
-        .task {
+        .task(id: screenshot.filename) {
             image = await loadImage()
         }
+        .onDisappear { image = nil }
     }
 
     private func loadImage() async -> NSImage? {

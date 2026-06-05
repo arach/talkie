@@ -3300,21 +3300,7 @@ final class TalkieServer {
     }
 
     private func handleTrayImage(_ connection: NWConnection, path: String) async {
-        // Extract UUID from /tray/<uuid>.png
-        let filename = String(path.dropFirst("/tray/".count))
-        let uuidString = filename.replacingOccurrences(of: ".png", with: "")
-        guard let uuid = UUID(uuidString: uuidString) else {
-            sendResponse(connection, statusCode: 400, body: "Invalid UUID")
-            return
-        }
-
-        guard let item = ScreenshotTray.shared.items.first(where: { $0.id == uuid }),
-              let data = item.loadData() else {
-            sendResponse(connection, statusCode: 404, body: "Tray item not found")
-            return
-        }
-
-        sendImageResponse(connection, data: data, contentType: "image/png")
+        sendResponse(connection, statusCode: 410, body: "Screenshot tray image route retired")
     }
 
     private func handleCaptureTerminals(_ connection: NWConnection) async {
