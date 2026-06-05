@@ -132,7 +132,7 @@ struct AgentHomeExecutorJob: Identifiable, Decodable {
         Self.parseDate(updatedAt) ?? Self.parseDate(createdAt) ?? .distantPast
     }
 
-    init(snapshot: WalkieRuntimeActivitySnapshot) {
+    init(snapshot: AgentRuntimeActivitySnapshot) {
         self.jobId = snapshot.id
         self.sessionId = snapshot.sessionId
         self.state = snapshot.state
@@ -283,12 +283,12 @@ struct AgentHomeExecutorTurn: Identifiable {
     }
 
     var agentDisplayName: String {
-        walkieAgentDisplayName(for: executorProvider)
+        agentRuntimeDisplayName(for: executorProvider)
             ?? topLevelProvider?.nonEmpty
             ?? "Talkie"
     }
 
-    init(job: AgentHomeExecutorJob, runtimePing: WalkieRuntimePing?) {
+    init(job: AgentHomeExecutorJob, runtimePing: AgentRuntimePing?) {
         let turnTranscript = job.transcript?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
             ?? job.instruction?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
             ?? job.ack.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
@@ -331,7 +331,7 @@ struct AgentHomeExecutorTurn: Identifiable {
 
     private static func makeThreads(
         job: AgentHomeExecutorJob,
-        runtimePing: WalkieRuntimePing?,
+        runtimePing: AgentRuntimePing?,
         transcript: String,
         instruction: String
     ) -> [AgentHomeExecutorThread] {
@@ -417,8 +417,8 @@ private extension String {
 final class AgentHomeActivityStore: ObservableObject {
     @Published private(set) var executorJobs: [AgentHomeExecutorJob] = []
     @Published private(set) var recentDictations: [LiveRecording] = []
-    @Published private(set) var runtimePing: WalkieRuntimePing?
-    @Published private(set) var agentRuntimexyx: [WalkieRuntimeAgentSnapshot] = []
+    @Published private(set) var runtimePing: AgentRuntimePing?
+    @Published private(set) var agents: [AgentRuntimeAgentSnapshot] = []
     @Published private(set) var lastRefreshed: Date?
     @Published private(set) var isInvokingAgent = false
     @Published private(set) var invokeError: String?
@@ -554,12 +554,12 @@ final class AgentHomeActivityStore: ObservableObject {
         invokeError = nil
 
         do {
-            let invocation = WalkieAgentInvocation(
+            let invocation = AgentInvocation(
                 id: UUID(),
                 channel: .defaultChannel,
                 transcript: trimmed,
                 instruction: trimmed,
-                topLevelModel: WalkieModelUse(
+                topLevelModel: AgentModelUse(
                     providerId: "talkie-agent",
                     providerName: "Talkie Agent",
                     modelId: "agent-home"
@@ -569,7 +569,7 @@ final class AgentHomeActivityStore: ObservableObject {
                 parentSessionId: parentSessionId,
                 source: "agent-home"
             )
-            _ = try await WalkieNodeRuntimeClient.shared.invoke(invocation)
+            _ = try await AgentRuntimeClient.shared.invoke(invocation)
             await refreshRuntimeStatus()
         } catch {
             invokeError = error.localizedDescription
@@ -584,15 +584,15 @@ final class AgentHomeActivityStore: ObservableObject {
 
     private func refreshRuntimeStatus() async {
         do {
-            let status = try await WalkieNodeRuntimeClient.shared.status()
+            let status = try await AgentRuntimeClient.shared.status()
             runtimePing = status.ping
-            agentRuntimexyx = status.ping.agentRuntimexyx
+            agents = status.ping.agents
             executorJobs = status.activities
                 .map(AgentHomeExecutorJob.init(snapshot:))
                 .sorted { $0.updatedDate > $1.updatedDate }
         } catch {
             runtimePing = nil
-            agentRuntimexyx = []
+            agents = []
             executorJobs = []
             agentHomeLog.warning(
                 "Agent Home could not refresh runtime status",

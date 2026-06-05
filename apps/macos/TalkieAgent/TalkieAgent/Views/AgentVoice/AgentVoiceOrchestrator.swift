@@ -1,5 +1,5 @@
 //
-//  WalkieOrchestrator.swift
+//  AgentVoiceOrchestrator.swift
 //  TalkieAgent
 //
 
@@ -8,13 +8,13 @@ import TalkieKit
 
 private let orchestratorLog = Log(.workflow)
 
-actor WalkieOrchestrator {
-    static let shared = WalkieOrchestrator()
+actor AgentVoiceOrchestrator {
+    static let shared = AgentVoiceOrchestrator()
 
     func run(
-        draft: WalkieTransmissionDraft,
-        onToolInvocation: @escaping @Sendable (WalkieToolInvocation) -> Void = { _ in }
-    ) async throws -> WalkieTurnResult {
+        draft: AgentVoiceTransmissionDraft,
+        onToolInvocation: @escaping @Sendable (AgentVoiceToolInvocation) -> Void = { _ in }
+    ) async throws -> AgentVoiceTurnResult {
         _ = onToolInvocation
 
         let topLevel = try await resolveTopLevelModel(channel: draft.channel)
@@ -22,7 +22,7 @@ actor WalkieOrchestrator {
         let route = try await route(draft: draft, topLevel: topLevel)
         let latencyMs = Int(Date().timeIntervalSince(start) * 1000)
 
-        var transmission = WalkieTransmission(
+        var transmission = AgentVoiceTransmission(
             id: draft.id,
             channelId: draft.channel.id,
             code: draft.code,
@@ -47,10 +47,10 @@ actor WalkieOrchestrator {
 
         if route.mode == .async {
             let runtimeId = draft.channel.executorRuntimeId
-                ?? TalkieSharedSettings.string(forKey: AgentSettingsKey.walkieExecutorRuntimeId)
+                ?? TalkieSharedSettings.string(forKey: AgentSettingsKey.agentVoiceExecutorRuntimeId)
 
-            if let runtime = await WalkieRuntimeRegistry.shared.resolve(preferredId: runtimeId) {
-                let invocation = WalkieAgentInvocation(
+            if let runtime = await AgentRuntimeRegistry.shared.resolve(preferredId: runtimeId) {
+                let invocation = AgentInvocation(
                     id: draft.id,
                     channel: draft.channel,
                     transcript: draft.userBody,
@@ -66,7 +66,7 @@ actor WalkieOrchestrator {
                 transmission.executorRuntimeId = runtime.id
                 transmission.executorProviderId = runtimeResult.providerId
                 transmission.executorModelId = runtimeResult.modelId
-                transmission.executorRuntimeName = walkieAgentDisplayName(for: runtimeResult.providerId) ?? runtime.name
+                transmission.executorRuntimeName = agentRuntimeDisplayName(for: runtimeResult.providerId) ?? runtime.name
                 transmission.executorSessionId = runtimeResult.sessionId
                 transmission.jobState = runtimeResult.jobState
             } else {
@@ -77,11 +77,11 @@ actor WalkieOrchestrator {
         }
 
         orchestratorLog.info(
-            "Walkie turn routed",
+            "Agent voice turn routed",
             detail: "mode=\(transmission.mode.rawValue) provider=\(topLevel.providerId) model=\(topLevel.modelId) latency=\(latencyMs)ms"
         )
 
-        return WalkieTurnResult(
+        return AgentVoiceTurnResult(
             transmission: transmission,
             route: route,
             topLevelModel: topLevel
@@ -89,9 +89,9 @@ actor WalkieOrchestrator {
     }
 
     private func route(
-        draft: WalkieTransmissionDraft,
-        topLevel: WalkieModelUse
-    ) async throws -> WalkieRouteDecision {
+        draft: AgentVoiceTransmissionDraft,
+        topLevel: AgentModelUse
+    ) async throws -> AgentVoiceRouteDecision {
         let provider = try await resolveProvider(id: topLevel.providerId)
         let options = LLMGenerationOptions(
             temperature: 0.2,
@@ -107,28 +107,28 @@ actor WalkieOrchestrator {
 
         let decision = parseRouteDecision(response)
         guard !decision.reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw WalkieOrchestratorError.emptyRouteReply
+            throw AgentVoiceOrchestratorError.emptyRouteReply
         }
         return decision
     }
 
     @MainActor
-    private func resolveTopLevelModel(channel: WalkieChannel) async throws -> WalkieModelUse {
+    private func resolveTopLevelModel(channel: AgentChannel) async throws -> AgentModelUse {
         let registry = LLMProviderRegistry.shared
 
         let preferredProviderId = channel.topLevelProviderId
-            ?? TalkieSharedSettings.string(forKey: AgentSettingsKey.walkieTopLevelProviderId)
+            ?? TalkieSharedSettings.string(forKey: AgentSettingsKey.agentVoiceTopLevelProviderId)
             ?? TalkieSharedSettings.string(forKey: AgentSettingsKey.llmProviderId)
 
         let preferredModelId = channel.topLevelModelId
-            ?? TalkieSharedSettings.string(forKey: AgentSettingsKey.walkieTopLevelModelId)
+            ?? TalkieSharedSettings.string(forKey: AgentSettingsKey.agentVoiceTopLevelModelId)
             ?? TalkieSharedSettings.string(forKey: AgentSettingsKey.llmModelId)
 
         if let preferredProviderId,
            let provider = registry.provider(for: preferredProviderId),
            let preferredModelId,
            await provider.isAvailable {
-            return WalkieModelUse(
+            return AgentModelUse(
                 providerId: provider.id,
                 providerName: provider.name,
                 modelId: preferredModelId
@@ -136,14 +136,14 @@ actor WalkieOrchestrator {
         }
 
         if let resolved = await registry.resolveProviderAndModel() {
-            return WalkieModelUse(
+            return AgentModelUse(
                 providerId: resolved.provider.id,
                 providerName: resolved.provider.name,
                 modelId: resolved.modelId
             )
         }
 
-        throw WalkieOrchestratorError.noTopLevelModelConfigured
+        throw AgentVoiceOrchestratorError.noTopLevelModelConfigured
     }
 
     @MainActor
@@ -154,7 +154,7 @@ actor WalkieOrchestrator {
         return provider
     }
 
-    private func routeSystemPrompt(channel: WalkieChannel) -> String {
+    private func routeSystemPrompt(channel: AgentChannel) -> String {
         """
         \(channel.systemPrompt)
 
@@ -177,7 +177,7 @@ actor WalkieOrchestrator {
         """
     }
 
-    private func routeUserPrompt(for draft: WalkieTransmissionDraft) -> String {
+    private func routeUserPrompt(for draft: AgentVoiceTransmissionDraft) -> String {
         """
         Channel: \(draft.channel.code) · \(draft.channel.label)
         Transmission: \(draft.code)
@@ -188,7 +188,7 @@ actor WalkieOrchestrator {
         """
     }
 
-    private func parseRouteDecision(_ response: String) -> WalkieRouteDecision {
+    private func parseRouteDecision(_ response: String) -> AgentVoiceRouteDecision {
         let json = extractJSONObject(from: response)
         let data = Data(json.utf8)
 
@@ -201,10 +201,10 @@ actor WalkieOrchestrator {
         }
 
         if let decoded = try? JSONDecoder().decode(RouteDTO.self, from: data) {
-            let mode = decoded.mode == WalkieTransmissionMode.async.rawValue
-                ? WalkieTransmissionMode.async
-                : WalkieTransmissionMode.verbal
-            return WalkieRouteDecision(
+            let mode = decoded.mode == AgentVoiceTransmissionMode.async.rawValue
+                ? AgentVoiceTransmissionMode.async
+                : AgentVoiceTransmissionMode.verbal
+            return AgentVoiceRouteDecision(
                 mode: mode,
                 reply: decoded.reply ?? "",
                 executorInstruction: decoded.executorInstruction,
@@ -213,7 +213,7 @@ actor WalkieOrchestrator {
             )
         }
 
-        return WalkieRouteDecision(
+        return AgentVoiceRouteDecision(
             mode: .verbal,
             reply: response,
             executorInstruction: nil,

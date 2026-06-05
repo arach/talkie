@@ -18,13 +18,29 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const runtimeDir = dirname(fileURLToPath(import.meta.url));
 const version = readPackageVersion();
+const defaultJobStorePath = join(
+  homedir(),
+  'Library',
+  'Application Support',
+  'Talkie',
+  'AgentRuntime',
+  'jobs.json'
+);
+const legacyJobStorePath = join(
+  homedir(),
+  'Library',
+  'Application Support',
+  'Talkie',
+  'Walkie',
+  'jobs.json'
+);
 const jobStorePath = process.env.TALKIE_AGENT_ACTIVITY_STORE
   ?? process.env.TALKIE_WALKIE_JOB_STORE
-  ?? join(homedir(), 'Library', 'Application Support', 'Talkie', 'Walkie', 'jobs.json');
+  ?? (existsSync(defaultJobStorePath) || !existsSync(legacyJobStorePath) ? defaultJobStorePath : legacyJobStorePath);
 const agentRuntimeHome = process.env.TALKIE_AGENT_RUNTIME_HOME
   ?? join(homedir(), '.talkie', 'agent-runtime');
 const runtimeBase = {
-  id: 'walkie-node-dispatcher',
+  id: 'agent-node-dispatcher',
   name: 'Agent Runtime Dispatcher',
   version,
   capabilities: ['readOnlyData', 'longRunningJobs', 'codeExecution', 'externalNodeTools'],
@@ -159,7 +175,7 @@ async function handleLine(line) {
     const runtime = await runtimeInfo();
     switch (request?.op) {
       case 'ping':
-        writeResponse({ ok: true, pid: process.pid, version, runtime, agentRuntimexyx: runtime.agentRuntimexyx });
+        writeResponse({ ok: true, pid: process.pid, version, runtime, agents: runtime.agents });
         break;
       case 'status':
         {
@@ -169,7 +185,7 @@ async function handleLine(line) {
             pid: process.pid,
             version,
             runtime,
-            agentRuntimexyx: runtime.agentRuntimexyx,
+            agents: runtime.agents,
             activities,
             jobs: activities,
           });
@@ -233,13 +249,13 @@ async function handleLine(line) {
 
 async function runtimeInfo() {
   const agentRuntime = await agentRuntimeStatus();
-  const agentRuntimexyx = buildAgentRuntimexyx(agentRuntime);
+  const agents = buildAgents(agentRuntime);
   return {
     ...runtimeBase,
     scoutBridge: agentRuntime.available ? 'configured' : 'pending',
     agentRuntimeHome,
     agentRuntimeModule: agentRuntime.modulePath,
-    agentRuntimexyx,
+    agents,
   };
 }
 
@@ -260,7 +276,7 @@ async function loadAgentSessionsPackage() {
   return (await resolveAgentRuntimePackage()).packageModule;
 }
 
-function buildAgentRuntimexyx(agentRuntime) {
+function buildAgents(agentRuntime) {
   const preferredAdapter = resolveAdapterType({});
   const now = new Date().toISOString();
 
@@ -476,7 +492,7 @@ function writeResponse(response) {
 async function invoke(invocation, runtime) {
   validateInvocation(invocation);
 
-  const sessionId = `walkie-${invocation.id}`;
+  const sessionId = `agent-${invocation.id}`;
   const now = new Date().toISOString();
   const adapterType = resolveAdapterType(invocation);
   const bridgeReady = runtime.scoutBridge === 'configured';
@@ -1035,7 +1051,8 @@ function sleepSync(ms) {
 }
 
 function workspaceCwd() {
-  const configured = process.env.TALKIE_WALKIE_EXECUTOR_CWD;
+  const configured = process.env.TALKIE_AGENT_EXECUTOR_CWD
+    ?? process.env.TALKIE_WALKIE_EXECUTOR_CWD;
   if (configured && existsSync(configured)) {
     return configured;
   }

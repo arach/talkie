@@ -83,7 +83,7 @@ public final class LiveStateMachine: ObservableObject {
         case (.listening, .stopRecording):
             return .transcribing  // Always transition to transcribing when stopping
         case (.listening, .cancel):
-            return .transcribing  // Cancelled recordings still go through transcribing for cleanup
+            return .idle  // Cancel is instant — discard audio, skip the transcribing flash
         case (.listening, .error):
             return .idle  // Audio capture error, abort immediately
         case (.listening, .forceReset):
@@ -141,7 +141,7 @@ public final class LiveStateMachine: ObservableObject {
 
  LISTENING
   ├─ stopRecording → TRANSCRIBING
-  ├─ cancel → TRANSCRIBING (audio preserved)
+  ├─ cancel → IDLE (audio discarded, instant — no processing UI)
   ├─ error → IDLE (capture failure)
   └─ forceReset → IDLE
 

@@ -348,6 +348,21 @@ struct SelectionProcessingContent: View {
                     get: { s.selectionTTSVoiceId },
                     set: { s.selectionTTSVoiceId = $0 }
                 ))
+
+                SelectionVoicePickerCard(
+                    selectionTTSVoiceId: Binding(
+                        get: { s.agentVoiceTTSVoiceId },
+                        set: { s.agentVoiceTTSVoiceId = $0 }
+                    ),
+                    title: "Use dedicated Agent reply voice",
+                    dedicatedDescription: "Agent replies use their own TTS voice.",
+                    inheritedDescription: "Agent replies use selection/global TTS fallback.",
+                    defaultVoiceId: {
+                        TTSVoiceCatalog.recommendedSettingsVoiceId(
+                            hasOpenAIKey: SettingsManager.shared.hasOpenAIKey()
+                        )
+                    }
+                )
             }
             .settingsSectionCard(padding: Spacing.md)
 
@@ -480,6 +495,14 @@ struct SelectionProcessingContent: View {
 
 private struct SelectionVoicePickerCard: View {
     @Binding var selectionTTSVoiceId: String?
+    var title = "Use dedicated voice"
+    var dedicatedDescription = "Selection uses its own TTS voice."
+    var inheritedDescription = "Using global TTS voice from Models settings."
+    var defaultVoiceId: () -> String = {
+        TalkieSharedSettings.string(forKey: AgentSettingsKey.selectedTTSVoiceId)
+            ?? TTSVoiceCatalog.recommendedSettingsVoiceId(hasOpenAIKey: SettingsManager.shared.hasOpenAIKey())
+    }
+
     @State private var availableVoices: [VoiceOption] = []
     @State private var isLoading = true
 
@@ -494,13 +517,13 @@ private struct SelectionVoicePickerCard: View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Use dedicated voice")
+                    Text(title)
                         .font(Theme.current.fontSMMedium)
                         .foregroundColor(Theme.current.foreground)
 
                     Text(hasDedicatedVoice
-                         ? "Selection uses its own TTS voice."
-                         : "Using global TTS voice from Models settings.")
+                         ? dedicatedDescription
+                         : inheritedDescription)
                         .font(Theme.current.fontXS)
                         .foregroundColor(Theme.current.foregroundMuted)
                 }
@@ -511,9 +534,7 @@ private struct SelectionVoicePickerCard: View {
                     get: { hasDedicatedVoice },
                     set: { newValue in
                         if newValue {
-                            let globalVoice = TalkieSharedSettings.string(forKey: AgentSettingsKey.selectedTTSVoiceId)
-                                ?? TTSVoiceCatalog.recommendedSettingsVoiceId(hasOpenAIKey: SettingsManager.shared.hasOpenAIKey())
-                            selectionTTSVoiceId = globalVoice
+                            selectionTTSVoiceId = defaultVoiceId()
                         } else {
                             selectionTTSVoiceId = nil
                         }

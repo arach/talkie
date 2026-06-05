@@ -21,7 +21,7 @@ final class AgentHomeVoiceCapture: ObservableObject {
     @Published private(set) var elapsedMs = 0
     @Published private(set) var errorMessage: String?
 
-    private var meter: WalkieAudioMeter?
+    private var meter: AgentVoiceAudioMeter?
     private var startedAt: Date?
     private var elapsedTimer: Timer?
     private var transcriptionTask: Task<Void, Never>?
@@ -47,7 +47,7 @@ final class AgentHomeVoiceCapture: ObservableObject {
         startedAt = Date()
         phase = .recording
 
-        let capture = WalkieAudioMeter { [weak self] nextLevel in
+        let capture = AgentVoiceAudioMeter { [weak self] nextLevel in
             guard let self else { return }
             self.level = self.level * 0.8 + nextLevel * 0.2
         }

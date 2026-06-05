@@ -143,12 +143,13 @@ public enum AgentSettingsKey {
     public static let llmTemperature = "llmTemperature"
     public static let llmMaxTokens = "llmMaxTokens"
 
-    // MARK: Walkie
-    public static let walkieTopLevelProviderId = "walkie.topLevelProviderId"
-    public static let walkieTopLevelModelId = "walkie.topLevelModelId"
-    public static let walkieExecutorRuntimeId = "walkie.executorRuntimeId"
-    public static let walkieScoutRuntimeEnabled = "walkie.scoutRuntimeEnabled"
-    public static let walkieAutoPlay = "walkie.autoPlay"
+    // MARK: Agent Voice
+    public static let agentVoiceTopLevelProviderId = "walkie.topLevelProviderId"
+    public static let agentVoiceTopLevelModelId = "walkie.topLevelModelId"
+    public static let agentVoiceExecutorRuntimeId = "walkie.executorRuntimeId"
+    public static let agentRuntimeScoutEnabled = "walkie.scoutRuntimeEnabled"
+    public static let agentVoiceAutoPlay = "walkie.autoPlay"
+    public static let agentVoiceTTSVoiceId = "agentVoice.ttsVoiceId"
 
     // MARK: API Keys (stored in Keychain, these are just for reference)
     // Actual keys are read via LLMAPIKeyStore

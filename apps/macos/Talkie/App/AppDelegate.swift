@@ -232,7 +232,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         // Set notification delegate to show notifications while app is in foreground
         signposter.emitEvent("Notification Delegate")
         UNUserNotificationCenter.current().delegate = self
-        setupWalkieReportNotifications()
+        setupAgentReportNotifications()
 
         // Phase 3: Deferred - CloudKit, remote notifications (after UI visible)
         // These run with 300ms delay to let UI settle first
@@ -1500,16 +1500,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         }
     }
 
-    private func setupWalkieReportNotifications() {
+    private func setupAgentReportNotifications() {
         DistributedNotificationCenter.default().addObserver(
             self,
-            selector: #selector(walkieReportReceived(_:)),
-            name: NSNotification.Name("to.talkie.app.agent.walkie.report"),
+            selector: #selector(agentReportReceived(_:)),
+            name: NSNotification.Name("to.talkie.app.agent.voice.report"),
             object: nil
         )
     }
 
-    @objc private func walkieReportReceived(_ notification: Notification) {
+    @objc private func agentReportReceived(_ notification: Notification) {
         guard let userInfo = notification.userInfo else { return }
         let title = (userInfo["title"] as? String)?.trimmedNonEmpty ?? "Talkie report back"
         let body = (userInfo["body"] as? String)?.trimmedNonEmpty
@@ -1522,8 +1522,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         content.title = Self.notificationText(title, maxLength: 90)
         content.body = Self.notificationText(body, maxLength: 360)
         content.sound = .default
-        content.threadIdentifier = "talkie-walkie-\(sessionId)"
-        content.categoryIdentifier = "talkie-walkie-report"
+        content.threadIdentifier = "talkie-agent-report-\(sessionId)"
+        content.categoryIdentifier = "talkie-agent-report"
         content.userInfo = [
             "sessionId": sessionId,
             "source": source ?? "",
@@ -1531,19 +1531,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         ]
 
         let request = UNNotificationRequest(
-            identifier: "talkie-walkie-report-\(sessionId)-\(Int(Date().timeIntervalSince1970))",
+            identifier: "talkie-agent-report-\(sessionId)-\(Int(Date().timeIntervalSince1970))",
             content: content,
             trigger: nil
         )
 
         UNUserNotificationCenter.current().add(request) { error in
             if let error {
-                logger.warning("Failed to show Walkie report notification: \(error.localizedDescription)")
+                logger.warning("Failed to show agent report notification: \(error.localizedDescription)")
             }
         }
 
         Task {
-            await Self.queueWalkieReportForIPhone(
+            await Self.queueAgentReportForIPhone(
                 title: title,
                 body: body,
                 sessionId: sessionId,
@@ -1552,7 +1552,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         }
     }
 
-    private static func queueWalkieReportForIPhone(
+    private static func queueAgentReportForIPhone(
         title: String,
         body: String,
         sessionId: String,
@@ -1565,9 +1565,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                 sessionId: sessionId,
                 source: source
             )
-            logger.info("Queued iPhone Walkie report notification in CloudKit: \(recordID.recordName)")
+            logger.info("Queued iPhone agent report notification in CloudKit: \(recordID.recordName)")
         } catch {
-            logger.warning("Failed to queue iPhone Walkie report notification in CloudKit: \(error.localizedDescription)")
+            logger.warning("Failed to queue iPhone agent report notification in CloudKit: \(error.localizedDescription)")
         }
     }
 

@@ -3460,7 +3460,7 @@ struct DebugToolbarOverlay<Content: View>: View {
         NSLog("[DEBUG] Opening URL: \(urlString)")
         AppLogger.shared.log(.system, "Opening interstitial", detail: urlString)
 
-        NSWorkspace.shared.open(url)
+        TalkieAppOpener.open(url)
     }
 }
 
