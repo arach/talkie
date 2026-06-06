@@ -2247,7 +2247,7 @@ final class AgentController: ObservableObject {
                         metadata: metadataDict.isEmpty ? nil : metadataDict,
                         audioFilename: audioFilename,
                         createdInTalkieView: false,
-                        pasteTimestamp: Date()
+                        pasteTimestamp: nil
                     )
 
                     let storedRecordingId = await Self.persistDictationRecording(
@@ -2282,10 +2282,17 @@ final class AgentController: ObservableObject {
                     )
 
                     trace?.begin("paste")
-                    await router.handle(transcript: deliveryText)
+                    let routeSucceeded = await router.handle(transcript: deliveryText)
                     let pasteMs = trace?.end(routingMode) ?? 0
                     logTiming("Router finished (\(pasteMs)ms)")
-                    metadata.wasRouted = true
+                    metadata.wasRouted = routeSucceeded
+                    if let storedRecordingId {
+                        if routeSucceeded {
+                            UnifiedDatabase.markPasted(id: storedRecordingId)
+                        } else {
+                            UnifiedDatabase.markRoutingFailed(id: storedRecordingId)
+                        }
+                    }
 
                     let routeEnd = Date()
                     let totalMs = Int(routeEnd.timeIntervalSince(pipelineStart) * 1000)
@@ -2461,7 +2468,7 @@ final class AgentController: ObservableObject {
                         metadata: metadataDict.isEmpty ? nil : metadataDict,
                         audioFilename: audioFilename,
                         createdInTalkieView: false,
-                        pasteTimestamp: Date()
+                        pasteTimestamp: nil
                     )
 
                     let storedRecordingId = await Self.persistDictationRecording(
@@ -2496,10 +2503,17 @@ final class AgentController: ObservableObject {
                     )
 
                     trace?.begin("paste")
-                    await router.handle(transcript: deliveryText)
+                    let routeSucceeded = await router.handle(transcript: deliveryText)
                     let pasteMs = trace?.end(routingMode) ?? 0
                     logTiming("Router finished (\(pasteMs)ms)")
-                    metadata.wasRouted = true
+                    metadata.wasRouted = routeSucceeded
+                    if let storedRecordingId {
+                        if routeSucceeded {
+                            UnifiedDatabase.markPasted(id: storedRecordingId)
+                        } else {
+                            UnifiedDatabase.markRoutingFailed(id: storedRecordingId)
+                        }
+                    }
 
                     let routeEnd = Date()
                     let totalMs = Int(routeEnd.timeIntervalSince(pipelineStart) * 1000)
@@ -2670,7 +2684,7 @@ final class AgentController: ObservableObject {
                     metadata: metadataDict,
                     audioFilename: audioFilename,
                     createdInTalkieView: false,
-                    pasteTimestamp: Date()
+                    pasteTimestamp: nil
                 )
 
                 let storedRecordingId = await Self.persistDictationRecording(
@@ -2706,10 +2720,17 @@ final class AgentController: ObservableObject {
 
                 // Trace ONLY the actual paste operation
                 trace?.begin("paste")
-                await router.handle(transcript: deliveryText)
+                let routeSucceeded = await router.handle(transcript: deliveryText)
                 let pasteMs = trace?.end(routingMode) ?? 0
                 logTiming("Router finished (\(pasteMs)ms)")
-                metadata.wasRouted = true
+                metadata.wasRouted = routeSucceeded
+                if let storedRecordingId {
+                    if routeSucceeded {
+                        UnifiedDatabase.markPasted(id: storedRecordingId)
+                    } else {
+                        UnifiedDatabase.markRoutingFailed(id: storedRecordingId)
+                    }
+                }
 
                 // Calculate timing metrics immediately after paste for logs
                 let routeEnd = Date()
