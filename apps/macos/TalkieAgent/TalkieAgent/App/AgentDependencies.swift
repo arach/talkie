@@ -26,7 +26,8 @@ protocol AgentAudioCapture {
 }
 
 protocol AgentRouter {
-    func handle(transcript: String) async
+    @MainActor @discardableResult
+    func handle(transcript: String) async -> Bool
 }
 
 // MARK: - Stub Implementations (for now)
@@ -138,10 +139,12 @@ enum EngineTranscriptionError: LocalizedError {
 }
 
 struct LoggingRouter: AgentRouter {
-    func handle(transcript: String) async {
+    @MainActor @discardableResult
+    func handle(transcript: String) async -> Bool {
         logger.info("Routing transcript...")
         // Simulate routing taking 0.5 seconds
         try? await Task.sleep(for: .milliseconds(500))
         logger.info("Transcript routed: \(transcript)")
+        return true
     }
 }
