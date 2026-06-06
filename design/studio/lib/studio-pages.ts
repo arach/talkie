@@ -392,6 +392,16 @@ export const STUDIO_PAGES: StudioPage[] = [
     status: "shipped",
   },
   {
+    href: "/ios-library-cta",
+    label: "Library · CTA",
+    bucket: "surfaces",
+    platform: "iphone",
+    family: "library",
+    status: "concept",
+    swift: ["apps/ios/Talkie iOS/Views/Next/LibraryNextView.swift"],
+    blurb: "Contextual round CTA per tab (mic / keyboard / viewfinder) — Accent / Glass / Ring material variants.",
+  },
+  {
     href: "/compose",
     label: "Compose",
     bucket: "surfaces",

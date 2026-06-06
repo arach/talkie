@@ -437,9 +437,9 @@ function PadSignals({ state }: { state: DeckState }) {
     state === "dictating"
       ? { label: "DICTATING", color: "var(--theme-amber)" }
       : { label: "LIVE", color: "#5CBD80" };
+  // leading matches the Masthead (px-4) so MAC aligns under the title;
+  // the status pill keeps the tighter trailing inset.
   return (
-    {/* leading matches the Masthead (px-4) so MAC aligns under the title;
-        the status pill keeps the tighter trailing inset. */}
     <div className="flex items-center justify-between pl-4 pr-3 pt-2.5">
       <button
         className="flex items-center gap-1.5 text-[10px] tracking-[0.14em]"
