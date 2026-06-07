@@ -33,13 +33,6 @@ enum RoutingMode: String, CaseIterable {
 
 struct TranscriptRouter: AgentRouter {
     private static let postPasteSubmitDelay: Duration = .milliseconds(180)
-    private static let modifierReleasePoll: Duration = .milliseconds(20)
-    private static let blockingModifierFlags: NSEvent.ModifierFlags = [
-        .command,
-        .option,
-        .control,
-        .shift
-    ]
 
     var mode: RoutingMode = .paste
 
@@ -71,8 +64,6 @@ struct TranscriptRouter: AgentRouter {
             // Cache setting before paste to avoid async hop after
             let shouldPressEnter = await MainActor.run { LiveSettings.shared.pressEnterAfterPaste }
 
-            let modifiersReleased = await waitForModifierReleaseBeforePaste()
-            guard modifiersReleased else { return false }
             guard !Task.isCancelled else { return false }
 
             // Paste: clipboard + simulated Cmd+V
@@ -109,53 +100,6 @@ struct TranscriptRouter: AgentRouter {
         return true
     }
 
-    private func waitForModifierReleaseBeforePaste() async -> Bool {
-        let startedAt = Date()
-        var lastFlags = Self.currentBlockingModifierFlags()
-        guard !lastFlags.isEmpty else { return true }
-
-        log.info("Waiting for physical hotkey modifiers to release before paste: \(Self.describeModifiers(lastFlags))")
-        while !Task.isCancelled {
-            let activeFlags = Self.currentBlockingModifierFlags()
-
-            if activeFlags.isEmpty {
-                let waitedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
-                if waitedMs > 40 {
-                    log.info("Waited \(waitedMs)ms for hotkey modifiers to release before paste")
-                }
-                return true
-            }
-
-            lastFlags = activeFlags
-            try? await Task.sleep(for: Self.modifierReleasePoll)
-        }
-
-        log.warning("Cancelled synthetic paste while physical modifiers remain active: \(Self.describeModifiers(lastFlags))")
-        return false
-    }
-
-    private static func currentBlockingModifierFlags() -> NSEvent.ModifierFlags {
-        // NSEvent.modifierFlags can retain synthetic flags from a global hotkey
-        // event. Read the HID state so Caps Lock -> Hyper transports don't
-        // make paste wait forever after the physical key is released.
-        let flags = CGEventSource.flagsState(.hidSystemState)
-        var modifiers: NSEvent.ModifierFlags = []
-        if flags.contains(.maskControl) { modifiers.insert(.control) }
-        if flags.contains(.maskAlternate) { modifiers.insert(.option) }
-        if flags.contains(.maskShift) { modifiers.insert(.shift) }
-        if flags.contains(.maskCommand) { modifiers.insert(.command) }
-        return modifiers.intersection(Self.blockingModifierFlags)
-    }
-
-    private static func describeModifiers(_ flags: NSEvent.ModifierFlags) -> String {
-        var parts: [String] = []
-        if flags.contains(.control) { parts.append("control") }
-        if flags.contains(.option) { parts.append("option") }
-        if flags.contains(.shift) { parts.append("shift") }
-        if flags.contains(.command) { parts.append("command") }
-        return parts.isEmpty ? "none" : parts.joined(separator: "+")
-    }
-
     private func simulatePaste() -> Bool {
         // Use cached accessibility check (pre-warmed on boot) for fast path.
         // If permission is missing, report failure to invalidate cache and force re-check.
@@ -171,38 +115,15 @@ struct TranscriptRouter: AgentRouter {
             return false
         }
 
-        guard let src = CGEventSource(stateID: .combinedSessionState) else {
-            log.error("Failed to create CGEventSource - cannot paste")
-            // This could indicate an accessibility issue - report it
+        let posted = postSyntheticShortcut(keyCode: 0x09, modifiers: .maskCommand)
+        guard posted else {
+            log.warning("Paste shortcut failed to post - possible accessibility issue")
             PermissionManager.shared.reportAccessibilityFailure()
             return false
         }
 
-        let events: [(UInt16, Bool)] = [
-            (0x37, true),   // ⌘ down
-            (0x09, true),   // V down
-            (0x09, false),  // V up
-            (0x37, false)   // ⌘ up
-        ]
-
-        var eventsPosted = 0
-        for (key, down) in events {
-            if let evt = CGEvent(keyboardEventSource: src, virtualKey: key, keyDown: down) {
-                evt.flags = down && key == 0x09 ? .maskCommand : []
-                evt.post(tap: .cghidEventTap)
-                eventsPosted += 1
-            }
-        }
-
-        // If not all events posted, report potential accessibility issue
-        if eventsPosted < 4 {
-            log.warning("Paste incomplete (\(eventsPosted)/4 events) - possible accessibility issue")
-            PermissionManager.shared.reportAccessibilityFailure()
-            return false
-        } else {
-            log.info("Pasted (\(eventsPosted)/4 events posted)")
-            return true
-        }
+        log.info("Pasted via private shortcut event source")
+        return true
     }
 
     private func submitAfterPaste() async {
@@ -213,31 +134,73 @@ struct TranscriptRouter: AgentRouter {
     }
 
     private func simulateEnter() -> Bool {
-        guard let src = CGEventSource(stateID: .combinedSessionState) else {
-            log.error("Failed to create CGEventSource - cannot send Enter")
-            return false
-        }
-
-        // Return/Enter key = 0x24
-        let events: [(UInt16, Bool)] = [
-            (0x24, true),   // Return down
-            (0x24, false)   // Return up
-        ]
-
-        var eventsPosted = 0
-        for (key, down) in events {
-            if let evt = CGEvent(keyboardEventSource: src, virtualKey: key, keyDown: down) {
-                evt.post(tap: .cghidEventTap)
-                eventsPosted += 1
-            }
-        }
-
-        if eventsPosted == events.count {
+        // Return/Enter key = 0x24. Use the same private event source as paste
+        // so a just-released hotkey cannot turn this into a modified Enter.
+        if postSyntheticShortcut(keyCode: 0x24, modifiers: []) {
             log.info("Sent Enter key")
             return true
         } else {
-            log.warning("Enter incomplete (\(eventsPosted)/\(events.count) events)")
+            log.warning("Enter key failed to post")
             return false
         }
+    }
+
+    private func postSyntheticShortcut(keyCode: UInt16, modifiers: CGEventFlags) -> Bool {
+        guard let source = CGEventSource(stateID: .privateState) else {
+            log.error("Failed to create private CGEventSource")
+            return false
+        }
+
+        let modifierEvents = modifierKeyEvents(for: modifiers, source: source)
+
+        for event in modifierEvents.down {
+            event.post(tap: .cghidEventTap)
+        }
+
+        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) else {
+            log.error("Failed to create synthetic shortcut events", detail: "keyCode=\(keyCode)")
+            for event in modifierEvents.up {
+                event.post(tap: .cghidEventTap)
+            }
+            return false
+        }
+
+        keyDown.flags = modifiers
+        keyUp.flags = modifiers
+        keyDown.post(tap: .cghidEventTap)
+        keyUp.post(tap: .cghidEventTap)
+
+        for event in modifierEvents.up {
+            event.post(tap: .cghidEventTap)
+        }
+
+        return true
+    }
+
+    private func modifierKeyEvents(
+        for modifiers: CGEventFlags,
+        source: CGEventSource
+    ) -> (down: [CGEvent], up: [CGEvent]) {
+        let modifierKeyCodes: [(flag: CGEventFlags, keyCode: UInt16)] = [
+            (.maskCommand, 55),
+            (.maskShift, 56),
+            (.maskAlternate, 58),
+            (.maskControl, 59),
+        ]
+
+        let active = modifierKeyCodes.filter { modifiers.contains($0.flag) }
+        let down = active.compactMap { item in
+            let event = CGEvent(keyboardEventSource: source, virtualKey: item.keyCode, keyDown: true)
+            event?.flags = modifiers
+            return event
+        }
+        let up = active.reversed().compactMap { item in
+            let event = CGEvent(keyboardEventSource: source, virtualKey: item.keyCode, keyDown: false)
+            event?.flags = modifiers
+            return event
+        }
+
+        return (down, up)
     }
 }
