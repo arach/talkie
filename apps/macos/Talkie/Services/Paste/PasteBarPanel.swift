@@ -90,14 +90,24 @@ final class PasteBarPanel {
     }
 
     func dismiss() {
-        guard let p = panel else { return }
+        state.onAction = nil
+
+        guard let p = panel else {
+            state.items = []
+            return
+        }
         panel = nil
+        let state = self.state
         NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = 0.1
             ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
             p.animator().alphaValue = 0
         }, completionHandler: {
-            p.orderOut(nil)
+            MainActor.assumeIsolated {
+                p.orderOut(nil)
+                p.contentView = nil
+                state.items = []
+            }
         })
     }
 }

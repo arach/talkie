@@ -121,6 +121,7 @@ final class FileDragPanel {
     func dismiss() {
         if let m = escapeMonitor { NSEvent.removeMonitor(m); escapeMonitor = nil }
         if let m = globalEscapeMonitor { NSEvent.removeMonitor(m); globalEscapeMonitor = nil }
+        dragSource.onEnd = nil
         guard let p = panel else { return }
         panel = nil
         NSAnimationContext.runAnimationGroup({ ctx in
@@ -128,6 +129,7 @@ final class FileDragPanel {
             p.animator().alphaValue = 0
         }, completionHandler: {
             p.orderOut(nil)
+            p.contentView = nil
         })
     }
 }

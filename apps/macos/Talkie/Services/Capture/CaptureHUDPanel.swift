@@ -161,6 +161,8 @@ final class CaptureHUDPanel {
     }
 
     func dismiss() {
+        state.onAction = nil
+
         guard let p = panel else { return }
         panel = nil
         NSAnimationContext.runAnimationGroup({ ctx in
@@ -169,6 +171,7 @@ final class CaptureHUDPanel {
             p.animator().alphaValue = 0
         }, completionHandler: {
             p.orderOut(nil)
+            p.contentView = nil
         })
     }
 

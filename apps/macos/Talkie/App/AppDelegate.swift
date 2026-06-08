@@ -56,6 +56,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     private var captureChordLocalMonitor: Any?
     // Direct screenshot shortcuts local monitor
     private var screenshotDirectLocalMonitor: Any?
+    // App-wide keyboard shortcuts
+    private var singleKeyShortcutLocalMonitor: Any?
+    #if DEBUG
+    private var designModeLocalMonitor: Any?
+    #endif
 
     // MARK: - Window Restoration
 
@@ -293,12 +298,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                 setupCaptureChord()
                 setupDirectScreenshotShortcuts()
 
-                // Warm core screenshot/tray path shortly after launch to reduce first-hit latency.
+                // Prewarm only the floating preview surface. Idle launch should
+                // not restore screenshot tray state or touch capture APIs.
                 Task { @MainActor in
                     try? await Task.sleep(for: .seconds(1))
-                    _ = ScreenshotTray.shared.count
                     ScreenshotPreviewPanel.shared.prewarmIfNeeded()
-                    ScreenshotCaptureService.shared.prewarmPipelineIfNeeded()
                 }
             }
 
@@ -1470,9 +1474,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        tearDownEventMonitors()
+        DistributedNotificationCenter.default().removeObserver(self)
+        NotificationCenter.default.removeObserver(self)
+        NSAppleEventManager.shared().removeEventHandler(
+            forEventClass: AEEventClass(kInternetEventClass),
+            andEventID: AEEventID(kAEGetURL)
+        )
         ConsoleSessionPool.shared.detachAll()
         ManagedAgentConsoleSession.handleApplicationWillTerminate()
         ServiceManager.shared.bootoutHelpers()
+    }
+
+    private func tearDownEventMonitors() {
+        if let singleKeyShortcutLocalMonitor {
+            NSEvent.removeMonitor(singleKeyShortcutLocalMonitor)
+            self.singleKeyShortcutLocalMonitor = nil
+        }
+        if let captureChordLocalMonitor {
+            NSEvent.removeMonitor(captureChordLocalMonitor)
+            self.captureChordLocalMonitor = nil
+        }
+        if let screenshotDirectLocalMonitor {
+            NSEvent.removeMonitor(screenshotDirectLocalMonitor)
+            self.screenshotDirectLocalMonitor = nil
+        }
+        if let cameraLocalMonitor {
+            NSEvent.removeMonitor(cameraLocalMonitor)
+            self.cameraLocalMonitor = nil
+        }
+        #if DEBUG
+        if let designModeLocalMonitor {
+            NSEvent.removeMonitor(designModeLocalMonitor)
+            self.designModeLocalMonitor = nil
+        }
+        #endif
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -1793,7 +1829,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     /// - O = Open/activate selected item
     /// - ? = Show keyboard shortcuts help (Shift+/ or typed ?)
     private func setupSingleKeyShortcuts() {
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+        if let singleKeyShortcutLocalMonitor {
+            NSEvent.removeMonitor(singleKeyShortcutLocalMonitor)
+            self.singleKeyShortcutLocalMonitor = nil
+        }
+
+        singleKeyShortcutLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             if HotkeyRecordingCoordinator.shared.isRecording {
                 return event
             }
@@ -2715,7 +2756,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     /// - R = Toggle rulers (when design mode is active, no modifiers)
     /// - B = Toggle borders (when design mode is active, no modifiers)
     private func setupDesignModeShortcut() {
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        if let designModeLocalMonitor {
+            NSEvent.removeMonitor(designModeLocalMonitor)
+            self.designModeLocalMonitor = nil
+        }
+
+        designModeLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             if HotkeyRecordingCoordinator.shared.isRecording {
                 return event
             }

@@ -164,8 +164,9 @@ final class ScreenCaptureOverlay {
 
     private func dismiss() {
         removeKeyMonitors()
-        overlayView?.deactivateCursor()
+        overlayView?.releaseTransientResources()
         overlayWindow?.orderOut(nil)
+        overlayWindow?.contentView = nil
         overlayWindow = nil
         overlayView = nil
     }
@@ -365,11 +366,22 @@ private final class OverlayView: NSView {
     }
 
     override func removeFromSuperview() {
+        releaseTransientResources()
+        super.removeFromSuperview()
+    }
+
+    func releaseTransientResources() {
         pendingWindowHoverUpdate = false
         windowCandidatesRefreshTask?.cancel()
         windowCandidatesRefreshTask = nil
+        frozenSnapshot = nil
+        windowCandidates.removeAll(keepingCapacity: false)
+        highlightedWindowID = nil
+        highlightedWindowFrame = nil
+        dragStart = nil
+        dragCurrent = nil
+        lastDragDrawRect = .zero
         deactivateCursor()
-        super.removeFromSuperview()
     }
 
     override func draw(_ dirtyRect: NSRect) {
