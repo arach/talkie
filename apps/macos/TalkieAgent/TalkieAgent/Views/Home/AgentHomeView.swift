@@ -304,6 +304,7 @@ struct AgentHomeView: View {
                 id: selectedTopicId,
                 title: "New conversation",
                 subtitle: "Draft",
+                wireLabel: nil,
                 icon: "plus.bubble",
                 activeCount: 0,
                 turnCount: 0,
@@ -630,18 +631,28 @@ private struct AgentHomeConversationRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
-                Text(topic.title)
-                    .font(.system(size: 12, weight: selected ? .semibold : .regular))
-                    .foregroundStyle(ScopeInk.primary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 8) {
+                    Text(topic.title)
+                        .font(.system(size: 12, weight: selected ? .semibold : .regular))
+                        .foregroundStyle(ScopeInk.primary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
-                trailing
+                    trailing
+                }
+
+                if let wireLabel = topic.wireLabel {
+                    Text(wireLabel)
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundStyle(selected ? ScopeBrass.solid.opacity(0.85) : ScopeInk.subtle)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.vertical, topic.wireLabel == nil ? 8 : 7)
             .background(
                 RoundedRectangle(cornerRadius: 7)
                     .fill(rowFill)
@@ -840,7 +851,9 @@ private struct AgentHomeTurnBlock: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
+            AgentHomeWireTrace(turn: turn)
+
             AgentHomeSpeech(
                 speaker: .you,
                 bodyText: turn.askBody ?? "—",
@@ -890,6 +903,43 @@ private struct AgentHomeTurnBlock: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
         return formatter.string(from: date).lowercased()
+    }
+}
+
+// MARK: - Wire trace
+
+private struct AgentHomeWireTrace: View {
+    let turn: AgentHomeExecutorTurn
+
+    private var trace: AgentHomeWireTraceText { turn.wireTrace }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(trace.primary)
+                .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                .foregroundStyle(primaryColor)
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+            Text(trace.secondary)
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundStyle(ScopeInk.subtle)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .padding(.leading, 1)
+        .help("\(trace.primary)\n\(trace.secondary)")
+    }
+
+    private var primaryColor: Color {
+        switch turn.status {
+        case .waiting, .running:
+            return ScopeBrass.solid
+        case .done:
+            return ScopeInk.subtle
+        case .failed:
+            return .red
+        }
     }
 }
 
