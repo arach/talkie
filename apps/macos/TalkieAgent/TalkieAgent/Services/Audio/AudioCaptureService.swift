@@ -217,6 +217,7 @@ final class AudioCaptureService: AgentAudioCapture {
     private let slowStartupRecoveryThresholdMs = 1200
     private let rebootCooldownAfterSlowStart: CFTimeInterval = 90
     private var lastPostRecordingRebootTime: CFTimeInterval = 0
+    private var rebootTask: Task<AudioRebootResult, Never>?
 
     /// Track a new startup time and update HAL health status
     private func recordStartupTime(_ ms: Int) {
@@ -591,6 +592,22 @@ final class AudioCaptureService: AgentAudioCapture {
     /// - Returns: Result indicating success and HAL health status
     @discardableResult
     func reboot() async -> AudioRebootResult {
+        if let rebootTask {
+            log.debug("Audio reboot already in progress")
+            return await rebootTask.value
+        }
+
+        let task = Task { [weak self] in
+            guard let self else { return AudioRebootResult.failed }
+            return await self.performReboot()
+        }
+        rebootTask = task
+        let result = await task.value
+        rebootTask = nil
+        return result
+    }
+
+    private func performReboot() async -> AudioRebootResult {
         let wasAlreadyDegraded = isHALDegraded
         log.info("════════════════════════════════════════════════════════════")
         log.info("🔄 Rebooting audio system", detail: "HAL was \(wasAlreadyDegraded ? "degraded" : "healthy")")
@@ -1225,6 +1242,15 @@ final class AudioCaptureService: AgentAudioCapture {
             return true
         }
 
+        if isDefaultInputAggregate(currentDeviceID, name: currentName),
+           defaultInputMatches(selection) {
+            log.info(
+                "🎤 Engine using device: \(currentName) (ID: \(currentDeviceID))",
+                detail: "✅ default aggregate routes to \(selection.name)"
+            )
+            return true
+        }
+
         log.warning(
             "Engine input mismatch; binding selected microphone",
             detail: "current=\(currentName) (ID: \(currentDeviceID)), selected=\(selection.name) (ID: \(selection.deviceID))"
@@ -1257,6 +1283,25 @@ final class AudioCaptureService: AgentAudioCapture {
             detail: matches ? "✅ bound selected microphone" : "⚠️ still mismatch with \(selection.name)"
         )
         return matches
+    }
+
+    private func isDefaultInputAggregate(_ deviceID: AudioDeviceID, name: String) -> Bool {
+        if name.localizedCaseInsensitiveContains("DefaultDeviceAggregate") {
+            return true
+        }
+
+        guard let uid = getDeviceUID(deviceID) else { return false }
+        return uid.localizedCaseInsensitiveContains("DefaultDeviceAggregate")
+    }
+
+    private func defaultInputMatches(_ selection: DeviceSelection) -> Bool {
+        let defaultDeviceID = getDefaultInputDeviceID()
+        guard defaultDeviceID != 0 else { return false }
+        if defaultDeviceID == selection.deviceID {
+            return true
+        }
+
+        return getDeviceUID(defaultDeviceID) == selection.uid
     }
 
     private func currentInputDeviceID(for audioUnit: AudioUnit) -> AudioDeviceID? {

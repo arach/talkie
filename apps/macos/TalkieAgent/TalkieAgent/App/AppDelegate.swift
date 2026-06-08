@@ -12,6 +12,10 @@ private let log = Log(.system)
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate {
     private var statusItem: NSStatusItem!
+    private var agentStatusMenu: NSMenu?
+    private var agentMenuPopover: NSPopover?
+    private var cachedAgentMenuModel: AgentMenuModel?
+    private var agentMenuRefreshTask: Task<Void, Never>?
     private var agentController: AgentController!
     private let speechPlaybackController = SelectionSpeechPlaybackController.shared
     private let selectionFeedbackController = SelectionFeedbackOverlayController.shared
@@ -193,6 +197,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         // Show floating pill on launch
         floatingPill.show()
 
+        refreshAgentMenuCacheAndPopover(reason: "post-boot")
+
         log.info("Boot complete — hotkey change observers active")
     }
 
@@ -243,7 +249,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private func setupStatusBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            // Start with mic icon (idle state)
+            // Start with Talkie's menu bar glyph.
+            button.imagePosition = .imageOnly
+            button.target = self
+            button.action = #selector(statusItemClicked(_:))
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
             updateMenuBarIcon(isRecording: false)
             updateStatusBarTooltip()
 
@@ -261,110 +271,132 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         let hasMicPermission = PermissionManager.shared.microphoneStatus == .granted
         let image = createMenuBarIcon(isRecording: isRecording, hasMicPermission: hasMicPermission)
+        button.imagePosition = .imageOnly
         button.image = image
 
         // Reset any tint - color is handled in the drawing
         button.contentTintColor = nil
     }
 
-    /// Create a custom menu bar icon.
-    /// - Recording: pill with mic + waveform (red background, white symbols)
-    /// - Idle, mic denied: mic symbol + small orange dot badge
-    /// - Idle, mic granted: plain mic symbol (template, adapts to system appearance)
+    /// Create the status item icon.
+    /// - Recording: Talkie glyph plus the bottom-left Hot Mic dot.
+    /// - Idle, mic denied: Talkie glyph plus small orange warning dot.
+    /// - Idle, mic granted: Talkie glyph as a native template symbol.
     private func createMenuBarIcon(isRecording: Bool, hasMicPermission: Bool) -> NSImage {
         if isRecording {
-            // Recording: pill with mic + waveform
-            let height: CGFloat = 22      // Taller pill
-            let pillWidth: CGFloat = 40   // Wider pill
+            return Self.createRecordingMenuBarIcon()
+        }
 
-            let image = NSImage(size: NSSize(width: pillWidth, height: height), flipped: false) { rect in
-                // Red pill background
-                let bgRect = rect.insetBy(dx: 1, dy: 1)
-                let cornerRadius = bgRect.height / 2  // Fully rounded ends
+        if hasMicPermission {
+            return Self.createTalkieMenuBarIcon()
+        }
 
-                let bgPath = NSBezierPath(roundedRect: bgRect, xRadius: cornerRadius, yRadius: cornerRadius)
-                NSColor.systemRed.withAlphaComponent(0.9).setFill()
-                bgPath.fill()
+        return Self.createTalkieMenuBarIconWithBadge(color: .systemOrange)
+    }
 
-                // Symbol configuration
-                let symbolConfig = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold)
+    private static let talkieMenuBarIconLength: CGFloat = 24
 
-                // Draw mic on the left
-                if let micSymbol = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: nil)?
-                    .withSymbolConfiguration(symbolConfig) {
+    private static func createTalkieMenuBarIcon() -> NSImage {
+        if let asset = NSImage(named: "MenuBarIcon")?.copy() as? NSImage {
+            asset.size = NSSize(width: Self.talkieMenuBarIconLength, height: Self.talkieMenuBarIconLength)
+            asset.isTemplate = true
+            return asset
+        }
 
-                    let micSize = NSSize(width: 11, height: 14)
-                    let micX: CGFloat = 6
-                    let micY = (height - micSize.height) / 2
+        let iconSize = NSSize(width: Self.talkieMenuBarIconLength, height: Self.talkieMenuBarIconLength)
+        let glyphRect = NSRect(origin: .zero, size: iconSize)
 
-                    let micRect = NSRect(x: micX, y: micY, width: micSize.width, height: micSize.height)
-                    let tintedMic = micSymbol.tinted(with: .white)
-                    tintedMic.draw(in: micRect)
-                }
+        let image = NSImage(size: iconSize, flipped: false) { _ in
+            Self.drawTalkieGlyph(in: glyphRect, color: .labelColor)
+            return true
+        }
+        image.isTemplate = false
+        return image
+    }
 
-                // Draw waveform on the right
-                if let waveSymbol = NSImage(systemSymbolName: "waveform", accessibilityDescription: nil)?
-                    .withSymbolConfiguration(symbolConfig) {
+    private static func createTalkieMenuBarIconWithBadge(color: NSColor) -> NSImage {
+        let iconSize = NSSize(width: Self.talkieMenuBarIconLength + 3, height: Self.talkieMenuBarIconLength)
+        let glyphRect = NSRect(
+            x: 0,
+            y: 0,
+            width: Self.talkieMenuBarIconLength,
+            height: Self.talkieMenuBarIconLength
+        )
+        let dotDiameter: CGFloat = 5
 
-                    let waveSize = NSSize(width: 16, height: 12)
-                    let waveX = pillWidth - waveSize.width - 5
-                    let waveY = (height - waveSize.height) / 2
+        let image = NSImage(size: iconSize, flipped: false) { _ in
+            Self.drawTalkieGlyph(in: glyphRect, color: .labelColor)
 
-                    let waveRect = NSRect(x: waveX, y: waveY, width: waveSize.width, height: waveSize.height)
-                    let tintedWave = waveSymbol.tinted(with: .white)
-                    tintedWave.draw(in: waveRect)
-                }
+            color.setFill()
+            NSBezierPath(
+                ovalIn: NSRect(
+                    x: iconSize.width - dotDiameter - 1,
+                    y: iconSize.height - dotDiameter - 2,
+                    width: dotDiameter,
+                    height: dotDiameter
+                )
+            ).fill()
 
-                return true
-            }
+            return true
+        }
+        image.isTemplate = false
+        return image
+    }
 
-            image.isTemplate = false  // Keep red color
-            return image
+    private static func createRecordingMenuBarIcon() -> NSImage {
+        let iconSize = NSSize(width: Self.talkieMenuBarIconLength, height: Self.talkieMenuBarIconLength)
+        let glyphRect = NSRect(origin: .zero, size: iconSize)
 
-        } else if !hasMicPermission {
-            // Idle + mic permission missing: mic icon with small orange warning dot in top-right
-            let menuBarHeight = NSStatusBar.system.thickness
-            let pointSize = min(15, menuBarHeight * 0.55)
-            let dotDiameter: CGFloat = 5
-            let iconWidth = pointSize + dotDiameter * 0.6
-            let iconHeight = pointSize + dotDiameter * 0.6
-            let iconSize = NSSize(width: iconWidth, height: iconHeight)
+        let image = NSImage(size: iconSize, flipped: false) { _ in
+            Self.drawTalkieGlyph(in: glyphRect, color: .labelColor)
+            Self.drawHotMicDot(in: glyphRect)
+            return true
+        }
+        image.isTemplate = false
+        return image
+    }
 
-            let image = NSImage(size: iconSize, flipped: false) { _ in
-                let symbolConfig = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .medium)
-                if let micSymbol = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Microphone permission missing")?
-                    .withSymbolConfiguration(symbolConfig) {
-                    let tinted = micSymbol.tinted(with: NSColor.labelColor)
-                    tinted.draw(in: NSRect(x: 0, y: 0, width: pointSize, height: iconHeight))
-                }
+    private static func drawTalkieGlyph(in rect: NSRect, color: NSColor) {
+        if let asset = NSImage(named: "MenuBarIcon")?.copy() as? NSImage {
+            asset.size = rect.size
+            asset.tinted(with: color).draw(in: rect)
+            return
+        }
 
-                // Orange dot badge anchored to top-right corner of the mic
-                let dotX = iconWidth - dotDiameter
-                let dotY = iconHeight - dotDiameter
-                NSColor.systemOrange.setFill()
-                NSBezierPath(ovalIn: NSRect(x: dotX, y: dotY, width: dotDiameter, height: dotDiameter)).fill()
+        createFallbackTalkieGlyph(color: color, size: rect.size).draw(in: rect)
+    }
 
-                return true
-            }
-            image.isTemplate = false
-            return image
+    private static func drawHotMicDot(in rect: NSRect) {
+        let hotMic = NSColor(calibratedRed: 1.0, green: 0.325, blue: 0.275, alpha: 1.0)
+        let dotDiameter: CGFloat = 5.8
 
-        } else {
-            // Idle: just the mic icon, no background (minimalist)
-            // Scale to fit the actual menu bar height (varies: ~24pt non-notch, ~33pt M2 Air, ~38pt Pro)
-            let menuBarHeight = NSStatusBar.system.thickness
-            let pointSize = min(15, menuBarHeight * 0.55)
-            let symbolConfig = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .medium)
+        hotMic.setFill()
+        NSBezierPath(
+            ovalIn: NSRect(
+                x: rect.minX + 3.2,
+                y: rect.minY + 4.8,
+                width: dotDiameter,
+                height: dotDiameter
+            )
+        ).fill()
+    }
 
-            if let micSymbol = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Ready")?
-                .withSymbolConfiguration(symbolConfig) {
-                micSymbol.isTemplate = true  // Adapts to menu bar (light/dark mode)
-                return micSymbol
-            }
+    private static func createFallbackTalkieGlyph(color: NSColor, size: NSSize) -> NSImage {
+        NSImage(size: size, flipped: false) { rect in
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.alignment = .center
 
-            // Fallback
-            let fallback = NSImage(size: NSSize(width: 15, height: 15))
-            return fallback
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 16, weight: .bold),
+                .foregroundColor: color,
+                .paragraphStyle: paragraph
+            ]
+
+            NSString(string: "t").draw(
+                in: rect.insetBy(dx: 0, dy: -1),
+                withAttributes: attributes
+            )
+            return true
         }
     }
 
@@ -374,6 +406,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         // Only show badge for dev builds when Control is held
         if controlPressed && bundleID.hasSuffix(".dev") {
+            button.imagePosition = .noImage
             button.title = "DEV"
             button.image = nil
             button.contentTintColor = nil
@@ -381,8 +414,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             // Restore icon based on current state
             button.title = ""
             let isRecording = agentController?.state == .listening
-            let isProcessing = agentController?.state == .transcribing || agentController?.state == .routing
-            updateMenuBarIcon(isRecording: isRecording || isProcessing)
+            updateMenuBarIcon(isRecording: isRecording)
         }
     }
 
@@ -405,10 +437,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         menu.addItem(NSMenuItem.separator())
 
-        let speakSelectionItem = NSMenuItem(title: "Quick Selection Action", action: #selector(speakSelectionFromMenu), keyEquivalent: "")
-        speakSelectionItem.target = self
-        menu.addItem(speakSelectionItem)
-
         let historyItem = NSMenuItem(title: "Show History", action: #selector(showHistory), keyEquivalent: "h")
         historyItem.keyEquivalentModifierMask = [.option, .command]
         historyItem.target = self
@@ -419,6 +447,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         let recentSubmenu = NSMenu()
         recentItem.submenu = recentSubmenu
         menu.addItem(recentItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        let ambientItem = NSMenuItem(title: "Ambient Mode", action: #selector(toggleAmbientModeFromMenu), keyEquivalent: "")
+        ambientItem.target = self
+        ambientItem.state = AmbientSettings.shared.isEnabled ? .on : .off
+        menu.addItem(ambientItem)
+
+        let streamingItem = NSMenuItem(title: "Streaming Wake Detection", action: #selector(toggleStreamingWakeFromMenu), keyEquivalent: "")
+        streamingItem.target = self
+        streamingItem.state = AmbientSettings.shared.useStreamingASR ? .on : .off
+        menu.addItem(streamingItem)
+
+        let clearQueueItem = NSMenuItem(title: "Clear Failed Queue", action: #selector(clearFailedQueue), keyEquivalent: "")
+        clearQueueItem.target = self
+        clearQueueItem.isHidden = UnifiedDatabase.countQueued() == 0
+        menu.addItem(clearQueueItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -436,14 +481,376 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         menu.addItem(NSMenuItem.separator())
 
+        let restartItem = NSMenuItem(title: "Restart Talkie Agent", action: #selector(restartAgent), keyEquivalent: "")
+        restartItem.target = self
+        menu.addItem(restartItem)
+
         let quitItem = NSMenuItem(title: "Quit Talkie Agent", action: #selector(confirmQuit), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
 
-        statusItem.menu = menu
+        agentStatusMenu = menu
 
         // Set initial key equivalents from settings
         updateMenuKeyEquivalent()
+    }
+
+    @objc private func statusItemClicked(_ sender: Any?) {
+        guard let event = NSApp.currentEvent,
+              let button = statusItem.button else {
+            return
+        }
+
+        if event.type == .rightMouseUp || event.modifierFlags.contains(.control) {
+            showNativeStatusMenu(from: button)
+            return
+        }
+
+        if let popover = agentMenuPopover, popover.isShown {
+            popover.performClose(sender)
+            return
+        }
+
+        showAgentMenuPopover(from: button)
+    }
+
+    private func showNativeStatusMenu(from button: NSStatusBarButton) {
+        agentMenuPopover?.performClose(nil)
+        updateStatusMenuItems()
+        agentStatusMenu?.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
+    }
+
+    private func showAgentMenuPopover(from button: NSStatusBarButton) {
+        let openStart = CFAbsoluteTimeGetCurrent()
+        let initialModel = makeAgentMenuModel(refreshPermissions: false, loadSlowData: false)
+
+        let popover = NSPopover()
+        popover.behavior = .transient
+        // Match the popover chrome (menus, scrollbars) to the active tray skin.
+        popover.appearance = NSAppearance(named: AgentTraySkin.current().isDark ? .darkAqua : .aqua)
+        popover.contentSize = NSSize(width: 320, height: 470)
+        popover.contentViewController = NSHostingController(
+            rootView: AgentMenuPopoverView(
+                model: initialModel,
+                actions: makeAgentMenuActions()
+            )
+        )
+
+        agentMenuPopover = popover
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        popover.contentViewController?.view.window?.sharingType = .readOnly
+        popover.contentViewController?.view.window?.makeKey()
+
+        let firstPaintMs = Int((CFAbsoluteTimeGetCurrent() - openStart) * 1000)
+        log.info(
+            "Agent menu popover shown",
+            detail: "firstPaintMs=\(firstPaintMs) cached=\(cachedAgentMenuModel != nil)"
+        )
+
+        refreshAgentMenuPopoverAsync(reason: "open", openedAt: openStart)
+    }
+
+    private func makeAgentMenuModel(refreshPermissions: Bool, loadSlowData: Bool) -> AgentMenuModel {
+        let cachedModel = cachedAgentMenuModel
+
+        if refreshPermissions {
+            PermissionManager.shared.refreshAll()
+        }
+
+        let settings = LiveSettings.shared
+        let state = agentController?.state
+        let isRecording = state == .listening
+        let isReady = agentController != nil
+        let permissionsGranted = PermissionManager.shared.allRequiredGranted
+        let failedQueueCount = loadSlowData ? UnifiedDatabase.countQueued() : (cachedModel?.failedQueueCount ?? 0)
+
+        let stateTitle: String
+        let stateDetail: String
+        switch state {
+        case .some(.listening):
+            stateTitle = "Recording"
+            stateDetail = "Listening for dictation"
+        case .some(.transcribing):
+            stateTitle = "Transcribing"
+            stateDetail = "Processing the last capture"
+        case .some(.routing):
+            stateTitle = "Routing"
+            stateDetail = "Delivering the result"
+        case .some(.refining):
+            stateTitle = "Refining"
+            stateDetail = "Polishing the transcript"
+        case .some(.idle):
+            stateTitle = permissionsGranted ? "Ready" : "Needs Permissions"
+            stateDetail = AmbientSettings.shared.isEnabled ? "Ambient wake is on" : "Ready for \(settings.hotkey.displayString)"
+        case nil:
+            stateTitle = "Starting"
+            stateDetail = "Audio engine starting"
+        }
+
+        let recentItems = loadSlowData ? makeAgentMenuRecentItems() : (cachedModel?.recentItems ?? [])
+        let inputState = loadSlowData
+            ? makeAgentMenuInputState()
+            : (
+                name: cachedModel?.inputDeviceName ?? "Loading inputs",
+                ready: cachedModel?.inputDevicesReady ?? false,
+                systemDefault: cachedModel?.isSystemDefaultInput ?? true,
+                devices: cachedModel?.inputDevices ?? []
+            )
+
+        return AgentMenuModel(
+            stateTitle: stateTitle,
+            stateDetail: stateDetail,
+            isReady: isReady,
+            isRecording: isRecording,
+            permissionsGranted: permissionsGranted,
+            recordingShortcut: settings.hotkey.displayString,
+            inputDeviceName: inputState.name,
+            inputDevicesReady: inputState.ready,
+            isSystemDefaultInput: inputState.systemDefault,
+            inputDevices: inputState.devices,
+            failedQueueCount: failedQueueCount,
+            recentItems: recentItems
+        )
+    }
+
+    private func refreshAgentMenuPopoverAsync(reason: String, openedAt: CFAbsoluteTime) {
+        agentMenuRefreshTask?.cancel()
+        agentMenuRefreshTask = Task { @MainActor [weak self] in
+            await Task.yield()
+            guard let self else { return }
+
+            let refreshStart = CFAbsoluteTimeGetCurrent()
+            self.refreshAgentMenuCacheAndPopover(reason: reason)
+            let refreshMs = Int((CFAbsoluteTimeGetCurrent() - refreshStart) * 1000)
+            let totalMs = Int((CFAbsoluteTimeGetCurrent() - openedAt) * 1000)
+            log.info(
+                "Agent menu model refreshed",
+                detail: "reason=\(reason) refreshMs=\(refreshMs) totalSinceOpenMs=\(totalMs)"
+            )
+        }
+    }
+
+    @discardableResult
+    private func refreshAgentMenuCacheAndPopover(reason: String) -> AgentMenuModel {
+        let model = makeAgentMenuModel(refreshPermissions: true, loadSlowData: true)
+        cachedAgentMenuModel = model
+        updateAgentMenuPopoverContent(with: model)
+        log.info("Agent menu cache refreshed", detail: "reason=\(reason)")
+        return model
+    }
+
+    private func updateAgentMenuPopoverContent(with model: AgentMenuModel) {
+        guard let popover = agentMenuPopover, popover.isShown else { return }
+
+        if let hostingController = popover.contentViewController as? NSHostingController<AgentMenuPopoverView> {
+            hostingController.rootView = AgentMenuPopoverView(
+                model: model,
+                actions: makeAgentMenuActions()
+            )
+            return
+        }
+
+        popover.contentViewController = NSHostingController(
+            rootView: AgentMenuPopoverView(
+                model: model,
+                actions: makeAgentMenuActions()
+            )
+        )
+    }
+
+    private func makeAgentMenuRecentItems() -> [AgentMenuRecentItem] {
+        UnifiedDatabase.recentDictations(limit: 5).map { recording in
+            let text = recording.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let preview = Self.truncatedMenuText(text, limit: 58)
+            return AgentMenuRecentItem(
+                id: recording.id,
+                preview: preview.isEmpty ? "Empty dictation" : preview,
+                timestamp: recording.createdAt.timeAgoShort,
+                text: recording.text
+            )
+        }
+    }
+
+    private func makeAgentMenuInputState() -> (
+        name: String,
+        ready: Bool,
+        systemDefault: Bool,
+        devices: [AgentMenuInputDevice]
+    ) {
+        let audioDevices = AudioDeviceManager.shared
+        let settings = LiveSettings.shared
+        let devices = audioDevices.inputDevices.map { device in
+            AgentMenuInputDevice(
+                id: device.id,
+                uid: device.uid,
+                name: device.name,
+                isDefault: device.isDefault
+            )
+        }
+
+        let isSystemDefault = settings.selectedMicrophoneMode == .systemDefault
+        let selectedName: String
+        if isSystemDefault {
+            if let defaultDevice = audioDevices.inputDevices.first(where: { $0.isDefault }) {
+                selectedName = "System Default (\(defaultDevice.name))"
+            } else {
+                selectedName = "System Default"
+            }
+        } else if let selectedUID = settings.selectedMicrophoneUID,
+                  let selectedDevice = audioDevices.inputDevices.first(where: { $0.uid == selectedUID }) {
+            selectedName = selectedDevice.name
+        } else if let savedName = settings.selectedMicrophoneName {
+            selectedName = "\(savedName) unavailable"
+        } else {
+            selectedName = "System Default"
+        }
+
+        return (
+            name: selectedName,
+            ready: !devices.isEmpty,
+            systemDefault: isSystemDefault,
+            devices: devices
+        )
+    }
+
+    private func makeAgentMenuActions() -> AgentMenuActions {
+        AgentMenuActions(
+            toggleRecording: { [weak self] in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.dismissAgentMenuPopover()
+                    self.toggleListeningFromMenu()
+                }
+            },
+            openHome: { [weak self] in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.dismissAgentMenuPopover()
+                    self.showAgentHome()
+                }
+            },
+            openHistory: { [weak self] in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.dismissAgentMenuPopover()
+                    self.showHistory()
+                }
+            },
+            openSettings: { [weak self] in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.dismissAgentMenuPopover()
+                    self.showSettingsAction()
+                }
+            },
+            openAudioSettings: { [weak self] in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.dismissAgentMenuPopover()
+                    self.showSettings(tab: .audio)
+                }
+            },
+            openLogs: { [weak self] in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.dismissAgentMenuPopover()
+                    self.openLogsDirectory()
+                }
+            },
+            openPermissions: { [weak self] in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.dismissAgentMenuPopover()
+                    self.showPermissions()
+                }
+            },
+            openQueue: { [weak self] in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.dismissAgentMenuPopover()
+                    self.showQueuePicker()
+                }
+            },
+            clearQueue: { [weak self] in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.dismissAgentMenuPopover()
+                    self.clearFailedQueue()
+                }
+            },
+            refreshAudioDevices: { [weak self] in
+                Task { @MainActor in
+                    guard let self else { return }
+                    AudioDeviceManager.shared.refreshDevices()
+                    self.refreshAgentMenuCacheAndPopover(reason: "audio-devices-refresh")
+                }
+            },
+            selectSystemDefaultInput: { [weak self] in
+                Task { @MainActor in
+                    guard let self else { return }
+                    AudioDeviceManager.shared.selectSystemDefault()
+                    self.refreshAgentMenuCacheAndPopover(reason: "audio-input-system-default")
+                }
+            },
+            selectInputDevice: { [weak self] device in
+                Task { @MainActor in
+                    guard let self else { return }
+                    guard let inputDevice = AudioDeviceManager.shared.inputDevices.first(where: { $0.uid == device.uid }) else {
+                        AudioDeviceManager.shared.refreshDevices()
+                        self.refreshAgentMenuCacheAndPopover(reason: "audio-input-missing")
+                        return
+                    }
+                    AudioDeviceManager.shared.selectDevice(inputDevice)
+                    self.refreshAgentMenuCacheAndPopover(reason: "audio-input-selected")
+                }
+            },
+            rebootAudio: { [weak self] in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.dismissAgentMenuPopover()
+                    self.rebootAudioSystem()
+                }
+            },
+            copyRecent: { [weak self] text in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.dismissAgentMenuPopover()
+                    self.copyRecentDictationText(text)
+                }
+            },
+            restart: { [weak self] in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.dismissAgentMenuPopover()
+                    self.restartAgent()
+                }
+            },
+            quit: { [weak self] in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.dismissAgentMenuPopover()
+                    self.confirmQuit()
+                }
+            }
+        )
+    }
+
+    private func dismissAgentMenuPopover() {
+        agentMenuPopover?.performClose(nil)
+    }
+
+    private func updateStatusMenuItems() {
+        updateRecordingMenuItem(isRecording: agentController?.state == .listening)
+        updateRecentMenu()
+        updatePermissionsMenuItem()
+        updateAmbientMenuItem()
+        updateStreamingMenuItem()
+        updateClearQueueMenuItem()
+    }
+
+    private static func truncatedMenuText(_ text: String, limit: Int) -> String {
+        guard text.count > limit else { return text }
+        return "\(String(text.prefix(limit)))..."
     }
 
     // MARK: - State Observation
@@ -559,8 +966,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             .sink { [weak self] _ in
                 guard let self else { return }
                 let isRecording = self.agentController?.state == .listening
-                let isProcessing = self.agentController?.state == .transcribing || self.agentController?.state == .routing
-                self.updateMenuBarIcon(isRecording: isRecording || isProcessing)
+                self.updateMenuBarIcon(isRecording: isRecording)
             }
             .store(in: &cancellables)
 
@@ -1170,7 +1576,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     private func updateMenuKeyEquivalent() {
-        guard let menu = statusItem.menu else {
+        guard let menu = agentStatusMenu else {
             return
         }
 
@@ -1199,18 +1605,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         ]
         recordItem.keyEquivalent = keyMap[config.keyCode] ?? ""
 
-        if let speakSelectionItem = menu.items.first(where: { $0.action == #selector(speakSelectionFromMenu) }) {
-            let selectionConfig = settings.selectionQuickHotkey
-            var selectionModifiers: NSEvent.ModifierFlags = []
-            if selectionConfig.modifiers & UInt32(cmdKey) != 0 { selectionModifiers.insert(.command) }
-            if selectionConfig.modifiers & UInt32(optionKey) != 0 { selectionModifiers.insert(.option) }
-            if selectionConfig.modifiers & UInt32(controlKey) != 0 { selectionModifiers.insert(.control) }
-            if selectionConfig.modifiers & UInt32(shiftKey) != 0 { selectionModifiers.insert(.shift) }
-
-            speakSelectionItem.keyEquivalentModifierMask = selectionModifiers
-            speakSelectionItem.keyEquivalent = keyMap[selectionConfig.keyCode] ?? ""
-        }
-
         // Update tooltip too
         updateStatusBarTooltip()
     }
@@ -1226,6 +1620,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     private func toggleListening(interstitial: Bool, hotkeyTimestamp: HotKeyTimestamp? = nil) {
+        guard let agentController else {
+            log.warning("Recording toggle requested before audio engine was ready")
+            return
+        }
+
         log.debug("toggleListening called: interstitial=\(interstitial)")
         Task {
             log.debug("Calling agentController.toggleListening...")
@@ -1712,9 +2111,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     @objc private func toggleStreamingWakeFromMenu(_ sender: NSMenuItem) {
+        toggleStreamingWake()
+        sender.state = AmbientSettings.shared.useStreamingASR ? .on : .off
+    }
+
+    private func toggleStreamingWake() {
         let newValue = !AmbientSettings.shared.useStreamingASR
         AmbientSettings.shared.useStreamingASR = newValue
-        sender.state = newValue ? .on : .off
         log.info("Streaming wake detection: \(newValue ? "enabled" : "disabled")")
 
         // If ambient is currently running, it will pick up the change via the settings binding
@@ -1733,7 +2136,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     @objc private func copyRecentDictation(_ sender: NSMenuItem) {
         guard let text = sender.representedObject as? String else { return }
+        copyRecentDictationText(text)
+    }
 
+    private func copyRecentDictationText(_ text: String) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
@@ -1745,6 +2151,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     nonisolated func menuWillOpen(_ menu: NSMenu) {
         Task { @MainActor in
+            self.updateRecordingMenuItem(isRecording: self.agentController?.state == .listening)
             self.updateRecentMenu()
             self.updatePermissionsMenuItem()
             self.updateAmbientMenuItem()
@@ -1754,7 +2161,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     private func updateAmbientMenuItem() {
-        guard let menu = statusItem.menu,
+        guard let menu = agentStatusMenu,
               let ambientItem = menu.items.first(where: { $0.action == #selector(toggleAmbientModeFromMenu) }) else {
             return
         }
@@ -1762,7 +2169,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     private func updateStreamingMenuItem() {
-        guard let menu = statusItem.menu,
+        guard let menu = agentStatusMenu,
               let streamingItem = menu.items.first(where: { $0.action == #selector(toggleStreamingWakeFromMenu) }) else {
             return
         }
@@ -1770,7 +2177,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     private func updateClearQueueMenuItem() {
-        guard let menu = statusItem.menu,
+        guard let menu = agentStatusMenu,
               let clearItem = menu.items.first(where: { $0.action == #selector(clearFailedQueue) }) else {
             return
         }
@@ -1784,7 +2191,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     private func updatePermissionsMenuItem() {
-        guard let menu = statusItem.menu,
+        guard let menu = agentStatusMenu,
               let permissionsItem = menu.items.first(where: { $0.action == #selector(showPermissions) }) else {
             return
         }
@@ -1799,45 +2206,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     private func updateRecentMenu() {
-        guard let menu = statusItem.menu,
+        guard let menu = agentStatusMenu,
               let recentItem = menu.items.first(where: { $0.title == "Recent" }),
               let submenu = recentItem.submenu else { return }
 
         submenu.removeAllItems()
 
-        Task { @MainActor in
-            let store = DictationStore.shared
-            let recent = Array(store.utterances.prefix(5))
+        let store = DictationStore.shared
+        let recent = Array(store.utterances.prefix(5))
 
-            if recent.isEmpty {
-                let emptyItem = NSMenuItem(title: "No recent dictations", action: nil, keyEquivalent: "")
-                emptyItem.isEnabled = false
-                submenu.addItem(emptyItem)
-            } else {
-                for (index, utterance) in recent.enumerated() {
-                    // Truncate text for display
-                    let displayText = utterance.text.prefix(40) + (utterance.text.count > 40 ? "..." : "")
-                    let timeAgo = utterance.timestamp.timeAgoShort
+        if recent.isEmpty {
+            let emptyItem = NSMenuItem(title: "No recent dictations", action: nil, keyEquivalent: "")
+            emptyItem.isEnabled = false
+            submenu.addItem(emptyItem)
+        } else {
+            for (index, utterance) in recent.enumerated() {
+                let displayText = Self.truncatedMenuText(utterance.text, limit: 40)
+                let timeAgo = utterance.timestamp.timeAgoShort
 
-                    let item = NSMenuItem(
-                        title: "\(displayText)",
-                        action: #selector(copyRecentDictation(_:)),
-                        keyEquivalent: index < 3 ? "\(index + 1)" : ""
-                    )
-                    if index < 3 {
-                        item.keyEquivalentModifierMask = [.control, .option]
-                    }
-                    item.target = self
-                    item.representedObject = utterance.text
-                    item.toolTip = "\(timeAgo) • Click to copy"
-                    submenu.addItem(item)
+                let item = NSMenuItem(
+                    title: displayText,
+                    action: #selector(copyRecentDictation(_:)),
+                    keyEquivalent: index < 3 ? "\(index + 1)" : ""
+                )
+                if index < 3 {
+                    item.keyEquivalentModifierMask = [.control, .option]
                 }
-
-                submenu.addItem(NSMenuItem.separator())
-                let showAllItem = NSMenuItem(title: "Show All History...", action: #selector(showHistory), keyEquivalent: "")
-                showAllItem.target = self
-                submenu.addItem(showAllItem)
+                item.target = self
+                item.representedObject = utterance.text
+                item.toolTip = "\(timeAgo) • Click to copy"
+                submenu.addItem(item)
             }
+
+            submenu.addItem(NSMenuItem.separator())
+            let showAllItem = NSMenuItem(title: "Show All History...", action: #selector(showHistory), keyEquivalent: "")
+            showAllItem.target = self
+            submenu.addItem(showAllItem)
         }
     }
 
@@ -1976,7 +2380,77 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
     #endif
 
-    // MARK: - Quit
+    // MARK: - Restart / Quit
+
+    @objc private func restartAgent() {
+        log.info("User requested Talkie Agent restart")
+
+        let env = TalkieEnvironment.current
+        let uid = getuid()
+        let labels = [
+            TalkieHelper.agent.bundleId(for: env),
+            TalkieHelper.agent.xpcServiceName(for: env)
+        ]
+
+        for label in labels where launchAgentIsLoaded(label: label, uid: uid) {
+            if kickstartLaunchAgent(label: label, uid: uid) {
+                return
+            }
+        }
+
+        relaunchCurrentBundle()
+    }
+
+    private func launchAgentIsLoaded(label: String, uid: uid_t) -> Bool {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        process.arguments = ["print", "gui/\(uid)/\(label)"]
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        } catch {
+            log.warning("Could not inspect launch agent \(label): \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    private func kickstartLaunchAgent(label: String, uid: uid_t) -> Bool {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        process.arguments = ["kickstart", "-k", "gui/\(uid)/\(label)"]
+
+        do {
+            try process.run()
+            log.info("Restarting Talkie Agent via launchctl", detail: label)
+            return true
+        } catch {
+            log.error("Failed to restart launch agent \(label): \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    private func relaunchCurrentBundle() {
+        let appURL = Bundle.main.bundleURL
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = false
+
+        NSWorkspace.shared.openApplication(at: appURL, configuration: configuration) { [weak self] _, error in
+            Task { @MainActor in
+                if let error {
+                    log.error("Failed to relaunch Talkie Agent: \(error.localizedDescription)")
+                    self?.showToast(emoji: "⚠️", message: "Restart failed", color: .systemOrange)
+                    return
+                }
+
+                log.info("Relaunched Talkie Agent from bundle", detail: appURL.path)
+                NSApp.terminate(nil)
+            }
+        }
+    }
 
     @objc private func confirmQuit() {
         let alert = NSAlert()
@@ -2012,6 +2486,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     @objc private func showSettingsAction() {
         showSettings(tab: .shortcuts)
+    }
+
+    private func openLogsDirectory() {
+        let logsDirectory = TalkieEnvironment.current.logsDirectory
+
+        do {
+            try FileManager.default.createDirectory(at: logsDirectory, withIntermediateDirectories: true)
+            NSWorkspace.shared.open(logsDirectory)
+            log.info("Opened Talkie logs directory", detail: logsDirectory.path)
+        } catch {
+            log.error("Failed to open Talkie logs directory: \(error.localizedDescription)")
+            showToast(emoji: "⚠️", message: "Could not open logs", color: .systemOrange)
+        }
     }
 
     private func showSettings(tab: QuickSettingsTab) {
@@ -2116,13 +2603,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         guard let button = statusItem.button else { return }
 
         // Update icon based on state:
-        // - Idle: mic icon (template, follows system appearance)
-        // - Listening: waveform icon with subtle red tint
-        // - Transcribing/Routing: waveform icon (processing)
+        // - Idle/processing: Talkie glyph
+        // - Listening: Talkie glyph plus bottom-left Hot Mic dot
         let isRecording = state == .listening
-        let isProcessing = state == .transcribing || state == .routing
 
-        updateMenuBarIcon(isRecording: isRecording || isProcessing)
+        updateMenuBarIcon(isRecording: isRecording)
 
         // Clear any text suffix (no more big dot)
         button.title = ""
@@ -2133,7 +2618,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     /// Update the "Start Recording" / "Stop Recording" menu item
     private func updateRecordingMenuItem(isRecording: Bool) {
-        guard let menu = statusItem.menu,
+        guard let menu = agentStatusMenu,
               let recordItem = menu.items.first(where: { $0.action == #selector(toggleListeningFromMenu) }) else {
             return
         }
