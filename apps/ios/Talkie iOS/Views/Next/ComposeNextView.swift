@@ -99,8 +99,9 @@ struct ComposeNextView: View {
 
             if compose.state != .diff {
                 QuickTransforms(
-                    muted: compose.state == .generating || compose.state == .listening,
-                    onTap: { compose.applyTransform($0) }
+                    state: compose.state,
+                    onTap: { compose.applyTransform($0) },
+                    onCommand: { compose.toggleVoiceCommand() }
                 )
             }
 
@@ -109,7 +110,6 @@ struct ComposeNextView: View {
                 onAccept: { compose.acceptDiff() },
                 onDiscard: { compose.discardDiff() },
                 onRefine: { compose.discardDiff() },
-                onVoice: { compose.toggleVoiceCommand() },
                 onKeyboard: {
                     NotificationCenter.default.post(name: .composeNextEditorToggleKeyboard, object: nil)
                 }
@@ -156,6 +156,10 @@ extension Notification.Name {
     static let composeNextEditorCut = Notification.Name("composeNextEditorCut")
     static let composeNextEditorCopy = Notification.Name("composeNextEditorCopy")
     static let composeNextEditorSelectAll = Notification.Name("composeNextEditorSelectAll")
+    /// Insert a space / newline at the caret (replacing any selection). Posted
+    /// by the editor tool row so quick edits don't need the full keyboard.
+    static let composeNextEditorInsertSpace = Notification.Name("composeNextEditorInsertSpace")
+    static let composeNextEditorInsertNewline = Notification.Name("composeNextEditorInsertNewline")
     /// Show/hide the embedded keyboard. The Coordinator decides which by
     /// reading the text view's real first-responder state, so the tray
     /// button can't desync into a dead toggle.
@@ -355,6 +359,18 @@ private struct ComposeNextDocumentEditor: UIViewRepresentable {
             )
             NotificationCenter.default.addObserver(
                 self,
+                selector: #selector(handleInsertSpaceRequest),
+                name: .composeNextEditorInsertSpace,
+                object: nil
+            )
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(handleInsertNewlineRequest),
+                name: .composeNextEditorInsertNewline,
+                object: nil
+            )
+            NotificationCenter.default.addObserver(
+                self,
                 selector: #selector(handleToggleKeyboardRequest),
                 name: .composeNextEditorToggleKeyboard,
                 object: nil
@@ -499,6 +515,18 @@ private struct ComposeNextDocumentEditor: UIViewRepresentable {
             guard let textView else { return }
             if !textView.isFirstResponder { textView.becomeFirstResponder() }
             textView.selectAll(nil)
+        }
+
+        @objc private func handleInsertSpaceRequest() {
+            guard let textView else { return }
+            if !textView.isFirstResponder { requestFocus(for: textView) }
+            replaceSelection(with: " ")
+        }
+
+        @objc private func handleInsertNewlineRequest() {
+            guard let textView else { return }
+            if !textView.isFirstResponder { requestFocus(for: textView) }
+            replaceSelection(with: "\n")
         }
 
         func requestFocus(for textView: UITextView) {
@@ -1053,7 +1081,9 @@ private struct DocumentBody: View {
             // out of the way while scrolling down so it stops covering
             // the text you're reading, glides back on scroll-up.
             if state == .idle || state == .dictating {
-                InlineMicButton(state: state, action: onMic)
+                ComposeFloatingTools(state: state, onMic: onMic)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, 14)
                     .opacity(isMicVisible ? 1 : 0)
                     .scaleEffect(isMicVisible ? 1 : 0.85, anchor: .bottom)
                     .offset(y: isMicVisible ? 0 : 16)
@@ -1215,14 +1245,18 @@ private struct InlineMicButton: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        Button(action: action) {
+        Button(action: {
+            // Light "go" when starting dictation, firm "caught it" when stopping.
+            Haptics.play(state == .dictating ? .transition : .confirm)
+            action()
+        }) {
             ZStack {
                 Circle()
-                    .fill(state == .dictating ? theme.currentTheme.chrome.accent : theme.colors.cardBackground)
+                    .fill(state == .dictating ? theme.currentTheme.chrome.accent : theme.chrome.actionTint)
                     .overlay(Circle().strokeBorder(
                         state == .dictating
                             ? Color.clear
-                            : theme.currentTheme.chrome.edgeFaint,
+                            : theme.chrome.action.opacity(0.5),
                         lineWidth: theme.currentTheme.chrome.hairlineWidth
                     ))
                 Image(systemName: state == .dictating ? "stop.fill" : "mic.fill")
@@ -1230,7 +1264,7 @@ private struct InlineMicButton: View {
                     .foregroundStyle(
                         state == .dictating
                             ? theme.colors.cardBackground
-                            : theme.colors.textSecondary
+                            : theme.chrome.action
                     )
             }
             .frame(width: 38, height: 38)
@@ -1243,8 +1277,97 @@ private struct InlineMicButton: View {
             )
         }
         .buttonStyle(.plain)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .padding(.bottom, 14)
+    }
+}
+
+/// Floating editing toolbar that hovers over the bottom of the document
+/// card — the "bottom row of the composer". The dictation mic is the
+/// centerpiece; clipboard tools (select · cut · copy) sit to its left and
+/// insert tools (space · paste · new line) to its right. Summon, cursor pad,
+/// and keyboard live on the lower chrome row (ActionTray), not here.
+private struct ComposeFloatingTools: View {
+    let state: ComposeState
+    let onMic: () -> Void
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        // Mic is pinned to the true horizontal center (ZStack) so it lines up
+        // with the cursor pad on the chrome row below. The flanking clipboard /
+        // insert clusters have unequal widths, so centering the mic *between*
+        // them (the old HStack + paired Spacers) pushed it left of true center.
+        ZStack {
+            InlineMicButton(state: state, action: onMic)
+
+            HStack(spacing: 0) {
+                // Left cluster — take from the doc — flush to the left edge.
+                HStack(spacing: 7) {
+                    iconButton("selection.pin.in.out", "Select all") {
+                        NotificationCenter.default.post(name: .composeNextEditorSelectAll, object: nil)
+                    }
+                    iconButton("scissors", "Cut") {
+                        NotificationCenter.default.post(name: .composeNextEditorCut, object: nil)
+                    }
+                    iconButton("doc.on.doc", "Copy") {
+                        NotificationCenter.default.post(name: .composeNextEditorCopy, object: nil)
+                    }
+                }
+
+                Spacer(minLength: 16)
+
+                // Right cluster — put into the doc — flush to the right edge.
+                HStack(spacing: 7) {
+                    spaceButton
+                    iconButton("doc.on.clipboard", "Paste") {
+                        NotificationCenter.default.post(name: .composeNextEditorPaste, object: nil)
+                    }
+                    iconButton("arrow.turn.down.left", "New line") {
+                        NotificationCenter.default.post(name: .composeNextEditorInsertNewline, object: nil)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 18)
+    }
+
+    // Deck-cockpit key: a hairline-bordered rounded-rect on the dark surface
+    // with the icon in the action accent. No capsule wrapping the row — each
+    // key stands on its own, matching the deck's command keys.
+    private func iconButton(_ systemImage: String, _ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(theme.chrome.action)
+                .frame(width: 32, height: 30)
+                .background(deckKeyBackground)
+        }
+        .buttonStyle(CardPressStyle())
+        .accessibilityLabel(label)
+    }
+
+    // Wider "space" key — same deck-key treatment, just roomier.
+    private var spaceButton: some View {
+        Button {
+            NotificationCenter.default.post(name: .composeNextEditorInsertSpace, object: nil)
+        } label: {
+            Text("space")
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .foregroundStyle(theme.chrome.action)
+                .frame(width: 46, height: 30)
+                .background(deckKeyBackground)
+        }
+        .buttonStyle(CardPressStyle())
+        .accessibilityLabel("Space")
+    }
+
+    private var deckKeyBackground: some View {
+        RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous)
+            .fill(theme.chrome.actionTint)
+            .overlay(
+                RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous)
+                    .strokeBorder(theme.chrome.edgeFaint, lineWidth: theme.chrome.hairlineWidth)
+            )
     }
 }
 
@@ -1300,17 +1423,52 @@ struct DiffInline: View {
 // MARK: - Quick transforms row (thin)
 
 private struct QuickTransforms: View {
-    let muted: Bool
+    let state: ComposeState
     let onTap: (ComposeStore.QuickTransform) -> Void
+    let onCommand: () -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
 
+    private var muted: Bool { state == .generating || state == .listening }
+
     var body: some View {
-        HStack(alignment: .center, spacing: 8) {
-            Text("· QUICK")
-                .talkieType(.channelLabelTiny)
-                .foregroundStyle(theme.colors.textTertiary)
-                .fixedSize()
+        HStack(alignment: .center, spacing: 10) {
+            // Command key — one pretty keycap: a mic, the word, and a sparkle
+            // for the "AI is happening" signal. Rounded-rect (not a capsule) so
+            // it reads as a real button / keyboard key rather than just another
+            // quick-action chip. Tap to invoke a voice command — speak an
+            // instruction and the model returns a diff.
+            Button(action: onCommand) {
+                HStack(spacing: 5) {
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("Command")
+                        .talkieType(.fieldLabel)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundStyle(theme.chrome.action)
+                .padding(.horizontal, 11)
+                .padding(.vertical, 7)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(theme.chrome.actionTint)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .strokeBorder(theme.chrome.action.opacity(0.4),
+                                              lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                        )
+                )
+            }
+            .buttonStyle(CardPressStyle())
+            .accessibilityLabel("Voice command")
+
+            // Separator — the command key is its own thing, not a quick action.
+            Rectangle()
+                .fill(theme.currentTheme.chrome.edgeFaint)
+                .frame(width: theme.currentTheme.chrome.hairlineWidth, height: 22)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
@@ -1337,19 +1495,10 @@ private struct QuickTransforms: View {
                     }
                 }
             }
+            .opacity(muted ? 0.5 : 1)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .opacity(muted ? 0.5 : 1)
-        .overlay(
-            // Single top hairline separates QUICK from the document
-            // card above. The action tray below flows visually as
-            // the same footer cluster — no divider between them.
-            Rectangle()
-                .fill(theme.currentTheme.chrome.edgeFaint)
-                .frame(height: theme.currentTheme.chrome.hairlineWidth),
-            alignment: .top
-        )
     }
 }
 
@@ -1684,7 +1833,6 @@ private struct ActionTray: View {
     let onAccept: () -> Void
     let onDiscard: () -> Void
     let onRefine: () -> Void
-    let onVoice: () -> Void
     let onKeyboard: () -> Void
 
     @State private var showJoystick = false
@@ -1700,38 +1848,23 @@ private struct ActionTray: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
         } else {
-            // Joystick is the centerpiece: the cursor pad sits dead-center
-            // as the hero, flanked by the two clipboard pairs — select·cut
-            // to its left, copy·paste to its right (copy/paste being the
-            // everyday wins). Voice and keyboard bookend the row at the
-            // extremes.
-            HStack(spacing: 0) {
-                trayButton(systemImage: "dot.radiowaves.left.and.right", accessibilityLabel: "Voice command", action: onVoice)
-                Spacer(minLength: 8)
-                HStack(spacing: 12) {
-                    trayButton(systemImage: "selection.pin.in.out", accessibilityLabel: "Select all") {
-                        NotificationCenter.default.post(name: .composeNextEditorSelectAll, object: nil)
-                    }
-                    trayButton(systemImage: "scissors", accessibilityLabel: "Cut") {
-                        NotificationCenter.default.post(name: .composeNextEditorCut, object: nil)
-                    }
+            // Lower chrome row: the summon floats bottom-left (shell), the
+            // cursor pad sits in the middle as the hero, and the keyboard
+            // toggle caps the right. The editing tools + mic live on the
+            // floating row above this — not here.
+            ZStack {
+                joystickButton
 
-                    joystickButton
-
-                    trayButton(systemImage: "doc.on.doc", accessibilityLabel: "Copy") {
-                        NotificationCenter.default.post(name: .composeNextEditorCopy, object: nil)
-                    }
-                    trayButton(systemImage: "doc.on.clipboard", accessibilityLabel: "Paste") {
-                        NotificationCenter.default.post(name: .composeNextEditorPaste, object: nil)
-                    }
+                HStack {
+                    Spacer()
+                    trayButton(
+                        size: 48,
+                        systemImage: "keyboard",
+                        accessibilityLabel: "Keyboard",
+                        accessibilityID: "compose.keyboard.toggle",
+                        action: onKeyboard
+                    )
                 }
-                Spacer(minLength: 8)
-                trayButton(
-                    systemImage: "keyboard",
-                    accessibilityLabel: "Keyboard",
-                    accessibilityID: "compose.keyboard.toggle",
-                    action: onKeyboard
-                )
             }
             .padding(.horizontal, 16)
             .padding(.top, 4)
@@ -1770,7 +1903,7 @@ private struct ActionTray: View {
             Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
                 .font(.system(size: 19, weight: .medium))
                 .foregroundStyle(theme.currentTheme.chrome.accent)
-                .frame(width: 46, height: 46)
+                .frame(width: 48, height: 48)
                 .background(
                     Circle()
                         .fill(theme.currentTheme.chrome.accentTint)
@@ -1787,6 +1920,7 @@ private struct ActionTray: View {
 
     @ViewBuilder
     private func trayButton(
+        size: CGFloat = 40,
         systemImage: String,
         accessibilityLabel: String,
         accessibilityID: String? = nil,
@@ -1794,9 +1928,9 @@ private struct ActionTray: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 17, weight: .regular))
+                .font(.system(size: size * 0.42, weight: .regular))
                 .foregroundStyle(theme.colors.textSecondary)
-                .frame(width: 40, height: 40)
+                .frame(width: size, height: size)
                 .background(
                     Circle()
                         .fill(theme.colors.cardBackground)

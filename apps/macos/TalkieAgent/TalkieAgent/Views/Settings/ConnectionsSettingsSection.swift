@@ -296,28 +296,8 @@ struct TalkieAppCard: View {
     }
 
     private func launchTalkie() {
-        #if DEBUG
-        if let devAppURL = findDevTalkieApp() {
-            NSWorkspace.shared.open(devAppURL)
-            return
-        }
-        #endif
-
-        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: TalkieEnvironment.current.talkieBundleId) {
-            NSWorkspace.shared.open(url)
-        }
+        TalkieAppOpener.openApp()
     }
-
-    #if DEBUG
-    private func findDevTalkieApp() -> URL? {
-        let stableURL = TalkieEnvironment.current.userInstalledAppURL(named: "Talkie.app")
-        if FileManager.default.fileExists(atPath: stableURL.path) {
-            return stableURL
-        }
-
-        return nil
-    }
-    #endif
 }
 
 // MARK: - Connection Card

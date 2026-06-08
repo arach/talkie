@@ -1,8 +1,8 @@
 //
-//  WalkieSession.swift
+//  AgentVoiceSession.swift
 //  TalkieAgent
 //
-//  Live state for one walkie transmission. Observable so the SwiftUI
+//  Live state for one agent voice transmission. Observable so the SwiftUI
 //  scope view binds to it.
 //
 //  Phase progression (Unit 3 — closed loop):
@@ -30,8 +30,8 @@ import TalkieKit
 private let log = Log(.workflow)
 
 @MainActor
-final class WalkieSession: ObservableObject {
-    @Published private(set) var phase: WalkieScopePhase = .ready
+final class AgentVoiceSession: ObservableObject {
+    @Published private(set) var phase: AgentVoiceScopePhase = .ready
     @Published private(set) var level: Float = 0
     @Published private(set) var elapsedMs: Int = 0
     @Published private(set) var transcript: String?
@@ -42,26 +42,26 @@ final class WalkieSession: ObservableObject {
     @Published private(set) var topLevelModelId: String?
     @Published private(set) var executorRuntimeName: String?
     @Published private(set) var continuationSessionId: String?
-    @Published private(set) var executorBranchState: WalkieExecutorBranchState = .idle
-    @Published private(set) var routeMode: WalkieTransmissionMode?
-    @Published private(set) var toolInvocations: [WalkieToolInvocation] = []
-    @Published private(set) var offersWalkieRetry = false
+    @Published private(set) var executorBranchState: AgentVoiceExecutorBranchState = .idle
+    @Published private(set) var routeMode: AgentVoiceTransmissionMode?
+    @Published private(set) var toolInvocations: [AgentVoiceToolInvocation] = []
+    @Published private(set) var offersVoiceRetry = false
     @Published private(set) var isLatchedTransmission = false
     @Published var autoPlayEnabled: Bool {
         didSet {
-            TalkieSharedSettings.set(autoPlayEnabled, forKey: AgentSettingsKey.walkieAutoPlay)
+            TalkieSharedSettings.set(autoPlayEnabled, forKey: AgentSettingsKey.agentVoiceAutoPlay)
         }
     }
 
-    private var meter: WalkieAudioMeter?
+    private var meter: AgentVoiceAudioMeter?
     private var startedAt: Date?
     private var elapsedTimer: Timer?
     private var pipelineTask: Task<Void, Never>?
     private var executorReportTask: Task<Void, Never>?
-    private var latestTopLevelModel: WalkieModelUse?
+    private var latestTopLevelModel: AgentModelUse?
 
     init() {
-        self.autoPlayEnabled = TalkieSharedSettings.bool(forKey: AgentSettingsKey.walkieAutoPlay)
+        self.autoPlayEnabled = TalkieSharedSettings.bool(forKey: AgentSettingsKey.agentVoiceAutoPlay)
     }
 
     // MARK: - Lifecycle
@@ -107,7 +107,7 @@ final class WalkieSession: ObservableObject {
     }
 
     private func startCapture(
-        phase nextPhase: WalkieScopePhase,
+        phase nextPhase: AgentVoiceScopePhase,
         clearsVisibleTurn: Bool,
         clearsContinuation: Bool,
         isLatched: Bool
@@ -119,7 +119,7 @@ final class WalkieSession: ObservableObject {
         startedAt = Date()
         elapsedMs = 0
 
-        let m = WalkieAudioMeter { [weak self] level in
+        let m = AgentVoiceAudioMeter { [weak self] level in
             guard let self else { return }
             self.level = self.level * 0.8 + level * 0.2
         }
@@ -160,7 +160,7 @@ final class WalkieSession: ObservableObject {
             continuationSessionId = nil
             latestTopLevelModel = nil
         }
-        offersWalkieRetry = false
+        offersVoiceRetry = false
         isLatchedTransmission = false
     }
 
@@ -170,7 +170,7 @@ final class WalkieSession: ObservableObject {
         guard phase != .arming else {
             await fail(
                 "Didn't catch that. Want to try Talkie again?",
-                offersWalkieRetry: true
+                offersVoiceRetry: true
             )
             return
         }
@@ -182,7 +182,7 @@ final class WalkieSession: ObservableObject {
         await endCapture(overPhase: .followUpOver, isFollowUp: true)
     }
 
-    private func endCapture(overPhase: WalkieScopePhase, isFollowUp: Bool) async {
+    private func endCapture(overPhase: AgentVoiceScopePhase, isFollowUp: Bool) async {
         meter?.stop()
         elapsedTimer?.invalidate()
         elapsedTimer = nil
@@ -197,7 +197,7 @@ final class WalkieSession: ObservableObject {
         guard let recordedURL else {
             await fail(
                 "Didn't catch that. Want to try Talkie again?",
-                offersWalkieRetry: !isFollowUp
+                offersVoiceRetry: !isFollowUp
             )
             return
         }
@@ -238,12 +238,12 @@ final class WalkieSession: ObservableObject {
         routeMode = nil
         executorBranchState = .idle
         toolInvocations = []
-        offersWalkieRetry = false
+        offersVoiceRetry = false
         isLatchedTransmission = false
     }
 
-    func startWalkieRetryFromFallback() {
-        guard phase == .error, offersWalkieRetry else { return }
+    func startVoiceRetryFromFallback() {
+        guard phase == .error, offersVoiceRetry else { return }
         startCapture(
             phase: .transmitting,
             clearsVisibleTurn: true,
@@ -260,7 +260,7 @@ final class WalkieSession: ObservableObject {
             do {
                 _ = try await SelectionSpeechPlaybackController.shared.speakSelection(reply)
             } catch {
-                log.error("Walkie playReply failed", detail: error.localizedDescription)
+                log.error("Agent voice playReply failed", detail: error.localizedDescription)
             }
         }
     }
@@ -296,7 +296,7 @@ final class WalkieSession: ObservableObject {
                 postProcess: .none
             ).trimmingCharacters(in: .whitespacesAndNewlines)
         } catch {
-            log.error("Walkie transcription failed", detail: error.localizedDescription)
+            log.error("Agent voice transcription failed", detail: error.localizedDescription)
             await fail("Couldn't transcribe that. \(error.localizedDescription)")
             return
         }
@@ -306,34 +306,34 @@ final class WalkieSession: ObservableObject {
         guard !transcript.isEmpty else {
             await fail(
                 "Didn't catch any speech. Want to talk to the agent again?",
-                offersWalkieRetry: !isFollowUp
+                offersVoiceRetry: !isFollowUp
             )
             return
         }
         self.transcript = transcript
         self.replyText = nil
-        log.info("Walkie transcript captured", detail: transcript)
+        log.info("Agent voice transcript captured", detail: transcript)
 
         if isFollowUp, continuationSessionId != nil {
-            await runFollowUp(invocationForFollowUp(text: transcript, source: "walkie-follow-up-voice"))
+            await runFollowUp(invocationForFollowUp(text: transcript, source: "agent-voice-follow-up-voice"))
             return
         }
 
         // 2. Top-level orchestration: multi-LLM routing + optional executor handoff.
-        let draft = WalkieTransmissionDraft(
+        let draft = AgentVoiceTransmissionDraft(
             userBody: transcript,
             userDurationMs: durationMs,
             startedAt: startedAt
         )
-        let result: WalkieTurnResult
+        let result: AgentVoiceTurnResult
         do {
-            result = try await WalkieOrchestrator.shared.run(draft: draft) { @Sendable invocation in
+            result = try await AgentVoiceOrchestrator.shared.run(draft: draft) { @Sendable invocation in
                 Task { @MainActor [weak self] in
                     self?.toolInvocations.append(invocation)
                 }
             }
         } catch {
-            log.error("Walkie orchestration failed", detail: error.localizedDescription)
+            log.error("Agent voice orchestration failed", detail: error.localizedDescription)
             await fail(error.localizedDescription)
             return
         }
@@ -353,7 +353,7 @@ final class WalkieSession: ObservableObject {
         self.replyText = transmission.talkieBody
         self.phase = .receiving
         log.info(
-            "Walkie reply ready",
+            "Agent voice reply ready",
             detail: "mode=\(transmission.mode.rawValue) model=\(transmission.topLevelModelId ?? "unknown")"
         )
 
@@ -385,38 +385,38 @@ final class WalkieSession: ObservableObject {
         toolInvocations = []
         phase = .thinking
 
-        let invocation = invocationForFollowUp(text: trimmed, source: "walkie-follow-up")
+        let invocation = invocationForFollowUp(text: trimmed, source: "agent-voice-follow-up")
 
         pipelineTask = Task { @MainActor [weak self] in
             await self?.runFollowUp(invocation)
         }
     }
 
-    private func invocationForFollowUp(text: String, source: String) -> WalkieAgentInvocation {
-        WalkieAgentInvocation(
+    private func invocationForFollowUp(text: String, source: String) -> AgentInvocation {
+        AgentInvocation(
             id: UUID(),
             channel: .defaultChannel,
             transcript: text,
             instruction: text,
-            topLevelModel: latestTopLevelModel ?? WalkieModelUse(
+            topLevelModel: latestTopLevelModel ?? AgentModelUse(
                 providerId: "talkie-agent",
                 providerName: "Talkie Agent",
-                modelId: "walkie-follow-up"
+                modelId: "agent-voice-follow-up"
             ),
             requestedAt: Date(),
-            conversationId: "channel-\(WalkieChannel.defaultChannel.code.lowercased())",
+            conversationId: "channel-\(AgentChannel.defaultChannel.code.lowercased())",
             parentSessionId: continuationSessionId,
             source: source
         )
     }
 
-    private func runFollowUp(_ invocation: WalkieAgentInvocation) async {
+    private func runFollowUp(_ invocation: AgentInvocation) async {
         do {
-            let result = try await WalkieNodeRuntimeClient.shared.invoke(invocation)
+            let result = try await AgentRuntimeClient.shared.invoke(invocation)
             if let sessionId = result.sessionId {
                 continuationSessionId = sessionId
             }
-            executorRuntimeName = walkieAgentDisplayName(for: result.providerId) ?? "Agent Runtime Dispatcher"
+            executorRuntimeName = agentRuntimeDisplayName(for: result.providerId) ?? "Agent Runtime Dispatcher"
             routeMode = .async
             replyText = result.ack
             executorBranchState = result.sessionId == nil ? .done : .working
@@ -436,7 +436,7 @@ final class WalkieSession: ObservableObject {
 
             executorBranchState = .done
         } catch {
-            log.error("Walkie follow-up failed", detail: error.localizedDescription)
+            log.error("Agent voice follow-up failed", detail: error.localizedDescription)
             await fail(error.localizedDescription)
         }
     }
@@ -457,22 +457,22 @@ final class WalkieSession: ObservableObject {
             guard let activity else { return }
             let applied = await applyExecutorResult(activity, fallbackError: "The agent did not finish cleanly.")
             guard applied else { return }
-            log.info("Walkie executor branch returned", detail: "session=\(activity.sessionId)")
+            log.info("Agent voice executor branch returned", detail: "session=\(activity.sessionId)")
         } catch {
             guard !Task.isCancelled else { return }
             executorBranchState = .failed
-            log.error("Walkie executor report failed", detail: error.localizedDescription)
+            log.error("Agent voice executor report failed", detail: error.localizedDescription)
         }
     }
 
     private func applyExecutorResult(
-        _ activity: WalkieRuntimeActivitySnapshot,
+        _ activity: AgentRuntimeActivitySnapshot,
         fallbackError: String
     ) async -> Bool {
         continuationSessionId = activity.sessionId
         topLevelProviderName = activity.topLevelProviderName ?? topLevelProviderName
         topLevelModelId = activity.topLevelModelId ?? topLevelModelId
-        executorRuntimeName = walkieAgentDisplayName(for: activity.providerId)
+        executorRuntimeName = agentRuntimeDisplayName(for: activity.providerId)
             ?? activity.runtimeName
             ?? executorRuntimeName
         routeMode = .async
@@ -499,7 +499,7 @@ final class WalkieSession: ObservableObject {
     }
 
     private func notifyReportBack(
-        activity: WalkieRuntimeActivitySnapshot,
+        activity: AgentRuntimeActivitySnapshot,
         spokenSummary: String?,
         fullOutput: String?
     ) {
@@ -510,7 +510,7 @@ final class WalkieSession: ObservableObject {
         let title = activity.agentSessionName?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
             ?? "Talkie report back"
 
-        TalkieNotifier.shared.walkieReport(
+        TalkieNotifier.shared.agentReport(
             sessionId: activity.sessionId,
             title: title,
             body: body,
@@ -519,31 +519,48 @@ final class WalkieSession: ObservableObject {
         )
     }
 
-    private func waitForRuntimeActivity(sessionId: String?) async throws -> WalkieRuntimeActivitySnapshot? {
+    private func waitForRuntimeActivity(sessionId: String?) async throws -> AgentRuntimeActivitySnapshot? {
         guard let sessionId else { return nil }
 
         let startedAt = Date()
+        var lastPartialOutput = ""
         while Date().timeIntervalSince(startedAt) < 600 {
             guard !Task.isCancelled else { return nil }
-            let status = try await WalkieNodeRuntimeClient.shared.status()
+            let status = try await AgentRuntimeClient.shared.status()
             if let activity = status.activities.first(where: { $0.sessionId == sessionId }) {
                 let state = activity.state.lowercased()
                 if ["done", "completed", "complete", "succeeded", "failed", "cancelled", "canceled"].contains(state) {
                     return activity
                 }
+                updatePartialRuntimeOutput(activity, previousOutput: &lastPartialOutput)
             }
-            try await Task.sleep(for: .seconds(1))
+            try await Task.sleep(for: .milliseconds(600))
         }
 
-        throw WalkieNodeRuntimeError.runtimeTimedOut
+        throw AgentRuntimeClientError.runtimeTimedOut
     }
 
-    private func fail(_ message: String, offersWalkieRetry: Bool = false) async {
-        log.error("Walkie session error", detail: message)
+    private func updatePartialRuntimeOutput(
+        _ activity: AgentRuntimeActivitySnapshot,
+        previousOutput: inout String
+    ) {
+        let partialOutput = activity.output?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .nonEmpty
+
+        guard let partialOutput, partialOutput != previousOutput else { return }
+
+        previousOutput = partialOutput
+        replyText = partialOutput
+        phase = .receiving
+    }
+
+    private func fail(_ message: String, offersVoiceRetry: Bool = false) async {
+        log.error("Agent voice session error", detail: message)
         if executorBranchState == .working {
             executorBranchState = .failed
         }
-        self.offersWalkieRetry = offersWalkieRetry
+        self.offersVoiceRetry = offersVoiceRetry
         errorMessage = message
         phase = .error
     }

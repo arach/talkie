@@ -37,7 +37,6 @@ struct OnboardingNext: View {
     @State private var selectedSyncNode: SyncNodeKind = .icloud
     @State private var microphonePermissionStatus: PermissionPromptStatus = .needsAction
     @State private var speechPermissionStatus: PermissionPromptStatus = .needsAction
-    @State private var keyboardPermissionStatus: PermissionPromptStatus = .needsSettings
 
     private let totalPages = 4
 
@@ -472,7 +471,7 @@ struct OnboardingNext: View {
                 )
 
             VStack(spacing: 8) {
-                Text("The Magic of Sync")
+                Text("Yours, on every device")
                     .talkieType(.headlineSecondary)
                     .foregroundStyle(theme.colors.textPrimary)
                 Text("Record anywhere on your iPhone.\nSync locally, via iCloud, or direct to Mac.\nMac processes with on-device AI.\nAll encrypted, all yours.")
@@ -660,13 +659,10 @@ struct OnboardingNext: View {
                 status: speechPermissionStatus,
                 action: requestSpeechPermission
             )
-            permissionPromptRow(
-                icon: "keyboard",
-                title: "Dictation Extension",
-                detail: "Enable in Settings",
-                status: keyboardPermissionStatus,
-                action: openICloudSettings
-            )
+            // The custom-keyboard ("Dictation Extension") setup is the
+            // full iOS Add-a-Keyboard + Allow-Full-Access flow — an
+            // advanced, leave-the-app step that doesn't belong in
+            // first-run. It lives in Settings instead.
         }
         .padding(12)
         .background(
@@ -780,7 +776,6 @@ struct OnboardingNext: View {
             speechPermissionStatus = .needsAction
         }
 
-        keyboardPermissionStatus = KeyboardBridge.shared.getKeyboardModeEnabled() ? .ready : .needsSettings
     }
 
     private func requestMicrophonePermission() {
@@ -823,6 +818,9 @@ struct OnboardingNext: View {
             openICloudSettings()
         }
     }
+
+    // (Keyboard/dictation-extension status intentionally not surfaced
+    // in onboarding — its enable flow is a Settings-only step.)
 
     private func featureHint(icon: String, text: String) -> some View {
         HStack(spacing: 10) {

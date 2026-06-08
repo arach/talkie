@@ -1,15 +1,15 @@
 //
-//  WalkieTool.swift
+//  AgentVoiceTool.swift
 //  TalkieAgent
 //
-//  Tool-calling layer for the walkie. v1 exposes a single tool —
+//  Tool-calling layer for the agent voice surface. v1 exposes a single tool —
 //  `talkie_cli` — restricted to a read-only allowlist of subcommands.
 //  Output is forced to JSON so the LLM can structure-pattern-match on
 //  it rather than parse prose.
 //
 //  Future tools land here (shell, AppleScript, window control) each
 //  behind their own setting + allowlist. The session reads each
-//  WalkieToolInvocation it produces and surfaces them live in the
+//  AgentVoiceToolInvocation it produces and surfaces them live in the
 //  scope panel.
 //
 
@@ -34,7 +34,7 @@ private let outputTruncationChars = 12_000
 
 // MARK: - Public types
 
-struct WalkieToolInvocation: Identifiable, Equatable, Sendable {
+struct AgentVoiceToolInvocation: Identifiable, Equatable, Sendable {
     enum Status: Equatable, Sendable {
         case running
         case done
@@ -62,7 +62,7 @@ struct WalkieToolInvocation: Identifiable, Equatable, Sendable {
     }
 }
 
-enum WalkieToolError: LocalizedError, Sendable {
+enum AgentVoiceToolError: LocalizedError, Sendable {
     case unknownTool(String)
     case missingArgs
     case subcommandNotAllowed(String)
@@ -82,7 +82,7 @@ enum WalkieToolError: LocalizedError, Sendable {
 
 // MARK: - JSON-Schema definitions sent to the LLM
 
-enum WalkieToolCatalog {
+enum AgentVoiceToolCatalog {
     /// OpenAI tool definitions (Chat Completions tools API).
     static func toolDefinitions() -> [[String: Any]] {
         return [
@@ -153,25 +153,25 @@ enum WalkieToolCatalog {
 
 // MARK: - Executor
 
-enum WalkieToolExecutor {
+enum AgentVoiceToolExecutor {
     /// Execute one tool call. Returns the completed invocation (with
     /// output + status). Throws if the tool is unknown or rejected.
-    static func execute(name: String, arguments: [String: Any]) async throws -> WalkieToolInvocation {
+    static func execute(name: String, arguments: [String: Any]) async throws -> AgentVoiceToolInvocation {
         switch name {
         case "talkie_cli":
             return try await runTalkieCLI(arguments: arguments)
         case "capture_markup_open":
             return try await runCaptureMarkupOpen(arguments: arguments)
         default:
-            throw WalkieToolError.unknownTool(name)
+            throw AgentVoiceToolError.unknownTool(name)
         }
     }
 
     // MARK: - capture_markup_open
 
-    private static func runCaptureMarkupOpen(arguments: [String: Any]) async throws -> WalkieToolInvocation {
+    private static func runCaptureMarkupOpen(arguments: [String: Any]) async throws -> AgentVoiceToolInvocation {
         guard let path = arguments["path"] as? String, !path.isEmpty else {
-            throw WalkieToolError.missingArgs
+            throw AgentVoiceToolError.missingArgs
         }
         let instruction = arguments["instruction"] as? String
         var components = URLComponents()
@@ -186,11 +186,11 @@ enum WalkieToolExecutor {
         }
         components.queryItems = query
         guard let url = components.url else {
-            throw WalkieToolError.execFailed("Invalid capture markup URL")
+            throw AgentVoiceToolError.execFailed("Invalid capture markup URL")
         }
 
         let display = "talkie://capture/markup path=\(path)"
-        var invocation = WalkieToolInvocation(
+        var invocation = AgentVoiceToolInvocation(
             toolName: "capture_markup_open",
             displayCommand: display,
             args: [path]
@@ -198,7 +198,7 @@ enum WalkieToolExecutor {
 
         let started = Date()
         let opened = await MainActor.run {
-            NSWorkspace.shared.open(url)
+            TalkieAppOpener.open(url)
         }
         invocation.durationMs = Int(Date().timeIntervalSince(started) * 1000)
         if opened {
@@ -212,13 +212,13 @@ enum WalkieToolExecutor {
 
     // MARK: - talkie_cli
 
-    private static func runTalkieCLI(arguments: [String: Any]) async throws -> WalkieToolInvocation {
+    private static func runTalkieCLI(arguments: [String: Any]) async throws -> AgentVoiceToolInvocation {
         guard let args = arguments["args"] as? [String], !args.isEmpty else {
-            throw WalkieToolError.missingArgs
+            throw AgentVoiceToolError.missingArgs
         }
         let subcommand = args[0]
         guard allowedTalkieCliSubcommands.contains(subcommand) else {
-            throw WalkieToolError.subcommandNotAllowed(subcommand)
+            throw AgentVoiceToolError.subcommandNotAllowed(subcommand)
         }
 
         // Force JSON output (idempotent — the LLM may include it too).
@@ -227,7 +227,7 @@ enum WalkieToolExecutor {
             resolvedArgs.append("--json")
         }
         let displayCommand = "talkie " + resolvedArgs.joined(separator: " ")
-        var invocation = WalkieToolInvocation(
+        var invocation = AgentVoiceToolInvocation(
             toolName: "talkie_cli",
             displayCommand: displayCommand,
             args: resolvedArgs
@@ -247,7 +247,7 @@ enum WalkieToolExecutor {
         } catch {
             invocation.durationMs = Int(Date().timeIntervalSince(started) * 1000)
             invocation.status = .failed(error.localizedDescription)
-            invocation.output = (error as? WalkieToolError)?.errorDescription
+            invocation.output = (error as? AgentVoiceToolError)?.errorDescription
             log.error("Tool talkie_cli failed", detail: error.localizedDescription)
             return invocation
         }
@@ -285,10 +285,10 @@ enum WalkieToolExecutor {
                 let data = pipe.fileHandleForReading.readDataToEndOfFile()
                 let output = String(data: data, encoding: .utf8) ?? ""
                 if proc.terminationReason == .uncaughtSignal && proc.terminationStatus == 15 {
-                    continuation.resume(throwing: WalkieToolError.timeout)
+                    continuation.resume(throwing: AgentVoiceToolError.timeout)
                 } else if proc.terminationStatus != 0 {
                     let detail = output.isEmpty ? "exit \(proc.terminationStatus)" : output
-                    continuation.resume(throwing: WalkieToolError.execFailed(detail))
+                    continuation.resume(throwing: AgentVoiceToolError.execFailed(detail))
                 } else {
                     continuation.resume(returning: output)
                 }

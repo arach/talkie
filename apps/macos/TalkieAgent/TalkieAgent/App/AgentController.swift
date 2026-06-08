@@ -930,33 +930,37 @@ final class AgentController: ObservableObject {
     /// Works in any active state - sets cancelled flag to prevent paste
     @Published private(set) var isCancelled = false
 
-    /// Cancel recording during listening phase (before transcription starts)
-    /// Audio is still preserved in the queue for later access
+    /// Cancel recording during the listening phase (before transcription starts).
+    /// Cancel is instant: we drop straight back to idle and discard the captured
+    /// audio — no transcribing/processing UI, mic available again immediately.
     func cancelListening() {
         guard state == .listening else {
             log.info("cancelListening() ignored - not in listening state (current: \(self.state.rawValue))")
             return
         }
         isCancelled = true
-
-        // Transition to transcribing state to prevent double-cancel
-        // This makes the UI show "processing" and blocks further clicks
-        stateMachine.transition(.cancel)
-
-        // stopCapture() will trigger process() which will see isCancelled
-        // and skip transcription (audio is still preserved)
         recordingEndTime = Date()
-        audio.stopCapture()
-        log.info("Recording cancelled during listening - audio will be preserved")
 
-        // Safety timeout: if process() doesn't get called (e.g., PTT too short, no audio file),
-        // force reset to idle after 2 seconds
+        // Stop capture. For too-short / no-audio recordings this routes synchronously
+        // through handleCaptureError (graceful cancel → idle). For normal recordings it
+        // schedules process(), which sees isCancelled and discards the audio.
+        audio.stopCapture()
+
+        // Return to idle right away if capture didn't already reset us.
+        if state == .listening {
+            stateMachine.transition(.cancel)  // → .idle
+            SoundManager.shared.playCancelled()
+        }
+        log.info("Recording cancelled during listening - audio discarded")
+
+        // Backstop: if no capture callback fires (e.g. PTT too short, no audio file),
+        // make sure the cancelled flag / recording state never leaks.
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(2))
-            guard let self else { return }
-            if self.state == .transcribing && self.isCancelled {
-                log.warning("Cancel timeout - forcing reset to idle (audio file may not have been created)")
-                self.clearRecordingState()
+            guard let self, self.isCancelled else { return }
+            log.warning("Cancel backstop - clearing leftover recording state")
+            self.clearRecordingState()
+            if self.state != .idle {
                 self.stateMachine.transition(.forceReset)
             }
         }
@@ -1679,6 +1683,20 @@ final class AgentController: ObservableObject {
         hasShownDeviceRoutingAlert = false  // Allow showing again if issue recurs later
         let captureSessionId = recordingId
 
+        // User cancelled during listening: discard the captured audio immediately.
+        // No save, no transcription, no state change — cancelListening already
+        // returned us to idle, so the mic is free again right away.
+        if isCancelled {
+            log.info("Recording cancelled - discarding \(segmentPaths.count) captured segment(s)")
+            AppLogger.shared.log(.system, "Recording cancelled", detail: "Audio discarded")
+            for path in segmentPaths {
+                try? FileManager.default.removeItem(atPath: path)
+            }
+            await discardLiveSidecarSession(captureSessionId: captureSessionId)
+            clearRecordingState()
+            return
+        }
+
         let pipelineStart = Date()  // Track end-to-end timing
         let recordingEndedAt = recordingEndTime ?? pipelineStart
         let settings = LiveSettings.shared
@@ -1826,17 +1844,6 @@ final class AgentController: ObservableObject {
         // End file save step before deciding whether to transcribe
         trace?.end(fileSizeStr)
         trace?.externalRefId = externalRefId  // Already the same, but kept for reference
-
-        // If user cancelled during listening, skip transcription entirely
-        if isCancelled {
-            let audioPath = AudioStorage.url(for: audioFilename).path
-            log.info("Recording cancelled - skipping transcription", detail: "Audio saved: \(audioPath)")
-            AppLogger.shared.log(.system, "Recording cancelled", detail: "Audio saved: \(audioFilename)")
-            await discardLiveSidecarSession(captureSessionId: captureSessionId)
-            clearRecordingState()
-            stateMachine.transition(.complete)
-            return
-        }
 
         await processPendingLiveSidecarSegments(
             captureSessionId: captureSessionId,

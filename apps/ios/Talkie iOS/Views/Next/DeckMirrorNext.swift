@@ -15,6 +15,20 @@ import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// Material skin for the deck. Layout + proportions are identical across
+/// treatments; only the texture changes — how the keycaps catch light and
+/// lift, and whether the keybed reads as a flush face or a recessed pocket.
+/// Mirrors the studio (`design/studio/components/studies/IOSDeck.tsx`).
+enum DeckTreatment: String, CaseIterable {
+    /// Matte aluminium, flat chamfered caps, a recessed brushed pocket.
+    case milled
+    /// Satin caps with pronounced lift off a flush brushed face (figure/ground).
+    case relief
+
+    var next: DeckTreatment { self == .milled ? .relief : .milled }
+    var label: String { rawValue.uppercased() }
+}
+
 struct DeckMirrorNext: View {
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var deck = DeckMirrorStore.shared
@@ -26,6 +40,13 @@ struct DeckMirrorNext: View {
     @State private var appSwitcherErrorMessage: String?
     @State private var isTrackpadInteracting = false
     @State private var trackpadErrorMessage: String?
+
+    /// The active material skin (Milled / Relief). Persisted so it can be
+    /// flipped from settings later; tap the wordmark to cycle it in-app.
+    @AppStorage("deckTreatment") private var treatmentRaw = DeckTreatment.relief.rawValue
+    private var treatment: DeckTreatment {
+        DeckTreatment(rawValue: treatmentRaw) ?? .relief
+    }
 
     // MARK: Dictation (paint state — Codex wires the engine)
     //
@@ -88,10 +109,22 @@ struct DeckMirrorNext: View {
     var body: some View {
         ZStack {
             theme.colors.background.ignoresSafeArea()
+            // Anodised sheen over the chassis — a faint top→bottom metal
+            // fall-off so the face reads as brushed metal. Zones are set
+            // apart by material (this + the dark trackpad + the keybed
+            // pocket), not by dividing lines.
+            LinearGradient(
+                colors: [Color.white.opacity(0.04), .clear, Color.black.opacity(0.05)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+
+            BrushedMetal()
 
             VStack(spacing: 0) {
                 header
-                Divider().background(theme.currentTheme.chrome.edgeFaint)
 
                 if let board = deck.board, !board.spaces.isEmpty {
                     boardContent(board)
@@ -140,10 +173,18 @@ struct DeckMirrorNext: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack {
+        HStack(spacing: 8) {
             Text("TALKIE · DECK")
                 .talkieType(.wordmark)
                 .foregroundStyle(theme.colors.textPrimary.opacity(0.78))
+                .contentShape(Rectangle())
+                // Tap the wordmark to cycle the material skin in-app so both
+                // are reviewable without a settings screen.
+                .onTapGesture { treatmentRaw = treatment.next.rawValue }
+
+            Text(treatment.label)
+                .talkieType(.channelLabelTiny)
+                .foregroundStyle(theme.colors.textTertiary.opacity(0.7))
 
             Spacer()
 
@@ -184,16 +225,21 @@ struct DeckMirrorNext: View {
                 // cockpit's elevated transcript card handles overflow
                 // via its own line-clamp.
                 VStack(spacing: 12) {
-                    // Cockpit goes full-bleed horizontally — the trackpad
-                    // chassis IS the instrument and the recording tape
-                    // wants the whole width. Tiles below keep the 16pt
-                    // gutter so they read as a grid, not as edge-glued
-                    // panels.
+                    // Cockpit AND keypad both go full-bleed horizontally so
+                    // the keypad's keys line up edge-for-edge with the
+                    // cockpit's key row (Dictate ↔ esc on the left, last
+                    // column ↔ enter on the right). Each insets its keys by
+                    // the same 10pt from the instrument edge.
                     cockpitSurface(space)
-                        .layoutPriority(40)
+                        // FIXED console height — a maxHeight cap let the
+                        // greedy keybed starve it down to a cramped strip.
+                        // 248 is smaller than the old 40% share (which
+                        // dominated big phones) but tall enough that the
+                        // trackpad + signals + key row breathe; the keybed
+                        // takes the rest → tall rectangular keys.
+                        .frame(height: 248)
                     tileGrid(space.tiles)
                         .layoutPriority(60)
-                        .padding(.horizontal, 16)
                 }
                 // 40pt lets the summon button (occupies y=16..64
                 // above safe-area) barely encroach on the bottom-
@@ -473,25 +519,147 @@ struct DeckMirrorNext: View {
     // MARK: - Tile grid
 
     private func tileGrid(_ tiles: [DeckTile]) -> some View {
-        LazyVGrid(
-            columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4),
-            spacing: 6
-        ) {
-            ForEach(tiles) { tile in
-                if tile.slotID == dictationSlotID {
-                    dictationTile(tile)
-                } else {
-                    tileView(tile)
+        // Manual 4×4 so every row STRETCHES to fill the keybed height —
+        // LazyVGrid sizes rows to content, which left the caps square. Here
+        // each row + cell is maxHeight:.infinity, so the keys grow into tall
+        // rectangular caps that fill the space.
+        let rows = stride(from: 0, to: tiles.count, by: 4).map {
+            Array(tiles[$0 ..< min($0 + 4, tiles.count)])
+        }
+        return VStack(spacing: 8) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { rowIndex, row in
+                HStack(spacing: 8) {
+                    ForEach(Array(row.enumerated()), id: \.element.id) { colIndex, tile in
+                        let index = rowIndex * 4 + colIndex
+                        Group {
+                            if tile.slotID == dictationSlotID {
+                                dictationTile(tile, index: index)
+                            } else {
+                                tileView(tile, index: index)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                 }
+                .frame(maxHeight: .infinity)
             }
         }
+        // Full-bleed keybed. 10pt horizontal bezel keeps the keys lined up
+        // with the cockpit key row above. The surround is the treatment's
+        // job — flush for Relief, a recessed pocket for Milled.
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(keybedWell)
+    }
+
+    /// The keybed surround. Relief is FLUSH — keys lift straight off the
+    /// brushed chassis, no plate. Milled sits in a recessed pocket: a
+    /// slightly darker well with a soft top recess but NO hard rim, so the
+    /// zone reads by material, not a line.
+    @ViewBuilder
+    private var keybedWell: some View {
+        switch treatment {
+        case .relief:
+            Color.clear
+        case .milled:
+            Rectangle()
+                .fill(Color.black.opacity(0.11))
+                .overlay(alignment: .top) {
+                    LinearGradient(
+                        colors: [Color.black.opacity(0.30), .clear],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 16)
+                    .allowsHitTesting(false)
+                }
+                .allowsHitTesting(false)
+        }
+    }
+
+    /// Keycap surface shared by every tile, treatment-aware. No resting
+    /// hairline on either skin — caps read by finish + lift, not an
+    /// outline. Relief: a satin top-light + a pronounced drop shadow so the
+    /// cap stands off a flush face. Milled: a flat chamfer (top light →
+    /// bottom shadow) + a tight seat shadow in its recessed pocket. `active`
+    /// swaps to the amber armed look (tint + ring + glow); `isEmpty` reads
+    /// as a socket (a faint ring on Relief, a dark dimple on Milled).
+    private func keycapSurface(active: Bool, activeColor: Color, isEmpty: Bool) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+        let isRelief = treatment == .relief
+        return shape
+            .fill(
+                active
+                    ? activeColor.opacity(0.20)
+                    : (isEmpty
+                        ? Color.black.opacity(isRelief ? 0.04 : 0.14)
+                        : theme.colors.cardBackground)
+            )
+            .overlay {
+                // Cap finish. Relief: a soft satin top-light. Milled: a flat
+                // chamfer, light top → shadow bottom. No glossy dome.
+                if !isEmpty && !active {
+                    shape.fill(
+                        LinearGradient(
+                            colors: isRelief
+                                ? [Color.white.opacity(0.22), .clear]
+                                : [Color.white.opacity(0.16), .clear, Color.black.opacity(0.12)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .allowsHitTesting(false)
+                }
+            }
+            .overlay {
+                // The only crisp edges: the armed ring, and Relief's printed
+                // empty-socket ring. No resting hairline on a live cap.
+                if active {
+                    shape.strokeBorder(activeColor, lineWidth: theme.chrome.hairlineWidth * 1.5)
+                } else if isEmpty && isRelief {
+                    shape.strokeBorder(Color.black.opacity(0.10), lineWidth: theme.chrome.hairlineWidth)
+                }
+            }
+            .compositingGroup()
+            // Lift = two layers. A soft AMBIENT shadow (the cap floating off
+            // the face, thrown well below) + a tight CONTACT shadow (the dark
+            // line where it meets the surface). One flat blur reads like a
+            // sticker; two layers read as real elevation. Relief lifts hard;
+            // Milled still lifts but seats nearer its recessed pocket.
+            .shadow(
+                color: active
+                    ? activeColor.opacity(0.5)
+                    : (isEmpty ? .clear : Color.black.opacity(isRelief ? 0.34 : 0.26)),
+                radius: active ? 9 : (isEmpty ? 0 : (isRelief ? 13 : 7)),
+                x: 0,
+                y: active ? 0 : (isEmpty ? 0 : (isRelief ? 9 : 4))
+            )
+            .shadow(
+                color: active
+                    ? .clear
+                    : (isEmpty ? .clear : Color.black.opacity(isRelief ? 0.28 : 0.24)),
+                radius: active ? 0 : (isEmpty ? 0 : (isRelief ? 3 : 2)),
+                x: 0,
+                y: active ? 0 : (isEmpty ? 0 : (isRelief ? 2 : 1))
+            )
+    }
+
+    /// Tiny corner index (01–16) — the TE step/pad numbering from the
+    /// studio. Low-contrast so it reads as a system, not clutter.
+    private func keyIndexLabel(_ index: Int) -> some View {
+        Text(String(format: "%02d", index + 1))
+            .font(.system(size: 8, weight: .medium, design: .monospaced))
+            .foregroundStyle(theme.colors.textTertiary.opacity(0.55))
+            .padding(.top, 7)
+            .padding(.leading, 8)
+            .allowsHitTesting(false)
     }
 
     /// Top-left grid slot — state-aware dictation toggle. Tap when
     /// idle to start; tap again (in the same physical position) to
     /// commit. Visual matches the studio mock: mic glyph in idle,
     /// amber-armed enter glyph while dictating.
-    private func dictationTile(_ tile: DeckTile) -> some View {
+    private func dictationTile(_ tile: DeckTile, index: Int) -> some View {
         Button {
             toggleDictation()
         } label: {
@@ -517,27 +685,22 @@ struct DeckMirrorNext: View {
                     .minimumScaleFactor(0.85)
                 Spacer(minLength: 0)
             }
-            .frame(maxWidth: .infinity, minHeight: 72)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(theme.colors.cardBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .strokeBorder(
-                                isDictating
-                                    ? theme.currentTheme.chrome.accent
-                                    : theme.currentTheme.chrome.edgeFaint,
-                                lineWidth: theme.currentTheme.chrome.hairlineWidth
-                            )
-                    )
-            )
-            .shadow(
-                color: isDictating
-                    ? theme.currentTheme.chrome.accent.opacity(0.45)
-                    : .clear,
-                radius: isDictating ? 6 : 0
-            )
+            .background {
+                keycapSurface(active: isDictating, activeColor: theme.chrome.accent, isEmpty: false)
+            }
+            .overlay(alignment: .topLeading) { keyIndexLabel(index) }
+            .overlay(alignment: .topTrailing) {
+                // The one always-on accent dot — marks the live/dictation key.
+                if !isDictating {
+                    Circle()
+                        .fill(theme.chrome.accent)
+                        .frame(width: 4, height: 4)
+                        .padding(.top, 8)
+                        .padding(.trailing, 8)
+                }
+            }
             .scaleEffect(isDictating ? 1.02 : 1.0)
             .animation(.easeOut(duration: 0.18), value: isDictating)
         }
@@ -556,7 +719,7 @@ struct DeckMirrorNext: View {
     }
 
     @ViewBuilder
-    private func tileView(_ tile: DeckTile) -> some View {
+    private func tileView(_ tile: DeckTile, index: Int) -> some View {
         let isImageShareTile = tile.slotID == "mac-paste-image"
         let isFiring = deck.firingSlotID == tile.slotID
         let isEmpty = tile.slotID == nil
@@ -569,6 +732,7 @@ struct DeckMirrorNext: View {
             PhotosPicker(selection: $imageSharePickerItem, matching: .images) {
                 tileSurface(
                     tile,
+                    index: index,
                     isEmpty: isEmpty,
                     isActive: isActive,
                     activeColor: activeColor
@@ -585,6 +749,7 @@ struct DeckMirrorNext: View {
             }) {
                 tileSurface(
                     tile,
+                    index: index,
                     isEmpty: isEmpty,
                     isActive: isActive,
                     activeColor: activeColor
@@ -599,6 +764,7 @@ struct DeckMirrorNext: View {
 
     private func tileSurface(
         _ tile: DeckTile,
+        index: Int,
         isEmpty: Bool,
         isActive: Bool,
         activeColor: Color
@@ -630,26 +796,14 @@ struct DeckMirrorNext: View {
                 Spacer(minLength: 0)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: isEmpty ? 0 : 72)
-        .padding(.vertical, isEmpty ? 0 : 6)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(
-                    isActive
-                        ? activeColor.opacity(0.22)
-                        : theme.colors.cardBackground.opacity(isEmpty ? 0.45 : 1)
-                )
-                .overlay(
-                    isActive
-                        ? RoundedRectangle(cornerRadius: 10)
-                            .strokeBorder(activeColor, lineWidth: theme.currentTheme.chrome.hairlineWidth)
-                        : nil
-                )
-        )
-        .shadow(
-            color: isActive ? activeColor.opacity(0.45) : .clear,
-            radius: isActive ? 6 : 0
-        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.vertical, 6)
+        .background {
+            keycapSurface(active: isActive, activeColor: activeColor, isEmpty: isEmpty)
+        }
+        .overlay(alignment: .topLeading) {
+            if !isEmpty { keyIndexLabel(index) }
+        }
         .scaleEffect(isActive ? 1.02 : 1.0)
         .animation(.easeOut(duration: 0.18), value: isActive)
     }
@@ -781,6 +935,35 @@ struct DeckMirrorNext: View {
 
 // MARK: - Cockpit Components
 
+/// Fine brushed-metal grain drawn over the whole chassis. Paired faint
+/// dark+light ridges so the texture reads on both light and dark themes.
+/// The dark trackpad + the keybed pocket sit on top, so the grain only
+/// shows on the exposed metal — separating the zones by material, not lines.
+private struct BrushedMetal: View {
+    var body: some View {
+        Canvas { ctx, size in
+            let period: CGFloat = 3
+            let slant = size.height * 0.10
+            var x: CGFloat = -slant
+            while x < size.width {
+                var dark = Path()
+                dark.move(to: CGPoint(x: x, y: 0))
+                dark.addLine(to: CGPoint(x: x + slant, y: size.height))
+                ctx.stroke(dark, with: .color(.black.opacity(0.030)), lineWidth: 0.5)
+
+                var light = Path()
+                light.move(to: CGPoint(x: x + period / 2, y: 0))
+                light.addLine(to: CGPoint(x: x + period / 2 + slant, y: size.height))
+                ctx.stroke(light, with: .color(.white.opacity(0.040)), lineWidth: 0.5)
+
+                x += period
+            }
+        }
+        .allowsHitTesting(false)
+        .ignoresSafeArea()
+    }
+}
+
 private struct DeckCockpitSurface: View {
     let computerName: String
     let deckName: String
@@ -824,7 +1007,10 @@ private struct DeckCockpitSurface: View {
             onInteractionChanged: onTrackpadInteractionChanged
         )
         .overlay(alignment: .top) {
-            header.padding(.horizontal, 10).padding(.top, 8)
+            // Identity slides to 20pt leading so MAC · TALKIE aligns under
+            // the app title (also 20pt) instead of hanging 10pt further
+            // left. Status pill keeps its 10pt trailing inset.
+            header.padding(.leading, 20).padding(.trailing, 10).padding(.top, 8)
         }
         .overlay(alignment: .center) {
             // Waveform sits in the cockpit's centerline — the
@@ -853,7 +1039,7 @@ private struct DeckCockpitSurface: View {
         // Contain the waveform (and any other overlay) within the
         // trackpad's rounded shape — without this the 96pt band
         // bleeds out the top/bottom of the chassis on smaller phones.
-        .clipShape(RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous))
+        .clipShape(Rectangle())
     }
 
     // Identity + status, floating inside the dark trackpad. Colors
@@ -1025,10 +1211,10 @@ private struct DeckInstrumentTrackpad: View {
         ZStack {
             // Plain dark inset — the magnetic-tape transport was a
             // voice-UI motif that didn't belong on a cursor surface.
-            RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous)
+            Rectangle()
                 .fill(theme.chrome.panelAlt.opacity(0.88))
                 .overlay(
-                    RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous)
+                    Rectangle()
                         .fill(accent.opacity(isTouching ? 0.10 : 0))
                 )
                 .allowsHitTesting(false)
@@ -1050,7 +1236,10 @@ private struct DeckInstrumentTrackpad: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .screenRecess(padding: 0, corner: CornerRadius.sm)
+        // Full-bleed, square — the dark glass runs edge to edge and reads as
+        // a distinct material band against the brushed chassis (no rounded
+        // card, no rim).
+        .screenRecess(padding: 0, corner: 0)
         .contentShape(Rectangle())
         .gesture(trackpadDragGesture)
         .simultaneousGesture(TapGesture(count: 1).onEnded { onEvent(.click, 0, 0) })

@@ -1,11 +1,11 @@
 //
-//  WalkieAudioMeter.swift
+//  AgentVoiceAudioMeter.swift
 //  TalkieAgent
 //
 //  Two jobs on one audio tap:
 //
 //    1. Real-time mic RMS → onLevel callback. Drives the scope trace
-//       amplitude in WalkieScopeView.
+//       amplitude in AgentVoiceScopeView.
 //    2. Lazy WAV file capture → recordedFileURL on stop. Hands the
 //       transcript stage a file path that EngineClient can read.
 //
@@ -19,7 +19,7 @@ import TalkieKit
 private let log = Log(.audio)
 
 @MainActor
-final class WalkieAudioMeter {
+final class AgentVoiceAudioMeter {
     private let engine = AVAudioEngine()
     private let onLevel: (Float) -> Void
     private var audioFile: AVAudioFile?
@@ -41,14 +41,14 @@ final class WalkieAudioMeter {
         let format = input.outputFormat(forBus: 0)
 
         guard format.channelCount > 0 else {
-            log.error("Walkie meter: input bus has 0 channels, skipping start")
+            log.error("Agent voice meter: input bus has 0 channels, skipping start")
             return
         }
 
         // Allocate a fresh temp file URL — created lazily on first
         // buffer so we match the hardware format exactly.
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("walkie_\(UUID().uuidString).wav")
+            .appendingPathComponent("agent_voice_\(UUID().uuidString).wav")
         fileURL = url
         audioFile = nil
         recordedFileURL = nil
@@ -93,7 +93,7 @@ final class WalkieAudioMeter {
                 do {
                     self.audioFile = try AVAudioFile(forWriting: url, settings: settings)
                 } catch {
-                    log.error("Walkie meter: failed to open audio file — \(error.localizedDescription)")
+                    log.error("Agent voice meter: failed to open audio file — \(error.localizedDescription)")
                 }
             }
 
@@ -101,7 +101,7 @@ final class WalkieAudioMeter {
                 do {
                     try file.write(from: buffer)
                 } catch {
-                    log.error("Walkie meter: write failed — \(error.localizedDescription)")
+                    log.error("Agent voice meter: write failed — \(error.localizedDescription)")
                 }
             }
         }
@@ -109,9 +109,9 @@ final class WalkieAudioMeter {
         do {
             try engine.start()
             isRunning = true
-            log.info("Walkie meter started (rate=\(format.sampleRate), ch=\(format.channelCount))")
+            log.info("Agent voice meter started (rate=\(format.sampleRate), ch=\(format.channelCount))")
         } catch {
-            log.error("Walkie meter failed to start: \(error.localizedDescription)")
+            log.error("Agent voice meter failed to start: \(error.localizedDescription)")
             input.removeTap(onBus: 0)
         }
     }
@@ -138,7 +138,7 @@ final class WalkieAudioMeter {
             } else {
                 try? FileManager.default.removeItem(at: capturedURL)
                 recordedFileURL = nil
-                log.info("Walkie meter stopped without usable audio", detail: "frames=\(capturedFrames) bytes=\(fileSize)")
+                log.info("Agent voice meter stopped without usable audio", detail: "frames=\(capturedFrames) bytes=\(fileSize)")
             }
         } else {
             recordedFileURL = nil
@@ -147,6 +147,6 @@ final class WalkieAudioMeter {
         Task { @MainActor in
             self.onLevel(0)
         }
-        log.info("Walkie meter stopped")
+        log.info("Agent voice meter stopped")
     }
 }

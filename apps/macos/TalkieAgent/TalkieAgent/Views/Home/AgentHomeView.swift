@@ -58,7 +58,7 @@ struct AgentHomeView: View {
 
                 AgentHomeRuntimeBadge(ping: store.runtimePing)
 
-                AgentHomeAgentRuntimexyx(agentRuntimexyx: store.agentRuntimexyx)
+                AgentHomeAgents(agents: store.agents)
             }
             .padding(.horizontal, 16)
             .padding(.top, 18)
@@ -472,7 +472,7 @@ private struct AgentHomeContinuationContext: Equatable {
 // MARK: - Agent status badge
 
 private struct AgentHomeRuntimeBadge: View {
-    let ping: WalkieRuntimePing?
+    let ping: AgentRuntimePing?
 
     var body: some View {
         let healthy = ping?.scoutBridge == .configured
@@ -491,11 +491,11 @@ private struct AgentHomeRuntimeBadge: View {
     }
 }
 
-private struct AgentHomeAgentRuntimexyx: View {
-    let agentRuntimexyx: [WalkieRuntimeAgentSnapshot]
+private struct AgentHomeAgents: View {
+    let agents: [AgentRuntimeAgentSnapshot]
 
     private var availableCount: Int {
-        agentRuntimexyx.filter(\.isAvailable).count
+        agents.filter(\.isAvailable).count
     }
 
     var body: some View {
@@ -507,16 +507,16 @@ private struct AgentHomeAgentRuntimexyx: View {
 
                 Spacer(minLength: 4)
 
-                Text(agentRuntimexyx.isEmpty ? "checking" : "\(availableCount)/\(agentRuntimexyx.count)")
+                Text(agents.isEmpty ? "checking" : "\(availableCount)/\(agents.count)")
                     .font(.system(size: 9.5, weight: .medium, design: .monospaced))
                     .foregroundStyle(ScopeInk.subtle)
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                if agentRuntimexyx.isEmpty {
-                    AgentHomeAgentRuntimexyxPlaceholder()
+                if agents.isEmpty {
+                    AgentHomeAgentsPlaceholder()
                 } else {
-                    ForEach(agentRuntimexyx) { agent in
+                    ForEach(agents) { agent in
                         AgentHomeAgentRow(agent: agent)
                     }
                 }
@@ -526,7 +526,7 @@ private struct AgentHomeAgentRuntimexyx: View {
     }
 }
 
-private struct AgentHomeAgentRuntimexyxPlaceholder: View {
+private struct AgentHomeAgentsPlaceholder: View {
     var body: some View {
         HStack(spacing: 8) {
             Circle()
@@ -542,7 +542,7 @@ private struct AgentHomeAgentRuntimexyxPlaceholder: View {
 }
 
 private struct AgentHomeAgentRow: View {
-    let agent: WalkieRuntimeAgentSnapshot
+    let agent: AgentRuntimeAgentSnapshot
 
     var body: some View {
         HStack(spacing: 8) {
@@ -1170,7 +1170,7 @@ private struct AgentHomeActionRow: View {
 // MARK: - Idle hero (fresh conversation surface)
 
 /// First-class surface for a fresh conversation. Borrows the "press to
-/// transmit" idea from MacWalkie but quieted into something editorial
+/// transmit" idea from agent voice but quieted into something editorial
 /// rather than instrumental:
 ///   - Headline is a question, not a command.
 ///   - One amber focal point (the mic disc); everything else is ink.

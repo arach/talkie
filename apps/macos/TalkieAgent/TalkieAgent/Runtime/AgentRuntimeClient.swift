@@ -1,29 +1,29 @@
 //
-//  WalkieNodeRuntimeClient.swift
+//  AgentRuntimeClient.swift
 //  TalkieAgent
 //
 
 import Foundation
 import TalkieKit
 
-private let nodeRuntimeLog = Log(.workflow)
+private let agentRuntimeClientLog = Log(.workflow)
 
-enum WalkieScoutBridgeStatus: String, Codable, Sendable {
+enum AgentScoutBridgeStatus: String, Codable, Sendable {
     case pending
     case configured
 }
 
-struct WalkieRuntimePing: Sendable {
+struct AgentRuntimePing: Sendable {
     let pid: Int?
     let version: String
     let runtimeId: String
     let runtimeName: String
-    let capabilities: Set<WalkieRuntimeCapability>
-    let scoutBridge: WalkieScoutBridgeStatus
-    let agentRuntimexyx: [WalkieRuntimeAgentSnapshot]
+    let capabilities: Set<AgentRuntimeCapability>
+    let scoutBridge: AgentScoutBridgeStatus
+    let agents: [AgentRuntimeAgentSnapshot]
 }
 
-struct WalkieRuntimeAgentSnapshot: Identifiable, Decodable, Sendable {
+struct AgentRuntimeAgentSnapshot: Identifiable, Decodable, Sendable {
     let id: String
     let name: String
     let adapterType: String
@@ -38,7 +38,7 @@ struct WalkieRuntimeAgentSnapshot: Identifiable, Decodable, Sendable {
     let lastSeenAt: String?
 }
 
-struct WalkieRuntimeActivitySnapshot: Decodable, Sendable {
+struct AgentRuntimeActivitySnapshot: Decodable, Sendable {
     let id: String
     let sessionId: String
     let state: String
@@ -69,12 +69,12 @@ struct WalkieRuntimeActivitySnapshot: Decodable, Sendable {
     let error: String?
 }
 
-struct WalkieRuntimeStatus: Sendable {
-    let ping: WalkieRuntimePing
-    let activities: [WalkieRuntimeActivitySnapshot]
+struct AgentRuntimeStatus: Sendable {
+    let ping: AgentRuntimePing
+    let activities: [AgentRuntimeActivitySnapshot]
 }
 
-enum WalkieNodeRuntimeError: LocalizedError, Sendable {
+enum AgentRuntimeClientError: LocalizedError, Sendable {
     case missingNodeRuntime
     case missingNodeExecutable
     case runtimeFailed(String)
@@ -97,41 +97,41 @@ enum WalkieNodeRuntimeError: LocalizedError, Sendable {
     }
 }
 
-actor WalkieNodeRuntimeClient {
-    static let shared = WalkieNodeRuntimeClient()
+actor AgentRuntimeClient {
+    static let shared = AgentRuntimeClient()
 
     private let timeoutMs = 10_000
 
-    func ping() async -> WalkieRuntimePing? {
+    func ping() async -> AgentRuntimePing? {
         do {
             let response = try await send(NodeRuntimeRequest(op: "ping"))
             return try runtimePing(from: response)
         } catch {
-            nodeRuntimeLog.debug("Walkie node runtime ping failed", detail: error.localizedDescription)
+            agentRuntimeClientLog.debug("Agent runtime ping failed", detail: error.localizedDescription)
             return nil
         }
     }
 
-    func status() async throws -> WalkieRuntimeStatus {
+    func status() async throws -> AgentRuntimeStatus {
         let response = try await send(NodeRuntimeRequest(op: "status"))
-        return WalkieRuntimeStatus(
+        return AgentRuntimeStatus(
             ping: try runtimePing(from: response),
             activities: response.activities ?? response.jobs ?? []
         )
     }
 
-    func invoke(_ invocation: WalkieAgentInvocation) async throws -> WalkieAgentRuntimeResult {
+    func invoke(_ invocation: AgentInvocation) async throws -> AgentRuntimeResult {
         let response = try await send(NodeRuntimeRequest(op: "invoke", invocation: invocation))
         guard let activity = response.activity ?? response.job else {
-            throw WalkieNodeRuntimeError.invalidResponse("Missing activity object.")
+            throw AgentRuntimeClientError.invalidResponse("Missing activity object.")
         }
 
-        return WalkieAgentRuntimeResult(
+        return AgentRuntimeResult(
             ack: activity.ack,
             sessionId: activity.sessionId,
             providerId: activity.providerId,
             modelId: activity.modelId,
-            jobState: WalkieJobState(rawValue: activity.state) ?? .acked
+            jobState: AgentJobState(rawValue: activity.state) ?? .acked
         )
     }
 
@@ -139,21 +139,21 @@ actor WalkieNodeRuntimeClient {
         do {
             _ = try await send(NodeRuntimeRequest(op: "cancelInvocation", sessionId: sessionId))
         } catch {
-            nodeRuntimeLog.warning(
-                "Walkie node runtime cancel failed",
+            agentRuntimeClientLog.warning(
+                "Agent runtime cancel failed",
                 detail: "session=\(sessionId) error=\(error.localizedDescription)"
             )
         }
     }
 }
 
-private extension WalkieNodeRuntimeClient {
+private extension AgentRuntimeClient {
     struct NodeRuntimeRequest: Encodable {
         let op: String
-        var invocation: WalkieAgentInvocation?
+        var invocation: AgentInvocation?
         var sessionId: String?
 
-        init(op: String, invocation: WalkieAgentInvocation? = nil, sessionId: String? = nil) {
+        init(op: String, invocation: AgentInvocation? = nil, sessionId: String? = nil) {
             self.op = op
             self.invocation = invocation
             self.sessionId = sessionId
@@ -166,19 +166,19 @@ private extension WalkieNodeRuntimeClient {
         let pid: Int?
         let version: String?
         let runtime: RuntimeInfo?
-        let agentRuntimexyx: [WalkieRuntimeAgentSnapshot]?
-        let activity: WalkieRuntimeActivitySnapshot?
-        let activities: [WalkieRuntimeActivitySnapshot]?
-        let job: WalkieRuntimeActivitySnapshot?
-        let jobs: [WalkieRuntimeActivitySnapshot]?
+        let agents: [AgentRuntimeAgentSnapshot]?
+        let activity: AgentRuntimeActivitySnapshot?
+        let activities: [AgentRuntimeActivitySnapshot]?
+        let job: AgentRuntimeActivitySnapshot?
+        let jobs: [AgentRuntimeActivitySnapshot]?
     }
 
     struct RuntimeInfo: Decodable {
         let id: String
         let name: String
         let capabilities: [String]
-        let scoutBridge: WalkieScoutBridgeStatus?
-        let agentRuntimexyx: [WalkieRuntimeAgentSnapshot]?
+        let scoutBridge: AgentScoutBridgeStatus?
+        let agents: [AgentRuntimeAgentSnapshot]?
     }
 
     struct Invocation: Sendable {
@@ -245,7 +245,7 @@ private extension WalkieNodeRuntimeClient {
 
         guard exitCode == 0 else {
             let detail = stderr.isEmpty ? stdout : stderr
-            throw WalkieNodeRuntimeError.runtimeFailed(detail.trimmingCharacters(in: .whitespacesAndNewlines))
+            throw AgentRuntimeClientError.runtimeFailed(detail.trimmingCharacters(in: .whitespacesAndNewlines))
         }
 
         do {
@@ -253,33 +253,33 @@ private extension WalkieNodeRuntimeClient {
             if response.ok {
                 return response
             }
-            throw WalkieNodeRuntimeError.runtimeFailed(response.error ?? "Unknown runtime error.")
-        } catch let error as WalkieNodeRuntimeError {
+            throw AgentRuntimeClientError.runtimeFailed(response.error ?? "Unknown runtime error.")
+        } catch let error as AgentRuntimeClientError {
             throw error
         } catch {
-            throw WalkieNodeRuntimeError.invalidResponse(stdout.isEmpty ? error.localizedDescription : stdout)
+            throw AgentRuntimeClientError.invalidResponse(stdout.isEmpty ? error.localizedDescription : stdout)
         }
     }
 
-    func runtimePing(from response: NodeRuntimeResponse) throws -> WalkieRuntimePing {
+    func runtimePing(from response: NodeRuntimeResponse) throws -> AgentRuntimePing {
         guard let runtime = response.runtime else {
-            throw WalkieNodeRuntimeError.invalidResponse("Missing runtime object.")
+            throw AgentRuntimeClientError.invalidResponse("Missing runtime object.")
         }
 
-        return WalkieRuntimePing(
+        return AgentRuntimePing(
             pid: response.pid,
             version: response.version ?? "0.0.0",
             runtimeId: runtime.id,
             runtimeName: runtime.name,
-            capabilities: Set(runtime.capabilities.compactMap(WalkieRuntimeCapability.init(rawValue:))),
+            capabilities: Set(runtime.capabilities.compactMap(AgentRuntimeCapability.init(rawValue:))),
             scoutBridge: runtime.scoutBridge ?? .pending,
-            agentRuntimexyx: runtime.agentRuntimexyx ?? response.agentRuntimexyx ?? []
+            agents: runtime.agents ?? response.agents ?? []
         )
     }
 
     func resolveInvocation() throws -> Invocation {
         guard let runtimeURL = resolveRuntimeURL() else {
-            throw WalkieNodeRuntimeError.missingNodeRuntime
+            throw AgentRuntimeClientError.missingNodeRuntime
         }
 
         if let bunURL = ExecutableResolver.resolve("bun") {
@@ -306,15 +306,16 @@ private extension WalkieNodeRuntimeClient {
             )
         }
 
-        throw WalkieNodeRuntimeError.missingNodeExecutable
+        throw AgentRuntimeClientError.missingNodeExecutable
     }
 
     func runtimeEnvironment() -> [String: String] {
         var environment = ExecutableResolver.enrichedEnvironment()
 
-        if environment["TALKIE_WALKIE_EXECUTOR_CWD"] == nil,
+        if environment["TALKIE_AGENT_EXECUTOR_CWD"] == nil,
+           environment["TALKIE_WALKIE_EXECUTOR_CWD"] == nil,
            let workspaceURL = resolveSourceWorkspaceURL() {
-            environment["TALKIE_WALKIE_EXECUTOR_CWD"] = workspaceURL.path(percentEncoded: false)
+            environment["TALKIE_AGENT_EXECUTOR_CWD"] = workspaceURL.path(percentEncoded: false)
         }
 
         if let codexPath = ExecutableResolver.resolvePath("codex") {
@@ -349,7 +350,8 @@ private extension WalkieNodeRuntimeClient {
     func resolveRuntimeURL() -> URL? {
         let fileManager = FileManager.default
 
-        if let override = ProcessInfo.processInfo.environment["TALKIE_WALKIE_RUNTIME_NODE"],
+        let environment = ProcessInfo.processInfo.environment
+        if let override = environment["TALKIE_AGENT_RUNTIME_NODE"] ?? environment["TALKIE_WALKIE_RUNTIME_NODE"],
            !override.isEmpty,
            fileManager.fileExists(atPath: override) {
             return URL(fileURLWithPath: override)
@@ -386,13 +388,13 @@ private extension WalkieNodeRuntimeClient {
                 if processBox.process.isRunning {
                     processBox.process.terminate()
                 }
-                throw WalkieNodeRuntimeError.runtimeTimedOut
+                throw AgentRuntimeClientError.runtimeTimedOut
             }
 
             defer { group.cancelAll() }
 
             guard let result = try await group.next() else {
-                throw WalkieNodeRuntimeError.invalidResponse("Process ended without a termination result.")
+                throw AgentRuntimeClientError.invalidResponse("Process ended without a termination result.")
             }
 
             return result
