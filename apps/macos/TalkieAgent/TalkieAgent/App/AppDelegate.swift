@@ -10,11 +10,13 @@ import UniformTypeIdentifiers
 private let log = Log(.system)
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate, NSPopoverDelegate {
     private var statusItem: NSStatusItem!
     private var agentStatusMenu: NSMenu?
     private var agentMenuPopover: NSPopover?
     private var cachedAgentMenuModel: AgentMenuModel?
+    private var cachedAgentMenuActions: AgentMenuActions?
+    private var agentMenuPrewarmTask: Task<Void, Never>?
     private var agentMenuRefreshTask: Task<Void, Never>?
     private var agentController: AgentController!
     private let speechPlaybackController = SelectionSpeechPlaybackController.shared
@@ -38,6 +40,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private let ssWindowHotKey     = HotKeyManager(signature: "\(sig)S6", hotkeyID: 12)
     private let ssShelfHotKey      = HotKeyManager(signature: "\(sig)ST", hotkeyID: 17)
     private let screenRecordHotKeyManager = HotKeyManager(signature: "\(sig)SR", hotkeyID: 13)  // Screen recording chord
+
+    private struct AgentMenuInputState {
+        var name: String
+        var ready: Bool
+        var systemDefault: Bool
+        var devices: [AgentMenuInputDevice]
+    }
+
+    private struct AgentMenuDeferredData: Sendable {
+        var failedQueueCount: Int
+        var recentItems: [AgentMenuRecentItem]
+    }
     private let pasteChordHotKeyManager = HotKeyManager(signature: "\(sig)PV", hotkeyID: 15)  // Quick Paste chord
     private let pasteLastScreenshotHotKey = HotKeyManager(signature: "\(sig)PF", hotkeyID: 16)  // Paste last screenshot
     private let agentVoiceHotKeyManager = HotKeyManager(signature: "\(sig)WT", hotkeyID: 17)  // Hyper+T agent voice panel (TLK-020)
@@ -132,6 +146,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         // Sync setup that can't wait for boot
         setupStatusBar()
         setupMenu()
+        scheduleAgentMenuPrewarm()
         configureSelectionFeedback()
         trackSelectionSourceApp()
     }
@@ -213,6 +228,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             NSEvent.removeMonitor(monitor)
             controlKeyMonitor = nil
         }
+        agentMenuPrewarmTask?.cancel()
+        agentMenuRefreshTask?.cancel()
     }
 
     // MARK: - URL Handling
@@ -271,7 +288,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         let hasMicPermission = PermissionManager.shared.microphoneStatus == .granted
         let image = createMenuBarIcon(isRecording: isRecording, hasMicPermission: hasMicPermission)
+        statusItem.length = image.size.width + 6
         button.imagePosition = .imageOnly
+        button.imageScaling = .scaleNone
         button.image = image
 
         // Reset any tint - color is handled in the drawing
@@ -279,125 +298,159 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     /// Create the status item icon.
-    /// - Recording: Talkie glyph plus the bottom-left Hot Mic dot.
-    /// - Idle, mic denied: Talkie glyph plus small orange warning dot.
+    /// - Recording: high-contrast red active capsule.
+    /// - Idle, mic denied: high-contrast orange warning capsule.
     /// - Idle, mic granted: Talkie glyph as a native template symbol.
     private func createMenuBarIcon(isRecording: Bool, hasMicPermission: Bool) -> NSImage {
         if isRecording {
-            return Self.createRecordingMenuBarIcon()
+            return Self.createActiveTalkieMenuBarIcon(style: .recording)
         }
 
         if hasMicPermission {
             return Self.createTalkieMenuBarIcon()
         }
 
-        return Self.createTalkieMenuBarIconWithBadge(color: .systemOrange)
+        return Self.createActiveTalkieMenuBarIcon(style: .microphoneWarning)
     }
 
-    private static let talkieMenuBarIconLength: CGFloat = 24
+    private enum TalkieMenuBarIconStyle {
+        case recording
+        case microphoneWarning
+    }
+
+    private struct TalkieMenuBarIconPalette {
+        let background: NSColor
+        let stroke: NSColor
+        let foreground: NSColor
+    }
+
+    private static let talkieMenuBarIconLength: CGFloat = 18
+    private static let activeTalkieMenuBarIconSize = NSSize(width: 28, height: 18)
 
     private static func createTalkieMenuBarIcon() -> NSImage {
-        if let asset = NSImage(named: "MenuBarIcon")?.copy() as? NSImage {
-            asset.size = NSSize(width: Self.talkieMenuBarIconLength, height: Self.talkieMenuBarIconLength)
-            asset.isTemplate = true
-            return asset
-        }
-
         let iconSize = NSSize(width: Self.talkieMenuBarIconLength, height: Self.talkieMenuBarIconLength)
-        let glyphRect = NSRect(origin: .zero, size: iconSize)
 
-        let image = NSImage(size: iconSize, flipped: false) { _ in
-            Self.drawTalkieGlyph(in: glyphRect, color: .labelColor)
+        let image = NSImage(size: iconSize, flipped: false) { rect in
+            Self.drawTalkieT(in: rect.insetBy(dx: 3.1, dy: 1.25), color: .black)
+            return true
+        }
+        image.isTemplate = true
+        return image
+    }
+
+    private static func createActiveTalkieMenuBarIcon(style: TalkieMenuBarIconStyle) -> NSImage {
+        let iconSize = Self.activeTalkieMenuBarIconSize
+
+        let image = NSImage(size: iconSize, flipped: false) { rect in
+            let palette = Self.activeTalkieMenuBarPalette(for: style)
+            let capsuleRect = rect.insetBy(dx: 1.0, dy: 1.35)
+            let capsule = NSBezierPath(
+                roundedRect: capsuleRect,
+                xRadius: capsuleRect.height / 2,
+                yRadius: capsuleRect.height / 2
+            )
+
+            palette.background.setFill()
+            capsule.fill()
+
+            palette.stroke.setStroke()
+            capsule.lineWidth = 0.9
+            capsule.stroke()
+
+            let glyphRect = NSRect(
+                x: rect.midX - 5.7,
+                y: rect.midY - 7.35,
+                width: 11.4,
+                height: 14.7
+            )
+            Self.drawTalkieT(in: glyphRect, color: palette.foreground)
+
             return true
         }
         image.isTemplate = false
         return image
     }
 
-    private static func createTalkieMenuBarIconWithBadge(color: NSColor) -> NSImage {
-        let iconSize = NSSize(width: Self.talkieMenuBarIconLength + 3, height: Self.talkieMenuBarIconLength)
-        let glyphRect = NSRect(
-            x: 0,
-            y: 0,
-            width: Self.talkieMenuBarIconLength,
-            height: Self.talkieMenuBarIconLength
+    private static func activeTalkieMenuBarPalette(for style: TalkieMenuBarIconStyle) -> TalkieMenuBarIconPalette {
+        let isDark = NSAppearance.currentDrawing().bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+
+        switch (style, isDark) {
+        case (.recording, true):
+            let red = NSColor(calibratedRed: 1.0, green: 0.34, blue: 0.27, alpha: 1.0)
+            return TalkieMenuBarIconPalette(
+                background: NSColor(calibratedRed: 0.32, green: 0.045, blue: 0.04, alpha: 0.95),
+                stroke: red.withAlphaComponent(0.82),
+                foreground: red
+            )
+        case (.recording, false):
+            return TalkieMenuBarIconPalette(
+                background: NSColor(calibratedRed: 1.0, green: 0.84, blue: 0.82, alpha: 0.96),
+                stroke: NSColor(calibratedRed: 0.82, green: 0.16, blue: 0.10, alpha: 0.58),
+                foreground: NSColor(calibratedRed: 0.70, green: 0.06, blue: 0.03, alpha: 1.0)
+            )
+        case (.microphoneWarning, true):
+            let orange = NSColor(calibratedRed: 1.0, green: 0.64, blue: 0.20, alpha: 1.0)
+            return TalkieMenuBarIconPalette(
+                background: NSColor(calibratedRed: 0.30, green: 0.17, blue: 0.035, alpha: 0.95),
+                stroke: orange.withAlphaComponent(0.82),
+                foreground: orange
+            )
+        case (.microphoneWarning, false):
+            return TalkieMenuBarIconPalette(
+                background: NSColor(calibratedRed: 1.0, green: 0.89, blue: 0.68, alpha: 0.96),
+                stroke: NSColor(calibratedRed: 0.82, green: 0.42, blue: 0.06, alpha: 0.58),
+                foreground: NSColor(calibratedRed: 0.63, green: 0.28, blue: 0.00, alpha: 1.0)
+            )
+        }
+    }
+
+    private static func drawTalkieT(in rect: NSRect, color: NSColor) {
+        let sourceBounds = NSRect(x: 313, y: 224, width: 381, height: 591)
+        let scale = min(rect.width / sourceBounds.width, rect.height / sourceBounds.height)
+        let drawSize = NSSize(width: sourceBounds.width * scale, height: sourceBounds.height * scale)
+        let origin = NSPoint(x: rect.midX - drawSize.width / 2, y: rect.midY - drawSize.height / 2)
+
+        func mappedX(_ value: CGFloat) -> CGFloat {
+            origin.x + (value - sourceBounds.minX) * scale
+        }
+
+        func mappedY(_ value: CGFloat) -> CGFloat {
+            origin.y + (sourceBounds.maxY - value) * scale
+        }
+
+        color.setFill()
+
+        let stem = NSBezierPath()
+        stem.move(to: NSPoint(x: mappedX(436), y: mappedY(224)))
+        stem.line(to: NSPoint(x: mappedX(520), y: mappedY(224)))
+        stem.line(to: NSPoint(x: mappedX(520), y: mappedY(681)))
+        stem.curve(
+            to: NSPoint(x: mappedX(579), y: mappedY(737)),
+            controlPoint1: NSPoint(x: mappedX(520), y: mappedY(716)),
+            controlPoint2: NSPoint(x: mappedX(542), y: mappedY(737))
         )
-        let dotDiameter: CGFloat = 5
+        stem.line(to: NSPoint(x: mappedX(694), y: mappedY(737)))
+        stem.line(to: NSPoint(x: mappedX(694), y: mappedY(815)))
+        stem.line(to: NSPoint(x: mappedX(559), y: mappedY(815)))
+        stem.curve(
+            to: NSPoint(x: mappedX(436), y: mappedY(696)),
+            controlPoint1: NSPoint(x: mappedX(483), y: mappedY(815)),
+            controlPoint2: NSPoint(x: mappedX(436), y: mappedY(767))
+        )
+        stem.close()
+        stem.fill()
 
-        let image = NSImage(size: iconSize, flipped: false) { _ in
-            Self.drawTalkieGlyph(in: glyphRect, color: .labelColor)
-
-            color.setFill()
-            NSBezierPath(
-                ovalIn: NSRect(
-                    x: iconSize.width - dotDiameter - 1,
-                    y: iconSize.height - dotDiameter - 2,
-                    width: dotDiameter,
-                    height: dotDiameter
-                )
-            ).fill()
-
-            return true
-        }
-        image.isTemplate = false
-        return image
-    }
-
-    private static func createRecordingMenuBarIcon() -> NSImage {
-        let iconSize = NSSize(width: Self.talkieMenuBarIconLength, height: Self.talkieMenuBarIconLength)
-        let glyphRect = NSRect(origin: .zero, size: iconSize)
-
-        let image = NSImage(size: iconSize, flipped: false) { _ in
-            Self.drawTalkieGlyph(in: glyphRect, color: .labelColor)
-            Self.drawHotMicDot(in: glyphRect)
-            return true
-        }
-        image.isTemplate = false
-        return image
-    }
-
-    private static func drawTalkieGlyph(in rect: NSRect, color: NSColor) {
-        if let asset = NSImage(named: "MenuBarIcon")?.copy() as? NSImage {
-            asset.size = rect.size
-            asset.tinted(with: color).draw(in: rect)
-            return
-        }
-
-        createFallbackTalkieGlyph(color: color, size: rect.size).draw(in: rect)
-    }
-
-    private static func drawHotMicDot(in rect: NSRect) {
-        let hotMic = NSColor(calibratedRed: 1.0, green: 0.325, blue: 0.275, alpha: 1.0)
-        let dotDiameter: CGFloat = 5.8
-
-        hotMic.setFill()
+        let crossbar = NSRect(
+            x: mappedX(313),
+            y: mappedY(452),
+            width: 381 * scale,
+            height: 76 * scale
+        )
         NSBezierPath(
-            ovalIn: NSRect(
-                x: rect.minX + 3.2,
-                y: rect.minY + 4.8,
-                width: dotDiameter,
-                height: dotDiameter
-            )
+            roundedRect: crossbar,
+            xRadius: 8 * scale,
+            yRadius: 8 * scale
         ).fill()
-    }
-
-    private static func createFallbackTalkieGlyph(color: NSColor, size: NSSize) -> NSImage {
-        NSImage(size: size, flipped: false) { rect in
-            let paragraph = NSMutableParagraphStyle()
-            paragraph.alignment = .center
-
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 16, weight: .bold),
-                .foregroundColor: color,
-                .paragraphStyle: paragraph
-            ]
-
-            NSString(string: "t").draw(
-                in: rect.insetBy(dx: 0, dy: -1),
-                withAttributes: attributes
-            )
-            return true
-        }
     }
 
     private func updateStatusBarBadge(controlPressed: Bool) {
@@ -406,6 +459,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         // Only show badge for dev builds when Control is held
         if controlPressed && bundleID.hasSuffix(".dev") {
+            statusItem.length = 38
             button.imagePosition = .noImage
             button.title = "DEV"
             button.image = nil
@@ -462,7 +516,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         let clearQueueItem = NSMenuItem(title: "Clear Failed Queue", action: #selector(clearFailedQueue), keyEquivalent: "")
         clearQueueItem.target = self
-        clearQueueItem.isHidden = UnifiedDatabase.countQueued() == 0
+        clearQueueItem.isHidden = true
         menu.addItem(clearQueueItem)
 
         menu.addItem(NSMenuItem.separator())
@@ -496,22 +550,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     @objc private func statusItemClicked(_ sender: Any?) {
-        guard let event = NSApp.currentEvent,
-              let button = statusItem.button else {
+        guard let button = statusItem.button else {
+            log.warning("Agent menu status item click ignored because the button was unavailable")
             return
         }
 
-        if event.type == .rightMouseUp || event.modifierFlags.contains(.control) {
+        let event = NSApp.currentEvent
+        if event == nil {
+            log.warning("Agent menu status item click had no current event; treating it as a left click")
+        }
+
+        let isNativeMenuRequest = event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true
+        if isNativeMenuRequest {
+            log.info("Agent menu native menu requested", detail: Self.statusClickEventDescription(event))
             showNativeStatusMenu(from: button)
             return
         }
 
         if let popover = agentMenuPopover, popover.isShown {
+            log.info("Agent menu popover close requested from status item", detail: Self.statusClickEventDescription(event))
             popover.performClose(sender)
             return
         }
 
+        log.info("Agent menu popover open requested from status item", detail: Self.statusClickEventDescription(event))
         showAgentMenuPopover(from: button)
+    }
+
+    private static func statusClickEventDescription(_ event: NSEvent?) -> String {
+        guard let event else { return "event=nil" }
+        return "event=\(event.type) modifiers=\(event.modifierFlags.rawValue)"
     }
 
     private func showNativeStatusMenu(from button: NSStatusBarButton) {
@@ -523,18 +591,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private func showAgentMenuPopover(from button: NSStatusBarButton) {
         let openStart = CFAbsoluteTimeGetCurrent()
         let initialModel = makeAgentMenuModel(refreshPermissions: false, loadSlowData: false)
-
-        let popover = NSPopover()
-        popover.behavior = .transient
-        // Match the popover chrome (menus, scrollbars) to the active tray skin.
-        popover.appearance = NSAppearance(named: AgentTraySkin.current().isDark ? .darkAqua : .aqua)
-        popover.contentSize = NSSize(width: 320, height: 470)
-        popover.contentViewController = NSHostingController(
-            rootView: AgentMenuPopoverView(
-                model: initialModel,
-                actions: makeAgentMenuActions()
-            )
-        )
+        let wasPrewarmed = agentMenuPopover != nil
+        let popover = prepareAgentMenuPopover(with: initialModel)
 
         agentMenuPopover = popover
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
@@ -544,13 +602,69 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         let firstPaintMs = Int((CFAbsoluteTimeGetCurrent() - openStart) * 1000)
         log.info(
             "Agent menu popover shown",
-            detail: "firstPaintMs=\(firstPaintMs) cached=\(cachedAgentMenuModel != nil)"
+            detail: "firstPaintMs=\(firstPaintMs) prewarmed=\(wasPrewarmed) cached=\(cachedAgentMenuModel != nil)"
         )
 
         refreshAgentMenuPopoverAsync(reason: "open", openedAt: openStart)
     }
 
-    private func makeAgentMenuModel(refreshPermissions: Bool, loadSlowData: Bool) -> AgentMenuModel {
+    private func scheduleAgentMenuPrewarm() {
+        agentMenuPrewarmTask?.cancel()
+        agentMenuPrewarmTask = Task { @MainActor [weak self] in
+            await Task.yield()
+            try? await Task.sleep(for: .milliseconds(80))
+            guard let self, !Task.isCancelled else { return }
+            self.prewarmAgentMenuPopover()
+        }
+    }
+
+    private func prewarmAgentMenuPopover() {
+        guard agentMenuPopover == nil else { return }
+
+        let start = CFAbsoluteTimeGetCurrent()
+        let initialModel = makeAgentMenuModel(refreshPermissions: false, loadSlowData: false)
+        _ = prepareAgentMenuPopover(with: initialModel)
+        let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
+        log.info("Agent menu popover prewarmed", detail: "elapsedMs=\(elapsedMs)")
+    }
+
+    private func prepareAgentMenuPopover(with model: AgentMenuModel) -> NSPopover {
+        let popover = agentMenuPopover ?? NSPopover()
+        popover.delegate = self
+        popover.behavior = .transient
+        // Match the popover chrome (menus, scrollbars) to the active tray skin.
+        popover.appearance = NSAppearance(named: AgentTraySkin.current().isDark ? .darkAqua : .aqua)
+        popover.contentSize = NSSize(width: 320, height: 470)
+
+        if let hostingController = popover.contentViewController as? NSHostingController<AgentMenuPopoverView> {
+            hostingController.rootView = AgentMenuPopoverView(
+                model: model,
+                actions: makeAgentMenuActions()
+            )
+        } else {
+            popover.contentViewController = NSHostingController(
+                rootView: AgentMenuPopoverView(
+                    model: model,
+                    actions: makeAgentMenuActions()
+                )
+            )
+        }
+
+        agentMenuPopover = popover
+        return popover
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        guard notification.object as? NSPopover === agentMenuPopover else { return }
+        log.info("Agent menu popover closed")
+    }
+
+    private func makeAgentMenuModel(
+        refreshPermissions: Bool,
+        loadSlowData: Bool,
+        deferredData: AgentMenuDeferredData? = nil,
+        inputState providedInputState: AgentMenuInputState? = nil
+    ) -> AgentMenuModel {
         let cachedModel = cachedAgentMenuModel
 
         if refreshPermissions {
@@ -562,7 +676,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         let isRecording = state == .listening
         let isReady = agentController != nil
         let permissionsGranted = PermissionManager.shared.allRequiredGranted
-        let failedQueueCount = loadSlowData ? UnifiedDatabase.countQueued() : (cachedModel?.failedQueueCount ?? 0)
+        let isLoadingData = !loadSlowData && cachedModel == nil
+        let resolvedDeferredData = deferredData ?? (loadSlowData ? Self.loadAgentMenuDeferredData() : nil)
+        let failedQueueCount = resolvedDeferredData?.failedQueueCount ?? cachedModel?.failedQueueCount ?? 0
 
         let stateTitle: String
         let stateDetail: String
@@ -587,15 +703,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             stateDetail = "Audio engine starting"
         }
 
-        let recentItems = loadSlowData ? makeAgentMenuRecentItems() : (cachedModel?.recentItems ?? [])
-        let inputState = loadSlowData
-            ? makeAgentMenuInputState()
-            : (
-                name: cachedModel?.inputDeviceName ?? "Loading inputs",
-                ready: cachedModel?.inputDevicesReady ?? false,
-                systemDefault: cachedModel?.isSystemDefaultInput ?? true,
-                devices: cachedModel?.inputDevices ?? []
-            )
+        let recentItems = resolvedDeferredData?.recentItems ?? cachedModel?.recentItems ?? []
+        let inputState = providedInputState ?? (
+            loadSlowData
+                ? makeAgentMenuInputState()
+                : AgentMenuInputState(
+                    name: cachedModel?.inputDeviceName ?? "Loading inputs",
+                    ready: cachedModel?.inputDevicesReady ?? false,
+                    systemDefault: cachedModel?.isSystemDefaultInput ?? true,
+                    devices: cachedModel?.inputDevices ?? []
+                )
+        )
 
         return AgentMenuModel(
             stateTitle: stateTitle,
@@ -609,18 +727,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             isSystemDefaultInput: inputState.systemDefault,
             inputDevices: inputState.devices,
             failedQueueCount: failedQueueCount,
-            recentItems: recentItems
+            recentItems: recentItems,
+            isLoadingData: isLoadingData
         )
     }
 
     private func refreshAgentMenuPopoverAsync(reason: String, openedAt: CFAbsoluteTime) {
         agentMenuRefreshTask?.cancel()
         agentMenuRefreshTask = Task { @MainActor [weak self] in
-            await Task.yield()
-            guard let self else { return }
+            try? await Task.sleep(for: .milliseconds(120))
+            guard let self, !Task.isCancelled else { return }
 
             let refreshStart = CFAbsoluteTimeGetCurrent()
-            self.refreshAgentMenuCacheAndPopover(reason: reason)
+            let deferredData = await Task.detached(priority: .utility) {
+                Self.loadAgentMenuDeferredData()
+            }.value
+            guard !Task.isCancelled else { return }
+
+            PermissionManager.shared.refreshAll()
+            let inputState = self.makeAgentMenuInputState()
+            let model = self.makeAgentMenuModel(
+                refreshPermissions: false,
+                loadSlowData: true,
+                deferredData: deferredData,
+                inputState: inputState
+            )
+            self.cachedAgentMenuModel = model
+            self.updateAgentMenuPopoverContent(with: model)
+
             let refreshMs = Int((CFAbsoluteTimeGetCurrent() - refreshStart) * 1000)
             let totalMs = Int((CFAbsoluteTimeGetCurrent() - openedAt) * 1000)
             log.info(
@@ -658,8 +792,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         )
     }
 
-    private func makeAgentMenuRecentItems() -> [AgentMenuRecentItem] {
-        UnifiedDatabase.recentDictations(limit: 5).map { recording in
+    private nonisolated static func loadAgentMenuDeferredData() -> AgentMenuDeferredData {
+        let failedQueueCount = UnifiedDatabase.countQueued()
+        let recentItems = UnifiedDatabase.recentDictations(limit: 5).map { recording in
             let text = recording.text.trimmingCharacters(in: .whitespacesAndNewlines)
             let preview = Self.truncatedMenuText(text, limit: 58)
             return AgentMenuRecentItem(
@@ -669,14 +804,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 text: recording.text
             )
         }
+
+        return AgentMenuDeferredData(
+            failedQueueCount: failedQueueCount,
+            recentItems: recentItems
+        )
     }
 
-    private func makeAgentMenuInputState() -> (
-        name: String,
-        ready: Bool,
-        systemDefault: Bool,
-        devices: [AgentMenuInputDevice]
-    ) {
+    private func makeAgentMenuInputState() -> AgentMenuInputState {
         let audioDevices = AudioDeviceManager.shared
         let settings = LiveSettings.shared
         let devices = audioDevices.inputDevices.map { device in
@@ -705,7 +840,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             selectedName = "System Default"
         }
 
-        return (
+        return AgentMenuInputState(
             name: selectedName,
             ready: !devices.isEmpty,
             systemDefault: isSystemDefault,
@@ -714,7 +849,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     private func makeAgentMenuActions() -> AgentMenuActions {
-        AgentMenuActions(
+        if let cachedAgentMenuActions {
+            return cachedAgentMenuActions
+        }
+
+        let actions = AgentMenuActions(
             toggleRecording: { [weak self] in
                 Task { @MainActor in
                     guard let self else { return }
@@ -833,6 +972,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 }
             }
         )
+        cachedAgentMenuActions = actions
+        return actions
     }
 
     private func dismissAgentMenuPopover() {
@@ -848,7 +989,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         updateClearQueueMenuItem()
     }
 
-    private static func truncatedMenuText(_ text: String, limit: Int) -> String {
+    private nonisolated static func truncatedMenuText(_ text: String, limit: Int) -> String {
         guard text.count > limit else { return text }
         return "\(String(text.prefix(limit)))..."
     }
@@ -3419,23 +3560,6 @@ private enum OpenAISpeechService {
 
         try data.write(to: outputURL, options: .atomic)
         return outputURL
-    }
-}
-
-// MARK: - Date Extension
-
-// MARK: - NSImage Tinting Extension
-
-extension NSImage {
-    /// Create a copy of the image tinted with the specified color
-    func tinted(with color: NSColor) -> NSImage {
-        let image = self.copy() as! NSImage
-        image.lockFocus()
-        color.set()
-        let imageRect = NSRect(origin: .zero, size: image.size)
-        imageRect.fill(using: .sourceAtop)
-        image.unlockFocus()
-        return image
     }
 }
 

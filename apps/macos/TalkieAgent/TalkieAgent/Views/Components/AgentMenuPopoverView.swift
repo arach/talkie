@@ -6,7 +6,7 @@
 import AppKit
 import SwiftUI
 
-struct AgentMenuModel {
+struct AgentMenuModel: Sendable {
     var stateTitle: String
     var stateDetail: String
     var isReady: Bool
@@ -19,16 +19,17 @@ struct AgentMenuModel {
     var inputDevices: [AgentMenuInputDevice]
     var failedQueueCount: Int
     var recentItems: [AgentMenuRecentItem]
+    var isLoadingData: Bool
 }
 
-struct AgentMenuInputDevice: Identifiable, Hashable {
+struct AgentMenuInputDevice: Identifiable, Hashable, Sendable {
     var id: UInt32
     var uid: String
     var name: String
     var isDefault: Bool
 }
 
-struct AgentMenuRecentItem: Identifiable {
+struct AgentMenuRecentItem: Identifiable, Sendable {
     var id: UUID
     var preview: String
     var timestamp: String
@@ -388,7 +389,9 @@ struct AgentMenuPopoverView: View {
 
     private var recentSection: some View {
         AgentMenuSection(title: "Recent", trailingTitle: "All", trailingAction: actions.openHistory) {
-            if model.recentItems.isEmpty {
+            if model.isLoadingData {
+                AgentMenuEmptyRow(title: "Loading recent...")
+            } else if model.recentItems.isEmpty {
                 AgentMenuEmptyRow(title: "No recent dictations")
             } else {
                 ForEach(model.recentItems) { item in
@@ -1105,7 +1108,8 @@ private struct AgentMenuEmptyRow: View {
                     timestamp: "3m",
                     text: "Turn this recording into a tighter product note for the menu treatment."
                 )
-            ]
+            ],
+            isLoadingData: false
         ),
         actions: AgentMenuActions(
             toggleRecording: {},
