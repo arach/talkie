@@ -216,17 +216,23 @@ extension View {
 
 struct SessionLayoutKeyboardShortcuts: View {
     private let layoutManager = SessionLayoutManager.shared
+    @State private var keyMonitor: Any?
 
     var body: some View {
         EmptyView()
             .onAppear {
                 setupKeyboardShortcuts()
             }
+            .onDisappear {
+                removeKeyboardShortcuts()
+            }
     }
 
     private func setupKeyboardShortcuts() {
+        guard keyMonitor == nil else { return }
+
         // Cmd+L = Lock/Unlock Layout
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "l" {
                 layoutManager.toggleLock()
                 return nil // Consume event
@@ -239,6 +245,13 @@ struct SessionLayoutKeyboardShortcuts: View {
             }
 
             return event
+        }
+    }
+
+    private func removeKeyboardShortcuts() {
+        if let keyMonitor {
+            NSEvent.removeMonitor(keyMonitor)
+            self.keyMonitor = nil
         }
     }
 }

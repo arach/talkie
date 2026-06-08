@@ -58,6 +58,7 @@ struct AppWidgetWebView: NSViewRepresentable {
         }
 
         context.coordinator.webView = webView
+        context.coordinator.installedMessageHandler = true
         return webView
     }
 
@@ -65,10 +66,24 @@ struct AppWidgetWebView: NSViewRepresentable {
         // No-op: WebView is loaded once
     }
 
+    static func dismantleNSView(_ nsView: WKWebView, coordinator: Coordinator) {
+        nsView.stopLoading()
+        nsView.navigationDelegate = nil
+        nsView.uiDelegate = nil
+        if coordinator.installedMessageHandler {
+            nsView.configuration.userContentController.removeScriptMessageHandler(forName: "talkie")
+        }
+        nsView.configuration.userContentController.removeAllUserScripts()
+        nsView.loadHTMLString("", baseURL: nil)
+        coordinator.webView = nil
+        coordinator.installedMessageHandler = false
+    }
+
     // MARK: - Coordinator (Message Handler)
 
     class Coordinator: NSObject, WKScriptMessageHandler {
         weak var webView: WKWebView?
+        var installedMessageHandler = false
 
         func userContentController(
             _ userContentController: WKUserContentController,

@@ -21,7 +21,7 @@ final class CaptureMarkupWebSession: NSObject {
     private var pendingDocument: CaptureMarkupDocument?
 
     func attach(to container: NSView) {
-        teardown()
+        teardown(clearCallbacks: false)
 
         let config = WKWebViewConfiguration()
         #if DEBUG
@@ -255,12 +255,24 @@ final class CaptureMarkupWebSession: NSObject {
         webView?.evaluateJavaScript("window.talkieMarkup && window.talkieMarkup.removeMessageLayer(\(idJSON));")
     }
 
-    func teardown() {
+    func teardown(clearCallbacks: Bool = true) {
         if let webView {
+            webView.stopLoading()
+            webView.navigationDelegate = nil
             webView.configuration.userContentController.removeScriptMessageHandler(forName: "talkie")
+            webView.loadHTMLString("", baseURL: nil)
+            webView.removeFromSuperview()
         }
-        webView?.removeFromSuperview()
         webView = nil
+        if clearCallbacks {
+            onMessage = nil
+        }
+        threadInstruction = ""
+        threadModel = ""
+        threadPass = nil
+        threadAttachmentCount = 0
+        threadRows.removeAll(keepingCapacity: false)
+        threadMarks.removeAll(keepingCapacity: false)
         if let sessionDirectory {
             try? FileManager.default.removeItem(at: sessionDirectory)
         }

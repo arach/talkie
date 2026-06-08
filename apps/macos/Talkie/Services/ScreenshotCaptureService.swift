@@ -324,23 +324,18 @@ final class ScreenshotCaptureService {
         )
     }
 
-    /// Warm screenshot + PNG encode path once so first hotkey hit avoids cold-start stalls.
+    /// Warm local PNG encode path once without touching ScreenCaptureKit or TCC.
     func prewarmPipelineIfNeeded() {
         guard !didPrewarmPipeline else { return }
         didPrewarmPipeline = true
 
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            try? await Task.sleep(for: .milliseconds(1200))
-            guard await self.hasScreenRecordingPermission() else { return }
-            guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
-
-            if let image = await self.captureScreenRegion(screenRect: screen.frame) {
+        Task.detached(priority: .utility) {
+            if let image = Self.makePrewarmImage() {
                 _ = Self.pngData(from: image)
             }
-            if self.captureHotPathLoggingEnabled {
-                self.log.debug("Screenshot pipeline prewarmed")
-            }
+        }
+        if captureHotPathLoggingEnabled {
+            log.debug("Screenshot encode path prewarmed")
         }
     }
 
@@ -629,20 +624,38 @@ final class ScreenshotCaptureService {
     }
 
     nonisolated private static func pngData(from image: CGImage) -> Data? {
-        let data = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(
-            data,
-            UTType.png.identifier as CFString,
-            1,
-            nil
+        autoreleasepool {
+            let data = NSMutableData()
+            guard let destination = CGImageDestinationCreateWithData(
+                data,
+                UTType.png.identifier as CFString,
+                1,
+                nil
+            ) else {
+                return nil
+            }
+            CGImageDestinationAddImage(destination, image, nil)
+            guard CGImageDestinationFinalize(destination) else {
+                return nil
+            }
+            return data as Data
+        }
+    }
+
+    nonisolated private static func makePrewarmImage() -> CGImage? {
+        guard let context = CGContext(
+            data: nil,
+            width: 1,
+            height: 1,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else {
             return nil
         }
-        CGImageDestinationAddImage(destination, image, nil)
-        guard CGImageDestinationFinalize(destination) else {
-            return nil
-        }
-        return data as Data
+        context.clear(CGRect(x: 0, y: 0, width: 1, height: 1))
+        return context.makeImage()
     }
 
     nonisolated private static func downscaledImage(from image: CGImage, maxPixelLength: CGFloat) -> CGImage? {
