@@ -76,6 +76,9 @@ const PORT =
   portArgIndex !== -1 && args[portArgIndex + 1]
     ? parseInt(args[portArgIndex + 1], 10)
     : DEFAULT_PORT;
+const ADMIN_SHUTDOWN_PATH = "/admin/shutdown";
+const HANDOFF_TIMEOUT_MS = 5000;
+const HANDOFF_POLL_INTERVAL_MS = 100;
 
 // ===== Server Config =====
 
@@ -86,6 +89,7 @@ const serverConfig = {
   port: PORT,
   alternateHosts: [] as string[],
 };
+let requestGracefulShutdown: ((reason: string) => void) | undefined;
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
@@ -314,6 +318,17 @@ const app = new Elysia()
 
   // ===== Debug Routes =====
   .get("/debug/cache", () => sessionCache.getStatus())
+  .post(ADMIN_SHUTDOWN_PATH, () => {
+    log.info(`Graceful rollover shutdown requested by incoming TalkieServer (pid ${process.pid})`);
+    setTimeout(() => requestGracefulShutdown?.("rollover"), 50);
+
+    return {
+      ok: true,
+      shuttingDown: true,
+      pid: process.pid,
+      instanceId: SERVER_INSTANCE_ID,
+    };
+  })
 
   // ===== Mount Modules =====
   .use(bridge)
@@ -323,6 +338,98 @@ const app = new Elysia()
 
 // ===== Main =====
 
+async function probeExistingServer(): Promise<Record<string, unknown> | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 750);
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${PORT}/health`, {
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      return null;
+    }
+
+    const body = await response.json();
+    if (
+      body &&
+      typeof body === "object" &&
+      body.status === "ok" &&
+      body.port === PORT
+    ) {
+      return body as Record<string, unknown>;
+    }
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  return null;
+}
+
+async function readLocalAuthTokenFile(): Promise<string | null> {
+  try {
+    const token = await Bun.file(LOCAL_AUTH_TOKEN_FILE).text();
+    const trimmed = token.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  } catch {
+    return null;
+  }
+}
+
+async function requestExistingServerShutdown(): Promise<boolean> {
+  const token = await readLocalAuthTokenFile();
+  if (!token) {
+    log.warn("TalkieServer rollover could not find a local auth token for the existing bridge");
+    return false;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1500);
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${PORT}${ADMIN_SHUTDOWN_PATH}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        reason: "rollover",
+        incomingPid: process.pid,
+        incomingInstanceId: SERVER_INSTANCE_ID,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      log.warn(`TalkieServer rollover shutdown request failed with HTTP ${response.status}`);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    log.warn(`TalkieServer rollover shutdown request failed: ${error}`);
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function waitForExistingServerExit(): Promise<boolean> {
+  const deadline = Date.now() + HANDOFF_TIMEOUT_MS;
+
+  while (Date.now() < deadline) {
+    if (!(await probeExistingServer())) {
+      return true;
+    }
+    await Bun.sleep(HANDOFF_POLL_INTERVAL_MS);
+  }
+
+  return false;
+}
+
 async function main() {
   if (NEARBY_MODE && !ALLOW_LAN) {
     log.error("Refusing to start nearby LAN mode without --allow-lan");
@@ -331,6 +438,23 @@ async function main() {
   }
 
   await ensureDirectories();
+  const existingServer = await probeExistingServer();
+  if (existingServer) {
+    log.info(`TalkieServer already healthy on port ${PORT}; requesting graceful rollover`);
+    const shutdownRequested = await requestExistingServerShutdown();
+    if (!shutdownRequested) {
+      log.warn(`TalkieServer rollover could not contact the existing bridge; refusing duplicate bind`);
+      process.exit(0);
+    }
+
+    if (!(await waitForExistingServerExit())) {
+      log.warn(`TalkieServer rollover timed out waiting for port ${PORT} to clear; refusing duplicate bind`);
+      process.exit(0);
+    }
+
+    log.info(`Previous TalkieServer released port ${PORT}; continuing startup`);
+  }
+
   await clearLog();
   log.info("TalkieServer starting...");
   const bindAddress = LOCAL_MODE ? "127.0.0.1" : NEARBY_MODE ? "0.0.0.0" : await getTailscaleBindAddress();
@@ -394,17 +518,26 @@ async function main() {
   log.info(`PID ${process.pid} written to ${PID_FILE}`);
 
   // Clean up on exit
-  const shutdown = async () => {
-    log.info("Shutting down...");
+  let isShuttingDown = false;
+  const shutdown = async (reason = "signal") => {
+    if (isShuttingDown) {
+      return;
+    }
+
+    isShuttingDown = true;
+    log.info(`Shutting down (${reason})...`);
     stopBonjour?.();
     sessionCache.shutdown();
     await Bun.write(PID_FILE, "").catch(() => {});
     await cleanupLocalAuthToken();
     process.exit(0);
   };
+  requestGracefulShutdown = (reason: string) => {
+    void shutdown(reason);
+  };
 
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", () => void shutdown("SIGINT"));
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
   // Start HTTP server
   // SECURITY: Local dev is loopback-only and also exposes a Unix socket.
