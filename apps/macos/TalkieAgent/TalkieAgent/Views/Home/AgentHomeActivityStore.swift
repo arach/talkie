@@ -44,10 +44,160 @@ enum AgentHomeJobStatus: String {
     }
 }
 
+struct AgentHomeWireTraceText: Equatable {
+    let primary: String
+    let secondary: String
+    let compact: String
+}
+
+private enum AgentHomeWireSyntax {
+    static func make(
+        channelCode: String?,
+        status: AgentHomeJobStatus,
+        providerId: String?,
+        topLevelProvider: String?,
+        sessionId: String,
+        source: String?,
+        parentSessionId: String?,
+        continuedFromSessionId: String?
+    ) -> AgentHomeWireTraceText {
+        let channel = channelCode?.nonEmpty ?? "CH-01"
+        let target = targetLabel(providerId: providerId, fallback: topLevelProvider)
+        let token = shortToken(from: sessionId)
+        let source = sourceLabel(source)
+        let session = sessionLabel(
+            parentSessionId: parentSessionId,
+            continuedFromSessionId: continuedFromSessionId
+        )
+        let delivery = deliveryLabel(status)
+        let verb = verbLabel(status: status, session: session)
+        let route = routeLabel(verb: verb, target: target)
+
+        return AgentHomeWireTraceText(
+            primary: "╍ \(channel) · \(route) · \(verb):\(token)",
+            secondary: "delivery:\(delivery) · session:\(session) · source:\(source)",
+            compact: "╍ \(channel) · \(route) · \(verb):\(token)"
+        )
+    }
+
+    private static func targetLabel(providerId: String?, fallback: String?) -> String {
+        let candidate = providerId?.nonEmpty ?? fallback?.nonEmpty ?? "talkie"
+        let normalized = normalizedProviderSlug(candidate)
+        guard normalized != "talkie", normalized != "talkie-agent" else {
+            return "TALKIE"
+        }
+        return "TALKIE#\(normalized)"
+    }
+
+    private static func normalizedProviderSlug(_ value: String) -> String {
+        let normalized = slug(from: value)
+        switch normalized {
+        case "claude-code":
+            return "claude"
+        case "open-code":
+            return "opencode"
+        default:
+            return normalized.nonEmpty ?? "talkie"
+        }
+    }
+
+    private static func shortToken(from value: String) -> String {
+        var token = ""
+        for scalar in value.lowercased().unicodeScalars where CharacterSet.alphanumerics.contains(scalar) {
+            token.append(String(scalar))
+            if token.count == 7 { break }
+        }
+        return token.nonEmpty ?? "pending"
+    }
+
+    private static func sourceLabel(_ value: String?) -> String {
+        guard let value = value?.nonEmpty else {
+            return "voice"
+        }
+
+        let normalized = slug(from: value)
+        if normalized == "agent-home" {
+            return "home"
+        }
+
+        if normalized.contains("voice") {
+            return "voice"
+        }
+
+        let clipped = normalized.prefix(14)
+        return String(clipped).nonEmpty ?? "voice"
+    }
+
+    private static func sessionLabel(
+        parentSessionId: String?,
+        continuedFromSessionId: String?
+    ) -> String {
+        if parentSessionId?.nonEmpty != nil || continuedFromSessionId?.nonEmpty != nil {
+            return "continued"
+        }
+        return "fresh"
+    }
+
+    private static func deliveryLabel(_ status: AgentHomeJobStatus) -> String {
+        switch status {
+        case .waiting:
+            return "waking"
+        case .running:
+            return "working"
+        case .done:
+            return "done"
+        case .failed:
+            return "failed"
+        }
+    }
+
+    private static func verbLabel(status: AgentHomeJobStatus, session: String) -> String {
+        switch status {
+        case .waiting, .running:
+            return session == "continued" ? "cont" : "ask"
+        case .done:
+            return "reply"
+        case .failed:
+            return "err"
+        }
+    }
+
+    private static func routeLabel(verb: String, target: String) -> String {
+        switch verb {
+        case "cont":
+            return "YOU ↪ \(target)"
+        case "reply":
+            return "\(target) ↩ YOU"
+        case "err":
+            return "\(target) ↯ YOU"
+        default:
+            return "YOU → \(target)"
+        }
+    }
+
+    private static func slug(from value: String) -> String {
+        var result = ""
+        var previousWasSeparator = false
+
+        for scalar in value.lowercased().unicodeScalars {
+            if CharacterSet.alphanumerics.contains(scalar) {
+                result.append(String(scalar))
+                previousWasSeparator = false
+            } else if !result.isEmpty && !previousWasSeparator {
+                result.append("-")
+                previousWasSeparator = true
+            }
+        }
+
+        return result.trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+    }
+}
+
 struct AgentHomeConversationTopic: Identifiable, Equatable {
     let id: String
     let title: String
     let subtitle: String
+    let wireLabel: String?
     let icon: String
     let activeCount: Int
     let turnCount: Int
@@ -57,6 +207,7 @@ struct AgentHomeConversationTopic: Identifiable, Equatable {
         id: "agent-home-main",
         title: "General",
         subtitle: "General Talkie conversation",
+        wireLabel: nil,
         icon: "bubble.left.and.bubble.right",
         activeCount: 0,
         turnCount: 0,
@@ -288,6 +439,19 @@ struct AgentHomeExecutorTurn: Identifiable {
             ?? "Talkie"
     }
 
+    var wireTrace: AgentHomeWireTraceText {
+        AgentHomeWireSyntax.make(
+            channelCode: channelCode,
+            status: status,
+            providerId: executorProvider,
+            topLevelProvider: topLevelProvider,
+            sessionId: id,
+            source: source,
+            parentSessionId: parentSessionId,
+            continuedFromSessionId: continuedFromSessionId
+        )
+    }
+
     init(job: AgentHomeExecutorJob, runtimePing: AgentRuntimePing?) {
         let turnTranscript = job.transcript?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
             ?? job.instruction?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
@@ -447,6 +611,7 @@ final class AgentHomeActivityStore: ObservableObject {
                 id: conversationId,
                 title: topicTitle(for: conversationId, jobs: sortedJobs),
                 subtitle: topicSubtitle(for: conversationId, jobs: sortedJobs, activeCount: activeCount),
+                wireLabel: topicWireLabel(for: sortedJobs),
                 icon: topicIcon(for: conversationId, jobs: sortedJobs),
                 activeCount: activeCount,
                 turnCount: jobs.count,
@@ -647,6 +812,21 @@ final class AgentHomeActivityStore: ObservableObject {
             return "\(activeLabel) · \(turnLabel)"
         }
         return turnLabel
+    }
+
+    private func topicWireLabel(for jobs: [AgentHomeExecutorJob]) -> String? {
+        guard let job = jobs.first else { return nil }
+        let topLevelProvider = job.topLevelProviderName ?? job.topLevelProviderId
+        return AgentHomeWireSyntax.make(
+            channelCode: job.channelCode,
+            status: job.status,
+            providerId: job.providerId,
+            topLevelProvider: topLevelProvider,
+            sessionId: job.sessionId,
+            source: job.source,
+            parentSessionId: job.parentSessionId,
+            continuedFromSessionId: job.continuedFromSessionId
+        ).compact
     }
 
     private func topicIcon(for conversationId: String, jobs: [AgentHomeExecutorJob]) -> String {
