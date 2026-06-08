@@ -10,6 +10,7 @@
 
 import { LOCAL_AUTH_TOKEN_FILE } from "../paths";
 import { log } from "../log";
+import { readFile, unlink } from "node:fs/promises";
 
 let localAuthToken: string | null = null;
 
@@ -109,6 +110,7 @@ export function requiresLocalOnlyAuth(path: string, method: string): boolean {
   if (path === "/devices" && method === "GET") return true;     // full roster
   if (path === "/devices" && method === "DELETE") return true;  // revoke all
   if (/^\/devices\/[^/]+$/.test(path) && method === "DELETE" && path !== "/devices/setup-state") return true; // revoke one
+  if (path === "/admin/shutdown" && method === "POST") return true;
 
   return false;
 }
@@ -118,7 +120,13 @@ export function requiresLocalOnlyAuth(path: string, method: string): boolean {
  */
 export async function cleanupLocalAuthToken(): Promise<void> {
   try {
-    const { unlink } = await import("node:fs/promises");
+    const currentToken = await readFile(LOCAL_AUTH_TOKEN_FILE, "utf8").catch(() => null);
+    if (currentToken?.trim() !== localAuthToken) {
+      log.warn("Local auth token file belongs to another TalkieServer; leaving it in place");
+      localAuthToken = null;
+      return;
+    }
+
     await unlink(LOCAL_AUTH_TOKEN_FILE);
     log.info("Local auth token file cleaned up");
   } catch {
