@@ -433,8 +433,8 @@ struct AgentMenuPopoverView: View {
                     badgeTint: skin.accent,
                     action: actions.openPermissions
                 )
-                AgentMenuToolTile(title: "Restart", systemImage: "arrow.clockwise", tint: skin.accent, action: actions.restart)
-                AgentMenuToolTile(title: "Quit", systemImage: "power", tint: skin.rec.opacity(0.62), action: actions.quit)
+                AgentMenuToolTile(title: "Restart", systemImage: "arrow.clockwise", tint: skin.inkMuted, action: actions.restart)
+                AgentMenuToolTile(title: "Quit", systemImage: "power", tint: skin.inkSubtle, action: actions.quit)
             }
         }
     }
