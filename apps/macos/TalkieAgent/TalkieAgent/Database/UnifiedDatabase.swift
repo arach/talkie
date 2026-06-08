@@ -273,7 +273,9 @@ struct LiveRecording: Identifiable {
             refinementPrompt: dictation.metadata?["refinement.prompt"],
             refinementRuleName: dictation.metadata?["refinement.ruleName"],
             refinementModel: dictation.metadata?["refinement.model"],
-            refinementLatencyMs: dictation.metadata?["refinement.latencyMs"]
+            refinementLatencyMs: dictation.metadata?["refinement.latencyMs"],
+            createdInTalkieView: dictation.createdInTalkieView,
+            pasteTimestamp: dictation.pasteTimestamp
         )
     }
 
@@ -295,7 +297,9 @@ struct LiveRecording: Identifiable {
         refinementPrompt: String? = nil,
         refinementRuleName: String? = nil,
         refinementModel: String? = nil,
-        refinementLatencyMs: String? = nil
+        refinementLatencyMs: String? = nil,
+        createdInTalkieView: Bool = false,
+        pasteTimestamp: Date? = nil
     ) -> String? {
         var metadata: [String: Any] = [:]
 
@@ -325,6 +329,12 @@ struct LiveRecording: Identifiable {
         if let mode = mode {
             metadata["routing"] = ["mode": mode]
         }
+
+        // Queue/delivery state
+        var queue: [String: Any] = [:]
+        if createdInTalkieView { queue["createdInTalkieView"] = true }
+        if let pasteTimestamp { queue["pasteTimestamp"] = pasteTimestamp.timeIntervalSince1970 }
+        if !queue.isEmpty { metadata["queue"] = queue }
 
         // Refinement info
         var refinement: [String: String] = [:]
@@ -1061,6 +1071,8 @@ extension LiveRecording {
 
         struct RoutingInfo {
             var mode: String?
+            var wasRouted: Bool?
+            var pasteTimestamp: Double?
         }
 
         init() {}
@@ -1121,6 +1133,8 @@ extension LiveRecording {
             if let routingDict = dict["routing"] as? [String: Any] {
                 var routingInfo = RoutingInfo()
                 routingInfo.mode = routingDict["mode"] as? String
+                routingInfo.wasRouted = routingDict["wasRouted"] as? Bool
+                routingInfo.pasteTimestamp = routingDict["pasteTimestamp"] as? Double
                 self.routing = routingInfo
             }
         }
@@ -1170,8 +1184,10 @@ extension LiveRecording {
             }
 
             if let routing = routing {
-                var routingDict: [String: String] = [:]
+                var routingDict: [String: Any] = [:]
                 if let mode = routing.mode { routingDict["mode"] = mode }
+                if let wasRouted = routing.wasRouted { routingDict["wasRouted"] = wasRouted }
+                if let pasteTimestamp = routing.pasteTimestamp { routingDict["pasteTimestamp"] = pasteTimestamp }
                 if !routingDict.isEmpty { dict["routing"] = routingDict }
             }
 
@@ -1295,11 +1311,17 @@ extension UnifiedDatabase {
                 )
 
                 // Parse and update
+                let timestamp = Date().timeIntervalSince1970
                 var metadata = LiveRecording.ParsedMetadata(from: currentJSON)
                 if metadata.queue == nil {
                     metadata.queue = .init()
                 }
-                metadata.queue?.pasteTimestamp = Date().timeIntervalSince1970
+                metadata.queue?.pasteTimestamp = timestamp
+                if metadata.routing == nil {
+                    metadata.routing = .init()
+                }
+                metadata.routing?.wasRouted = true
+                metadata.routing?.pasteTimestamp = timestamp
 
                 // Write back
                 try db.execute(
@@ -1310,6 +1332,33 @@ extension UnifiedDatabase {
             log.info("[UnifiedDatabase] Marked recording \(id.uuidString.prefix(8)) as pasted")
         } catch {
             log.error("[UnifiedDatabase] markPasted failed: \(error)")
+        }
+    }
+
+    /// Mark a recording as not routed after the router failed.
+    static func markRoutingFailed(id: UUID) {
+        do {
+            try shared.write { db in
+                let currentJSON: String? = try String.fetchOne(
+                    db,
+                    sql: "SELECT metadataJSON FROM recordings WHERE id = ?",
+                    arguments: [id.uuidString]
+                )
+
+                var metadata = LiveRecording.ParsedMetadata(from: currentJSON)
+                if metadata.routing == nil {
+                    metadata.routing = .init()
+                }
+                metadata.routing?.wasRouted = false
+
+                try db.execute(
+                    sql: "UPDATE recordings SET metadataJSON = ? WHERE id = ?",
+                    arguments: [metadata.toJSON(), id.uuidString]
+                )
+            }
+            log.info("[UnifiedDatabase] Marked recording \(id.uuidString.prefix(8)) as routing failed")
+        } catch {
+            log.error("[UnifiedDatabase] markRoutingFailed failed: \(error)")
         }
     }
 }

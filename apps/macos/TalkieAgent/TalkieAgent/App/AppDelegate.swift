@@ -38,6 +38,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private let pasteLastScreenshotHotKey = HotKeyManager(signature: "\(sig)PF", hotkeyID: 16)  // Paste last screenshot
     private let agentVoiceHotKeyManager = HotKeyManager(signature: "\(sig)WT", hotkeyID: 17)  // Hyper+T agent voice panel (TLK-020)
     private let captureHotPathLoggingEnabled = ProcessInfo.processInfo.environment["CAPTURE_PERF"] == "1"
+    private static let walkieHotkeyKeyCode: UInt32 = 17
+    private static var walkieHotkeyModifiers: UInt32 { hyperModifiers }
 
     #if DEBUG
     private let debugPasteHotKeyManager = HotKeyManager(signature: "\(sig)DP", hotkeyID: 5)  // Debug paste test
@@ -926,6 +928,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 log.info("Direct screenshot hotkey skipped because it matches the screen record chord: \(settingsKey)")
                 continue
             }
+            if config.keyCode == Self.walkieHotkeyKeyCode && config.modifiers == Self.walkieHotkeyModifiers {
+                log.info("Direct screenshot hotkey skipped because it matches the talk-to-agents chord: \(settingsKey)")
+                continue
+            }
             manager.registerHotKey(modifiers: config.modifiers, keyCode: config.keyCode) { _ in
                 DistributedNotificationCenter.default().postNotificationName(
                     NSNotification.Name("to.talkie.app.screenshotDirect"),
@@ -1070,8 +1076,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         // semantics: press blooms the floating instrument, release dismisses.
         // Unit 1 (TLK-020): mechanic only — no audio, no LLM yet.
         agentVoiceHotKeyManager.registerHotKey(
-            modifiers: UInt32(cmdKey | controlKey | optionKey | shiftKey),
-            keyCode: 17,
+            modifiers: Self.walkieHotkeyModifiers,
+            keyCode: Self.walkieHotkeyKeyCode,
             onPress: { _ in
                 Task { @MainActor in
                     AgentVoiceController.shared.press()

@@ -337,6 +337,8 @@ final class NotchOverlayController: ObservableObject {
 
     func hide() {
         stopTimer()
+        isListeningForShortcuts = false
+        stopKeyMonitoring()
         recordingStartTime = nil
         elapsedTime = 0
 
@@ -395,17 +397,17 @@ final class NotchOverlayController: ObservableObject {
         // Always show the notch overlay (hover detection via SwiftUI onHover)
         show()
 
-        // Entering listening state
-        if state == .listening && previousState != .listening {
-            recordingStartTime = Date()
-            elapsedTime = 0
-            startTimer()
-            isListeningForShortcuts = true
-            startKeyMonitoring()  // Enable Right Option + . / shortcuts
-        }
-
-        // Leaving listening state (to any other state)
-        if state != .listening && previousState == .listening {
+        if state == .listening {
+            if previousState != .listening {
+                recordingStartTime = Date()
+                elapsedTime = 0
+                startTimer()
+            }
+            if !isListeningForShortcuts {
+                isListeningForShortcuts = true
+                startKeyMonitoring()  // Enable Right Option + . / shortcuts
+            }
+        } else if isListeningForShortcuts {
             isListeningForShortcuts = false
             stopKeyMonitoring()
         }

@@ -36,42 +36,47 @@ struct TranscriptRouter: AgentRouter {
 
     var mode: RoutingMode = .paste
 
-    func handle(transcript: String) async {
+    @MainActor @discardableResult
+    func handle(transcript: String) async -> Bool {
         let cleaned = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Filter noise
         guard !Self.isSkippableNoise(cleaned) else {
             log.info("Skipping noise: \(transcript)")
-            return
+            return false
         }
 
         // Validate: Ensure valid UTF-8 and reasonable length
         guard cleaned.utf8.count < 1_000_000,  // 1MB limit
               cleaned.canBeConverted(to: .utf8) else {
             log.error("Invalid text - cannot copy to clipboard")
-            return
+            return false
         }
 
         // Copy to clipboard (required for both modes)
         let copySuccess = copyToClipboard(cleaned)
         guard copySuccess else {
             log.error("Clipboard copy failed")
-            return
+            return false
         }
 
         if mode == .paste {
             // Cache setting before paste to avoid async hop after
             let shouldPressEnter = await MainActor.run { LiveSettings.shared.pressEnterAfterPaste }
 
+            guard !Task.isCancelled else { return false }
+
             // Paste: clipboard + simulated Cmd+V
             let pasted = simulatePaste()
-            guard pasted else { return }
+            guard pasted else { return false }
 
             // Optionally press Enter after paste (for chat apps, terminals)
             if shouldPressEnter {
                 await submitAfterPaste()
             }
         }
+
+        return true
     }
 
     static func isSkippableNoise(_ cleaned: String) -> Bool {
@@ -80,9 +85,14 @@ struct TranscriptRouter: AgentRouter {
 
     private func copyToClipboard(_ text: String) -> Bool {
         let pb = NSPasteboard.general
-        pb.prepareForNewContents()
+        pb.declareTypes([.string], owner: nil)
 
         guard pb.setString(text, forType: .string) else {
+            return false
+        }
+
+        guard pb.string(forType: .string) == text else {
+            log.error("Clipboard readback mismatch after copy")
             return false
         }
 
@@ -105,38 +115,15 @@ struct TranscriptRouter: AgentRouter {
             return false
         }
 
-        guard let src = CGEventSource(stateID: .combinedSessionState) else {
-            log.error("Failed to create CGEventSource - cannot paste")
-            // This could indicate an accessibility issue - report it
+        let posted = postSyntheticShortcut(keyCode: 0x09, modifiers: .maskCommand)
+        guard posted else {
+            log.warning("Paste shortcut failed to post - possible accessibility issue")
             PermissionManager.shared.reportAccessibilityFailure()
             return false
         }
 
-        let events: [(UInt16, Bool)] = [
-            (0x37, true),   // ⌘ down
-            (0x09, true),   // V down
-            (0x09, false),  // V up
-            (0x37, false)   // ⌘ up
-        ]
-
-        var eventsPosted = 0
-        for (key, down) in events {
-            if let evt = CGEvent(keyboardEventSource: src, virtualKey: key, keyDown: down) {
-                evt.flags = down && key == 0x09 ? .maskCommand : []
-                evt.post(tap: .cghidEventTap)
-                eventsPosted += 1
-            }
-        }
-
-        // If not all events posted, report potential accessibility issue
-        if eventsPosted < 4 {
-            log.warning("Paste incomplete (\(eventsPosted)/4 events) - possible accessibility issue")
-            PermissionManager.shared.reportAccessibilityFailure()
-            return false
-        } else {
-            log.info("Pasted (\(eventsPosted)/4 events posted)")
-            return true
-        }
+        log.info("Pasted via private shortcut event source")
+        return true
     }
 
     private func submitAfterPaste() async {
@@ -147,31 +134,73 @@ struct TranscriptRouter: AgentRouter {
     }
 
     private func simulateEnter() -> Bool {
-        guard let src = CGEventSource(stateID: .combinedSessionState) else {
-            log.error("Failed to create CGEventSource - cannot send Enter")
-            return false
-        }
-
-        // Return/Enter key = 0x24
-        let events: [(UInt16, Bool)] = [
-            (0x24, true),   // Return down
-            (0x24, false)   // Return up
-        ]
-
-        var eventsPosted = 0
-        for (key, down) in events {
-            if let evt = CGEvent(keyboardEventSource: src, virtualKey: key, keyDown: down) {
-                evt.post(tap: .cghidEventTap)
-                eventsPosted += 1
-            }
-        }
-
-        if eventsPosted == events.count {
+        // Return/Enter key = 0x24. Use the same private event source as paste
+        // so a just-released hotkey cannot turn this into a modified Enter.
+        if postSyntheticShortcut(keyCode: 0x24, modifiers: []) {
             log.info("Sent Enter key")
             return true
         } else {
-            log.warning("Enter incomplete (\(eventsPosted)/\(events.count) events)")
+            log.warning("Enter key failed to post")
             return false
         }
+    }
+
+    private func postSyntheticShortcut(keyCode: UInt16, modifiers: CGEventFlags) -> Bool {
+        guard let source = CGEventSource(stateID: .privateState) else {
+            log.error("Failed to create private CGEventSource")
+            return false
+        }
+
+        let modifierEvents = modifierKeyEvents(for: modifiers, source: source)
+
+        for event in modifierEvents.down {
+            event.post(tap: .cghidEventTap)
+        }
+
+        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) else {
+            log.error("Failed to create synthetic shortcut events", detail: "keyCode=\(keyCode)")
+            for event in modifierEvents.up {
+                event.post(tap: .cghidEventTap)
+            }
+            return false
+        }
+
+        keyDown.flags = modifiers
+        keyUp.flags = modifiers
+        keyDown.post(tap: .cghidEventTap)
+        keyUp.post(tap: .cghidEventTap)
+
+        for event in modifierEvents.up {
+            event.post(tap: .cghidEventTap)
+        }
+
+        return true
+    }
+
+    private func modifierKeyEvents(
+        for modifiers: CGEventFlags,
+        source: CGEventSource
+    ) -> (down: [CGEvent], up: [CGEvent]) {
+        let modifierKeyCodes: [(flag: CGEventFlags, keyCode: UInt16)] = [
+            (.maskCommand, 55),
+            (.maskShift, 56),
+            (.maskAlternate, 58),
+            (.maskControl, 59),
+        ]
+
+        let active = modifierKeyCodes.filter { modifiers.contains($0.flag) }
+        let down = active.compactMap { item in
+            let event = CGEvent(keyboardEventSource: source, virtualKey: item.keyCode, keyDown: true)
+            event?.flags = modifiers
+            return event
+        }
+        let up = active.reversed().compactMap { item in
+            let event = CGEvent(keyboardEventSource: source, virtualKey: item.keyCode, keyDown: false)
+            event?.flags = modifiers
+            return event
+        }
+
+        return (down, up)
     }
 }
