@@ -126,29 +126,21 @@ struct TalkieAIProviderCredentialPayload: Codable, Equatable {
     You are Talkie's Apple Watch voice assistant. Answer directly, briefly, and naturally.
     """
 
-    static let supportedProviderIds: Set<String> = ["openai", "groq"]
-    static let defaultOpenAIModel = "gpt-5.5"
+    // Provider metadata is owned by AIProviderCatalog (single source of truth);
+    // these thin shims keep existing call sites stable.
+    static var supportedProviderIds: Set<String> { AIProviderCatalog.ids }
+    static let defaultOpenAIModel = AIProviderCatalog.openai.defaultModel
     static let legacyDefaultOpenAIModels: Set<String> = [
         "gpt-5.2-chat-latest",
         "gpt-5.4-mini",
     ]
 
     static func displayName(for providerId: String) -> String {
-        switch providerId {
-        case "groq":
-            return "Groq"
-        default:
-            return "OpenAI"
-        }
+        AIProviderCatalog.displayName(for: providerId)
     }
 
     static func defaultModel(for providerId: String) -> String {
-        switch providerId {
-        case "groq":
-            return "llama-3.3-70b-versatile"
-        default:
-            return defaultOpenAIModel
-        }
+        AIProviderCatalog.defaultModel(for: providerId)
     }
 
     static func isLegacyDefaultModel(_ modelId: String, for providerId: String) -> Bool {
@@ -161,18 +153,7 @@ struct TalkieAIProviderCredentialPayload: Codable, Equatable {
     }
 
     private static func isValidAPIKey(_ apiKey: String, providerId: String) -> Bool {
-        guard apiKey.count >= 20,
-              !apiKey.contains("*"),
-              !apiKey.contains("•") else {
-            return false
-        }
-
-        switch providerId {
-        case "groq":
-            return apiKey.hasPrefix("gsk_")
-        default:
-            return apiKey.hasPrefix("sk-")
-        }
+        AIProviderCatalog.isValidKeyFormat(apiKey, providerId: providerId)
     }
 }
 

@@ -48,6 +48,7 @@ import {
   cleanupLocalAuthToken,
 } from "./auth/local";
 import { setAutoApprove } from "./bridge/routes/pair";
+import { decryptRequestBody, encryptResponse } from "./bridge/transport-encryption";
 import { startBonjourAdvertisement } from "./bonjour";
 import { log, clearLog } from "./log";
 import { PID_FILE, LOCAL_AUTH_TOKEN_FILE, ensureDirectories } from "./paths";
@@ -59,6 +60,7 @@ const LOCAL_MODE = args.includes("--local") || args.includes("-l");
 const NEARBY_MODE = args.includes("--nearby");
 const ALLOW_LAN = args.includes("--allow-lan") || process.env.TALKIE_SERVER_ALLOW_LAN === "1";
 const REQUIRE_APPROVAL = args.includes("--require-approval");
+const ALLOW_AUTO_APPROVE = args.includes("--auto-approve");
 type ServerMode = "pairing" | "nearby" | "local_dev";
 const SERVER_MODE: ServerMode = LOCAL_MODE ? "local_dev" : NEARBY_MODE ? "nearby" : "pairing";
 const SERVER_INSTANCE_ID = process.env.TALKIE_SERVER_INSTANCE_ID || "standalone";
@@ -135,6 +137,13 @@ const app = new Elysia()
     mode: SERVER_MODE,
     instanceId: SERVER_INSTANCE_ID,
   }))
+
+  // Transport encryption (talkie-bridge v2): decrypt opted-in request bodies so
+  // route handlers receive plaintext. No-op for old/plaintext clients. Reads a
+  // clone, leaving the original body intact for HMAC verification.
+  .onParse(async ({ request }) => {
+    return await decryptRequestBody(request);
+  })
 
   // CORS for local development - manual implementation
   .onBeforeHandle(({ request, set }) => {
@@ -271,6 +280,26 @@ const app = new Elysia()
       log.warn(`Auth failed: ${authResult.error} for ${path}`);
       return authErrorResponse(authResult);
     }
+
+    // Per-device scope. A paired device may only act as ITSELF: if it carries a
+    // `deviceId` query param it must equal its HMAC-verified identity. Without
+    // this, a malicious paired device (authenticated as itself) could pass
+    // `?deviceId=<victim>` to read another device's companion state / scope
+    // (and over WS receive victim-scoped frames). Local-bearer callers (the
+    // macOS app) skip HMAC entirely and are unaffected — they may query any
+    // device. iOS always sends its own id, so honest clients are unaffected.
+    const claimedDeviceId = url.searchParams.get("deviceId");
+    if (claimedDeviceId && authResult.deviceId && claimedDeviceId !== authResult.deviceId) {
+      log.warn(`Device scope mismatch: ${authResult.deviceId} requested deviceId=${claimedDeviceId} on ${path}`);
+      return Response.json({ error: "Device scope mismatch" }, { status: 403 });
+    }
+  })
+
+  // Transport encryption (talkie-bridge v2): seal the response body for clients
+  // that opted in. Only 200s are sealed; error bodies stay plaintext.
+  .mapResponse(async ({ request, response, set }) => {
+    const status = typeof set.status === "number" ? set.status : 200;
+    return await encryptResponse(request, response, status);
   })
 
   // Error handler
@@ -307,10 +336,11 @@ async function main() {
   const bindAddress = LOCAL_MODE ? "127.0.0.1" : NEARBY_MODE ? "0.0.0.0" : await getTailscaleBindAddress();
   await initLocalAuthToken();
 
-  // Configure pairing approval mode
-  if (REQUIRE_APPROVAL) {
-    setAutoApprove(false);
-  }
+  // Pairing approval: manual approval is the safe default. Auto-approve only on
+  // a loopback bind (LOCAL_MODE) or with an explicit --auto-approve opt-in, and
+  // never when --require-approval is passed. This stops a LAN attacker in NEARBY
+  // mode (0.0.0.0) from self-pairing a fully trusted device with no user action.
+  setAutoApprove(!REQUIRE_APPROVAL && (LOCAL_MODE || ALLOW_AUTO_APPROVE));
 
   if (LOCAL_MODE) {
     log.info("Running in LOCAL mode (Tailscale check skipped)");

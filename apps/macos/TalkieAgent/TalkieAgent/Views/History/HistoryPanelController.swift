@@ -62,7 +62,7 @@ final class HistoryPanelController: ObservableObject {
     func openInTalkie() {
         let scheme = TalkieEnvironment.current.talkieURLScheme
         guard let url = URL(string: "\(scheme)://agent/recent") else { return }
-        NSWorkspace.shared.open(url)
+        TalkieAppOpener.open(url)
         dismiss()
     }
 

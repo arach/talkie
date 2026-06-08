@@ -88,10 +88,14 @@ final class ComposeStore: ObservableObject {
     /// Keychain and resolvable by the direct path. Empty when the user
     /// hasn't added a key yet (header routes them to AI Keys).
     var configuredModelOptions: [ModelOption] {
-        let supported = TalkieAIProviderCredentialPayload.supportedProviderIds
-        return AICredentialStore.shared.setProviderIDs
-            .filter { supported.contains($0) }
+        // Resolve through TalkieAIProviderResolver (not a single store) so a key
+        // saved via *any* path — AI Keys editor, QR/bridge import, or the legacy
+        // OpenAI speech key — surfaces as a pickable model. The header already
+        // resolves this way; the list previously read only AICredentialStore,
+        // which is why "I set my key" didn't show up here.
+        return TalkieAIProviderCredentialPayload.supportedProviderIds
             .sorted()
+            .filter { TalkieAIProviderResolver.shared.provider(providerId: $0) != nil }
             .map { ModelOption(providerId: $0, modelId: TalkieAIProviderCredentialPayload.defaultModel(for: $0)) }
     }
 

@@ -15,41 +15,25 @@
 
 import SwiftUI
 
-/// Lightweight provider catalog used by the paint side. Codex can
-/// replace with a live provider registry (TalkieAIProvider enum) once
-/// the store + service wiring lands.
+/// View-model row for a provider, projected from the single-source-of-truth
+/// `AIProviderCatalog`. Adding/removing a provider happens in the catalog, not
+/// here — this list, the resolver, the validator, and the executor stay in sync.
 struct AIProviderEntry: Identifiable, Equatable {
     let id: String
     let displayName: String
     let blurb: String
     let placeholder: String
+    let defaultModel: String
 
-    static let catalog: [AIProviderEntry] = [
-        AIProviderEntry(
-            id: "openai",
-            displayName: "OpenAI",
-            blurb: "GPT-4, o-series, embeddings",
-            placeholder: "sk-…"
-        ),
-        AIProviderEntry(
-            id: "anthropic",
-            displayName: "Anthropic",
-            blurb: "Claude 4 (Opus, Sonnet, Haiku)",
-            placeholder: "sk-ant-…"
-        ),
-        AIProviderEntry(
-            id: "groq",
-            displayName: "Groq",
-            blurb: "Llama, Mixtral, Whisper",
-            placeholder: "gsk_…"
-        ),
-        AIProviderEntry(
-            id: "openrouter",
-            displayName: "OpenRouter",
-            blurb: "Multi-provider routing",
-            placeholder: "sk-or-…"
-        )
-    ]
+    init(_ provider: AIProviderCatalog.Provider) {
+        self.id = provider.id
+        self.displayName = provider.displayName
+        self.blurb = provider.blurb
+        self.placeholder = provider.keyPlaceholder
+        self.defaultModel = provider.defaultModel
+    }
+
+    static let catalog: [AIProviderEntry] = AIProviderCatalog.all.map(AIProviderEntry.init)
 }
 
 struct AICredentialsNext: View {
@@ -224,7 +208,16 @@ private struct CredentialEditor: View {
     @ObservedObject private var theme = ThemeManager.shared
     @State private var draft: String = ""
     @State private var isMasked: Bool = true
+    @State private var status: ValidationStatus = .idle
     @FocusState private var fieldFocused: Bool
+
+    private enum ValidationStatus: Equatable {
+        case idle
+        case validating
+        case invalid(String)
+    }
+
+    private var isValidating: Bool { status == .validating }
 
     var body: some View {
         ZStack {
@@ -234,6 +227,7 @@ private struct CredentialEditor: View {
                 header
                 fieldRow
                 hintRow
+                statusRow
                 Spacer(minLength: 8)
                 actionRow
             }
@@ -247,6 +241,10 @@ private struct CredentialEditor: View {
                 fieldFocused = true
             }
         }
+        .onChange(of: draft) { _, _ in
+            // Clear a prior rejection once the user starts correcting the key.
+            if case .invalid = status { status = .idle }
+        }
     }
 
     private var header: some View {
@@ -257,6 +255,10 @@ private struct CredentialEditor: View {
             Text(provider.blurb)
                 .talkieType(.preview)
                 .foregroundStyle(theme.colors.textPrimary)
+            Text("Default model · \(provider.defaultModel)")
+                .talkieType(.channelLabelTiny)
+                .foregroundStyle(theme.colors.textTertiary)
+                .padding(.top, 2)
         }
     }
 
@@ -311,6 +313,30 @@ private struct CredentialEditor: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
+    @ViewBuilder
+    private var statusRow: some View {
+        switch status {
+        case .idle:
+            EmptyView()
+        case .validating:
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Verifying key with \(provider.displayName)…")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textSecondary)
+            }
+        case .invalid(let message):
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 11))
+                Text(message)
+                    .talkieType(.channelLabelTiny)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .foregroundStyle(Color(red: 0.85, green: 0.46, blue: 0.34))
+        }
+    }
+
     private var actionRow: some View {
         HStack(spacing: 10) {
             if !initial.isEmpty {
@@ -327,17 +353,53 @@ private struct CredentialEditor: View {
                         )
                 }
                 .buttonStyle(.plain)
+                .disabled(isValidating)
             }
 
-            Button(action: { onSave(draft) }) {
-                Text("SAVE")
+            Button(action: submit) {
+                Text(isValidating ? "VERIFYING…" : "SAVE")
                     .talkieType(.chipLabel)
                     .foregroundStyle(theme.colors.cardBackground)
                     .frame(maxWidth: .infinity)
                     .frame(height: 48)
-                    .background(Capsule().fill(theme.currentTheme.chrome.accent))
+                    .background(Capsule().fill(theme.currentTheme.chrome.accent.opacity(isValidating ? 0.5 : 1)))
             }
             .buttonStyle(.plain)
+            .disabled(isValidating)
+        }
+    }
+
+    /// Validate the key with the provider before persisting it, so a saved key
+    /// always means a working key. Empty draft → clear. Format-bad → reject
+    /// without a network round-trip.
+    private func submit() {
+        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            onSave("")
+            return
+        }
+        guard AIProviderCatalog.isValidKeyFormat(trimmed, providerId: provider.id) else {
+            status = .invalid("That doesn't look like a \(provider.displayName) key (expected \(provider.placeholder)).")
+            return
+        }
+
+        status = .validating
+        Task {
+            do {
+                let payload = TalkieAIProviderCredentialPayload(
+                    providerId: provider.id,
+                    providerName: provider.displayName,
+                    modelId: provider.defaultModel,
+                    apiKey: trimmed,
+                    assistantPrompt: TalkieAIProviderCredentialPayload.defaultAssistantPrompt
+                )
+                try await TalkieAIProviderCredentialValidator.shared.validate(payload)
+                await MainActor.run { onSave(trimmed) }
+            } catch {
+                await MainActor.run {
+                    status = .invalid(error.localizedDescription)
+                }
+            }
         }
     }
 }

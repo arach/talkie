@@ -1,9 +1,9 @@
 //
-//  WalkieController.swift
+//  AgentVoiceController.swift
 //  TalkieAgent
 //
-//  Owns the floating walkie instrument panel and the live session.
-//  Press Hyper+T → panel blooms centered with `WalkieSession.beginTransmission()`.
+//  Owns the floating agent voice panel and the live session.
+//  Press Hyper+T → panel blooms centered with `AgentVoiceSession.beginTransmission()`.
 //  Release → session runs the over → transcribe → LLM pipeline; the
 //  panel STAYS VISIBLE through .thinking and .receiving so the user
 //  can read the answer. Dismiss is explicit (Done button).
@@ -23,25 +23,25 @@ import TalkieKit
 
 private let log = Log(.ui)
 
-private enum WalkiePanelGeometry {
+private enum AgentVoicePanelGeometry {
     static let width: CGFloat = 640
     static let compactHeight: CGFloat = 290    // scope only
     static let expandedHeight: CGFloat = 590   // scope + response + follow-up controls
 }
 
-private final class WalkiePanel: NSPanel {
+private final class AgentVoicePanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 }
 
 @MainActor
-final class WalkieController {
-    static let shared = WalkieController()
+final class AgentVoiceController {
+    static let shared = AgentVoiceController()
 
-    let session = WalkieSession()
+    let session = AgentVoiceSession()
 
     private var panel: NSPanel?
-    private var hostingView: NSHostingView<WalkieScopeView>?
+    private var hostingView: NSHostingView<AgentVoiceScopeView>?
     private var phaseSink: AnyCancellable?
     private var escapeMonitor: Any?
     private var clickOutsideMonitor: Any?
@@ -78,14 +78,14 @@ final class WalkieController {
             try? await Task.sleep(for: .milliseconds(20))
             self?.session.beginTransmission()
         }
-        log.info("Walkie panel up", detail: "phase=arming")
+        log.info("Agent voice panel up", detail: "phase=arming")
     }
 
     /// Hyper+T released. Session drives the rest of the lifecycle —
     /// panel stays up until the session goes back to .ready.
     func release() {
         guard panel != nil else { return }
-        log.info("Walkie release received", detail: "running pipeline")
+        log.info("Agent voice release received", detail: "running pipeline")
         Task { @MainActor in
             await session.endTransmission()
         }
@@ -93,7 +93,7 @@ final class WalkieController {
 
     // MARK: - Phase changes
 
-    private func handlePhaseChange(_ phase: WalkieScopePhase) {
+    private func handlePhaseChange(_ phase: AgentVoiceScopePhase) {
         switch phase {
         case .ready:
             stopDismissMonitors()
@@ -187,7 +187,7 @@ final class WalkieController {
 
     private func applyPanelSize(expanded: Bool, animated: Bool) {
         guard let panel, let hostingView else { return }
-        let newHeight = expanded ? WalkiePanelGeometry.expandedHeight : WalkiePanelGeometry.compactHeight
+        let newHeight = expanded ? AgentVoicePanelGeometry.expandedHeight : AgentVoicePanelGeometry.compactHeight
         let frame = panel.frame
         if abs(frame.size.height - newHeight) < 0.5 { return }
 
@@ -197,13 +197,13 @@ final class WalkieController {
         let newFrame = NSRect(
             x: frame.origin.x,
             y: topY - newHeight,
-            width: WalkiePanelGeometry.width,
+            width: AgentVoicePanelGeometry.width,
             height: newHeight
         )
         hostingView.frame = NSRect(
             x: 0,
             y: 0,
-            width: WalkiePanelGeometry.width,
+            width: AgentVoicePanelGeometry.width,
             height: newHeight
         )
         panel.setFrame(newFrame, display: true, animate: animated)
@@ -214,18 +214,18 @@ final class WalkieController {
     private func ensurePanel() -> NSPanel {
         if let panel { return panel }
 
-        let view = WalkieScopeView(session: session) { [weak self] in
+        let view = AgentVoiceScopeView(session: session) { [weak self] in
             self?.session.dismiss()
         }
         let hosting = NSHostingView(rootView: view)
         hosting.frame = NSRect(
             x: 0,
             y: 0,
-            width: WalkiePanelGeometry.width,
-            height: WalkiePanelGeometry.compactHeight
+            width: AgentVoicePanelGeometry.width,
+            height: AgentVoicePanelGeometry.compactHeight
         )
 
-        let p = WalkiePanel(
+        let p = AgentVoicePanel(
             contentRect: hosting.frame,
             styleMask: [.nonactivatingPanel, .fullSizeContentView, .borderless],
             backing: .buffered,

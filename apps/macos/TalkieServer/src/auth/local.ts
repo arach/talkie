@@ -98,7 +98,19 @@ export function requiresLocalAuth(path: string): boolean {
 }
 
 export function requiresLocalOnlyAuth(path: string, method: string): boolean {
-  return path === "/security/events" && method === "POST";
+  if (path === "/security/events" && method === "POST") return true;
+
+  // Pairing trust-management + device roster/revocation. These are driven ONLY
+  // by the local macOS app (which carries the local bearer token); they must
+  // NOT be reachable by a LAN attacker (who has no token) OR even by a paired
+  // iOS device (which has an HMAC key but never calls them). Strictly local.
+  if (path === "/pair/pending" && method === "GET") return true;
+  if (/^\/pair\/[^/]+\/(approve|reject)$/.test(path) && method === "POST") return true;
+  if (path === "/devices" && method === "GET") return true;     // full roster
+  if (path === "/devices" && method === "DELETE") return true;  // revoke all
+  if (/^\/devices\/[^/]+$/.test(path) && method === "DELETE" && path !== "/devices/setup-state") return true; // revoke one
+
+  return false;
 }
 
 /**

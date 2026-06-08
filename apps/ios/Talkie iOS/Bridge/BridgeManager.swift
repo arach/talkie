@@ -51,6 +51,7 @@ final class BridgeManager {
 
     private let log = Log(.system)
     private let configurationStore = TalkieAppConfigurationStore.shared
+    private let privateKeyStore = BridgePrivateKeyStore()
 
     // MARK: - State
 
@@ -137,6 +138,9 @@ final class BridgeManager {
     private var pendingPairingApprovalTask: Task<Void, Never>?
     private var companionEventTask: Task<Void, Never>?
     private var companionEventSocket: URLSessionWebSocketTask?
+    // Captured per stream connection: when true, each companion event frame is a
+    // sealed envelope opened fail-closed (drop frames that can't be opened).
+    private var companionEventStreamEncrypted = false
     private var lastReportedSetupState: DeviceSetupStateRequest?
     private var isRefreshingCompanionState = false
     private var pendingCompanionRefresh = false
@@ -170,8 +174,9 @@ final class BridgeManager {
 
     var activePairedMac: PairedMac? {
         let bridgeConfiguration = configurationStore.configuration.bridge
-        return bridgeConfiguration.pairedMacs.first(where: { $0.id == bridgeConfiguration.activePairedMacID })
+        let mac = bridgeConfiguration.pairedMacs.first(where: { $0.id == bridgeConfiguration.activePairedMacID })
             ?? bridgeConfiguration.pairedMacs.first
+        return hydratePrivateKey(mac)
     }
 
     var pairedHostname: String? {
@@ -246,8 +251,49 @@ final class BridgeManager {
     // MARK: - Init
 
     private init() {
+        migratePrivateKeysToKeychainIfNeeded()
         loadPairing()
         setupAutoReconnectObservers()
+    }
+
+    /// One-time migration: move any bridge private keys still stored in
+    /// config.json / legacy UserDefaults into the keychain, then blank the
+    /// plaintext copies. Idempotent — a no-op once everything lives in the keychain.
+    private func migratePrivateKeysToKeychainIfNeeded() {
+        let defaults = UserDefaults.standard
+        var migratedAny = false
+
+        configurationStore.update { configuration in
+            for index in configuration.bridge.pairedMacs.indices {
+                let mac = configuration.bridge.pairedMacs[index]
+                let plaintextKey = mac.privateKey.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !plaintextKey.isEmpty else { continue }
+                privateKeyStore.save(id: mac.id, privateKeyBase64: plaintextKey)
+                configuration.bridge.pairedMacs[index].privateKey = ""
+                migratedAny = true
+            }
+        }
+
+        // Drop the legacy plaintext UserDefaults copy regardless (it is mirrored
+        // into config.json on bootstrap, so the key is already preserved above).
+        if defaults.object(forKey: "bridge.privateKey") != nil {
+            defaults.removeObject(forKey: "bridge.privateKey")
+            migratedAny = true
+        }
+
+        if migratedAny {
+            TalkieAppSettings.shared.reloadFromDisk()
+        }
+    }
+
+    /// Fill in a paired Mac's private key from the keychain (the field is no
+    /// longer persisted in config.json).
+    private func hydratePrivateKey(_ mac: PairedMac?) -> PairedMac? {
+        guard var mac else { return nil }
+        if mac.privateKey.isEmpty, let stored = privateKeyStore.load(id: mac.id) {
+            mac.privateKey = stored
+        }
+        return mac
     }
 
 
@@ -319,6 +365,12 @@ final class BridgeManager {
         let serverPublicKeyBase64 = qrData.publicKey
         let localDeviceId = deviceId
         let localDeviceName = deviceName
+        let existingPairedMac = pairedMacMatchingPairing(
+            serverPublicKey: serverPublicKeyBase64,
+            candidateHosts: candidateHosts,
+            port: port
+        )
+        let encryptionPinned = existingPairedMac.map { Self.isEncryptionPinned($0.id) } ?? false
 
         do {
             let result = try await Task.detached(priority: .userInitiated) { [client] in
@@ -337,6 +389,7 @@ final class BridgeManager {
                         let sharedSecret = try privateKey.sharedSecretFromKeyAgreement(with: serverPublicKey)
 
                         await client.configureAuth(deviceId: localDeviceId, sharedSecret: sharedSecret)
+                        await client.setEncryptionRequired(encryptionPinned)
                         try await client.connect()
 
                         let response = try await client.pair(
@@ -382,8 +435,9 @@ final class BridgeManager {
                     port: port,
                     serverPublicKey: serverPublicKeyBase64
                 )
+            var storedPairedMacId: String?
             if shouldStorePairing {
-                upsertPairedMac(
+                storedPairedMacId = upsertPairedMac(
                     deviceId: localDeviceId,
                     hostname: result.connectionHost,
                     port: port,
@@ -405,6 +459,9 @@ final class BridgeManager {
                 awaitingPairingApproval = false
                 lastSuccessfulContactAt = .now
                 updateActiveMacContactDate(.now)
+                if let storedPairedMacId, await client.didNegotiateEncryption {
+                    Self.pinEncryption(storedPairedMacId)
+                }
                 justCompletedPairing = true
                 status = .connected
                 startCompanionPolling()
@@ -458,6 +515,27 @@ final class BridgeManager {
     }
 
     /// Connect using saved pairing with auto-retry
+    // MARK: - Encryption pin (per-Mac downgrade protection)
+
+    private static func encryptionPinKey(_ macId: String) -> String {
+        "bridge.encryptionRequired.\(macId)"
+    }
+
+    static func isEncryptionPinned(_ macId: String) -> Bool {
+        guard !macId.isEmpty else { return false }
+        return UserDefaults.standard.bool(forKey: encryptionPinKey(macId))
+    }
+
+    static func pinEncryption(_ macId: String) {
+        guard !macId.isEmpty else { return }
+        UserDefaults.standard.set(true, forKey: encryptionPinKey(macId))
+    }
+
+    static func clearEncryptionPin(_ macId: String) {
+        guard !macId.isEmpty else { return }
+        UserDefaults.standard.removeObject(forKey: encryptionPinKey(macId))
+    }
+
     func connect() async {
         retryTask?.cancel()
         retryTask = nil
@@ -472,6 +550,8 @@ final class BridgeManager {
         let privateKeyBase64 = bridgeConfiguration.privateKey
         let serverPublicKeyBase64 = bridgeConfiguration.serverPublicKey
         let deviceClass = currentDeviceClass
+        let macId = bridgeConfiguration.id
+        let encryptionPinned = Self.isEncryptionPinned(macId)
 
         status = .connecting
         errorMessage = nil
@@ -486,6 +566,9 @@ final class BridgeManager {
                     privateKeyBase64: privateKeyBase64,
                     serverPublicKeyBase64: serverPublicKeyBase64
                 )
+                // Apply the per-Mac encryption pin so client.connect() refuses a
+                // plaintext downgrade if this Mac has used encryption before.
+                await client.setEncryptionRequired(encryptionPinned)
                 try await client.connect()
                 _ = try await client.companionState(
                     deviceId: configuredDeviceId,
@@ -502,6 +585,11 @@ final class BridgeManager {
             awaitingPairingApproval = false
             lastSuccessfulContactAt = .now
             updateActiveMacContactDate(.now)
+            // Pin encryption for this Mac the first time it negotiates a sealed
+            // connection — future connects then refuse a plaintext downgrade.
+            if await client.didNegotiateEncryption {
+                Self.pinEncryption(macId)
+            }
             status = .connected
             retryCount = 0
             startCompanionPolling()
@@ -576,6 +664,9 @@ final class BridgeManager {
     func unpair() {
         guard let activePairedMacID else {
             disconnect()
+            for mac in configurationStore.configuration.bridge.pairedMacs {
+                privateKeyStore.delete(id: mac.id)
+            }
             configurationStore.update { configuration in
                 configuration.bridge = .init()
             }
@@ -642,6 +733,10 @@ final class BridgeManager {
         let wasActive = activePairedMacID == id
         disconnect()
 
+        privateKeyStore.delete(id: id)
+        // Drop the encryption pin so re-pairing this Mac on a trusted network
+        // can re-negotiate cleanly.
+        Self.clearEncryptionPin(id)
         configurationStore.update { configuration in
             configuration.bridge.pairedMacs.removeAll(where: { $0.id == id })
             if configuration.bridge.pairedMacs.isEmpty {
@@ -1289,6 +1384,7 @@ final class BridgeManager {
                     deviceId: deviceId,
                     deviceClass: currentDeviceClass
                 )
+                companionEventStreamEncrypted = await client.streamsAreEncrypted
 
                 let socket = URLSession.shared.webSocketTask(with: request)
                 companionEventSocket = socket
@@ -1314,16 +1410,28 @@ final class BridgeManager {
     }
 
     private func handleCompanionEventMessage(_ message: URLSessionWebSocketTask.Message) async {
-        let data: Data
+        let raw: Data
 
         switch message {
         case .string(let text):
             guard let textData = text.data(using: .utf8) else { return }
-            data = textData
+            raw = textData
         case .data(let bytes):
-            data = bytes
+            raw = bytes
         @unknown default:
             return
+        }
+
+        // Encrypted stream: every frame is a sealed envelope. Open it and drop
+        // fail-closed if it can't be opened (never accept a plaintext frame).
+        let data: Data
+        if companionEventStreamEncrypted {
+            guard let opened = try? await client.openStreamFrame(raw) else {
+                return
+            }
+            data = opened
+        } else {
+            data = raw
         }
 
         guard let envelope = try? JSONDecoder().decode(CompanionEventEnvelope.self, from: data) else {
@@ -1495,6 +1603,45 @@ final class BridgeManager {
         return hosts
     }
 
+    private func pairedMacMatchingPairing(
+        serverPublicKey: String,
+        candidateHosts: [String],
+        port: Int
+    ) -> PairedMac? {
+        let bridgeConfiguration = configurationStore.configuration.bridge
+        let normalizedCandidateHosts = Set(candidateHosts.map(Self.normalizedPairingHost).filter { !$0.isEmpty })
+
+        if let activeMac = bridgeConfiguration.pairedMacs.first(where: { $0.id == bridgeConfiguration.activePairedMacID }) {
+            if !serverPublicKey.isEmpty, activeMac.serverPublicKey == serverPublicKey {
+                return activeMac
+            }
+
+            if activeMac.port == port,
+               normalizedCandidateHosts.contains(Self.normalizedPairingHost(activeMac.hostname)) {
+                return activeMac
+            }
+        }
+
+        if let hostMatch = bridgeConfiguration.pairedMacs.first(where: { mac in
+            mac.port == port && normalizedCandidateHosts.contains(Self.normalizedPairingHost(mac.hostname))
+        }) {
+            return hostMatch
+        }
+
+        if !serverPublicKey.isEmpty,
+           let keyMatch = bridgeConfiguration.pairedMacs.first(where: { $0.serverPublicKey == serverPublicKey }) {
+            return keyMatch
+        }
+
+        return nil
+    }
+
+    private static func normalizedPairingHost(_ host: String) -> String {
+        host.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+            .lowercased()
+    }
+
     private func isRefreshingActivePairing(
         hostname: String,
         port: Int,
@@ -1518,6 +1665,7 @@ final class BridgeManager {
         let port = activePairedMac.port
         let serverPublicKeyBase64 = activePairedMac.serverPublicKey
         let currentName = sanitizedMacName(activePairedMac.pairedMacName) ?? activePairedMac.hostname
+        let encryptionPinned = Self.isEncryptionPinned(activePairedMac.id)
 
         guard !hostname.isEmpty, port > 0, !serverPublicKeyBase64.isEmpty else {
             throw BridgeError.notConfigured
@@ -1544,6 +1692,7 @@ final class BridgeManager {
             let sharedSecret = try privateKey.sharedSecretFromKeyAgreement(with: serverPublicKey)
 
             await client.configureAuth(deviceId: localDeviceId, sharedSecret: sharedSecret)
+            await client.setEncryptionRequired(encryptionPinned)
             try await client.connect()
 
             let response = try await client.pair(
@@ -1575,7 +1724,7 @@ final class BridgeManager {
             }
         }.value
 
-        upsertPairedMac(
+        let storedPairedMacId = upsertPairedMac(
             deviceId: localDeviceId,
             hostname: result.connectionHost,
             port: port,
@@ -1592,6 +1741,9 @@ final class BridgeManager {
             stopPendingPairingApprovalMonitor()
             awaitingPairingApproval = false
             errorMessage = nil
+            if await client.didNegotiateEncryption {
+                Self.pinEncryption(storedPairedMacId)
+            }
             await connect()
 
         case .pendingApproval:
@@ -1638,6 +1790,8 @@ final class BridgeManager {
                 return "The Mac returned an invalid credential response."
             case .pairingRejected:
                 return "The Mac rejected this iPhone's pairing request."
+            case .encryptionDowngrade:
+                return "The Mac offered an unencrypted connection after previously using encryption. Refused for safety."
             }
         }
 
@@ -1668,6 +1822,7 @@ final class BridgeManager {
         return trimmed
     }
 
+    @discardableResult
     private func upsertPairedMac(
         deviceId: String,
         hostname: String,
@@ -1676,8 +1831,9 @@ final class BridgeManager {
         serverPublicKey: String,
         privateKey: String,
         activate: Bool
-    ) {
+    ) -> String {
         let now = Date().timeIntervalSince1970
+        var upsertedMacID = ""
         configurationStore.update { configuration in
             configuration.bridge.deviceId = deviceId
 
@@ -1692,11 +1848,15 @@ final class BridgeManager {
             let existingIndex = matchingHostIndex ?? matchingActiveKeyIndex
 
             if let existingIndex {
+                let macID = configuration.bridge.pairedMacs[existingIndex].id
+                upsertedMacID = macID
+                // Private key lives in the keychain, never in config.json.
+                privateKeyStore.save(id: macID, privateKeyBase64: privateKey)
                 configuration.bridge.pairedMacs[existingIndex].hostname = hostname
                 configuration.bridge.pairedMacs[existingIndex].port = port
                 configuration.bridge.pairedMacs[existingIndex].pairedMacName = pairedMacName
                 configuration.bridge.pairedMacs[existingIndex].serverPublicKey = serverPublicKey
-                configuration.bridge.pairedMacs[existingIndex].privateKey = privateKey
+                configuration.bridge.pairedMacs[existingIndex].privateKey = ""
                 if activate {
                     configuration.bridge.pairedMacs[existingIndex].lastSelectedAt = now
                     configuration.bridge.activePairedMacID = configuration.bridge.pairedMacs[existingIndex].id
@@ -1707,8 +1867,11 @@ final class BridgeManager {
                     port: port,
                     pairedMacName: pairedMacName,
                     serverPublicKey: serverPublicKey,
-                    privateKey: privateKey
+                    privateKey: ""
                 )
+                // Private key lives in the keychain, never in config.json.
+                privateKeyStore.save(id: pairedMac.id, privateKeyBase64: privateKey)
+                upsertedMacID = pairedMac.id
                 if activate {
                     pairedMac.lastSelectedAt = now
                 }
@@ -1720,6 +1883,7 @@ final class BridgeManager {
         }
 
         loadPairing()
+        return upsertedMacID
     }
 
     private func updateStoredActiveMacName(_ pairedMacName: String) {

@@ -43,11 +43,9 @@ export async function verifyRequest(req: Request): Promise<AuthResult> {
     return { authenticated: false, error: "Request expired", serverTime: now };
   }
 
-  // 3. Check nonce uniqueness (replay protection layer 2)
-  if (!nonceStore.check(nonce)) {
-    log.auth("REJECT: Replay", { deviceId, nonce: nonce.slice(0, 16) });
-    return { authenticated: false, error: "Replay detected" };
-  }
+  // 3. (Nonce replay check is deferred until AFTER signature verification — see
+  //    below — so that unauthenticated/forged requests can never insert entries
+  //    into the nonce store. Otherwise a LAN attacker could flood it pre-auth.)
 
   // 4. Look up device and get auth key
   let authKey: CryptoKey | null;
@@ -70,12 +68,10 @@ export async function verifyRequest(req: Request): Promise<AuthResult> {
   const bodyBytes = await bodyClone.arrayBuffer();
   const bodyHash = await sha256Hex(bodyBytes);
 
-  // Debug: log POST body (truncated for large payloads)
-  if (req.method === "POST") {
-    const bodyText = new TextDecoder().decode(bodyBytes);
-    const truncated = bodyText.length > 200 ? bodyText.slice(0, 200) + "..." : bodyText;
-    log.info(`POST body: ${truncated}`);
-  }
+  // NOTE: never log the request body here. For non-encrypted clients this is
+  // plaintext user content (messages, compose text, prompts) and this runs on
+  // the production HMAC path with no mode gate — it would persist secrets to
+  // bridge.log for adversary C. The bodyHash above is all auth needs.
 
   const message = `${req.method}\n${pathWithQuery}\n${timestamp}\n${nonce}\n${bodyHash}`;
   const expectedSig = await hmacSha256Hex(authKey, message);
@@ -84,6 +80,15 @@ export async function verifyRequest(req: Request): Promise<AuthResult> {
   if (!timingSafeEqual(signature, expectedSig)) {
     log.auth("REJECT: Signature mismatch", { deviceId, path: pathWithQuery });
     return { authenticated: false, error: "Invalid signature" };
+  }
+
+  // 7. Replay check (deferred from step 3). Only authenticated requests reach
+  //    here, so the nonce store only ever holds entries for valid signatures —
+  //    a forged-signature flood cannot grow it. A replay of a captured valid
+  //    request still records once and is rejected on every repeat within TTL.
+  if (!nonceStore.check(nonce)) {
+    log.auth("REJECT: Replay", { deviceId, nonce: nonce.slice(0, 16) });
+    return { authenticated: false, error: "Replay detected" };
   }
 
   log.auth("OK", { deviceId, path: pathWithQuery });
@@ -109,16 +114,17 @@ export function authErrorResponse(result: AuthResult): Response {
  * Check if a path is exempt from authentication
  */
 export function isExemptPath(path: string, method: string): boolean {
-  // Pairing and health endpoints don't require auth
+  // Only the pairing BOOTSTRAP is unauthenticated — a not-yet-paired device has
+  // no HMAC key. Everything an attacker could abuse to ESTABLISH or ENUMERATE
+  // trust (pending list, approve, reject) is Mac-local-only (requiresLocalOnlyAuth),
+  // not exempt. The roster (GET /devices) and revocation are Mac-local too.
   if (path === "/health" && method === "GET") return true;
   if (path === "/pair/info" && method === "GET") return true;
   if (path === "/pair" && method === "POST") return true;
-  if (path === "/pair/pending" && method === "GET") return true;
-  if (path.match(/^\/pair\/[^/]+\/approve$/) && method === "POST") return true;
-  if (path.match(/^\/pair\/[^/]+\/reject$/) && method === "POST") return true;
-  if (path === "/devices" && method === "GET") return true;
 
-  // Extensions module has its own token-based auth at WebSocket layer
+  // Extensions module has its own token-based auth at WebSocket layer.
+  // /extensions/token + /extensions/status are additionally loopback-gated in
+  // their handlers so a LAN attacker can't lift the WS token.
   if (path.startsWith("/extensions")) return true;
 
   return false;

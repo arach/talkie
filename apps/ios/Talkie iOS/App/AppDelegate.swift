@@ -48,6 +48,12 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         // Activate Watch connectivity and set up audio handler
         setupWatchAudioHandler()
 
+        // One-time: lift the legacy plaintext OpenAI key into the Keychain so it
+        // surfaces in AI Keys and resolves like every other provider.
+        Task { @MainActor in
+            AICredentialStore.shared.migrateLegacyTTSKeyIfNeeded()
+        }
+
         return true
     }
 

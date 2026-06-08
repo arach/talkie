@@ -837,7 +837,13 @@ struct SettingsNext: View {
                 .foregroundStyle(theme.colors.textTertiary)
                 .padding(.bottom, 10)
 
-            actionRow("Reset onboarding", tone: .neutral) { appSettings.hasSeenOnboarding = false }
+            actionRow("Reset onboarding", tone: .neutral) {
+                // Clearing the flag alone only takes effect on next
+                // launch (the gate in talkieApp lives in .onAppear).
+                // Re-open the flow now so "reset" is observable.
+                appSettings.hasSeenOnboarding = false
+                AppShellRouter.shared.openOnboarding()
+            }
             actionRow("Reset auth state", tone: .neutral) { resetAuthState() }
             actionRow("Reset resume tooltip", tone: .neutral) { appSettings.hasSeenResumeTooltip = false }
             actionRow("Dump shared store", tone: .neutral) { dumpSharedStore() }

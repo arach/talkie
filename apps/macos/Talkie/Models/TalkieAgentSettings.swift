@@ -609,6 +609,11 @@ final class AgentSettings {
         didSet { save() }
     }
 
+    /// Dedicated TTS voice for spoken Agent replies (nil = use selection/global)
+    var agentVoiceTTSVoiceId: String? {
+        didSet { save() }
+    }
+
     /// LLM timeout in seconds
     var selectionLLMTimeout: Double {
         didSet { save() }
@@ -785,6 +790,8 @@ final class AgentSettings {
         self.selectionShortTextThreshold = threshold > 0 ? threshold : 45
         let storedSelectionVoiceId = store.string(forKey: AgentSettingsKey.selectionTTSVoiceId)
         self.selectionTTSVoiceId = storedSelectionVoiceId?.hasPrefix("kokoro:") == true ? nil : storedSelectionVoiceId
+        let storedAgentVoiceId = store.string(forKey: AgentSettingsKey.agentVoiceTTSVoiceId)
+        self.agentVoiceTTSVoiceId = storedAgentVoiceId?.hasPrefix("kokoro:") == true ? nil : storedAgentVoiceId
         let timeout = store.double(forKey: AgentSettingsKey.selectionLLMTimeout)
         self.selectionLLMTimeout = timeout > 0 ? timeout : 6.0
         self.selectionShowFeedbackOverlay = store.object(forKey: AgentSettingsKey.selectionShowFeedbackOverlay) as? Bool ?? true
@@ -919,6 +926,7 @@ final class AgentSettings {
         storage.set(selectionDefaultMode.rawValue, forKey: AgentSettingsKey.selectionDefaultMode)
         storage.set(selectionShortTextThreshold, forKey: AgentSettingsKey.selectionShortTextThreshold)
         storage.set(selectionTTSVoiceId, forKey: AgentSettingsKey.selectionTTSVoiceId)
+        storage.set(agentVoiceTTSVoiceId, forKey: AgentSettingsKey.agentVoiceTTSVoiceId)
         storage.set(selectionLLMTimeout, forKey: AgentSettingsKey.selectionLLMTimeout)
         storage.set(selectionShowFeedbackOverlay, forKey: AgentSettingsKey.selectionShowFeedbackOverlay)
         if let data = try? JSONEncoder().encode(selectionAppOverrides) {

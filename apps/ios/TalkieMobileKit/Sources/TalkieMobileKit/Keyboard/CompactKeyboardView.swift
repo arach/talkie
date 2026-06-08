@@ -81,37 +81,42 @@ public final class CompactKeyboardView: UIView {
         /// Keyboard background - fully transparent to match iOS
         static let background = UIColor.clear
 
-        /// Regular key background
+        /// Regular key background. In dark mode the keys used to be a
+        /// near-invisible 3% white wash on black — they read as flat
+        /// gray-on-black. Lift letter keys to a clear, tactile surface
+        /// so each cap separates from the backdrop.
         static let keyBackground = UIColor { traits in
             traits.userInterfaceStyle == .dark
-                ? UIColor(white: 1.0, alpha: 0.03)
+                ? UIColor(white: 1.0, alpha: 0.13)
                 : UIColor(white: 1.0, alpha: 0.74)
         }
 
         /// Key pressed/hover state
         static let keyPressed = UIColor { traits in
             traits.userInterfaceStyle == .dark
-                ? UIColor(white: 1.0, alpha: 0.12)
+                ? UIColor(white: 1.0, alpha: 0.26)
                 : UIColor(white: 1.0, alpha: 0.92)
         }
 
-        /// Special key background (shift, delete, etc.)
+        /// Special key background (shift, delete, etc.). Kept a notch
+        /// darker than the letter keys so modifiers read as secondary —
+        /// the same letter-vs-modifier hierarchy iOS uses.
         static let specialKey = UIColor { traits in
             traits.userInterfaceStyle == .dark
-                ? UIColor(white: 1.0, alpha: 0.05)
+                ? UIColor(white: 1.0, alpha: 0.07)
                 : UIColor(white: 1.0, alpha: 0.80)
         }
 
         /// Special key active state (shift enabled)
         static let specialKeyActive = UIColor { traits in
             traits.userInterfaceStyle == .dark
-                ? UIColor(white: 1.0, alpha: 0.14)
+                ? UIColor(white: 1.0, alpha: 0.22)
                 : UIColor(white: 1.0, alpha: 0.92)
         }
 
         static let keyBorder = UIColor { traits in
             traits.userInterfaceStyle == .dark
-                ? UIColor(white: 1.0, alpha: 0.16)
+                ? UIColor(white: 1.0, alpha: 0.10)
                 : UIColor(white: 0.0, alpha: 0.08)
         }
 
@@ -147,7 +152,19 @@ public final class CompactKeyboardView: UIView {
                 ? UIColor.black
                 : UIColor(white: 0.0, alpha: 0.3)
         }
+
+        /// Press-callout keycap. Brighter than a resting key so the
+        /// magnified character pops as a raised cap on touch-down.
+        static let keyCalloutBackground = UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(white: 0.32, alpha: 1.0)
+                : UIColor(white: 1.0, alpha: 1.0)
+        }
     }
+
+    // Active press-callout bubble (iOS-style key pop). Weakly held — it
+    // lives in the view hierarchy while a key is held down.
+    private weak var keyCalloutView: UIView?
 
     // MARK: - Callbacks
 
@@ -842,6 +859,7 @@ public final class CompactKeyboardView: UIView {
             lightImpact.impactOccurred(intensity: 0.5)
             lightImpact.prepare()
         }
+        showKeyCallout(for: sender)
         UIView.animate(withDuration: 0.05, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState, .curveEaseOut]) {
             sender.transform = self.pressTransform(for: sender)
             sender.backgroundColor = Colors.keyPressed
@@ -851,6 +869,7 @@ public final class CompactKeyboardView: UIView {
     }
 
     @objc private func keyTouchUp(_ sender: KeyButton) {
+        dismissKeyCallout()
         UIView.animate(
             withDuration: 0.16,
             delay: 0,
@@ -892,6 +911,7 @@ public final class CompactKeyboardView: UIView {
     }
 
     public func resetTransientTouchState(animated: Bool) {
+        dismissKeyCallout()
         dismissAccentPopup()
         dismissPunctuationPopup()
         stopDeleteRepeat()
@@ -1056,6 +1076,70 @@ public final class CompactKeyboardView: UIView {
     }
 
 
+
+    // MARK: - Key Press Callout (iOS-style pop-out)
+
+    /// Pops a magnified character keycap above the pressed letter key,
+    /// the way the system keyboard does. Purely a visual confirmation
+    /// that the tap registered; dismissed on touch-up.
+    private func showKeyCallout(for key: KeyButton) {
+        dismissKeyCallout()
+
+        let character = (isShifted || isCapsLock) ? key.keyValue.uppercased() : key.keyValue
+        guard !character.isEmpty else { return }
+
+        let keyFrame = key.convert(key.bounds, to: self)
+        let calloutWidth = max(keyFrame.width + 20, 42)
+        let calloutHeight = keyFrame.height + 26
+
+        var x = keyFrame.midX - calloutWidth / 2
+        x = max(sidePadding, min(bounds.width - calloutWidth - sidePadding, x))
+        // Bottom edge overlaps the key's top by a few points so the cap
+        // reads as lifting off the key itself.
+        let y = keyFrame.minY - (calloutHeight - keyFrame.height) + 6
+
+        let callout = UIView(frame: CGRect(x: x, y: y, width: calloutWidth, height: calloutHeight))
+        callout.backgroundColor = Colors.keyCalloutBackground
+        callout.layer.cornerRadius = 9
+        callout.layer.cornerCurve = .continuous
+        callout.layer.borderColor = Colors.keyBorder.cgColor
+        callout.layer.borderWidth = 1
+        callout.layer.shadowColor = Colors.keyShadow.cgColor
+        callout.layer.shadowOffset = CGSize(width: 0, height: 4)
+        callout.layer.shadowRadius = 12
+        callout.layer.shadowOpacity = 0.45
+        callout.isUserInteractionEnabled = false
+
+        let label = UILabel(frame: CGRect(x: 0, y: 0, width: calloutWidth, height: calloutHeight - 12))
+        label.text = character
+        label.textColor = Colors.keyText
+        label.font = .systemFont(ofSize: 30, weight: .regular)
+        label.textAlignment = .center
+        callout.addSubview(label)
+
+        addSubview(callout)
+        keyCalloutView = callout
+
+        // Balloon up from the key.
+        callout.alpha = 0
+        callout.transform = CGAffineTransform(translationX: 0, y: 8).scaledBy(x: 0.7, y: 0.7)
+        UIView.animate(withDuration: 0.10, delay: 0, options: [.curveEaseOut, .allowUserInteraction]) {
+            callout.alpha = 1
+            callout.transform = .identity
+        }
+    }
+
+    private func dismissKeyCallout() {
+        guard let callout = keyCalloutView else { return }
+        keyCalloutView = nil
+        UIView.animate(
+            withDuration: 0.07,
+            delay: 0,
+            options: [.curveEaseIn, .allowUserInteraction],
+            animations: { callout.alpha = 0 },
+            completion: { _ in callout.removeFromSuperview() }
+        )
+    }
 
     // MARK: - Accent Popup
 

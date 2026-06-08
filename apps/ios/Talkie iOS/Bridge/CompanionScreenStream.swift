@@ -26,6 +26,9 @@ final class CompanionScreenStream {
     private let bridgeManager = BridgeManager.shared
     private var webSocketTask: URLSessionWebSocketTask?
     private var receiveTask: Task<Void, Never>?
+    // Captured at stream start: when true, every frame is a sealed envelope and
+    // is opened fail-closed (a frame that can't be opened is dropped).
+    private var streamEncrypted = false
 
     private init() {}
 
@@ -77,6 +80,7 @@ final class CompanionScreenStream {
                 maxDimension: maxDimension,
                 quality: quality
             )
+            streamEncrypted = await bridgeManager.client.streamsAreEncrypted
 
             let task = URLSession.shared.webSocketTask(with: request)
             webSocketTask = task
@@ -97,15 +101,27 @@ final class CompanionScreenStream {
     }
 
     private func handle(_ message: URLSessionWebSocketTask.Message) async {
-        let data: Data
+        let raw: Data
         switch message {
         case .string(let text):
             guard let textData = text.data(using: .utf8) else { return }
-            data = textData
+            raw = textData
         case .data(let bytes):
-            data = bytes
+            raw = bytes
         @unknown default:
             return
+        }
+
+        // On an encrypted stream every frame is a sealed envelope; open it and
+        // drop fail-closed if it can't be opened (never accept a plaintext frame).
+        let data: Data
+        if streamEncrypted {
+            guard let opened = try? await bridgeManager.client.openStreamFrame(raw) else {
+                return
+            }
+            data = opened
+        } else {
+            data = raw
         }
 
         guard let envelope = try? JSONDecoder().decode(StreamEnvelope.self, from: data) else {

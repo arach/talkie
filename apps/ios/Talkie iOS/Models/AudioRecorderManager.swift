@@ -335,6 +335,13 @@ class AudioRecorderManager: NSObject, ObservableObject {
             if audioRecorder?.record() == true {
                 AppLogger.recording.info("Recording started at: \(audioFilename.path)")
                 currentRecordingURL = audioFilename
+                // Protect the recording at rest. `untilFirstUserAuthentication` keeps it
+                // writable while the device is locked (background capture) but encrypts it
+                // on a powered-off device.
+                try? FileManager.default.setAttributes(
+                    [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+                    ofItemAtPath: audioFilename.path
+                )
                 isRecording = true
                 isInterrupted = false
                 recordingDuration = 0

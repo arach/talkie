@@ -19,6 +19,38 @@ actor BridgeClient {
     private var authKey: SymmetricKey?
     private var clockOffset: TimeInterval = 0
 
+    // Transport encryption (talkie-bridge v2). Negotiated from /health.
+    private var serverSupportsEncryption = false
+
+    /// Pinned per-Mac: once a paired Mac has advertised encryption, the app
+    /// requires it forever after. Prevents a MITM from stripping `enc` from the
+    /// unauthenticated /health response to silently force a plaintext downgrade.
+    private var encryptionRequired = false
+
+    /// Whether the most recent connect negotiated transport encryption — read by
+    /// BridgeManager to persist the per-Mac pin.
+    var didNegotiateEncryption: Bool { serverSupportsEncryption }
+
+    func setEncryptionRequired(_ required: Bool) {
+        encryptionRequired = required
+    }
+
+    /// Per-frame stream encryption (SSE/WS), negotiated from /health.encStream.
+    private var serverSupportsStreamEncryption = false
+
+    /// Whether outgoing traffic should be sealed: we hold the derived key and
+    /// either the server advertised support this session or it's pinned-required.
+    private var shouldEncrypt: Bool {
+        encryptionKey != nil && (serverSupportsEncryption || encryptionRequired)
+    }
+
+    /// Whether stream frames should be sealed/opened — gated on the server
+    /// advertising per-frame stream support. Old servers → plaintext streams,
+    /// unchanged (fully backward compatible).
+    private var shouldEncryptStreams: Bool {
+        encryptionKey != nil && serverSupportsStreamEncryption
+    }
+
     // MARK: - Configuration
 
     func configure(hostname: String, port: Int) {
@@ -47,6 +79,9 @@ actor BridgeClient {
         self.encryptionKey = nil
         self.baseURL = nil
         self.clockOffset = 0
+        self.serverSupportsEncryption = false
+        self.serverSupportsStreamEncryption = false
+        self.encryptionRequired = false
     }
 
     var isConfigured: Bool {
@@ -66,6 +101,15 @@ actor BridgeClient {
     /// Call this after configureAuth() before making authenticated requests
     func connect() async throws {
         let health = try await healthUnauthenticated()
+        // Negotiate transport encryption: only seal traffic if the server advertises it.
+        serverSupportsEncryption = (health.enc == true)
+        serverSupportsStreamEncryption = (health.encStream == true)
+        // Downgrade guard: if this Mac is pinned to encryption but the (plaintext,
+        // unauthenticated) /health no longer advertises it, refuse — a network
+        // attacker may have stripped the flag to force cleartext.
+        if encryptionRequired && !serverSupportsEncryption {
+            throw BridgeError.encryptionDowngrade
+        }
         if let serverTimeValue = health.time {
             let localTime = Date().timeIntervalSince1970
             clockOffset = Double(serverTimeValue) - localTime
@@ -103,12 +147,10 @@ actor BridgeClient {
         // Use longer timeout for mobile network + Tailscale latency
         let data = try await get(path, timeout: deepSync ? 60 : 30)
         let response = try JSONDecoder().decode(SessionsResponse.self, from: data)
-
-        // Log the full response for debugging
-        if let jsonString = String(data: data, encoding: .utf8) {
-            AppLogger.app.info("[Bridge] sessions() returned \(response.sessions.count) sessions - deepSync: \(deepSync)", detail: jsonString)
-        }
-
+        // Never log the decrypted body — session JSON carries message previews
+        // and project paths; logging it would persist plaintext to the device
+        // log store and defeat transport encryption. Counts only.
+        AppLogger.app.info("[Bridge] sessions() returned \(response.sessions.count) sessions - deepSync: \(deepSync)")
         return response
     }
 
@@ -117,12 +159,8 @@ actor BridgeClient {
         // Use longer timeout for mobile network + Tailscale latency
         let data = try await get(path, timeout: deepSync ? 60 : 30)
         let response = try JSONDecoder().decode(PathsResponse.self, from: data)
-
-        // Log the full response for debugging
-        if let jsonString = String(data: data, encoding: .utf8) {
-            AppLogger.app.info("[Bridge] paths() returned \(response.paths.count) paths - deepSync: \(deepSync)", detail: jsonString)
-        }
-
+        // Counts only — never log the decrypted body (carries project paths).
+        AppLogger.app.info("[Bridge] paths() returned \(response.paths.count) paths - deepSync: \(deepSync)")
         return response
     }
 
@@ -271,11 +309,18 @@ actor BridgeClient {
 
         components.scheme = components.scheme == "https" ? "wss" : "ws"
         components.path = "/companion/screen"
-        components.queryItems = [
+        var queryItems = [
             URLQueryItem(name: "fps", value: "\(max(1, fps))"),
             URLQueryItem(name: "maxDimension", value: "\(max(320, maxDimension))"),
             URLQueryItem(name: "quality", value: String(quality)),
         ]
+        // Opt the frame stream into per-frame sealing. The server resolves the
+        // key from `deviceId`; both ride under the HMAC signature over the query.
+        if shouldEncryptStreams, let deviceId, !deviceId.isEmpty {
+            queryItems.append(URLQueryItem(name: "deviceId", value: deviceId))
+            queryItems.append(URLQueryItem(name: "encStream", value: "2"))
+        }
+        components.queryItems = queryItems
 
         guard let url = components.url else {
             throw BridgeError.invalidResponse
@@ -303,11 +348,18 @@ actor BridgeClient {
         components.path = "/companion/events"
 
         var queryItems: [URLQueryItem] = []
+        var hasDeviceId = false
         if let deviceId, !deviceId.isEmpty {
             queryItems.append(URLQueryItem(name: "deviceId", value: deviceId))
+            hasDeviceId = true
         }
         if let deviceClass, !deviceClass.isEmpty {
             queryItems.append(URLQueryItem(name: "deviceClass", value: deviceClass))
+        }
+        // The server keys the per-frame sealer off `deviceId`, so only opt in
+        // when one is present (it always is for a paired companion subscription).
+        if shouldEncryptStreams, hasDeviceId {
+            queryItems.append(URLQueryItem(name: "encStream", value: "2"))
         }
         components.queryItems = queryItems.isEmpty ? nil : queryItems
 
@@ -408,6 +460,14 @@ actor BridgeClient {
         request.timeoutInterval = 120
         request.httpBody = try JSONEncoder().encode(body)
 
+        // Opt into per-frame response-stream encryption when the server
+        // advertises it. Dedicated header — the request body itself stays
+        // plaintext here (only the agent's streamed reply is sealed).
+        let encryptStream = shouldEncryptStreams
+        if encryptStream {
+            request.setValue("2", forHTTPHeaderField: "X-Enc-Stream")
+        }
+
         signRequest(&request)
 
         let (bytes, response) = try await URLSession.shared.bytes(for: request)
@@ -422,9 +482,21 @@ actor BridgeClient {
 
         for try await line in bytes.lines {
             guard line.hasPrefix("data: ") else { continue }
-            let payload = String(line.dropFirst(6))
+            var payload = String(line.dropFirst(6))
 
             if payload == "[DONE]" { break }
+
+            // On an encrypted stream every non-[DONE] frame is a sealed envelope;
+            // open it back to the original JSON. Fail closed if a frame can't be
+            // opened — we never silently accept a plaintext frame here.
+            if encryptStream {
+                guard let envelopeData = payload.data(using: .utf8),
+                      let opened = try? open(envelopeData),
+                      let openedString = String(data: opened, encoding: .utf8) else {
+                    throw BridgeError.invalidResponse
+                }
+                payload = openedString
+            }
 
             guard let jsonData = payload.data(using: .utf8),
                   let chunk = try? JSONDecoder().decode(SSEChunk.self, from: jsonData) else {
@@ -596,6 +668,12 @@ actor BridgeClient {
         request.httpMethod = "GET"
         request.timeoutInterval = timeout
 
+        // Ask the server to seal the response (v2). No request body to encrypt for GET.
+        let encrypted = shouldEncrypt
+        if encrypted {
+            request.setValue("2", forHTTPHeaderField: "X-Enc")
+        }
+
         // Sign request if authenticated
         signRequest(&request)
 
@@ -605,7 +683,7 @@ actor BridgeClient {
             throw BridgeError.invalidResponse
         }
 
-        // Handle 401 with clock recalibration
+        // Handle 401 with clock recalibration (error bodies are always plaintext)
         if httpResponse.statusCode == 401 && allowRetry {
             if let serverTime = try? extractServerTime(from: data) {
                 recalibrateClockFrom(serverTime: serverTime)
@@ -617,7 +695,7 @@ actor BridgeClient {
             throw BridgeError.httpError(httpResponse.statusCode)
         }
 
-        return data
+        return encrypted ? try open(data) : data
     }
 
     /// Authenticated POST with HMAC signing
@@ -635,6 +713,14 @@ actor BridgeClient {
         request.timeoutInterval = timeout
         request.httpBody = try JSONEncoder().encode(body)
 
+        // Seal the request body and ask the server to seal its response (v2).
+        // Encrypt before signing so the HMAC covers the ciphertext that is sent.
+        let encrypted = shouldEncrypt
+        if encrypted, let plaintextBody = request.httpBody {
+            request.httpBody = try seal(plaintextBody)
+            request.setValue("2", forHTTPHeaderField: "X-Enc")
+        }
+
         // Sign request if authenticated
         signRequest(&request)
 
@@ -644,7 +730,7 @@ actor BridgeClient {
             throw BridgeError.invalidResponse
         }
 
-        // Handle 401 with clock recalibration
+        // Handle 401 with clock recalibration (error bodies are always plaintext)
         if httpResponse.statusCode == 401 && allowRetry {
             if let serverTime = try? extractServerTime(from: data) {
                 recalibrateClockFrom(serverTime: serverTime)
@@ -656,7 +742,7 @@ actor BridgeClient {
             throw BridgeError.httpError(httpResponse.statusCode)
         }
 
-        return data
+        return encrypted ? try open(data) : data
     }
 
     // MARK: - Signing Helpers
@@ -680,6 +766,39 @@ actor BridgeClient {
         }
         let response = try JSONDecoder().decode(ErrorResponse.self, from: data)
         return response.serverTime
+    }
+
+    // MARK: - Transport Encryption (v2)
+
+    /// Seal a plaintext body into a v2 envelope (`{ enc, ciphertext }`).
+    private func seal(_ plaintext: Data) throws -> Data {
+        guard let encryptionKey else { throw BridgeError.notConfigured }
+        let sealed = try AES.GCM.seal(plaintext, using: encryptionKey)
+        guard let combined = sealed.combined else { throw BridgeError.invalidResponse }
+        let envelope = EncEnvelope(enc: 2, ciphertext: combined.base64EncodedString())
+        return try JSONEncoder().encode(envelope)
+    }
+
+    /// Whether stream requests built now negotiate per-frame encryption. The WS
+    /// stream consumers read this to decide whether to open each frame.
+    var streamsAreEncrypted: Bool { shouldEncryptStreams }
+
+    /// Open a sealed WS stream frame (`{enc,ciphertext}`) back into plaintext
+    /// bytes. Throws on failure — callers MUST drop the frame, never fall back to
+    /// treating it as plaintext (fail-closed, matching the SSE path).
+    func openStreamFrame(_ data: Data) throws -> Data {
+        try open(data)
+    }
+
+    /// Open a v2 envelope back into plaintext bytes.
+    private func open(_ data: Data) throws -> Data {
+        guard let encryptionKey else { throw BridgeError.notConfigured }
+        let envelope = try JSONDecoder().decode(EncEnvelope.self, from: data)
+        guard let combined = Data(base64Encoded: envelope.ciphertext) else {
+            throw BridgeError.invalidResponse
+        }
+        let sealedBox = try AES.GCM.SealedBox(combined: combined)
+        return try AES.GCM.open(sealedBox, using: encryptionKey)
     }
 
     private func decryptPayload<T: Decodable>(
@@ -708,6 +827,14 @@ struct HealthResponse: Codable {
     let hostname: String
     let port: Int
     let time: Int?  // Unix epoch seconds for clock sync
+    let enc: Bool?  // Server advertises transport encryption (talkie-bridge v2)
+    let encStream: Bool?  // Server advertises per-frame stream encryption (SSE/WS)
+}
+
+/// Sealed request/response body for talkie-bridge v2 transport encryption.
+struct EncEnvelope: Codable {
+    let enc: Int
+    let ciphertext: String
 }
 
 struct SessionsResponse: Codable {
@@ -1355,6 +1482,7 @@ enum BridgeError: LocalizedError {
     case connectionFailed
     case pairingRejected
     case messageFailed(String)
+    case encryptionDowngrade
 
     var errorDescription: String? {
         switch self {
@@ -1370,6 +1498,8 @@ enum BridgeError: LocalizedError {
             return "Pairing was rejected"
         case .messageFailed(let reason):
             return "Could not send message: \(reason)"
+        case .encryptionDowngrade:
+            return "This Mac previously used an encrypted connection but is now offering an unencrypted one. Refusing to connect — this can indicate a network attacker. Re-pair on a trusted network if your Mac server genuinely changed."
         }
     }
 }

@@ -36,8 +36,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private let screenRecordHotKeyManager = HotKeyManager(signature: "\(sig)SR", hotkeyID: 13)  // Screen recording chord
     private let pasteChordHotKeyManager = HotKeyManager(signature: "\(sig)PV", hotkeyID: 15)  // Quick Paste chord
     private let pasteLastScreenshotHotKey = HotKeyManager(signature: "\(sig)PF", hotkeyID: 16)  // Paste last screenshot
-    private let walkieHotKeyManager = HotKeyManager(signature: "\(sig)WT", hotkeyID: 17)  // Hyper+T walkie instrument (TLK-020)
+    private let agentVoiceHotKeyManager = HotKeyManager(signature: "\(sig)WT", hotkeyID: 17)  // Hyper+T agent voice panel (TLK-020)
     private let captureHotPathLoggingEnabled = ProcessInfo.processInfo.environment["CAPTURE_PERF"] == "1"
+    private static let walkieHotkeyKeyCode: UInt32 = 17
+    private static var walkieHotkeyModifiers: UInt32 { hyperModifiers }
 
     #if DEBUG
     private let debugPasteHotKeyManager = HotKeyManager(signature: "\(sig)DP", hotkeyID: 5)  // Debug paste test
@@ -926,6 +928,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 log.info("Direct screenshot hotkey skipped because it matches the screen record chord: \(settingsKey)")
                 continue
             }
+            if config.keyCode == Self.walkieHotkeyKeyCode && config.modifiers == Self.walkieHotkeyModifiers {
+                log.info("Direct screenshot hotkey skipped because it matches the talk-to-agents chord: \(settingsKey)")
+                continue
+            }
             manager.registerHotKey(modifiers: config.modifiers, keyCode: config.keyCode) { _ in
                 DistributedNotificationCenter.default().postNotificationName(
                     NSNotification.Name("to.talkie.app.screenshotDirect"),
@@ -989,7 +995,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             ("Queue Picker", queuePickerHotKeyManager),
             ("Compose", composeHotKeyManager),
             ("Speak Selection", speakSelectionHotKeyManager),
-            ("Talk to Agents", walkieHotKeyManager),
+            ("Talk to Agents", agentVoiceHotKeyManager),
         ]
 
         if TalkieSharedSettings.bool(forKey: AgentSettingsKey.featureCaptureEnabled) {
@@ -1066,20 +1072,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             )
         }
 
-        // Register walkie hotkey — default Hyper+T (⇧⌃⌥⌘T). Press-and-hold
+        // Register agent voice hotkey — default Hyper+T (⇧⌃⌥⌘T). Press-and-hold
         // semantics: press blooms the floating instrument, release dismisses.
         // Unit 1 (TLK-020): mechanic only — no audio, no LLM yet.
-        walkieHotKeyManager.registerHotKey(
-            modifiers: UInt32(cmdKey | controlKey | optionKey | shiftKey),
-            keyCode: 17,
+        agentVoiceHotKeyManager.registerHotKey(
+            modifiers: Self.walkieHotkeyModifiers,
+            keyCode: Self.walkieHotkeyKeyCode,
             onPress: { _ in
                 Task { @MainActor in
-                    WalkieController.shared.press()
+                    AgentVoiceController.shared.press()
                 }
             },
             onRelease: {
                 Task { @MainActor in
-                    WalkieController.shared.release()
+                    AgentVoiceController.shared.release()
                 }
             }
         )
@@ -1103,7 +1109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         hotKeyManager.unregisterAll()
         pttHotKeyManager.unregisterAll()
         speakSelectionHotKeyManager.unregisterAll()
-        walkieHotKeyManager.unregisterAll()
+        agentVoiceHotKeyManager.unregisterAll()
         unregisterCaptureHotkeys()
         registerHotkeys()
         registerSelectionQuickHotkey()
@@ -1274,7 +1280,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
             if let encodedText = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
                let url = URL(string: "\(TalkieEnvironment.current.talkieURLScheme)://compose?text=\(encodedText)") {
-                NSWorkspace.shared.open(url)
+                TalkieAppOpener.open(url)
                 return
             }
         }
@@ -1282,7 +1288,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         // No text or encoding failed — still open Compose
         log.debug("No selected text found - opening Compose without text")
         if let url = URL(string: "\(TalkieEnvironment.current.talkieURLScheme)://compose") {
-            NSWorkspace.shared.open(url)
+            TalkieAppOpener.open(url)
         }
     }
 
@@ -2261,6 +2267,7 @@ final class SelectionSpeechPlaybackController: NSObject, ObservableObject, AVAud
     }
 
     private func candidateVoiceIDs() -> [String] {
+        let agentVoiceId = TalkieSharedSettings.string(forKey: AgentSettingsKey.agentVoiceTTSVoiceId)
         let selectionVoiceId = TalkieSharedSettings.string(forKey: AgentSettingsKey.selectionTTSVoiceId)
         let globalVoiceId = TalkieSharedSettings.string(forKey: AgentSettingsKey.selectedTTSVoiceId)
         let hasOpenAIKey = TalkieSharedSettings.string(forKey: AgentSettingsKey.openaiApiKey)?
@@ -2279,6 +2286,7 @@ final class SelectionSpeechPlaybackController: NSObject, ObservableObject, AVAud
             candidates.append(normalized)
         }
 
+        append(agentVoiceId)
         append(selectionVoiceId)
         append(globalVoiceId)
 

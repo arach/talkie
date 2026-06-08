@@ -42,6 +42,8 @@ struct LibraryNextView: View {
                 onBack: { AppShellRouter.shared.openHome() }
             )
             TabRow(active: $activeTab)
+                // Push the tabs down off the header so the titles breathe.
+                .padding(.top, 14)
             ScrollView {
                 VStack(spacing: 12) {
                     LibraryListCard(
@@ -73,6 +75,17 @@ struct LibraryNextView: View {
                 .padding(.top, 4)
             }
             .scrollIndicators(.hidden)
+        }
+        // Contextual primary action — a round CTA appropriate to the
+        // active tab: mic to record a memo, keyboard to type a dictation,
+        // viewfinder to grab a capture. Floats bottom-center, clear of the
+        // shell's bottom-left summon.
+        .overlay(alignment: .bottom) {
+            // Bottom inset puts the CTA's center of gravity on the same
+            // line as the bottom-left summon: summon is 16 + 48/2 = 40pt
+            // up; a 62pt CTA at 9 + 62/2 = 40pt matches it.
+            LibraryCTA(tab: activeTab)
+                .padding(.bottom, 9)
         }
         .onReceive(NotificationCenter.default.publisher(for: .voiceMemosDidChange)) { _ in library.reload() }
         .onReceive(NotificationCenter.default.publisher(for: .capturesDidChange)) { _ in library.reload() }
@@ -134,12 +147,8 @@ private struct LibraryHeader: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .overlay(
-            Rectangle()
-                .fill(theme.currentTheme.chrome.edgeFaint)
-                .frame(height: theme.currentTheme.chrome.hairlineWidth),
-            alignment: .bottom
-        )
+        // No bottom hairline — the gap below the header (TabRow's top
+        // padding) separates the zones by space, not a line.
     }
 }
 
@@ -181,6 +190,181 @@ private struct TabRow: View {
             }
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Contextual CTA
+
+/// A swappable MATERIAL skin for the CTA. Themes can diverge across these
+/// over time to increasingly stand out; today they share one default.
+enum LibraryCTAMaterial: String {
+    case accent   // filled + two-layer lift — the highlighted button
+    case glass    // dark translucent + accent ring — matches the summon
+    case ring     // ghost outline — quietest
+}
+
+/// The CTA's resolved permutation. The seam where a theme picks its own
+/// material / size / label later; for now everything resolves to `.standard`.
+struct LibraryCTAStyle {
+    var material: LibraryCTAMaterial
+    var diameter: CGFloat
+    var showLabel: Bool
+    static let standard = LibraryCTAStyle(material: .accent, diameter: 62, showLabel: false)
+}
+
+/// The round primary action that swaps with the active tab — record a
+/// memo (mic), type a dictation (keyboard), grab a capture (viewfinder).
+/// Carries the deck keycaps' two-layer lift so it reads as the one
+/// tappable thing on a quiet surface. Shares the summon's vertical center
+/// of gravity, and steps aside when the summon chrome is up.
+private struct LibraryCTA: View {
+    let tab: LibraryTab
+    @ObservedObject private var theme = ThemeManager.shared
+    @EnvironmentObject private var chrome: ShellChrome
+
+    // Theme-overridable permutation — resolve from the theme as themes
+    // diverge; one shared default for now.
+    private var style: LibraryCTAStyle { .standard }
+
+    // One highlighted button on screen at a time: when the summon chrome
+    // is up, the center CTA steps aside rather than compete with it.
+    private var isVisible: Bool { chrome.state == .resting }
+
+    var body: some View {
+        VStack(spacing: 7) {
+            Button(action: act) { fab }
+                .buttonStyle(.plain)
+                .accessibilityLabel(accessibilityLabel)
+
+            if style.showLabel {
+                Text(caption)
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(labelColor)
+            }
+        }
+        .opacity(isVisible ? 1 : 0)
+        .allowsHitTesting(isVisible)
+        .animation(.easeOut(duration: 0.2), value: isVisible)
+    }
+
+    private var fab: some View {
+        let d = style.diameter
+        return ZStack {
+            Circle()
+                .fill(fillColor)
+                // Top sheen → catches light from above, like a real cap.
+                .overlay(
+                    Circle().fill(
+                        LinearGradient(
+                            colors: [Color.white.opacity(sheen), .clear],
+                            startPoint: .top,
+                            endPoint: .center
+                        )
+                    )
+                )
+                .overlay(Circle().strokeBorder(ringColor, lineWidth: ringWidth))
+
+            Image(systemName: icon)
+                .font(.system(size: d * 0.34, weight: .semibold))
+                .foregroundStyle(glyphColor)
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .frame(width: d, height: d)
+        .compositingGroup()
+        .shadow(color: shadow1.color, radius: shadow1.radius, y: shadow1.y)
+        .shadow(color: shadow2.color, radius: shadow2.radius, y: shadow2.y)
+    }
+
+    // MARK: material-driven appearance
+
+    private var accent: Color { theme.currentTheme.chrome.accent }
+
+    private var fillColor: Color {
+        switch style.material {
+        case .accent: return accent
+        case .glass:  return theme.colors.cardBackground
+        case .ring:   return Color.white.opacity(0.02)
+        }
+    }
+    private var sheen: Double {
+        switch style.material {
+        case .accent: return 0.22
+        case .glass:  return 0.07
+        case .ring:   return 0
+        }
+    }
+    private var ringColor: Color {
+        switch style.material {
+        case .accent: return Color.white.opacity(0.16)
+        case .glass:  return accent.opacity(0.5)
+        case .ring:   return accent
+        }
+    }
+    private var ringWidth: CGFloat {
+        switch style.material {
+        case .accent: return 0.5
+        case .glass:  return 1
+        case .ring:   return 1.5
+        }
+    }
+    private var glyphColor: Color {
+        switch style.material {
+        case .accent:        return Color.black.opacity(0.82)
+        case .glass, .ring:  return accent
+        }
+    }
+    private var labelColor: Color {
+        switch style.material {
+        case .accent:        return theme.colors.textTertiary
+        case .glass, .ring:  return accent
+        }
+    }
+    // Lift: a wide glow/ambient + a tight contact. Ring is flat.
+    private var shadow1: (color: Color, radius: CGFloat, y: CGFloat) {
+        switch style.material {
+        case .accent: return (accent.opacity(0.45), 16, 7)
+        case .glass:  return (Color.black.opacity(0.45), 12, 6)
+        case .ring:   return (Color.clear, 0, 0)
+        }
+    }
+    private var shadow2: (color: Color, radius: CGFloat, y: CGFloat) {
+        switch style.material {
+        case .accent: return (Color.black.opacity(0.32), 3, 1)
+        case .glass:  return (Color.black.opacity(0.40), 2, 1)
+        case .ring:   return (Color.clear, 0, 0)
+        }
+    }
+
+    // MARK: per-tab content
+
+    private var icon: String {
+        switch tab {
+        case .memos:      return "mic.fill"
+        case .dictations: return "keyboard"
+        case .items:      return "viewfinder"
+        }
+    }
+    private var caption: String {
+        switch tab {
+        case .memos:      return "Record"
+        case .dictations: return "Dictate"
+        case .items:      return "Capture"
+        }
+    }
+    private var accessibilityLabel: String {
+        switch tab {
+        case .memos:      return "Record a memo"
+        case .dictations: return "Type a dictation"
+        case .items:      return "Grab a capture"
+        }
+    }
+
+    private func act() {
+        switch tab {
+        case .memos:      RecordingSheetController.shared.isPresented = true
+        case .dictations: AppShellRouter.shared.openComposeWithKeyboard()
+        case .items:      AppShellRouter.shared.openCaptureCompose()
+        }
     }
 }
 

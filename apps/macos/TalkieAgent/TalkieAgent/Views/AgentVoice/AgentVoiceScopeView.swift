@@ -1,5 +1,5 @@
 //
-//  WalkieScopeView.swift
+//  AgentVoiceScopeView.swift
 //  TalkieAgent
 //
 //  The floating instrument that blooms in the center of the screen
@@ -19,7 +19,7 @@
 
 import SwiftUI
 
-enum WalkieScopePhase {
+enum AgentVoiceScopePhase {
     case ready
     case arming
     case transmitting
@@ -31,8 +31,8 @@ enum WalkieScopePhase {
     case error
 }
 
-struct WalkieScopeView: View {
-    @ObservedObject var session: WalkieSession
+struct AgentVoiceScopeView: View {
+    @ObservedObject var session: AgentVoiceSession
     let onDismiss: () -> Void
 
     @State private var followUpText = ""
@@ -201,12 +201,12 @@ struct WalkieScopeView: View {
     }
 
     private var scopeTrace: some View {
-        TimelineView(.animation) { timeline in
+        TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { timeline in
             Canvas { context, size in
                 let t = timeline.date.timeIntervalSinceReferenceDate
                 let phase = session.phase
                 let level = CGFloat(session.level)
-                let points = tracePoints(for: phase, t: t, level: level, count: 160)
+                let points = tracePoints(for: phase, t: t, level: level, count: 120)
                 guard points.count >= 2 else { return }
                 var path = Path()
                 path.move(to: scaled(points[0], to: size))
@@ -226,7 +226,7 @@ struct WalkieScopeView: View {
     }
 
     private func tracePoints(
-        for phase: WalkieScopePhase,
+        for phase: AgentVoiceScopePhase,
         t: TimeInterval,
         level: CGFloat,
         count: Int
@@ -332,7 +332,7 @@ struct WalkieScopeView: View {
         }
     }
 
-    private func toolRow(_ invocation: WalkieToolInvocation) -> some View {
+    private func toolRow(_ invocation: AgentVoiceToolInvocation) -> some View {
         HStack(alignment: .top, spacing: 8) {
             statusGlyph(invocation.status)
             VStack(alignment: .leading, spacing: 2) {
@@ -370,7 +370,7 @@ struct WalkieScopeView: View {
     }
 
     @ViewBuilder
-    private func statusGlyph(_ status: WalkieToolInvocation.Status) -> some View {
+    private func statusGlyph(_ status: AgentVoiceToolInvocation.Status) -> some View {
         switch status {
         case .running:
             ThinkingDot()
@@ -629,11 +629,11 @@ struct WalkieScopeView: View {
                 .multilineTextAlignment(.leading)
 
             HStack(spacing: 8) {
-                if session.offersWalkieRetry {
+                if session.offersVoiceRetry {
                     actionChip(
                         label: "TALK",
                         systemImage: "mic.circle",
-                        action: { session.startWalkieRetryFromFallback() }
+                        action: { session.startVoiceRetryFromFallback() }
                     )
                 }
                 actionChip(label: "DISMISS", systemImage: "xmark", action: onDismiss)
@@ -840,7 +840,7 @@ struct WalkieScopeView: View {
             return executorBranchIsWorking ? "WAITING ON AGENT" : "FOLLOW UP OR DONE"
         case .followUpRecording: return "STOP TO SEND"
         case .followUpOver: return "PROCESSING…"
-        case .error: return session.offersWalkieRetry ? "TALK OR DISMISS" : "DISMISS TO RESET"
+        case .error: return session.offersVoiceRetry ? "TALK OR DISMISS" : "DISMISS TO RESET"
         }
     }
 

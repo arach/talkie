@@ -40,6 +40,13 @@ struct RecordingSheetNext: View {
     @State private var pendingSidecarRequests: [RecordingSidecarRequest] = []
     @State private var attachmentError: String?
 
+    // First-ever-save milestone. `didCelebrateFirstSave` swaps the saved
+    // state for the celebratory variant; `firstSavePulse` drives the
+    // one-shot ring + checkmark spring. Recomputed from the store on each
+    // save, so it fires exactly once (then quiets) — never noise.
+    @State private var didCelebrateFirstSave = false
+    @State private var firstSavePulse = false
+
     private let memoAttachmentStore = MemoAttachmentStore.shared
 
     private enum Phase { case starting, recording, stopped, saving, saved }
@@ -66,9 +73,14 @@ struct RecordingSheetNext: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.horizontal, 20)
-        .presentationDetents([.height(280), .height(560)], selection: $detent)
+        .presentationDetents([.height(280), .height(460), .height(560)], selection: $detent)
         .presentationDragIndicator(.hidden)
-        .presentationBackground(.regularMaterial)
+        // Theme-true sheet: the app's palette is fixed-dark per theme, but
+        // `.regularMaterial` follows the SYSTEM appearance — on a light-mode
+        // device it rendered light while every text color stayed dark-theme,
+        // washing the sheet out. Back it with the theme's own base so the
+        // inner cards (cardBackground) still read as elevated above it.
+        .presentationBackground(theme.colors.background)
         .photosPicker(
             isPresented: $showingAttachmentPhotoPicker,
             selection: $selectedAttachmentItems,
@@ -77,7 +89,11 @@ struct RecordingSheetNext: View {
         )
         .onAppear {
             startedAt = Date()
+            didCelebrateFirstSave = false
+            firstSavePulse = false
             recorder.startRecording()
+            Haptics.confirm.fire()        // gentle "go" the frame capture engages
+            Haptics.prepare(.transition)  // warm the stop thunk so it lands instantly
             phase = .recording
         }
         .onDisappear {
@@ -134,7 +150,7 @@ struct RecordingSheetNext: View {
                 .talkieType(.channelLabelTiny)
                 .foregroundStyle(theme.colors.textTertiary)
 
-            compactContextQueue
+            compactContextQueue(centered: true)
 
             Spacer()
 
@@ -229,7 +245,11 @@ struct RecordingSheetNext: View {
             .padding(.bottom, 22)
         }
         .padding(.top, 4)
-        .onAppear { detent = .height(560) }
+        // Content-fit height: title + metadata + context pills sit snug with
+        // a small button gap, not a tall empty void. Grows to 560 only when
+        // attachments/sidecars are queued (see addPendingAttachment /
+        // queueSidecarRequest, which bump the detent).
+        .onAppear { detent = .height(460) }
     }
 
     // MARK: - Saving / Saved
@@ -245,21 +265,69 @@ struct RecordingSheetNext: View {
     }
 
     private var savedBody: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 30))
-                .foregroundStyle(theme.currentTheme.chrome.accent)
-            Text("Memo saved")
-                .talkieType(.listTitle)
-                .foregroundStyle(theme.colors.textPrimary)
+        Group {
+            if didCelebrateFirstSave {
+                firstSaveCelebration
+            } else {
+                VStack(spacing: 14) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 30))
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+                    Text("Memo saved")
+                        .talkieType(.listTitle)
+                        .foregroundStyle(theme.colors.textPrimary)
+                }
+                .padding(.top, 40)
+            }
         }
-        .padding(.top, 40)
+    }
+
+    // The first-ever save. A single amber ring expands out of the
+    // checkmark — one tape-reel pulse, not a particle burst — and the
+    // label reads like a tape spine. Earned once; every later save is
+    // the quiet "Memo saved" above.
+    private var firstSaveCelebration: some View {
+        VStack(spacing: 16) {
+            ZStack {
+                Circle()
+                    .stroke(
+                        theme.currentTheme.chrome.accent.opacity(firstSavePulse ? 0 : 0.55),
+                        lineWidth: 2
+                    )
+                    .frame(width: firstSavePulse ? 98 : 46,
+                           height: firstSavePulse ? 98 : 46)
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 34))
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                    .scaleEffect(firstSavePulse ? 1 : 0.7)
+            }
+            VStack(spacing: 4) {
+                Text("Your first memo")
+                    .talkieType(.listTitle)
+                    .foregroundStyle(theme.colors.textPrimary)
+                Text("Saved to tape")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+            }
+        }
+        .padding(.top, 36)
+        .onAppear {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.62)) {
+                firstSavePulse = true
+            }
+        }
     }
 
     // MARK: - Context queue
 
-    private var compactContextQueue: some View {
+    // `centered` mirrors the chip group with Spacers on both ends so it
+    // sits under the centered timer/transport on the recording screen.
+    // Default (false) keeps chips left + count badge pinned right, which
+    // is what the labeled · CONTEXT card on the save sheet wants.
+    private func compactContextQueue(centered: Bool = false) -> some View {
         HStack(spacing: 8) {
+            if centered { Spacer(minLength: 0) }
+
             contextPill(systemImage: "photo.on.rectangle", label: "Photos", action: showPhotosPicker)
 
             ForEach(RecordingSidecarKind.allCases, id: \.self) { kind in
@@ -268,7 +336,9 @@ struct RecordingSheetNext: View {
                 }
             }
 
-            Spacer(minLength: 0)
+            if !centered {
+                Spacer(minLength: 0)
+            }
 
             if queuedContextCount > 0 {
                 Text("\(queuedContextCount)")
@@ -278,6 +348,8 @@ struct RecordingSheetNext: View {
                     .padding(.vertical, 5)
                     .background(Capsule().fill(theme.currentTheme.chrome.accent.opacity(0.14)))
             }
+
+            if centered { Spacer(minLength: 0) }
         }
     }
 
@@ -295,7 +367,7 @@ struct RecordingSheetNext: View {
                 }
             }
 
-            compactContextQueue
+            compactContextQueue()
 
             if !pendingAttachments.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -421,6 +493,7 @@ struct RecordingSheetNext: View {
     // MARK: - Actions
 
     private func cancelRecording() {
+        Haptics.toggle.fire()  // neutral dismiss — nothing kept
         recorder.stopRecording()
         recorder.finalizeRecording()
         // Delete the temp file
@@ -431,6 +504,7 @@ struct RecordingSheetNext: View {
     }
 
     private func stopRecording() {
+        Haptics.transition.fire()  // firm "caught it" the instant capture ends
         // Snapshot duration + levels BEFORE finalizing — the recorder
         // resets isRecording and may clear state on finalize.
         savedDuration = recorder.recordingDuration
@@ -443,6 +517,7 @@ struct RecordingSheetNext: View {
     }
 
     private func discardRecording() {
+        Haptics.toggle.fire()  // neutral dismiss — nothing kept
         if let url = savedURL {
             try? FileManager.default.removeItem(at: url)
         }
@@ -457,6 +532,11 @@ struct RecordingSheetNext: View {
         phase = .saving
 
         let context = PersistenceController.shared.container.viewContext
+        // Detect the milestone BEFORE inserting this memo — count == 0
+        // means this is the first one ever. `--celebrateFirstSave` forces
+        // it so the moment can be previewed on a device that already has
+        // memos.
+        let isFirstMemo = Self.isFirstMemoSave(in: context)
         let memo = VoiceMemo(context: context)
         memo.id = UUID()
         memo.title = title.trimmingCharacters(in: .whitespaces).isEmpty
@@ -507,15 +587,38 @@ struct RecordingSheetNext: View {
                 }
             }
 
+            Haptics.success.fire()  // earned: you made something and it's safe
+            didCelebrateFirstSave = isFirstMemo
+            if isFirstMemo {
+                // Kerchunk — the sound of committing to tape. Safe here:
+                // the mic is already closed, so it can't bleed in. Small
+                // delay lets the recorder release the audio session first.
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(140))
+                    WalkieFX.shared.playOpeningClick()
+                }
+            }
             phase = .saved
+            // Let the first-save moment breathe before the sheet dismisses.
             Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(700))
+                try? await Task.sleep(for: .milliseconds(isFirstMemo ? 1800 : 700))
                 controller.isPresented = false
             }
         } catch {
             // Best-effort: dismiss; the recording file stays on disk.
             controller.isPresented = false
         }
+    }
+
+    /// True when no memo exists yet (this save is the first ever), or when
+    /// the `--celebrateFirstSave` launch arg forces the milestone for preview.
+    private static func isFirstMemoSave(in context: NSManagedObjectContext) -> Bool {
+        if ProcessInfo.processInfo.arguments.contains("--celebrateFirstSave") {
+            return true
+        }
+        let request = NSFetchRequest<NSFetchRequestResult>(entityName: "VoiceMemo")
+        let count = (try? context.count(for: request)) ?? 1
+        return count == 0
     }
 
     private func persistQueuedContext(for memoID: UUID, memoTitle: String) {

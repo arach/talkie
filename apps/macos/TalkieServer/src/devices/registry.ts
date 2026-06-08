@@ -70,6 +70,13 @@ export async function getDevices(): Promise<PairedDevice[]> {
  */
 async function saveDevices(devices: PairedDevice[]): Promise<void> {
   await Bun.write(DEVICES_FILE, JSON.stringify({ devices }, null, 2));
+  // Device public keys + roster are owner-only (defense-in-depth atop 0700 dir).
+  try {
+    const { chmod } = await import("node:fs/promises");
+    await chmod(DEVICES_FILE, 0o600);
+  } catch {
+    // best-effort; the parent CONFIG_DIR is already 0700
+  }
 }
 
 export async function updateDeviceSetupState(

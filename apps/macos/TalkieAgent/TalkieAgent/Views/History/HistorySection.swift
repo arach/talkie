@@ -66,13 +66,13 @@ struct HistorySection: View {
     private func openInTalkie() {
         let scheme = TalkieEnvironment.current.talkieURLScheme
         guard let url = URL(string: "\(scheme)://agent/recent") else { return }
-        NSWorkspace.shared.open(url)
+        TalkieAppOpener.open(url)
     }
 
     private func openDictationInTalkie(_ id: UUID) {
         let scheme = TalkieEnvironment.current.talkieURLScheme
         guard let url = URL(string: "\(scheme)://agent/dictation?id=\(id.uuidString)") else { return }
-        NSWorkspace.shared.open(url)
+        TalkieAppOpener.open(url)
     }
 
     // MARK: - Header

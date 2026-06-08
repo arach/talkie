@@ -645,6 +645,7 @@ struct VoiceMemoDetailNext: View {
     @State private var knownWorkflowStatuses: [String: String] = [:]
     @State private var workflowToast: VoiceMemoDetailStore.WorkflowRunDisplay?
     @FocusState private var titleFieldFocused: Bool
+    @FocusState private var transcriptFieldFocused: Bool
 
     init(memoID: String? = nil) {
         _store = StateObject(wrappedValue: VoiceMemoDetailStore(memoID: memoID))
@@ -655,50 +656,45 @@ struct VoiceMemoDetailNext: View {
             header
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    metaRow
+                // Sections share a 16pt left margin (matching the back
+                // button) — EXCEPT the workflow carousel, which spans full
+                // width and re-insets its own content so cards bleed off the
+                // right edge.
+                VStack(alignment: .leading, spacing: 16) {
+                    // The whole memo as one component: identity (title +
+                    // source) → tape strip → words, on one raised paper.
+                    // Tapping the body — or Edit/Done — turns it into an
+                    // inline editor; no modal sheet.
+                    documentCard
                         .padding(.horizontal, 16)
                         .padding(.top, 12)
 
-                    playbackCard
-                        .padding(.horizontal, 12)
+                    // Reading-only chrome. While editing, the words are the
+                    // whole job — tools + workflows step out of the way.
+                    if !isEditingTranscript {
+                        toolRail
+                            .padding(.horizontal, 16)
 
-                    // NOTE: Legacy VoiceMemoDetailView surfaces a lot
-                    // more — version history, reminders, mac workflows,
-                    // and OCR. Parity slices now restore title/transcript
-                    // editing, sharing, memo-scoped CLI commands, and
-                    // workflow-status polling.
+                        // Memo-scoped workflow triggers — full-bleed carousel.
+                        if !memoWorkflowTemplates.isEmpty {
+                            workflowTriggersSection
+                        }
 
-                    transcriptSection
-                        .padding(.horizontal, 12)
+                        // Mac workflow runs — only when runs synced back.
+                        if !store.workflowRuns.isEmpty {
+                            workflowRunsSection
+                                .padding(.horizontal, 16)
+                        }
 
-                    memoActionsSection
-                        .padding(.horizontal, 12)
-
-                    // Memo-scoped workflow triggers — only render
-                    // when there are memo-prefixed templates defined.
-                    // Empty list = no value in showing the header.
-                    if !memoWorkflowTemplates.isEmpty {
-                        workflowTriggersSection
-                            .padding(.horizontal, 12)
+                        if shouldShowAttachmentsSection {
+                            attachmentsSection
+                                .padding(.horizontal, 16)
+                        }
                     }
 
-                    // Mac workflow runs — only render when there are
-                    // actual runs synced back. The "Waiting for runs"
-                    // empty state was high-density-no-value clutter
-                    // for memos that never went through Mac workflows.
-                    if !store.workflowRuns.isEmpty {
-                        workflowRunsSection
-                            .padding(.horizontal, 12)
-                    }
-
-                    if shouldShowAttachmentsSection {
-                        attachmentsSection
-                            .padding(.horizontal, 12)
-                    }
-
-                    Spacer(minLength: 120)   // breathing room above the chrome tray
+                    Spacer(minLength: 8)
                 }
+                .padding(.bottom, 80)   // clear the ~64pt summon-button band
             }
             .scrollIndicators(.hidden)
         }
@@ -763,9 +759,6 @@ struct VoiceMemoDetailNext: View {
         .sheet(item: $previewAttachment) { attachment in
             attachmentPreview(attachment)
         }
-        .sheet(isPresented: $isEditingTranscript) {
-            transcriptEditorSheet
-        }
         .sheet(isPresented: $showingShareSheet) {
             VoiceMemoShareSheet(items: store.shareItems())
         }
@@ -828,6 +821,10 @@ struct VoiceMemoDetailNext: View {
             }
         }
         .onDisappear {
+            // Auto-save any in-progress inline edit — leaving is committing.
+            if isEditingTranscript {
+                _ = store.saveTranscript(editedTranscript)
+            }
             chrome.voiceCommandHandler = { transcript in
                 AppShellRouter.shared.submitVoiceCommand(transcript)
             }
@@ -854,34 +851,30 @@ struct VoiceMemoDetailNext: View {
 
             Spacer()
 
-            Text("Memo")
-                .talkieType(.headlineSecondary)
-                .foregroundStyle(theme.colors.textPrimary)
-
-            Spacer()
-
-            // Single global "Edit" pill — opens the transcript edit
-            // sheet which also exposes the title field. Replaces the
-            // inline pencil next to the title and the EDIT chip in
-            // the transcript section header.
-            if store.canEditTranscript {
-                Button(action: beginTranscriptEdit) {
-                    Text("Edit")
-                        .talkieType(.channelLabelTiny)
+            // No centered nav title — the body title carries the screen's
+            // identity, so a sans "Memo" stacked above the serif "Memo Jun 4
+            // · …" was redundant and a font clash. Edit ↔ Done is the
+            // iOS-canonical text-edit control; Done commits (auto-saves,
+            // undo is the net) so there's no Cancel.
+            if isEditingTranscript {
+                Button(action: commitTranscriptEdit) {
+                    Text("Done")
+                        .talkieType(.fieldLabel)
                         .foregroundStyle(theme.currentTheme.chrome.accent)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .overlay(
-                            Capsule().strokeBorder(
-                                theme.currentTheme.chrome.accent.opacity(0.4),
-                                lineWidth: theme.currentTheme.chrome.hairlineWidth
-                            )
-                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Done editing")
+            } else if store.canEditTranscript {
+                Button(action: beginInlineTranscriptEdit) {
+                    Text("Edit")
+                        .talkieType(.fieldLabel)
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Edit memo")
             }
 
+            if !isEditingTranscript {
             Menu {
                 Button("Share", systemImage: "square.and.arrow.up") {
                     showingShareSheet = true
@@ -914,38 +907,32 @@ struct VoiceMemoDetailNext: View {
             }
             .buttonStyle(.plain)
             .yieldsToChromeZone(.topTrailing)
+            }   // end if !isEditingTranscript (overflow menu)
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .overlay(Rectangle().fill(theme.currentTheme.chrome.edgeFaint).frame(height: theme.currentTheme.chrome.hairlineWidth), alignment: .bottom)
     }
 
-    private var metaRow: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // Title — no inline pencil; the global "Edit" pill in the
-            // header is the single entry point for editing the memo
-            // (title + transcript both live in the edit sheet).
+    // Identity zone — just the title now. The capture date/time moved down
+    // to the metadata footer (with word count), so the top of the card is
+    // clean and the title stands alone.
+    private var identityZone: some View {
+        Group {
             if isEditingTitle {
                 titleEditor
             } else {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(store.memo.title)
-                        .talkieType(.headline)
-                        .foregroundStyle(theme.colors.textPrimary)
-
-                    Spacer(minLength: 0)
-                }
-            }
-
-            HStack(spacing: 6) {
-                Image(systemName: "waveform")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(theme.currentTheme.chrome.accent)
-                Text("· MEMO · \(store.memo.createdAtLabel.uppercased()) · \(store.memo.durationLabel)")
-                    .talkieType(.channelLabelTiny)
-                    .foregroundStyle(theme.colors.textTertiary)
+                Text(store.memo.title)
+                    .talkieType(.headline)
+                    .foregroundStyle(theme.colors.textPrimary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .onTapGesture { beginTitleEdit() }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
     }
 
     private var titleEditor: some View {
@@ -1020,12 +1007,10 @@ struct VoiceMemoDetailNext: View {
         }
     }
 
-    /// Matches the donor's `transcriptInstrumentPlayer` — a single
-    /// compact horizontal rail: play button (30pt circle, accent
-    /// fill when playing) + InteractiveWaveformView (28pt with
-    /// played/unplayed coloring) + monospaced "current / total"
-    /// time readout right-aligned.
-    private var playbackCard: some View {
+    // Tape strip — the recording, fused to the top of the document. Play +
+    // mag-tape waveform + time. No card of its own; the documentCard is the
+    // paper it sits on.
+    private var tapeStrip: some View {
         HStack(spacing: 10) {
             Button(action: { store.togglePlayback() }) {
                 ZStack {
@@ -1057,190 +1042,217 @@ struct VoiceMemoDetailNext: View {
             Text("\(store.currentTimeLabel) / \(store.memo.durationLabel)")
                 .talkieType(.channelLabel)
                 .foregroundStyle(theme.colors.textTertiary)
-                .frame(width: 78, alignment: .trailing)
                 .monospacedDigit()
+                .lineLimit(1)
+                .fixedSize()
         }
-        .padding(14)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    // While editing, the transport recedes to a quiet label — the words are
+    // the focus, not the audio.
+    private var tapeChip: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "play.fill")
+                .font(.system(size: 9))
+                .foregroundStyle(theme.colors.textTertiary)
+            Text("TAPE · \(store.memo.durationLabel)")
+                .talkieType(.channelLabelTiny)
+                .foregroundStyle(theme.colors.textTertiary)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    // The whole memo as one component: identity (title + source) → the
+    // recording (tape strip) → the words, all on one raised paper. The
+    // border lifts to amber while editing so the surface reads as "live".
+    private var documentCard: some View {
+        VStack(spacing: 0) {
+            identityZone
+
+            cardDivider
+
+            if isEditingTranscript { tapeChip } else { tapeStrip }
+
+            cardDivider
+
+            if isEditingTranscript { editingField } else { readingBody }
+        }
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: 16)
                 .fill(theme.colors.cardBackground)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(theme.currentTheme.chrome.edgeFaint,
-                                      lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                    RoundedRectangle(cornerRadius: 16)
+                        .strokeBorder(
+                            isEditingTranscript
+                                ? theme.currentTheme.chrome.accent
+                                : theme.currentTheme.chrome.edgeFaint,
+                            lineWidth: isEditingTranscript ? 1.5 : theme.currentTheme.chrome.hairlineWidth
+                        )
                 )
         )
     }
 
-    private var transcriptSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Section header: no inline EDIT chip — global Edit pill
-            // in the header is the single entry point. Just label +
-            // word count here.
+    // Full-width hairline between the card's zones (identity · recording ·
+    // words) so the unified paper still reads as distinct sections.
+    private var cardDivider: some View {
+        Rectangle()
+            .fill(theme.currentTheme.chrome.edgeFaint)
+            .frame(height: theme.currentTheme.chrome.hairlineWidth)
+    }
+
+    // Reading body — the transcript as the audio made readable. During
+    // playback the played words take full ink, the rest dim, with an amber
+    // playhead between; idle, it's full ink for plain reading. Tap to edit.
+    private var readingBody: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(playheadTranscript)
+                .talkieType(.listTitle)
+                .lineSpacing(5)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture { if store.canEditTranscript { beginInlineTranscriptEdit() } }
+
+            // Consolidated metadata footer — capture date/time + word count
+            // + source, all in one quiet technical line at the foot of the
+            // words (so the title stands alone up top).
             HStack(spacing: 6) {
-                Text("· TRANSCRIPT")
-                    .talkieType(.channelLabelTiny)
-                    .foregroundStyle(theme.colors.textTertiary)
-                Spacer()
+                // Word count anchors left (it's about the words above it);
+                // capture date/time + source glyph ride the right edge.
                 Text("\(wordCount) WORDS")
+                Spacer(minLength: 8)
+                Image(systemName: "iphone")
+                    .font(.system(size: 9, weight: .medium))
+                Text(store.memo.createdAtLabel)
+            }
+            .talkieType(.channelLabelTiny)
+            .foregroundStyle(theme.colors.textTertiary.opacity(0.85))
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .contextMenu {
+            if store.hasTranscriptVersionHistory {
+                Button("Version History", systemImage: "clock.arrow.circlepath") {
+                    showingVersionHistory = true
+                }
+            }
+            Button("Copy", systemImage: "doc.on.doc") {
+                UIPasteboard.general.string = store.memo.transcript
+            }
+            if store.canEditTranscript {
+                Button("Edit", systemImage: "pencil") { beginInlineTranscriptEdit() }
+            }
+        }
+    }
+
+    // Inline editing field — tap puts a caret in the words. Plain editable
+    // text; Done (header) commits. Auto-saves, undo is the safety net — no
+    // Accept/Cancel.
+    private var editingField: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            TextEditor(text: $editedTranscript)
+                .talkieType(.listTitle)
+                .foregroundStyle(theme.colors.textPrimary)
+                .lineSpacing(5)
+                .scrollContentBackground(.hidden)
+                .frame(minHeight: 140, maxHeight: 340)
+                .focused($transcriptFieldFocused)
+
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.circle")
+                    .font(.system(size: 9))
+                Text("SAVES AUTOMATICALLY · SHAKE TO UNDO")
+            }
+            .talkieType(.channelLabelTiny)
+            .foregroundStyle(theme.colors.textTertiary.opacity(0.7))
+
+            if let transcriptEditError {
+                Text(transcriptEditError)
                     .talkieType(.channelLabelTiny)
-                    .foregroundStyle(theme.colors.textTertiary)
+                    .foregroundStyle(Color.red.opacity(0.8))
             }
-            .padding(.horizontal, 4)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+    }
 
-            VStack(alignment: .leading, spacing: 0) {
-                Text(store.memo.transcript)
-                    .talkieType(.listTitle)
-                    .lineSpacing(5)
-                    .foregroundStyle(theme.colors.textPrimary)
-                    .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+    // Two-tone transcript driven by playback progress. Idle → full ink so
+    // it reads as plain text, not "half transcribed".
+    private var playheadTranscript: AttributedString {
+        let text = store.memo.transcript
+        let progress = store.memo.playheadProgress
+        guard store.memo.isPlaying, progress > 0.001, !text.isEmpty else {
+            var full = AttributedString(text)
+            full.foregroundColor = theme.colors.textPrimary
+            return full
+        }
+        let offset = max(0, min(text.count, Int((Double(text.count) * progress).rounded())))
+        let splitIndex = text.index(text.startIndex, offsetBy: offset)
+        var played = AttributedString(String(text[text.startIndex..<splitIndex]))
+        played.foregroundColor = theme.colors.textPrimary
+        var caret = AttributedString("▏")
+        caret.foregroundColor = theme.currentTheme.chrome.accent
+        var rest = AttributedString(String(text[splitIndex...]))
+        rest.foregroundColor = theme.colors.textTertiary
+        return played + caret + rest
+    }
 
-                Rectangle()
-                    .fill(theme.currentTheme.chrome.edgeFaint)
-                    .frame(height: theme.currentTheme.chrome.hairlineWidth)
-                    .padding(.horizontal, 14)
-
-                Button(action: openMemoInCompose) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "square.and.pencil")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text("Refine in Compose")
-                            .talkieType(.fieldLabel)
-                        Spacer(minLength: 0)
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(theme.colors.textTertiary)
-                    }
-                    .foregroundStyle(theme.currentTheme.chrome.accent)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(!canRefineMemo)
-                .opacity(canRefineMemo ? 1 : 0.45)
+    // Tool rail — one flat row of secondary verbs. Refine ✨ (the AI
+    // transform) lives here now, honestly labelled; it no longer
+    // masquerades as the editor. Listen is gone — the tape strip does it.
+    // Ask Agent / Run CLI keep their home in the overflow menu.
+    private var toolRail: some View {
+        HStack(spacing: 6) {
+            toolRailButton(label: "Share", systemImage: "square.and.arrow.up") {
+                showingShareSheet = true
             }
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(theme.colors.cardBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .strokeBorder(
-                                theme.currentTheme.chrome.edgeFaint,
-                                lineWidth: theme.currentTheme.chrome.hairlineWidth
-                            )
-                    )
-            )
-            .contextMenu {
-                    if store.hasTranscriptVersionHistory {
-                        Button("Version History", systemImage: "clock.arrow.circlepath") {
-                            showingVersionHistory = true
-                        }
-                    }
-                    Button("Copy", systemImage: "doc.on.doc") {
-                        UIPasteboard.general.string = store.memo.transcript
-                    }
+            toolRailButton(label: "Copy", systemImage: "doc.on.doc", action: copyTranscript)
+            toolRailButton(label: "Attach", systemImage: "paperclip") {
+                showingAttachmentPickerSheet = true
             }
+            toolRailButton(label: "Refine", systemImage: "sparkles",
+                           isEnabled: canRefineMemo, action: openMemoInCompose)
         }
     }
 
-    private var memoActionsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Button(action: { showingShareSheet = true }) {
-                HStack(spacing: 10) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 15, weight: .semibold))
-                        .frame(width: 30, height: 30)
-                        .foregroundStyle(theme.currentTheme.chrome.accent)
-                        .background(
-                            RoundedRectangle(cornerRadius: 7)
-                                .fill(theme.currentTheme.chrome.accent.opacity(0.12))
-                        )
-                    Text("Share Memo")
-                        .talkieType(.fieldLabel)
-                        .foregroundStyle(theme.colors.textPrimary)
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(theme.colors.textTertiary)
-                }
-                .padding(12)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(theme.colors.cardBackground)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .strokeBorder(
-                                    theme.currentTheme.chrome.edgeFaint,
-                                    lineWidth: theme.currentTheme.chrome.hairlineWidth
-                                )
-                        )
-                )
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Share memo")
-
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: 8),
-                    GridItem(.flexible(), spacing: 8),
-                ],
-                spacing: 8
-            ) {
-                memoUtilityAction(
-                    label: "Listen",
-                    systemImage: "speaker.wave.2",
-                    action: openMemoReadAloud
-                )
-                memoUtilityAction(
-                    label: "Ask Agent",
-                    systemImage: "brain.head.profile",
-                    action: { showingAgentSheet = true }
-                )
-                memoUtilityAction(
-                    label: "Run CLI",
-                    systemImage: "terminal",
-                    action: { showingCLISheet = true }
-                )
-                memoUtilityAction(
-                    label: "Attach",
-                    systemImage: "paperclip",
-                    action: { showingAttachmentPickerSheet = true }
-                )
-            }
-        }
-    }
-
-    private func memoUtilityAction(label: String, systemImage: String, action: @escaping () -> Void) -> some View {
+    private func toolRailButton(
+        label: String,
+        systemImage: String,
+        isEnabled: Bool = true,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             VStack(spacing: 6) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(theme.currentTheme.chrome.accent)
-                    .frame(height: 16)
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundStyle(theme.colors.textSecondary)
+                    .frame(height: 18)
                 Text(label)
                     .talkieType(.channelLabelTiny)
-                    .foregroundStyle(theme.colors.textSecondary)
+                    .foregroundStyle(theme.colors.textTertiary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.82)
+                    .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 58)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(theme.colors.cardBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .strokeBorder(
-                                theme.currentTheme.chrome.edgeFaint,
-                                lineWidth: theme.currentTheme.chrome.hairlineWidth
-                            )
-                    )
-            )
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.4)
         .accessibilityLabel(label)
+    }
+
+    private func copyTranscript() {
+        UIPasteboard.general.string = normalizedTranscript.isEmpty
+            ? store.memo.title
+            : normalizedTranscript
+        Haptics.toggle.fire()
     }
 
     private var workflowRunsSection: some View {
@@ -1546,6 +1558,9 @@ struct VoiceMemoDetailNext: View {
     /// without regressing the Next hub. These chips run the memo-scoped
     /// templates directly against the active memo and record the run in the
     /// shared WorkflowsStore history.
+    // Full-bleed carousel. The section spans the screen (no outer padding);
+    // the header and the first card re-inset to the 16pt column, and cards
+    // scroll off the right edge instead of clipping inside a tight box.
     private var workflowTriggersSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
@@ -1560,7 +1575,7 @@ struct VoiceMemoDetailNext: View {
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 4)
+            .padding(.horizontal, 16)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -1568,6 +1583,7 @@ struct VoiceMemoDetailNext: View {
                         workflowTriggerCard(template)
                     }
                 }
+                .padding(.horizontal, 16)
                 .padding(.vertical, 2)
             }
         }
@@ -1912,6 +1928,24 @@ struct VoiceMemoDetailNext: View {
             return
         }
         cancelTranscriptEdit()
+    }
+
+    // Inline editing: tap/Edit drops a caret in the words; Done commits.
+    private func beginInlineTranscriptEdit() {
+        beginTranscriptEdit()
+        Haptics.confirm.fire()
+        transcriptFieldFocused = true
+    }
+
+    private func commitTranscriptEdit() {
+        transcriptFieldFocused = false
+        // Done = commit. Auto-saves; if the field was emptied we just exit
+        // (saveTranscript declines empty, leaving the prior text intact).
+        _ = store.saveTranscript(editedTranscript)
+        transcriptEditError = nil
+        editedTranscript = ""
+        isEditingTranscript = false
+        Haptics.transition.fire()
     }
 
     private func importSelectedAttachmentItems(_ items: [PhotosPickerItem]) async {

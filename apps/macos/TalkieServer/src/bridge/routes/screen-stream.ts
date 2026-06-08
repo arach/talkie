@@ -1,5 +1,8 @@
 import { log } from "../../log";
 import { talkieServerFetch } from "../talkie-local-client";
+import { prepareWsFrameSealer } from "../transport-encryption";
+
+type FrameSealer = (plaintext: string) => Promise<string>;
 
 const TALKIESERVER_PORT = 8766;
 const TALKIESERVER_URL = `http://127.0.0.1:${TALKIESERVER_PORT}`;
@@ -32,14 +35,18 @@ type FrameFetchResult = {
 const streamTimers = new WeakMap<object, Timer>();
 const streamInflight = new WeakSet<object>();
 const streamConfigBySocket = new WeakMap<object, ScreenStreamConfig>();
+// Per-frame sealer (null = cleartext). Resolved once on open from the upgrade
+// query so a passive LAN sniffer can't read screen frames off the wire.
+const streamSealerBySocket = new WeakMap<object, FrameSealer | null>();
 
 export const companionScreenStreamSocket = {
-  open(ws: ScreenStreamSocket) {
+  async open(ws: ScreenStreamSocket) {
     const socketKey = rawSocketKey(ws);
     const config = configFromSocket(ws);
     streamConfigBySocket.set(socketKey, config);
+    streamSealerBySocket.set(socketKey, await prepareWsFrameSealer(socketQuery(ws)));
 
-    sendJSON(ws, {
+    await sendJSON(ws, {
       type: "screen:ready",
       fps: config.fps,
       maxDimension: config.maxDimension,
@@ -49,7 +56,7 @@ export const companionScreenStreamSocket = {
     startStreaming(ws);
   },
 
-  message(ws: ScreenStreamSocket, rawMessage: unknown) {
+  async message(ws: ScreenStreamSocket, rawMessage: unknown) {
     const socketKey = rawSocketKey(ws);
 
     let message: { type?: string; fps?: number; maxDimension?: number; quality?: number } | null = null;
@@ -62,7 +69,7 @@ export const companionScreenStreamSocket = {
         message = rawMessage as { type?: string; fps?: number; maxDimension?: number; quality?: number };
       }
     } catch {
-      sendJSON(ws, { type: "screen:error", error: "Invalid screen stream message" });
+      await sendJSON(ws, { type: "screen:error", error: "Invalid screen stream message" });
       return;
     }
 
@@ -79,7 +86,7 @@ export const companionScreenStreamSocket = {
       });
       streamConfigBySocket.set(socketKey, nextConfig);
       restartStreaming(ws);
-      sendJSON(ws, {
+      await sendJSON(ws, {
         type: "screen:config:applied",
         fps: nextConfig.fps,
         maxDimension: nextConfig.maxDimension,
@@ -102,8 +109,12 @@ function rawSocketKey(ws: ScreenStreamSocket): object {
   return ws.raw ?? ws;
 }
 
+function socketQuery(ws: ScreenStreamSocket): Record<string, string | undefined> {
+  return ((ws as any).data?.query ?? {}) as Record<string, string | undefined>;
+}
+
 function configFromSocket(ws: ScreenStreamSocket): ScreenStreamConfig {
-  const query = ((ws as any).data?.query ?? {}) as Record<string, string | undefined>;
+  const query = socketQuery(ws);
   return normalizeConfig({
     fps: query.fps ? Number.parseInt(query.fps, 10) : DEFAULT_FPS,
     maxDimension: query.maxDimension ? Number.parseInt(query.maxDimension, 10) : DEFAULT_MAX_DIMENSION,
@@ -166,7 +177,7 @@ async function pushFrame(ws: ScreenStreamSocket) {
 
     if (!response.ok) {
       const errorText = await responseErrorText(response);
-      sendJSON(ws, {
+      await sendJSON(ws, {
         type: "screen:error",
         error: errorText || "Unable to fetch screen frame",
         status: response.status,
@@ -177,7 +188,7 @@ async function pushFrame(ws: ScreenStreamSocket) {
 
     const bytes = await response.bytes();
     const frameBase64 = Buffer.from(bytes).toString("base64");
-    sendJSON(ws, {
+    await sendJSON(ws, {
       type: "screen:frame",
       mimeType: "image/jpeg",
       frameBase64,
@@ -185,7 +196,7 @@ async function pushFrame(ws: ScreenStreamSocket) {
     });
   } catch (error) {
     log.warn(`Companion screen stream frame failed: ${error}`);
-    sendJSON(ws, {
+    await sendJSON(ws, {
       type: "screen:error",
       error: error instanceof Error ? error.message : String(error),
     });
@@ -237,9 +248,11 @@ async function responseErrorText(response: Response): Promise<string> {
     .catch(() => "Unable to fetch screen frame");
 }
 
-function sendJSON(ws: ScreenStreamSocket, payload: Record<string, unknown>) {
+async function sendJSON(ws: ScreenStreamSocket, payload: Record<string, unknown>) {
   try {
-    ws.send(JSON.stringify(payload));
+    const text = JSON.stringify(payload);
+    const sealer = streamSealerBySocket.get(rawSocketKey(ws));
+    ws.send(sealer ? await sealer(text) : text);
   } catch (error) {
     log.warn(`Companion screen stream send failed: ${error}`);
     try {

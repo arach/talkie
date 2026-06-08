@@ -100,8 +100,8 @@ final class TalkieNotifier {
         sendSilent("queue.updated", userInfo: ["count": String(count)])
     }
 
-    /// Notify Talkie that a background Walkie executor finished and has a user-facing report.
-    func walkieReport(
+    /// Notify Talkie that a background agent executor finished and has a user-facing report.
+    func agentReport(
         sessionId: String,
         title: String,
         body: String,
@@ -119,7 +119,7 @@ final class TalkieNotifier {
         if let source, !source.isEmpty {
             info["source"] = Self.truncateForNotificationField(source, maxLength: 80)
         }
-        sendSilent("walkie.report", userInfo: info)
+        sendSilent("agent.voice.report", userInfo: info)
     }
 
     // MARK: - Lifecycle
@@ -193,10 +193,7 @@ final class TalkieNotifier {
 
         logger.info("→ \(path) (URL)")
 
-        let config = NSWorkspace.OpenConfiguration()
-        config.activates = false
-
-        NSWorkspace.shared.open(url, configuration: config) { [weak self] _, error in
+        TalkieAppOpener.open(url, activates: false) { [weak self] error in
             if let error = error {
                 self?.failureCount += 1
                 logger.debug("Notification delivery issue: \(error.localizedDescription)")
@@ -241,5 +238,63 @@ final class TalkieNotifier {
 
         guard clean.count > maxLength else { return clean }
         return String(clean.prefix(maxLength)).trimmingCharacters(in: .whitespacesAndNewlines) + "..."
+    }
+}
+
+@MainActor
+enum TalkieAppOpener {
+    @discardableResult
+    static func open(_ url: URL, activates: Bool = true, completion: ((Error?) -> Void)? = nil) -> Bool {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = activates
+
+        if let appURL = preferredTalkieAppURL() {
+            NSWorkspace.shared.open([url], withApplicationAt: appURL, configuration: configuration) { _, error in
+                completion?(error)
+            }
+            return true
+        }
+
+        NSWorkspace.shared.open(url, configuration: configuration) { _, error in
+            completion?(error)
+        }
+        return true
+    }
+
+    @discardableResult
+    static func openApp(activates: Bool = true, completion: ((Error?) -> Void)? = nil) -> Bool {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = activates
+
+        if let appURL = preferredTalkieAppURL() {
+            NSWorkspace.shared.openApplication(at: appURL, configuration: configuration) { _, error in
+                completion?(error)
+            }
+            return true
+        }
+
+        guard let appURL = NSWorkspace.shared.urlForApplication(
+            withBundleIdentifier: TalkieEnvironment.current.talkieBundleId
+        ) else {
+            return false
+        }
+
+        NSWorkspace.shared.openApplication(at: appURL, configuration: configuration) { _, error in
+            completion?(error)
+        }
+        return true
+    }
+
+    private static func preferredTalkieAppURL() -> URL? {
+        let env = TalkieEnvironment.current
+
+        if env == .dev {
+            let stableDevURL = env.userInstalledAppURL(named: "Talkie.app")
+            if FileManager.default.fileExists(atPath: stableDevURL.path) {
+                return stableDevURL
+            }
+        }
+
+        return NSWorkspace.shared.urlForApplication(withBundleIdentifier: env.talkieBundleId)
     }
 }
