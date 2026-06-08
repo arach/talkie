@@ -139,6 +139,8 @@ struct WorkflowListColumn: View {
 }
 
 struct WorkflowDetailColumn: View {
+    @Environment(\.navigationState) private var navigationState
+
     @Binding var editingWorkflow: WorkflowDefinition?
     @Binding var selectedWorkflowID: UUID?
     private let workflowService = WorkflowService.shared
@@ -246,7 +248,7 @@ struct WorkflowDetailColumn: View {
         .task {
             applyNavigationSelection()
         }
-        .onChange(of: NavigationState.shared.params) { _, _ in
+        .onChange(of: navigationState.params) { _, _ in
             applyNavigationSelection()
         }
         .sheet(isPresented: $showingLibrarySelector) {
@@ -387,10 +389,10 @@ struct WorkflowDetailColumn: View {
     }
 
     private var requestedWorkflowID: UUID? {
-        if let id = NavigationState.shared.params["workflowId"] as? UUID {
+        if let id = navigationState.params["workflowId"] as? UUID {
             return id
         }
-        guard let raw = NavigationState.shared.params["workflowId"] as? String else { return nil }
+        guard let raw = navigationState.params["workflowId"] as? String else { return nil }
         return UUID(uuidString: raw)
     }
 

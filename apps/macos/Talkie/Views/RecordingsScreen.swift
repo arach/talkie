@@ -109,6 +109,8 @@ private struct LiveActivityBars: View {
 // MARK: - Recordings Screen
 
 struct RecordingsScreen: View {
+    @Environment(\.navigationState) private var navigationState
+
     /// Initial type filter — set by navigation to open with a specific tab
     var initialTypeFilter: RecordingTypeFilter
 
@@ -260,7 +262,7 @@ struct RecordingsScreen: View {
             }
 
             // Apply pending navigation params BEFORE initial load
-            let pendingParams = NavigationState.shared.params
+            let pendingParams = navigationState.params
             if let filterValue = pendingParams["typeFilter"] as? String,
                let filter = RecordingTypeFilter(rawValue: filterValue) {
                 suppressFilterReload = true
@@ -282,10 +284,10 @@ struct RecordingsScreen: View {
             if let id = pendingParams["selectedID"] as? UUID {
                 selectedRecordingIDs = [id]
                 pendingScrollID = id
-            } else if let id = NavigationState.shared.selectedMemoID {
+            } else if let id = navigationState.selectedMemoID {
                 selectedRecordingIDs = [id]
                 pendingScrollID = id
-            } else if let id = NavigationState.shared.selectedDictationID {
+            } else if let id = navigationState.selectedDictationID {
                 selectedRecordingIDs = [id]
                 pendingScrollID = id
             }
@@ -293,7 +295,7 @@ struct RecordingsScreen: View {
                 // Only clear params that RecordingsScreen consumed — other params
                 // (e.g. initialText for Compose) may be in-flight to another screen.
                 for key in pendingParams.keys {
-                    NavigationState.shared.params.removeValue(forKey: key)
+                    navigationState.params.removeValue(forKey: key)
                 }
             }
         }
@@ -328,19 +330,19 @@ struct RecordingsScreen: View {
         // continuing-memo + chrome-bar-mic flows. Modal only shows when the
         // user explicitly clicks New Recording (or the ShowRecordingView
         // notification, retained above).
-        .task(id: NavigationState.shared.selectedMemoID) {
-            guard let id = NavigationState.shared.selectedMemoID else { return }
+        .task(id: navigationState.selectedMemoID) {
+            guard let id = navigationState.selectedMemoID else { return }
             await waitForRecordingsIfNeeded()
             selectedRecordingIDs = [id]
             pendingScrollID = id
         }
-        .task(id: NavigationState.shared.selectedDictationID) {
-            guard let id = NavigationState.shared.selectedDictationID else { return }
+        .task(id: navigationState.selectedDictationID) {
+            guard let id = navigationState.selectedDictationID else { return }
             await waitForRecordingsIfNeeded()
             selectedRecordingIDs = [id]
             pendingScrollID = id
         }
-        .onChange(of: NavigationState.shared.params) { _, newParams in
+        .onChange(of: navigationState.params) { _, newParams in
             consumeNavigationParams(newParams)
         }
         .onDisappear {
@@ -865,7 +867,7 @@ struct RecordingsScreen: View {
 
         if let text = recording.text, !text.isEmpty {
             Button {
-                NavigationState.shared.navigateToCompose(withText: text, sourceRecordingId: recording.id)
+                navigationState.navigateToCompose(withText: text, sourceRecordingId: recording.id)
             } label: {
                 Label("Open in Compose", systemImage: "square.and.pencil")
             }
@@ -1082,7 +1084,7 @@ struct RecordingsScreen: View {
         // Only clear params that RecordingsScreen consumes — other params
         // (e.g. initialText for Compose) may be in-flight to another screen.
         for key in ["selectedID", "typeFilter", "searchQuery", "dateFilter"] {
-            NavigationState.shared.params.removeValue(forKey: key)
+            navigationState.params.removeValue(forKey: key)
         }
 
         Task {

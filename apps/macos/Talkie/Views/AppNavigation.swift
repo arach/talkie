@@ -87,15 +87,14 @@ extension NavigationSection {
 }
 
 struct AppNavigation: View {
+    @Environment(\.navigationState) private var nav
+
     // GRDB-backed ViewModel for memo data
     private var memosVM: MemosViewModel { MemosViewModel.shared }
 
     // Singletons - observe remote data
     private let settings = SettingsManager.shared
     private let pendingActionsManager = PendingActionsManager.shared
-
-    // Central navigation state (observable)
-    private var nav: NavigationState { NavigationState.shared }
 
     // Local view state (synced with NavigationState)
     @State private var selectedSection: NavigationSection? = .home
@@ -401,7 +400,7 @@ struct AppNavigation: View {
                 // Page-header proxy. Renders above the chrome bar in z-order
                 // so the page title + chrome line stay visible where they
                 // would otherwise be overwritten by the bar's capsule. The
-                // page publishes its content via `ChromeBarHeader.shared`.
+                // page publishes its content via the window-local ChromeBarHeader.
                 ChromeBarPageHeaderOverlay()
                     .allowsHitTesting(false)
             }
@@ -657,7 +656,7 @@ struct AppNavigation: View {
                         object: memo.id
                     )
                 case .recording(let recordingID):
-                    NavigationState.shared.navigate(
+                    nav.navigate(
                         to: .recordings,
                         params: ["recordingId": recordingID.uuidString]
                     )
@@ -1902,6 +1901,8 @@ struct ToolbarBackgroundVisibilityModifier: ViewModifier {
 /// Always visible. Record button expands to show elapsed time during recording.
 /// Designed to feel native to the midnight aesthetic — no material blur, just surface + border.
 private struct GlobalActionBar: View {
+    @Environment(\.navigationState) private var nav
+
     private let controller = MemoRecordingController.shared
     private let screenRecorder = ScreenRecordingController.shared
     @State private var dictateHovered = false
@@ -1922,7 +1923,7 @@ private struct GlobalActionBar: View {
                 isHovered: $dictateHovered,
                 help: "Dictations (D)"
             ) {
-                NavigationState.shared.navigate(to: .dictations)
+                nav.navigate(to: .dictations)
             }
 
             // Center: Record
@@ -2066,7 +2067,7 @@ private struct GlobalActionBar: View {
     private var createMenuButton: some View {
         Menu {
             Button {
-                NavigationState.shared.navigate(to: .drafts)
+                nav.navigate(to: .drafts)
             } label: {
                 Label("Compose", systemImage: "square.and.pencil")
             }
@@ -2082,13 +2083,13 @@ private struct GlobalActionBar: View {
             Divider()
 
             Button {
-                NavigationState.shared.navigate(to: .workflows)
+                nav.navigate(to: .workflows)
             } label: {
                 Label("Workflows", systemImage: "wand.and.stars")
             }
 
             Button {
-                NavigationState.shared.navigate(to: .screenshots)
+                nav.navigate(to: .screenshots)
             } label: {
                 Label("Screenshots", systemImage: "camera.viewfinder")
             }
@@ -2133,7 +2134,7 @@ private struct GlobalActionBar: View {
                 let repository = TalkieObjectRepository()
                 try await repository.saveRecording(note)
                 await RecordingsViewModel.shared.loadRecordings()
-                NavigationState.shared.navigate(to: .recordings, params: ["recordingId": noteId.uuidString])
+                nav.navigate(to: .recordings, params: ["recordingId": noteId.uuidString])
             } catch {
                 Log(.ui).error("Failed to create note: \(error)")
             }

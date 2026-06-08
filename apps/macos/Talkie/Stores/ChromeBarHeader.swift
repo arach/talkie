@@ -2,18 +2,19 @@
 //  ChromeBarHeader.swift
 //  Talkie
 //
-//  Shared observable for page header content surfaced into the
-//  TalkieChromeBar. Each page publishes its title + subtitle on
-//  appear; the bar reads and renders them around the pill.
+//  Window-local observable for page header content surfaced into the
+//  TalkieChromeBar. Each root window injects its own instance so the
+//  title, subtitle, and hover reveal do not mirror across windows.
 //
 
 import Foundation
 import Observation
+import SwiftUI
 
 @MainActor
 @Observable
 final class ChromeBarHeader {
-    static let shared = ChromeBarHeader()
+    nonisolated static let shared = ChromeBarHeader()
 
     /// Display-font page title (e.g., "Today", "Library", "Compose").
     /// nil hides the title row.
@@ -28,7 +29,7 @@ final class ChromeBarHeader {
     /// chrome bar's hover state visually extends across the title row.
     var hovered: Bool = false
 
-    private init() {}
+    nonisolated init() {}
 
     func set(title: String?, subtitle: String? = nil) {
         self.title = title
@@ -38,5 +39,24 @@ final class ChromeBarHeader {
     func clear() {
         title = nil
         subtitle = nil
+    }
+}
+
+// MARK: - Environment
+
+private struct ChromeBarHeaderKey: EnvironmentKey {
+    static let defaultValue = ChromeBarHeader.shared
+}
+
+extension EnvironmentValues {
+    var chromeBarHeader: ChromeBarHeader {
+        get { self[ChromeBarHeaderKey.self] }
+        set { self[ChromeBarHeaderKey.self] = newValue }
+    }
+}
+
+extension View {
+    func withChromeBarHeader(_ header: ChromeBarHeader) -> some View {
+        environment(\.chromeBarHeader, header)
     }
 }

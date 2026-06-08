@@ -104,6 +104,8 @@ struct TalkieApp: App {
 
 private struct TalkieRootWindow: View {
     // Command palette, keyboard help, report sheet, and voice command state
+    @State private var navigationState = NavigationState()
+    @State private var chromeBarHeader = ChromeBarHeader()
     @State private var settings = SettingsManager.shared
     @State private var showCommandPalette = false
     @State private var showKeyboardHelp = false
@@ -112,18 +114,7 @@ private struct TalkieRootWindow: View {
     @State private var bridgeManager = BridgeManager.shared
 
     var body: some View {
-        // Show UI immediately - GRDB is source of truth
-        // CoreData + CloudKit sync layer initializes in background
-        AppNavigation()
-            .environment(SettingsManager.shared)
-            .environment(EngineClient.shared)
-            .environment(AgentSettings.shared)
-            .environment(CloudKitSyncManager.shared)
-            .environment(SystemEventManager.shared)
-            .environment(RelativeTimeTicker.shared)
-            .frame(minWidth: 900, minHeight: 600)
-            .tint(SettingsManager.shared.accentColor.color)
-            .refreshThemeOnAppearanceChange()
+        rootContent
             // NOTE: URL handling is done via Apple Events in AppDelegate.handleGetURLEvent
             // Do NOT add .onOpenURL here - it causes SwiftUI to spawn new windows
             // DB init now starts in TalkieApp.init() for faster startup
@@ -234,6 +225,32 @@ private struct TalkieRootWindow: View {
             // NOTE: Interstitial cold launch handling moved to main.swift
             // In full mode (this file), we always show the main window normally
     }
+
+    private var rootContent: some View {
+        // Show UI immediately - GRDB is source of truth
+        // CoreData + CloudKit sync layer initializes in background
+        AppNavigation()
+            .withNavigationState(navigationState)
+            .withChromeBarHeader(chromeBarHeader)
+            .environment(SettingsManager.shared)
+            .environment(EngineClient.shared)
+            .environment(AgentSettings.shared)
+            .environment(CloudKitSyncManager.shared)
+            .environment(SystemEventManager.shared)
+            .environment(RelativeTimeTicker.shared)
+            .frame(minWidth: 900, minHeight: 600)
+            .tint(SettingsManager.shared.accentColor.color)
+            .refreshThemeOnAppearanceChange()
+            .background {
+                NavigationWindowActivationView(navigationState: navigationState)
+                    .frame(width: 0, height: 0)
+            }
+            .onAppear {
+                Task { @MainActor in
+                    NavigationState.activate(navigationState, reason: "root-appear")
+                }
+            }
+    }
 }
 
 private struct TalkieCommands: Commands {
@@ -242,10 +259,9 @@ private struct TalkieCommands: Commands {
     var body: some Commands {
         // Replace the default New file group with a single "New Window"
         // item. SwiftUI's WindowGroup already lets us spawn additional
-        // instances; the windows stay in sync via shared singletons
-        // (recording controller, view models, navigation), so opening a
-        // second window gives the user "two viewports on the same
-        // workspace" — independent selection / scroll, shared truth.
+        // instances. Windows share app data/services, but each root window
+        // owns its own NavigationState so sidebar routing and back stacks do
+        // not mirror each other.
         CommandGroup(replacing: .newItem) {
             Button("New Window") {
                 openWindow(id: "main")
@@ -324,6 +340,95 @@ private struct TalkieCommands: Commands {
             }
             .keyboardShortcut("l", modifiers: [.command, .option])
             #endif
+        }
+    }
+}
+
+@MainActor
+private struct NavigationWindowActivationView: NSViewRepresentable {
+    let navigationState: NavigationState
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        context.coordinator.attachWhenReady(from: view)
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.navigationState = navigationState
+        context.coordinator.attachWhenReady(from: nsView)
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(navigationState: navigationState)
+    }
+
+    @MainActor
+    final class Coordinator {
+        var navigationState: NavigationState
+        private weak var window: NSWindow?
+        private var observers: [NSObjectProtocol] = []
+
+        init(navigationState: NavigationState) {
+            self.navigationState = navigationState
+        }
+
+        deinit {
+            for observer in observers {
+                NotificationCenter.default.removeObserver(observer)
+            }
+        }
+
+        func attachWhenReady(from view: NSView) {
+            guard let window = view.window else {
+                Task { @MainActor [weak self, weak view] in
+                    guard let self, let view else { return }
+                    self.attachWhenReady(from: view)
+                }
+                return
+            }
+
+            guard self.window !== window else {
+                if window.isKeyWindow || window.isMainWindow {
+                    activate(reason: "window-update")
+                }
+                return
+            }
+
+            for observer in observers {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            observers.removeAll()
+            self.window = window
+
+            let center = NotificationCenter.default
+            observers.append(center.addObserver(
+                forName: NSWindow.didBecomeKeyNotification,
+                object: window,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.activate(reason: "window-key")
+                }
+            })
+
+            observers.append(center.addObserver(
+                forName: NSWindow.didBecomeMainNotification,
+                object: window,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.activate(reason: "window-main")
+                }
+            })
+
+            if window.isKeyWindow || window.isMainWindow {
+                activate(reason: "window-attached")
+            }
+        }
+
+        private func activate(reason: String) {
+            NavigationState.activate(navigationState, reason: reason)
         }
     }
 }

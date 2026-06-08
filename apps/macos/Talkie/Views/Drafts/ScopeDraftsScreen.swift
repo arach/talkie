@@ -97,6 +97,7 @@ private enum ComposeStage: Int, CaseIterable {
 // MARK: - ScopeDraftsScreen
 
 struct ScopeDraftsScreen: View {
+    @Environment(\.navigationState) private var navigationState
     @Environment(SettingsManager.self) private var settings
     @State private var editorState = VoiceEditorState()
     @FocusState private var isTextFieldFocused: Bool
@@ -195,7 +196,7 @@ struct ScopeDraftsScreen: View {
                 isTextFieldFocused = true
             }
         }
-        .onChange(of: NavigationState.shared.params["initialText"] as? String) { _, newValue in
+        .onChange(of: navigationState.params["initialText"] as? String) { _, newValue in
             if newValue != nil {
                 consumeNavigationParams()
             }
@@ -215,7 +216,7 @@ struct ScopeDraftsScreen: View {
         ) {
             if let sourceId = sourceRecordingId {
                 Button {
-                    NavigationState.shared.navigateToMemo(sourceId)
+                    navigationState.navigateToMemo(sourceId)
                 } label: {
                     Text("← SOURCE")
                         .font(ScopeType.chrome)
@@ -1087,14 +1088,14 @@ struct ScopeDraftsScreen: View {
     }
 
     private func consumeNavigationParams() {
-        guard let initialText = NavigationState.shared.params["initialText"] as? String,
+        guard let initialText = navigationState.params["initialText"] as? String,
               !initialText.isEmpty else { return }
 
         editorState.reset()
         editorState.text = initialText
-        sourceRecordingId = NavigationState.shared.params["sourceRecordingId"] as? UUID
-        NavigationState.shared.params.removeValue(forKey: "initialText")
-        NavigationState.shared.params.removeValue(forKey: "sourceRecordingId")
+        sourceRecordingId = navigationState.params["sourceRecordingId"] as? UUID
+        navigationState.params.removeValue(forKey: "initialText")
+        navigationState.params.removeValue(forKey: "sourceRecordingId")
         log.info("Compose (scope) opened with \(initialText.count) chars\(sourceRecordingId != nil ? " from recording \(sourceRecordingId!.uuidString.prefix(8))" : "")")
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
