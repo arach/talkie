@@ -2,8 +2,9 @@
 //  NavigationState.swift
 //  Talkie
 //
-//  Central navigation state for the app.
-//  Replaces NotificationCenter-based navigation with observable state.
+//  Per-window navigation state for the app.
+//  `NavigationState.shared` is an active-window proxy so legacy global
+//  navigation call sites route to the focused window.
 //
 //  Usage:
 //    NavigationState.shared.navigate(to: .settings)
@@ -22,35 +23,98 @@ private let log = Log(.ui)
 @MainActor
 @Observable
 final class NavigationState {
-    static let shared = NavigationState()
+    nonisolated static let shared = NavigationState(isActiveWindowProxy: true)
+
+    private static let fallbackState = NavigationState()
+    private static weak var activeState: NavigationState?
+
+    let id = UUID()
+
+    private let isActiveWindowProxy: Bool
+
+    init() {
+        self.isActiveWindowProxy = false
+    }
+
+    nonisolated private init(isActiveWindowProxy: Bool) {
+        self.isActiveWindowProxy = isActiveWindowProxy
+    }
+
+    static var active: NavigationState {
+        activeState ?? fallbackState
+    }
+
+    static func activate(_ state: NavigationState, reason: String) {
+        guard !state.isActiveWindowProxy else { return }
+        guard activeState !== state else { return }
+
+        activeState = state
+        log.debug("Navigation active window changed", detail: "id=\(state.id.uuidString.prefix(8)) reason=\(reason)")
+    }
+
+    private var target: NavigationState {
+        isActiveWindowProxy ? Self.active : self
+    }
 
     // MARK: - Navigation State
 
     /// Currently selected sidebar section
-    var selectedSection: NavigationSection? = .home
+    var selectedSection: NavigationSection? {
+        get { target._selectedSection }
+        set { target._selectedSection = newValue }
+    }
 
     /// Previous section (for back navigation)
-    var previousSection: NavigationSection?
+    var previousSection: NavigationSection? {
+        get { target._previousSection }
+        set { target._previousSection = newValue }
+    }
 
     /// Current settings subsection
-    var settingsSection: SettingsSection = .appearance
+    var settingsSection: SettingsSection {
+        get { target._settingsSection }
+        set { target._settingsSection = newValue }
+    }
 
     /// Selected memo ID (for deep linking)
-    var selectedMemoID: UUID?
+    var selectedMemoID: UUID? {
+        get { target._selectedMemoID }
+        set { target._selectedMemoID = newValue }
+    }
 
     /// Selected dictation ID (for deep linking)
-    var selectedDictationID: UUID?
+    var selectedDictationID: UUID? {
+        get { target._selectedDictationID }
+        set { target._selectedDictationID = newValue }
+    }
 
     /// Filter state for dictations
-    var dictationFilter: DictationFilter = .all
+    var dictationFilter: DictationFilter {
+        get { target._dictationFilter }
+        set { target._dictationFilter = newValue }
+    }
 
     /// Selected date (for navigating to date-filtered Recordings)
-    var selectedDate: Date?
+    var selectedDate: Date? {
+        get { target._selectedDate }
+        set { target._selectedDate = newValue }
+    }
 
     /// Generic navigation params — each destination reads the keys it understands.
     /// Replaced on every `navigate(to:params:)` call (not merged).
-    var params: [String: AnyHashable] = [:]
+    var params: [String: AnyHashable] {
+        get { target._params }
+        set { target._params = newValue }
+    }
 
+    private var _selectedSection: NavigationSection? = .home
+    private var _previousSection: NavigationSection?
+    private var _settingsSection: SettingsSection = .appearance
+    private var _selectedMemoID: UUID?
+    private var _selectedDictationID: UUID?
+    private var _dictationFilter: DictationFilter = .all
+    private var _selectedDate: Date?
+    private var _params: [String: AnyHashable] = [:]
     private var backStack: [NavigationSection] = []
     private let maxBackStackCount = 50
     private var isRestoringHistory = false
@@ -59,6 +123,12 @@ final class NavigationState {
 
     /// Navigate to a section with optional params dictionary
     func navigate(to section: NavigationSection, params: [String: AnyHashable] = [:]) {
+        guard !isActiveWindowProxy else {
+            target.navigate(to: section, params: params)
+            return
+        }
+
+        log.debug("Navigation route", detail: "id=\(id.uuidString.prefix(8)) section=\(String(describing: section)) params=\(params.keys.sorted().joined(separator: ","))")
         rememberCurrentSection(beforeNavigatingTo: section)
         // Set params BEFORE selectedSection — the destination view reads params
         // in onAppear, which fires as soon as selectedSection changes.
@@ -70,11 +140,22 @@ final class NavigationState {
 
     /// Mirror sidebar/chrome selections into the central state while preserving history.
     func navigateFromUI(to section: NavigationSection) {
+        guard !isActiveWindowProxy else {
+            target.navigateFromUI(to: section)
+            return
+        }
+
         navigate(to: section)
     }
 
     /// Navigate to settings with a specific subsection
     func navigateToSettings(_ section: SettingsSection) {
+        guard !isActiveWindowProxy else {
+            target.navigateToSettings(section)
+            return
+        }
+
+        log.debug("Navigation route settings", detail: "id=\(id.uuidString.prefix(8)) section=\(String(describing: section))")
         rememberCurrentSection(beforeNavigatingTo: .settings)
         selectedSection = .settings
         settingsSection = section
@@ -83,6 +164,11 @@ final class NavigationState {
 
     /// Navigate to a specific memo — opens unified Recordings with selection + detail
     func navigateToMemo(_ id: UUID) {
+        guard !isActiveWindowProxy else {
+            target.navigateToMemo(id)
+            return
+        }
+
         selectedMemoID = id
         navigate(to: .recordings, params: [
             "typeFilter": "memos",
@@ -92,6 +178,11 @@ final class NavigationState {
 
     /// Navigate to a specific dictation — opens unified Recordings with selection + detail
     func navigateToDictation(_ id: UUID) {
+        guard !isActiveWindowProxy else {
+            target.navigateToDictation(id)
+            return
+        }
+
         selectedDictationID = id
         navigate(to: .recordings, params: [
             "typeFilter": "dictations",
@@ -101,6 +192,11 @@ final class NavigationState {
 
     /// Navigate to dictations with pending filter
     func navigateToDictationsPending() {
+        guard !isActiveWindowProxy else {
+            target.navigateToDictationsPending()
+            return
+        }
+
         dictationFilter = .pending
         navigate(to: .dictations, params: [
             "dictationFilter": "pending"
@@ -110,6 +206,10 @@ final class NavigationState {
     /// Go back to the previous app section.
     @discardableResult
     func goBack() -> Bool {
+        guard !isActiveWindowProxy else {
+            return target.goBack()
+        }
+
         if SettingsManager.shared.isMarkupSessionActive {
             NotificationCenter.default.post(name: .dismissCaptureMarkupHost, object: nil)
             return true
@@ -187,6 +287,17 @@ final class NavigationState {
         notes: String? = nil,
         examples: String? = nil
     ) {
+        guard !isActiveWindowProxy else {
+            target.navigateToConsole(
+                profile: profile,
+                systemPrompt: systemPrompt,
+                prompt: prompt,
+                notes: notes,
+                examples: examples
+            )
+            return
+        }
+
         ManagedAgentConsoleStore.shared.open(
             profile: profile,
             systemPrompt: systemPrompt,
@@ -201,6 +312,10 @@ final class NavigationState {
         _ tabID: String,
         createIfMissing fallbackDefinition: TabDefinition? = nil
     ) -> ManagedAgentConsoleSession? {
+        guard !isActiveWindowProxy else {
+            return target.navigateToConsoleTab(tabID, createIfMissing: fallbackDefinition)
+        }
+
         let registry = TabDefinitionRegistry.shared
         let pool = ConsoleSessionPool.shared
 
@@ -309,6 +424,11 @@ final class NavigationState {
     ///   - intent: The recognized intent string (matches VoiceIntent.rawValue)
     ///   - rawText: The original voice command text
     func handleVoiceNavigation(intent: String, rawText: String) {
+        guard !isActiveWindowProxy else {
+            target.handleVoiceNavigation(intent: intent, rawText: rawText)
+            return
+        }
+
         log.info("[VoiceCmd:Route] handleVoiceNavigation() intent=\(intent) rawText=\"\(rawText)\"")
         switch intent {
         // MARK: - Main Navigation
@@ -419,7 +539,7 @@ extension EnvironmentValues {
 
 extension View {
     /// Inject navigation state into environment
-    func withNavigationState(_ state: NavigationState = .shared) -> some View {
+    func withNavigationState(_ state: NavigationState) -> some View {
         environment(\.navigationState, state)
     }
 }

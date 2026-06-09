@@ -68,6 +68,8 @@ private enum DateBucket: Hashable {
 // MARK: - ScopeLibraryView
 
 struct ScopeLibraryView: View {
+    @Environment(\.navigationState) private var navigationState
+
     /// Initial type filter — set by navigation to open with a specific tab.
     var initialTypeFilter: RecordingTypeFilter
 
@@ -184,7 +186,7 @@ struct ScopeLibraryView: View {
             // of dropping the user on the unfiltered list.
             consumePendingNavigationParams()
         }
-        .onChange(of: NavigationState.shared.params) { _, _ in
+        .onChange(of: navigationState.params) { _, _ in
             // A subsequent tap from elsewhere (e.g. the home Captures
             // section while we're already on the Library) needs to
             // re-select. `.task` only fires on first appearance.
@@ -384,7 +386,7 @@ struct ScopeLibraryView: View {
     /// convention) so existing call sites keep working.
     private func consumePendingNavigationParams() {
         var consumedKeys: [String] = []
-        let params = NavigationState.shared.params
+        let params = navigationState.params
 
         var resolved: UUID? = nil
         if let uuid = params["recordingId"] as? UUID {
@@ -404,7 +406,7 @@ struct ScopeLibraryView: View {
         }
 
         for key in consumedKeys {
-            NavigationState.shared.params.removeValue(forKey: key)
+            navigationState.params.removeValue(forKey: key)
         }
     }
 

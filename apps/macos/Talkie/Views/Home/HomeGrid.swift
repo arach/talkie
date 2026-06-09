@@ -903,6 +903,8 @@ private struct HomeKeyboardPreviewHUD: View {
 }
 
 private struct HomeKeyboardNavigationModifier: ViewModifier {
+    @Environment(\.navigationState) private var navigationState
+
     let items: [HomeKeyboardNavigationItem]
     @Binding var selectedCardID: String?
     @Binding var isPreviewVisible: Bool
@@ -932,7 +934,7 @@ private struct HomeKeyboardNavigationModifier: ViewModifier {
 
     @MainActor
     private func handle(_ event: NSEvent) -> Bool {
-        guard NavigationState.shared.selectedSection == .home,
+        guard navigationState.selectedSection == .home,
               !items.isEmpty,
               !SettingsManager.shared.isCommandPalettePresented,
               !SettingsManager.shared.isVoiceCommandPresented,

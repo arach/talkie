@@ -18,6 +18,8 @@ import TalkieKit
 // Display + mono font lookups centralized in `ScopeType` (TalkieKit/UI/ScopeDesign.swift).
 
 struct ScopeHomeView: View {
+    @Environment(\.chromeBarHeader) private var chromeBarHeader
+
     let unifiedActivity: [UnifiedActivityItem]
     let totalWords: Int
     let streak: Int
@@ -108,7 +110,7 @@ struct ScopeHomeView: View {
             // highlighted home icon carry identity, and word/streak chrome
             // lives in the AGENT card below. Clear so a stale title from
             // a sibling page (e.g. Library) doesn't leak in.
-            ChromeBarHeader.shared.clear()
+            chromeBarHeader.clear()
             await memosStore.loadStats()
             await workflowExecutor.refreshHomeHistory()
             if recordingsVM.recordings.isEmpty {

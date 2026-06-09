@@ -139,9 +139,10 @@ private enum ChromeTone {
 // MARK: - Chrome bar
 
 struct TalkieChromeBar: View {
-    private var nav: NavigationState { NavigationState.shared }
+    @Environment(\.navigationState) private var nav
+    @Environment(\.chromeBarHeader) private var header
+
     private let controller = MemoRecordingController.shared
-    private let header = ChromeBarHeader.shared
 
     private var isRecording: Bool { controller.state.isRecording }
     private var isProcessing: Bool { controller.state.isProcessing }

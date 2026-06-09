@@ -13,6 +13,7 @@ struct LearnKnowledgeBaseView: View {
     let onBridgeAction: (URL) -> Void
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.navigationState) private var navigationState
     @State private var articles = LearnArticleStore.load()
     @State private var query = ""
     @State private var selectedArticleID: String?
@@ -69,7 +70,7 @@ struct LearnKnowledgeBaseView: View {
         .onChange(of: query) {
             keepSelectionVisible()
         }
-        .onChange(of: NavigationState.shared.params) { _, _ in
+        .onChange(of: navigationState.params) { _, _ in
             selectRequestedArticleIfNeeded()
         }
     }
@@ -178,7 +179,7 @@ struct LearnKnowledgeBaseView: View {
     }
 
     private func selectRequestedArticleIfNeeded() {
-        guard let requestedArticleID = NavigationState.shared.params["learnArticleId"] as? String,
+        guard let requestedArticleID = navigationState.params["learnArticleId"] as? String,
               articles.contains(where: { $0.id == requestedArticleID }) else {
             if selectedArticleID == nil {
                 selectedArticleID = articles.first?.id

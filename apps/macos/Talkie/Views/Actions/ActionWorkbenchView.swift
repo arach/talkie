@@ -11,6 +11,8 @@ import TalkieKit
 private let actionWorkbenchLog = Log(.ui)
 
 struct ActionWorkbenchView: View {
+    @Environment(\.navigationState) private var navigationState
+
     private let repository = LocalRepository()
 
     @State private var runs: [ActionRunModel] = []
@@ -26,7 +28,7 @@ struct ActionWorkbenchView: View {
     }
 
     private var requestedRunId: UUID? {
-        guard let raw = NavigationState.shared.params["actionRunId"] as? String else { return nil }
+        guard let raw = navigationState.params["actionRunId"] as? String else { return nil }
         return UUID(uuidString: raw)
     }
 
@@ -88,7 +90,7 @@ struct ActionWorkbenchView: View {
                 await load(showLoading: false)
             }
         }
-        .onChange(of: NavigationState.shared.params) { _, _ in
+        .onChange(of: navigationState.params) { _, _ in
             Task { await applyNavigationSelection() }
         }
     }
@@ -326,6 +328,8 @@ private struct ActionRunRow: View {
 }
 
 private struct ActionRunConsole: View {
+    @Environment(\.navigationState) private var navigationState
+
     let run: ActionRunModel
     let events: [ActionEventModel]
     let subjects: [ActionSubjectRef]
@@ -401,7 +405,7 @@ private struct ActionRunConsole: View {
 
             if let workflowId {
                 Button("Edit", systemImage: "slider.horizontal.3") {
-                    NavigationState.shared.navigate(
+                    navigationState.navigate(
                         to: .workflows,
                         params: ["workflowId": workflowId.uuidString]
                     )

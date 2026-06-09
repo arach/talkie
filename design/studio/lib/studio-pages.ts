@@ -365,6 +365,16 @@ export const STUDIO_PAGES: StudioPage[] = [
     blurb: "One conversation surface: topics, parent turns, branch threads, and agent work folding back in-line.",
   },
   {
+    href: "/mac-agent-tray",
+    label: "Agent Tray",
+    bucket: "surfaces",
+    platform: "mac",
+    family: "agent",
+    status: "concept",
+    swift: ["apps/macos/TalkieAgent/TalkieAgent/Views/Components/AgentMenuPopoverView.swift"],
+    blurb: "Menu-bar pop-out reworked: NOW+INPUT collapse into one capture composer; recent + tools pick up scope language.",
+  },
+  {
     href: "/mac-walkie",
     label: "Walkie",
     bucket: "surfaces",

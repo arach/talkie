@@ -12,6 +12,7 @@ import TalkieKit
 private let log = Log(.ui)
 
 struct DraftsScreen: View {
+    @Environment(\.navigationState) private var navigationState
     @Environment(SettingsManager.self) private var settings
     @State private var editorState = VoiceEditorState()
     @FocusState private var isTextFieldFocused: Bool
@@ -91,7 +92,7 @@ struct DraftsScreen: View {
                 isTextFieldFocused = true
             }
         }
-        .onChange(of: NavigationState.shared.params["initialText"] as? String) { _, newValue in
+        .onChange(of: navigationState.params["initialText"] as? String) { _, newValue in
             if newValue != nil {
                 consumeNavigationParams()
             }
@@ -113,7 +114,7 @@ struct DraftsScreen: View {
 
             if let sourceId = sourceRecordingId {
                 Button {
-                    NavigationState.shared.navigateToMemo(sourceId)
+                    navigationState.navigateToMemo(sourceId)
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "link")
@@ -162,14 +163,14 @@ struct DraftsScreen: View {
     }
 
     private func consumeNavigationParams() {
-        guard let initialText = NavigationState.shared.params["initialText"] as? String,
+        guard let initialText = navigationState.params["initialText"] as? String,
               !initialText.isEmpty else { return }
 
         editorState.reset()
         editorState.text = initialText
-        sourceRecordingId = NavigationState.shared.params["sourceRecordingId"] as? UUID
-        NavigationState.shared.params.removeValue(forKey: "initialText")
-        NavigationState.shared.params.removeValue(forKey: "sourceRecordingId")
+        sourceRecordingId = navigationState.params["sourceRecordingId"] as? UUID
+        navigationState.params.removeValue(forKey: "initialText")
+        navigationState.params.removeValue(forKey: "sourceRecordingId")
         log.info("Compose opened with \(initialText.count) chars\(sourceRecordingId != nil ? " from recording \(sourceRecordingId!.uuidString.prefix(8))" : "")")
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
@@ -567,7 +568,7 @@ struct DraftsScreen: View {
 
                         // Edit prompt (opens settings)
                         Button {
-                            NavigationState.shared.navigateToSettings(.context)
+                            navigationState.navigateToSettings(.context)
                         } label: {
                             Image(systemName: "pencil")
                                 .font(.system(size: 10))
