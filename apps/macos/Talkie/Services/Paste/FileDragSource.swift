@@ -161,13 +161,11 @@ private class DragInitiatorView: NSView {
 
     required init?(coder: NSCoder) { fatalError() }
 
-    override var isFlipped: Bool { true }
-
     override func draw(_ dirtyRect: NSRect) {
         let bounds = self.bounds
         let stripHeight: CGFloat = 16
-        let imageRect = NSRect(x: 0, y: 0, width: bounds.width, height: bounds.height - stripHeight)
-        let stripRect = NSRect(x: 0, y: imageRect.maxY, width: bounds.width, height: stripHeight)
+        let stripRect = NSRect(x: 0, y: 0, width: bounds.width, height: stripHeight)
+        let imageRect = NSRect(x: 0, y: stripHeight, width: bounds.width, height: bounds.height - stripHeight)
 
         // Clip to rounded rect
         let clipPath = NSBezierPath(roundedRect: bounds, xRadius: cornerRadius, yRadius: cornerRadius)

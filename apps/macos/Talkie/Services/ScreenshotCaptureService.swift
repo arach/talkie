@@ -662,11 +662,9 @@ final class ScreenshotCaptureService {
         let width = CGFloat(image.width)
         let height = CGFloat(image.height)
         let longestEdge = max(width, height)
-        guard longestEdge > maxPixelLength, longestEdge > 0 else {
-            return image
-        }
+        guard longestEdge > 0 else { return nil }
 
-        let scale = maxPixelLength / longestEdge
+        let scale = min(1, maxPixelLength / longestEdge)
         let targetWidth = max(Int((width * scale).rounded(.toNearestOrEven)), 1)
         let targetHeight = max(Int((height * scale).rounded(.toNearestOrEven)), 1)
 

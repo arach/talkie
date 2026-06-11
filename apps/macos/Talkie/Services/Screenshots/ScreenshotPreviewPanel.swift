@@ -236,16 +236,15 @@ private final class PreviewView: NSView, NSDraggingSource {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    override var isFlipped: Bool { true }
-
     override func layout() {
         super.layout()
 
         let padding: CGFloat = 8
+        let stripHeight: CGFloat = 18
         let size: CGFloat = 24
         annotateButton?.frame = NSRect(
             x: padding + thumbSize.width - size - 6,
-            y: padding + 6,
+            y: padding + stripHeight + thumbSize.height - size - 6,
             width: size,
             height: size
         )
@@ -386,11 +385,11 @@ private final class PreviewView: NSView, NSDraggingSource {
         let cornerRadius: CGFloat = 8
         let stripHeight: CGFloat = 18
         let imageRect = NSRect(
-            x: padding, y: padding,
+            x: padding, y: padding + stripHeight,
             width: thumbSize.width, height: thumbSize.height
         )
         let stripRect = NSRect(
-            x: padding, y: padding + thumbSize.height,
+            x: padding, y: padding,
             width: thumbSize.width, height: stripHeight
         )
 
@@ -409,14 +408,7 @@ private final class PreviewView: NSView, NSDraggingSource {
         imageClip.addClip()
         NSColor(white: 0.1, alpha: 1).setFill()
         imageRect.fill()
-        image.draw(
-            in: imageRect,
-            from: .zero,
-            operation: .sourceOver,
-            fraction: 1.0,
-            respectFlipped: true,
-            hints: nil
-        )
+        image.draw(in: imageRect, from: .zero, operation: .sourceOver, fraction: 1.0)
         ctx.restoreGState()
 
         // Image border
