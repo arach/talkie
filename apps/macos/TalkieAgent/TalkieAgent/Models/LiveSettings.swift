@@ -454,6 +454,8 @@ final class OverlayIndicatorOverridesStore {
 @MainActor
 final class LiveSettings: ObservableObject {
     static let shared = LiveSettings()
+    static let defaultIslandOverlayWidth: Double = 168
+    static let defaultIslandOverlayHeight: Double = 32
 
     // MARK: - Shared Settings Storage
     // Uses TalkieSharedSettings from TalkieKit for cross-app sync with Talkie
@@ -541,9 +543,37 @@ final class LiveSettings: ObservableObject {
         didSet { save() }
     }
 
+    @Published var islandOverlayMotion: Double {
+        didSet { save() }
+    }
+
+    @Published var islandOverlayReactivity: Double {
+        didSet { save() }
+    }
+
+    @Published var islandOverlayShape: Double {
+        didSet { save() }
+    }
+
+    @Published var islandOverlayWidth: Double {
+        didSet { save() }
+    }
+
+    @Published var islandOverlayHeight: Double {
+        didSet { save() }
+    }
+
     var effectiveOverlayStyle: OverlayStyle {
         guard overlayStyle.showsTopOverlay else { return .pillOnly }
         return OverlayIndicatorOverridesStore.shared.resolvedOverlayStyle(fallback: overlayStyle)
+    }
+
+    var islandVisualizationSettings: IslandVisualizationSettings {
+        IslandVisualizationSettings(
+            motion: islandOverlayMotion,
+            reactivity: islandOverlayReactivity,
+            shape: islandOverlayShape
+        )
     }
 
     @Published var overlayPosition: OverlayPosition {
@@ -825,6 +855,34 @@ final class LiveSettings: ObservableObject {
             self.overlayStyle = .particles
         }
 
+        self.islandOverlayMotion = Self.storedOverlayDouble(
+            forKey: AgentSettingsKey.islandOverlayMotion,
+            from: store,
+            defaultValue: IslandVisualizationSettings.defaultValue.motion
+        )
+        self.islandOverlayReactivity = Self.storedOverlayDouble(
+            forKey: AgentSettingsKey.islandOverlayReactivity,
+            from: store,
+            defaultValue: IslandVisualizationSettings.defaultValue.reactivity
+        )
+        self.islandOverlayShape = Self.storedOverlayDouble(
+            forKey: AgentSettingsKey.islandOverlayShape,
+            from: store,
+            defaultValue: IslandVisualizationSettings.defaultValue.shape
+        )
+        self.islandOverlayWidth = Self.storedDimensionDouble(
+            forKey: AgentSettingsKey.islandOverlayWidth,
+            from: store,
+            defaultValue: Self.defaultIslandOverlayWidth,
+            range: 112...260
+        )
+        self.islandOverlayHeight = Self.storedDimensionDouble(
+            forKey: AgentSettingsKey.islandOverlayHeight,
+            from: store,
+            defaultValue: Self.defaultIslandOverlayHeight,
+            range: 24...48
+        )
+
         // Load overlay position
         let overlayPosition: OverlayPosition
         if let rawValue = store.string(forKey: AgentSettingsKey.overlayPosition),
@@ -994,6 +1052,11 @@ final class LiveSettings: ObservableObject {
             "pttEnabled": pttEnabled,
             "overlay": [
                 "style": overlayStyle.rawValue,
+                "islandMotion": islandOverlayMotion,
+                "islandReactivity": islandOverlayReactivity,
+                "islandShape": islandOverlayShape,
+                "islandWidth": islandOverlayWidth,
+                "islandHeight": islandOverlayHeight,
                 "position": overlayPosition.rawValue,
                 "placement": ["x": overlayPlacement.x, "y": overlayPlacement.y],
                 "pillEnabled": pillEnabled,
@@ -1070,6 +1133,11 @@ final class LiveSettings: ObservableObject {
         store.set(dictationTTLHours, forKey: AgentSettingsKey.utteranceTTLHours)
         store.set(segmentDuration, forKey: AgentSettingsKey.segmentDuration)
         store.set(overlayStyle.rawValue, forKey: AgentSettingsKey.overlayStyle)
+        store.set(islandOverlayMotion, forKey: AgentSettingsKey.islandOverlayMotion)
+        store.set(islandOverlayReactivity, forKey: AgentSettingsKey.islandOverlayReactivity)
+        store.set(islandOverlayShape, forKey: AgentSettingsKey.islandOverlayShape)
+        store.set(islandOverlayWidth, forKey: AgentSettingsKey.islandOverlayWidth)
+        store.set(islandOverlayHeight, forKey: AgentSettingsKey.islandOverlayHeight)
         store.set(overlayPosition.rawValue, forKey: AgentSettingsKey.overlayPosition)
         if let data = try? JSONEncoder().encode(overlayPlacement) {
             store.set(data, forKey: AgentSettingsKey.overlayPlacement)
@@ -1127,6 +1195,25 @@ final class LiveSettings: ObservableObject {
     private static func decodePlacement(forKey key: String, from store: UserDefaults) -> NormalizedPlacement? {
         guard let data = store.data(forKey: key) else { return nil }
         return try? JSONDecoder().decode(NormalizedPlacement.self, from: data)
+    }
+
+    private static func storedOverlayDouble(
+        forKey key: String,
+        from store: UserDefaults,
+        defaultValue: Double
+    ) -> Double {
+        guard store.object(forKey: key) != nil else { return defaultValue }
+        return min(1, max(0, store.double(forKey: key)))
+    }
+
+    private static func storedDimensionDouble(
+        forKey key: String,
+        from store: UserDefaults,
+        defaultValue: Double,
+        range: ClosedRange<Double>
+    ) -> Double {
+        guard store.object(forKey: key) != nil else { return defaultValue }
+        return min(range.upperBound, max(range.lowerBound, store.double(forKey: key)))
     }
 
     // MARK: - Appearance Application

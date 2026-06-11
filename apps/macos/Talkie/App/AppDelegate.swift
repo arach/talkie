@@ -285,7 +285,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         // Sync feature flags to shared defaults so Agent can read them
         FeatureFlags.shared.syncAllToSharedDefaults()
 
-        // NotchComposer — unified notch area coordinator
+        // Talkie's notch/island is retired in favor of TalkieAgent's own
+        // capture island (TLK-027). Clear any agent-driven enable override so
+        // the legacy composer stays dormant; setup() then no-ops behind the
+        // (default-off) feature flag.
+        FeatureFlags.shared.clearLocalOverride("enableNotchComposer")
         NotchComposer.shared.setup()
 
         // Capture system (gated)

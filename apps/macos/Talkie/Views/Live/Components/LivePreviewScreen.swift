@@ -246,6 +246,8 @@ private struct HUDStylePreview: View {
                 WaveformBarsPreview(sensitive: false)
             case .waveformSensitive:
                 WaveformBarsPreview(sensitive: true)
+            case .island:
+                IslandPillShapesPreview()
             case .pillOnly:
                 EmptyView()
             }
@@ -310,7 +312,8 @@ struct LiveStyleSelector: View {
     // Only show the main HUD styles
     private let options: [(style: OverlayStyle, label: String, icon: String)] = [
         (.particles, "Particles", "sparkles"),
-        (.waveform, "Waveform", "waveform")
+        (.waveform, "Waveform", "waveform"),
+        (.island, "Island", "capsule")
     ]
 
     var body: some View {
@@ -332,6 +335,8 @@ struct LiveStyleSelector: View {
             return selection == .particles || selection == .particlesCalm
         case .waveform:
             return selection == .waveform || selection == .waveformSensitive
+        case .island:
+            return selection == .island
         default:
             return selection == style
         }
@@ -348,6 +353,8 @@ struct LiveStyleSelector: View {
             if selection != .waveform && selection != .waveformSensitive {
                 selection = .waveform
             }
+        case .island:
+            selection = .island
         default:
             selection = style
         }

@@ -268,9 +268,9 @@ struct ConsoleTabEditor: View {
 
     private var modelPlaceholder: String {
         switch harness {
-        case .claudeCode: "claude-sonnet-4-6"
+        case .claudeCode: "opus"
         case .pi: "gemini-2.5-pro"
-        case .opencode: "claude-sonnet-4-6"
+        case .opencode: "claude-opus-4-8"
         case .shell: ""
         }
     }
@@ -285,26 +285,26 @@ struct ConsoleTabEditor: View {
         switch harness {
         case .claudeCode:
             return [
-                ModelPreset(label: "Opus 4.6", value: "claude-opus-4-6", provider: ""),
+                ModelPreset(label: "Opus (latest)", value: "opus", provider: ""),
+                ModelPreset(label: "Opus 4.8", value: "claude-opus-4-8", provider: ""),
+                ModelPreset(label: "Sonnet (latest)", value: "sonnet", provider: ""),
                 ModelPreset(label: "Sonnet 4.6", value: "claude-sonnet-4-6", provider: ""),
                 ModelPreset(label: "Haiku 4.5", value: "claude-haiku-4-5-20251001", provider: ""),
-                ModelPreset(label: "Sonnet (alias)", value: "sonnet", provider: ""),
-                ModelPreset(label: "Opus (alias)", value: "opus", provider: ""),
             ]
         case .pi:
             return [
                 ModelPreset(label: "Gemini 2.5 Pro", value: "gemini-2.5-pro", provider: "google"),
                 ModelPreset(label: "Gemini 2.5 Flash", value: "gemini-2.5-flash", provider: "google"),
+                ModelPreset(label: "Claude Opus 4.8", value: "claude-opus-4-8", provider: "anthropic"),
                 ModelPreset(label: "Claude Sonnet 4.6", value: "claude-sonnet-4-6", provider: "anthropic"),
-                ModelPreset(label: "Claude Opus 4.6", value: "claude-opus-4-6", provider: "anthropic"),
                 ModelPreset(label: "GPT-4.1", value: "gpt-4.1", provider: "openai"),
                 ModelPreset(label: "o3", value: "o3", provider: "openai"),
                 ModelPreset(label: "Copilot (GPT-4.1)", value: "gpt-4.1", provider: "copilot"),
             ]
         case .opencode:
             return [
+                ModelPreset(label: "Claude Opus 4.8", value: "claude-opus-4-8", provider: ""),
                 ModelPreset(label: "Claude Sonnet 4.6", value: "claude-sonnet-4-6", provider: ""),
-                ModelPreset(label: "Claude Opus 4.6", value: "claude-opus-4-6", provider: ""),
                 ModelPreset(label: "GPT-4.1", value: "gpt-4.1", provider: ""),
             ]
         case .shell:

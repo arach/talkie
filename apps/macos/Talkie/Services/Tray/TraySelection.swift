@@ -441,10 +441,30 @@ final class TrayActionService {
             height: ts.height,
             windowTitle: ts.windowTitle,
             appName: ts.appName,
+            appBundleID: ts.appBundleID,
             displayName: ts.displayName
         )
 
-        var capture = TalkieObject.newCapture(id: captureId)
+        let titleSource = [ts.appName, ts.windowTitle, ts.displayName]
+            .compactMap { value -> String? in
+                guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !trimmed.isEmpty else { return nil }
+                return trimmed
+            }
+            .first
+        var capture = TalkieObject.newCapture(
+            id: captureId,
+            title: titleSource.map { "\($0) capture" }
+        )
+        if titleSource != nil || ts.appBundleID != nil {
+            capture.metadataJSON = RecordingMetadata(
+                app: AppContext(
+                    bundleId: ts.appBundleID,
+                    name: ts.appName,
+                    windowTitle: ts.windowTitle
+                )
+            ).toJSON()
+        }
         var assets = TalkieObjectAssets(screenshots: [screenshot])
 
         if runOCR {

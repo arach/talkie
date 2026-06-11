@@ -1,0 +1,275 @@
+//
+//  CaptureHUDController.swift
+//  Talkie
+//
+//  Chord controller for the HUD bar capture menu.
+//  Owns the keyboard chord lifecycle and forwards into CaptureHUDPanel.
+//
+
+import AppKit
+import TalkieKit
+
+@MainActor
+final class CaptureHUDController: CaptureChordController {
+
+    private let panel = CaptureHUDPanel()
+    private var globalMonitor: Any?
+    private var localMonitor: Any?
+    private var paletteTask: Task<Void, Never>?
+    private var armedRegionOverlay: ScreenCaptureOverlay?
+    private var armedRegionTask: Task<Void, Never>?
+    private let timeoutSeconds: TimeInterval = 30
+
+    func beginChord(initialMode: CaptureBarMode, options: CaptureChordOptions = .captureOnly) async -> CaptureBarResult? {
+        let traySnapshot = await AgentLiveTrayAssetStore.shared.snapshot()
+        let showCameraOption = false
+        let hasTrayItems = options.showTrayOption && traySnapshot.totalCount > 0
+        let hasSelectionItems = false
+        let trayCount = traySnapshot.totalCount
+
+        return await withCheckedContinuation { continuation in
+            var resumed = false
+
+            let resume: (CaptureBarResult?) -> Void = { [weak self] result in
+                guard !resumed else { return }
+                resumed = true
+                self?.tearDown()
+                continuation.resume(returning: result)
+            }
+
+            // Draw immediately with the appearance fallback. Wallpaper sampling
+            // uses ScreenCaptureKit, so it must never hold up showing the HUD.
+            let expectedFrame = CaptureHUDPanel.expectedFrame(
+                for: NSEvent.mouseLocation,
+                position: Self.captureHUDPosition
+            )
+            panel.show(
+                mode: initialMode,
+                showCameraOption: showCameraOption,
+                showTrayOption: hasTrayItems,
+                showSelectionOption: hasSelectionItems,
+                trayCount: trayCount,
+                palette: WallpaperLuminanceSampler.fallbackPalette()
+            )
+            paletteTask = Task { @MainActor [weak self] in
+                let palette = await WallpaperLuminanceSampler.samplePalette(for: expectedFrame)
+                guard !Task.isCancelled else { return }
+                self?.panel.updatePalette(palette)
+            }
+
+            var timeout = Task { @MainActor in
+                try? await Task.sleep(for: .seconds(self.timeoutSeconds))
+                resume(nil)
+            }
+
+            let resetTimeout: () -> Void = { [weak self] in
+                guard let self else { return }
+                timeout.cancel()
+                timeout = Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(self.timeoutSeconds))
+                    resume(nil)
+                }
+            }
+
+            self.panel.state.onAction = { result in
+                if let result {
+                    timeout.cancel()
+                    resume(result)
+                } else {
+                    self.syncArmedRegionOverlay(resume: resume)
+                    resetTimeout()
+                }
+            }
+
+            // The opening chord's keyDown can be delivered more than once
+            // while the HUD is coming up. Ignore every still-held Hyper+S/R
+            // event so it never gets mistaken for Screen/Record selection.
+            let handleKey: (NSEvent) -> Void = { [weak self] event in
+                guard let self else { return }
+                if event.isOpeningCaptureChordKey(initialMode: initialMode) {
+                    resetTimeout()
+                    return
+                }
+                let key = event.charactersIgnoringModifiers?.lowercased()
+                let currentMode = self.panel.state.mode
+
+                if event.keyCode == 123 || event.keyCode == 124 { // Left / Right Arrow
+                    self.panel.state.mode = event.keyCode == 123 ? .screenshot : .video
+                    self.syncArmedRegionOverlay(resume: resume)
+                    resetTimeout()
+                    return
+                }
+
+                switch key {
+                case "a":
+                    timeout.cancel()
+                    switch currentMode {
+                    case .screenshot:
+                        if self.armedRegionOverlay != nil {
+                            resetTimeout()
+                        } else {
+                            resume(.screenshot(.region))
+                        }
+                    case .video:      resume(.screenRecord(.region))
+                    }
+
+                case "s":
+                    timeout.cancel()
+                    switch currentMode {
+                    case .screenshot: resume(.screenshot(.fullscreen))
+                    case .video:      resume(.screenRecord(.fullscreen))
+                    }
+
+                case "d":
+                    timeout.cancel()
+                    switch currentMode {
+                    case .screenshot: resume(.screenshot(.window))
+                    case .video:      resume(.screenRecord(.window))
+                    }
+
+                case "c":
+                    if showCameraOption {
+                        timeout.cancel()
+                        resume(.toggleCamera)
+                    } else {
+                        resetTimeout()
+                    }
+
+                case "n":
+                    if hasSelectionItems {
+                        timeout.cancel()
+                        resume(.saveSelection)
+                    } else {
+                        resetTimeout()
+                    }
+
+                case "v", "f":
+                    if hasTrayItems {
+                        timeout.cancel()
+                        resume(.pasteLastTray)
+                    } else {
+                        resetTimeout()
+                    }
+
+                case "t", "w":
+                    if hasTrayItems {
+                        timeout.cancel()
+                        resume(.viewTray)
+                    } else {
+                        resetTimeout()
+                    }
+
+                default:
+                    break
+                }
+
+                if event.keyCode == 48 {  // Tab
+                    self.panel.toggleMode()
+                    self.syncArmedRegionOverlay(resume: resume)
+                    resetTimeout()
+                }
+
+                if event.keyCode == 36 || event.keyCode == 76 {  // Return / Enter (keypad)
+                    // Commit the preselected mode. The HUD highlights
+                    // REGION by default, so ↵ on first open fires a
+                    // region capture without needing the A keystroke.
+                    timeout.cancel()
+                    let selected = self.panel.state.selectedCaptureMode
+                    switch self.panel.state.mode {
+                    case .screenshot:
+                        if selected == .region, self.armedRegionOverlay != nil {
+                            resetTimeout()
+                        } else {
+                            resume(.screenshot(selected))
+                        }
+                    case .video:      resume(.screenRecord(selected))
+                    }
+                }
+
+                if event.keyCode == 53 {  // Escape
+                    timeout.cancel()
+                    resume(nil)
+                }
+            }
+
+            globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
+                handleKey(event)
+            }
+
+            localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                handleKey(event)
+                return nil
+            }
+
+            syncArmedRegionOverlay(resume: resume)
+        }
+    }
+
+    // MARK: - Private
+
+    private func tearDown() {
+        paletteTask?.cancel()
+        paletteTask = nil
+        cancelArmedRegionOverlay()
+        panel.dismiss()
+        if let monitor = globalMonitor {
+            NSEvent.removeMonitor(monitor)
+            globalMonitor = nil
+        }
+        if let monitor = localMonitor {
+            NSEvent.removeMonitor(monitor)
+            localMonitor = nil
+        }
+    }
+
+    private func syncArmedRegionOverlay(resume: @escaping (CaptureBarResult?) -> Void) {
+        guard panel.state.mode == .screenshot else {
+            cancelArmedRegionOverlay()
+            return
+        }
+        armRegionOverlayIfNeeded(resume: resume)
+    }
+
+    private func armRegionOverlayIfNeeded(resume: @escaping (CaptureBarResult?) -> Void) {
+        guard armedRegionOverlay == nil else { return }
+
+        let overlay = ScreenCaptureOverlay()
+        armedRegionOverlay = overlay
+        armedRegionTask = Task { @MainActor [weak self] in
+            guard !Task.isCancelled else { return }
+            let rect = await overlay.selectRegion(
+                freezesDesktop: false,
+                onModeSwitch: { [weak self] mode in
+                    guard let self else { return }
+                    self.panel.state.mode = mode
+                    self.syncArmedRegionOverlay(resume: resume)
+                }
+            )
+            guard !Task.isCancelled else { return }
+            if self?.armedRegionOverlay === overlay {
+                self?.armedRegionOverlay = nil
+                self?.armedRegionTask = nil
+            }
+            if let rect {
+                resume(.screenshotRegion(rect))
+            } else {
+                resume(nil)
+            }
+        }
+    }
+
+    private func cancelArmedRegionOverlay() {
+        armedRegionTask?.cancel()
+        armedRegionTask = nil
+        armedRegionOverlay?.cancel()
+        armedRegionOverlay = nil
+    }
+
+    private static var captureHUDPosition: CaptureHUDPosition {
+        guard let raw = UserDefaults.standard.string(forKey: "captureHUDPosition"),
+              let position = CaptureHUDPosition(rawValue: raw) else {
+            return .fixed
+        }
+        return position
+    }
+}

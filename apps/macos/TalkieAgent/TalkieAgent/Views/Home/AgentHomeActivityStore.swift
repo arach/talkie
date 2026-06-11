@@ -215,7 +215,7 @@ struct AgentHomeConversationTopic: Identifiable, Equatable {
     )
 }
 
-struct AgentHomeExecutorJob: Identifiable, Decodable {
+struct AgentHomeExecutorJob: Identifiable, Decodable, Equatable {
     let jobId: String
     let sessionId: String
     let state: String
@@ -244,6 +244,8 @@ struct AgentHomeExecutorJob: Identifiable, Decodable {
     let createdAt: String?
     let updatedAt: String?
     let error: String?
+    private let parsedCreatedAt: Date?
+    private let parsedUpdatedAt: Date?
 
     var id: String { sessionId }
 
@@ -276,11 +278,11 @@ struct AgentHomeExecutorJob: Identifiable, Decodable {
     }
 
     var createdDate: Date {
-        Self.parseDate(createdAt) ?? updatedDate
+        parsedCreatedAt ?? updatedDate
     }
 
     var updatedDate: Date {
-        Self.parseDate(updatedAt) ?? Self.parseDate(createdAt) ?? .distantPast
+        parsedUpdatedAt ?? parsedCreatedAt ?? .distantPast
     }
 
     init(snapshot: AgentRuntimeActivitySnapshot) {
@@ -312,6 +314,42 @@ struct AgentHomeExecutorJob: Identifiable, Decodable {
         self.createdAt = snapshot.createdAt
         self.updatedAt = snapshot.updatedAt
         self.error = snapshot.error
+        self.parsedCreatedAt = Self.parseDate(snapshot.createdAt)
+        self.parsedUpdatedAt = Self.parseDate(snapshot.updatedAt)
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.jobId = try container.decode(String.self, forKey: .jobId)
+        self.sessionId = try container.decode(String.self, forKey: .sessionId)
+        self.state = try container.decode(String.self, forKey: .state)
+        self.ack = try container.decode(String.self, forKey: .ack)
+        self.providerId = try container.decodeIfPresent(String.self, forKey: .providerId)
+        self.modelId = try container.decodeIfPresent(String.self, forKey: .modelId)
+        self.topLevelProviderId = try container.decodeIfPresent(String.self, forKey: .topLevelProviderId)
+        self.topLevelProviderName = try container.decodeIfPresent(String.self, forKey: .topLevelProviderName)
+        self.topLevelModelId = try container.decodeIfPresent(String.self, forKey: .topLevelModelId)
+        self.runtimeId = try container.decodeIfPresent(String.self, forKey: .runtimeId)
+        self.runtimeName = try container.decodeIfPresent(String.self, forKey: .runtimeName)
+        self.conversationId = try container.decodeIfPresent(String.self, forKey: .conversationId)
+        self.parentSessionId = try container.decodeIfPresent(String.self, forKey: .parentSessionId)
+        self.continuedFromSessionId = try container.decodeIfPresent(String.self, forKey: .continuedFromSessionId)
+        self.source = try container.decodeIfPresent(String.self, forKey: .source)
+        self.channelCode = try container.decodeIfPresent(String.self, forKey: .channelCode)
+        self.instruction = try container.decodeIfPresent(String.self, forKey: .instruction)
+        self.transcript = try container.decodeIfPresent(String.self, forKey: .transcript)
+        self.output = try container.decodeIfPresent(String.self, forKey: .output)
+        self.spokenSummary = try container.decodeIfPresent(String.self, forKey: .spokenSummary)
+        self.bridgeStatus = try container.decodeIfPresent(String.self, forKey: .bridgeStatus)
+        self.agentSessionId = try container.decodeIfPresent(String.self, forKey: .agentSessionId)
+        self.agentSessionThreadId = try container.decodeIfPresent(String.self, forKey: .agentSessionThreadId)
+        self.agentSessionStatus = try container.decodeIfPresent(String.self, forKey: .agentSessionStatus)
+        self.agentSessionName = try container.decodeIfPresent(String.self, forKey: .agentSessionName)
+        self.createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
+        self.updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
+        self.error = try container.decodeIfPresent(String.self, forKey: .error)
+        self.parsedCreatedAt = Self.parseDate(createdAt)
+        self.parsedUpdatedAt = Self.parseDate(updatedAt)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -580,7 +618,6 @@ private extension String {
 @MainActor
 final class AgentHomeActivityStore: ObservableObject {
     @Published private(set) var executorJobs: [AgentHomeExecutorJob] = []
-    @Published private(set) var recentDictations: [LiveRecording] = []
     @Published private(set) var runtimePing: AgentRuntimePing?
     @Published private(set) var agents: [AgentRuntimeAgentSnapshot] = []
     @Published private(set) var lastRefreshed: Date?
@@ -645,9 +682,7 @@ final class AgentHomeActivityStore: ObservableObject {
     }
 
     var latestActivityDate: Date? {
-        let jobDate = executorJobs.first?.updatedDate
-        let dictationDate = recentDictations.first?.createdAt
-        return [jobDate, dictationDate].compactMap { $0 }.max()
+        executorJobs.first?.updatedDate
     }
 
     /// Sidebar grouping: "Today" / "Yesterday" / "Earlier" based on the
@@ -691,9 +726,6 @@ final class AgentHomeActivityStore: ObservableObject {
     }
 
     func refresh() {
-        recentDictations = UnifiedDatabase.recentDictations(limit: 12)
-        lastRefreshed = Date()
-
         Task { @MainActor [weak self] in
             await self?.refreshRuntimeStatus()
         }
@@ -750,15 +782,34 @@ final class AgentHomeActivityStore: ObservableObject {
     private func refreshRuntimeStatus() async {
         do {
             let status = try await AgentRuntimeClient.shared.status()
-            runtimePing = status.ping
-            agents = status.ping.agents
-            executorJobs = status.activities
+            var didChange = false
+            let nextJobs = status.activities
                 .map(AgentHomeExecutorJob.init(snapshot:))
                 .sorted { $0.updatedDate > $1.updatedDate }
+
+            if runtimePing != status.ping {
+                runtimePing = status.ping
+                didChange = true
+            }
+            if agents != status.ping.agents {
+                agents = status.ping.agents
+                didChange = true
+            }
+            if executorJobs != nextJobs {
+                executorJobs = nextJobs
+                didChange = true
+            }
+            if didChange {
+                lastRefreshed = Date()
+            }
         } catch {
+            let didChange = runtimePing != nil || !agents.isEmpty || !executorJobs.isEmpty
             runtimePing = nil
             agents = []
             executorJobs = []
+            if didChange {
+                lastRefreshed = Date()
+            }
             agentHomeLog.warning(
                 "Agent Home could not refresh runtime status",
                 detail: error.localizedDescription

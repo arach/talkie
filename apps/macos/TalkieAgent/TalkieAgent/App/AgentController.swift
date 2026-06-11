@@ -403,13 +403,9 @@ final class AgentController: ObservableObject {
         }
     }
 
-    private struct TrayAssetPayload: Sendable {
-        let json: String
-        let assets: TalkieObjectAssets
-    }
-
     /// Prepare only the Agent-local data that must be available before delivery.
-    /// Talkie's tray assets are fetched separately so delivery is not DB-gated.
+    /// Agent-owned live tray assets are promoted locally after the recording row
+    /// is stored, so delivery never depends on Talkie.app being available.
     private nonisolated static func prepareDictation(
         plainText: String,
         localScreenshots: [RecordingScreenshot]
@@ -488,54 +484,35 @@ final class AgentController: ObservableObject {
         recordingEndedAt: Date?,
         includeScreenshots: Bool
     ) async -> TalkieObjectAssets? {
-        guard let payload = await fetchTrayAssetPayload(
-            recordingId: recordingId,
-            captureSessionId: captureSessionId,
-            recordingStartedAt: recordingStartedAt,
-            recordingEndedAt: recordingEndedAt,
-            includeScreenshots: includeScreenshots
-        ) else {
-            return nil
-        }
-
-        return await mergeTrayAssetPayload(payload, into: recordingId)
-    }
-
-    private nonisolated static func fetchTrayAssetPayload(
-        recordingId: UUID,
-        captureSessionId: UUID?,
-        recordingStartedAt: Date?,
-        recordingEndedAt: Date?,
-        includeScreenshots: Bool
-    ) async -> TrayAssetPayload? {
         guard captureSessionId != nil,
-              let json = await TalkieAgentXPCService.shared.fetchTrayAssets(
+              let promotion = await AgentLiveTrayAssetStore.shared.promoteAssetsForRecording(
                 recordingId: recordingId,
                 recordingStartedAt: recordingStartedAt,
                 recordingEndedAt: recordingEndedAt,
                 includeScreenshots: includeScreenshots
               ),
-              let assets = TalkieObjectAssets.from(json: json),
-              !assets.isEmpty else {
+              !promotion.isEmpty,
+              let json = promotion.assets.toJSON(),
+              UnifiedDatabase.mergeAssets(id: recordingId, assetsJSON: json) else {
             return nil
         }
 
-        return TrayAssetPayload(json: json, assets: assets)
-    }
-
-    private nonisolated static func mergeTrayAssetPayload(
-        _ payload: TrayAssetPayload,
-        into recordingId: UUID
-    ) async -> TalkieObjectAssets? {
-        guard UnifiedDatabase.mergeAssets(id: recordingId, assetsJSON: payload.json) else {
-            return nil
-        }
-
+        await AgentLiveTrayAssetStore.shared.drainPromotedAssets(promotion)
         await TalkieAgentXPCService.shared.notifyDictationAdded()
+        notifyLiveTrayAssetsDidChange()
         await MainActor.run {
             DictationStore.shared.refresh()
         }
-        return payload.assets
+        return promotion.assets
+    }
+
+    private nonisolated static func notifyLiveTrayAssetsDidChange() {
+        DistributedNotificationCenter.default().postNotificationName(
+            Notification.Name(LiveTrayNotifications.assetsDidChange),
+            object: Bundle.main.bundleIdentifier ?? "TalkieAgent",
+            userInfo: ["source": "TalkieAgent"],
+            deliverImmediately: true
+        )
     }
 
     private nonisolated static func renderDictationDeliveryText(
@@ -1982,8 +1959,8 @@ final class AgentController: ObservableObject {
             // Track milestone
             ProcessingMilestones.shared.markRouting()
 
-            // Prepare only local state needed for delivery. Talkie's tray
-            // assets attach later, after the recording row is stored.
+            // Prepare only local state needed for delivery. Agent-owned live
+            // tray assets attach later, after the recording row is stored.
             let prepared = Self.prepareDictation(
                 plainText: result.text,
                 localScreenshots: capturedScreenshots

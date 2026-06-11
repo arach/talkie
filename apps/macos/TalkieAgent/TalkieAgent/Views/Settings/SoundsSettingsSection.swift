@@ -56,8 +56,8 @@ struct SoundsSettingsSection: View {
         } content: {
             // Event selector - horizontal row with play all
             SettingsCard(title: "EVENT") {
-                VStack(spacing: Spacing.md) {
-                    HStack(spacing: Spacing.sm) {
+                VStack(spacing: OpsSpacing.md) {
+                    HStack(spacing: OpsSpacing.md) {
                         ForEach(SoundEvent.allCases, id: \.rawValue) { event in
                             SoundEventCard(
                                 event: event,
@@ -73,16 +73,16 @@ struct SoundsSettingsSection: View {
                     Button(action: playSequence) {
                         HStack(spacing: 6) {
                             Image(systemName: isPlayingSequence ? "stop.fill" : "play.fill")
-                                .font(.system(size: 10))
+                                .font(OpsType.ui(OpsSize.xxs))
                             Text(isPlayingSequence ? "Playing..." : "Play Sequence")
-                                .font(.system(size: 11, weight: .medium))
+                                .font(OpsType.ui(OpsSize.xs, weight: .medium))
                         }
-                        .foregroundColor(isPlayingSequence ? .orange : .accentColor)
-                        .padding(.horizontal, Spacing.md)
-                        .padding(.vertical, Spacing.sm)
+                        .foregroundStyle(isPlayingSequence ? OpsInk.statusWarn : OpsTint.amber.color)
+                        .padding(.horizontal, OpsSpacing.md)
+                        .padding(.vertical, OpsSpacing.md)
                         .background(
-                            RoundedRectangle(cornerRadius: CornerRadius.xs)
-                                .fill(isPlayingSequence ? Color.orange.opacity(0.15) : Color.accentColor.opacity(0.1))
+                            RoundedRectangle(cornerRadius: OpsRadius.standard)
+                                .fill(isPlayingSequence ? OpsSurface.tintFill(OpsInk.statusWarn) : OpsSurface.tintGhost(OpsTint.amber.color))
                         )
                     }
                     .buttonStyle(.plain)
@@ -129,42 +129,40 @@ struct SoundEventCard: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: Spacing.sm) {
+            VStack(spacing: OpsSpacing.md) {
                 // Icon
                 Image(systemName: event.icon)
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundColor(isSelected ? .accentColor : (isHovered ? TalkieTheme.textPrimary : TalkieTheme.textSecondary))
+                    .font(OpsType.ui(OpsSize.xl, weight: .medium))
+                    .foregroundStyle(isSelected ? OpsTint.amber.color : (isHovered ? OpsInk.ink : OpsInk.muted))
                     .frame(height: 24)
 
                 // Event name
                 Text(event.rawValue)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(isSelected ? TalkieTheme.textPrimary : (isHovered ? TalkieTheme.textPrimary : TalkieTheme.textSecondary))
+                    .font(OpsType.ui(OpsSize.xs, weight: .semibold))
+                    .foregroundStyle(isSelected || isHovered ? OpsInk.ink : OpsInk.muted)
 
                 // Current sound
                 Text(sound.displayName)
-                    .font(.system(size: 9))
-                    .foregroundColor(TalkieTheme.textTertiary)
+                    .font(OpsType.ui(OpsSize.micro))
+                    .foregroundStyle(OpsInk.dim)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, Spacing.md)
-            .glassHover(
-                isHovered: isHovered,
-                isSelected: isSelected,
-                cornerRadius: CornerRadius.sm,
-                accentColor: isSelected ? .accentColor : nil
+            .padding(.vertical, OpsSpacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: OpsRadius.standard)
+                    .fill(isSelected ? OpsSurface.selected(OpsTint.amber.color) : (isHovered ? OpsSurface.hover : OpsSurface.control))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                RoundedRectangle(cornerRadius: OpsRadius.standard)
                     .stroke(
-                        isSelected ? Color.accentColor.opacity(0.6) : Color.clear,
-                        lineWidth: isSelected ? 1.5 : 0
+                        isSelected ? OpsSurface.tintBorder(OpsTint.amber.color) : OpsHairline.subtle,
+                        lineWidth: isSelected ? 1.5 : OpsStroke.standard
                     )
             )
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
-        .animation(TalkieAnimation.fast, value: isHovered)
+        .animation(.easeOut(duration: 0.12), value: isHovered)
     }
 }
 
@@ -174,11 +172,11 @@ struct SoundGrid: View {
     @Binding var selection: TalkieSound
 
     private let columns = [
-        GridItem(.adaptive(minimum: 80, maximum: 100), spacing: Spacing.sm)
+        GridItem(.adaptive(minimum: 80, maximum: 100), spacing: OpsSpacing.md)
     ]
 
     var body: some View {
-        LazyVGrid(columns: columns, spacing: Spacing.sm) {
+        LazyVGrid(columns: columns, spacing: OpsSpacing.md) {
             ForEach(TalkieSound.allCases, id: \.self) { sound in
                 SoundChip(
                     sound: sound,
@@ -216,45 +214,41 @@ struct SoundChip: View {
                 // Checkmark for selected
                 if isSelected {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(.accentColor)
+                        .font(OpsType.ui(OpsSize.micro, weight: .bold))
+                        .foregroundStyle(OpsTint.amber.color)
                 } else if sound == .none {
                     Image(systemName: "speaker.slash")
-                        .font(.system(size: 10))
-                        .foregroundColor(TalkieTheme.textMuted)
+                        .font(OpsType.ui(OpsSize.xxs))
+                        .foregroundStyle(OpsInk.dim)
                 } else {
                     Image(systemName: isPlaying ? "speaker.wave.3.fill" : "speaker.wave.2")
-                        .font(.system(size: 10))
-                        .foregroundColor(isHovered ? TalkieTheme.textPrimary : TalkieTheme.textSecondary)
+                        .font(OpsType.ui(OpsSize.xxs))
+                        .foregroundStyle(isHovered ? OpsInk.ink : OpsInk.muted)
                         .symbolEffect(.variableColor.iterative, isActive: isPlaying)
                 }
 
                 Text(sound.displayName)
-                    .font(.system(size: 10, weight: isSelected ? .bold : .medium))
-                    .foregroundColor(isSelected ? .accentColor : (isHovered ? TalkieTheme.textPrimary : TalkieTheme.textSecondary))
+                    .font(OpsType.ui(OpsSize.xxs, weight: isSelected ? .bold : .medium))
+                    .foregroundStyle(isSelected ? OpsTint.amber.color : (isHovered ? OpsInk.ink : OpsInk.muted))
             }
-            .padding(.horizontal, Spacing.sm)
-            .padding(.vertical, Spacing.xs)
+            .padding(.horizontal, OpsSpacing.md)
+            .padding(.vertical, OpsSpacing.xs)
             .frame(maxWidth: .infinity)
             .frame(height: 28)
-            .glassHover(
-                isHovered: isHovered,
-                isSelected: isSelected,
-                cornerRadius: CornerRadius.xs,
-                baseOpacity: 0.02,
-                hoverOpacity: 0.15,
-                accentColor: isSelected ? .accentColor : nil
+            .background(
+                RoundedRectangle(cornerRadius: OpsRadius.tight)
+                    .fill(isSelected ? OpsSurface.selected(OpsTint.amber.color) : (isHovered ? OpsSurface.hover : OpsSurface.inset))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: CornerRadius.xs)
+                RoundedRectangle(cornerRadius: OpsRadius.tight)
                     .stroke(
-                        isSelected ? Color.accentColor : Color.clear,
+                        isSelected ? OpsSurface.tintBorder(OpsTint.amber.color) : Color.clear,
                         lineWidth: isSelected ? 1.5 : 0
                     )
             )
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
-        .animation(TalkieAnimation.fast, value: isHovered)
+        .animation(.easeOut(duration: 0.12), value: isHovered)
     }
 }

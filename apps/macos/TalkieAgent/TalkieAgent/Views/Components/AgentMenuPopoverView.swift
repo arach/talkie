@@ -39,8 +39,8 @@ struct AgentMenuRecentItem: Identifiable, Sendable {
 struct AgentMenuActions {
     var toggleRecording: () -> Void
     var openHome: () -> Void
-    var openHistory: () -> Void
     var openSettings: () -> Void
+    var openHistory: () -> Void
     var openAudioSettings: () -> Void
     var openLogs: () -> Void
     var openPermissions: () -> Void
@@ -416,7 +416,7 @@ struct AgentMenuPopoverView: View {
                 spacing: 6
             ) {
                 AgentMenuToolTile(title: "Home", systemImage: "rectangle.grid.2x2.fill", tint: skin.inkDim, action: actions.openHome)
-                AgentMenuToolTile(title: "Settings", systemImage: "gearshape.fill", tint: skin.inkMuted, action: actions.openSettings)
+                AgentMenuToolTile(title: "Settings", systemImage: "gearshape.fill", tint: skin.inkDim, action: actions.openSettings)
                 AgentMenuToolTile(
                     title: "Logs",
                     systemImage: "doc.text.magnifyingglass",
@@ -1114,8 +1114,8 @@ private struct AgentMenuEmptyRow: View {
         actions: AgentMenuActions(
             toggleRecording: {},
             openHome: {},
-            openHistory: {},
             openSettings: {},
+            openHistory: {},
             openAudioSettings: {},
             openLogs: {},
             openPermissions: {},

@@ -24,48 +24,13 @@ import AppKit
 // Other Scope surfaces that still defined their own copies have been
 // migrated to the same single source so resolution doesn't drift.)
 
-// MARK: - Date bucket
-
-/// Section-header buckets for the library list. Items are grouped
-/// into these buckets in date-descending order; oldest items fall
-/// into a month bucket so the list stays tractable for big archives.
-private enum DateBucket: Hashable {
-    case today
-    case yesterday
-    case thisWeek
-    case month(year: Int, month: Int)
-
-    var label: String {
-        switch self {
-        case .today: return "TODAY"
-        case .yesterday: return "YESTERDAY"
-        case .thisWeek: return "THIS WEEK"
-        case .month(let y, let m):
-            let df = DateFormatter()
-            df.dateFormat = "MMM yyyy"
-            var comps = DateComponents()
-            comps.year = y
-            comps.month = m
-            comps.day = 1
-            let date = Calendar.current.date(from: comps) ?? Date()
-            return df.string(from: date).uppercased()
-        }
-    }
-
-    static func bucket(for date: Date, now: Date = Date()) -> DateBucket {
-        let cal = Calendar.current
-        if cal.isDateInToday(date) { return .today }
-        if cal.isDateInYesterday(date) { return .yesterday }
-        // "This week" = within the last 7 days, not in today / yesterday
-        if let weekAgo = cal.date(byAdding: .day, value: -7, to: now), date >= weekAgo {
-            return .thisWeek
-        }
-        let comps = cal.dateComponents([.year, .month], from: date)
-        return .month(year: comps.year ?? 2026, month: comps.month ?? 1)
-    }
-}
-
 // MARK: - ScopeLibraryView
+//
+// Date buckets, the channel-tagged row, the ⌘-badge chip, and the
+// capture drag modifier all live in TalkieKit (ScopeLibraryList.swift)
+// so companion surfaces (TalkieAgent's Library page) render the exact
+// same presentation. This view keeps what's Talkie-only: semantic
+// filters, search, pagination, ⌘-hold shortcuts, and the inspector.
 
 struct ScopeLibraryView: View {
     @Environment(\.navigationState) private var navigationState
@@ -623,13 +588,13 @@ struct ScopeLibraryView: View {
 
     private var recordingsList: some View {
         // Bucket the recordings so we can render section headers as eyebrows.
-        let groups = bucketed(viewModel.recordings)
+        let groups = ScopeLibraryDateBucket.grouped(viewModel.recordings)
 
         return ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
                     ForEach(groups, id: \.bucket) { group in
-                        bucketHeader(group.bucket, count: group.items.count)
+                        ScopeLibraryBucketHeader(bucket: group.bucket, count: group.items.count)
                         ForEach(Array(group.items.enumerated()), id: \.element.id) { idx, recording in
                             ScopeLibraryRow(
                                 recording: recording,
@@ -692,47 +657,6 @@ struct ScopeLibraryView: View {
             }
             .buttonStyle(.plain)
         }
-    }
-
-    private func bucketHeader(_ bucket: DateBucket, count: Int) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text("· \(bucket.label)")
-                .font(ScopeType.eyebrow)
-                .tracking(ScopeType.Tracking.wide)
-                .foregroundStyle(ScopeInk.muted)
-            Spacer()
-            Text("\(count)")
-                .font(ScopeType.chrome)
-                .tracking(ScopeType.Tracking.wide)
-                .foregroundStyle(ScopeInk.subtle)
-        }
-        .padding(.horizontal, 32)
-        .padding(.top, 14)
-        .padding(.bottom, 8)
-        .overlay(alignment: .bottom) {
-            ScopeDivider(color: ScopeEdge.faint).padding(.horizontal, 32)
-        }
-    }
-
-    private struct BucketGroup {
-        let bucket: DateBucket
-        let items: [TalkieObject]
-    }
-
-    private func bucketed(_ items: [TalkieObject]) -> [BucketGroup] {
-        let now = Date()
-        // Preserve original ordering — RecordingsViewModel already sorts desc.
-        var order: [DateBucket] = []
-        var map: [DateBucket: [TalkieObject]] = [:]
-        for r in items {
-            let b = DateBucket.bucket(for: r.createdAt, now: now)
-            if map[b] == nil {
-                order.append(b)
-                map[b] = []
-            }
-            map[b]?.append(r)
-        }
-        return order.map { BucketGroup(bucket: $0, items: map[$0] ?? []) }
     }
 
     // MARK: - States
@@ -859,306 +783,6 @@ struct ScopeLibraryView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-}
-
-// MARK: - Row
-
-/// Compact channel-tagged signal row. The heart of the library: leading
-/// channel label (M / D / N / C), title in sans, chrome metadata line,
-/// and a right-side detail block (sparkline for memos w/ duration, else
-/// word count / time).
-private struct ScopeLibraryRow: View {
-    let recording: TalkieObject
-    let isSelected: Bool
-    /// 1-9 while ⌘ is held and this row is in the first nine slots.
-    /// Nil otherwise — no badge is rendered.
-    let shortcutNumber: Int?
-    let onSelect: () -> Void
-
-    @State private var isHovered = false
-
-    private var channelLetter: String {
-        switch recording.type {
-        case .memo: return "M"
-        case .dictation: return "D"
-        case .note: return "N"
-        case .capture: return "C"
-        case .selection: return "S"
-        case .segment: return "·"
-        }
-    }
-
-    private var channelColor: Color {
-        switch recording.type {
-        case .memo: return ScopeKind.memo
-        case .dictation: return ScopeKind.dict
-        case .note: return ScopeKind.note
-        case .capture, .selection: return ScopeKind.capture
-        default: return ScopeInk.subtle
-        }
-    }
-
-    private var rowTitle: String {
-        if let title = recording.title, !title.isEmpty { return title }
-
-        // Captures: name the source app or capture mode rather than
-        // falling through to a generic "(untitled)".
-        if recording.type == .capture {
-            if let app = recording.appContext?.name, !app.isEmpty {
-                return "\(app) capture"
-            }
-            if let shot = recording.screenshots.first {
-                let mode = shot.captureMode.capitalized
-                return "\(mode) capture"
-            }
-        }
-
-        // Text-bearing items: first sentence reads better than the dumb
-        // 80-char prefix from `transcriptPreview`.
-        if let text = recording.text?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !text.isEmpty {
-            return Self.firstSentence(of: text, limit: 80)
-        }
-
-        // Recording without a transcript yet — type + duration is more
-        // informative than the literal "(untitled)".
-        if recording.duration > 0 {
-            let kind = recording.type.rawValue.capitalized
-            return "\(kind) · \(formatDuration(recording.duration))"
-        }
-
-        return "(untitled)"
-    }
-
-    /// Returns the first sentence of `text`, or a soft-truncated prefix
-    /// when no sentence boundary lands within `limit` characters. A
-    /// sentence ends at `.`, `!`, or `?` followed by whitespace.
-    private static func firstSentence(of text: String, limit: Int) -> String {
-        let cleaned = text
-            .components(separatedBy: .newlines)
-            .joined(separator: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        let enders: Set<Character> = [".", "!", "?"]
-        var end: String.Index? = nil
-        for i in cleaned.indices {
-            if enders.contains(cleaned[i]) {
-                let next = cleaned.index(after: i)
-                if next == cleaned.endIndex || cleaned[next].isWhitespace {
-                    end = next
-                    break
-                }
-            }
-        }
-
-        if let e = end {
-            let s = String(cleaned[..<e]).trimmingCharacters(in: .whitespacesAndNewlines)
-            if !s.isEmpty && s.count <= limit { return s }
-        }
-
-        if cleaned.count <= limit { return cleaned }
-        let truncated = String(cleaned.prefix(limit))
-        if let lastSpace = truncated.lastIndex(of: " ") {
-            return String(truncated[..<lastSpace]) + "…"
-        }
-        return truncated + "…"
-    }
-
-    /// Chrome metadata — date · source · duration · word count.
-    private var chromeLine: String {
-        var parts: [String] = []
-        parts.append(recording.type.rawValue.uppercased())
-        if let app = recording.appContext?.name, !app.isEmpty {
-            parts.append(app.uppercased())
-        } else {
-            parts.append(recording.source.displayName.uppercased())
-        }
-        if recording.duration > 0 {
-            parts.append(formatDuration(recording.duration))
-        }
-        if recording.wordCount > 0 {
-            parts.append("\(recording.wordCount)W")
-        }
-        return parts.joined(separator: " · ")
-    }
-
-    private func formatDuration(_ seconds: Double) -> String {
-        let mins = Int(seconds) / 60
-        let secs = Int(seconds) % 60
-        if mins > 0 {
-            return "\(mins):\(String(format: "%02d", secs))"
-        }
-        return "0:\(String(format: "%02d", secs))"
-    }
-
-    var body: some View {
-        Button(action: onSelect) {
-            HStack(alignment: .center, spacing: 12) {
-                // Channel tag
-                ChannelLabel(
-                    channelLetter,
-                    color: isSelected ? ScopeAmber.solid : channelColor,
-                    strokeColor: isSelected ? ScopeAmber.solid.opacity(0.5) : ScopeEdge.normal
-                )
-                .frame(width: 26, alignment: .leading)
-
-                // Title + chrome
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        Text(rowTitle)
-                            .font(.system(size: 13, weight: isSelected ? .medium : .regular))
-                            .foregroundStyle(isSelected ? ScopeInk.primary : ScopeInk.dim)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-
-                        if recording.wasRefined {
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 9))
-                                .foregroundStyle(ScopeAmber.solid.opacity(0.7))
-                        }
-                        if recording.wasPromoted {
-                            Image(systemName: "arrow.up.circle")
-                                .font(.system(size: 9))
-                                .foregroundStyle(ScopeAmber.solid.opacity(0.7))
-                        }
-                    }
-
-                    Text(chromeLine)
-                        .font(ScopeType.chrome)
-                        .tracking(ScopeType.Tracking.normal)
-                        .foregroundStyle(ScopeInk.subtle)
-                        .lineLimit(1)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                // Trailing: time-ago, plus a fixed-height trace slot. The
-                // slot stays reserved (Color.clear) on non-memo rows so the
-                // row height is identical across all filter types — the
-                // list doesn't visually jolt when toggling between Memos
-                // and Notes/Dictations.
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text(timeAgo)
-                        .font(ScopeType.chrome)
-                        .tracking(ScopeType.Tracking.wide)
-                        .foregroundStyle(ScopeInk.faint)
-                    Group {
-                        if recording.isMemo && recording.duration > 0 {
-                            TraceSparkline(seed: recording.id.uuidString.hashValue)
-                                .opacity(isHovered || isSelected ? 1.0 : 0.65)
-                        } else {
-                            Color.clear
-                        }
-                    }
-                    .frame(width: 56, height: 10)
-                }
-                .frame(width: 72, alignment: .trailing)
-            }
-            .padding(.horizontal, 32)
-            .padding(.vertical, 10)
-            .background {
-                if isSelected {
-                    ScopeAmber.tintSubtle
-                } else if isHovered {
-                    ScopeCanvas.canvasOverlay
-                }
-            }
-            .overlay(alignment: .leading) {
-                if isSelected || isHovered {
-                    Rectangle()
-                        .fill(isSelected ? ScopeAmber.solid : ScopeAmber.solid.opacity(0.4))
-                        .frame(width: 2)
-                }
-            }
-            .overlay(alignment: .trailing) {
-                // ⌘-hold position badge. Lives in the right margin so
-                // it doesn't fight the channel label on the left or
-                // overlap the time-ago / sparkline in the trailing
-                // slot. Fades with the parent `cmdHeld` animation.
-                if let n = shortcutNumber {
-                    CmdGlyphBadge(letter: "\(n)")
-                        .padding(.trailing, 10)
-                        .transition(.opacity.combined(with: .scale(scale: 0.85)))
-                        .allowsHitTesting(false)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .contentShape(Rectangle())
-        .modifier(CaptureRowDragModifier(fileURL: primaryScreenshotURL))
-    }
-
-    private var timeAgo: String {
-        RelativeTimeFormatter.format(recording.createdAt).uppercased()
-    }
-
-    /// First screenshot file on disk, if any. Captures (and notes / memos
-    /// with an image attached) drag as the file URL so the receiver sees
-    /// a real image, not bitmap data. nil for audio-only rows.
-    private var primaryScreenshotURL: URL? {
-        guard let filename = recording.screenshots.first?.filename else { return nil }
-        return ScreenshotStorage.screenshotsDirectory.appendingPathComponent(filename)
-    }
-}
-
-/// Conditionally adds `.onDrag` to a row when a file URL is available.
-/// Avoids starting a drag gesture on rows that have no payload (audio-
-/// only memos, dictations) — those drag visually but drop nothing,
-/// which feels broken.
-struct CaptureRowDragModifier: ViewModifier {
-    let fileURL: URL?
-
-    func body(content: Content) -> some View {
-        if let url = fileURL {
-            content.onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider() }
-        } else {
-            content
-        }
-    }
-}
-
-// MARK: - TraceSparkline
-
-/// Tiny deterministic sparkline drawn from a seed hash. Real audio
-/// envelopes aren't reachable from the row context without an extra
-/// async load, so this is a *signature* line — it's stable per memo
-/// and looks like a trace, but doesn't claim to be the actual waveform.
-private struct TraceSparkline: View {
-    let seed: Int
-
-    var body: some View {
-        Canvas { ctx, size in
-            let n = 18
-            var rng = SplitMix(seed: UInt64(bitPattern: Int64(seed)))
-            var path = Path()
-            for i in 0..<n {
-                let x = CGFloat(i) / CGFloat(n - 1) * size.width
-                let amp = CGFloat(rng.nextUnit()) * 0.7 + 0.15  // 0.15…0.85
-                let y = size.height * (1 - amp)
-                if i == 0 {
-                    path.move(to: CGPoint(x: x, y: y))
-                } else {
-                    path.addLine(to: CGPoint(x: x, y: y))
-                }
-            }
-            ctx.stroke(path, with: .color(ScopeTrace.solid.opacity(0.55)), lineWidth: 0.8)
-        }
-        .allowsHitTesting(false)
-    }
-
-    /// Tiny inline deterministic PRNG so the sparkline is stable per recording.
-    private struct SplitMix {
-        var state: UInt64
-        init(seed: UInt64) { self.state = seed == 0 ? 0xDEADBEEF : seed }
-        mutating func nextUnit() -> Double {
-            state &+= 0x9E3779B97F4A7C15
-            var z = state
-            z = (z ^ (z >> 30)) &* 0xBF58476D1CE4E5B9
-            z = (z ^ (z >> 27)) &* 0x94D049BB133111EB
-            z = z ^ (z >> 31)
-            return Double(z >> 11) / Double(UInt64(1) << 53)
-        }
-    }
 }
 
 // MARK: - Resizable split layout
@@ -1312,38 +936,6 @@ private struct ScopeLibraryRowSkeleton: View {
     private var titleWidth: CGFloat {
         let widths: [CGFloat] = [180, 220, 150, 240, 200, 130, 210, 170]
         return widths.randomElement() ?? 200
-    }
-}
-
-// MARK: - Cmd-hold glyph badge
-
-/// Editorial cmd-hint chip rendered next to navigation targets while
-/// the user holds ⌘. Reads as a small printer's tag on the Scope page:
-/// cream substrate, ink letterform, amber ⌘ glyph as the accent dot.
-/// Sits on top of whatever surface it's overlaid on; allowsHitTesting
-/// is the caller's responsibility.
-private struct CmdGlyphBadge: View {
-    let letter: String
-
-    var body: some View {
-        HStack(spacing: 1) {
-            Text("⌘")
-                .foregroundColor(ScopeAmber.solid)
-            Text(letter)
-                .foregroundColor(ScopeInk.primary)
-        }
-        .font(.system(size: 8.5, weight: .semibold, design: .monospaced))
-        .padding(.horizontal, 4)
-        .padding(.vertical, 1.5)
-        .background(
-            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                .fill(ScopeCanvas.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                .strokeBorder(ScopeEdge.normal, lineWidth: 0.5)
-        )
-        .shadow(color: ScopeInk.primary.opacity(0.10), radius: 2, y: 1)
     }
 }
 

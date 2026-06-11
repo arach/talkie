@@ -314,7 +314,7 @@ final class TabDefinitionRegistry {
         # TALKIE_WORKSPACE = "~/dev/talkie"
 
         # [defaults.claude-code]
-        # model = "claude-sonnet-4-6"
+        # model = "opus"
         """
         try? content.write(to: url, atomically: true, encoding: .utf8)
     }

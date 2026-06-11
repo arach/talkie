@@ -193,11 +193,14 @@ final class NotchOverlayController: ObservableObject {
     @Published var isExpanded: Bool = false
     @Published var captureIntent: String = "Paste"
     @Published var style: NotchOverlayStyle = .minimal  // Default to minimal
+    @Published var isScreenRecordingActive: Bool = false
+    @Published var screenRecordingElapsedTime: TimeInterval = 0
 
     // Notch info
     @Published var notchInfo: NotchInfo = NotchInfo(hasNotch: false, notchWidth: 0, notchHeight: 24, screenFrame: .zero, screenCenter: 0)
 
     private var recordingStartTime: Date?
+    private var screenRecordingStartTime: Date?
     private var timer: Timer?
 
     private init() {
@@ -332,7 +335,7 @@ final class NotchOverlayController: ObservableObject {
         }
 
         self.window = panel
-        startTimer()
+        ensureTimer()
     }
 
     func hide() {
@@ -340,7 +343,9 @@ final class NotchOverlayController: ObservableObject {
         isListeningForShortcuts = false
         stopKeyMonitoring()
         recordingStartTime = nil
+        screenRecordingStartTime = nil
         elapsedTime = 0
+        screenRecordingElapsedTime = 0
 
         guard let panel = window else { return }
         guard !isHideAnimating else { return }
@@ -401,7 +406,7 @@ final class NotchOverlayController: ObservableObject {
             if previousState != .listening {
                 recordingStartTime = Date()
                 elapsedTime = 0
-                startTimer()
+                ensureTimer()
             }
             if !isListeningForShortcuts {
                 isListeningForShortcuts = true
@@ -414,11 +419,35 @@ final class NotchOverlayController: ObservableObject {
 
         // Entering idle state
         if state == .idle && previousState != .idle {
-            stopTimer()
+            recordingStartTime = nil
             elapsedTime = 0
+            stopTimerIfIdle()
         }
 
         // Expand during active recording, collapse during processing
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            isExpanded = (state == .listening || isScreenRecordingActive)
+        }
+    }
+
+    func activateScreenRecording(startedAt: Date) {
+        screenRecordingStartTime = startedAt
+        screenRecordingElapsedTime = max(0, Date().timeIntervalSince(startedAt))
+        isScreenRecordingActive = true
+        show()
+        ensureTimer()
+
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            isExpanded = true
+        }
+    }
+
+    func deactivateScreenRecording() {
+        isScreenRecordingActive = false
+        screenRecordingStartTime = nil
+        screenRecordingElapsedTime = 0
+        stopTimerIfIdle()
+
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             isExpanded = (state == .listening)
         }
@@ -426,13 +455,24 @@ final class NotchOverlayController: ObservableObject {
 
     // MARK: - Timer
 
-    private func startTimer() {
-        stopTimer()
+    private func ensureTimer() {
+        guard timer == nil else { return }
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                guard let self, let start = self.recordingStartTime else { return }
-                self.elapsedTime = Date().timeIntervalSince(start)
+                guard let self else { return }
+                if let start = self.recordingStartTime {
+                    self.elapsedTime = Date().timeIntervalSince(start)
+                }
+                if let start = self.screenRecordingStartTime {
+                    self.screenRecordingElapsedTime = Date().timeIntervalSince(start)
+                }
             }
+        }
+    }
+
+    private func stopTimerIfIdle() {
+        if recordingStartTime == nil && screenRecordingStartTime == nil {
+            stopTimer()
         }
     }
 
@@ -445,6 +485,7 @@ final class NotchOverlayController: ObservableObject {
 
     var onStop: (() -> Void)?
     var onCancel: (() -> Void)?
+    var onStopScreenRecording: (() -> Void)?
 
     func requestStop() {
         onStop?()
@@ -452,6 +493,10 @@ final class NotchOverlayController: ObservableObject {
 
     func requestCancel() {
         onCancel?()
+    }
+
+    func requestStopScreenRecording() {
+        onStopScreenRecording?()
     }
 }
 
@@ -478,9 +523,17 @@ struct NotchOverlayView: View {
         case active     // Full expansion with particles/indicators
     }
 
+    private var isScreenRecordingVisible: Bool {
+        controller.state == .idle && controller.isScreenRecordingActive
+    }
+
+    private var hasActiveIntent: Bool {
+        controller.state != .idle || controller.isScreenRecordingActive
+    }
+
     private var expansionState: ExpansionState {
-        if controller.state != .idle {
-            return .active  // Recording/transcribing/routing
+        if hasActiveIntent {
+            return .active  // Recording/transcribing/routing/screen recording
         } else if isHovered {
             return .hover   // Hovering over notch area
         } else {
@@ -598,20 +651,25 @@ struct NotchOverlayView: View {
 
     @ViewBuilder
     private var notchHitLayer: some View {
-        switch controller.state {
-        case .listening:
-            HStack(spacing: 0) {
-                notchHitButton(action: { controller.requestCancel() })
-                    .help("Cancel recording")
+        if isScreenRecordingVisible {
+            notchHitButton(action: { controller.requestStopScreenRecording() })
+                .help("Stop screen recording")
+        } else {
+            switch controller.state {
+            case .listening:
+                HStack(spacing: 0) {
+                    notchHitButton(action: { controller.requestCancel() })
+                        .help("Cancel recording")
+                    notchHitButton(action: { controller.requestStop() })
+                        .help("Stop and send")
+                }
+            case .idle:
                 notchHitButton(action: { controller.requestStop() })
-                    .help("Stop and send")
+                    .help("Start recording")
+            case .transcribing, .routing, .refining:
+                Color.clear
+                    .contentShape(Rectangle())
             }
-        case .idle:
-            notchHitButton(action: { controller.requestStop() })
-                .help("Start recording")
-        case .transcribing, .routing, .refining:
-            Color.clear
-                .contentShape(Rectangle())
         }
     }
 
@@ -661,7 +719,9 @@ struct NotchOverlayView: View {
                     .padding(.trailing, 4)
                 }
 
-                if controller.state == .listening {
+                if isScreenRecordingVisible {
+                    screenRecordingBadge
+                } else if controller.state == .listening {
                     // Particles flowing RIGHT (toward notch)
                     NotchParticles(audioLevel: controller.audioLevel, flowDirection: .right)
                         .frame(width: 45, height: 20)
@@ -694,7 +754,15 @@ struct NotchOverlayView: View {
                     .padding(.leading, 4)
                 }
 
-                if controller.state == .listening {
+                if isScreenRecordingVisible {
+                    if isHovered {
+                        screenRecordingStopGlyph
+                    } else {
+                        Text(formatTime(controller.screenRecordingElapsedTime))
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.9))
+                    }
+                } else if controller.state == .listening {
                     // Particles flowing LEFT (toward notch)
                     NotchParticles(audioLevel: controller.audioLevel, flowDirection: .left)
                         .frame(width: 45, height: 20)
@@ -743,39 +811,44 @@ struct NotchOverlayView: View {
 
                     // Active state content only (hover shows centered pill instead)
                     if expansionState == .active {
-                        switch controller.state {
-                        case .listening:
-                            ZStack {
-                                NotchParticles(audioLevel: controller.audioLevel, flowDirection: .right)
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        if isScreenRecordingVisible {
+                            screenRecordingBadge
+                                .offset(x: -3, y: -3)
+                        } else {
+                            switch controller.state {
+                            case .listening:
+                                ZStack {
+                                    NotchParticles(audioLevel: controller.audioLevel, flowDirection: .right)
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                                if isHovered {
-                                    ZStack {
-                                        Capsule()
-                                            .fill(Color.white.opacity(0.15))
-                                            .frame(width: 20, height: 20)
-                                        Image(systemName: "xmark")
-                                            .font(.system(size: 8, weight: .bold))
-                                            .foregroundColor(.white.opacity(0.8))
+                                    if isHovered {
+                                        ZStack {
+                                            Capsule()
+                                                .fill(Color.white.opacity(0.15))
+                                                .frame(width: 20, height: 20)
+                                            Image(systemName: "xmark")
+                                                .font(.system(size: 8, weight: .bold))
+                                                .foregroundColor(.white.opacity(0.8))
+                                        }
+                                        .offset(x: -6, y: -3)
+                                        .contentShape(Circle())
+                                        .onTapGesture { controller.requestCancel() }
                                     }
-                                    .offset(x: -6, y: -3)
-                                    .contentShape(Circle())
-                                    .onTapGesture { controller.requestCancel() }
                                 }
+                            case .transcribing:
+                                ProcessingDots(color: .orange)
+                                    .frame(width: 24, height: 8)
+                            case .routing:
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.green)
+                            case .refining:
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.purple)
+                            case .idle:
+                                EmptyView()
                             }
-                        case .transcribing:
-                            ProcessingDots(color: .orange)
-                                .frame(width: 24, height: 8)
-                        case .routing:
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.green)
-                        case .refining:
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.purple)
-                        case .idle:
-                            EmptyView()
                         }
                     }
                 }
@@ -793,39 +866,53 @@ struct NotchOverlayView: View {
 
                     // Active state content only (hover shows centered pill instead)
                     if expansionState == .active {
-                        switch controller.state {
-                        case .listening:
+                        if isScreenRecordingVisible {
                             ZStack {
-                                NotchParticles(audioLevel: controller.audioLevel, flowDirection: .left)
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-
                                 if isHovered {
-                                    ZStack {
-                                        Capsule()
-                                            .fill(Color.white.opacity(0.15))
-                                            .frame(width: 20, height: 20)
-                                        RoundedRectangle(cornerRadius: 2)
-                                            .fill(Color(red: 1.0, green: 0.35, blue: 0.35))
-                                            .frame(width: 8, height: 8)
-                                    }
-                                    .offset(x: 6, y: -3)
-                                    .contentShape(Circle())
-                                    .onTapGesture { controller.requestStop() }
+                                    screenRecordingStopGlyph
+                                } else {
+                                    Text(formatTime(controller.screenRecordingElapsedTime))
+                                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                        .foregroundColor(.white.opacity(0.9))
+                                        .minimumScaleFactor(0.7)
                                 }
                             }
-                        case .transcribing:
-                            ProcessingDots(color: .orange)
-                                .frame(width: 24, height: 8)
-                        case .routing:
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.green)
-                        case .refining:
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.purple)
-                        case .idle:
-                            EmptyView()
+                            .offset(x: 4, y: -3)
+                        } else {
+                            switch controller.state {
+                            case .listening:
+                                ZStack {
+                                    NotchParticles(audioLevel: controller.audioLevel, flowDirection: .left)
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                                    if isHovered {
+                                        ZStack {
+                                            Capsule()
+                                                .fill(Color.white.opacity(0.15))
+                                                .frame(width: 20, height: 20)
+                                            RoundedRectangle(cornerRadius: 2)
+                                                .fill(Color(red: 1.0, green: 0.35, blue: 0.35))
+                                                .frame(width: 8, height: 8)
+                                        }
+                                        .offset(x: 6, y: -3)
+                                        .contentShape(Circle())
+                                        .onTapGesture { controller.requestStop() }
+                                    }
+                                }
+                            case .transcribing:
+                                ProcessingDots(color: .orange)
+                                    .frame(width: 24, height: 8)
+                            case .routing:
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.green)
+                            case .refining:
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.purple)
+                            case .idle:
+                                EmptyView()
+                            }
                         }
                     }
                 }
@@ -853,6 +940,40 @@ struct NotchOverlayView: View {
             .modifier(LinePulseModifier(isAnimating: controller.state == .listening))
     }
 
+    private var screenRecordingColor: Color {
+        Color(red: 1.0, green: 0.24, blue: 0.22)
+    }
+
+    private var screenRecordingBadge: some View {
+        HStack(spacing: 3) {
+            Circle()
+                .fill(screenRecordingColor)
+                .frame(width: 6, height: 6)
+            Image(systemName: "video.fill")
+                .font(.system(size: 8, weight: .semibold))
+                .foregroundColor(.white.opacity(0.9))
+        }
+        .padding(.horizontal, 5)
+        .padding(.vertical, 3)
+        .background(
+            Capsule()
+                .fill(Color.white.opacity(0.13))
+        )
+    }
+
+    private var screenRecordingStopGlyph: some View {
+        ZStack {
+            Capsule()
+                .fill(Color.white.opacity(0.15))
+                .frame(width: 20, height: 20)
+            RoundedRectangle(cornerRadius: 2)
+                .fill(screenRecordingColor)
+                .frame(width: 8, height: 8)
+        }
+        .contentShape(Circle())
+        .onTapGesture { controller.requestStopScreenRecording() }
+    }
+
     // MARK: - Centered Status Line (below notch, adapts to state)
 
     @ViewBuilder
@@ -860,6 +981,12 @@ struct NotchOverlayView: View {
         let lineW = CGFloat(tuning.lineWidth)
         let lineH = CGFloat(tuning.lineHeight)
 
+        if isScreenRecordingVisible {
+            Rectangle()
+                .fill(screenRecordingColor)
+                .frame(width: lineW * 0.8, height: lineH)
+                .modifier(LinePulseModifier(isAnimating: true, speed: tuning.pulseSpeed))
+        } else {
         switch controller.state {
         case .listening:
             // Red pulsating line
@@ -886,6 +1013,7 @@ struct NotchOverlayView: View {
         case .idle:
             EmptyView()
         }
+        }
     }
 
     // MARK: - Left Content (Particles / Indicator)
@@ -905,7 +1033,9 @@ struct NotchOverlayView: View {
             }
 
             // Content
-            if controller.state == .listening {
+            if isScreenRecordingVisible {
+                screenRecordingBadge
+            } else if controller.state == .listening {
                 // Particles when recording
                 NotchParticles(audioLevel: controller.audioLevel)
                     .frame(width: 45, height: 20)
@@ -941,7 +1071,15 @@ struct NotchOverlayView: View {
 
             // Content
             VStack(spacing: 2) {
-                if controller.state == .listening {
+                if isScreenRecordingVisible {
+                    if isHovered {
+                        screenRecordingStopGlyph
+                    } else {
+                        Text(formatTime(controller.screenRecordingElapsedTime))
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.9))
+                    }
+                } else if controller.state == .listening {
                     // Pulsating red line + timer
                     pulsatingLine
                     Text(formatTime(controller.elapsedTime))
@@ -1002,6 +1140,10 @@ struct NotchOverlayView: View {
     }
 
     private var stateColor: Color {
+        if isScreenRecordingVisible {
+            return screenRecordingColor
+        }
+
         switch controller.state {
         case .listening:
             return Color(red: 1.0, green: 0.35, blue: 0.35)  // Soft red

@@ -263,6 +263,9 @@ final class TalkieServer {
     private var activeDictationShortcutId: String = "talkie-dictate"
     private var lastCompanionDictationShortcutId: String?
     private var lastCompanionDictationStartedAt: Date?
+    private var lastCompanionDictationStoppedShortcutId: String?
+    private var lastCompanionDictationStoppedAt: Date?
+    private let companionDictationRestartSuppressionInterval: TimeInterval = 0.9
     private var isCompanionAppSwitcherActive = false
     private var isUsingExternalRelay = false
     private var companionAppSwitcherReleaseTask: Task<Void, Never>?
@@ -1559,6 +1562,10 @@ final class TalkieServer {
             activeDictationShortcutId = shortcutId
             switch ServiceManager.shared.live.state {
             case .idle:
+                if shouldSuppressCompanionDictationRestart(shortcutId: shortcutId) {
+                    return companionDictationAlreadyStoppedResponse(shortcutId: shortcutId)
+                }
+
                 lastCompanionDictationShortcutId = shortcutId
                 lastCompanionDictationStartedAt = Date()
                 ServiceManager.shared.live.toggleRecording()
@@ -1575,6 +1582,7 @@ final class TalkieServer {
                 )
 
             case .listening:
+                markCompanionDictationStopped(shortcutId: shortcutId)
                 ServiceManager.shared.live.toggleRecording()
                 return CompanionShortcutTriggerResponse(
                     ok: true,
@@ -1608,6 +1616,10 @@ final class TalkieServer {
             activeDictationShortcutId = shortcutId
             switch ServiceManager.shared.live.state {
             case .idle:
+                if shouldSuppressCompanionDictationRestart(shortcutId: shortcutId) {
+                    return companionDictationAlreadyStoppedResponse(shortcutId: shortcutId)
+                }
+
                 lastCompanionDictationShortcutId = shortcutId
                 lastCompanionDictationStartedAt = Date()
                 let didOpen = await openITermForCompanion()
@@ -1634,6 +1646,7 @@ final class TalkieServer {
                 )
 
             case .listening:
+                markCompanionDictationStopped(shortcutId: shortcutId)
                 ServiceManager.shared.live.toggleRecording()
                 return CompanionShortcutTriggerResponse(
                     ok: true,
@@ -2087,6 +2100,28 @@ final class TalkieServer {
             detail: detail,
             elapsedSeconds: elapsedSeconds,
             signalLevel: signalLevel
+        )
+    }
+
+    private func markCompanionDictationStopped(shortcutId: String) {
+        lastCompanionDictationStoppedShortcutId = shortcutId
+        lastCompanionDictationStoppedAt = Date()
+    }
+
+    private func shouldSuppressCompanionDictationRestart(shortcutId: String) -> Bool {
+        guard lastCompanionDictationStoppedShortcutId == shortcutId,
+              let stoppedAt = lastCompanionDictationStoppedAt else {
+            return false
+        }
+
+        return Date().timeIntervalSince(stoppedAt) <= companionDictationRestartSuppressionInterval
+    }
+
+    private func companionDictationAlreadyStoppedResponse(shortcutId: String) -> CompanionShortcutTriggerResponse {
+        CompanionShortcutTriggerResponse(
+            ok: true,
+            handledShortcutId: shortcutId,
+            message: "Dictation is stopped"
         )
     }
 

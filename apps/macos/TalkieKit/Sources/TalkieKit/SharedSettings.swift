@@ -54,6 +54,18 @@ public enum SyncSettingsKey {
     public static let iCloudEnabled = "sync_icloud_enabled"
 }
 
+/// Cross-process bridge for the rich notch/island surface.
+///
+/// TalkieAgent authors the notch-surface settings (enabled / external / shape /
+/// always-visible) into the shared suite, then posts this distributed
+/// notification. The Talkie app (which owns the `NotchComposer` renderer)
+/// applies the shared values and refreshes the overlay. The shared keys are the
+/// durable channel — read at Talkie launch — and this notification is the live
+/// signal when Talkie is already running.
+public enum TalkieNotchBridge {
+    public static let surfaceSettingsDidChange = "to.talkie.app.agent.notchSurfaceSettings"
+}
+
 /// All settings keys used by Agent settings
 /// Centralized here to ensure consistency between Talkie and Talkie Agent
 public enum AgentSettingsKey {
@@ -86,6 +98,11 @@ public enum AgentSettingsKey {
     // MARK: Overlay & Pill
     public static let overlayPlacement = "overlayPlacement"
     public static let overlayStyle = "overlayStyle"
+    public static let islandOverlayMotion = "islandOverlay.motion"
+    public static let islandOverlayReactivity = "islandOverlay.reactivity"
+    public static let islandOverlayShape = "islandOverlay.shape"
+    public static let islandOverlayWidth = "islandOverlay.width"
+    public static let islandOverlayHeight = "islandOverlay.height"
     public static let overlayPosition = "overlayPosition"
     public static let pillEnabled = "pillEnabled"
     public static let pillPlacement = "pillPlacement"
@@ -93,6 +110,14 @@ public enum AgentSettingsKey {
     public static let pillShowOnAllScreens = "pillShowOnAllScreens"
     public static let pillExpandsDuringRecording = "pillExpandsDuringRecording"
     public static let notchOverlayEnabled = "notchOverlayEnabled"
+
+    // MARK: Notch Surface (rich notch/island — rendered by the Talkie app's
+    // NotchComposer, authored from TalkieAgent settings and synced via the
+    // shared suite + a distributed notification; see TalkieNotchBridge).
+    public static let notchSurfaceEnabled = "notchSurface.enabled"
+    public static let notchSurfaceExternalEnabled = "notchSurface.externalEnabled"
+    public static let notchSurfaceAlwaysVisible = "notchSurface.alwaysVisible"
+    public static let notchSurfaceShellStyle = "notchSurface.shellStyle"  // "auto" | "island" | "notch"
 
     // MARK: Sounds
     public static let startSound = "startSound"

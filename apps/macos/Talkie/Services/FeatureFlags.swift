@@ -65,7 +65,7 @@ final class FeatureFlags {
         "enableCameraBubble": false, // Sub: floating camera preview, clip recording
         "enableScreenshots": false,  // Sub: Hyper+S chord, screenshot capture
         "enableCaptureRichUI": false, // Sub: richer screenshot overlay/preview visuals
-        "enableNotchComposer": true,  // Talkie owns the notch area (disables Agent's overlay)
+        "enableNotchComposer": false, // TLK-027: Agent owns live notch/island rendering
         "enableVoiceForegrounding": false, // Experimental mic processing for voice over background audio
     ]
 
@@ -139,7 +139,7 @@ final class FeatureFlags {
         enableScreenshots && flag("enableCaptureRichUI")
     }
 
-    /// Talkie owns the notch area — disables Agent's notch overlay
+    /// Legacy Talkie-owned notch composer. Agent owns live notch/island rendering by default.
     var enableNotchComposer: Bool {
         flag("enableNotchComposer")
     }

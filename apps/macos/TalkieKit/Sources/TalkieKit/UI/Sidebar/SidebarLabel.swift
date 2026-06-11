@@ -16,7 +16,6 @@
 //
 //  TODO(donation): the `selectedIcon` mapping below is Talkie-specific.
 //  Move it to the host as a parameter (e.g., `selectedIcon: String?`).
-//  Also: `DesignGuideFrameKey` is a Talkie debug-overlay preference key.
 //
 
 import SwiftUI
@@ -72,18 +71,6 @@ public struct SidebarLabel: View {
                 .foregroundColor(.white)
                 .frame(width: SidebarLayout.railWidth, alignment: .center)
                 .border(showMeasurements ? Color.pink : .clear, width: 1.5)
-                #if DEBUG
-                .background {
-                    if isSelected {
-                        GeometryReader { geo in
-                            Color.clear.preference(
-                                key: DesignGuideFrameKey.self,
-                                value: ["iconBox": geo.frame(in: .named("designGuides"))]
-                            )
-                        }
-                    }
-                }
-                #endif
 
             // ── Label region: text rendered at fixed size, clipped by parent ──
             Text(title)

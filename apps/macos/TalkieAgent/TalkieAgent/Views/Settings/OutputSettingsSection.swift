@@ -22,7 +22,7 @@ struct OutputSettingsSection: View {
             )
         } content: {
             SettingsCard(title: "ROUTING MODE") {
-                VStack(alignment: .leading, spacing: Spacing.sm) {
+                VStack(alignment: .leading, spacing: OpsSpacing.lg) {
                     ForEach(RoutingMode.allCases, id: \.rawValue) { mode in
                         RoutingModeRow(
                             mode: mode,
@@ -37,7 +37,7 @@ struct OutputSettingsSection: View {
             // Paste options (only shown when paste mode is enabled)
             if settings.routingMode == .paste {
                 SettingsCard(title: "PASTE OPTIONS") {
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                    VStack(alignment: .leading, spacing: OpsSpacing.lg) {
                         SettingsToggleRow(
                             icon: "return",
                             title: "Press Enter after paste",
@@ -49,34 +49,34 @@ struct OutputSettingsSection: View {
             }
 
             SettingsCard(title: "SELECTION") {
-                VStack(alignment: .leading, spacing: Spacing.sm) {
+                VStack(alignment: .leading, spacing: OpsSpacing.lg) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Selected text is replaced in place")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(TalkieTheme.textPrimary)
+                            .font(OpsType.ui(OpsSize.xs, weight: .medium))
+                            .foregroundStyle(OpsInk.ink)
 
                         Text("Highlight text, start dictation, and Talkie will overwrite the current selection when it pastes.")
-                            .font(.system(size: 9))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .font(OpsType.ui(OpsSize.micro))
+                            .foregroundStyle(OpsInk.dim)
                     }
 
-                    HStack(spacing: Spacing.xs) {
+                    HStack(spacing: OpsSpacing.xs) {
                         Image(systemName: "square.and.pencil")
-                            .font(.system(size: 10))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .font(OpsType.ui(OpsSize.xxs))
+                            .foregroundStyle(OpsInk.dim)
                         Text("Hold Shift while recording if you want to open Scratchpad instead.")
-                            .font(.system(size: 10))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .font(OpsType.ui(OpsSize.xxs))
+                            .foregroundStyle(OpsInk.dim)
                     }
                 }
             }
 
             // Context Settings - which app to show in history
             SettingsCard(title: "APP CONTEXT") {
-                VStack(alignment: .leading, spacing: Spacing.sm) {
+                VStack(alignment: .leading, spacing: OpsSpacing.lg) {
                     Text("Which app to show in history")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(TalkieTheme.textTertiary)
+                        .font(OpsType.mono(OpsSize.micro, weight: .medium))
+                        .foregroundStyle(OpsInk.dim)
                         .textCase(.uppercase)
 
                     ForEach(PrimaryContextSource.allCases, id: \.rawValue) { source in
@@ -91,22 +91,23 @@ struct OutputSettingsSection: View {
             }
 
             SettingsCard(title: "CONTEXT CAPTURE") {
-                VStack(alignment: .leading, spacing: Spacing.sm) {
+                VStack(alignment: .leading, spacing: OpsSpacing.lg) {
                     Toggle(isOn: $settings.contextCaptureSessionAllowed) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Capture context this session")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(TalkieTheme.textPrimary)
+                                .font(OpsType.ui(OpsSize.xs, weight: .medium))
+                                .foregroundStyle(OpsInk.ink)
                             Text("Front app, window titles, and (optionally) focused text. Resets when you quit Talkie Agent.")
-                                .font(.system(size: 9))
-                                .foregroundColor(TalkieTheme.textTertiary)
+                                .font(OpsType.ui(OpsSize.micro))
+                                .foregroundStyle(OpsInk.dim)
                         }
                     }
                     .toggleStyle(.switch)
+                    .tint(OpsTint.amber.color)
 
                     Text("Detail level")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(TalkieTheme.textTertiary)
+                        .font(OpsType.mono(OpsSize.micro, weight: .medium))
+                        .foregroundStyle(OpsInk.dim)
                         .textCase(.uppercase)
 
                     ForEach(ContextCaptureDetail.allCases, id: \.rawValue) { detail in
@@ -136,25 +137,25 @@ struct PrimaryContextRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(source.displayName)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .font(OpsType.ui(OpsSize.xs, weight: .medium))
+                    .foregroundStyle(OpsInk.ink)
 
                 Text(source.description)
-                    .font(.system(size: 9))
-                    .foregroundColor(TalkieTheme.textTertiary)
+                    .font(OpsType.ui(OpsSize.micro))
+                    .foregroundStyle(OpsInk.dim)
             }
 
             Spacer()
 
             if isSelected {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.accentColor)
+                    .foregroundStyle(OpsTint.amber.color)
             }
         }
-        .padding(Spacing.sm)
+        .padding(OpsSpacing.md)
         .background(
-            RoundedRectangle(cornerRadius: CornerRadius.xs)
-                .fill(isSelected ? Color.accentColor.opacity(0.15) : (isHovered ? TalkieTheme.hover : Color.clear))
+            RoundedRectangle(cornerRadius: OpsRadius.standard)
+                .fill(isSelected ? OpsSurface.selected(OpsTint.amber.color) : (isHovered ? OpsSurface.hover : Color.clear))
         )
         .contentShape(Rectangle())
         .onTapGesture { action() }
@@ -175,25 +176,25 @@ struct ContextCaptureDetailRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(detail.displayName)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .font(OpsType.ui(OpsSize.xs, weight: .medium))
+                    .foregroundStyle(OpsInk.ink)
 
                 Text(detail.description)
-                    .font(.system(size: 9))
-                    .foregroundColor(TalkieTheme.textTertiary)
+                    .font(OpsType.ui(OpsSize.micro))
+                    .foregroundStyle(OpsInk.dim)
             }
 
             Spacer()
 
             if isSelected {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.accentColor)
+                    .foregroundStyle(OpsTint.amber.color)
             }
         }
-        .padding(Spacing.sm)
+        .padding(OpsSpacing.md)
         .background(
-            RoundedRectangle(cornerRadius: CornerRadius.xs)
-                .fill(isSelected ? Color.accentColor.opacity(0.15) : (isHovered ? TalkieTheme.hover : Color.clear))
+            RoundedRectangle(cornerRadius: OpsRadius.standard)
+                .fill(isSelected ? OpsSurface.selected(OpsTint.amber.color) : (isHovered ? OpsSurface.hover : Color.clear))
         )
         .contentShape(Rectangle())
         .onTapGesture { action() }
@@ -214,25 +215,25 @@ struct RoutingModeRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(mode.displayName)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .font(OpsType.ui(OpsSize.xs, weight: .medium))
+                    .foregroundStyle(OpsInk.ink)
 
                 Text(mode.description)
-                    .font(.system(size: 9))
-                    .foregroundColor(TalkieTheme.textTertiary)
+                    .font(OpsType.ui(OpsSize.micro))
+                    .foregroundStyle(OpsInk.dim)
             }
 
             Spacer()
 
             if isSelected {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.accentColor)
+                    .foregroundStyle(OpsTint.amber.color)
             }
         }
-        .padding(Spacing.sm)
+        .padding(OpsSpacing.md)
         .background(
-            RoundedRectangle(cornerRadius: CornerRadius.xs)
-                .fill(isSelected ? Color.accentColor.opacity(0.15) : (isHovered ? TalkieTheme.hover : Color.clear))
+            RoundedRectangle(cornerRadius: OpsRadius.standard)
+                .fill(isSelected ? OpsSurface.selected(OpsTint.amber.color) : (isHovered ? OpsSurface.hover : Color.clear))
         )
         .contentShape(Rectangle())
         .onTapGesture { action() }

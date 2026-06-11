@@ -55,6 +55,8 @@ final class TalkieAgentServerSupervisor {
     private let healthyProbeInterval: TimeInterval = 30
     private let minBackoff: TimeInterval = 10
     private let maxBackoff: TimeInterval = 300
+    private let rolloverAdoptionAttempts = 24
+    private let rolloverAdoptionDelayMs: UInt64 = 250
 
     private init() {}
 
@@ -189,20 +191,13 @@ final class TalkieAgentServerSupervisor {
             }
         }
 
-        // Termination handler — detect unexpected exits
+        // Termination handler — detect unexpected exits. A zero-code exit may
+        // also mean another TalkieServer requested a graceful rollover and is
+        // taking ownership of the port, so give the replacement a short window
+        // to become healthy before treating it as a crash.
         proc.terminationHandler = { [weak self] terminatedProcess in
             Task { @MainActor in
-                guard let self else { return }
-                let code = terminatedProcess.terminationStatus
-                self.log.warning("TalkieServer exited with code \(code)")
-                self.process = nil
-                self.startedAt = nil
-
-                // Don't restart if we intentionally stopped
-                if self.processState == .stopped { return }
-
-                self.updateState(.error, error: "Process exited with code \(code)")
-                self.scheduleRestart()
+                await self?.handleProcessTermination(terminatedProcess)
             }
         }
 
@@ -436,6 +431,37 @@ final class TalkieAgentServerSupervisor {
     }
 
     // MARK: - Process Helpers
+
+    private func handleProcessTermination(_ terminatedProcess: Process) async {
+        let code = terminatedProcess.terminationStatus
+        log.warning("TalkieServer exited with code \(code)")
+        process = nil
+        startedAt = nil
+
+        // Don't restart if we intentionally stopped.
+        if processState == .stopped { return }
+
+        if code == 0 {
+            switch await waitForReady(maxAttempts: rolloverAdoptionAttempts, delayMs: rolloverAdoptionDelayMs) {
+            case .ready:
+                log.info("TalkieServer exited cleanly and a replacement bridge is healthy; adopting rollover")
+                markServerRunning()
+                startHealthTimer()
+                return
+
+            case .conflict(let reason):
+                NearbyBridgeAdvertiser.shared.stop()
+                updateState(.error, error: reason)
+                return
+
+            case .notReady:
+                break
+            }
+        }
+
+        updateState(.error, error: "Process exited with code \(code)")
+        scheduleRestart()
+    }
 
     private func waitForReady(maxAttempts: Int, delayMs: UInt64) async -> HealthProbeResult {
         for attempt in 1...maxAttempts {

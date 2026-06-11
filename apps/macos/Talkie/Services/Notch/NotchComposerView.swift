@@ -78,6 +78,19 @@ private struct NotchInteractiveContentSizeKey: PreferenceKey {
     }
 }
 
+/// Thin wrapper that sources the audio level from the composer's isolated
+/// `liveAudioLevel` observable. Only this view re-evaluates on the ~60Hz level
+/// stream; the surrounding `recordingUnit` (geometry, shapes, drawingGroup) stays
+/// put until an actual lifecycle-state transition.
+private struct RecordingParticleStream: View {
+    let composer: NotchComposer
+    var flowDirection: ParticleFlowDirection = .right
+
+    var body: some View {
+        NotchParticles(audioLevel: composer.liveAudioLevel, flowDirection: flowDirection)
+    }
+}
+
 struct NotchComposerView: View {
     let composer: NotchComposer
     let notchInfo: NotchInfo
@@ -904,10 +917,10 @@ struct NotchComposerView: View {
                         switch payload.state {
                         case .listening:
                             if unifiedUsesIslandShape {
-                                NotchParticles(audioLevel: payload.audioLevel, flowDirection: .right)
+                                RecordingParticleStream(composer: composer, flowDirection: .right)
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                             } else {
-                                NotchParticles(audioLevel: payload.audioLevel, flowDirection: .right)
+                                RecordingParticleStream(composer: composer, flowDirection: .right)
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                                     .clipShape(NotchWingShape(side: .left, cornerRadius: 14, topOuterRadius: leftTopOuterRadius, topInnerRadius: topInnerRadius, innerCurveMode: innerCurveMode))
                                     .drawingGroup()
@@ -970,10 +983,10 @@ struct NotchComposerView: View {
                         switch payload.state {
                         case .listening:
                             if unifiedUsesIslandShape {
-                                NotchParticles(audioLevel: payload.audioLevel, flowDirection: .left)
+                                RecordingParticleStream(composer: composer, flowDirection: .left)
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                             } else {
-                                NotchParticles(audioLevel: payload.audioLevel, flowDirection: .left)
+                                RecordingParticleStream(composer: composer, flowDirection: .left)
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                                     .clipShape(NotchWingShape(side: .right, cornerRadius: 14, topOuterRadius: rightTopOuterRadius, topInnerRadius: topInnerRadius, innerCurveMode: innerCurveMode))
                                     .drawingGroup()
@@ -1017,13 +1030,13 @@ struct NotchComposerView: View {
                 switch payload.state {
                 case .listening:
                     if unifiedUsesIslandShape {
-                        NotchParticles(audioLevel: payload.audioLevel, flowDirection: uniformFlowDirection)
+                        RecordingParticleStream(composer: composer, flowDirection: uniformFlowDirection)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .clipShape(RoundedRectangle(cornerRadius: islandSurfaceCornerRadius, style: .continuous))
                             .drawingGroup()
                             .allowsHitTesting(false)
                     } else {
-                        NotchParticles(audioLevel: payload.audioLevel, flowDirection: uniformFlowDirection)
+                        RecordingParticleStream(composer: composer, flowDirection: uniformFlowDirection)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .clipShape(wingPairClipShape)
                             .drawingGroup()

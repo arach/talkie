@@ -128,7 +128,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         broadcastDictationAdded()
     }
 
-    /// Legacy paste callback retained for older observers. Dictation does not mutate tray items.
+    /// Legacy paste callback retained for older observers. TalkieAgent no longer asks Talkie to mutate tray items.
     func notifyDictationPasted(recordingId: UUID) {
         let idString = recordingId.uuidString
         for connection in observers {
@@ -138,88 +138,6 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
             observer.dictationWasPasted(recordingId: idString)
         }
         NSLog("[TalkieAgentXPC] ✓ Notified \(observers.count) observers about dictation paste (recording: \(idString.prefix(8)))")
-    }
-
-    /// Pull tray screenshots from Talkie for attachment to an existing DB record.
-    func fetchTrayScreenshots(recordingId: UUID) async -> String? {
-        let idString = recordingId.uuidString
-        guard let connection = observers.first,
-              let observer = connection.remoteObjectProxyWithErrorHandler({ error in
-                  NSLog("[TalkieAgentXPC] Error fetching tray screenshots: \(error)")
-              }) as? TalkieAgentStateObserverProtocol else {
-            NSLog("[TalkieAgentXPC] No observers connected — cannot fetch tray screenshots")
-            return nil
-        }
-
-        return await withCheckedContinuation { continuation in
-            observer.fetchTrayScreenshots(recordingId: idString) { json in
-                NSLog("[TalkieAgentXPC] Fetched tray screenshots: \(json != nil ? "✓ got JSON" : "nil (no tray items)")")
-                continuation.resume(returning: json)
-            }
-        }
-    }
-
-    /// Pull pending tray media captured during the recording window.
-    func fetchTrayAssets(
-        recordingId: UUID,
-        recordingStartedAt: Date?,
-        recordingEndedAt: Date?,
-        includeScreenshots: Bool
-    ) async -> String? {
-        let idString = recordingId.uuidString
-        guard let connection = observers.first,
-              let observer = connection.remoteObjectProxyWithErrorHandler({ error in
-                  NSLog("[TalkieAgentXPC] Error fetching tray assets: \(error)")
-              }) as? TalkieAgentStateObserverProtocol else {
-            NSLog("[TalkieAgentXPC] No observers connected — cannot fetch tray assets")
-            return nil
-        }
-
-        let startedAt = recordingStartedAt?.timeIntervalSince1970 ?? 0
-        let endedAt = recordingEndedAt?.timeIntervalSince1970 ?? 0
-        if observer.fetchTrayAssets != nil {
-            return await withTimeout(seconds: 2.0) { finish in
-                observer.fetchTrayAssets?(
-                    recordingId: idString,
-                    recordingStartedAt: startedAt,
-                    recordingEndedAt: endedAt,
-                    includeScreenshots: includeScreenshots
-                ) { json in
-                    NSLog("[TalkieAgentXPC] Fetched tray assets: \(json != nil ? "✓ got JSON" : "nil (no tray assets)")")
-                    finish(json)
-                }
-            }
-        }
-
-        NSLog("[TalkieAgentXPC] Observer does not support exact-window tray assets")
-        return nil
-    }
-
-    private func withTimeout<T>(
-        seconds: TimeInterval,
-        operation: (@escaping (T?) -> Void) -> Void
-    ) async -> T? {
-        await withCheckedContinuation { continuation in
-            let lock = NSLock()
-            var didResume = false
-
-            func resume(_ value: T?) {
-                lock.lock()
-                defer { lock.unlock() }
-                guard !didResume else { return }
-                didResume = true
-                continuation.resume(returning: value)
-            }
-
-            operation { value in
-                resume(value)
-            }
-
-            Task {
-                try? await Task.sleep(for: .milliseconds(Int(max(0, seconds) * 1000)))
-                resume(nil)
-            }
-        }
     }
 
     private func broadcastStateChange(state: String, elapsedTime: TimeInterval) {

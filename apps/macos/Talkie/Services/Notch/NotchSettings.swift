@@ -1,6 +1,7 @@
 import AppKit
 import CoreGraphics
 import Foundation
+import TalkieKit
 
 // MARK: - Per-Monitor Hover Zone Config
 
@@ -60,6 +61,37 @@ final class NotchSettings {
 
     func usesIslandShellShape(for notchInfo: NotchInfo) -> Bool {
         resolvedShellStyle(for: notchInfo) == .island
+    }
+
+    /// Applies notch-surface settings authored by TalkieAgent via the shared
+    /// suite (see `TalkieNotchBridge`). Only keys that are actually present are
+    /// applied, so Talkie's own config isn't clobbered by defaults when the
+    /// agent has never written them. Returns true if anything changed.
+    @discardableResult
+    func applyAgentSharedOverrides() -> Bool {
+        let shared = TalkieSharedSettings
+        var changed = false
+
+        if let value = shared.object(forKey: AgentSettingsKey.notchSurfaceEnabled) as? Bool, value != enabled {
+            enabled = value
+            changed = true
+        }
+        if let value = shared.object(forKey: AgentSettingsKey.notchSurfaceExternalEnabled) as? Bool, value != externalEnabled {
+            externalEnabled = value
+            changed = true
+        }
+        if let value = shared.object(forKey: AgentSettingsKey.notchSurfaceAlwaysVisible) as? Bool, value != alwaysVisible {
+            alwaysVisible = value
+            changed = true
+        }
+        if let raw = shared.string(forKey: AgentSettingsKey.notchSurfaceShellStyle),
+           NotchVirtualDisplayStyle(rawValue: raw) != nil,
+           raw != shellStyleRaw {
+            shellStyleRaw = raw
+            changed = true
+        }
+
+        return changed
     }
 
     func overlayOwnsTrayDiscovery(isOverlayActive: Bool) -> Bool {

@@ -122,9 +122,13 @@ final class DeckMirrorStore: ObservableObject {
         }
         // No active runtime: clear so the cockpit can exit "in-flight"
         // visuals (timer, phase-specific waveform state) cleanly.
+        let hadActiveRuntime = lastRuntimeState != nil
         lastRuntimeState = nil
 
-        guard let recentResult = companionState?.recentResults?.first else { return }
+        guard let recentResult = companionState?.recentResults?.first else {
+            clearRunningTriggerResultAfterRemoteIdle(hadActiveRuntime: hadActiveRuntime)
+            return
+        }
         let key = "\(recentResult.shortcutId)-\(recentResult.completedAt)"
         guard key != lastRecentResultKey else { return }
 
@@ -136,6 +140,18 @@ final class DeckMirrorStore: ObservableObject {
             completedAt: Self.date(from: recentResult.completedAt),
             autoResetAfter: .seconds(4)
         )
+    }
+
+    private func clearRunningTriggerResultAfterRemoteIdle(hadActiveRuntime: Bool) {
+        guard let lastTriggerResult,
+              hadActiveRuntime || lastTriggerResult.outcome == .running,
+              lastTriggerResult.outcome == .pending || lastTriggerResult.outcome == .running else {
+            return
+        }
+
+        triggerResultResetTask?.cancel()
+        triggerResultResetTask = nil
+        self.lastTriggerResult = nil
     }
 
     /// Fire a slot on the paired Mac via the bridge. Keeps
