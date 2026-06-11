@@ -275,6 +275,7 @@ class TranscriptionService {
 
                 do {
                     try context.save()
+                    VoiceMemoStore.publishChange(context: context)
                     AppLogger.persistence.info("Transcription saved successfully to Core Data")
                 } catch {
                     AppLogger.persistence.error("Failed to save transcription: \(error.localizedDescription)")

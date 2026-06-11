@@ -38,6 +38,9 @@ struct HomeNextView: View {
             VStack(spacing: 12) {
                 HomeHeader()
 
+                HomeTodayStrip(stats: feed.todayStats)
+                    .padding(.horizontal, 12)
+
                 HomeFrequentActionsStrip()
                     .padding(.horizontal, 12)
 
@@ -568,6 +571,82 @@ private struct StatusPixel: View {
     }
 }
 
+// MARK: - Today rail
+
+private struct HomeTodayStrip: View {
+    let stats: HomeFeed.TodayStats
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        HStack(spacing: 0) {
+            statCell(
+                count: stats.memos,
+                singular: "memo",
+                plural: "memos",
+                icon: "waveform",
+                tab: .memos
+            )
+            divider
+            statCell(
+                count: stats.dictations,
+                singular: "dictation",
+                plural: "dictations",
+                icon: "keyboard",
+                tab: .dictations
+            )
+            divider
+            statCell(
+                count: stats.items,
+                singular: "item",
+                plural: "items",
+                icon: "tray.and.arrow.down",
+                tab: .items
+            )
+        }
+        .frame(height: 42)
+        .background(theme.colors.cardBackground.opacity(0.74))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                              lineWidth: theme.currentTheme.chrome.hairlineWidth)
+        )
+    }
+
+    private func statCell(
+        count: Int,
+        singular: String,
+        plural: String,
+        icon: String,
+        tab: LibraryTab
+    ) -> some View {
+        Button(action: { AppShellRouter.shared.openLibrary(tab: tab) }) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                Text("\(count) \(count == 1 ? singular : plural) today")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(count) \(count == 1 ? singular : plural) today")
+        .accessibilityHint("Opens \(plural)")
+    }
+
+    private var divider: some View {
+        Rectangle()
+            .fill(theme.currentTheme.chrome.edgeFaint)
+            .frame(width: theme.currentTheme.chrome.hairlineWidth)
+            .padding(.vertical, 9)
+    }
+}
+
 // MARK: - Frequent actions (above recents)
 
 private struct HomeFrequentActionsStrip: View {
@@ -789,7 +868,7 @@ private struct RecentSection: View {
                 filterMenu
                 sortMenu
 
-                Button(action: { AppShellRouter.shared.openLibrary() }) {
+                Button(action: { AppShellRouter.shared.openLibrary(tab: libraryTabForCurrentFilter) }) {
                     Text("ALL ›")
                         .talkieType(.chipLabel)
                         .foregroundStyle(theme.colors.textTertiary)
@@ -922,6 +1001,15 @@ private struct RecentSection: View {
         }
         .accessibilityLabel("Sort recent items")
         .accessibilityValue(sortOption.label)
+    }
+
+    private var libraryTabForCurrentFilter: LibraryTab? {
+        switch contentFilter {
+        case .all: return nil
+        case .memos: return .memos
+        case .dictations: return .dictations
+        case .captures: return .items
+        }
     }
 
     private func open(_ item: HomeFeed.RecentItem) {

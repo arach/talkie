@@ -7,8 +7,49 @@
 
 import AppKit
 import ApplicationServices
+import CoreGraphics
 import SwiftUI
 import TalkieKit
+
+enum PermissionKind: String {
+    case accessibility
+    case screenRecording
+
+    var displayName: String {
+        switch self {
+        case .accessibility: return "Accessibility"
+        case .screenRecording: return "Screen Recording"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .accessibility: return "accessibility"
+        case .screenRecording: return "rectangle.dashed.badge.record"
+        }
+    }
+
+    var settingsPaneURL: URL? {
+        switch self {
+        case .accessibility:
+            return URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+        case .screenRecording:
+            return URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
+        }
+    }
+
+    var requiresRelaunch: Bool {
+        switch self {
+        case .accessibility: return false
+        case .screenRecording: return true
+        }
+    }
+}
+
+private final class AccessibilityInstallAssistantPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+}
 
 @MainActor
 final class AccessibilityInstallAssistant {
@@ -18,16 +59,24 @@ final class AccessibilityInstallAssistant {
 
     private init() {}
 
-    func present() {
-        Self.promptForCurrentProcessAccessibilityIfNeeded()
-        openAccessibilitySettingsPane()
+    func present(permission: PermissionKind = .accessibility) {
+        switch permission {
+        case .accessibility:
+            Self.promptForCurrentProcessAccessibilityIfNeeded()
+        case .screenRecording:
+            _ = CGRequestScreenCaptureAccess()
+        }
+
+        openSettingsPane(for: permission)
 
         let appURL = Bundle.main.bundleURL
         let content = AccessibilityInstallAssistantView(
+            permission: permission,
             appURL: appURL,
             bundleIdentifier: Bundle.main.bundleIdentifier ?? "unknown",
-            onOpenSettings: { [weak self] in self?.openAccessibilitySettingsPane() },
+            onOpenSettings: { [weak self] in self?.openSettingsPane(for: permission) },
             onRevealApp: { Self.reveal(appURL) },
+            onRelaunch: { Self.quitAndRelaunch() },
             onClose: { [weak self] in self?.close() }
         )
 
@@ -38,18 +87,20 @@ final class AccessibilityInstallAssistant {
             return
         }
 
-        let panel = NSPanel(
+        let panel = AccessibilityInstallAssistantPanel(
             contentRect: NSRect(x: 0, y: 0, width: 430, height: 286),
             styleMask: [.titled, .closable, .utilityWindow, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
-        panel.title = "Accessibility Setup"
+        panel.title = "\(permission.displayName) Setup"
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
         panel.isMovableByWindowBackground = false
         panel.isReleasedWhenClosed = false
         panel.hidesOnDeactivate = false
+        panel.becomesKeyOnlyIfNeeded = false
+        panel.acceptsMouseMovedEvents = true
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
         panel.contentViewController = NSHostingController(rootView: content)
@@ -74,10 +125,8 @@ final class AccessibilityInstallAssistant {
         _ = AXIsProcessTrustedWithOptions(options)
     }
 
-    private func openAccessibilitySettingsPane() {
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") else {
-            return
-        }
+    private func openSettingsPane(for permission: PermissionKind) {
+        guard let url = permission.settingsPaneURL else { return }
 
         if !NSWorkspace.shared.open(url) {
             let process = Process()
@@ -85,6 +134,18 @@ final class AccessibilityInstallAssistant {
             process.arguments = [url.absoluteString]
             try? process.run()
         }
+    }
+
+    private static func quitAndRelaunch() {
+        let appURL = Bundle.main.bundleURL
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = [
+            "-c",
+            "/bin/sleep 1; /usr/bin/open -n \"\(appURL.path)\""
+        ]
+        try? process.run()
+        NSApp.terminate(nil)
     }
 
     private func position(_ panel: NSPanel) {
@@ -108,10 +169,12 @@ final class AccessibilityInstallAssistant {
 
 @MainActor
 private struct AccessibilityInstallAssistantView: View {
+    let permission: PermissionKind
     let appURL: URL
     let bundleIdentifier: String
     let onOpenSettings: () -> Void
     let onRevealApp: () -> Void
+    let onRelaunch: () -> Void
     let onClose: () -> Void
 
     @State private var isGranted = false
@@ -122,10 +185,28 @@ private struct AccessibilityInstallAssistantView: View {
         NSWorkspace.shared.icon(forFile: appURL.path)
     }
 
+    private var headline: String {
+        switch permission {
+        case .accessibility:
+            return "Add TalkieAgent to Accessibility"
+        case .screenRecording:
+            return "Enable Screen Recording for TalkieAgent"
+        }
+    }
+
+    private var hint: String {
+        switch permission {
+        case .accessibility:
+            return "Drag this app into the Accessibility list, or toggle it if it is already listed."
+        case .screenRecording:
+            return "If TalkieAgent is not listed, drag it into Screen Recording. Toggle it on, then click Quit & Relaunch."
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "accessibility")
+                Image(systemName: permission.icon)
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(isGranted ? Color.green : Color.accentColor)
                     .frame(width: 30, height: 30)
@@ -133,11 +214,11 @@ private struct AccessibilityInstallAssistantView: View {
                     .clipShape(.rect(cornerRadius: 7))
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Add TalkieAgent to Accessibility")
+                    Text(headline)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(TalkieTheme.textPrimary)
 
-                    Text("Drag this app into the Accessibility list, or toggle it if it is already listed.")
+                    Text(hint)
                         .font(.system(size: 11))
                         .foregroundStyle(TalkieTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -166,6 +247,7 @@ private struct AccessibilityInstallAssistantView: View {
                     NativeAppFileDragSource(
                         appURL: appURL,
                         dragImage: appIcon,
+                        dropListName: permission.displayName,
                         onDragCompleted: schedulePermissionRefresh
                     )
                         .frame(width: 92, height: 92)
@@ -175,7 +257,7 @@ private struct AccessibilityInstallAssistantView: View {
                         .strokeBorder(Color.accentColor.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
                 )
                 .clipShape(.rect(cornerRadius: 8))
-                .help("Drag \(appURL.lastPathComponent) into the Accessibility list")
+                .help("Drag \(appURL.lastPathComponent) into the \(permission.displayName) list")
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text("TalkieAgent")
@@ -203,7 +285,7 @@ private struct AccessibilityInstallAssistantView: View {
             }
 
             HStack(spacing: 12) {
-                Button("Open Accessibility", systemImage: "gearshape") {
+                Button("Open \(permission.displayName)", systemImage: "gearshape") {
                     onOpenSettings()
                 }
 
@@ -212,6 +294,14 @@ private struct AccessibilityInstallAssistantView: View {
                 }
 
                 Spacer()
+
+                if permission.requiresRelaunch {
+                    Button("Quit & Relaunch", systemImage: "arrow.clockwise.circle") {
+                        onRelaunch()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .help("Quit TalkieAgent and reopen it so Screen Recording takes effect.")
+                }
 
                 Button(isGranted ? "Done" : "Close") {
                     onClose()
@@ -225,7 +315,7 @@ private struct AccessibilityInstallAssistantView: View {
         .background(TalkieTheme.surface)
         .task {
             while !Task.isCancelled {
-                isGranted = AccessibilityCache.shared.preflight()
+                refreshStatus()
                 try? await Task.sleep(for: .seconds(1))
             }
         }
@@ -263,8 +353,14 @@ private struct AccessibilityInstallAssistantView: View {
                 try? await Task.sleep(for: delay)
                 guard !Task.isCancelled else { return }
 
-                isGranted = AccessibilityCache.shared.preflight()
-                PermissionManager.shared.checkAccessibility()
+                refreshStatus()
+
+                switch permission {
+                case .accessibility:
+                    PermissionManager.shared.checkAccessibility()
+                case .screenRecording:
+                    PermissionManager.shared.checkScreenRecording()
+                }
 
                 if isGranted {
                     break
@@ -274,17 +370,28 @@ private struct AccessibilityInstallAssistantView: View {
             isRechecking = false
         }
     }
+
+    private func refreshStatus() {
+        switch permission {
+        case .accessibility:
+            isGranted = AccessibilityCache.shared.preflight()
+        case .screenRecording:
+            isGranted = CGPreflightScreenCaptureAccess()
+        }
+    }
 }
 
 private struct NativeAppFileDragSource: NSViewRepresentable {
     let appURL: URL
     let dragImage: NSImage
+    let dropListName: String
     let onDragCompleted: () -> Void
 
     func makeNSView(context: Context) -> NativeAppFileDragSourceView {
         NativeAppFileDragSourceView(
             appURL: appURL,
             dragImage: dragImage,
+            dropListName: dropListName,
             onDragCompleted: onDragCompleted
         )
     }
@@ -292,6 +399,7 @@ private struct NativeAppFileDragSource: NSViewRepresentable {
     func updateNSView(_ nsView: NativeAppFileDragSourceView, context: Context) {
         nsView.appURL = appURL
         nsView.dragImage = dragImage
+        nsView.dropListName = dropListName
         nsView.onDragCompleted = onDragCompleted
     }
 }
@@ -299,22 +407,28 @@ private struct NativeAppFileDragSource: NSViewRepresentable {
 private final class NativeAppFileDragSourceView: NSView, NSDraggingSource {
     var appURL: URL {
         didSet {
-            toolTip = "Drag \(appURL.lastPathComponent) into the Accessibility list"
+            updateToolTip()
         }
     }
     var dragImage: NSImage
+    var dropListName: String {
+        didSet {
+            updateToolTip()
+        }
+    }
     var onDragCompleted: () -> Void
 
     private var dragStartLocation: NSPoint?
     private let dragThreshold: CGFloat = 4
     private var isDragging = false
 
-    init(appURL: URL, dragImage: NSImage, onDragCompleted: @escaping () -> Void) {
+    init(appURL: URL, dragImage: NSImage, dropListName: String, onDragCompleted: @escaping () -> Void) {
         self.appURL = appURL
         self.dragImage = dragImage
+        self.dropListName = dropListName
         self.onDragCompleted = onDragCompleted
         super.init(frame: .zero)
-        toolTip = "Drag \(appURL.lastPathComponent) into the Accessibility list"
+        updateToolTip()
     }
 
     required init?(coder: NSCoder) {
@@ -388,5 +502,9 @@ private final class NativeAppFileDragSourceView: NSView, NSDraggingSource {
         isDragging = false
         dragStartLocation = nil
         onDragCompleted()
+    }
+
+    private func updateToolTip() {
+        toolTip = "Drag \(appURL.lastPathComponent) into the \(dropListName) list"
     }
 }

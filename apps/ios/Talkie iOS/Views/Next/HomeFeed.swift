@@ -90,6 +90,15 @@ final class HomeFeed: ObservableObject {
         enum Source { case dictation, typed, link, scan }
     }
 
+    struct TodayStats: Equatable {
+        let memos: Int
+        let dictations: Int
+        let items: Int
+
+        static let empty = TodayStats(memos: 0, dictations: 0, items: 0)
+    }
+
+    @Published private(set) var todayStats: TodayStats
     var hasMoreRecentItems: Bool { totalRecentCount > displayLimit }
     var remainingRecentItems: Int { max(0, totalRecentCount - displayLimit) }
     var isSearching: Bool { !normalizedSearchText.isEmpty }
@@ -105,6 +114,7 @@ final class HomeFeed: ObservableObject {
         self.isLoading = false
         self.errorMessage = nil
         self.displayLimit = Self.defaultDisplayLimit
+        self.todayStats = .empty
         reload()
     }
 
@@ -127,6 +137,12 @@ final class HomeFeed: ObservableObject {
 
             let matchingDictations = Self.filter(dictations: dictations, matching: normalizedSearchText)
             let matchingCaptures = Self.filter(captures: captures, matching: normalizedSearchText)
+            todayStats = Self.makeTodayStats(
+                memos: unfilteredMemos,
+                notes: unfilteredNotes,
+                dictations: dictations,
+                captures: captures
+            )
 
             entries = Self.makeEntries(
                 memos: filteredMemos,
@@ -511,6 +527,21 @@ private extension HomeFeed {
             return fraction == 0 ? "\(whole)k" : "\(whole).\(fraction)k"
         }
         return "\(count)"
+    }
+
+    static func makeTodayStats(
+        memos: [VoiceMemo],
+        notes: [ComposeNote],
+        dictations: [KeyboardDictation],
+        captures: [Capture]
+    ) -> TodayStats {
+        let calendar = Calendar.current
+        return TodayStats(
+            memos: memos.filter { calendar.isDateInToday($0.createdAt ?? $0.lastModified ?? .distantPast) }.count,
+            dictations: notes.filter { calendar.isDateInToday($0.createdAt ?? $0.lastModified ?? .distantPast) }.count
+                + dictations.filter { calendar.isDateInToday($0.timestamp) }.count,
+            items: captures.filter { calendar.isDateInToday($0.timestamp) }.count
+        )
     }
 
     static func relativeAge(from date: Date) -> String {

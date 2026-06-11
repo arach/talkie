@@ -344,8 +344,13 @@ class OnDeviceAIService: ObservableObject {
 
         await MainActor.run {
             memo.title = title
-            try? context.save()
-            AppLogger.ai.info("Applied smart title to memo: \(title)")
+            do {
+                try context.save()
+                VoiceMemoStore.publishChange(context: context)
+                AppLogger.ai.info("Applied smart title to memo: \(title)")
+            } catch {
+                AppLogger.ai.error("Failed to save smart title: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -360,8 +365,13 @@ class OnDeviceAIService: ObservableObject {
             let title = try await generateSmartTitle(for: transcript)
             await MainActor.run {
                 memo.title = title
-                try? context.save()
-                AppLogger.ai.info("Auto-titled memo: \(title)")
+                do {
+                    try context.save()
+                    VoiceMemoStore.publishChange(context: context)
+                    AppLogger.ai.info("Auto-titled memo: \(title)")
+                } catch {
+                    AppLogger.ai.error("Failed to save auto-title: \(error.localizedDescription)")
+                }
             }
         } catch {
             AppLogger.ai.debug("Auto-title skipped: \(error.localizedDescription)")
