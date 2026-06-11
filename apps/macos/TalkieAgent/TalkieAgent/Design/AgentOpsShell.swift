@@ -217,4 +217,3 @@ struct OpsInspectorToggle: View {
         withAnimation(OpsAnimation.chromeResize) { isCollapsed.toggle() }
     }
 }
-
