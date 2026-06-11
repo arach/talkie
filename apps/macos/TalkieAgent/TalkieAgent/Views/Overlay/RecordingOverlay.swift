@@ -47,14 +47,46 @@ extension View {
     }
 }
 
+@MainActor
+private func persistOverlayPlacement(from frame: CGRect, on screen: NSScreen?) {
+    guard let screen else { return }
+
+    let placementBounds = screen.overlayPlacementFrame()
+    let minX = placementBounds.minX
+    let maxX = max(minX, placementBounds.maxX - frame.width)
+    let minY = placementBounds.minY
+    let maxY = max(minY, placementBounds.maxY - frame.height)
+    let normalizedX: CGFloat
+    let normalizedY: CGFloat
+
+    if maxX > minX {
+        normalizedX = (frame.minX - minX) / (maxX - minX)
+    } else {
+        normalizedX = 0.5
+    }
+
+    if maxY > minY {
+        normalizedY = (maxY - frame.minY) / (maxY - minY)
+    } else {
+        normalizedY = 0
+    }
+
+    let placement = NormalizedPlacement(x: normalizedX, y: normalizedY)
+    let current = LiveSettings.shared.overlayPlacement
+    guard abs(current.x - placement.x) > 0.002 || abs(current.y - placement.y) > 0.002 else { return }
+
+    LiveSettings.shared.overlayPlacement = placement
+}
+
 // MARK: - Overlay Window Controller
 
 @MainActor
-final class RecordingOverlayController: ObservableObject {
+final class RecordingOverlayController: NSObject, ObservableObject, NSWindowDelegate {
     static let shared = RecordingOverlayController()
 
     private var window: NSWindow?
     private var settingsCancellables = Set<AnyCancellable>()
+    private var moveCommitTask: Task<Void, Never>?
 
     @Published var state: LiveState = .idle
     @Published var elapsedTime: TimeInterval = 0
@@ -66,7 +98,9 @@ final class RecordingOverlayController: ObservableObject {
     private var keyMonitor: Any?  // Event monitor for mid-recording modifiers
     private var isHiding = false  // Track if we're in the middle of a hide animation
 
-    private init() {
+    private override init() {
+        super.init()
+
         LiveSettings.shared.$overlayPlacement
             .dropFirst()
             .sink { [weak self] _ in
@@ -96,6 +130,26 @@ final class RecordingOverlayController: ObservableObject {
                 }
             }
             .store(in: &settingsCancellables)
+
+        LiveSettings.shared.$islandOverlayWidth
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor in
+                    guard let self, self.window != nil, LiveSettings.shared.effectiveOverlayStyle == .island else { return }
+                    self.updateWindowPosition(for: self.state)
+                }
+            }
+            .store(in: &settingsCancellables)
+
+        LiveSettings.shared.$islandOverlayHeight
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor in
+                    guard let self, self.window != nil, LiveSettings.shared.effectiveOverlayStyle == .island else { return }
+                    self.updateWindowPosition(for: self.state)
+                }
+            }
+            .store(in: &settingsCancellables)
     }
 
     func show() {
@@ -119,15 +173,10 @@ final class RecordingOverlayController: ObservableObject {
             return
         }
 
-        let tuning = OverlayTuning.shared
         let overlayView = RecordingOverlayView()
         let hostingView = NSHostingView(rootView: overlayView.environmentObject(self))
-        hostingView.frame = NSRect(
-            x: 0,
-            y: 0,
-            width: OverlayIndicatorOverridesStore.shared.topBarWidth(fallback: tuning.overlayWidth),
-            height: OverlayIndicatorOverridesStore.shared.topBarHeight(fallback: tuning.overlayHeight)
-        )
+        let overlaySize = listeningOverlaySize()
+        hostingView.frame = NSRect(x: 0, y: 0, width: overlaySize.width, height: overlaySize.height)
 
         let panel = NSPanel(
             contentRect: hostingView.frame,
@@ -142,6 +191,7 @@ final class RecordingOverlayController: ObservableObject {
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isMovableByWindowBackground = true
+        panel.delegate = self
         panel.hasShadow = false  // Chromeless - no visible border/shadow
         panel.acceptsMouseMovedEvents = true  // Required for hover detection
 
@@ -180,6 +230,8 @@ final class RecordingOverlayController: ObservableObject {
     func hide() {
         timer?.invalidate()
         timer = nil
+        moveCommitTask?.cancel()
+        moveCommitTask = nil
         startTime = nil
         elapsedTime = 0
         transcript = ""
@@ -198,12 +250,14 @@ final class RecordingOverlayController: ObservableObject {
             panel.animator().setFrame(exitFrame, display: true)
             panel.animator().alphaValue = 0
         }, completionHandler: { [weak self] in
-            guard let self else { return }
-            // Only clean up if we weren't interrupted by a new show()
-            if self.isHiding {
-                self.isHiding = false
-                self.window?.orderOut(nil)
-                self.window = nil
+            Task { @MainActor in
+                guard let self else { return }
+                // Only clean up if we weren't interrupted by a new show()
+                if self.isHiding {
+                    self.isHiding = false
+                    self.window?.orderOut(nil)
+                    self.window = nil
+                }
             }
         })
     }
@@ -235,7 +289,6 @@ final class RecordingOverlayController: ObservableObject {
     private func updateWindowPosition(for state: LiveState) {
         guard let panel = window else { return }
 
-        let tuning = OverlayTuning.shared
         let screen = panel.screen ?? NSScreen.main
 
         // Calculate size based on state (matches processingWidth/processingHeight in view)
@@ -243,8 +296,9 @@ final class RecordingOverlayController: ObservableObject {
         let height: CGFloat
         switch state {
         case .listening, .idle:
-            width = OverlayIndicatorOverridesStore.shared.topBarWidth(fallback: tuning.overlayWidth)
-            height = OverlayIndicatorOverridesStore.shared.topBarHeight(fallback: tuning.overlayHeight)
+            let overlaySize = listeningOverlaySize()
+            width = overlaySize.width
+            height = overlaySize.height
         case .transcribing:
             width = recordingOverlayProcessingBoxWidth
             height = recordingOverlayProcessingBoxHeight
@@ -271,6 +325,38 @@ final class RecordingOverlayController: ObservableObject {
         let placementBounds = screen.overlayPlacementFrame()
         let origin = LiveSettings.shared.overlayPlacement.origin(in: placementBounds, itemSize: size)
         return CGRect(origin: origin, size: size)
+    }
+
+    private func listeningOverlaySize() -> CGSize {
+        let settings = LiveSettings.shared
+        if settings.effectiveOverlayStyle == .island {
+            return CGSize(width: CGFloat(settings.islandOverlayWidth), height: CGFloat(settings.islandOverlayHeight))
+        }
+
+        let tuning = OverlayTuning.shared
+        return CGSize(
+            width: OverlayIndicatorOverridesStore.shared.topBarWidth(fallback: tuning.overlayWidth),
+            height: OverlayIndicatorOverridesStore.shared.topBarHeight(fallback: tuning.overlayHeight)
+        )
+    }
+
+    nonisolated func windowDidMove(_ notification: Notification) {
+        Task { @MainActor in
+            guard let panel = notification.object as? NSWindow,
+                  panel === self.window,
+                  self.state == .listening else { return }
+
+            self.schedulePlacementCommit(for: panel)
+        }
+    }
+
+    private func schedulePlacementCommit(for panel: NSWindow) {
+        moveCommitTask?.cancel()
+        moveCommitTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(180))
+            guard !Task.isCancelled, panel === self.window, self.state == .listening else { return }
+            persistOverlayPlacement(from: panel.frame, on: panel.screen ?? NSScreen.main)
+        }
     }
 
     func updateTranscript(_ text: String) {
@@ -345,6 +431,310 @@ final class RecordingOverlayController: ObservableObject {
     }
 }
 
+// MARK: - Overlay Settings Preview
+
+@MainActor
+final class OverlaySettingsPreviewController: NSObject, NSWindowDelegate {
+    static let shared = OverlaySettingsPreviewController()
+
+    private var window: NSPanel?
+    private var cancellables = Set<AnyCancellable>()
+    private var moveCommitTask: Task<Void, Never>?
+    private var isActive = false
+    private var isHiding = false
+    private var isDismissedForCurrentActivation = false
+
+    private override init() {
+        super.init()
+
+        let settings = LiveSettings.shared
+
+        settings.$overlayStyle
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor in self?.refresh() }
+            }
+            .store(in: &cancellables)
+
+        settings.$overlayPlacement
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor in self?.refreshFrame(animated: true) }
+            }
+            .store(in: &cancellables)
+
+        settings.$islandOverlayWidth
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor in self?.refreshFrame(animated: true) }
+            }
+            .store(in: &cancellables)
+
+        settings.$islandOverlayHeight
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor in self?.refreshFrame(animated: true) }
+            }
+            .store(in: &cancellables)
+
+        RecordingOverlayController.shared.$state
+            .removeDuplicates()
+            .sink { [weak self] _ in
+                Task { @MainActor in self?.refresh() }
+            }
+            .store(in: &cancellables)
+    }
+
+    func activate() {
+        isActive = true
+        isDismissedForCurrentActivation = false
+        refresh()
+    }
+
+    func deactivate() {
+        isActive = false
+        moveCommitTask?.cancel()
+        moveCommitTask = nil
+        hide()
+    }
+
+    func dismissForCurrentActivation() {
+        isDismissedForCurrentActivation = true
+        moveCommitTask?.cancel()
+        moveCommitTask = nil
+        hide()
+    }
+
+    private func refresh() {
+        guard isActive else {
+            hide()
+            return
+        }
+
+        guard !isDismissedForCurrentActivation else {
+            hide()
+            return
+        }
+
+        guard RecordingOverlayController.shared.state == .idle,
+              LiveSettings.shared.effectiveOverlayStyle.showsTopOverlay else {
+            hide()
+            return
+        }
+
+        showOrUpdate()
+    }
+
+    private func showOrUpdate() {
+        if isHiding, let panel = window {
+            isHiding = false
+            panel.orderFront(nil)
+            panel.animator().alphaValue = 1
+            refreshFrame(animated: true)
+            return
+        }
+
+        guard window == nil else {
+            refreshFrame(animated: true)
+            window?.orderFront(nil)
+            return
+        }
+
+        let frame = previewFrame()
+        let hostingView = NSHostingView(rootView: OverlaySettingsFloatingPreviewView())
+        hostingView.frame = NSRect(origin: .zero, size: frame.size)
+
+        let panel = NSPanel(
+            contentRect: frame,
+            styleMask: [.nonactivatingPanel, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        panel.contentView = hostingView
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.level = .floating
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+        panel.isMovableByWindowBackground = true
+        panel.delegate = self
+        panel.hasShadow = false
+        panel.ignoresMouseEvents = false
+        panel.acceptsMouseMovedEvents = true
+        panel.alphaValue = 0
+
+        window = panel
+        panel.orderFront(nil)
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.18
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            panel.animator().alphaValue = 1
+        }
+    }
+
+    private func refreshFrame(animated: Bool) {
+        guard let panel = window else { return }
+        let frame = previewFrame()
+        panel.contentView?.frame = NSRect(origin: .zero, size: frame.size)
+
+        if animated {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.18
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                panel.animator().setFrame(frame, display: true)
+            }
+        } else {
+            panel.setFrame(frame, display: true)
+        }
+    }
+
+    private func hide() {
+        guard let panel = window else { return }
+        moveCommitTask?.cancel()
+        moveCommitTask = nil
+        isHiding = true
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.14
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            panel.animator().alphaValue = 0
+        }, completionHandler: { [weak self] in
+            Task { @MainActor in
+                guard let self, self.isHiding else { return }
+                self.isHiding = false
+                self.window?.orderOut(nil)
+                self.window = nil
+            }
+        })
+    }
+
+    private func previewFrame() -> CGRect {
+        let size = Self.currentPreviewSize()
+        let screen = NSScreen.main
+        let placementFrame = screen?.overlayPlacementFrame() ?? .zero
+        let origin = LiveSettings.shared.overlayPlacement.origin(in: placementFrame, itemSize: size)
+        return CGRect(origin: origin, size: size)
+    }
+
+    static func currentPreviewSize() -> CGSize {
+        let settings = LiveSettings.shared
+        if settings.effectiveOverlayStyle == .island {
+            return CGSize(width: CGFloat(settings.islandOverlayWidth), height: CGFloat(settings.islandOverlayHeight))
+        }
+
+        let tuning = OverlayTuning.shared
+        return CGSize(
+            width: OverlayIndicatorOverridesStore.shared.topBarWidth(fallback: tuning.overlayWidth),
+            height: OverlayIndicatorOverridesStore.shared.topBarHeight(fallback: tuning.overlayHeight)
+        )
+    }
+
+    nonisolated func windowDidMove(_ notification: Notification) {
+        Task { @MainActor in
+            guard let panel = notification.object as? NSWindow,
+                  panel === self.window,
+                  self.isActive,
+                  !self.isDismissedForCurrentActivation else { return }
+
+            self.schedulePlacementCommit(for: panel)
+        }
+    }
+
+    private func schedulePlacementCommit(for panel: NSWindow) {
+        moveCommitTask?.cancel()
+        moveCommitTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(180))
+            guard !Task.isCancelled,
+                  panel === self.window,
+                  self.isActive,
+                  !self.isDismissedForCurrentActivation else { return }
+
+            persistOverlayPlacement(from: panel.frame, on: panel.screen ?? NSScreen.main)
+        }
+    }
+}
+
+private struct OverlaySettingsFloatingPreviewView: View {
+    @ObservedObject private var settings = LiveSettings.shared
+    @ObservedObject private var overlayTuning = OverlayTuning.shared
+    private let overlayOverrides = OverlayIndicatorOverridesStore.shared
+
+    var body: some View {
+        AgentOverlay(
+            animationStyle: animationStyle,
+            animationDirection: .inbound,
+            width: previewSize.width,
+            height: previewSize.height,
+            cornerRadius: cornerRadius,
+            backgroundFill: backgroundFill,
+            borderColor: borderColor,
+            audioLevel: 0.42,
+            controlVisibility: .always,
+            content: nil,
+            leadingControl: AnyView(
+                OverlayButton(action: {
+                    OverlaySettingsPreviewController.shared.dismissForCurrentActivation()
+                }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .help("Hide preview")
+            ),
+            trailingControl: AnyView(
+                OverlayButton(action: {}) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .frame(width: 10, height: 10)
+                }
+            )
+        )
+    }
+
+    private var previewSize: CGSize {
+        OverlaySettingsPreviewController.currentPreviewSize()
+    }
+
+    private var cornerRadius: CGFloat {
+        if settings.effectiveOverlayStyle == .island {
+            return previewSize.height / 2
+        }
+
+        return overlayOverrides.topBarCornerRadius(fallback: overlayTuning.cornerRadius)
+    }
+
+    private var backgroundFill: Color {
+        if settings.effectiveOverlayStyle == .island {
+            return Color.black.opacity(0.92)
+        }
+
+        let opacity = overlayOverrides.topBarBackgroundOpacity(fallback: overlayTuning.backgroundOpacity)
+        return Color(white: 0, opacity: opacity * 0.7)
+    }
+
+    private var borderColor: Color {
+        if settings.effectiveOverlayStyle == .island {
+            return Color.white.opacity(0.12)
+        }
+
+        return TalkieTheme.textSecondary.opacity(0.1)
+    }
+
+    private var animationStyle: AgentOverlay.AnimationStyle {
+        switch settings.effectiveOverlayStyle {
+        case .particles:
+            return .particles(calm: false, speedMultiplier: 1.0)
+        case .particlesCalm:
+            return .particles(calm: true, speedMultiplier: 1.0)
+        case .waveform:
+            return .waveform(sensitive: false)
+        case .waveformSensitive:
+            return .waveform(sensitive: true)
+        case .island:
+            return .island
+        case .pillOnly:
+            return .none
+        }
+    }
+}
+
 // MARK: - Overlay View
 
 struct RecordingOverlayView: View {
@@ -404,13 +794,13 @@ struct RecordingOverlayView: View {
                 leadingControl: AnyView(
                     OverlayButton(action: { controller.requestCancel() }) {
                         Image(systemName: "xmark")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.system(size: 9, weight: .medium))
                     }
                 ),
                 trailingControl: AnyView(
                     OverlayButton(action: { controller.requestStop() }) {
                         RoundedRectangle(cornerRadius: 2)
-                            .frame(width: 10, height: 10)
+                            .frame(width: 8.5, height: 8.5)
                     }
                 )
             )
@@ -476,7 +866,7 @@ struct RecordingOverlayView: View {
 
     // Dynamic sizing - shrinks progressively for processing states (droplet effect)
     private var processingWidth: CGFloat {
-        let baseWidth = overlayOverrides.topBarWidth(fallback: overlayTuning.overlayWidth)
+        let baseWidth = listeningOverlaySize.width
         switch controller.state {
         case .listening: return baseWidth
         case .transcribing: return recordingOverlayProcessingBoxWidth
@@ -487,7 +877,7 @@ struct RecordingOverlayView: View {
     }
 
     private var processingHeight: CGFloat {
-        let baseHeight = overlayOverrides.topBarHeight(fallback: overlayTuning.overlayHeight)
+        let baseHeight = listeningOverlaySize.height
         switch controller.state {
         case .listening: return baseHeight
         case .transcribing: return recordingOverlayProcessingBoxHeight
@@ -497,20 +887,42 @@ struct RecordingOverlayView: View {
         }
     }
 
+    private var listeningOverlaySize: CGSize {
+        if settings.effectiveOverlayStyle == .island {
+            return CGSize(width: CGFloat(settings.islandOverlayWidth), height: CGFloat(settings.islandOverlayHeight))
+        }
+
+        return CGSize(
+            width: overlayOverrides.topBarWidth(fallback: overlayTuning.overlayWidth),
+            height: overlayOverrides.topBarHeight(fallback: overlayTuning.overlayHeight)
+        )
+    }
+
     private var cornerRadiusForState: CGFloat {
         switch controller.state {
-        case .listening: return overlayOverrides.topBarCornerRadius(fallback: overlayTuning.cornerRadius)
+        case .listening:
+            if settings.effectiveOverlayStyle == .island {
+                return processingHeight / 2
+            }
+            return overlayOverrides.topBarCornerRadius(fallback: overlayTuning.cornerRadius)
         case .transcribing:
             return 12
         case .routing, .refining:
             return 12
-        case .idle: return overlayOverrides.topBarCornerRadius(fallback: overlayTuning.cornerRadius)
+        case .idle:
+            if settings.effectiveOverlayStyle == .island {
+                return processingHeight / 2
+            }
+            return overlayOverrides.topBarCornerRadius(fallback: overlayTuning.cornerRadius)
         }
     }
 
     private var backgroundFill: Color {
         switch controller.state {
         case .listening:
+            if settings.effectiveOverlayStyle == .island {
+                return Color.black.opacity(0.92)
+            }
             let opacity = overlayOverrides.topBarBackgroundOpacity(fallback: overlayTuning.backgroundOpacity)
             return Color(white: 0, opacity: opacity * 0.7)
         case .transcribing:
@@ -527,6 +939,9 @@ struct RecordingOverlayView: View {
     private var borderColor: Color {
         switch controller.state {
         case .listening:
+            if settings.effectiveOverlayStyle == .island {
+                return Color.white.opacity(0.12)
+            }
             return TalkieTheme.textSecondary.opacity(0.1)
         case .transcribing:
             return (whisperService.isWarmingUp ? warmupCyan : processingOrange).opacity(0.18)
@@ -549,6 +964,8 @@ struct RecordingOverlayView: View {
             return .waveform(sensitive: false)
         case .waveformSensitive:
             return .waveform(sensitive: true)
+        case .island:
+            return .island
         case .pillOnly:
             return .none
         }
@@ -675,9 +1092,9 @@ struct InfinityParticlesView: View {
 
                         // Opacity variation creates depth - particles fade in and out gently
                         // Use same opacity range as WavyParticlesView for consistency
-                        let baseOpacity = 0.45
-                        let breathOpacity = sin(time * 1.2 + Double(i) * 0.5) * 0.15
-                        let flowOpacity = sin(phase * 1.5) * 0.1
+                        let baseOpacity = 0.56
+                        let breathOpacity = sin(time * 1.2 + Double(i) * 0.5) * 0.18
+                        let flowOpacity = sin(phase * 1.5) * 0.12
                         let opacity = baseOpacity + breathOpacity + flowOpacity
 
                         let rect = CGRect(
@@ -687,7 +1104,7 @@ struct InfinityParticlesView: View {
                             height: particleSize
                         )
                         // Use explicit white for overlay context
-                        context.fill(Circle().path(in: rect), with: .color(Color.white.opacity(max(0.25, min(0.75, opacity)))))
+                        context.fill(Circle().path(in: rect), with: .color(Color.white.opacity(max(0.34, min(0.90, opacity)))))
                     }
 
                     // Add a subtle glow trail effect - a few larger, more transparent particles
@@ -701,7 +1118,7 @@ struct InfinityParticlesView: View {
                         let y = centerY + CGFloat(sin(t) * cos(t) / denom) * loopHeight
 
                         let glowSize: CGFloat = 4.5 * CGFloat(breathingCycle)
-                        let glowOpacity = 0.06 + sin(time * 0.8) * 0.02
+                        let glowOpacity = 0.10 + sin(time * 0.8) * 0.025
 
                         let rect = CGRect(
                             x: x - glowSize / 2,
@@ -773,13 +1190,18 @@ struct OverlayButton<Content: View>: View {
     var body: some View {
         Button(action: action) {
             content()
-                .foregroundColor(TalkieTheme.textSecondary.opacity(isHovered ? 0.9 : 0.4))
-                .frame(width: 26, height: 26)
+                .foregroundColor(Color.white.opacity(isHovered ? 0.96 : 0.50))
+                .frame(width: 22, height: 22)
                 .background(
                     Circle()
-                        .fill(TalkieTheme.textSecondary.opacity(isHovered ? 0.15 : 0))
+                        .fill(Color.white.opacity(isHovered ? 0.22 : 0.035))
                 )
-                .scaleEffect(isHovered ? 1.1 : 1.0)
+                .overlay(
+                    Circle()
+                        .stroke(Color.white.opacity(isHovered ? 0.28 : 0.07), lineWidth: 0.8)
+                )
+                .shadow(color: Color.white.opacity(isHovered ? 0.18 : 0), radius: 5)
+                .scaleEffect(isHovered ? 1.04 : 1.0)
         }
         .buttonStyle(.plain)
         .contentShape(Circle())
@@ -866,8 +1288,14 @@ struct WavyParticlesView: View {
                     let particleSize = baseSize + levelBonus * sizeVariation
 
                     // Opacity from tuning - more responsive to voice
-                    let visibilityBoost = levelOverride == nil ? 1.0 : max(0.06, Double(level) * 1.35)
-                    let opacity = (tuning.baseOpacity + Double(level) * 0.5 * (0.6 + sin(seed * 3) * 0.4)) * visibilityBoost
+                    let visibilityBoost = levelOverride == nil ? 1.18 : max(0.12, Double(level) * 1.65)
+                    let opacity = min(
+                        0.96,
+                        max(
+                            0.24,
+                            (tuning.baseOpacity + Double(level) * 0.56 * (0.6 + sin(seed * 3) * 0.4)) * visibilityBoost
+                        )
+                    )
 
                     let rect = CGRect(
                         x: x - particleSize / 2,
@@ -1003,6 +1431,121 @@ struct WaveformBarsView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Island Pill Shapes
+
+struct IslandPillShapesView: View {
+    let direction: AgentOverlay.AnimationDirection
+    let levelOverride: Float?
+
+    @ObservedObject private var audioMonitor = AudioLevelMonitor.shared
+    @ObservedObject private var settings = LiveSettings.shared
+    @State private var smoothedLevel: CGFloat = 0.18
+
+    init(
+        direction: AgentOverlay.AnimationDirection = .inbound,
+        levelOverride: Float? = nil
+    ) {
+        self.direction = direction
+        self.levelOverride = levelOverride
+    }
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 0.016)) { timeline in
+            Canvas { context, size in
+                let time = timeline.date.timeIntervalSinceReferenceDate
+                let islandSettings = settings.islandVisualizationSettings
+                let speed = CGFloat(islandSettings.motion)
+                let reactivity = CGFloat(islandSettings.reactivity)
+                let density = CGFloat(islandSettings.shape)
+                let level = max(0.10, smoothedLevel)
+                let speedAmount = max(0.12, speed)
+                let particleCount = Int(18 + density * 22)
+                let flowSpeed = 0.18 + Double(speedAmount) * 0.52
+                let waveSpeed = 1.25 + Double(speedAmount) * 1.15
+                let flowRight = direction == .inbound
+                let centerY = size.height * 0.48
+                let waveAmplitude = (0.08 + Double(level) * (0.42 + Double(reactivity) * 0.22)) * Double(size.height) * 0.5
+                let baseSize = 1.45 + density * 1.15
+                let levelBonus = level * (1.2 + reactivity * 1.6)
+
+                for i in 0..<particleCount {
+                    let seed = Double(i) * 1.618033988749
+                    let speedVariation = seed.truncatingRemainder(dividingBy: 1.0) * 0.06
+                    let xProgress = (time * (flowSpeed + speedVariation) + seed).truncatingRemainder(dividingBy: 1.0)
+                    let x = flowRight
+                        ? CGFloat(xProgress) * size.width
+                        : size.width - CGFloat(xProgress) * size.width
+                    let laneOffset = (Double(i % 9) / 8.0 - 0.5) * 0.38
+                    let primaryWave = sin(time * waveSpeed + seed * 4.0)
+                    let secondaryWave = sin(time * (waveSpeed * 0.48) + seed * 6.0) * 0.28
+                    let y = centerY + CGFloat((primaryWave + secondaryWave + laneOffset) * waveAmplitude)
+                    let sizeScale = CGFloat(0.68 + sin(seed * 5.0) * 0.32)
+                    let particleSize = max(1.1, baseSize + levelBonus * sizeScale)
+                    let edgeFade = flowRight
+                        ? min(xProgress * 3.0, 1.0) * min((1.0 - xProgress) * 2.0, 1.0)
+                        : min((1.0 - xProgress) * 3.0, 1.0) * min(xProgress * 2.0, 1.0)
+                    let shimmer = 0.72 + sin(time * 2.2 + seed * 3.0) * 0.18
+                    let opacityScale = 0.58 + sin(seed * 3.0) * 0.34
+                    let opacity = min(
+                        0.92,
+                        max(
+                            0.18,
+                            (0.28 + Double(level) * (0.40 + Double(reactivity) * 0.22)) * edgeFade * shimmer * opacityScale
+                        )
+                    )
+
+                    let rect = CGRect(
+                        x: x - particleSize / 2,
+                        y: y - particleSize / 2,
+                        width: particleSize,
+                        height: particleSize
+                    )
+                    context.fill(Circle().path(in: rect), with: .color(Color.white.opacity(opacity)))
+                }
+
+                if speed > 0.05 {
+                    let glintWidth = max(18, size.width * (0.10 + level * 0.08))
+                    let glintXProgress = CGFloat((time * (0.18 + Double(speedAmount) * 0.34)).truncatingRemainder(dividingBy: 1))
+                    let glintX = flowRight
+                        ? glintXProgress * (size.width + glintWidth) - glintWidth
+                        : (1 - glintXProgress) * (size.width + glintWidth) - glintWidth
+                    let glintRect = CGRect(x: glintX, y: 2.2, width: glintWidth, height: 0.8)
+                    context.fill(
+                        RoundedRectangle(cornerRadius: 0.5).path(in: glintRect),
+                        with: .color(Color.white.opacity(0.055 + level * 0.10))
+                    )
+                }
+            }
+        }
+        .onAppear {
+            updateSmoothedLevel(from: currentInputLevel)
+        }
+        .onReceive(audioMonitor.$level) { level in
+            guard levelOverride == nil else { return }
+            updateSmoothedLevel(from: level)
+        }
+        .onChange(of: levelOverride) { _, newValue in
+            guard let newValue else { return }
+            updateSmoothedLevel(from: newValue)
+        }
+        .onChange(of: settings.islandOverlayReactivity) { _, _ in
+            updateSmoothedLevel(from: currentInputLevel)
+        }
+    }
+
+    private var currentInputLevel: Float {
+        levelOverride ?? audioMonitor.level
+    }
+
+    private func updateSmoothedLevel(from inputLevel: Float) {
+        let islandSettings = settings.islandVisualizationSettings
+        let sensitivity = 0.9 + islandSettings.reactivity * 2.0
+        let targetLevel = min(1, max(0.04, CGFloat(inputLevel) * CGFloat(sensitivity)))
+        let blend = CGFloat(0.12 + islandSettings.motion * 0.14)
+        smoothedLevel = smoothedLevel * (1 - blend) + targetLevel * blend
     }
 }
 

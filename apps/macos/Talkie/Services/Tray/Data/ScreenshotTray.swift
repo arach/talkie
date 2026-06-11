@@ -106,6 +106,8 @@ final class ScreenshotTray {
     static let shared = ScreenshotTray()
 
     private(set) var items: [TrayScreenshot] = []
+    @ObservationIgnored
+    private var externalMutationObserver: Any?
     private var manifestSaveTask: Task<Void, Never>?
     private var manifestSaveGeneration: UInt64 = 0
     private let captureHotPathLoggingEnabled = ProcessInfo.processInfo.environment["CAPTURE_PERF"] == "1"
@@ -181,6 +183,26 @@ final class ScreenshotTray {
 
     private init() {
         Self.migrateFromBufferIfNeeded()
+        restoreFromDisk()
+        observeExternalTrayMutations()
+    }
+
+    private func observeExternalTrayMutations() {
+        externalMutationObserver = DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name(LiveTrayNotifications.assetsDidChange),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.reloadAfterExternalMutation()
+            }
+        }
+    }
+
+    private func reloadAfterExternalMutation() {
+        manifestSaveTask?.cancel()
+        manifestSaveTask = nil
+        manifestSaveGeneration &+= 1
         restoreFromDisk()
     }
 
@@ -547,7 +569,7 @@ final class ScreenshotTray {
         manifestSaveTask?.cancel()
         manifestSaveTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(120))
-            guard let self, !Task.isCancelled else { return }
+            guard let self, !Task.isCancelled, generation == self.manifestSaveGeneration else { return }
 
             let writeError = await Task.detached(priority: .utility) { () -> Error? in
                 do {
@@ -573,7 +595,10 @@ final class ScreenshotTray {
 
     private func restoreFromDisk() {
         let url = Self.manifestURL
-        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            items = []
+            return
+        }
 
         do {
             let data = try Data(contentsOf: url)

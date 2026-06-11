@@ -75,6 +75,10 @@ public struct Sidebar<Selection: Hashable, RailHeader: View, LabelHeader: View, 
     let allCaps: Bool
     let labelWidth: CGFloat
     let onHeaderTap: (() -> Void)?
+    /// Scope-theme chrome tweak (header rule + flat rail surface). Injected by
+    /// the host so this component carries no app-target dependency
+    /// (SettingsManager lives in the Talkie app, not TalkieKit).
+    let isScopeTheme: Bool
     @ViewBuilder let railHeader: () -> RailHeader
     @ViewBuilder let labelHeader: () -> LabelHeader
     @ViewBuilder let footer: () -> Footer
@@ -93,6 +97,7 @@ public struct Sidebar<Selection: Hashable, RailHeader: View, LabelHeader: View, 
         allCaps: Bool = false,
         labelWidth: CGFloat = SidebarLayout.labelWidth,
         onHeaderTap: (() -> Void)? = nil,
+        isScopeTheme: Bool = false,
         @ViewBuilder railHeader: @escaping () -> RailHeader,
         @ViewBuilder labelHeader: @escaping () -> LabelHeader,
         @ViewBuilder footer: @escaping () -> Footer
@@ -104,6 +109,7 @@ public struct Sidebar<Selection: Hashable, RailHeader: View, LabelHeader: View, 
         self.allCaps = allCaps
         self.labelWidth = labelWidth
         self.onHeaderTap = onHeaderTap
+        self.isScopeTheme = isScopeTheme
         self.railHeader = railHeader
         self.labelHeader = labelHeader
         self.footer = footer
@@ -202,7 +208,7 @@ public struct Sidebar<Selection: Hashable, RailHeader: View, LabelHeader: View, 
         // own width from labelWidth → 0 by progress. Host (HStack) honors
         // the intrinsic width; nothing slides because nothing is being
         // re-anchored by a shrinking parent column.
-        .background(SidebarSurfaceBackground(style: style.surface))
+        .background(SidebarSurfaceBackground(style: style.surface, isScopeTheme: isScopeTheme))
         .overlay(alignment: .top) {
             // Editorial only: hairline at the very top so the rail reads
             // like a masthead under the title bar.
@@ -238,7 +244,7 @@ public struct Sidebar<Selection: Hashable, RailHeader: View, LabelHeader: View, 
     /// (the gray strip read wrong); structure comes from the rule alone.
     @ViewBuilder
     private var scopeHeaderStrip: some View {
-        if SettingsManager.shared.isScopeTheme {
+        if isScopeTheme {
             VStack(spacing: 0) {
                 Color.clear
                     .frame(height: SidebarLayout.headerHeight + SidebarLayout.headerTopPadding)
@@ -592,6 +598,7 @@ private struct RailIcon<Selection: Hashable>: View {
 /// Background plane that switches per surface style.
 struct SidebarSurfaceBackground: View {
     let style: SidebarSurfaceStyle
+    var isScopeTheme: Bool = false
 
     var body: some View {
         switch style {
@@ -606,7 +613,7 @@ struct SidebarSurfaceBackground: View {
             //
             // Gradient (top brighter, bottom slightly darker) preserves
             // the existing depth feel.
-            if SettingsManager.shared.isScopeTheme {
+            if isScopeTheme {
                 // Scope: the rail is the SAME white canvas as the content —
                 // no gray surface. The rail is usually collapsed, and a
                 // distinct gray panel read wrong; structure comes from the

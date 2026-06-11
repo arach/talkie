@@ -72,6 +72,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private var lastPTTEnabled: Bool?
     private var lastSelectionQuickHotkey: HotkeyConfig?
     private var lastExternalSelectionSourceApp: NSRunningApplication?
+    private var isAgentCaptureChordActive = false
+    private var isAgentDirectScreenshotCaptureActive = false
+    private var isAgentPasteChordActive = false
+    private var fileDragPanel: FileDragPanel?
+    private var lastAgentDirectScreenshotMode: String?
+    private var lastAgentDirectScreenshotAt: Date = .distantPast
 
     // Lazy UI controllers - initialized during boot sequence
     private var overlayController: RecordingOverlayController { RecordingOverlayController.shared }
@@ -118,6 +124,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 NSLog("[TalkieAgent] Found zombie instances (PID: %@) — taking over as PID %d", zombiePIDs, myPID)
             }
         }
+
+        // Register brand fonts bundled in TalkieKit so JetBrains Mono resolves
+        // here (the Agent target doesn't ship fonts of its own).
+        TalkieKitFonts.registerBundledFonts()
 
         // Configure unified logger first
         TalkieLogger.configure(source: .talkieLive, mirrorToOSLogInDebug: true)
@@ -250,14 +260,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         case "home", "agent":
             AgentHomeController.shared.show()
         case "settings":
-            showSettings(tab: .shortcuts)
+            AgentHomeController.shared.showSettings()
         case "performance":
             showSettings(tab: .performance)
         case "toggle":
             toggleListening(interstitial: false)
         default:
-            // Unknown command - show settings as fallback
-            showSettings(tab: .shortcuts)
+            // Unknown command - show Agent Home settings as fallback.
+            AgentHomeController.shared.showSettings()
         }
     }
 
@@ -318,90 +328,66 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         case microphoneWarning
     }
 
-    private struct TalkieMenuBarIconPalette {
-        let background: NSColor
-        let stroke: NSColor
-        let foreground: NSColor
+    /// Status dot drawn on the menu-bar tile.
+    private enum TalkieMenuBarDot {
+        case none
+        case recording
+        case microphoneWarning
+
+        var color: NSColor? {
+            switch self {
+            case .none: return nil
+            case .recording: return NSColor(calibratedRed: 0.93, green: 0.21, blue: 0.16, alpha: 1.0)
+            case .microphoneWarning: return NSColor(calibratedRed: 1.0, green: 0.62, blue: 0.16, alpha: 1.0)
+            }
+        }
     }
 
-    private static let talkieMenuBarIconLength: CGFloat = 18
-    private static let activeTalkieMenuBarIconSize = NSSize(width: 28, height: 18)
+    // The menu-bar mark is a fixed white tile with a black "T". State is shown by
+    // a small corner dot (red = recording, amber = mic blocked) rather than by
+    // recoloring the whole mark, so the icon never jumps shape or width.
+    private static let talkieMenuBarTileSize = NSSize(width: 21, height: 18)
 
     private static func createTalkieMenuBarIcon() -> NSImage {
-        let iconSize = NSSize(width: Self.talkieMenuBarIconLength, height: Self.talkieMenuBarIconLength)
-
-        let image = NSImage(size: iconSize, flipped: false) { rect in
-            Self.drawTalkieT(in: rect.insetBy(dx: 3.1, dy: 1.25), color: .black)
-            return true
-        }
-        image.isTemplate = true
-        return image
+        makeTalkieTileIcon(dot: .none)
     }
 
     private static func createActiveTalkieMenuBarIcon(style: TalkieMenuBarIconStyle) -> NSImage {
-        let iconSize = Self.activeTalkieMenuBarIconSize
+        switch style {
+        case .recording: return makeTalkieTileIcon(dot: .recording)
+        case .microphoneWarning: return makeTalkieTileIcon(dot: .microphoneWarning)
+        }
+    }
 
-        let image = NSImage(size: iconSize, flipped: false) { rect in
-            let palette = Self.activeTalkieMenuBarPalette(for: style)
-            let capsuleRect = rect.insetBy(dx: 1.0, dy: 1.35)
-            let capsule = NSBezierPath(
-                roundedRect: capsuleRect,
-                xRadius: capsuleRect.height / 2,
-                yRadius: capsuleRect.height / 2
-            )
+    private static func makeTalkieTileIcon(dot: TalkieMenuBarDot) -> NSImage {
+        let image = NSImage(size: Self.talkieMenuBarTileSize, flipped: false) { rect in
+            // White rounded tile.
+            let tile = NSRect(x: rect.minX + 1.0, y: rect.minY + 1.5, width: 17, height: 15)
+            let tilePath = NSBezierPath(roundedRect: tile, xRadius: 4.5, yRadius: 4.5)
+            NSColor.white.withAlphaComponent(0.97).setFill()
+            tilePath.fill()
+            NSColor.black.withAlphaComponent(0.14).setStroke()
+            tilePath.lineWidth = 0.75
+            tilePath.stroke()
 
-            palette.background.setFill()
-            capsule.fill()
+            // Black "T" centered in the tile.
+            Self.drawTalkieT(in: tile.insetBy(dx: 4.6, dy: 3.0), color: .black)
 
-            palette.stroke.setStroke()
-            capsule.lineWidth = 0.9
-            capsule.stroke()
-
-            let glyphRect = NSRect(
-                x: rect.midX - 5.7,
-                y: rect.midY - 7.35,
-                width: 11.4,
-                height: 14.7
-            )
-            Self.drawTalkieT(in: glyphRect, color: palette.foreground)
-
+            // Corner status dot, ringed so it reads against tile and menu bar alike.
+            if let dotColor = dot.color {
+                let d: CGFloat = 5.5
+                let dotRect = NSRect(x: tile.maxX - d + 1.0, y: tile.maxY - d + 1.0, width: d, height: d)
+                NSColor.white.withAlphaComponent(0.95).setStroke()
+                let halo = NSBezierPath(ovalIn: dotRect.insetBy(dx: -0.5, dy: -0.5))
+                halo.lineWidth = 1.0
+                halo.stroke()
+                dotColor.setFill()
+                NSBezierPath(ovalIn: dotRect).fill()
+            }
             return true
         }
         image.isTemplate = false
         return image
-    }
-
-    private static func activeTalkieMenuBarPalette(for style: TalkieMenuBarIconStyle) -> TalkieMenuBarIconPalette {
-        let isDark = NSAppearance.currentDrawing().bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-
-        switch (style, isDark) {
-        case (.recording, true):
-            let red = NSColor(calibratedRed: 1.0, green: 0.34, blue: 0.27, alpha: 1.0)
-            return TalkieMenuBarIconPalette(
-                background: NSColor(calibratedRed: 0.32, green: 0.045, blue: 0.04, alpha: 0.95),
-                stroke: red.withAlphaComponent(0.82),
-                foreground: red
-            )
-        case (.recording, false):
-            return TalkieMenuBarIconPalette(
-                background: NSColor(calibratedRed: 1.0, green: 0.84, blue: 0.82, alpha: 0.96),
-                stroke: NSColor(calibratedRed: 0.82, green: 0.16, blue: 0.10, alpha: 0.58),
-                foreground: NSColor(calibratedRed: 0.70, green: 0.06, blue: 0.03, alpha: 1.0)
-            )
-        case (.microphoneWarning, true):
-            let orange = NSColor(calibratedRed: 1.0, green: 0.64, blue: 0.20, alpha: 1.0)
-            return TalkieMenuBarIconPalette(
-                background: NSColor(calibratedRed: 0.30, green: 0.17, blue: 0.035, alpha: 0.95),
-                stroke: orange.withAlphaComponent(0.82),
-                foreground: orange
-            )
-        case (.microphoneWarning, false):
-            return TalkieMenuBarIconPalette(
-                background: NSColor(calibratedRed: 1.0, green: 0.89, blue: 0.68, alpha: 0.96),
-                stroke: NSColor(calibratedRed: 0.82, green: 0.42, blue: 0.06, alpha: 0.58),
-                foreground: NSColor(calibratedRed: 0.63, green: 0.28, blue: 0.00, alpha: 1.0)
-            )
-        }
     }
 
     private static func drawTalkieT(in rect: NSRect, color: NSColor) {
@@ -521,7 +507,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         menu.addItem(NSMenuItem.separator())
 
-        let settingsItem = NSMenuItem(title: "Settings...", action: #selector(showSettingsAction), keyEquivalent: ",")
+        let settingsItem = NSMenuItem(title: "Open Agent Home Settings...", action: #selector(showSettingsAction), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
 
@@ -868,18 +854,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                     self.showAgentHome()
                 }
             },
+            openSettings: { [weak self] in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.dismissAgentMenuPopover()
+                    AgentHomeController.shared.showSettings()
+                }
+            },
             openHistory: { [weak self] in
                 Task { @MainActor in
                     guard let self else { return }
                     self.dismissAgentMenuPopover()
                     self.showHistory()
-                }
-            },
-            openSettings: { [weak self] in
-                Task { @MainActor in
-                    guard let self else { return }
-                    self.dismissAgentMenuPopover()
-                    self.showSettingsAction()
                 }
             },
             openAudioSettings: { [weak self] in
@@ -997,11 +983,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     // MARK: - State Observation
 
     private func setupStateObservation() {
+        // Agent-owned capture island: surfaces a draggable preview at top-center
+        // when a screenshot/clip lands in the live tray. Works on any display.
+        CaptureIslandController.shared.initialize()
+
         let hasNotch = NotchInfo.detect().hasNotch
         let notchEnabled = LiveSettings.shared.notchOverlayEnabled
 
-        // Initialize notch overlay if Talkie isn't currently connected
-        if hasNotch && notchEnabled && !TalkieAgentXPCService.shared.isTalkieConnected {
+        // TLK-027: Agent owns live notch/island rendering. Talkie remains the
+        // durable media view/edit/save surface and should no longer suppress
+        // Agent's live overlay when it connects.
+        if hasNotch && notchEnabled {
             notchOverlay.initialize()
         }
 
@@ -1011,46 +1003,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             .sink { [weak self] state in
                 self?.updateIcon(for: state)
 
-                let talkieConnected = TalkieAgentXPCService.shared.isTalkieConnected
                 // Pill stays visible always — it doesn't compete for notch/top-bar real estate
                 self?.floatingPill.updateState(state)
-                if talkieConnected {
+                let notchActive = hasNotch && LiveSettings.shared.notchOverlayEnabled
+                if notchActive {
+                    // Notch overlay replaces the top bar recording overlay
+                    self?.notchOverlay.updateState(state)
                     self?.overlayController.hide()
-                    self?.notchOverlay.hide()
                 } else {
-                    let notchActive = hasNotch && LiveSettings.shared.notchOverlayEnabled
-                    if notchActive {
-                        // Notch overlay replaces the top bar recording overlay
-                        self?.notchOverlay.updateState(state)
-                        self?.overlayController.hide()
-                    } else {
-                        self?.overlayController.updateState(state)
-                    }
+                    self?.overlayController.updateState(state)
                 }
 
                 SidecarOverlayController.shared.updateState(state)
             }
             .store(in: &cancellables)
 
-        // When Talkie connects/disconnects, hand off the recording indicator
+        // Keep Agent-owned live overlays stable across Talkie connects/disconnects.
         TalkieAgentXPCService.shared.$isTalkieConnected
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] connected in
+            .sink { [weak self] _ in
                 guard let self else { return }
-                if connected {
-                    // Talkie takes over top bar / notch — pill stays independent
+                let currentState = self.agentController.state
+                if hasNotch && LiveSettings.shared.notchOverlayEnabled {
+                    self.notchOverlay.initialize()
+                    self.notchOverlay.updateState(currentState)
                     self.overlayController.hide()
-                    self.notchOverlay.hide()
                 } else {
-                    // Talkie gone — Agent takes over top bar / notch
-                    let currentState = self.agentController.state
-                    if hasNotch && LiveSettings.shared.notchOverlayEnabled {
-                        self.notchOverlay.initialize()
-                        self.notchOverlay.updateState(currentState)
-                    } else {
-                        self.overlayController.updateState(currentState)
-                    }
+                    self.notchOverlay.hide()
+                    self.overlayController.updateState(currentState)
                 }
             }
             .store(in: &cancellables)
@@ -1077,6 +1058,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }
         notchOverlay.onCancel = { [weak self] in
             self?.agentController.cancelListening()
+        }
+        notchOverlay.onStopScreenRecording = {
+            Task { @MainActor in
+                await ScreenRecordingController.shared.stopRecording()
+            }
         }
 
         // React to notch overlay setting changes at runtime
@@ -1392,28 +1378,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             keyCode: captureChord.keyCode
         ) { [weak self] _ in
             Task { @MainActor in
-                if let controller = self?.agentController, controller.state == .listening {
-                    let selectionPayload = self?.selectionCaptureUserInfo()
-                    DistributedNotificationCenter.default().postNotificationName(
-                        NSNotification.Name("to.talkie.app.screenshotChord"),
-                        object: nil,
-                        userInfo: selectionPayload,
-                        deliverImmediately: true
-                    )
-                    if self?.captureHotPathLoggingEnabled == true {
-                        Log(.system).info("Screenshot chord: forwarded to Talkie picker (recording active)")
-                    }
-                } else {
-                    DistributedNotificationCenter.default().postNotificationName(
-                        NSNotification.Name("to.talkie.app.screenshotChord"),
-                        object: nil,
-                        userInfo: nil,
-                        deliverImmediately: true
-                    )
-                    if self?.captureHotPathLoggingEnabled == true {
-                        Log(.system).info("Screenshot chord: forwarded to Talkie via distributed notification")
-                    }
-                }
+                await self?.handleAgentCaptureChord(initialMode: .screenshot)
             }
         }
         log.info("Screenshot hotkey registered: keyCode=\(captureChord.keyCode) modifiers=\(captureChord.modifiers)")
@@ -1422,14 +1387,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             modifiers: screenRecordChord.modifiers,
             keyCode: screenRecordChord.keyCode
         ) { [weak self] _ in
-            DistributedNotificationCenter.default().postNotificationName(
-                NSNotification.Name("to.talkie.app.screenRecordChord"),
-                object: nil,
-                userInfo: nil,
-                deliverImmediately: true
-            )
-            if self?.captureHotPathLoggingEnabled == true {
-                Log(.system).info("Screen record chord: forwarded to Talkie via distributed notification")
+            Task { @MainActor in
+                await self?.handleAgentCaptureChord(initialMode: .video)
             }
         }
         log.info("Screen recording hotkey registered: keyCode=\(screenRecordChord.keyCode) modifiers=\(screenRecordChord.modifiers)")
@@ -1442,14 +1401,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         pasteChordHotKeyManager.registerHotKey(
             modifiers: pasteChord.modifiers,
             keyCode: pasteChord.keyCode
-        ) { _ in
-            DistributedNotificationCenter.default().postNotificationName(
-                NSNotification.Name("to.talkie.app.pasteChord"),
-                object: nil,
-                userInfo: nil,
-                deliverImmediately: true
-            )
-            Log(.system).info("Paste chord: forwarded to Talkie via distributed notification")
+        ) { [weak self] _ in
+            Task { @MainActor in
+                await self?.handleAgentPasteChord()
+            }
         }
         log.info("Paste chord hotkey registered: keyCode=\(pasteChord.keyCode) modifiers=\(pasteChord.modifiers)")
 
@@ -1480,12 +1435,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 continue
             }
             manager.registerHotKey(modifiers: config.modifiers, keyCode: config.keyCode) { _ in
-                DistributedNotificationCenter.default().postNotificationName(
-                    NSNotification.Name("to.talkie.app.screenshotDirect"),
-                    object: mode,
-                    userInfo: nil,
-                    deliverImmediately: true
-                )
+                Task { @MainActor [weak self] in
+                    await self?.handleAgentDirectScreenshot(mode: mode)
+                }
             }
         }
 
@@ -1499,16 +1451,337 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         pasteLastScreenshotHotKey.registerHotKey(
             modifiers: pasteLastScreenshot.modifiers,
             keyCode: pasteLastScreenshot.keyCode
-        ) { _ in
-            DistributedNotificationCenter.default().postNotificationName(
-                NSNotification.Name("to.talkie.app.pasteLastScreenshot"),
-                object: nil,
-                userInfo: nil,
-                deliverImmediately: true
-            )
-            Log(.system).info("Paste last screenshot: forwarded to Talkie via distributed notification")
+        ) { [weak self] _ in
+            Task { @MainActor in
+                await self?.pasteLatestAgentScreenshot()
+            }
         }
         log.info("Paste last screenshot hotkey registered: keyCode=\(pasteLastScreenshot.keyCode) modifiers=\(pasteLastScreenshot.modifiers)")
+    }
+
+    private func handleAgentCaptureChord(initialMode: CaptureBarMode) async {
+        if initialMode == .video && ScreenRecordingController.shared.state == .recording {
+            await ScreenRecordingController.shared.stopRecording()
+            return
+        }
+
+        guard !isAgentCaptureChordActive else { return }
+        isAgentCaptureChordActive = true
+        defer { isAgentCaptureChordActive = false }
+
+        let previousApp = NSWorkspace.shared.frontmostApplication
+        if let previousApp, previousApp.bundleIdentifier != Bundle.main.bundleIdentifier {
+            previousApp.activate()
+        }
+
+        var hudInitialMode = initialMode
+        if initialMode == .video {
+            switch await ScreenRecordingController.shared.startReusableRecordingWithCountdown() {
+            case .started, .cancelled:
+                return
+            case .needsSelection:
+                break
+            case .needsSelectionInMode(let mode):
+                hudInitialMode = mode
+            }
+        }
+
+        let chord: any CaptureChordController = CaptureHUDController()
+        guard let result = await chord.beginChord(initialMode: hudInitialMode, options: .captureWithPeripherals) else {
+            return
+        }
+
+        switch result {
+        case .screenshot(let mode):
+            _ = await executeAgentScreenshotCapture(mode: mode)
+        case .screenshotRegion(let rect):
+            _ = await executeAgentScreenshotCapture(mode: .region, preselectedRegion: rect)
+        case .screenRecord(let mode):
+            await ScreenRecordingController.shared.startRecording(mode: mode)
+        case .toggleCamera:
+            log.info("Camera capture action ignored in Agent screenshot HUD")
+        case .saveSelection:
+            log.info("Selection note action ignored in Agent screenshot HUD")
+        case .viewTray:
+            forwardScreenshotDirectAction(mode: "viewTray")
+        case .pasteLastTray:
+            await pasteLatestAgentScreenshot(previousApp: previousApp)
+        }
+
+        if result.isBackground,
+           let previousApp,
+           previousApp.bundleIdentifier != Bundle.main.bundleIdentifier {
+            previousApp.activate()
+        }
+    }
+
+    private func handleAgentDirectScreenshot(mode: String) async {
+        let now = Date()
+        if lastAgentDirectScreenshotMode == mode,
+           now.timeIntervalSince(lastAgentDirectScreenshotAt) < 0.20 {
+            return
+        }
+        lastAgentDirectScreenshotMode = mode
+        lastAgentDirectScreenshotAt = now
+
+        guard !isAgentDirectScreenshotCaptureActive else { return }
+        isAgentDirectScreenshotCaptureActive = true
+        defer { isAgentDirectScreenshotCaptureActive = false }
+
+        switch mode {
+        case "fullscreen":
+            _ = await executeAgentScreenshotCapture(mode: .fullscreen)
+        case "region":
+            _ = await executeAgentScreenshotCapture(mode: .region)
+        case "window":
+            _ = await executeAgentScreenshotCapture(mode: .window)
+        case "viewTray", "viewShelf":
+            forwardScreenshotDirectAction(mode: mode)
+        default:
+            log.warning("Unknown Agent screenshot shortcut mode", detail: mode)
+        }
+    }
+
+    @discardableResult
+    private func executeAgentScreenshotCapture(
+        mode: CaptureMode,
+        preselectedRegion: CGRect? = nil
+    ) async -> Bool {
+        guard let result = await ScreenshotCaptureService.shared.captureStandalone(
+            mode: mode,
+            preselectedRegion: preselectedRegion
+        ) else {
+            return false
+        }
+
+        let recordedLive = agentController?.recordLiveScreenshot(
+            imageData: result.data,
+            capturedAt: result.capturedAt,
+            captureMode: mode.rawValue,
+            width: result.width,
+            height: result.height,
+            windowTitle: result.windowTitle,
+            appName: result.appName,
+            displayName: result.displayName
+        ) ?? false
+
+        do {
+            let stored = try await AgentLiveTrayAssetStore.shared.storeScreenshot(
+                data: result.data,
+                capturedAt: result.capturedAt,
+                mode: mode.rawValue,
+                width: result.width,
+                height: result.height,
+                windowTitle: result.windowTitle,
+                appName: result.appName,
+                appBundleID: result.appBundleID,
+                displayName: result.displayName
+            )
+            AgentCaptureLibraryWriter.persistScreenshot(
+                data: result.data,
+                id: stored.id,
+                capturedAt: result.capturedAt,
+                captureMode: mode.rawValue,
+                width: result.width,
+                height: result.height,
+                windowTitle: result.windowTitle,
+                appName: result.appName,
+                appBundleID: result.appBundleID,
+                displayName: result.displayName
+            )
+            log.info(
+                "Agent screenshot captured",
+                detail: "mode=\(mode.rawValue) file=\(stored.filename) live=\(recordedLive)"
+            )
+            return true
+        } catch {
+            log.error("Agent screenshot tray write failed: \(error.localizedDescription)")
+            return recordedLive
+        }
+    }
+
+    private func handleAgentPasteChord() async {
+        guard !isAgentPasteChordActive else { return }
+        isAgentPasteChordActive = true
+        defer { isAgentPasteChordActive = false }
+
+        let previousApp = NSWorkspace.shared.frontmostApplication
+        if let previousApp, previousApp.bundleIdentifier != Bundle.main.bundleIdentifier {
+            previousApp.activate()
+        }
+
+        let controller = PasteChordController()
+        guard let result = await controller.beginChord() else { return }
+
+        if result.format == .dragFile {
+            beginFileDrag(item: result.item)
+            return
+        }
+
+        if let previousApp, previousApp.bundleIdentifier != Bundle.main.bundleIdentifier {
+            previousApp.activate()
+        }
+
+        let shouldPaste = await executeAgentPaste(
+            item: result.item,
+            format: result.format,
+            targetApp: previousApp
+        )
+        guard shouldPaste else { return }
+
+        try? await Task.sleep(for: .milliseconds(80))
+        simulateCmdV()
+    }
+
+    @MainActor
+    private func pasteLatestAgentScreenshot(previousApp: NSRunningApplication? = nil) async {
+        let targetApp = previousApp ?? NSWorkspace.shared.frontmostApplication
+        guard let latest = await AgentLiveTrayAssetStore.shared
+            .recentItems(limit: 20)
+            .first(where: \.isScreenshot) else {
+            log.info("Paste latest screenshot: no Agent tray screenshot available")
+            return
+        }
+
+        guard await executeAgentPaste(item: latest, format: .image, targetApp: targetApp) else {
+            return
+        }
+
+        if let targetApp, targetApp.bundleIdentifier != Bundle.main.bundleIdentifier {
+            targetApp.activate()
+        }
+        try? await Task.sleep(for: .milliseconds(80))
+        simulateCmdV()
+    }
+
+    @MainActor
+    private func executeAgentPaste(
+        item: AgentLiveTrayItem,
+        format: PasteFormat,
+        targetApp: NSRunningApplication?
+    ) async -> Bool {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+
+        switch format {
+        case .image:
+            guard item.isScreenshot,
+                  let data = try? Data(contentsOf: item.fileURL),
+                  let durableURL = durablePasteURL(for: item, data: data) else {
+                return false
+            }
+            writeScreenshotPasteboard(data: data, fileURL: durableURL)
+            log.info("Quick Paste: Agent screenshot image + markdown → clipboard")
+            return true
+
+        case .filePath:
+            pasteboard.setString(item.fileURL.path, forType: .string)
+            log.info("Quick Paste: Agent tray file path → clipboard")
+            return true
+
+        case .url:
+            let urlString = "http://localhost:8766/tray/\(item.id.uuidString).png"
+            pasteboard.setString(urlString, forType: .string)
+            log.info("Quick Paste: Agent tray URL → clipboard")
+            return true
+
+        case .base64:
+            guard item.isScreenshot,
+                  let data = try? Data(contentsOf: item.fileURL) else {
+                return false
+            }
+            pasteboard.setString("data:image/png;base64," + data.base64EncodedString(), forType: .string)
+            log.info("Quick Paste: Agent screenshot base64 → clipboard")
+            return true
+
+        case .visionDescription:
+            let fallback = agentPasteDescription(for: item, targetApp: targetApp)
+            pasteboard.setString(fallback, forType: .string)
+            log.info("Quick Paste: Agent tray fallback description → clipboard")
+            return true
+
+        case .dragFile:
+            return false
+        }
+    }
+
+    private func agentPasteDescription(
+        for item: AgentLiveTrayItem,
+        targetApp: NSRunningApplication?
+    ) -> String {
+        let mediaKind = item.isClip ? "screen recording" : "screenshot"
+        let dimensions = "\(item.width)×\(item.height)"
+        let source = [item.appName, item.windowTitle, item.displayName]
+            .compactMap { value in
+                let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed?.isEmpty == false ? trimmed : nil
+            }
+            .joined(separator: " · ")
+        let target: String?
+        if let trimmed = targetApp?.localizedName?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !trimmed.isEmpty {
+            target = trimmed
+        } else {
+            target = nil
+        }
+        return [
+            "Talkie \(mediaKind)",
+            source.isEmpty ? nil : source,
+            dimensions,
+            target.map { "target: \($0)" },
+            item.fileURL.path
+        ]
+            .compactMap { $0 }
+            .joined(separator: "\n")
+    }
+
+    private func durablePasteURL(for item: AgentLiveTrayItem, data: Data) -> URL? {
+        ScreenshotStorage.saveStandalone(
+            data,
+            capturedAt: item.capturedAt,
+            captureMode: item.captureMode,
+            width: item.width,
+            height: item.height,
+            windowTitle: item.windowTitle,
+            appName: item.appName,
+            displayName: item.displayName
+        )
+    }
+
+    private func writeScreenshotPasteboard(data: Data, fileURL: URL) {
+        let markdown = "[Talkie Capture](<\(fileURL.path)>)"
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(markdown, forType: .string)
+        pasteboard.setData(data, forType: .png)
+    }
+
+    private func simulateCmdV() {
+        let source = CGEventSource(stateID: .hidSystemState)
+        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false) else {
+            return
+        }
+        keyDown.flags = .maskCommand
+        keyUp.flags = .maskCommand
+        keyDown.post(tap: .cghidEventTap)
+        keyUp.post(tap: .cghidEventTap)
+    }
+
+    @MainActor
+    private func beginFileDrag(item: AgentLiveTrayItem) {
+        let panel = FileDragPanel()
+        panel.show(item: item)
+        fileDragPanel = panel
+    }
+
+    private func forwardScreenshotDirectAction(mode: String) {
+        DistributedNotificationCenter.default().postNotificationName(
+            NSNotification.Name("to.talkie.app.screenshotDirect"),
+            object: mode,
+            userInfo: nil,
+            deliverImmediately: true
+        )
     }
 
     private func unregisterCaptureHotkeys() {
@@ -2626,7 +2899,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     @objc private func showSettingsAction() {
-        showSettings(tab: .shortcuts)
+        AgentHomeController.shared.showSettings()
     }
 
     private func openLogsDirectory() {
@@ -2674,6 +2947,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         window.title = "Settings"
         window.contentView = NSHostingView(rootView: contentView)
         window.center()
+        window.isMovableByWindowBackground = false
         window.isReleasedWhenClosed = false
         window.delegate = self
 
@@ -2717,6 +2991,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         window.title = "Settings"
         window.contentView = NSHostingView(rootView: contentView)
         window.center()
+        window.isMovableByWindowBackground = false
         window.isReleasedWhenClosed = false
         window.delegate = self
 

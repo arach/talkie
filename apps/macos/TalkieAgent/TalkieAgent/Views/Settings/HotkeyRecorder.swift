@@ -43,7 +43,7 @@ struct HotkeyRecorderButton: View {
             }) {
                 HStack(spacing: 6) {
                     Text(isRecording ? "Press keys..." : hotkey.displayString)
-                        .foregroundColor(.accentColor)
+                        .foregroundStyle(OpsTint.amber.color)
 
                     // Cancel X button when recording
                     if isRecording {
@@ -52,27 +52,27 @@ struct HotkeyRecorderButton: View {
                         }) {
                             Image(systemName: "xmark")
                                 .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(isCancelHovered ? .white : .accentColor.opacity(0.6))
+                                .foregroundStyle(isCancelHovered ? OpsInk.bg : OpsTint.amber.color.opacity(0.6))
                                 .frame(width: 16, height: 16)
                                 .background(
                                     Circle()
-                                        .fill(isCancelHovered ? Color.accentColor : Color.clear)
+                                        .fill(isCancelHovered ? OpsTint.amber.color : Color.clear)
                                 )
                         }
                         .buttonStyle(.plain)
                         .onHover { isCancelHovered = $0 }
                     }
                 }
-                .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                .font(OpsType.mono(OpsSize.md, weight: .semibold))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.accentColor.opacity(isRecording ? 0.2 : (isHovered ? 0.18 : 0.12)))
+                    RoundedRectangle(cornerRadius: OpsRadius.standard)
+                        .fill(OpsTint.amber.color.opacity(isRecording ? 0.2 : (isHovered ? 0.18 : 0.12)))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .strokeBorder(isRecording ? Color.accentColor : Color.clear, lineWidth: 1.5)
+                    RoundedRectangle(cornerRadius: OpsRadius.standard)
+                        .strokeBorder(isRecording ? OpsTint.amber.color : Color.clear, lineWidth: 1.5)
                 )
             }
             .buttonStyle(.plain)
@@ -85,13 +85,13 @@ struct HotkeyRecorderButton: View {
                     NotificationCenter.default.post(name: .hotkeyDidChange, object: nil)
                 }) {
                     Text("Reset")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(isResetHovered ? .white : TalkieTheme.textTertiary)
+                        .font(OpsType.ui(OpsSize.xxs, weight: .medium))
+                        .foregroundStyle(isResetHovered ? OpsInk.ink : OpsInk.dim)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(isResetHovered ? TalkieTheme.border : Color.clear)
+                            RoundedRectangle(cornerRadius: OpsRadius.tight)
+                                .fill(isResetHovered ? OpsInk.border : Color.clear)
                         )
                 }
                 .buttonStyle(.plain)

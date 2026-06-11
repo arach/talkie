@@ -29,7 +29,7 @@ enum TabPresets {
         icon: "sparkles",
         order: 10,
         harness: .claudeCode,
-        model: "claude-sonnet-4-6",
+        model: "opus",
         systemPrompt: mergedClaudeSystemPrompt,
         cwd: "~/dev/talkie",
         launchArgs: [],

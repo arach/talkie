@@ -26,10 +26,10 @@ struct SoundPickerRow: View {
                 SoundManager.shared.preview(sound)
             }) {
                 Image(systemName: "speaker.wave.2")
-                    .font(Design.fontXS)
+                    .font(OpsType.ui(OpsSize.xs))
             }
             .buttonStyle(.plain)
-            .foregroundColor(TalkieTheme.textSecondary)
+            .foregroundStyle(OpsInk.muted)
             .disabled(sound == .none)
         }
     }
@@ -46,10 +46,11 @@ struct StorageInfoRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Audio Storage")
-                    .font(Design.fontSM)
+                    .font(OpsType.ui(OpsSize.sm))
+                    .foregroundStyle(OpsInk.ink)
                 Text("\(pastLivesCount) recordings • \(storageSize)")
-                    .font(Design.fontXS)
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .font(OpsType.ui(OpsSize.xs))
+                    .foregroundStyle(OpsInk.muted)
             }
 
             Spacer()
@@ -59,9 +60,9 @@ struct StorageInfoRow: View {
                 AudioStorage.invalidateCache()
                 Task { await refreshStats() }
             }
-            .font(Design.fontXS)
+            .font(OpsType.ui(OpsSize.xs))
             .buttonStyle(.tiny)
-            .foregroundColor(SemanticColor.error.opacity(0.8))
+            .foregroundStyle(OpsInk.statusError.opacity(0.8))
         }
         .task {
             await refreshStats()

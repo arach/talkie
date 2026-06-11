@@ -16,6 +16,7 @@ public enum OverlayStyle: String, CaseIterable, Codable {
     case particlesCalm = "particlesCalm"
     case waveform = "waveform"
     case waveformSensitive = "waveformSensitive"
+    case island = "island"
     case pillOnly = "pillOnly"
 
     public var displayName: String {
@@ -24,6 +25,7 @@ public enum OverlayStyle: String, CaseIterable, Codable {
         case .particlesCalm: return "Particles (Calm)"
         case .waveform: return "Waveform"
         case .waveformSensitive: return "Waveform (Sensitive)"
+        case .island: return "Island"
         case .pillOnly: return "Pill Only"
         }
     }
@@ -34,15 +36,38 @@ public enum OverlayStyle: String, CaseIterable, Codable {
         case .particlesCalm: return "Smooth, relaxed particle flow"
         case .waveform: return "Scrolling audio bars"
         case .waveformSensitive: return "Waveform with enhanced low-level response"
+        case .island: return "Dark oval pill shapes that pulse with your voice"
         case .pillOnly: return "No top overlay, just the bottom pill"
         }
     }
 
     public var showsTopOverlay: Bool {
         switch self {
-        case .particles, .particlesCalm, .waveform, .waveformSensitive: return true
+        case .particles, .particlesCalm, .waveform, .waveformSensitive, .island: return true
         case .pillOnly: return false
         }
+    }
+}
+
+public struct IslandVisualizationSettings: Equatable, Sendable {
+    public static let defaultValue = IslandVisualizationSettings()
+
+    public var motion: Double
+    public var reactivity: Double
+    public var shape: Double
+
+    public init(
+        motion: Double = 0.38,
+        reactivity: Double = 0.58,
+        shape: Double = 0.50
+    ) {
+        self.motion = Self.clamp(motion)
+        self.reactivity = Self.clamp(reactivity)
+        self.shape = Self.clamp(shape)
+    }
+
+    private static func clamp(_ value: Double) -> Double {
+        min(1, max(0, value))
     }
 }
 
@@ -103,6 +128,8 @@ public struct LivePreviewScreen: View {
     @Binding public var hudPlacement: NormalizedPlacement
     @Binding public var pillEnabled: Bool
     @Binding public var pillPlacement: NormalizedPlacement
+    public let islandSettings: IslandVisualizationSettings
+    public let accentTint: Color
 
     private let screenWidth: CGFloat = 420
     private let screenHeight: CGFloat = 238
@@ -113,12 +140,16 @@ public struct LivePreviewScreen: View {
         overlayStyle: Binding<OverlayStyle>,
         hudPlacement: Binding<NormalizedPlacement>,
         pillEnabled: Binding<Bool>,
-        pillPlacement: Binding<NormalizedPlacement>
+        pillPlacement: Binding<NormalizedPlacement>,
+        islandSettings: IslandVisualizationSettings = .defaultValue,
+        accentTint: Color = TalkieTheme.accent
     ) {
         self._overlayStyle = overlayStyle
         self._hudPlacement = hudPlacement
         self._pillEnabled = pillEnabled
         self._pillPlacement = pillPlacement
+        self.islandSettings = islandSettings
+        self.accentTint = accentTint
     }
 
     public var body: some View {
@@ -130,7 +161,7 @@ public struct LivePreviewScreen: View {
                     ForEach(topPositions, id: \.rawValue) { position in
                         PreviewSlotMarker(
                             isSelected: overlaySelection == position,
-                            tint: TalkieTheme.accent
+                            tint: accentTint
                         )
                     }
                 }
@@ -150,8 +181,8 @@ public struct LivePreviewScreen: View {
             }
 
             if overlayStyle.showsTopOverlay {
-                PreviewTopBar()
-                    .frame(width: 124, height: 26)
+                PreviewTopBar(style: overlayStyle, islandSettings: islandSettings)
+                    .frame(width: overlayPreviewWidth, height: overlayPreviewHeight)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: overlayAlignment)
                     .padding(.top, 34)
                     .padding(.horizontal, 24)
@@ -169,6 +200,14 @@ public struct LivePreviewScreen: View {
 
     private var overlaySelection: IndicatorPosition {
         hudPlacement.nearestIndicatorPosition
+    }
+
+    private var overlayPreviewWidth: CGFloat {
+        overlayStyle == .island ? 148 : 124
+    }
+
+    private var overlayPreviewHeight: CGFloat {
+        overlayStyle == .island ? 30 : 26
     }
 
     private var pillSelection: PillPosition {
@@ -253,16 +292,86 @@ private struct PreviewSlotMarker: View {
 }
 
 private struct PreviewTopBar: View {
+    let style: OverlayStyle
+    let islandSettings: IslandVisualizationSettings
+
     var body: some View {
-        WavyParticlesPreview(calm: false)
-            .padding(6)
+        ZStack {
+            previewContent
+                .padding(previewPadding)
+
+            if style == .island {
+                HStack {
+                    PreviewIslandIcon(systemImage: "xmark")
+                    Spacer(minLength: 0)
+                    PreviewIslandStopIcon()
+                }
+                .padding(.horizontal, 11)
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .fill(style == .island ? Color.black.opacity(0.92) : TalkieTheme.surfaceElevated.opacity(0.95))
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .stroke(style == .island ? Color.white.opacity(0.12) : TalkieTheme.divider, lineWidth: 0.5)
+                )
+        )
+    }
+
+    @ViewBuilder
+    private var previewContent: some View {
+        switch style {
+        case .particles:
+            WavyParticlesPreview(calm: false)
+        case .particlesCalm:
+            WavyParticlesPreview(calm: true)
+        case .waveform:
+            WaveformBarsPreview(sensitive: false)
+        case .waveformSensitive:
+            WaveformBarsPreview(sensitive: true)
+        case .island:
+            IslandPillShapesPreview(settings: islandSettings)
+        case .pillOnly:
+            EmptyView()
+        }
+    }
+
+    private var previewPadding: EdgeInsets {
+        style == .island
+            ? EdgeInsets(top: 6, leading: 31, bottom: 6, trailing: 31)
+            : EdgeInsets(top: 6, leading: 6, bottom: 6, trailing: 6)
+    }
+
+    private var cornerRadius: CGFloat {
+        style == .island ? 15 : 9
+    }
+}
+
+private struct PreviewIslandIcon: View {
+    let systemImage: String
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 7, weight: .bold))
+            .foregroundStyle(Color.white.opacity(0.56))
+            .frame(width: 12, height: 12)
             .background(
-                RoundedRectangle(cornerRadius: 9)
-                    .fill(TalkieTheme.surfaceElevated.opacity(0.95))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 9)
-                            .stroke(TalkieTheme.divider, lineWidth: 0.5)
-                    )
+                Circle()
+                    .fill(Color.white.opacity(0.08))
+            )
+    }
+}
+
+private struct PreviewIslandStopIcon: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: 2)
+            .fill(Color.white.opacity(0.58))
+            .frame(width: 7, height: 7)
+            .frame(width: 12, height: 12)
+            .background(
+                Circle()
+                    .fill(Color.white.opacity(0.08))
             )
     }
 }
@@ -413,19 +522,92 @@ public struct WaveformBarsPreview: View {
     }
 }
 
+// MARK: - Island Preview
+
+public struct IslandPillShapesPreview: View {
+    public let settings: IslandVisualizationSettings
+
+    public init(settings: IslandVisualizationSettings = .defaultValue) {
+        self.settings = settings
+    }
+
+    public var body: some View {
+        TimelineView(.animation(minimumInterval: 0.033)) { timeline in
+            Canvas { context, size in
+                let time = timeline.date.timeIntervalSinceReferenceDate
+                let centerY = size.height / 2
+                let speed = CGFloat(settings.motion)
+                let reactivity = CGFloat(settings.reactivity)
+                let density = CGFloat(settings.shape)
+                let speedAmount = max(0.12, speed)
+                let voiceWave = CGFloat((sin(time * (1.9 + Double(reactivity) * 1.55)) + 1) / 2)
+                let animatedLevel = 0.14 + voiceWave * 0.20 * (0.45 + reactivity)
+                let particleCount = Int(16 + density * 18)
+                let flowSpeed = 0.18 + Double(speedAmount) * 0.52
+                let waveSpeed = 1.25 + Double(speedAmount) * 1.15
+                let waveAmplitude = (0.08 + Double(animatedLevel) * (0.42 + Double(reactivity) * 0.22)) * Double(size.height) * 0.5
+                let baseSize = 1.2 + density * 0.9
+                let levelBonus = animatedLevel * (1.0 + reactivity * 1.35)
+
+                for i in 0..<particleCount {
+                    let seed = Double(i) * 1.618033988749
+                    let speedVariation = seed.truncatingRemainder(dividingBy: 1.0) * 0.06
+                    let xProgress = (time * (flowSpeed + speedVariation) + seed).truncatingRemainder(dividingBy: 1.0)
+                    let x = CGFloat(xProgress) * size.width
+                    let laneOffset = (Double(i % 9) / 8.0 - 0.5) * 0.38
+                    let primaryWave = sin(time * waveSpeed + seed * 4.0)
+                    let secondaryWave = sin(time * (waveSpeed * 0.48) + seed * 6.0) * 0.28
+                    let y = centerY + CGFloat((primaryWave + secondaryWave + laneOffset) * waveAmplitude)
+                    let sizeScale = CGFloat(0.68 + sin(seed * 5.0) * 0.32)
+                    let particleSize = max(1.0, baseSize + levelBonus * sizeScale)
+                    let edgeFade = min(xProgress * 3.0, 1.0) * min((1.0 - xProgress) * 2.0, 1.0)
+                    let shimmer = 0.72 + sin(time * 2.2 + seed * 3.0) * 0.18
+                    let opacityScale = 0.58 + sin(seed * 3.0) * 0.34
+                    let opacity = max(
+                        0.10,
+                        (0.18 + Double(animatedLevel) * (0.32 + Double(reactivity) * 0.18)) * edgeFade * shimmer * opacityScale
+                    )
+
+                    let rect = CGRect(
+                        x: x - particleSize / 2,
+                        y: y - particleSize / 2,
+                        width: particleSize,
+                        height: particleSize
+                    )
+                    context.fill(Circle().path(in: rect), with: .color(Color.white.opacity(opacity)))
+                }
+
+                if settings.motion > 0.05 {
+                    let glintWidth = max(16, size.width * (0.10 + animatedLevel * 0.08))
+                    let glintXProgress = CGFloat((time * (0.18 + Double(speedAmount) * 0.34)).truncatingRemainder(dividingBy: 1))
+                    let glintX = glintXProgress * (size.width + glintWidth) - glintWidth
+                    let glintRect = CGRect(x: glintX, y: 1.6, width: glintWidth, height: 0.8)
+                    context.fill(
+                        RoundedRectangle(cornerRadius: 0.5).path(in: glintRect),
+                        with: .color(Color.white.opacity(0.035 + animatedLevel * 0.065))
+                    )
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Live Style Selector
 
-/// Selector for HUD overlay styles (particles or waveform)
+/// Selector for HUD overlay styles.
 public struct LiveStyleSelector: View {
     @Binding public var selection: OverlayStyle
+    public let accentTint: Color
 
     private let options: [(style: OverlayStyle, label: String, icon: String)] = [
         (.particles, "Particles", "sparkles"),
-        (.waveform, "Waveform", "waveform")
+        (.waveform, "Waveform", "waveform"),
+        (.island, "Island", "capsule")
     ]
 
-    public init(selection: Binding<OverlayStyle>) {
+    public init(selection: Binding<OverlayStyle>, accentTint: Color = TalkieTheme.accent) {
         self._selection = selection
+        self.accentTint = accentTint
     }
 
     public var body: some View {
@@ -435,6 +617,7 @@ public struct LiveStyleSelector: View {
                     label: option.label,
                     icon: option.icon,
                     isSelected: isSelected(option.style),
+                    accentTint: accentTint,
                     action: { selectStyle(option.style) }
                 )
             }
@@ -447,6 +630,8 @@ public struct LiveStyleSelector: View {
             return selection == .particles || selection == .particlesCalm
         case .waveform:
             return selection == .waveform || selection == .waveformSensitive
+        case .island:
+            return selection == .island
         default:
             return selection == style
         }
@@ -462,6 +647,8 @@ public struct LiveStyleSelector: View {
             if selection != .waveform && selection != .waveformSensitive {
                 selection = .waveform
             }
+        case .island:
+            selection = .island
         default:
             selection = style
         }
@@ -472,6 +659,7 @@ private struct StylePill: View {
     let label: String
     let icon: String
     let isSelected: Bool
+    let accentTint: Color
     let action: () -> Void
 
     @State private var isHovered = false
@@ -484,16 +672,16 @@ private struct StylePill: View {
                 Text(label)
                     .font(.system(size: 10, weight: .medium))
             }
-            .foregroundColor(isSelected ? .white : TalkieTheme.textSecondary)
+            .foregroundStyle(isSelected ? TalkieTheme.textPrimary : TalkieTheme.textSecondary)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(
                 Capsule()
-                    .fill(isSelected ? Color.cyan.opacity(0.8) : (isHovered ? TalkieTheme.hover : Color.clear))
+                    .fill(isSelected ? accentTint.opacity(0.16) : (isHovered ? TalkieTheme.hover : Color.clear))
             )
             .overlay(
                 Capsule()
-                    .stroke(isSelected ? Color.cyan : TalkieTheme.border, lineWidth: 0.5)
+                    .stroke(isSelected ? accentTint.opacity(0.72) : TalkieTheme.border, lineWidth: 0.5)
             )
         }
         .buttonStyle(.plain)

@@ -123,6 +123,16 @@ enum UnifiedDatabase {
                     try db.execute(sql: "ALTER TABLE recordings ADD COLUMN segmentIndex INTEGER")
                     log.info("[UnifiedDatabase] segmentIndex column added")
                 }
+                if !columnNames.contains("pinnedAt") {
+                    log.info("[UnifiedDatabase] Adding pinnedAt column...")
+                    try db.execute(sql: "ALTER TABLE recordings ADD COLUMN pinnedAt DATETIME")
+                    log.info("[UnifiedDatabase] pinnedAt column added")
+                }
+                if !columnNames.contains("starredAt") {
+                    log.info("[UnifiedDatabase] Adding starredAt column...")
+                    try db.execute(sql: "ALTER TABLE recordings ADD COLUMN starredAt DATETIME")
+                    log.info("[UnifiedDatabase] starredAt column added")
+                }
 
                 return
             }
@@ -140,6 +150,8 @@ enum UnifiedDatabase {
                 t.column("createdAt", .datetime).notNull()
                 t.column("lastModified", .datetime)
                 t.column("deletedAt", .datetime)
+                t.column("pinnedAt", .datetime)
+                t.column("starredAt", .datetime)
                 t.column("source", .text).notNull()
                 t.column("sourceDeviceId", .text)
                 t.column("promotedAt", .datetime)
@@ -174,7 +186,7 @@ enum UnifiedDatabase {
 
 /// Simplified recording model for TalkieAgent writes
 /// Full Recording model lives in Talkie - this is just for writing dictations
-struct LiveRecording: Identifiable {
+struct LiveRecording: Identifiable, Equatable, Sendable {
     let id: UUID
     var type: String = "dictation"
     var text: String

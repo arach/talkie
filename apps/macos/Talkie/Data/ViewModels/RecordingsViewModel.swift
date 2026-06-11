@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import Observation
 import SwiftUI
 import TalkieKit
 import GRDB
@@ -76,6 +77,7 @@ final class RecordingsViewModel {
     // MARK: - Observation
 
     private var observationCancellable: AnyDatabaseCancellable?
+    @ObservationIgnored private var externalLibraryObserver: NSObjectProtocol?
 
     // MARK: - Computed Properties
 
@@ -100,6 +102,7 @@ final class RecordingsViewModel {
     init(repository: TalkieObjectRepository = TalkieObjectRepository(), dbManager: DatabaseManager = .shared) {
         self.repository = repository
         self.dbManager = dbManager
+        observeExternalLibraryMutations()
     }
 
     // MARK: - Actions
@@ -133,6 +136,19 @@ final class RecordingsViewModel {
     /// Refresh (re-subscribes the observation)
     func refresh() async {
         await startObservation()
+    }
+
+    private func observeExternalLibraryMutations() {
+        guard externalLibraryObserver == nil else { return }
+        externalLibraryObserver = DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name(TalkieLibraryNotifications.recordsDidChange),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                await self?.refresh()
+            }
+        }
     }
 
     /// Search

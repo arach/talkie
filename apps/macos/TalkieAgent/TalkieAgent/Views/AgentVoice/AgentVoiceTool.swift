@@ -175,7 +175,7 @@ enum AgentVoiceToolExecutor {
         }
         let instruction = arguments["instruction"] as? String
         var components = URLComponents()
-        components.scheme = "talkie"
+        components.scheme = TalkieEnvironment.current.talkieURLScheme
         components.host = "capture"
         components.path = "/markup"
         var query: [URLQueryItem] = [
@@ -189,7 +189,7 @@ enum AgentVoiceToolExecutor {
             throw AgentVoiceToolError.execFailed("Invalid capture markup URL")
         }
 
-        let display = "talkie://capture/markup path=\(path)"
+        let display = "\(TalkieEnvironment.current.talkieURLScheme)://capture/markup path=\(path)"
         var invocation = AgentVoiceToolInvocation(
             toolName: "capture_markup_open",
             displayCommand: display,

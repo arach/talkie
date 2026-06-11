@@ -95,6 +95,8 @@ final class ClipTray {
     static let shared = ClipTray()
 
     private(set) var items: [TrayClip] = []
+    @ObservationIgnored
+    private var externalMutationObserver: Any?
 
     /// One-time migration from old Buffer/ path to Tray/
     private static func migrateFromBufferIfNeeded() {
@@ -149,6 +151,19 @@ final class ClipTray {
     private init() {
         Self.migrateFromBufferIfNeeded()
         restoreFromDisk()
+        observeExternalTrayMutations()
+    }
+
+    private func observeExternalTrayMutations() {
+        externalMutationObserver = DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name(LiveTrayNotifications.assetsDidChange),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.restoreFromDisk()
+            }
+        }
     }
 
     // MARK: - Add
@@ -429,7 +444,10 @@ final class ClipTray {
 
     private func restoreFromDisk() {
         let url = Self.manifestURL
-        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            items = []
+            return
+        }
 
         do {
             let data = try Data(contentsOf: url)

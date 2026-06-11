@@ -25,6 +25,7 @@ let package = Package(
             ],
             resources: [
                 .copy("Resources/Context"),
+                .copy("Resources/Fonts"),
             ]),
         .testTarget(
             name: "TalkieKitTests",

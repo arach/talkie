@@ -13,7 +13,7 @@ enum AgentScoutBridgeStatus: String, Codable, Sendable {
     case configured
 }
 
-struct AgentRuntimePing: Sendable {
+struct AgentRuntimePing: Equatable, Sendable {
     let pid: Int?
     let version: String
     let runtimeId: String
@@ -23,7 +23,7 @@ struct AgentRuntimePing: Sendable {
     let agents: [AgentRuntimeAgentSnapshot]
 }
 
-struct AgentRuntimeAgentSnapshot: Identifiable, Decodable, Sendable {
+struct AgentRuntimeAgentSnapshot: Identifiable, Decodable, Equatable, Sendable {
     let id: String
     let name: String
     let adapterType: String
@@ -38,7 +38,7 @@ struct AgentRuntimeAgentSnapshot: Identifiable, Decodable, Sendable {
     let lastSeenAt: String?
 }
 
-struct AgentRuntimeActivitySnapshot: Decodable, Sendable {
+struct AgentRuntimeActivitySnapshot: Decodable, Equatable, Sendable {
     let id: String
     let sessionId: String
     let state: String
@@ -69,7 +69,7 @@ struct AgentRuntimeActivitySnapshot: Decodable, Sendable {
     let error: String?
 }
 
-struct AgentRuntimeStatus: Sendable {
+struct AgentRuntimeStatus: Equatable, Sendable {
     let ping: AgentRuntimePing
     let activities: [AgentRuntimeActivitySnapshot]
 }

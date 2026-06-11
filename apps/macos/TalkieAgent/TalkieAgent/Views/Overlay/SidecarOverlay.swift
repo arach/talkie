@@ -564,6 +564,8 @@ struct SidecarOverlayView: View {
             WaveformBarsView(sensitive: false)
         case .waveformSensitive:
             WaveformBarsView(sensitive: true)
+        case .island:
+            IslandPillShapesView()
         case .pillOnly:
             // Fallback to calm particles for pill-only users
             WavyParticlesView(calm: true)
@@ -624,4 +626,3 @@ private struct SidecarActionButton: View {
         )
     }
 }
-

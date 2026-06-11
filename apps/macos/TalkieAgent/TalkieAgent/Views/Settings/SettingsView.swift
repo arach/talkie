@@ -17,6 +17,7 @@ enum SettingsSection: String, Hashable, CaseIterable {
     case appearance
     // Behavior
     case shortcuts
+    case capture
     case sounds
     case output
     case overlay
@@ -34,6 +35,7 @@ enum SettingsSection: String, Hashable, CaseIterable {
         switch self {
         case .appearance: return "APPEARANCE"
         case .shortcuts: return "SHORTCUTS"
+        case .capture: return "CAPTURE"
         case .sounds: return "SOUNDS"
         case .output: return "OUTPUT"
         case .overlay: return "OVERLAY"
@@ -52,6 +54,7 @@ enum SettingsSection: String, Hashable, CaseIterable {
         switch self {
         case .appearance: return "paintbrush"
         case .shortcuts: return "command"
+        case .capture: return "viewfinder"
         case .sounds: return "speaker.wave.2"
         case .output: return "arrow.right.doc.on.clipboard"
         case .overlay: return "rectangle.inset.topright.filled"
@@ -75,23 +78,50 @@ struct SettingsView: View {
     @ObservedObject private var troubleshooterController = AudioTroubleshooterController.shared
     @State private var selectedSection: SettingsSection = .appearance
 
-    private var sidebarBackground: Color { TalkieTheme.surfaceElevated }
-    private var contentBackground: Color { TalkieTheme.surface }
-    private var bottomBarBackground: Color { TalkieTheme.secondaryBackground }
+    /// Persisted width of the secondary (settings) navigation rail, so it
+    /// matches the resize behavior of the primary Agent Home rail beside it.
+    @AppStorage("talkie.agentSettings.sidebar.width") private var sidebarWidth: Double = 180
+
+    /// When set, Settings is presented in-shell (Agent Home) and this returns home.
+    /// When nil, it's a standalone window and falls back to the environment dismiss.
+    var onClose: (() -> Void)? = nil
+
+    private func close() {
+        if let onClose { onClose() } else { dismiss() }
+    }
+
+    private var sidebarBackground: Color { OpsInk.chrome }
+    private var contentBackground: Color { OpsInk.bg }
+    private var bottomBarBackground: Color { OpsInk.chrome }
 
     var body: some View {
         HStack(spacing: 0) {
             // MARK: - Sidebar
             VStack(spacing: 0) {
-                // Settings Header
-                Text("SETTINGS")
-                    .font(.system(size: 10, weight: .bold, design: .default))
-                    .tracking(Tracking.wide)
-                    .foregroundColor(TalkieTheme.textPrimary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 14)
-                    .padding(.top, 20)
-                    .padding(.bottom, 12)
+                // Settings Header — back affordance (in-shell) + eyebrow
+                HStack(spacing: 8) {
+                    if onClose != nil {
+                        Button(action: close) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(OpsInk.muted)
+                                .frame(width: 18, height: 18)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Back to Agent Home")
+                    }
+
+                    Text("SETTINGS")
+                        .font(OpsType.mono(OpsSize.xxs, weight: .bold))
+                        .tracking(1.5)
+                        .foregroundStyle(OpsTint.amber.color)
+
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14)
+                .padding(.top, 20)
+                .padding(.bottom, 12)
 
                 // Menu Sections
                 ScrollView(.vertical, showsIndicators: false) {
@@ -113,7 +143,7 @@ struct SettingsView: View {
                         // BEHAVIOR
                         SettingsSidebarSection(
                             title: "BEHAVIOR",
-                            isActive: selectedSection == .shortcuts || selectedSection == .sounds || selectedSection == .output || selectedSection == .overlay
+                            isActive: selectedSection == .shortcuts || selectedSection == .capture || selectedSection == .sounds || selectedSection == .output || selectedSection == .overlay || selectedSection == .audio
                         ) {
                             SettingsSidebarItem(
                                 icon: "command",
@@ -121,6 +151,13 @@ struct SettingsView: View {
                                 isSelected: selectedSection == .shortcuts
                             ) {
                                 selectedSection = .shortcuts
+                            }
+                            SettingsSidebarItem(
+                                icon: "viewfinder",
+                                title: "CAPTURE",
+                                isSelected: selectedSection == .capture
+                            ) {
+                                selectedSection = .capture
                             }
                             SettingsSidebarItem(
                                 icon: "speaker.wave.2",
@@ -206,13 +243,11 @@ struct SettingsView: View {
                     .padding(.bottom, 12)
                 }
             }
-            .frame(width: 180)
+            .frame(width: CGFloat(sidebarWidth))
             .background(sidebarBackground)
 
-            // Divider
-            Rectangle()
-                .fill(TalkieTheme.divider)
-                .frame(width: 1)
+            // Resizable divider — drag to size the settings rail (persisted).
+            SettingsSidebarResizeHandle(width: $sidebarWidth)
 
             // MARK: - Content Area
             VStack(spacing: 0) {
@@ -223,6 +258,8 @@ struct SettingsView: View {
                         AppearanceSettingsSection()
                     case .shortcuts:
                         ShortcutsSettingsSection()
+                    case .capture:
+                        CaptureSettingsSection()
                     case .sounds:
                         SoundsSettingsSection()
                     case .output:
@@ -247,24 +284,26 @@ struct SettingsView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                // Bottom bar with Done button
-                HStack {
-                    Spacer()
-                    Button("DONE") {
-                        dismiss()
+                // Bottom bar with Done button (standalone window only)
+                if onClose == nil {
+                    HStack {
+                        Spacer()
+                        Button("DONE") {
+                            close()
+                        }
+                        .buttonStyle(SettingsDoneButtonStyle())
+                        .keyboardShortcut(.return, modifiers: .command)
                     }
-                    .buttonStyle(SettingsDoneButtonStyle())
-                    .keyboardShortcut(.return, modifiers: .command)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity)
+                    .background(bottomBarBackground)
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .frame(maxWidth: .infinity)
-                .background(bottomBarBackground)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(contentBackground)
         }
-        .frame(minWidth: 600, minHeight: 450)
+        .frame(minWidth: onClose == nil ? 600 : nil, maxWidth: .infinity, minHeight: onClose == nil ? 450 : nil, maxHeight: .infinity)
         .sheet(isPresented: $troubleshooterController.isShowing) {
             AudioTroubleshooterView()
         }
@@ -280,12 +319,14 @@ struct SettingsSidebarSection<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.system(size: 9, weight: .semibold))
-                .tracking(Tracking.normal)
-                .foregroundColor(isActive ? TalkieTheme.textSecondary : TalkieTheme.textMuted)
-                .padding(.leading, 6)
-                .padding(.bottom, 2)
+            HStack(spacing: 6) {
+                Text(title.uppercased())
+                    .font(OpsType.mono(OpsSize.xxs, weight: .bold))
+                    .tracking(1.5)
+                    .foregroundStyle(isActive ? OpsTint.amber.color : OpsInk.muted)
+            }
+            .padding(.leading, 6)
+            .padding(.bottom, 2)
 
             content
                 .frame(maxWidth: .infinity)
@@ -303,28 +344,44 @@ struct SettingsSidebarItem: View {
     @State private var isHovered = false
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 9))
-                .foregroundColor(isSelected ? .white : TalkieTheme.textTertiary)
-                .frame(width: 14)
+        HStack(spacing: 0) {
+            // Armed channel: amber inset stripe on selection
+            Rectangle()
+                .fill(isSelected ? OpsTint.amber.color : Color.clear)
+                .frame(width: 2)
+                .padding(.vertical, 1)
+                .animation(.easeOut(duration: 0.15), value: isSelected)
 
-            Text(title)
-                .font(.system(size: 9, weight: .medium))
-                .foregroundColor(isSelected ? .white : TalkieTheme.textSecondary)
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 11))
+                    .foregroundStyle(isSelected ? OpsInk.ink : OpsInk.muted)
+                    .frame(width: 20)
 
-            Spacer(minLength: 0)
+                Text(title.uppercased())
+                    .font(OpsType.mono(OpsSize.xs, weight: isSelected ? .semibold : .medium))
+                    .tracking(0.5)
+                    .foregroundStyle(isSelected ? OpsInk.ink : OpsInk.ink.opacity(0.9))
+
+                Spacer(minLength: 0)
+            }
+            .padding(.leading, 4)
+            .padding(.trailing, 8)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .padding(.vertical, 5)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .liquidGlassCard(
-            cornerRadius: CornerRadius.xs,
-            tint: isSelected ? Color.accentColor : nil,
-            isInteractive: true,
-            depth: isSelected ? .standard : .subtle
+        .background(
+            Rectangle()
+                .fill(
+                    isSelected
+                        ? OpsSurface.selected(OpsTint.amber.color)
+                        : (isHovered ? OpsSurface.hover : Color.clear)
+                )
         )
-        .opacity(isSelected || isHovered ? 1.0 : 0.0)
+        .overlay(
+            Rectangle()
+                .strokeBorder(OpsHairline.subtle.opacity(isHovered && !isSelected ? 1.0 : 0), lineWidth: 0.5)
+        )
         .contentShape(Rectangle())
         .onTapGesture {
             action()
@@ -335,18 +392,81 @@ struct SettingsSidebarItem: View {
     }
 }
 
+// MARK: - Resizable Sidebar Divider
+
+/// The hairline between the settings rail and content, widened into a
+/// drag-to-resize handle with a resize cursor — mirroring the primary Agent
+/// Home rail's resize affordance that sits just to the left.
+struct SettingsSidebarResizeHandle: View {
+    @Binding var width: Double
+    var minWidth: Double = 168
+    var maxWidth: Double = 320
+
+    @State private var isHovered = false
+    @State private var isDragging = false
+    @State private var dragStartWidth: Double?
+    @State private var cursorPushed = false
+
+    var body: some View {
+        Rectangle()
+            .fill(isHovered || isDragging ? OpsTint.amber.color.opacity(0.55) : OpsHairline.standard)
+            .frame(width: 1)
+            .overlay {
+                // Invisible, wider hit target centered on the hairline.
+                Rectangle()
+                    .fill(Color.clear)
+                    .frame(width: 11)
+                    .contentShape(Rectangle())
+                    .onHover { hovering in
+                        isHovered = hovering
+                        if hovering { pushCursor() } else { popCursorIfIdle() }
+                    }
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                if dragStartWidth == nil {
+                                    dragStartWidth = width
+                                    isDragging = true
+                                    pushCursor()
+                                }
+                                let proposed = (dragStartWidth ?? width) + Double(value.translation.width)
+                                width = min(maxWidth, max(minWidth, proposed))
+                            }
+                            .onEnded { _ in
+                                dragStartWidth = nil
+                                isDragging = false
+                                popCursorIfIdle()
+                            }
+                    )
+            }
+            .animation(.easeOut(duration: 0.12), value: isHovered)
+            .animation(.easeOut(duration: 0.12), value: isDragging)
+    }
+
+    private func pushCursor() {
+        guard !cursorPushed else { return }
+        NSCursor.resizeLeftRight.push()
+        cursorPushed = true
+    }
+
+    private func popCursorIfIdle() {
+        guard cursorPushed, !isHovered, !isDragging else { return }
+        NSCursor.pop()
+        cursorPushed = false
+    }
+}
+
 struct SettingsDoneButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 11, weight: .semibold))
-            .tracking(Tracking.normal)
-            .foregroundColor(TalkieTheme.textPrimary)
+            .font(OpsType.ui(OpsSize.xs, weight: .semibold))
+            .foregroundStyle(OpsInk.bg)
             .padding(.horizontal, 20)
             .padding(.vertical, 8)
-            .background(Color.accentColor)
-            .cornerRadius(CornerRadius.xs)
+            .background(OpsTint.amber.color)
+            .cornerRadius(OpsRadius.standard)
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .animation(TalkieAnimation.fast, value: configuration.isPressed)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
@@ -357,14 +477,25 @@ struct SettingsPageContainer<Header: View, Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: Spacing.lg) {
-                header
-                content
+        VStack(alignment: .leading, spacing: 0) {
+            // Sticky header on the canvas, content scrolls beneath (matches Talkie settings).
+            header
+                .padding(.horizontal, 28)
+                .padding(.top, 22)
+                .padding(.bottom, 14)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .background(OpsInk.bg)
+
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: OpsSpacing.xxxl) {
+                    content
+                }
+                .padding(28)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
-            .padding(Spacing.lg)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(OpsInk.bg)
     }
 }
 
@@ -375,65 +506,40 @@ struct SettingsPageHeader: View {
     var badge: String? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center, spacing: Spacing.md) {
-                // Icon in a subtle glass container
-                ZStack {
-                    RoundedRectangle(cornerRadius: CornerRadius.sm)
-                        .fill(Color.accentColor.opacity(0.12))
-                    RoundedRectangle(cornerRadius: CornerRadius.sm)
-                        .strokeBorder(Color.accentColor.opacity(0.2), lineWidth: 0.5)
-                    Image(systemName: icon)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.accentColor)
+        VStack(alignment: .leading, spacing: 8) {
+            // Eyebrow: uppercase tracked label, reserving dots for actionable state.
+            HStack(spacing: 8) {
+                Text(title.uppercased())
+                    .font(OpsType.mono(OpsSize.xxs, weight: .bold))
+                    .tracking(1.5)
+                    .foregroundStyle(OpsTint.amber.color)
+
+                if let badge {
+                    Text(badge)
+                        .font(OpsType.mono(OpsSize.micro, weight: .bold))
+                        .foregroundStyle(OpsTint.amber.color)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(OpsSurface.tintFill(OpsTint.amber.color)))
                 }
-                .frame(width: 36, height: 36)
-
-                // Title and subtitle stacked
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: Spacing.sm) {
-                        Text(title)
-                            .font(.system(size: 13, weight: .semibold))
-                            .tracking(Tracking.normal)
-                            .foregroundColor(TalkieTheme.textPrimary)
-
-                        if let badge = badge {
-                            Text(badge)
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(.accentColor)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(
-                                    Capsule()
-                                        .fill(Color.accentColor.opacity(0.15))
-                                )
-                        }
-                    }
-
-                    Text(subtitle)
-                        .font(.system(size: 11))
-                        .foregroundColor(TalkieTheme.textTertiary)
-                }
-
-                Spacer()
             }
 
-            // Subtle separator line
-            Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            TalkieTheme.divider.opacity(0.6),
-                            TalkieTheme.divider.opacity(0.15),
-                            Color.clear
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .frame(height: 1)
-                .padding(.top, Spacing.md)
+            // Prominent page title mirrors the Agent Home scaffold.
+            Text(title.capitalized)
+                .font(OpsType.ui(OpsSize.xxl, weight: .semibold))
+                .foregroundStyle(OpsInk.ink)
+
+            if !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(OpsType.ui(OpsSize.sm))
+                    .foregroundStyle(OpsInk.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 640, alignment: .leading)
+            }
+
+            OpsDivider().padding(.top, 6)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -449,20 +555,17 @@ struct SettingsCard<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
+        VStack(alignment: .leading, spacing: OpsSpacing.md) {
             if let title = title {
-                Text(title)
-                    .font(.system(size: 10, weight: .bold))
-                    .tracking(Tracking.normal)
-                    .foregroundColor(TalkieTheme.textTertiary)
+                OpsSectionLabel(title)
             }
 
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                content
+            OpsCard(padding: OpsSpacing.xl) {
+                VStack(alignment: .leading, spacing: OpsSpacing.md) {
+                    content
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(Spacing.md)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .liquidGlassCard(cornerRadius: CornerRadius.sm, depth: depth)
         }
     }
 }
@@ -472,34 +575,44 @@ struct SettingsCard<Content: View>: View {
 struct SettingsToggleRow: View {
     let icon: String
     let title: String
-    let description: String
+    let description: String?
     @Binding var isOn: Bool
 
+    init(icon: String, title: String, description: String? = nil, isOn: Binding<Bool>) {
+        self.icon = icon
+        self.title = title
+        self.description = description
+        self._isOn = isOn
+    }
+
     var body: some View {
-        HStack(spacing: Spacing.sm) {
+        HStack(spacing: OpsSpacing.md) {
             Image(systemName: icon)
-                .font(.system(size: 12))
-                .foregroundColor(isOn ? SemanticColor.info : TalkieTheme.textTertiary)
+                .font(OpsType.ui(OpsSize.sm))
+                .foregroundStyle(isOn ? OpsTint.amber.color : OpsInk.dim)
                 .frame(width: 20)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .font(OpsType.ui(OpsSize.xs, weight: .medium))
+                    .foregroundStyle(OpsInk.ink)
 
-                Text(description)
-                    .font(.system(size: 9))
-                    .foregroundColor(TalkieTheme.textTertiary)
+                if let description, !description.isEmpty {
+                    Text(description)
+                        .font(OpsType.ui(OpsSize.micro))
+                        .foregroundStyle(OpsInk.dim)
+                }
             }
 
             Spacer()
 
             Toggle("", isOn: $isOn)
                 .toggleStyle(.switch)
+                .tint(OpsTint.amber.color)
                 .labelsHidden()
                 .scaleEffect(0.75)
         }
-        .padding(.vertical, Spacing.xs)
+        .padding(.vertical, OpsSpacing.xs)
     }
 }
 
@@ -514,25 +627,25 @@ struct WhisperModelRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(model.displayName)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .font(OpsType.ui(OpsSize.xs, weight: .medium))
+                    .foregroundStyle(OpsInk.ink)
 
                 Text(model.description)
-                    .font(.system(size: 9))
-                    .foregroundColor(TalkieTheme.textTertiary)
+                    .font(OpsType.ui(OpsSize.micro))
+                    .foregroundStyle(OpsInk.dim)
             }
 
             Spacer()
 
             if isSelected {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.accentColor)
+                    .foregroundStyle(OpsTint.amber.color)
             }
         }
-        .padding(Spacing.sm)
+        .padding(OpsSpacing.md)
         .background(
-            RoundedRectangle(cornerRadius: CornerRadius.xs)
-                .fill(isSelected ? Color.accentColor.opacity(0.15) : (isHovered ? TalkieTheme.hover : Color.clear))
+            RoundedRectangle(cornerRadius: OpsRadius.standard)
+                .fill(isSelected ? OpsSurface.selected(OpsTint.amber.color) : (isHovered ? OpsSurface.hover : Color.clear))
         )
         .contentShape(Rectangle())
         .onTapGesture { action() }
@@ -720,12 +833,9 @@ struct QuickSettingsSidebarSection<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            Text(title)
-                .font(.system(size: 9, weight: .semibold))
-                .tracking(0.5)
-                .foregroundColor(TalkieTheme.textTertiary)
-                .padding(.leading, Spacing.sm)
+        VStack(alignment: .leading, spacing: OpsSpacing.xs) {
+            OpsSectionLabel(title)
+                .padding(.leading, OpsSpacing.md)
                 .padding(.bottom, 2)
 
             content
@@ -761,16 +871,15 @@ struct QuickSettingsSidebarItem: View {
                         .foregroundColor(.orange)
                 }
             }
-            .foregroundColor(isSelected ? .primary : TalkieTheme.textSecondary)
-            .padding(.horizontal, Spacing.sm)
-            .padding(.vertical, Spacing.sm)
-            .liquidGlassCard(
-                cornerRadius: CornerRadius.sm,
-                isInteractive: true,
-                depth: isSelected ? .standard : .subtle
+            .foregroundStyle(isSelected ? OpsInk.ink : OpsInk.muted)
+            .padding(.horizontal, OpsSpacing.md)
+            .padding(.vertical, OpsSpacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: OpsRadius.standard)
+                    .fill(isSelected ? OpsSurface.selected(OpsTint.amber.color) : OpsSurface.hover)
             )
             .opacity(isSelected || isHovered ? 1.0 : 0.0)
-            .contentShape(RoundedRectangle(cornerRadius: CornerRadius.sm))
+            .contentShape(RoundedRectangle(cornerRadius: OpsRadius.standard))
         }
         .buttonStyle(.plain)
         .animation(TalkieAnimation.fast, value: isSelected)
@@ -800,29 +909,28 @@ struct QuickSettingsTabButton: View {
                         .foregroundColor(.orange)
                 }
             }
-            .foregroundColor(isSelected ? .primary : TalkieTheme.textSecondary)
+            .foregroundStyle(isSelected ? OpsInk.ink : OpsInk.muted)
             .frame(height: 36)
             .padding(.horizontal, 14)
             .background(
                 // Inner selection indicator
                 Group {
                     if isSelected {
-                        RoundedRectangle(cornerRadius: CornerRadius.sm)
-                            .fill(.regularMaterial)
-                            .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
+                        RoundedRectangle(cornerRadius: OpsRadius.standard)
+                            .fill(OpsSurface.selected(OpsTint.amber.color))
                     } else if isHovered {
-                        RoundedRectangle(cornerRadius: CornerRadius.sm)
-                            .fill(Color.primary.opacity(0.08))
+                        RoundedRectangle(cornerRadius: OpsRadius.standard)
+                            .fill(OpsSurface.hover)
                     }
                 }
             )
-            .contentShape(RoundedRectangle(cornerRadius: CornerRadius.sm))
+            .contentShape(RoundedRectangle(cornerRadius: OpsRadius.standard))
             // Label floats below - subtle, smaller treatment
             .overlay(alignment: .bottom) {
                 Text(tab.title.uppercased())
-                    .font(.system(size: 7, weight: .semibold))
+                    .font(OpsType.mono(7, weight: .semibold))
                     .tracking(0.3)
-                    .foregroundColor(TalkieTheme.textTertiary)
+                    .foregroundStyle(OpsInk.dim)
                     .opacity(isSelected || isHovered ? 1.0 : 0.0)
                     .offset(y: 16)
             }
@@ -999,11 +1107,11 @@ struct GlassCard<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            content()
+        OpsCard(padding: OpsSpacing.md) {
+            VStack(alignment: .leading, spacing: 0) {
+                content()
+            }
         }
-        .padding(Spacing.md)
-        .liquidGlassCard(cornerRadius: CornerRadius.md, isInteractive: isInteractive, depth: depth)
     }
 }
 

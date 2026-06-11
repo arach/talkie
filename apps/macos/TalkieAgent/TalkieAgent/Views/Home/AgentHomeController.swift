@@ -16,6 +16,8 @@ final class AgentHomeController: NSObject, ObservableObject, NSWindowDelegate {
     private let appPresentationClaim = "agent-home"
     private var window: NSWindow?
 
+    @Published var isShowingSettings = false
+
     var isVisible: Bool {
         window?.isVisible == true
     }
@@ -23,8 +25,17 @@ final class AgentHomeController: NSObject, ObservableObject, NSWindowDelegate {
     private override init() {}
 
     func show() {
+        show(openingSettings: false)
+    }
+
+    func showSettings() {
+        show(openingSettings: true)
+    }
+
+    private func show(openingSettings: Bool) {
         agentHomeControllerLog.info("Showing Agent Home")
         AgentAppPresentationController.shared.retainRegularPresentation(for: appPresentationClaim)
+        isShowingSettings = openingSettings
 
         if let window {
             if window.isMiniaturized {
@@ -35,30 +46,26 @@ final class AgentHomeController: NSObject, ObservableObject, NSWindowDelegate {
             return
         }
 
-        let view = AgentHomeView(
+        let view = AgentHomeShellView(
             onDismiss: { [weak self] in
                 self?.dismiss()
-            },
-            onOpenSettings: {
-                NotificationCenter.default.post(name: .showSettingsFromXPC, object: nil)
             }
         )
-        .frame(minWidth: 860, minHeight: 580)
+        .frame(minWidth: 1_020, minHeight: 640)
 
         let hostingView = NSHostingView(rootView: view)
         let homeWindow = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 920, height: 640),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            contentRect: NSRect(x: 0, y: 0, width: 1_180, height: 760),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
 
+        // Native title bar is the only top chrome (no custom OpsShell titlebar).
         homeWindow.title = "Talkie Agent"
-        homeWindow.minSize = NSSize(width: 780, height: 520)
+        homeWindow.minSize = NSSize(width: 1_020, height: 640)
         homeWindow.contentView = hostingView
-        homeWindow.titlebarAppearsTransparent = true
-        homeWindow.titleVisibility = .hidden
-        homeWindow.isMovableByWindowBackground = true
+        homeWindow.isMovableByWindowBackground = false
         homeWindow.isReleasedWhenClosed = false
         homeWindow.delegate = self
         homeWindow.setFrameAutosaveName("TalkieAgent.AgentHome")
@@ -71,6 +78,7 @@ final class AgentHomeController: NSObject, ObservableObject, NSWindowDelegate {
 
     func dismiss() {
         agentHomeControllerLog.info("Dismissing Agent Home")
+        isShowingSettings = false
         window?.close()
     }
 
@@ -79,6 +87,7 @@ final class AgentHomeController: NSObject, ObservableObject, NSWindowDelegate {
               closingWindow === window else { return }
 
         // Keep the app presentation claim so Dock reopen can bring Agent Home back.
+        isShowingSettings = false
         window = nil
     }
 }

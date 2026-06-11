@@ -13,6 +13,7 @@ struct AgentOverlay: View {
         case none
         case particles(calm: Bool, speedMultiplier: Double)
         case waveform(sensitive: Bool)
+        case island
     }
 
     enum AnimationDirection {
@@ -94,6 +95,8 @@ struct AgentOverlay: View {
             )
         case .waveform(let sensitive):
             WaveformBarsView(sensitive: sensitive, direction: animationDirection, levelOverride: audioLevel)
+        case .island:
+            IslandPillShapesView(direction: animationDirection, levelOverride: audioLevel)
         }
     }
 

@@ -29,6 +29,13 @@ final class NotchComposer {
     /// The payload for the resolved intent
     private(set) var resolvedPayload: NotchIntentPayload = .idle
 
+    /// High-frequency audio level (0...1), refreshed every poll during recording.
+    /// Deliberately kept OUT of `resolvedPayload`: the level changes ~60×/sec, and if
+    /// the view read it off the payload, every sample would re-evaluate the whole notch
+    /// geometry (custom Shape paths, masks, two `.drawingGroup()` offscreen passes).
+    /// Isolating it here means a level tick only invalidates the particle subview.
+    private(set) var liveAudioLevel: Float = 0
+
     /// Whether the composer has been initialized (notch detected)
     private(set) var isActive = false
 
@@ -74,6 +81,11 @@ final class NotchComposer {
 
     @ObservationIgnored
     private var lastHotStateSequence: UInt32 = 0
+
+    /// Last lifecycle state pushed into `resolvedPayload`. Used so the 60Hz poll only
+    /// refreshes the structural payload on real transitions, not on every audio sample.
+    @ObservationIgnored
+    private var lastPushedLiveState: LiveState?
 
     @ObservationIgnored
     private var hotStateRetryCount: Int = 0
@@ -273,21 +285,26 @@ final class NotchComposer {
     // MARK: - Notification Handlers
 
     private func handleRecordingStarted() {
+        lastPushedLiveState = .listening
         activate(.recording, payload: .recording(state: .listening, audioLevel: 0, elapsedTime: 0))
         swapToRecordingPolling()
     }
 
     private func handleRecordingStopped() {
+        liveAudioLevel = 0
+        lastPushedLiveState = nil
         deactivate(.recording)
         swapToIdlePolling()
     }
 
     private func handleTranscribing() {
+        lastPushedLiveState = .transcribing
         activate(.recording, payload: .recording(state: .transcribing, audioLevel: 0, elapsedTime: 0))
         // Keep polling — still want audio visualization during transcription
     }
 
     private func handleRouting() {
+        lastPushedLiveState = .routing
         activate(.recording, payload: .recording(state: .routing, audioLevel: 0, elapsedTime: 0))
     }
 
@@ -341,15 +358,25 @@ final class NotchComposer {
 
         switch liveState {
         case .listening, .transcribing, .routing, .refining:
+            // Audio level is the only thing that changes every frame — update the
+            // isolated observable so the particle view animates without dragging the
+            // whole notch geometry through a re-render.
+            liveAudioLevel = state.audioLevel
+
             if isRecordingActive {
-                // Already recording — just update payload (no re-resolve)
-                updatePayload(.recording, payload: .recording(
-                    state: liveState,
-                    audioLevel: state.audioLevel,
-                    elapsedTime: TimeInterval(state.elapsedTime)
-                ))
+                // Already recording — refresh the structural payload only on a real
+                // lifecycle transition (listening → transcribing → routing …).
+                if liveState != lastPushedLiveState {
+                    lastPushedLiveState = liveState
+                    updatePayload(.recording, payload: .recording(
+                        state: liveState,
+                        audioLevel: state.audioLevel,
+                        elapsedTime: TimeInterval(state.elapsedTime)
+                    ))
+                }
             } else {
                 // Idle poll caught recording start before notification — activate + swap to 60Hz
+                lastPushedLiveState = liveState
                 activate(.recording, payload: .recording(
                     state: liveState,
                     audioLevel: state.audioLevel,
@@ -360,6 +387,8 @@ final class NotchComposer {
         case .idle:
             if isRecordingActive {
                 // Mmap says idle before notification — deactivate + swap to 4Hz
+                liveAudioLevel = 0
+                lastPushedLiveState = nil
                 deactivate(.recording)
                 swapToIdlePolling()
             }

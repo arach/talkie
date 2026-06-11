@@ -98,17 +98,6 @@ struct AppearanceSettingsSection: View {
                 }
             }
 
-            SettingsCard(title: "VISUAL FEEDBACK") {
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text("HUD, pill, and notch placement live in Feedback now.")
-                        .font(.system(size: 10))
-                        .foregroundColor(TalkieTheme.textSecondary)
-
-                    Text("Use the draggable preview there to place the HUD and floating pill.")
-                        .font(.system(size: 9))
-                        .foregroundColor(TalkieTheme.textTertiary)
-                }
-            }
         }
     }
 }
@@ -148,6 +137,11 @@ struct AdvancedVisualizationSection: View {
                         ParticleControlsView()
                     } else if overlayStyle == .waveform || overlayStyle == .waveformSensitive {
                         WaveformControlsView()
+                    } else if overlayStyle == .island {
+                        Text("Island uses fixed dark pill geometry for now.")
+                            .font(.system(size: 10))
+                            .foregroundColor(TalkieTheme.textMuted)
+                            .padding(.vertical, Spacing.sm)
                     } else {
                         Text("Select Particles or Waveform style to customize.")
                             .font(.system(size: 10))
@@ -664,6 +658,32 @@ struct OverlayPreviewAnimation: View {
                         let barHeight = max(4, CGFloat(level) * size.height * 0.85)
                         let barRect = CGRect(x: x, y: centerY - barHeight / 2, width: barWidth, height: barHeight)
                         context.fill(RoundedRectangle(cornerRadius: 1).path(in: barRect), with: .color(.white.opacity(0.55 + level * 0.35)))
+                    }
+
+                case .island:
+                    // Dark capsule island treatment
+                    let count = 5
+                    let slot = size.width / CGFloat(count)
+                    for i in 0..<count {
+                        let seed = Double(i) * 0.72
+                        let pulse = (sin(time * 2.3 + seed) + 1) / 2
+                        let width = max(8, slot * CGFloat(0.38 + pulse * 0.22))
+                        let height = max(5, size.height * CGFloat(0.22 + pulse * 0.2))
+                        let rect = CGRect(
+                            x: slot * CGFloat(i) + slot / 2 - width / 2,
+                            y: centerY - height / 2,
+                            width: width,
+                            height: height
+                        )
+                        context.fill(
+                            RoundedRectangle(cornerRadius: height / 2).path(in: rect),
+                            with: .color(Color(white: 0.15 + pulse * 0.1).opacity(0.9))
+                        )
+                        context.stroke(
+                            RoundedRectangle(cornerRadius: height / 2).path(in: rect.insetBy(dx: 0.4, dy: 0.4)),
+                            with: .color(Color.white.opacity(0.08 + pulse * 0.06)),
+                            lineWidth: 0.6
+                        )
                     }
 
                 case .pillOnly:

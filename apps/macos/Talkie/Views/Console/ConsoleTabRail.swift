@@ -7,6 +7,7 @@
 
 import AppKit
 import SwiftUI
+import TalkieKit
 
 struct ConsoleTabRail: View {
     let tabs: [TabDefinition]
