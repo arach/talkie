@@ -600,9 +600,14 @@ struct RecordingSheetNext: View {
             }
             phase = .saved
             // Let the first-save moment breathe before the sheet dismisses.
+            let savedMemoID = memo.id?.uuidString
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(isFirstMemo ? 1800 : 700))
                 controller.isPresented = false
+                if let savedMemoID {
+                    try? await Task.sleep(for: .milliseconds(80))
+                    AppShellRouter.shared.openMemoDetail(memoID: savedMemoID)
+                }
             }
         } catch {
             // Best-effort: dismiss; the recording file stays on disk.

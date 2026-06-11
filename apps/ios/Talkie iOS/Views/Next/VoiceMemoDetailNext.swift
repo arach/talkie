@@ -268,6 +268,18 @@ final class VoiceMemoDetailStore: ObservableObject {
             .map(Self.workflowRunDisplay(from:))
     }
 
+    func reloadSourceMemo() {
+        guard !isMock, let sourceMemo else { return }
+        sourceMemo.managedObjectContext?.refresh(sourceMemo, mergeChanges: true)
+        audioData = sourceMemo.audioData
+        audioURL = Self.audioURL(for: sourceMemo)
+        durationSeconds = sourceMemo.duration
+        refreshSourceMemoDisplay()
+        reloadTranscriptVersions()
+        reloadWorkflowRuns()
+        reloadAttachments()
+    }
+
     @discardableResult
     func addAttachment(data: Data, originalName: String? = nil) -> MemoImageAttachment? {
         guard let uuid = memoUUID else { return nil }
@@ -832,6 +844,10 @@ struct VoiceMemoDetailNext: View {
         .task(id: store.memo.id) {
             await pollWorkflowRuns()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .voiceMemosDidChange)) { _ in
+            guard !isEditingTitle && !isEditingTranscript else { return }
+            store.reloadSourceMemo()
+        }
         .accessibilityIdentifier("memo.detail.screen")
     }
 
@@ -1109,12 +1125,12 @@ struct VoiceMemoDetailNext: View {
     // playhead between; idle, it's full ink for plain reading. Tap to edit.
     private var readingBody: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(playheadTranscript)
-                .talkieType(.listTitle)
-                .lineSpacing(5)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-                .onTapGesture { if store.canEditTranscript { beginInlineTranscriptEdit() } }
+            TranscriptRolloutText(
+                text: store.memo.transcript,
+                attributedText: playheadTranscript,
+                canEdit: store.canEditTranscript,
+                onTap: beginInlineTranscriptEdit
+            )
 
             // Consolidated metadata footer — capture date/time + word count
             // + source, all in one quiet technical line at the foot of the
@@ -1147,6 +1163,153 @@ struct VoiceMemoDetailNext: View {
             if store.canEditTranscript {
                 Button("Edit", systemImage: "pencil") { beginInlineTranscriptEdit() }
             }
+        }
+    }
+
+    private struct TranscriptRolloutText: View {
+        let text: String
+        let attributedText: AttributedString
+        let canEdit: Bool
+        let onTap: () -> Void
+
+        @ObservedObject private var theme = ThemeManager.shared
+        @State private var renderedText: String = ""
+        @State private var hasAppeared = false
+        @State private var isRollingOut = false
+        @State private var rolloutTask: Task<Void, Never>?
+
+        var body: some View {
+            Group {
+                if isRollingOut {
+                    rolloutViewport
+                } else {
+                    Text(attributedText)
+                        .talkieType(.listTitle)
+                        .lineSpacing(5)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if canEdit { onTap() }
+            }
+            .onAppear {
+                guard !hasAppeared else { return }
+                renderedText = text
+                hasAppeared = true
+            }
+            .onChange(of: text) { oldText, newText in
+                handleTextChange(from: oldText, to: newText)
+            }
+            .onDisappear {
+                rolloutTask?.cancel()
+            }
+            .accessibilityLabel(text)
+        }
+
+        private var rolloutViewport: some View {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(renderedText)
+                            .talkieType(.listTitle)
+                            .foregroundStyle(theme.colors.textPrimary)
+                            .lineSpacing(5)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        Color.clear
+                            .frame(height: 1)
+                            .id("transcript-rollout-bottom")
+                    }
+                }
+                .frame(minHeight: 126, maxHeight: rolloutViewportHeight)
+                .scrollIndicators(.hidden)
+                .onChange(of: renderedText) { _, _ in
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        proxy.scrollTo("transcript-rollout-bottom", anchor: .bottom)
+                    }
+                }
+            }
+        }
+
+        private var rolloutViewportHeight: CGFloat {
+            if text.count > 1_200 { return 260 }
+            if text.count > 520 { return 220 }
+            return 170
+        }
+
+        private func handleTextChange(from oldText: String, to newText: String) {
+            rolloutTask?.cancel()
+            guard Self.shouldRollout(from: oldText, to: newText), hasAppeared else {
+                renderedText = newText
+                isRollingOut = false
+                return
+            }
+            startRollout(newText)
+        }
+
+        private func startRollout(_ fullText: String) {
+            renderedText = ""
+            isRollingOut = true
+
+            let chunks = Self.rolloutChunks(from: fullText)
+            let delayMilliseconds = Self.delayMilliseconds(for: fullText)
+            rolloutTask = Task { @MainActor in
+                for chunk in chunks {
+                    if Task.isCancelled { return }
+                    renderedText += chunk
+                    try? await Task.sleep(for: .milliseconds(delayMilliseconds))
+                }
+                if Task.isCancelled { return }
+                renderedText = fullText
+                isRollingOut = false
+            }
+        }
+
+        private static func shouldRollout(from oldText: String, to newText: String) -> Bool {
+            let old = normalized(oldText)
+            let new = normalized(newText)
+            guard !new.isEmpty, old != new, !isPlaceholder(new) else { return false }
+            return old.isEmpty || isPlaceholder(old)
+        }
+
+        private static func normalized(_ text: String) -> String {
+            text.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        private static func isPlaceholder(_ text: String) -> Bool {
+            text == "No transcript yet."
+        }
+
+        private static func rolloutChunks(from text: String) -> [String] {
+            let wordsPerChunk = text.count > 1_200 ? 4 : 2
+            var chunks: [String] = []
+            var current = ""
+            var boundaryCount = 0
+
+            for scalar in text.unicodeScalars {
+                current.append(String(scalar))
+                if CharacterSet.whitespacesAndNewlines.contains(scalar) {
+                    boundaryCount += 1
+                    if boundaryCount >= wordsPerChunk {
+                        chunks.append(current)
+                        current = ""
+                        boundaryCount = 0
+                    }
+                }
+            }
+
+            if !current.isEmpty {
+                chunks.append(current)
+            }
+            return chunks.isEmpty ? [text] : chunks
+        }
+
+        private static func delayMilliseconds(for text: String) -> Int {
+            if text.count > 1_600 { return 24 }
+            if text.count > 800 { return 32 }
+            return 42
         }
     }
 

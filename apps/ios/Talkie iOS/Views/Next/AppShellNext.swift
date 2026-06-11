@@ -397,6 +397,10 @@ final class AppShellRouter: ObservableObject {
     /// editor on appear (popping the embedded Talkie keyboard).
     /// ComposeNextView consumes + clears this on appear.
     @Published var pendingComposeFocus: Bool = false
+    /// Optional tab to select the next time Library opens. Lets Home
+    /// counters route to the bucket they describe instead of a generic
+    /// landing page.
+    @Published var pendingLibraryTab: LibraryTab?
     /// True while Compose has the Talkie keyboard raised. The global
     /// bottom-left summon hides itself when this is set so it doesn't
     /// collide with the keyboard's bottom-left keys.
@@ -482,7 +486,10 @@ final class AppShellRouter: ObservableObject {
         surface = .compose(documentID: documentID)
     }
 
-    func openLibrary()              { push(.library) }
+    func openLibrary(tab: LibraryTab? = nil) {
+        pendingLibraryTab = tab
+        push(.library)
+    }
     func openSettings()             { push(.settings) }
     func openCaptureDetail(captureID: String) {
         push(.captureDetail(captureID: captureID))

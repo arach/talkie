@@ -282,6 +282,8 @@ class PermissionManager: ObservableObject {
     func openSettings(for permission: PermissionType) {
         if permission == .accessibility {
             AccessibilityInstallAssistant.shared.present()
+        } else if permission == .screenRecording {
+            AccessibilityInstallAssistant.shared.present(permission: .screenRecording)
         } else if let url = permission.settingsURL {
             openSystemSettings(url)
         }
@@ -359,10 +361,8 @@ class PermissionManager: ObservableObject {
                 requestAccessibility()
             }
         case .screenRecording:
-            let granted = requestScreenRecording()
-            if !granted {
-                openSettings(for: permission)
-            }
+            AccessibilityInstallAssistant.shared.present(permission: .screenRecording)
+            startPolling()
         }
     }
 

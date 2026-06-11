@@ -12,7 +12,7 @@
 
 import SwiftUI
 
-enum LibraryTab: CaseIterable {
+enum LibraryTab: CaseIterable, Equatable {
     case memos, dictations, items
 
     var label: String {
@@ -26,6 +26,7 @@ enum LibraryTab: CaseIterable {
 
 struct LibraryNextView: View {
     @ObservedObject private var theme = ThemeManager.shared
+    @ObservedObject private var router = AppShellRouter.shared
     @StateObject private var library: LibraryFeed
     @State private var activeTab: LibraryTab = .memos
     @State private var query: String = ""
@@ -90,6 +91,12 @@ struct LibraryNextView: View {
         .onReceive(NotificationCenter.default.publisher(for: .voiceMemosDidChange)) { _ in library.reload() }
         .onReceive(NotificationCenter.default.publisher(for: .capturesDidChange)) { _ in library.reload() }
         .onReceive(NotificationCenter.default.publisher(for: .composeNotesDidChange)) { _ in library.reload() }
+        .onAppear {
+            consumePendingLibraryTab()
+        }
+        .onChange(of: router.pendingLibraryTab) { _, _ in
+            consumePendingLibraryTab()
+        }
     }
 
     private var searchPlaceholder: String {
@@ -98,6 +105,14 @@ struct LibraryNextView: View {
         case .dictations: return "Search dictations"
         case .items:      return "Search items"
         }
+    }
+
+    private func consumePendingLibraryTab() {
+        guard let tab = router.pendingLibraryTab else { return }
+        withAnimation(.easeOut(duration: 0.18)) {
+            activeTab = tab
+        }
+        router.pendingLibraryTab = nil
     }
 }
 
