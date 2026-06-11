@@ -379,7 +379,7 @@ struct AppNavigation: View {
                 // canvas while a memo recording is active; the title-bar
                 // pill is the always-on baseline. Sits beneath the chrome
                 // bar in z-order so the bar / page header stay readable.
-                RecordingCompanionSurface()
+                RecordingCompanionSurface(windowID: nav.id)
                     .padding(.top, PageLayout.headerHeight)
             }
             .overlay(alignment: .top) {

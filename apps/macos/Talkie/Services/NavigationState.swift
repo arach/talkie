@@ -44,6 +44,10 @@ final class NavigationState {
         activeState ?? fallbackState
     }
 
+    static var activeWindowID: UUID? {
+        activeState?.id
+    }
+
     static func activate(_ state: NavigationState, reason: String) {
         guard !state.isActiveWindowProxy else { return }
         guard activeState !== state else { return }

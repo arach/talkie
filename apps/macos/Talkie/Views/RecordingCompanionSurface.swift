@@ -49,6 +49,8 @@ enum RecordingCompanionVariant: String, CaseIterable {
 // MARK: - Surface
 
 struct RecordingCompanionSurface: View {
+    let windowID: UUID
+
     private var controller: MemoRecordingController { MemoRecordingController.shared }
 
     @AppStorage("recordingCompanion.variant")
@@ -70,10 +72,17 @@ struct RecordingCompanionSurface: View {
     @State private var minimized: Bool = false
 
     private var isVisible: Bool {
+        guard ownsPresentation else { return false }
+
         let state = controller.state
         if state.isRecording || state.isPreparing || state.isProcessing { return true }
         if case .complete = state { return holdAfterComplete }
         return false
+    }
+
+    private var ownsPresentation: Bool {
+        guard let ownerID = controller.presentationOwnerID else { return true }
+        return ownerID == windowID
     }
 
     /// PiP only shows while we're actively recording. As soon as the

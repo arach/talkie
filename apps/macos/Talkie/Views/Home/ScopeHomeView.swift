@@ -12,6 +12,7 @@
 //  for every other theme.
 //
 
+import AppKit
 import SwiftUI
 import TalkieKit
 
@@ -104,6 +105,12 @@ struct ScopeHomeView: View {
         .background(cmdShortcutBindings)
         .onAppear { startCmdMonitor() }
         .onDisappear { stopCmdMonitor() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+            resetCmdHeld()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in
+            resetCmdHeld()
+        }
         .captureMarkupHost(url: $markupURL)
         .task {
             // Home has no chrome-bar title — the TALKIE pill + the rail's
@@ -433,6 +440,8 @@ struct ScopeHomeView: View {
     }
 
     private func startCmdMonitor() {
+        stopCmdMonitor()
+        cmdHeld = NSEvent.modifierFlags.contains(.command)
         cmdEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
             let isHeld = event.modifierFlags.contains(.command)
             if isHeld != cmdHeld {
@@ -448,6 +457,13 @@ struct ScopeHomeView: View {
             cmdEventMonitor = nil
         }
         cmdHeld = false
+    }
+
+    private func resetCmdHeld() {
+        guard cmdHeld else { return }
+        withAnimation(.easeOut(duration: 0.12)) {
+            cmdHeld = false
+        }
     }
 
     /// Toggle the live dictation pipeline. Same path as ⌃⇧⌘D.

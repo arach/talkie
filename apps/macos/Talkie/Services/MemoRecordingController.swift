@@ -90,11 +90,19 @@ final class MemoRecordingController {
     var state: RecordingState = .idle {
         didSet {
             guard state != oldValue else { return }
+            if case .idle = state {
+                presentationOwnerID = nil
+            }
             CompanionRuntimeSignal.notify(reason: "memo-\(state.signalToken)")
         }
     }
     var elapsedTime: TimeInterval = 0
     var audioLevel: Float = 0  // For waveform visualization
+
+    /// Window that owns the large recording presentation for the active memo.
+    /// The recorder remains process-global; this prevents every window from
+    /// mounting the same canvas-level companion surface.
+    private(set) var presentationOwnerID: UUID?
 
     /// Processing pipeline steps - shown after recording stops
     var processingSteps: [ProcessingStep] = []
@@ -134,6 +142,8 @@ final class MemoRecordingController {
 
     /// Start recording a new memo
     func startRecording() {
+        claimPresentationOwner()
+
         // Immediate visual feedback
         state = .preparing
 
@@ -200,6 +210,8 @@ final class MemoRecordingController {
 
     /// Start recording audio for an existing note/recording
     func startRecordingForNote(noteId: UUID) {
+        claimPresentationOwner()
+
         // Check microphone permission first
         let micStatus = MicrophonePermission.status
         guard micStatus == .granted else {
@@ -262,6 +274,7 @@ final class MemoRecordingController {
 
     /// Start recording a continuation segment for an existing memo
     func startContinuingMemo(memoId: UUID) {
+        claimPresentationOwner()
         state = .preparing
 
         let micStatus = MicrophonePermission.status
@@ -441,9 +454,14 @@ final class MemoRecordingController {
         recordingId = nil
         targetNoteId = nil
         continuingMemoId = nil
+        presentationOwnerID = nil
     }
 
     // MARK: - Private Methods
+
+    private func claimPresentationOwner() {
+        presentationOwnerID = NavigationState.activeWindowID
+    }
 
     private func setupAudioRecording() {
         // Create temp file

@@ -184,6 +184,12 @@ struct ScopeLibraryView: View {
         .background(cmdShortcutBindings)
         .onAppear { startCmdMonitor() }
         .onDisappear { stopCmdMonitor() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+            resetCmdHeld()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in
+            resetCmdHeld()
+        }
     }
 
     // MARK: - Cmd-hold shortcuts
@@ -235,6 +241,8 @@ struct ScopeLibraryView: View {
     }
 
     private func startCmdMonitor() {
+        stopCmdMonitor()
+        cmdHeld = NSEvent.modifierFlags.contains(.command)
         // `addLocalMonitorForEvents` fires for events delivered to our
         // own app, so we don't track ⌘ presses while the user is in
         // another window. Lightweight enough to leave installed.
@@ -255,6 +263,13 @@ struct ScopeLibraryView: View {
             cmdEventMonitor = nil
         }
         cmdHeld = false
+    }
+
+    private func resetCmdHeld() {
+        guard cmdHeld else { return }
+        withAnimation(.easeOut(duration: 0.12)) {
+            cmdHeld = false
+        }
     }
 
     // MARK: - List column
