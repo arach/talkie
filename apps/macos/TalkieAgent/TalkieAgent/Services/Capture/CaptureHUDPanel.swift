@@ -14,6 +14,8 @@
 //    │   [crop]        [display]      [window]                     │
 //    │    A              S              D                          │
 //    │  Region        Screen         Window                        │
+//    ├─ RECORDING OPTIONS ─────────────────────────────────────────┤
+//    │  Audio on/off   Mic on/off     Bubble on/off                │
 //    ├─ BOTTOM STRIP (stripBottom gradient) ───────────────────────┤
 //    │  Optional contextual actions: note, paste latest, tray       │
 //    └─────────────────────────────────────────────────────────────┘
@@ -28,7 +30,7 @@ import SwiftUI
 final class CaptureHUDPanel {
 
     static let panelWidth: CGFloat = 384
-    static let panelHeight: CGFloat = 156
+    static let panelHeight: CGFloat = 194
 
     private var panel: NSPanel?
     let state = CaptureBarState()
@@ -122,7 +124,9 @@ final class CaptureHUDPanel {
         self.palette = palette
 
         let hostingView = NSHostingView(rootView: CaptureHUDView(state: state, palette: palette))
+        hostingView.wantsLayer = true
         hostingView.layer?.isOpaque = false
+        hostingView.layer?.backgroundColor = NSColor.clear.cgColor
 
         let origin = Self.expectedFrame(
             for: NSEvent.mouseLocation,
@@ -141,7 +145,7 @@ final class CaptureHUDPanel {
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         p.isOpaque = false
         p.backgroundColor = .clear
-        p.hasShadow = true
+        p.hasShadow = false
         p.isMovableByWindowBackground = false
         p.sharingType = .none
         p.hidesOnDeactivate = false
@@ -180,7 +184,9 @@ final class CaptureHUDPanel {
         self.palette = palette
 
         let hostingView = NSHostingView(rootView: CaptureHUDView(state: state, palette: palette))
+        hostingView.wantsLayer = true
         hostingView.layer?.isOpaque = false
+        hostingView.layer?.backgroundColor = NSColor.clear.cgColor
         p.contentView = hostingView
     }
 
@@ -214,14 +220,12 @@ private struct CaptureHUDView: View {
     private var accent: Color {
         isVideo ? Color.captureHex(tokens.recHex) : Color.captureHex(tokens.accentHex)
     }
-    private var accentGlow: Color {
-        (isVideo ? tokens.recGlow : tokens.accentGlow).color
-    }
 
     var body: some View {
         VStack(spacing: 0) {
             topStrip
             primaryCells
+            recordingOptionsStrip
             bottomStrip
         }
         .frame(width: CaptureHUDPanel.panelWidth, height: CaptureHUDPanel.panelHeight)
@@ -231,24 +235,6 @@ private struct CaptureHUDView: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(tokens.edgeStrong.color, lineWidth: 0.5)
         )
-        .overlay(
-            // Inner bezel: highlight at top, shadow at bottom — reads as a
-            // milled hardware part rather than a flat sticker.
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .inset(by: 0.5)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [tokens.bezelHighlight.color, .clear, tokens.bezelShadow.color],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: 1
-                )
-                .blendMode(.plusLighter)
-                .opacity(0.75)
-        )
-        .shadow(color: .black.opacity(0.32), radius: 18, y: 10)
-        .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
         .scaleEffect(appeared ? 1 : 0.94)
         .opacity(appeared ? 1 : 0)
         .animation(.easeInOut(duration: 0.18), value: state.mode)
@@ -372,34 +358,7 @@ private struct CaptureHUDView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
-        .background(graticule)
-    }
-
-    /// 12-pt graticule wash behind the primary cells. Instrument-bay
-    /// vocabulary — reads as a precision field, not a flat plate.
-    private var graticule: some View {
-        Canvas { context, size in
-            let step: CGFloat = 12
-            let color = GraphicsContext.Shading.color(tokens.graticule.color)
-            var x: CGFloat = 0
-            while x <= size.width {
-                let path = Path { p in
-                    p.move(to: CGPoint(x: x, y: 0))
-                    p.addLine(to: CGPoint(x: x, y: size.height))
-                }
-                context.stroke(path, with: color, lineWidth: 0.5)
-                x += step
-            }
-            var y: CGFloat = 0
-            while y <= size.height {
-                let path = Path { p in
-                    p.move(to: CGPoint(x: 0, y: y))
-                    p.addLine(to: CGPoint(x: size.width, y: y))
-                }
-                context.stroke(path, with: color, lineWidth: 0.5)
-                y += step
-            }
-        }
+        .background(Color.captureHex(tokens.bgHex).opacity(0.58))
     }
 
     private func primaryCell(key: String, icon: HUDIcon, label: String) -> some View {
@@ -438,17 +397,6 @@ private struct CaptureHUDView: View {
                         lineWidth: 0.5
                     )
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .inset(by: 0.5)
-                    .strokeBorder(tokens.bezelHighlight.color, lineWidth: 0.5)
-                    .blendMode(.plusLighter)
-                    .opacity(isHovered ? 0.9 : (isActive ? 0.6 : 0))
-            )
-            .shadow(
-                color: isActive ? accentGlow.opacity(0.6) : .clear,
-                radius: isActive ? 6 : 0
-            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -486,13 +434,103 @@ private struct CaptureHUDView: View {
                         lineWidth: 0.5
                     )
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .inset(by: 0.5)
-                    .strokeBorder(tokens.bezelHighlight.color, lineWidth: 0.5)
-                    .blendMode(.plusLighter)
-                    .opacity(0.6)
+    }
+
+    // MARK: - Recording options
+
+    private var recordingOptionsStrip: some View {
+        HStack(spacing: 6) {
+            recordingOptionToggle(
+                title: "Audio",
+                systemImage: "speaker.wave.2",
+                isOn: $state.screenRecordingIncludesSystemAudio
             )
+            recordingOptionToggle(
+                title: "Mic",
+                systemImage: "mic",
+                isOn: $state.screenRecordingIncludesMicrophone
+            )
+            recordingOptionToggle(
+                title: "Bubble",
+                systemImage: "video.circle",
+                isOn: $state.screenRecordingShowsCameraBubble
+            )
+        }
+        .padding(.horizontal, 8)
+        .frame(height: 38)
+        .background(tokens.detailsBg.color.opacity(0.46))
+    }
+
+    private func recordingOptionToggle(
+        title: String,
+        systemImage: String,
+        isOn: Binding<Bool>
+    ) -> some View {
+        let id = "recording_\(title)"
+        let isHovered = hoveredKey == id
+        let enabled = isOn.wrappedValue
+
+        return Button {
+            isOn.wrappedValue.toggle()
+            state.onAction?(nil)
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .foregroundColor(enabled ? accent : Color.captureHex(tokens.inkFaintHex))
+                    .frame(width: 12)
+
+                Text(title)
+                    .font(.system(size: 8.5, weight: .semibold))
+                    .foregroundColor(Color.captureHex(tokens.inkHex))
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+
+                Text(enabled ? "ON" : "OFF")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundColor(enabled ? accent : Color.captureHex(tokens.inkFaintHex))
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(enabled ? accent.opacity(0.16) : tokens.detailsBg.color)
+                    )
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .strokeBorder(
+                                enabled ? accent.opacity(0.55) : tokens.edgeStrong.color,
+                                lineWidth: 0.5
+                            )
+                    )
+            }
+            .padding(.horizontal, 7)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(
+                        enabled
+                            ? accent.opacity(0.10)
+                            : (isHovered ? tokens.detailsBg.color : Color.clear)
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .strokeBorder(
+                        enabled
+                            ? accent.opacity(0.45)
+                            : (isHovered ? tokens.edgeStrong.color : tokens.edge.color),
+                        lineWidth: 0.5
+                    )
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("\(title) \(enabled ? "on" : "off") for screen recording")
+        .onHover { inside in
+            hoveredKey = inside ? id : (hoveredKey == id ? nil : hoveredKey)
+            if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
     }
 
     // MARK: - Bottom strip (extras)

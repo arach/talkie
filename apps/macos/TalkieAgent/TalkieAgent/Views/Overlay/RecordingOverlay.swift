@@ -12,6 +12,28 @@ import Combine
 
 private let recordingOverlayProcessingBoxWidth: CGFloat = 34
 private let recordingOverlayProcessingBoxHeight: CGFloat = 24
+private let islandOverlayEdgeMargin: CGFloat = 6
+private let islandOverlayTopEdgeMargin: CGFloat = 2
+
+@MainActor
+private func recordingOverlayPlacementFrame(for screen: NSScreen) -> CGRect {
+    guard LiveSettings.shared.effectiveOverlayStyle == .island else {
+        return screen.overlayPlacementFrame()
+    }
+
+    let screenFrame = screen.frame
+    let minX = screenFrame.minX + islandOverlayEdgeMargin
+    let maxX = max(minX, screenFrame.maxX - islandOverlayEdgeMargin)
+    let minY = screenFrame.minY + islandOverlayEdgeMargin
+    let maxY = max(minY, screenFrame.maxY - islandOverlayTopEdgeMargin)
+
+    return CGRect(
+        x: minX,
+        y: minY,
+        width: max(0, maxX - minX),
+        height: max(0, maxY - minY)
+    )
+}
 
 struct RecordingIndicatorSurfaceModifier: ViewModifier {
     let backgroundFill: Color
@@ -51,7 +73,7 @@ extension View {
 private func persistOverlayPlacement(from frame: CGRect, on screen: NSScreen?) {
     guard let screen else { return }
 
-    let placementBounds = screen.overlayPlacementFrame()
+    let placementBounds = recordingOverlayPlacementFrame(for: screen)
     let minX = placementBounds.minX
     let maxX = max(minX, placementBounds.maxX - frame.width)
     let minY = placementBounds.minY
@@ -322,7 +344,7 @@ final class RecordingOverlayController: NSObject, ObservableObject, NSWindowDele
     }
 
     private func targetFrame(for state: LiveState, on screen: NSScreen, size: CGSize) -> CGRect {
-        let placementBounds = screen.overlayPlacementFrame()
+        let placementBounds = recordingOverlayPlacementFrame(for: screen)
         let origin = LiveSettings.shared.overlayPlacement.origin(in: placementBounds, itemSize: size)
         return CGRect(origin: origin, size: size)
     }
@@ -610,7 +632,7 @@ final class OverlaySettingsPreviewController: NSObject, NSWindowDelegate {
     private func previewFrame() -> CGRect {
         let size = Self.currentPreviewSize()
         let screen = NSScreen.main
-        let placementFrame = screen?.overlayPlacementFrame() ?? .zero
+        let placementFrame = screen.map { recordingOverlayPlacementFrame(for: $0) } ?? .zero
         let origin = LiveSettings.shared.overlayPlacement.origin(in: placementFrame, itemSize: size)
         return CGRect(origin: origin, size: size)
     }
@@ -1190,16 +1212,16 @@ struct OverlayButton<Content: View>: View {
     var body: some View {
         Button(action: action) {
             content()
-                .foregroundColor(Color.white.opacity(isHovered ? 0.96 : 0.50))
+                .foregroundStyle(Color.white.opacity(isHovered ? 0.96 : 0.50))
                 .frame(width: 22, height: 22)
-                .background(
+                .background {
                     Circle()
                         .fill(Color.white.opacity(isHovered ? 0.22 : 0.035))
-                )
-                .overlay(
+                }
+                .overlay {
                     Circle()
-                        .stroke(Color.white.opacity(isHovered ? 0.28 : 0.07), lineWidth: 0.8)
-                )
+                        .strokeBorder(Color.white.opacity(isHovered ? 0.30 : 0.09), lineWidth: 1)
+                }
                 .shadow(color: Color.white.opacity(isHovered ? 0.18 : 0), radius: 5)
                 .scaleEffect(isHovered ? 1.04 : 1.0)
         }
@@ -1489,13 +1511,11 @@ struct IslandPillShapesView: View {
                         : min((1.0 - xProgress) * 3.0, 1.0) * min(xProgress * 2.0, 1.0)
                     let shimmer = 0.72 + sin(time * 2.2 + seed * 3.0) * 0.18
                     let opacityScale = 0.58 + sin(seed * 3.0) * 0.34
-                    let opacity = min(
-                        0.92,
-                        max(
-                            0.18,
-                            (0.28 + Double(level) * (0.40 + Double(reactivity) * 0.22)) * edgeFade * shimmer * opacityScale
-                        )
-                    )
+                    let rawOpacity = (0.28 + Double(level) * (0.40 + Double(reactivity) * 0.22))
+                        * edgeFade
+                        * shimmer
+                        * opacityScale
+                    let opacity = min(1.0, max(0.42, rawOpacity * 1.8))
 
                     let rect = CGRect(
                         x: x - particleSize / 2,
@@ -1515,7 +1535,7 @@ struct IslandPillShapesView: View {
                     let glintRect = CGRect(x: glintX, y: 2.2, width: glintWidth, height: 0.8)
                     context.fill(
                         RoundedRectangle(cornerRadius: 0.5).path(in: glintRect),
-                        with: .color(Color.white.opacity(0.055 + level * 0.10))
+                        with: .color(Color.white.opacity(0.11 + level * 0.16))
                     )
                 }
             }

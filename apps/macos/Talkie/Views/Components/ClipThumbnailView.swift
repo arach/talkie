@@ -4,7 +4,7 @@
 //
 //  Thumbnail for a video clip with play overlay.
 //  Tap toggles between thumbnail and expanded inline player.
-//  Generates thumbnail via AVAssetImageGenerator.
+//  Generates thumbnail from the first available video frame.
 //
 
 import SwiftUI
@@ -191,18 +191,14 @@ struct ClipThumbnailView: View {
         let url = fileURL
         guard FileManager.default.fileExists(atPath: url.path) else { return }
 
-        let asset = AVAsset(url: url)
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: size.thumbnailGeneratorSize, height: size.thumbnailGeneratorSize)
-
-        do {
-            let (cgImage, _) = try await generator.image(at: .zero)
+        if let nsImage = await VideoFrameThumbnailer.thumbnailAsync(
+            for: url,
+            maxSize: size.thumbnailGeneratorSize
+        ) {
             guard !Task.isCancelled else { return }
-            let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
             await MainActor.run { self.thumbnail = nsImage }
-        } catch {
-            Log(.ui).debug("Failed to generate clip thumbnail: \(error)")
+        } else {
+            Log(.ui).debug("Failed to generate clip thumbnail for \(url.lastPathComponent)")
         }
     }
 

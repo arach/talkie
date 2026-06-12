@@ -160,6 +160,7 @@ final class CaptureShortcutsModel: ObservableObject {
 
 struct CaptureSettingsSection: View {
     @StateObject private var model = CaptureShortcutsModel()
+    @ObservedObject private var settings = LiveSettings.shared
     @State private var recordingKey: String?
 
     private var captureEnabled: Bool {
@@ -176,6 +177,10 @@ struct CaptureSettingsSection: View {
         } content: {
             if !captureEnabled {
                 captureDisabledNotice
+            }
+
+            SettingsCard(title: "SCREEN RECORDING") {
+                screenRecordingSettings
             }
 
             SettingsCard(title: "CAPTURE HUD") {
@@ -200,6 +205,77 @@ struct CaptureSettingsSection: View {
             }
         }
         .onAppear { model.reload() }
+    }
+
+    private var screenRecordingSettings: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                Text("QUALITY")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundColor(TalkieTheme.textTertiary)
+
+                HStack(spacing: Spacing.sm) {
+                    ForEach(ScreenRecordingQualityPreset.allCases, id: \.self) { preset in
+                        screenRecordingQualityButton(preset)
+                    }
+                }
+            }
+
+            Rectangle()
+                .fill(Design.divider)
+                .frame(height: 0.5)
+
+            SettingsToggleRow(
+                icon: "speaker.wave.2",
+                title: "System audio",
+                description: "Capture app and system audio in screen clips",
+                isOn: $settings.screenRecordingIncludesSystemAudio
+            )
+
+            SettingsToggleRow(
+                icon: "mic",
+                title: "Microphone",
+                description: "Add voiceover from the selected input device",
+                isOn: $settings.screenRecordingIncludesMicrophone
+            )
+
+            SettingsToggleRow(
+                icon: "video.circle",
+                title: "Camera bubble",
+                description: "Show the face camera bubble while screen recording",
+                isOn: $settings.screenRecordingShowsCameraBubble
+            )
+        }
+    }
+
+    private func screenRecordingQualityButton(_ preset: ScreenRecordingQualityPreset) -> some View {
+        let isSelected = settings.screenRecordingQualityPreset == preset
+
+        return Button {
+            settings.screenRecordingQualityPreset = preset
+        } label: {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(preset.label)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(isSelected ? TalkieTheme.textPrimary : TalkieTheme.textSecondary)
+
+                Text("\(preset.bitrateSummary) / \(preset.fpsSummary)")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(TalkieTheme.textTertiary)
+            }
+            .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+            .padding(.horizontal, Spacing.sm)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
+                    .fill(isSelected ? OpsTint.amber.color.opacity(0.14) : TalkieTheme.surfaceElevated.opacity(0.5))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
+                    .stroke(isSelected ? OpsTint.amber.color.opacity(0.35) : Design.divider, lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder

@@ -1,6 +1,6 @@
 # Talkie CLI
 
-Access Talkie voice memos, dictations, workflows, and search from the command line. Talkie is a voice-first productivity suite for macOS that stores recordings in a local SQLite database.
+Access Talkie voice memos, dictations, captures, workflows, and search from the command line. Talkie is a voice-first productivity suite for macOS that stores recordings in a local SQLite database and media files in Application Support.
 
 ## Setup
 
@@ -62,6 +62,28 @@ talkie search "email draft" --type dictation
 talkie search "project" --limit 5
 ```
 
+### captures — Screenshots and video captures
+
+```bash
+# List recent screenshots and video clips
+talkie captures
+
+# List only screen/video clips
+talkie captures --kind video
+
+# List only tray screenshots
+talkie captures --kind screenshot --source tray
+
+# Print paths for shell scripts and agents
+talkie captures --kind screenshot --limit 3 --path
+
+# Get one capture by ID prefix, filename, or absolute path
+talkie captures d9d3cc46
+
+# Include OCR text when available
+talkie captures d9d3cc46 --ocr
+```
+
 ### workflows — Workflow execution history
 
 ```bash
@@ -110,6 +132,7 @@ talkie search "meeting" --pretty
 
 - **Memos** have: id, title, text (transcript), duration, summary, tasks, source, createdAt
 - **Dictations** have: id, text, duration, source, metadata (target app), createdAt
+- **Captures** have: id, kind (screenshot/clip), source (recording/library/tray), absolute path, dimensions, app/window metadata, and recording link when attached
 - **Workflow runs** have: id, workflowName, status, steps with outputs, durationMs
 - **Search** uses SQLite FTS5 — matches across title, text, and notes fields
 

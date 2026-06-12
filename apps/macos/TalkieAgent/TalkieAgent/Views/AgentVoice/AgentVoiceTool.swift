@@ -24,6 +24,7 @@ private let log = Log(.workflow)
 private let allowedTalkieCliSubcommands: Set<String> = [
     "memos",
     "dictations",
+    "captures",
     "search",
     "workflows",
     "stats",
@@ -98,8 +99,8 @@ enum AgentVoiceToolCatalog {
                     "name": "talkie_cli",
                     "description": """
                     Run a read-only Talkie CLI command and return the JSON output. Use this to query the \
-                    user's voice memos, dictations, search results, workflow runs, and usage stats. Only \
-                    these subcommands are allowed: memos, dictations, search, workflows, stats. Output is \
+                    user's voice memos, dictations, captures, search results, workflow runs, and usage stats. Only \
+                    these subcommands are allowed: memos, dictations, captures, search, workflows, stats. Output is \
                     automatically requested in JSON; you don't need to add --json.
                     """,
                     "parameters": [
@@ -110,7 +111,7 @@ enum AgentVoiceToolCatalog {
                                 "items": ["type": "string"],
                                 "description": """
                                 Full argument list to pass after `talkie`. First element MUST be one of: \
-                                memos, dictations, search, workflows, stats. Examples: ['memos'], \
+                                memos, dictations, captures, search, workflows, stats. Examples: ['memos'], \
                                 ['search', 'bridge protocol'], ['memos', '--limit', '3'], ['stats'].
                                 """,
                             ],

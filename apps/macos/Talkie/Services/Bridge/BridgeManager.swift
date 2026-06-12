@@ -235,6 +235,47 @@ final class BridgeManager {
         #endif
     }
 
+    @discardableResult
+    private func validateBridgeResponse(
+        _ data: Data,
+        response: URLResponse,
+        url: URL,
+        endpoint: String
+    ) throws -> HTTPURLResponse {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw BridgeError.invalidResponse(endpoint: endpoint)
+        }
+
+        guard 200..<300 ~= httpResponse.statusCode else {
+            throw BridgeError.httpStatus(
+                code: httpResponse.statusCode,
+                endpoint: endpoint,
+                message: bridgeErrorMessage(from: data),
+                url: url
+            )
+        }
+
+        return httpResponse
+    }
+
+    private func bridgeErrorMessage(from data: Data) -> String {
+        if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            for key in ["error", "message", "detail"] {
+                if let value = object[key] as? String, !value.isEmpty {
+                    return value
+                }
+            }
+        }
+
+        if let body = String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !body.isEmpty {
+            return body
+        }
+
+        return "No response body"
+    }
+
     // Source code location for local TalkieServer tooling.
     private static var bridgeSourcePath: String {
         if let runtimePath = LocalCheckoutLocator
@@ -613,32 +654,28 @@ final class BridgeManager {
 
     func approvePairing(_ deviceId: String) async {
         do {
-            let (_, response, _) = try await bridgeRequest(path: "/pair/\(deviceId)/approve", method: "POST")
-            guard let httpResponse = response as? HTTPURLResponse,
-                  httpResponse.statusCode == 200 else {
-                throw BridgeError.requestFailed
-            }
+            let endpoint = "/pair/\(deviceId)/approve"
+            let (data, response, url) = try await bridgeRequest(path: endpoint, method: "POST")
+            try validateBridgeResponse(data, response: response, url: url, endpoint: endpoint)
 
             log.info("Approved pairing for device: \(deviceId)")
             await refreshPendingPairings()
             await refreshDevices()
         } catch {
-            log.error("Failed to approve pairing: \(error)")
+            log.error("Failed to approve pairing: \(error.localizedDescription)")
         }
     }
 
     func rejectPairing(_ deviceId: String) async {
         do {
-            let (_, response, _) = try await bridgeRequest(path: "/pair/\(deviceId)/reject", method: "POST")
-            guard let httpResponse = response as? HTTPURLResponse,
-                  httpResponse.statusCode == 200 else {
-                throw BridgeError.requestFailed
-            }
+            let endpoint = "/pair/\(deviceId)/reject"
+            let (data, response, url) = try await bridgeRequest(path: endpoint, method: "POST")
+            try validateBridgeResponse(data, response: response, url: url, endpoint: endpoint)
 
             log.info("Rejected pairing for device: \(deviceId)")
             await refreshPendingPairings()
         } catch {
-            log.error("Failed to reject pairing: \(error)")
+            log.error("Failed to reject pairing: \(error.localizedDescription)")
         }
     }
 
@@ -926,18 +963,19 @@ final class BridgeManager {
     private func refreshDevices() async {
         if bridgeStatus == .running {
             do {
-                let (data, _, _) = try await bridgeRequest(path: "/devices")
+                let (data, urlResponse, url) = try await bridgeRequest(path: "/devices")
+                try validateBridgeResponse(data, response: urlResponse, url: url, endpoint: "/devices")
                 logResponse(data, endpoint: "/devices")
 
                 struct DevicesResponse: Codable {
                     var devices: [PairedDevice]
                 }
 
-                let response = try JSONDecoder().decode(DevicesResponse.self, from: data)
-                pairedDevices = response.devices
+                let decoded = try JSONDecoder().decode(DevicesResponse.self, from: data)
+                pairedDevices = decoded.devices
                 return
             } catch {
-                log.error("Failed to refresh devices from bridge: \(error)")
+                log.error("Failed to refresh devices from bridge: \(error.localizedDescription)")
             }
         }
 
@@ -948,26 +986,38 @@ final class BridgeManager {
         guard bridgeStatus == .running else { return }
 
         do {
-            let (data, _, _) = try await bridgeRequest(path: "/pair/pending")
+            let (data, urlResponse, url) = try await bridgeRequest(path: "/pair/pending")
+            try validateBridgeResponse(data, response: urlResponse, url: url, endpoint: "/pair/pending")
             logResponse(data, endpoint: "/pair/pending")
 
-            struct PendingResponse: Codable {
+            struct PendingResponse: Decodable {
                 var pending: [PendingPairing]
+
+                private enum CodingKeys: String, CodingKey {
+                    case pending
+                }
+
+                init(from decoder: Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    pending = try container.decodeIfPresent([PendingPairing].self, forKey: .pending) ?? []
+                }
             }
 
-            let response = try JSONDecoder().decode(PendingResponse.self, from: data)
+            let decoded = try JSONDecoder().decode(PendingResponse.self, from: data)
             let previousNotifiedIDs = notifiedPendingPairingIDs
-            pendingPairings = response.pending
+            pendingPairings = decoded.pending
             lastBackgroundPairingRefreshAt = Date()
-            let pendingIDs = Set(response.pending.map(\.deviceId))
+            let pendingIDs = Set(decoded.pending.map(\.deviceId))
             notifiedPendingPairingIDs.formIntersection(pendingIDs)
 
-            for pairing in response.pending where !previousNotifiedIDs.contains(pairing.deviceId) {
+            for pairing in decoded.pending where !previousNotifiedIDs.contains(pairing.deviceId) {
                 notifyPendingPairing(pairing)
                 notifiedPendingPairingIDs.insert(pairing.deviceId)
             }
         } catch {
-            log.error("Failed to refresh pending pairings: \(error)")
+            pendingPairings = []
+            notifiedPendingPairingIDs.removeAll()
+            log.error("Failed to refresh pending pairings: \(error.localizedDescription)")
         }
     }
 
@@ -997,7 +1047,8 @@ final class BridgeManager {
         }
 
         do {
-            let (data, _, _) = try await bridgeRequest(path: "/pair/info")
+            let (data, response, url) = try await bridgeRequest(path: "/pair/info")
+            try validateBridgeResponse(data, response: response, url: url, endpoint: "/pair/info")
             logResponse(data, endpoint: "/pair/info")
             let decoded = try JSONDecoder().decode(QRData.self, from: data)
             qrData = decoded
@@ -1006,7 +1057,7 @@ final class BridgeManager {
             }
         } catch {
             qrData = nil
-            log.error("Failed to fetch QR data: \(error)")
+            log.error("Failed to fetch QR data: \(error.localizedDescription)")
         }
     }
 
@@ -1284,7 +1335,20 @@ final class BridgeManager {
         refreshTimer = nil
     }
 
-    enum BridgeError: Error {
+    enum BridgeError: Error, LocalizedError {
         case requestFailed
+        case invalidResponse(endpoint: String)
+        case httpStatus(code: Int, endpoint: String, message: String, url: URL)
+
+        var errorDescription: String? {
+            switch self {
+            case .requestFailed:
+                return "Bridge request failed"
+            case .invalidResponse(let endpoint):
+                return "Bridge \(endpoint) returned a non-HTTP response"
+            case .httpStatus(let code, let endpoint, let message, let url):
+                return "Bridge \(endpoint) returned HTTP \(code): \(message) (\(url.absoluteString))"
+            }
+        }
     }
 }

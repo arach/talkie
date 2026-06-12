@@ -9,7 +9,6 @@
 //
 
 import AppKit
-import AVFoundation
 import TalkieKit
 
 // MARK: - Tray Directory
@@ -180,7 +179,7 @@ final class ClipTray {
         appName: String? = nil,
         displayName: String? = nil,
         metadataEvents: [RecordingVisualContextEvent] = []
-    ) {
+    ) async {
         let itemId = UUID()
         var filename = CaptureFilenameFormatter.clipFilename(
             id: itemId,
@@ -207,6 +206,7 @@ final class ClipTray {
             return
         }
 
+        let displayThumbnail = await Self.generateThumbnail(for: destURL)
         let item = TrayClip(
             id: itemId,
             capturedAt: capturedAt,
@@ -218,36 +218,22 @@ final class ClipTray {
             windowTitle: windowTitle,
             appName: appName,
             displayName: displayName,
-            metadataEvents: metadataEvents
+            metadataEvents: metadataEvents,
+            thumbnail: displayThumbnail
         )
 
         items.append(item)
         saveManifest()
         Log(.system).info("Clip added to tray (\(count) total), \(durationMs)ms \(width)x\(height)")
-
-        // Generate thumbnail async
-        Task {
-            let thumb = await Self.generateThumbnail(for: destURL)
-            if let idx = self.items.firstIndex(where: { $0.id == itemId }) {
-                self.items[idx].thumbnail = thumb
-            }
-        }
     }
 
     /// Generate a first-frame thumbnail from a video URL.
     static func generateThumbnail(for url: URL, maxSize: CGFloat = 160) async -> NSImage? {
-        let asset = AVAsset(url: url)
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: maxSize, height: maxSize)
-
-        do {
-            let (cgImage, _) = try await generator.image(at: .zero)
-            return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
-        } catch {
-            Log(.system).debug("Failed to generate clip thumbnail: \(error)")
+        guard let thumbnail = await VideoFrameThumbnailer.thumbnailAsync(for: url, maxSize: maxSize) else {
+            Log(.system).debug("Failed to generate clip thumbnail for \(url.lastPathComponent)")
             return nil
         }
+        return thumbnail
     }
 
     // MARK: - Drain to Recording

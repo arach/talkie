@@ -9,13 +9,16 @@ import {
 } from "../format";
 import { parseSince, parseUntil } from "./shared";
 
-const HAS_FIELDS: Record<string, string> = {
-  screenshots: "screenshotsJSON IS NOT NULL",
-  summary: "summary IS NOT NULL AND summary != ''",
-  tasks: "tasks IS NOT NULL AND tasks != ''",
-  audio: "audioFileBookmark IS NOT NULL",
-  segments: "segmentsJSON IS NOT NULL",
-};
+const HAS_FIELDS = [
+  "screenshots",
+  "clips",
+  "videos",
+  "captures",
+  "summary",
+  "tasks",
+  "audio",
+  "segments",
+];
 
 const SORT_OPTIONS: Record<string, string> = {
   newest: "r.createdAt DESC",
@@ -29,7 +32,7 @@ interface FilterResult {
   params: unknown[];
 }
 
-function buildFilters(opts: Record<string, unknown>): FilterResult {
+function buildFilters(opts: Record<string, unknown>, columns: Set<string>): FilterResult {
   const clauses: string[] = [];
   const params: unknown[] = [];
 
@@ -63,14 +66,14 @@ function buildFilters(opts: Record<string, unknown>): FilterResult {
 
   if (opts.has) {
     const field = opts.has as string;
-    const condition = HAS_FIELDS[field];
+    const condition = hasFieldCondition(field, columns);
     if (!condition) {
       console.error(
-        `Unknown --has value: ${field}. Options: ${Object.keys(HAS_FIELDS).join(", ")}`
+        `Unknown --has value: ${field}. Options: ${HAS_FIELDS.join(", ")}`
       );
       process.exit(1);
     }
-    clauses.push(condition.replace(/\b(screenshotsJSON|summary|tasks|audioFileBookmark|segmentsJSON)\b/g, "r.$1"));
+    clauses.push(condition);
   }
 
   if (opts.longerThan) {
@@ -84,6 +87,52 @@ function buildFilters(opts: Record<string, unknown>): FilterResult {
   }
 
   return { clauses, params };
+}
+
+function hasFieldCondition(field: string, columns: Set<string>): string | null {
+  switch (field) {
+    case "screenshots":
+      return mediaCondition(columns, "screenshots");
+    case "clips":
+    case "videos":
+      return mediaCondition(columns, "clips");
+    case "captures": {
+      const screenshots = mediaCondition(columns, "screenshots");
+      const clips = mediaCondition(columns, "clips");
+      return `(${[screenshots, clips].filter(Boolean).join(" OR ")})`;
+    }
+    case "summary":
+      return columns.has("summary") ? "r.summary IS NOT NULL AND r.summary != ''" : "0";
+    case "tasks":
+      return columns.has("tasks") ? "r.tasks IS NOT NULL AND r.tasks != ''" : "0";
+    case "audio": {
+      const clauses: string[] = [];
+      if (columns.has("hasAudio")) clauses.push("r.hasAudio = 1");
+      if (columns.has("audioFilename")) clauses.push("r.audioFilename IS NOT NULL AND r.audioFilename != ''");
+      if (columns.has("audioFileBookmark")) clauses.push("r.audioFileBookmark IS NOT NULL AND r.audioFileBookmark != ''");
+      return clauses.length > 0 ? `(${clauses.join(" OR ")})` : "0";
+    }
+    case "segments": {
+      const clauses: string[] = [];
+      if (columns.has("assetsJSON")) {
+        clauses.push("json_valid(r.assetsJSON) AND json_type(r.assetsJSON, '$.segments') IS NOT NULL");
+      }
+      if (columns.has("segmentsJSON")) clauses.push("r.segmentsJSON IS NOT NULL");
+      return clauses.length > 0 ? `(${clauses.join(" OR ")})` : "0";
+    }
+    default:
+      return null;
+  }
+}
+
+function mediaCondition(columns: Set<string>, key: "screenshots" | "clips"): string {
+  const clauses: string[] = [];
+  if (columns.has("assetsJSON")) {
+    clauses.push(`json_valid(r.assetsJSON) AND json_array_length(json_extract(r.assetsJSON, '$.${key}')) > 0`);
+  }
+  const legacyColumn = key === "screenshots" ? "screenshotsJSON" : "clipsJSON";
+  if (columns.has(legacyColumn)) clauses.push(`r.${legacyColumn} IS NOT NULL`);
+  return clauses.length > 0 ? `(${clauses.join(" OR ")})` : "0";
 }
 
 function getOrderBy(sort: string | undefined, hasTextQuery: boolean): string {
@@ -134,7 +183,8 @@ function prettyPrint(rows: Record<string, unknown>[], query?: string): void {
 
     // Feature indicators
     const features: string[] = [];
-    if (row.screenshotsJSON) features.push("📷");
+    if (rowHasAsset(row, "screenshots")) features.push("📷");
+    if (rowHasAsset(row, "clips")) features.push("🎞");
     if (row.summary) features.push("📝");
     if (row.tasks) features.push("✅");
     if (row.segmentsJSON) features.push("⏱");
@@ -155,6 +205,22 @@ function prettyPrint(rows: Record<string, unknown>[], query?: string): void {
   }
 }
 
+function rowHasAsset(row: Record<string, unknown>, key: "screenshots" | "clips"): boolean {
+  const legacyColumn = key === "screenshots" ? "screenshotsJSON" : "clipsJSON";
+  if (row[legacyColumn]) return true;
+  if (typeof row.assetsJSON !== "string") return false;
+  try {
+    const assets = JSON.parse(row.assetsJSON);
+    return Array.isArray(assets?.[key]) && assets[key].length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function prefixedColumns(columns: Set<string>, names: string[]): string[] {
+  return names.filter((name) => columns.has(name)).map((name) => `r.${name}`);
+}
+
 export function registerSearchCommand(program: Command): void {
   program
     .command("search [query]")
@@ -165,7 +231,7 @@ export function registerSearchCommand(program: Command): void {
     .option("--until <date>", "created before date")
     .option("--app <name>", "filter by app name or bundle ID")
     .option("--source <src>", "filter by source (mac, iphone, watch, live)")
-    .option("--has <field>", "has data: screenshots, summary, tasks, audio, segments")
+    .option("--has <field>", "has data: screenshots, clips, videos, captures, summary, tasks, audio, segments")
     .option("--longer-than <seconds>", "minimum duration in seconds")
     .option("--shorter-than <seconds>", "maximum duration in seconds")
     .option("--sort <order>", "sort: newest, oldest, longest, shortest, relevance")
@@ -174,6 +240,10 @@ export function registerSearchCommand(program: Command): void {
       const db = getDb(globalOpts.db);
       const fmt = getFormatOptions(globalOpts);
       const limit = parseInt(opts.limit, 10);
+      const columns = new Set(
+        (db.prepare("PRAGMA table_info(recordings)").all() as Array<{ name: string }>)
+          .map((row) => row.name)
+      );
 
       if (!query && !opts.type && !opts.since && !opts.until && !opts.app &&
           !opts.source && !opts.has && !opts.longerThan && !opts.shorterThan) {
@@ -181,11 +251,25 @@ export function registerSearchCommand(program: Command): void {
         process.exit(1);
       }
 
-      const { clauses, params } = buildFilters(opts);
+      const { clauses, params } = buildFilters(opts, columns);
       let rows: Record<string, unknown>[];
 
-      const selectCols = `r.id, r.type, r.title, r.text, r.createdAt, r.duration,
-                 r.source, r.metadataJSON, r.screenshotsJSON, r.summary, r.tasks, r.segmentsJSON`;
+      const selectCols = prefixedColumns(columns, [
+        "id",
+        "type",
+        "title",
+        "text",
+        "createdAt",
+        "duration",
+        "source",
+        "metadataJSON",
+        "assetsJSON",
+        "screenshotsJSON",
+        "clipsJSON",
+        "summary",
+        "tasks",
+        "segmentsJSON",
+      ]).join(", ");
 
       if (query) {
         // FTS path

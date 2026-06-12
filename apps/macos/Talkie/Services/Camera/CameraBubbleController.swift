@@ -179,7 +179,7 @@ final class CameraBubbleController {
             let capture = CameraCaptureService.shared
 
             // Add to buffer with actual recorded dimensions
-            ClipTray.shared.add(
+            await ClipTray.shared.add(
                 tempURL: url,
                 durationMs: durationMs,
                 width: capture.cameraWidth > 0 ? capture.cameraWidth : 1280,

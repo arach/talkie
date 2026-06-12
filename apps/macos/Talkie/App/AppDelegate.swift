@@ -2523,6 +2523,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         }
         CapturePerformanceMonitor.shared.mark("tray.add.complete")
         ScreenshotPreviewPanel.shared.attachFileURL(latestItem.tempURL, to: previewID)
+        ScreenRecordingController.shared.recordScreenshotHighlight(
+            capturedAt: result.capturedAt,
+            filename: latestItem.filename,
+            captureMode: mode.rawValue,
+            width: result.width,
+            height: result.height,
+            windowTitle: result.windowTitle,
+            appName: result.appName,
+            appBundleID: result.appBundleID,
+            displayName: result.displayName
+        )
         TrayActionService.shared.persistStandaloneScreenshotToLibrary(latestItem)
         return true
     }
