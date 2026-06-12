@@ -182,6 +182,19 @@ public struct ScopeLibraryRow: View {
                 let mode = shot.captureMode.capitalized
                 return "\(mode) capture"
             }
+            if let clip = recording.clips.first {
+                if let app = clip.appName, !app.isEmpty {
+                    return "\(app) capture"
+                }
+                let mode = (clip.captureMode ?? "video").capitalized
+                return "\(mode) capture"
+            }
+            if let context = recording.visualContexts.first {
+                if let app = context.appName, !app.isEmpty {
+                    return "\(app) capture"
+                }
+                return "\(context.captureMode.capitalized) capture"
+            }
         }
 
         // Text-bearing items: first sentence reads better than the dumb
@@ -273,6 +286,10 @@ public struct ScopeLibraryRow: View {
                 )
                 .frame(width: 26, alignment: .leading)
 
+                if hasVisualPreview {
+                    ScopeLibraryMediaThumbnail(recording: recording, isSelected: isSelected)
+                }
+
                 // Title + chrome
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
@@ -356,19 +373,130 @@ public struct ScopeLibraryRow: View {
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .contentShape(Rectangle())
-        .modifier(CaptureRowDragModifier(fileURL: primaryScreenshotURL))
+        .modifier(CaptureRowDragModifier(fileURL: primaryMediaURL))
     }
 
     private var timeAgo: String {
         ScopeLibraryRelativeTime.label(for: recording.createdAt).uppercased()
     }
 
-    /// First screenshot file on disk, if any. Captures (and notes / memos
-    /// with an image attached) drag as the file URL so the receiver sees
-    /// a real image, not bitmap data. nil for audio-only rows.
-    private var primaryScreenshotURL: URL? {
-        guard let filename = recording.screenshots.first?.filename else { return nil }
-        return ScreenshotStorage.screenshotsDirectory.appendingPathComponent(filename)
+    /// First visual media file on disk, if any. Captures (and notes /
+    /// memos with media attached) drag as the file URL so the receiver
+    /// sees a real file, not bitmap data. nil for audio/text-only rows.
+    private var primaryMediaURL: URL? {
+        CaptureMediaFileResolver.primaryMedia(for: recording)?.url
+    }
+
+    private var hasVisualPreview: Bool {
+        CaptureMediaFileResolver.primaryMedia(for: recording) != nil
+    }
+}
+
+private struct ScopeLibraryMediaThumbnail: View {
+    let recording: TalkieObject
+    let isSelected: Bool
+
+    @State private var image: NSImage?
+
+    private var media: CaptureMediaAsset? {
+        CaptureMediaFileResolver.primaryMedia(for: recording)
+    }
+
+    private var taskID: String {
+        media?.url.path ?? recording.id.uuidString
+    }
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(ScopeCanvas.surface)
+
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 36, height: 28)
+                    .clipped()
+            } else {
+                Image(systemName: media?.isVideo == true ? "play.rectangle" : "photo")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(ScopeInk.faint)
+            }
+
+            if media?.isVideo == true {
+                Circle()
+                    .fill(.black.opacity(0.45))
+                    .frame(width: 14, height: 14)
+                    .overlay(
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 6.5, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.92))
+                            .offset(x: 0.5)
+                    )
+            }
+        }
+        .frame(width: 36, height: 28)
+        .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .strokeBorder(isSelected ? ScopeAmber.solid.opacity(0.45) : ScopeEdge.normal, lineWidth: 0.5)
+        )
+        .shadow(color: ScopeInk.primary.opacity(isSelected ? 0.12 : 0.06), radius: 2, y: 1)
+        .task(id: taskID) {
+            await loadThumbnail()
+        }
+        .onDisappear {
+            image = nil
+        }
+    }
+
+    private func loadThumbnail() async {
+        guard let media else {
+            await MainActor.run { image = nil }
+            return
+        }
+
+        let cacheKey = media.url.path
+        if let cached = ScopeLibraryThumbnailCache.image(for: cacheKey) {
+            await MainActor.run { image = cached }
+            return
+        }
+
+        let thumbnail: NSImage?
+        switch media {
+        case .image(let url):
+            let data = await Task.detached(priority: .utility) {
+                try? Data(contentsOf: url)
+            }.value
+            thumbnail = data.flatMap(NSImage.init(data:))
+        case .video(let url):
+            thumbnail = await VideoFrameThumbnailer.thumbnailAsync(for: url, maxSize: 96)
+        }
+
+        guard !Task.isCancelled else { return }
+        if let thumbnail {
+            ScopeLibraryThumbnailCache.set(thumbnail, for: cacheKey)
+        }
+        await MainActor.run {
+            image = thumbnail
+        }
+    }
+}
+
+@MainActor
+private enum ScopeLibraryThumbnailCache {
+    private static let images: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 160
+        return cache
+    }()
+
+    static func image(for key: String) -> NSImage? {
+        images.object(forKey: key as NSString)
+    }
+
+    static func set(_ image: NSImage, for key: String) {
+        images.setObject(image, forKey: key as NSString)
     }
 }
 

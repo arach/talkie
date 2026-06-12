@@ -208,9 +208,19 @@ final class AgentController: ObservableObject {
             FloatingPillController.shared.state = newState
             FloatingPillController.shared.elapsedTime = elapsed
 
-            // Update recording overlay state (top overlay)
+            // Update live overlays directly so recording affordances appear
+            // in the same turn as the state transition. AppDelegate also
+            // observes state for menu/chrome coordination, but this path is
+            // the latency-sensitive one.
             RecordingOverlayController.shared.state = newState
             RecordingOverlayController.shared.elapsedTime = elapsed
+            let notchActive = NotchInfo.detect().hasNotch && LiveSettings.shared.notchOverlayEnabled
+            if notchActive {
+                NotchOverlayController.shared.updateState(newState)
+                RecordingOverlayController.shared.hide()
+            } else {
+                RecordingOverlayController.shared.updateState(newState)
+            }
 
             // Stop elapsed time timer when no longer actively recording
             if newState != .listening {
@@ -1449,6 +1459,7 @@ final class AgentController: ObservableObject {
                 // Update local overlays
                 FloatingPillController.shared.elapsedTime = elapsed
                 RecordingOverlayController.shared.elapsedTime = elapsed
+                NotchOverlayController.shared.elapsedTime = elapsed
             }
         }
     }
