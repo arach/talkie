@@ -881,13 +881,15 @@ final class AudioCaptureService: AgentAudioCapture {
             switch bindingResult {
             case .ready:
                 break
-            case .changed:
-                log.debug("Waiting for input device binding to settle", detail: "\(Int(self.deviceReconfigurationSettleDelay * 1000))ms")
-                Thread.sleep(forTimeInterval: self.deviceReconfigurationSettleDelay)
-                guard self.captureToken == token else {
-                    log.debug("Audio setup cancelled after device binding settle - token mismatch")
-                    newEngine.stop()
-                    return
+            case .changed(let requiresSettle):
+                if requiresSettle {
+                    log.debug("Waiting for input device binding to settle", detail: "\(Int(self.deviceReconfigurationSettleDelay * 1000))ms")
+                    Thread.sleep(forTimeInterval: self.deviceReconfigurationSettleDelay)
+                    guard self.captureToken == token else {
+                        log.debug("Audio setup cancelled after device binding settle - token mismatch")
+                        newEngine.stop()
+                        return
+                    }
                 }
             case .failed:
                 DispatchQueue.main.async { [weak self] in
@@ -1439,7 +1441,7 @@ final class AudioCaptureService: AgentAudioCapture {
 
     private enum InputDeviceBindingResult {
         case ready
-        case changed
+        case changed(requiresSettle: Bool)
         case failed
     }
 
@@ -1470,8 +1472,10 @@ final class AudioCaptureService: AgentAudioCapture {
             return .ready
         }
 
-        if isDefaultInputAggregate(currentDeviceID, name: currentName),
-           defaultInputMatches(selection) {
+        let bindingDefaultAggregate = isDefaultInputAggregate(currentDeviceID, name: currentName)
+            && defaultInputMatches(selection)
+
+        if bindingDefaultAggregate {
             log.info(
                 "🎤 Engine using device: \(currentName) (ID: \(currentDeviceID))",
                 detail: "default aggregate routes to \(selection.name); binding concrete device"
@@ -1500,7 +1504,7 @@ final class AudioCaptureService: AgentAudioCapture {
 
         guard let verifiedDeviceID = currentInputDeviceID(for: audioUnit) else {
             log.warning("Selected microphone bound but could not verify", detail: selection.name)
-            return .changed
+            return .changed(requiresSettle: true)
         }
 
         let verifiedName = getDeviceName(verifiedDeviceID) ?? "unknown"
@@ -1509,7 +1513,7 @@ final class AudioCaptureService: AgentAudioCapture {
             "🎤 Engine using device: \(verifiedName) (ID: \(verifiedDeviceID))",
             detail: matches ? "✅ bound selected microphone" : "⚠️ still mismatch with \(selection.name)"
         )
-        return matches ? .changed : .failed
+        return matches ? .changed(requiresSettle: !bindingDefaultAggregate) : .failed
     }
 
     private func isDefaultInputAggregate(_ deviceID: AudioDeviceID, name: String) -> Bool {
