@@ -23,6 +23,21 @@ import TalkieKit
 
 // Capture typography routed through ScopeType — see TalkieKit/UI/ScopeDesign.swift.
 
+private enum CapturePreviewMedia {
+    case image(URL)
+    case video(URL, CGFloat)
+    case unavailable
+
+    var url: URL? {
+        switch self {
+        case .image(let url), .video(let url, _):
+            return url
+        case .unavailable:
+            return nil
+        }
+    }
+}
+
 // MARK: - View
 
 struct ScopeCaptureDetailView: View {
@@ -62,16 +77,92 @@ struct ScopeCaptureDetailView: View {
         capture.screenshots.first
     }
 
+    private var primaryClip: RecordingClip? {
+        capture.clips.first
+    }
+
+    private var primaryVisualContext: RecordingVisualContext? {
+        capture.visualContexts.first
+    }
+
     private var imageURL: URL? {
         guard let filename = primaryShot?.filename else { return nil }
-        return ScreenshotStorage.screenshotsDirectory.appendingPathComponent(filename)
+        return existingFileURL(
+            filename: filename,
+            searchDirectories: [
+                ScreenshotStorage.screenshotsDirectory,
+                trayScreenshotsDirectory,
+                appSupportTalkieDirectory,
+                applicationSupportDirectory,
+            ]
+        )
+    }
+
+    private var videoURL: URL? {
+        if let clip = primaryClip,
+           let url = existingFileURL(
+                filename: clip.filename,
+                searchDirectories: [
+                    VideoClipStorage.videosDirectory,
+                    trayClipsDirectory,
+                    appSupportTalkieDirectory,
+                    applicationSupportDirectory,
+                ]
+           ) {
+            return url
+        }
+
+        guard let visualContext = primaryVisualContext else { return nil }
+        let bundleURL = VisualContextStorage.bundleURL(for: visualContext)
+        let sourceURL = bundleURL.appendingPathComponent(visualContext.sourceClipFilename)
+        if FileManager.default.fileExists(atPath: sourceURL.path) { return sourceURL }
+
+        return existingFileURL(
+            filename: visualContext.sourceClipFilename,
+            searchDirectories: [
+                bundleURL,
+                VideoClipStorage.videosDirectory,
+                trayClipsDirectory,
+                appSupportTalkieDirectory,
+                applicationSupportDirectory,
+            ]
+        )
+    }
+
+    private var visualContextContactSheetURL: URL? {
+        guard let visualContext = primaryVisualContext,
+              let filename = visualContext.contactSheetFilename else { return nil }
+        let bundleURL = VisualContextStorage.bundleURL(for: visualContext)
+        return existingFileURL(
+            filename: filename,
+            searchDirectories: [
+                bundleURL,
+                appSupportTalkieDirectory,
+                applicationSupportDirectory,
+            ]
+        )
+    }
+
+    private var primaryPreviewMedia: CapturePreviewMedia {
+        if let imageURL { return .image(imageURL) }
+        if let videoURL { return .video(videoURL, mediaAspectRatio) }
+        if let contactSheetURL = visualContextContactSheetURL { return .image(contactSheetURL) }
+        return .unavailable
+    }
+
+    private var primaryMediaURL: URL? {
+        primaryPreviewMedia.url
+    }
+
+    private var hasVisualMedia: Bool {
+        primaryShot != nil || primaryClip != nil || primaryVisualContext != nil
     }
 
     /// True when this capture is a text passage (Quick Selection) rather
     /// than a screenshot. Drives the hero branch.
     private var isTextCapture: Bool {
         if capture.type == .selection { return true }
-        if primaryShot == nil, let text = capture.text, !text.isEmpty { return true }
+        if !hasVisualMedia, let text = capture.text, !text.isEmpty { return true }
         return false
     }
 
@@ -79,8 +170,17 @@ struct ScopeCaptureDetailView: View {
         if isTextCapture {
             return "Quick Selection · text"
         }
-        let mode = primaryShot?.captureMode ?? "screenshot"
-        return "Hyper+S · \(mode)"
+        if let shot = primaryShot {
+            return "Hyper+S · \(shot.captureMode)"
+        }
+        if let clip = primaryClip {
+            let mode = clip.captureMode ?? "clip"
+            return "Capture · \(mode) video"
+        }
+        if let visualContext = primaryVisualContext {
+            return "Capture · \(visualContext.captureMode) video"
+        }
+        return "Capture · media"
     }
 
     private var channelLabel: String {
@@ -88,12 +188,27 @@ struct ScopeCaptureDetailView: View {
     }
 
     private var dimensions: String {
-        guard let w = primaryShot?.width, let h = primaryShot?.height else { return "—" }
+        guard let w = mediaWidth, let h = mediaHeight else { return "—" }
         return "\(w) × \(h)"
     }
 
+    private var mediaWidth: Int? {
+        primaryShot?.width ?? primaryClip?.width ?? primaryVisualContext?.width
+    }
+
+    private var mediaHeight: Int? {
+        primaryShot?.height ?? primaryClip?.height ?? primaryVisualContext?.height
+    }
+
+    private var mediaAspectRatio: CGFloat {
+        guard let width = mediaWidth, let height = mediaHeight, width > 0, height > 0 else {
+            return 16.0 / 10.0
+        }
+        return CGFloat(width) / CGFloat(height)
+    }
+
     private var fileSize: String {
-        guard let url = imageURL,
+        guard let url = primaryMediaURL,
               let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
               let bytes = attrs[.size] as? Int else { return "—" }
         return formatBytes(bytes)
@@ -114,13 +229,21 @@ struct ScopeCaptureDetailView: View {
     }
 
     private var filename: String {
-        primaryShot?.filename ?? (isTextCapture ? "selection" : "capture")
+        if let url = primaryMediaURL { return url.lastPathComponent }
+        return primaryShot?.filename
+            ?? primaryClip?.filename
+            ?? primaryVisualContext?.sourceClipFilename
+            ?? (isTextCapture ? "selection" : "capture")
     }
 
     private var derivedCaption: String? {
         // For now derive from window title or app name; OCR not yet wired.
         if let t = primaryShot?.windowTitle, !t.isEmpty { return t }
         if let a = primaryShot?.appName, !a.isEmpty { return "From \(a)" }
+        if let t = primaryClip?.windowTitle, !t.isEmpty { return t }
+        if let a = primaryClip?.appName, !a.isEmpty { return "From \(a)" }
+        if let t = primaryVisualContext?.windowTitle, !t.isEmpty { return t }
+        if let a = primaryVisualContext?.appName, !a.isEmpty { return "From \(a)" }
         return nil
     }
 
@@ -135,7 +258,7 @@ struct ScopeCaptureDetailView: View {
     // MARK: - Sections
 
     private func openInDefault() {
-        guard let url = imageURL else { return }
+        guard let url = primaryMediaURL else { return }
         NSWorkspace.shared.open(url)
     }
 
@@ -197,7 +320,7 @@ struct ScopeCaptureDetailView: View {
                 if isTextCapture {
                     textPassageHero
                 } else {
-                    heroImage
+                    heroMedia
                 }
             }
             .padding(.top, 20)
@@ -247,7 +370,8 @@ struct ScopeCaptureDetailView: View {
     private var bylineTextCapture: String {
         let words = capture.wordCount
         var parts = ["\(words) word\(words == 1 ? "" : "s")"]
-        if let appName = primaryShot?.appName, !appName.isEmpty {
+        if let appName = primaryShot?.appName ?? primaryClip?.appName ?? primaryVisualContext?.appName,
+           !appName.isEmpty {
             parts.append("from \(appName)")
         }
         parts.append("captured \(dateLabel.lowercased())")
@@ -299,41 +423,57 @@ struct ScopeCaptureDetailView: View {
     }
 
     @ViewBuilder
-    private var heroImage: some View {
-        if let url = imageURL, let nsImage = NSImage(contentsOf: url) {
-            Image(nsImage: nsImage)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(maxWidth: .infinity)
-                .background(
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(ThemedScopeCanvas.surface)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(ThemedScopeEdge.faint, lineWidth: 0.5)
-                )
-                .shadow(color: Color(red: 46/255, green: 68/255, blue: 82/255).opacity(0.10), radius: 12, y: 6)
-                // Drag the screenshot file out to other apps (Slack /
-                // Messages / Finder). Pasteboard carries the on-disk URL
-                // so receivers treat it as a real file, not bitmap data.
+    private var heroMedia: some View {
+        switch primaryPreviewMedia {
+        case .image(let url):
+            if let nsImage = NSImage(contentsOf: url) {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(ThemedScopeCanvas.surface)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(ThemedScopeEdge.faint, lineWidth: 0.5)
+                    )
+                    .shadow(
+                        color: Color(red: 46/255, green: 68/255, blue: 82/255).opacity(0.10),
+                        radius: 12,
+                        y: 6
+                    )
+                    // Drag the media file out to other apps (Slack /
+                    // Messages / Finder). Pasteboard carries the on-disk URL
+                    // so receivers treat it as a real file, not bitmap data.
+                    .onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider() }
+            } else {
+                unavailableMediaHero
+            }
+        case .video(let url, let aspectRatio):
+            CaptureVideoHero(url: url, aspectRatio: aspectRatio)
                 .onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider() }
-        } else {
-            // Placeholder mat when image isn't available — cool checker
-            Rectangle()
-                .fill(ThemedScopeCanvas.surface)
-                .aspectRatio(16/10, contentMode: .fit)
-                .frame(maxWidth: .infinity)
-                .overlay(
-                    Text("(image unavailable)")
-                        .font(ScopeType.displayItalic(size: 12))
-                        .foregroundStyle(ThemedScopeInk.subtle)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(ThemedScopeEdge.faint, lineWidth: 0.5)
-                )
+        case .unavailable:
+            unavailableMediaHero
         }
+    }
+
+    private var unavailableMediaHero: some View {
+        // Placeholder mat when media isn't available.
+        Rectangle()
+            .fill(ThemedScopeCanvas.surface)
+            .aspectRatio(16/10, contentMode: .fit)
+            .frame(maxWidth: .infinity)
+            .overlay(
+                Text("(media unavailable)")
+                    .font(ScopeType.displayItalic(size: 12))
+                    .foregroundStyle(ThemedScopeInk.subtle)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(ThemedScopeEdge.faint, lineWidth: 0.5)
+            )
     }
 
     @ViewBuilder
@@ -478,25 +618,38 @@ struct ScopeCaptureDetailView: View {
     // MARK: - Actions
 
     private func openMarkup() {
-        guard let url = imageURL else { return }
+        guard case .image(let url) = primaryPreviewMedia else { return }
         markupURL = url
     }
 
     private func copyCapture() {
-        guard let url = imageURL,
-              let image = NSImage(contentsOf: url) else { return }
+        if isTextCapture, let text = capture.text, !text.isEmpty {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            return
+        }
+
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.writeObjects([image])
+        switch primaryPreviewMedia {
+        case .image(let url):
+            if let image = NSImage(contentsOf: url) {
+                NSPasteboard.general.writeObjects([image])
+            }
+        case .video(let url, _):
+            NSPasteboard.general.writeObjects([url as NSURL])
+        case .unavailable:
+            break
+        }
     }
 
     private func revealInFinder() {
-        guard let url = imageURL else { return }
+        guard let url = primaryMediaURL else { return }
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
     private func shareCapture() {
         let items: [Any]
-        if let url = imageURL {
+        if let url = primaryMediaURL {
             items = [url]
         } else if let text = capture.text, !text.isEmpty {
             items = [text]
@@ -544,6 +697,91 @@ struct ScopeCaptureDetailView: View {
         formatter.allowedUnits = [.useKB, .useMB]
         formatter.countStyle = .file
         return formatter.string(fromByteCount: Int64(bytes))
+    }
+
+    private var applicationSupportDirectory: URL {
+        FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    }
+
+    private var appSupportTalkieDirectory: URL {
+        applicationSupportDirectory
+            .appending(path: "Talkie", directoryHint: .isDirectory)
+    }
+
+    private var trayScreenshotsDirectory: URL {
+        appSupportTalkieDirectory
+            .appending(path: "Tray", directoryHint: .isDirectory)
+            .appending(path: "screenshots", directoryHint: .isDirectory)
+    }
+
+    private var trayClipsDirectory: URL {
+        appSupportTalkieDirectory
+            .appending(path: "Tray", directoryHint: .isDirectory)
+            .appending(path: "clips", directoryHint: .isDirectory)
+    }
+
+    private func existingFileURL(filename: String, searchDirectories: [URL]) -> URL? {
+        let fileManager = FileManager.default
+        let expandedFilename = (filename as NSString).expandingTildeInPath
+        let absoluteURL = URL(fileURLWithPath: expandedFilename)
+
+        if expandedFilename.hasPrefix("/"),
+           fileManager.fileExists(atPath: absoluteURL.path) {
+            return absoluteURL
+        }
+
+        let pathComponents = filename
+            .split(separator: "/")
+            .map(String.init)
+            .filter { !$0.isEmpty && $0 != "." && $0 != ".." }
+
+        var candidates: [URL] = []
+        if !pathComponents.isEmpty {
+            candidates += searchDirectories.map { directory in
+                pathComponents.reduce(directory) { partial, component in
+                    partial.appending(path: component)
+                }
+            }
+
+            if let lastComponent = pathComponents.last {
+                candidates += searchDirectories.map { directory in
+                    directory.appending(path: lastComponent)
+                }
+            }
+        }
+
+        return candidates.first { url in
+            var isDirectory: ObjCBool = false
+            return fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory)
+                && !isDirectory.boolValue
+        }
+    }
+}
+
+private struct CaptureVideoHero: View {
+    let url: URL
+    let aspectRatio: CGFloat
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(ThemedScopeCanvas.surface)
+            InlineClipPlayer(url: url)
+                .id(url)
+        }
+        .aspectRatio(aspectRatio, contentMode: .fit)
+        .frame(maxWidth: .infinity)
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .overlay(
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(ThemedScopeEdge.faint, lineWidth: 0.5)
+        )
+        .shadow(
+            color: Color(red: 46/255, green: 68/255, blue: 82/255).opacity(0.10),
+            radius: 12,
+            y: 6
+        )
     }
 }
 
