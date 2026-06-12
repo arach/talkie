@@ -156,6 +156,7 @@ final class AudioCaptureService: AgentAudioCapture {
     private var retryCount = 0
     private var bufferCount = 0
     private var fileCreated = false
+    private var fallbackCaptureSession: FallbackCaptureSession?
 
     /// Performance trace for the current capture session
     /// Set by AgentController to enable "time to first audio" tracking
@@ -165,7 +166,6 @@ final class AudioCaptureService: AgentAudioCapture {
     /// Used for fallback-device recovery and pathological slow-start recovery.
     private var rebootAfterRecording = false
     private var rebootAfterRecordingReason: String?
-    private var usedFallbackMic = false
 
     // MARK: - Silence Detection (inlined)
 
@@ -184,6 +184,7 @@ final class AudioCaptureService: AgentAudioCapture {
     private var recordingStartTime: CFTimeInterval = 0
     private var lastSuccessfulRecordingTime: CFTimeInterval = 0
     private var halSetupEnteredQueue = false
+    private let deviceReconfigurationSettleDelay: TimeInterval = 0.65
 
     /// Dynamic timeout based on HAL health
     private var firstBufferTimeout: TimeInterval {
@@ -308,6 +309,8 @@ final class AudioCaptureService: AgentAudioCapture {
             return
         }
 
+        fallbackCaptureSession = nil
+
         if state == .cold {
             // Cold start: need async warmUp, then start capture
             Task { @MainActor [weak self] in
@@ -422,6 +425,7 @@ final class AudioCaptureService: AgentAudioCapture {
         guard state == .recording else {
             if wasStarting {
                 log.info("Cancelled pending audio setup")
+                finishFallbackCaptureSession()
                 // Signal immediately so AgentController doesn't wait for timeout
                 onCaptureErrorCallback?("Recording cancelled (setup incomplete)")
             } else {
@@ -431,6 +435,7 @@ final class AudioCaptureService: AgentAudioCapture {
         }
 
         let stopStart = CACurrentMediaTime()
+        var completedRecording = false
 
         func logTiming(_ step: String) {
             let ms = Int((CACurrentMediaTime() - stopStart) * 1000)
@@ -470,6 +475,7 @@ final class AudioCaptureService: AgentAudioCapture {
                 log.info("Recording complete",
                          detail: "\(segmentInfo)\(result.bufferCount) buffers, \(result.fileSize) bytes in \(totalMs)ms")
 
+                completedRecording = true
                 if segmentPaths.isEmpty {
                     onChunk?([result.url.path])
                 } else {
@@ -514,13 +520,14 @@ final class AudioCaptureService: AgentAudioCapture {
         voiceForegroundProcessor.reset()
         logTiming("cleanup done")
 
-        // If we fell back to system default mic due to HAL 'nope', reboot now
-        // This restores the configured mic for the next recording
+        finishFallbackCaptureSession(schedulePostRecordingReboot: completedRecording)
+
+        // If HAL was degraded or fallback recovery was needed, reboot now that
+        // the recording is finished. Device defaults are restored separately.
         if rebootAfterRecording {
             rebootAfterRecording = false
             let rebootReason = rebootAfterRecordingReason ?? "Audio recovery"
             rebootAfterRecordingReason = nil
-            usedFallbackMic = false
             lastPostRecordingRebootTime = CACurrentMediaTime()
             log.info("🔄 Rebooting audio system after recording", detail: rebootReason)
             Task {
@@ -577,11 +584,11 @@ final class AudioCaptureService: AgentAudioCapture {
 
         isRecordingActive = false
         retireEngine()
+        finishFallbackCaptureSession()
         // On full teardown, clear retired engines too (service is shutting down)
         retiredEngines.removeAll()
         rebootAfterRecording = false
         rebootAfterRecordingReason = nil
-        usedFallbackMic = false
         voiceForegroundingEnabledForSession = false
         voiceForegroundProcessor.reset()
         state = .cold
@@ -646,7 +653,10 @@ final class AudioCaptureService: AgentAudioCapture {
 
     // MARK: - Private Implementation
 
-    private func startCaptureWithStability(isRetry: Bool = false) {
+    private func startCaptureWithStability(
+        isRetry: Bool = false,
+        overrideDeviceSelection: DeviceSelection? = nil
+    ) {
         let token = UUID()
         captureToken = token
         if !isRetry {
@@ -654,10 +664,14 @@ final class AudioCaptureService: AgentAudioCapture {
         }
 
         // Call directly — callers are already on MainActor
-        doStartCapture(isRetry: isRetry, token: token)
+        doStartCapture(isRetry: isRetry, token: token, overrideDeviceSelection: overrideDeviceSelection)
     }
 
-    private func doStartCapture(isRetry: Bool, token: UUID) {
+    private func doStartCapture(
+        isRetry: Bool,
+        token: UUID,
+        overrideDeviceSelection: DeviceSelection? = nil
+    ) {
         // Safe to release engines from previous recordings — their IO threads
         // have had ample time to exit (at minimum the full device stability wait).
         drainRetiredEngines()
@@ -671,7 +685,12 @@ final class AudioCaptureService: AgentAudioCapture {
         }
 
         if isRetry {
-            log.info("Retrying audio capture after no-buffer start")
+            if let fallbackCaptureSession {
+                log.info("Retrying audio capture with fallback microphone",
+                         detail: fallbackCaptureSession.selection.name)
+            } else {
+                log.info("Retrying audio capture after no-buffer start")
+            }
         }
 
         #if DEBUG
@@ -697,14 +716,29 @@ final class AudioCaptureService: AgentAudioCapture {
 
         // Resolve device selection (lightweight - just reads settings)
         let deviceSelection: DeviceSelection
-        switch resolveDevice() {
-        case .selection(let selection):
-            deviceSelection = selection
-        case .missingFixed(let uid, let name):
-            let deviceLabel = name ?? uid ?? "Unknown device"
-            log.error("Selected microphone unavailable", detail: deviceLabel)
-            handleError("Selected microphone unavailable. Open Audio Settings to choose a device.")
-            return
+        if let overrideDeviceSelection {
+            deviceSelection = overrideDeviceSelection
+            log.warning("Using fallback microphone for this recording", detail: "\(deviceSelection.name) (uid: \(deviceSelection.uid))")
+        } else {
+            switch resolveDevice() {
+            case .selection(let selection):
+                deviceSelection = selection
+            case .missingFixed(let uid, let name):
+                let deviceLabel = name ?? uid ?? "Unknown device"
+                if let fallback = selectFallbackInputDevice(excludingUID: uid, excludingDeviceID: nil) {
+                    beginFallbackCaptureSession(
+                        selection: fallback,
+                        failedDeviceName: deviceLabel,
+                        reason: "configured microphone unavailable",
+                        rebootAfterRecording: false
+                    )
+                    deviceSelection = fallback
+                } else {
+                    log.error("Selected microphone unavailable", detail: deviceLabel)
+                    handleError("Selected microphone unavailable. Open Audio Settings to choose a device.")
+                    return
+                }
+            }
         }
 
         currentDeviceUID = deviceSelection.uid
@@ -727,6 +761,7 @@ final class AudioCaptureService: AgentAudioCapture {
         // AudioUnitSetProperty device switching doesn't work reliably when the audio graph
         // is confused (e.g., AirPods connected as default but we want USB mic).
         // Setting system default first ensures AVAudioEngine initializes with correct device.
+        var changedSystemDefaultInput = false
         if deviceSelection.isFixedDevice {
             let currentDefault = getDefaultInputDeviceID()
             if currentDefault != deviceSelection.deviceID {
@@ -735,6 +770,7 @@ final class AudioCaptureService: AgentAudioCapture {
                          detail: "from '\(currentDefaultName)' to '\(deviceSelection.name)'")
 
                 if setDefaultInputDevice(deviceSelection.deviceID) {
+                    changedSystemDefaultInput = true
                     log.info("✅ System default input changed to: \(deviceSelection.name)")
                     logTiming("system default switched")
                 } else {
@@ -747,7 +783,7 @@ final class AudioCaptureService: AgentAudioCapture {
 
         // Set up HAL timeout watchdog - fires if HAL init takes too long (queue might be stuck)
         // This runs on MainActor and will catch hung HAL operations
-        let halTimeoutSec: Double = 5.0
+        let halTimeoutSec: Double = 12.0
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(halTimeoutSec))
             guard let self else { return }
@@ -765,6 +801,14 @@ final class AudioCaptureService: AgentAudioCapture {
                       detail: "queueEntered=\(queueEntered) retiredEngines=\(retiredCount) idleSec=\(idleSec) device=\(self.currentDeviceUID ?? "default")")
             AppLogger.shared.log(.error, "HAL timeout",
                                  detail: "Audio setup stuck • queueEntered=\(queueEntered) retired=\(retiredCount) idle=\(idleSec)s")
+
+            if self.recoverWithFallbackMicrophone(
+                failedSelection: deviceSelection,
+                token: token,
+                reason: "Audio initialization timeout"
+            ) {
+                return
+            }
 
             // Trigger recovery
             self.handleError("Audio initialization timeout")
@@ -798,6 +842,15 @@ final class AudioCaptureService: AgentAudioCapture {
                 log.debug("Setup: \(step)", detail: "+\(ms)ms")
             }
 
+            if changedSystemDefaultInput {
+                log.debug("Waiting for system input change to settle", detail: "\(Int(self.deviceReconfigurationSettleDelay * 1000))ms")
+                Thread.sleep(forTimeInterval: self.deviceReconfigurationSettleDelay)
+                guard self.captureToken == token else {
+                    log.debug("Audio setup cancelled after system input settle - token mismatch")
+                    return
+                }
+            }
+
             // Create fresh audio engine
             let newEngine = AVAudioEngine()
             logSetupTiming("engine created")
@@ -820,17 +873,38 @@ final class AudioCaptureService: AgentAudioCapture {
             // Bind the selected device on the audio unit itself. Changing the
             // system default is not enough on setups where AVAudioEngine opens
             // a synthetic default aggregate device.
-            guard self.bindSelectedInputDeviceIfNeeded(
+            let bindingResult = self.bindSelectedInputDeviceIfNeeded(
                 inputNode: inputNode,
                 selection: deviceSelection
-            ) else {
-                DispatchQueue.main.async { [weak self] in
-                    guard let self, self.captureToken == token else { return }
+            )
+
+            switch bindingResult {
+            case .ready:
+                break
+            case .changed:
+                log.debug("Waiting for input device binding to settle", detail: "\(Int(self.deviceReconfigurationSettleDelay * 1000))ms")
+                Thread.sleep(forTimeInterval: self.deviceReconfigurationSettleDelay)
+                guard self.captureToken == token else {
+                    log.debug("Audio setup cancelled after device binding settle - token mismatch")
                     newEngine.stop()
+                    return
+                }
+            case .failed:
+                DispatchQueue.main.async { [weak self] in
+                    newEngine.stop()
+                    guard let self, self.captureToken == token else { return }
+                    if self.recoverWithFallbackMicrophone(
+                        failedSelection: deviceSelection,
+                        token: token,
+                        reason: "Failed to select microphone"
+                    ) {
+                        return
+                    }
                     self.handleError("Failed to select microphone: \(deviceSelection.name)")
                 }
                 return
             }
+
             logSetupTiming("device bound")
 
             // CRITICAL: Prepare engine after setting device
@@ -850,6 +924,7 @@ final class AudioCaptureService: AgentAudioCapture {
                 guard let self else { return }
                 guard self.captureToken == token else {
                     log.debug("Audio setup cancelled during handoff - token mismatch")
+                    newEngine.stop()
                     return
                 }
 
@@ -857,6 +932,7 @@ final class AudioCaptureService: AgentAudioCapture {
                     engine: newEngine,
                     inputNode: inputNode,
                     hwFormat: hwFormat,
+                    deviceSelection: deviceSelection,
                     deviceName: deviceSelection.name,
                     captureStart: captureStart,
                     token: token
@@ -869,6 +945,7 @@ final class AudioCaptureService: AgentAudioCapture {
         engine newEngine: AVAudioEngine,
         inputNode: AVAudioInputNode,
         hwFormat: AVAudioFormat,
+        deviceSelection: DeviceSelection,
         deviceName: String,
         captureStart: CFTimeInterval,
         token: UUID
@@ -925,33 +1002,70 @@ final class AudioCaptureService: AgentAudioCapture {
         }
         logTiming("tap installed")
 
-        // Start engine - this activates the mic
-        do {
-            try newEngine.start()
-            let totalMs = Int((CACurrentMediaTime() - captureStart) * 1000)
-            logTiming("engine started")
-            isRecordingActive = true
-            state = .recording
-            scheduleFirstBufferCheck(token: token)
+        // Start engine off the main actor. CoreAudio can block inside kAUStartIO
+        // for several seconds when HAL is degraded, and the watchdog/recovery
+        // timers need the main actor free to run.
+        state = .warming
+        audioSetupQueue.async { [weak self] in
+            do {
+                try newEngine.start()
+                let totalMs = Int((CACurrentMediaTime() - captureStart) * 1000)
 
-            // Track startup time for HAL health monitoring
-            recordStartupTime(totalMs)
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    guard self.captureToken == token, self.engine === newEngine else {
+                        newEngine.stop()
+                        return
+                    }
+                    guard self.state == .warm || self.state == .warming else {
+                        newEngine.stop()
+                        return
+                    }
 
-            if totalMs >= slowStartupRecoveryThresholdMs {
-                schedulePostRecordingReboot(
-                    reason: "Slow startup \(totalMs)ms (HAL degraded: \(isHALDegraded ? "yes" : "no"))"
-                )
+                    logTiming("engine started")
+                    self.isRecordingActive = true
+                    self.state = .recording
+                    self.scheduleFirstBufferCheck(token: token)
+
+                    // Track startup time for HAL health monitoring
+                    self.recordStartupTime(totalMs)
+
+                    if totalMs >= self.slowStartupRecoveryThresholdMs {
+                        self.schedulePostRecordingReboot(
+                            reason: "Slow startup \(totalMs)ms (HAL degraded: \(self.isHALDegraded ? "yes" : "no"))"
+                        )
+                    }
+
+                    // Warn if engine start was suspiciously slow (HAL issues often cause >500ms startup)
+                    if totalMs > self.halDegradedThresholdMs {
+                        log.warning("⚠️ Slow audio startup: \(totalMs)ms (HAL may be degraded)", detail: "timeout extended to \(Int(self.firstBufferTimeout * 1000))ms")
+                    }
+                    log.info("Recording started", detail: "\(Int(hwFormat.sampleRate))Hz, \(hwFormat.channelCount)ch in \(totalMs)ms")
+                }
+            } catch {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    guard self.captureToken == token else {
+                        newEngine.stop()
+                        return
+                    }
+
+                    log.error("Failed to start engine", error: error)
+                    if self.engine === newEngine {
+                        self.cleanupEngine()
+                    } else {
+                        newEngine.stop()
+                    }
+                    if self.recoverWithFallbackMicrophone(
+                        failedSelection: deviceSelection,
+                        token: token,
+                        reason: "Failed to start recording: \(error.localizedDescription)"
+                    ) {
+                        return
+                    }
+                    self.handleError("Failed to start recording: \(error.localizedDescription)")
+                }
             }
-
-            // Warn if engine start was suspiciously slow (HAL issues often cause >500ms startup)
-            if totalMs > halDegradedThresholdMs {
-                log.warning("⚠️ Slow audio startup: \(totalMs)ms (HAL may be degraded)", detail: "timeout extended to \(Int(firstBufferTimeout * 1000))ms")
-            }
-            log.info("Recording started", detail: "\(Int(hwFormat.sampleRate))Hz, \(hwFormat.channelCount)ch in \(totalMs)ms")
-        } catch {
-            log.error("Failed to start engine", error: error)
-            cleanupEngine()
-            handleError("Failed to start recording: \(error.localizedDescription)")
         }
     }
 
@@ -1085,6 +1199,7 @@ final class AudioCaptureService: AgentAudioCapture {
 
             cleanupEngine()
             cleanupFailedRecording()
+            finishFallbackCaptureSession()
 
             // Auto-reboot if we've failed multiple sessions in a row
             if consecutiveSessionFailures >= maxSessionFailuresBeforeReboot {
@@ -1107,7 +1222,10 @@ final class AudioCaptureService: AgentAudioCapture {
         cleanupEngine()
         cleanupFailedRecording()
         state = .warm
-        startCaptureWithStability(isRetry: true)
+        startCaptureWithStability(
+            isRetry: true,
+            overrideDeviceSelection: fallbackCaptureSession?.selection
+        )
     }
 
     private func cleanupFailedRecording() {
@@ -1164,8 +1282,104 @@ final class AudioCaptureService: AgentAudioCapture {
 
     private func handleError(_ error: String) {
         log.error("Capture error", detail: error)
+        finishFallbackCaptureSession()
         state = .error
         onCaptureErrorCallback?(error)
+    }
+
+    @discardableResult
+    private func recoverWithFallbackMicrophone(
+        failedSelection: DeviceSelection,
+        token: UUID,
+        reason: String
+    ) -> Bool {
+        guard captureToken == token else { return true }
+        guard fallbackCaptureSession == nil else {
+            log.error("Fallback microphone recovery already attempted", detail: reason)
+            return false
+        }
+
+        guard let fallback = selectFallbackInputDevice(
+            excludingUID: failedSelection.uid,
+            excludingDeviceID: failedSelection.deviceID
+        ) else {
+            log.error("No fallback microphone available", detail: reason)
+            return false
+        }
+
+        beginFallbackCaptureSession(
+            selection: fallback,
+            failedDeviceName: failedSelection.name,
+            reason: reason,
+            rebootAfterRecording: true
+        )
+
+        captureToken = UUID()
+        cleanupEngine()
+        cleanupFailedRecording()
+        state = .warm
+        retryCount = 0
+        halSetupEnteredQueue = false
+        audioSetupQueue = DispatchQueue(label: "to.talkie.app.audio.setup", qos: .userInitiated)
+
+        startCaptureWithStability(isRetry: true, overrideDeviceSelection: fallback)
+        return true
+    }
+
+    private func beginFallbackCaptureSession(
+        selection: DeviceSelection,
+        failedDeviceName: String,
+        reason: String,
+        rebootAfterRecording shouldRebootAfterRecording: Bool
+    ) {
+        let currentDefaultDeviceID = getDefaultInputDeviceID()
+        let restoreDefaultDeviceID = currentDefaultDeviceID != 0 && currentDefaultDeviceID != selection.deviceID
+            ? currentDefaultDeviceID
+            : nil
+        let restoreDefaultDeviceName = restoreDefaultDeviceID.flatMap { getDeviceName($0) }
+
+        fallbackCaptureSession = FallbackCaptureSession(
+            selection: selection,
+            restoreDefaultDeviceID: restoreDefaultDeviceID,
+            restoreDefaultDeviceName: restoreDefaultDeviceName,
+            reason: reason,
+            postRecordingRebootReason: shouldRebootAfterRecording
+                ? "Fallback microphone used after \(failedDeviceName) failed: \(reason)"
+                : nil
+        )
+
+        log.warning(
+            "Using fallback microphone for this recording",
+            detail: "\(failedDeviceName) -> \(selection.name) (\(reason))"
+        )
+    }
+
+    private func finishFallbackCaptureSession(schedulePostRecordingReboot: Bool = false) {
+        guard let session = fallbackCaptureSession else { return }
+        fallbackCaptureSession = nil
+
+        if schedulePostRecordingReboot, let reason = session.postRecordingRebootReason {
+            self.schedulePostRecordingReboot(reason: reason)
+        }
+
+        guard let restoreDefaultDeviceID = session.restoreDefaultDeviceID else { return }
+        guard getDefaultInputDeviceID() != restoreDefaultDeviceID else { return }
+
+        let restoreName = session.restoreDefaultDeviceName
+            ?? getDeviceName(restoreDefaultDeviceID)
+            ?? "previous input"
+
+        if setDefaultInputDevice(restoreDefaultDeviceID) {
+            log.info(
+                "Restored system default input",
+                detail: "\(restoreName) after fallback microphone \(session.selection.name)"
+            )
+        } else {
+            log.warning(
+                "Failed to restore system default input after fallback",
+                detail: "\(restoreName) after \(session.selection.name) (\(session.reason))"
+            )
+        }
     }
 
     private func archiveRecording(_ pcmURL: URL) {
@@ -1210,51 +1424,64 @@ final class AudioCaptureService: AgentAudioCapture {
         let isFixedDevice: Bool
     }
 
+    private struct FallbackCaptureSession {
+        let selection: DeviceSelection
+        let restoreDefaultDeviceID: AudioDeviceID?
+        let restoreDefaultDeviceName: String?
+        let reason: String
+        let postRecordingRebootReason: String?
+    }
+
     private enum DeviceResolution {
         case selection(DeviceSelection)
         case missingFixed(uid: String?, name: String?)
     }
 
+    private enum InputDeviceBindingResult {
+        case ready
+        case changed
+        case failed
+    }
+
     private func bindSelectedInputDeviceIfNeeded(
         inputNode: AVAudioInputNode,
         selection: DeviceSelection
-    ) -> Bool {
+    ) -> InputDeviceBindingResult {
         guard let audioUnit = inputNode.audioUnit else {
             log.warning("Could not inspect audio input device", detail: "No audio unit")
-            return !selection.isFixedDevice
+            return selection.isFixedDevice ? .failed : .ready
         }
 
         guard let currentDeviceID = currentInputDeviceID(for: audioUnit) else {
             log.warning("Could not inspect audio input device", detail: "Current device unavailable")
-            return !selection.isFixedDevice
+            return selection.isFixedDevice ? .failed : .ready
         }
 
         let currentName = getDeviceName(currentDeviceID) ?? "unknown"
         if currentDeviceID == selection.deviceID {
             log.info("🎤 Engine using device: \(currentName) (ID: \(currentDeviceID))",
                      detail: "✅ matches selection")
-            return true
+            return .ready
         }
 
         guard selection.isFixedDevice else {
             log.info("🎤 Engine using device: \(currentName) (ID: \(currentDeviceID))",
                      detail: "system default")
-            return true
+            return .ready
         }
 
         if isDefaultInputAggregate(currentDeviceID, name: currentName),
            defaultInputMatches(selection) {
             log.info(
                 "🎤 Engine using device: \(currentName) (ID: \(currentDeviceID))",
-                detail: "✅ default aggregate routes to \(selection.name)"
+                detail: "default aggregate routes to \(selection.name); binding concrete device"
             )
-            return true
+        } else {
+            log.warning(
+                "Engine input mismatch; binding selected microphone",
+                detail: "current=\(currentName) (ID: \(currentDeviceID)), selected=\(selection.name) (ID: \(selection.deviceID))"
+            )
         }
-
-        log.warning(
-            "Engine input mismatch; binding selected microphone",
-            detail: "current=\(currentName) (ID: \(currentDeviceID)), selected=\(selection.name) (ID: \(selection.deviceID))"
-        )
 
         var mutableDeviceID = selection.deviceID
         let status = AudioUnitSetProperty(
@@ -1268,12 +1495,12 @@ final class AudioCaptureService: AgentAudioCapture {
 
         guard status == noErr else {
             log.error("Failed to bind selected microphone", detail: "status=\(status), device=\(selection.name)")
-            return false
+            return .failed
         }
 
         guard let verifiedDeviceID = currentInputDeviceID(for: audioUnit) else {
             log.warning("Selected microphone bound but could not verify", detail: selection.name)
-            return true
+            return .changed
         }
 
         let verifiedName = getDeviceName(verifiedDeviceID) ?? "unknown"
@@ -1282,7 +1509,7 @@ final class AudioCaptureService: AgentAudioCapture {
             "🎤 Engine using device: \(verifiedName) (ID: \(verifiedDeviceID))",
             detail: matches ? "✅ bound selected microphone" : "⚠️ still mismatch with \(selection.name)"
         )
-        return matches
+        return matches ? .changed : .failed
     }
 
     private func isDefaultInputAggregate(_ deviceID: AudioDeviceID, name: String) -> Bool {
@@ -1372,6 +1599,77 @@ final class AudioCaptureService: AgentAudioCapture {
         log.warning("Configured microphone unavailable",
                     detail: "'\(requestedName ?? uid)' not found")
         return .missingFixed(uid: uid, name: requestedName)
+    }
+
+    private struct FallbackInputCandidate {
+        let selection: DeviceSelection
+        let isDefault: Bool
+        let score: Int
+    }
+
+    private func selectFallbackInputDevice(
+        excludingUID: String?,
+        excludingDeviceID: AudioDeviceID?
+    ) -> DeviceSelection? {
+        let defaultDeviceID = getDefaultInputDeviceID()
+        let candidates = getAllDeviceIDs().compactMap { deviceID -> FallbackInputCandidate? in
+            if let excludingDeviceID, deviceID == excludingDeviceID { return nil }
+            guard hasInputStreams(deviceID) else { return nil }
+            guard let uid = getDeviceUID(deviceID),
+                  let name = getDeviceName(deviceID) else { return nil }
+            if let excludingUID, uid == excludingUID { return nil }
+            guard !isVirtualOrAggregateInput(name: name, uid: uid) else { return nil }
+            guard isDeviceResponding(deviceID) else { return nil }
+
+            let isDefault = deviceID == defaultDeviceID
+            let lowerName = name.lowercased()
+            var score = isDefault ? 100 : 0
+            if lowerName.localizedStandardContains("webcam") { score += 40 }
+            if lowerName.localizedStandardContains("built-in") { score += 35 }
+            if lowerName.localizedStandardContains("microphone") { score += 25 }
+            if lowerName.localizedStandardContains("iphone") { score -= 20 }
+            if lowerName.localizedStandardContains("airpods") { score -= 15 }
+
+            return FallbackInputCandidate(
+                selection: DeviceSelection(
+                    deviceID: deviceID,
+                    uid: uid,
+                    name: name,
+                    isFixedDevice: true
+                ),
+                isDefault: isDefault,
+                score: score
+            )
+        }
+
+        let sorted = candidates.sorted {
+            if $0.score != $1.score { return $0.score > $1.score }
+            return $0.selection.name.localizedStandardCompare($1.selection.name) == .orderedAscending
+        }
+
+        guard let selected = sorted.first else { return nil }
+        let candidateList = sorted
+            .map { "\($0.selection.name)\($0.isDefault ? " default" : "")" }
+            .joined(separator: ", ")
+        log.info("Fallback microphone selected", detail: "\(selected.selection.name); candidates: \(candidateList)")
+        return selected.selection
+    }
+
+    private func isVirtualOrAggregateInput(name: String, uid: String) -> Bool {
+        let descriptor = "\(name) \(uid)".lowercased()
+        let virtualMarkers = [
+            "defaultdeviceaggregate",
+            "aggregate",
+            "blackhole",
+            "teams audio",
+            "speaker audio recorder",
+            "loopback",
+            "soundflower",
+            "background music",
+            "zoomaudio",
+            "obs"
+        ]
+        return virtualMarkers.contains { descriptor.localizedStandardContains($0) }
     }
 
     /// Check if a device is responding (CoreAudio IPC is healthy)

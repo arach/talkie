@@ -24,7 +24,9 @@ final class AppRoutes: RouteGroup {
             description: "Start a new recording",
             isInternal: false
         ) { _, _ in
-            ServiceManager.shared.live.toggleRecording()
+            if !ServiceManager.shared.live.isRecording {
+                ServiceManager.shared.live.toggleRecording()
+            }
         },
 
         Route(
@@ -32,7 +34,9 @@ final class AppRoutes: RouteGroup {
             description: "Stop current recording",
             isInternal: false
         ) { _, _ in
-            ServiceManager.shared.live.toggleRecording()
+            if ServiceManager.shared.live.isRecording {
+                ServiceManager.shared.live.toggleRecording()
+            }
         },
 
         Route(
