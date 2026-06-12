@@ -24,16 +24,15 @@ final class ScreenCaptureOverlay {
     private var localKeyMonitor: Any?
 
     func selectRegion(
-        freezesDesktop: Bool = true,
+        freezesDesktop: Bool = false,
         onModeSwitch: ((CaptureBarMode) -> Void)? = nil
     ) async -> CGRect? {
         let prearmedCursor = CursorLease(cursor: OverlayView.cursor(for: .region))
         prearmedCursor.activate()
 
-        // Freeze-the-desktop: snapshot the screen as soon as the overlay is
-        // armed so the cursor and drag target are available immediately. The
-        // actual capture on mouseUp still goes through SCScreenshotManager
-        // fresh (caller's path) — this snapshot is for visual stability only.
+        // Region selection defaults to a live transparent desktop. Callers can
+        // opt into a frozen snapshot when visual stability matters more than
+        // keeping the overlay visually invisible outside the border.
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) })
             ?? NSScreen.main
@@ -389,6 +388,7 @@ private final class OverlayView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        clearDirtyRect(dirtyRect)
         paintFrozenSnapshot()
         switch mode {
         case .region:
@@ -396,6 +396,13 @@ private final class OverlayView: NSView {
         case .window:
             drawWindowHighlight()
         }
+    }
+
+    private func clearDirtyRect(_ dirtyRect: NSRect) {
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current?.compositingOperation = .clear
+        dirtyRect.fill()
+        NSGraphicsContext.restoreGraphicsState()
     }
 
     func installFrozenSnapshot(_ snapshot: NSImage?) {
@@ -423,11 +430,9 @@ private final class OverlayView: NSView {
         let rect = selection.rect
         guard rect.width > 2, rect.height > 2 else { return }
 
-        drawRegionBackdrop(excluding: rect)
-
-        let border = NSBezierPath(rect: rect.insetBy(dx: 0.5, dy: 0.5))
-        selectionAccent.withAlphaComponent(selection.didSnap ? 0.95 : 0.82).setStroke()
-        border.lineWidth = selection.didSnap ? 1.5 : 1
+        let border = NSBezierPath(rect: rect.insetBy(dx: 0.75, dy: 0.75))
+        selectionAccent.withAlphaComponent(selection.didSnap ? 0.95 : 0.88).setStroke()
+        border.lineWidth = selection.didSnap ? 2 : 1.5
         border.stroke()
 
         if richCaptureUIEnabled {

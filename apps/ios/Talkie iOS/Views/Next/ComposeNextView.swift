@@ -1508,36 +1508,50 @@ private struct RevisionHistoryRollup: View {
     let revisions: [ComposeNoteStore.RevisionRecord]
     let onRestore: (ComposeNoteStore.RevisionRecord) -> Void
 
+    @State private var selectedRevisionID: UUID?
     @ObservedObject private var theme = ThemeManager.shared
 
+    private var selectedIndex: Int? {
+        guard !revisions.isEmpty else { return nil }
+        guard let selectedRevisionID else { return 0 }
+        return revisions.firstIndex { $0.id == selectedRevisionID } ?? 0
+    }
+
+    private var selectedRevision: ComposeNoteStore.RevisionRecord? {
+        guard let selectedIndex else { return nil }
+        return revisions[selectedIndex]
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Text("· VERSIONS")
+                Text("· REVISIONS")
                     .talkieType(.channelLabelTiny)
                     .foregroundStyle(theme.colors.textTertiary)
                 Spacer(minLength: 4)
-                Text("\(revisions.count) APPLIED")
+                Text("CURRENT v\(revisions.count + 1)")
                     .talkieType(.channelLabelTiny)
                     .foregroundStyle(theme.colors.textTertiary)
             }
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(revisions.prefix(8).enumerated(), id: \.element.id) { index, revision in
+                    ForEach(revisions.prefix(10).enumerated(), id: \.element.id) { index, revision in
+                        let version = versionNumber(for: index)
+                        let isSelected = selectedRevisionID == revision.id || (selectedRevisionID == nil && index == 0)
                         Button {
-                            onRestore(revision)
+                            selectedRevisionID = revision.id
                         } label: {
                             HStack(spacing: 6) {
-                                Text("R\((index + 1), format: .number.precision(.integerLength(2)))")
+                                Text("v\(version)")
                                     .talkieType(.channelLabelTiny)
-                                    .foregroundStyle(index == 0 ? theme.currentTheme.chrome.accent : theme.colors.textTertiary)
+                                    .foregroundStyle(isSelected ? theme.currentTheme.chrome.accent : theme.colors.textTertiary)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(revision.instruction)
                                         .talkieType(.fieldLabel)
                                         .foregroundStyle(theme.colors.textPrimary)
                                         .lineLimit(1)
-                                    Text("\(revision.providerName) · \(revision.scope)")
+                                    Text("\(revision.scope) · \(revision.providerName)")
                                         .talkieType(.timestamp)
                                         .foregroundStyle(theme.colors.textTertiary)
                                         .lineLimit(1)
@@ -1551,22 +1565,152 @@ private struct RevisionHistoryRollup: View {
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 8)
                                             .strokeBorder(
-                                                index == 0 ? theme.currentTheme.chrome.accentStrong : theme.currentTheme.chrome.edgeFaint,
+                                                isSelected ? theme.currentTheme.chrome.accentStrong : theme.currentTheme.chrome.edgeFaint,
                                                 lineWidth: theme.currentTheme.chrome.hairlineWidth
                                             )
                                     )
                             )
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Restore revision \(index + 1), \(revision.instruction)")
+                        .accessibilityLabel("Show revision \(version), \(revision.instruction)")
                     }
                 }
                 .padding(.vertical, 2)
             }
             .scrollClipDisabled()
+
+            if let selectedIndex, let selectedRevision {
+                RevisionDiffPreview(
+                    revision: selectedRevision,
+                    version: versionNumber(for: selectedIndex),
+                    beforeText: beforeText(for: selectedIndex, revision: selectedRevision),
+                    onRestore: { onRestore(selectedRevision) }
+                )
+            }
         }
         .padding(.top, 4)
         .padding(.bottom, 2)
+    }
+
+    private func versionNumber(for index: Int) -> Int {
+        revisions.count - index + 1
+    }
+
+    private func beforeText(for index: Int, revision: ComposeNoteStore.RevisionRecord) -> String? {
+        if let original = revision.originalText?.trimmingCharacters(in: .whitespacesAndNewlines), !original.isEmpty {
+            return original
+        }
+
+        if let documentBefore = revision.documentTextBefore?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !documentBefore.isEmpty {
+            return documentBefore
+        }
+
+        let olderIndex = index + 1
+        guard revisions.indices.contains(olderIndex) else { return nil }
+        let previousSnapshot = revisions[olderIndex].documentText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return previousSnapshot.isEmpty ? nil : previousSnapshot
+    }
+}
+
+private struct RevisionDiffPreview: View {
+    let revision: ComposeNoteStore.RevisionRecord
+    let version: Int
+    let beforeText: String?
+    let onRestore: () -> Void
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 8) {
+                Text("v\(max(1, version - 1)) → v\(version)")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+
+                Text(revision.createdAt, format: .dateTime.month(.abbreviated).day().hour().minute())
+                    .talkieType(.timestamp)
+                    .foregroundStyle(theme.colors.textTertiary)
+
+                Spacer(minLength: 0)
+
+                Button(action: onRestore) {
+                    Label("Restore", systemImage: "arrow.uturn.backward")
+                        .talkieType(.fieldLabel)
+                        .foregroundStyle(theme.chrome.action)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(theme.chrome.actionTint)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .strokeBorder(theme.chrome.action.opacity(0.4),
+                                                      lineWidth: theme.chrome.hairlineWidth)
+                                )
+                        )
+                }
+                .buttonStyle(CardPressStyle())
+            }
+
+            RevisionTextPane(
+                title: "BEFORE",
+                text: beforeText ?? "Earlier text was not stored for this revision.",
+                isMissing: beforeText == nil,
+                tint: Color.red.opacity(0.75)
+            )
+
+            RevisionTextPane(
+                title: "AFTER",
+                text: revision.revisedText,
+                isMissing: false,
+                tint: theme.currentTheme.chrome.accent
+            )
+
+            Text("\(revision.providerName) · \(revision.modelId)")
+                .talkieType(.timestamp)
+                .foregroundStyle(theme.colors.textTertiary)
+                .lineLimit(1)
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(theme.colors.cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                      lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                )
+        )
+    }
+}
+
+private struct RevisionTextPane: View {
+    let title: String
+    let text: String
+    let isMissing: Bool
+    let tint: Color
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .talkieType(.channelLabelTiny)
+                .foregroundStyle(tint)
+            Text(text)
+                .talkieType(.preview)
+                .lineSpacing(3)
+                .foregroundStyle(isMissing ? theme.colors.textTertiary : theme.colors.textPrimary)
+                .italic(isMissing)
+                .lineLimit(5)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(8)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(isMissing ? theme.colors.background : tint.opacity(0.08))
+                )
+        }
     }
 }
 

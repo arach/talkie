@@ -129,9 +129,7 @@ private final class PickerView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        // Soft backdrop across the whole screen so users see this isn't the normal desktop
-        NSColor(white: 0, alpha: 0.18).setFill()
-        bounds.fill()
+        clearDirtyRect(dirtyRect)
 
         guard let start = dragStart, let current = dragCurrent else { return }
         let rect = NSRect(
@@ -142,13 +140,9 @@ private final class PickerView: NSView {
         )
         guard rect.width > 2, rect.height > 2 else { return }
 
-        // Punch out selection area (draw over backdrop with clear-ish fill)
-        NSColor(white: 1, alpha: 0.05).setFill()
-        rect.fill()
-
-        let border = NSBezierPath(rect: rect)
-        NSColor.white.withAlphaComponent(0.94).setStroke()
-        border.lineWidth = 1
+        let border = NSBezierPath(rect: rect.insetBy(dx: 0.75, dy: 0.75))
+        NSColor(calibratedRed: 0.96, green: 0.66, blue: 0.34, alpha: 0.95).setStroke()
+        border.lineWidth = 1.5
         border.stroke()
 
         let label = "\(Int(rect.width)) × \(Int(rect.height))"
@@ -160,6 +154,13 @@ private final class PickerView: NSView {
         let size = label.size(withAttributes: attrs)
         let point = NSPoint(x: rect.midX - size.width / 2, y: rect.maxY + 6)
         label.draw(at: point, withAttributes: attrs)
+    }
+
+    private func clearDirtyRect(_ dirtyRect: NSRect) {
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current?.compositingOperation = .clear
+        dirtyRect.fill()
+        NSGraphicsContext.restoreGraphicsState()
     }
 
     override func mouseDown(with event: NSEvent) {

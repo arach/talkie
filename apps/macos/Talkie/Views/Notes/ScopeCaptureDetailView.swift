@@ -26,11 +26,12 @@ import TalkieKit
 private enum CapturePreviewMedia {
     case image(URL)
     case video(URL, CGFloat)
+    case file(URL, RecordingAttachment)
     case unavailable
 
     var url: URL? {
         switch self {
-        case .image(let url), .video(let url, _):
+        case .image(let url), .video(let url, _), .file(let url, _):
             return url
         case .unavailable:
             return nil
@@ -85,68 +86,37 @@ struct ScopeCaptureDetailView: View {
         capture.visualContexts.first
     }
 
-    private var imageURL: URL? {
-        guard let filename = primaryShot?.filename else { return nil }
-        return existingFileURL(
-            filename: filename,
-            searchDirectories: [
-                ScreenshotStorage.screenshotsDirectory,
-                trayScreenshotsDirectory,
-                appSupportTalkieDirectory,
-                applicationSupportDirectory,
-            ]
-        )
+    private var primaryMediaAsset: CaptureMediaAsset? {
+        CaptureMediaFileResolver.primaryMedia(for: capture)
     }
 
-    private var videoURL: URL? {
-        if let clip = primaryClip,
-           let url = existingFileURL(
-                filename: clip.filename,
-                searchDirectories: [
-                    VideoClipStorage.videosDirectory,
-                    trayClipsDirectory,
-                    appSupportTalkieDirectory,
-                    applicationSupportDirectory,
-                ]
-           ) {
-            return url
+    private var primaryAttachment: RecordingAttachment? {
+        if let mediaURL = primaryMediaAsset?.url,
+           let mediaAttachment = capture.attachments.first(where: { attachment in
+               CaptureMediaFileResolver.mediaAsset(for: attachment)?.url == mediaURL
+           }) {
+            return mediaAttachment
         }
-
-        guard let visualContext = primaryVisualContext else { return nil }
-        let bundleURL = VisualContextStorage.bundleURL(for: visualContext)
-        let sourceURL = bundleURL.appendingPathComponent(visualContext.sourceClipFilename)
-        if FileManager.default.fileExists(atPath: sourceURL.path) { return sourceURL }
-
-        return existingFileURL(
-            filename: visualContext.sourceClipFilename,
-            searchDirectories: [
-                bundleURL,
-                VideoClipStorage.videosDirectory,
-                trayClipsDirectory,
-                appSupportTalkieDirectory,
-                applicationSupportDirectory,
-            ]
-        )
+        return capture.attachments.first
     }
 
-    private var visualContextContactSheetURL: URL? {
-        guard let visualContext = primaryVisualContext,
-              let filename = visualContext.contactSheetFilename else { return nil }
-        let bundleURL = VisualContextStorage.bundleURL(for: visualContext)
-        return existingFileURL(
-            filename: filename,
-            searchDirectories: [
-                bundleURL,
-                appSupportTalkieDirectory,
-                applicationSupportDirectory,
-            ]
-        )
+    private var primaryAttachmentURL: URL? {
+        guard let primaryAttachment else { return nil }
+        return CaptureMediaFileResolver.attachmentURL(filename: primaryAttachment.filename)
     }
 
     private var primaryPreviewMedia: CapturePreviewMedia {
-        if let imageURL { return .image(imageURL) }
-        if let videoURL { return .video(videoURL, mediaAspectRatio) }
-        if let contactSheetURL = visualContextContactSheetURL { return .image(contactSheetURL) }
+        switch primaryMediaAsset {
+        case .image(let url):
+            return .image(url)
+        case .video(let url):
+            return .video(url, mediaAspectRatio)
+        case .none:
+            break
+        }
+        if let primaryAttachment, let url = primaryAttachmentURL {
+            return .file(url, primaryAttachment)
+        }
         return .unavailable
     }
 
@@ -154,19 +124,26 @@ struct ScopeCaptureDetailView: View {
         primaryPreviewMedia.url
     }
 
-    private var hasVisualMedia: Bool {
-        primaryShot != nil || primaryClip != nil || primaryVisualContext != nil
+    private var hasPreviewMedia: Bool {
+        primaryMediaAsset != nil || primaryAttachmentURL != nil
     }
 
     /// True when this capture is a text passage (Quick Selection) rather
     /// than a screenshot. Drives the hero branch.
     private var isTextCapture: Bool {
-        if capture.type == .selection { return true }
-        if !hasVisualMedia, let text = capture.text, !text.isEmpty { return true }
+        if capture.type == .selection { return !hasPreviewMedia }
+        if !hasPreviewMedia, let text = capture.text, !text.isEmpty { return true }
         return false
     }
 
     private var sourceLabel: String {
+        if let primaryAttachment {
+            let label = mediaLabel(for: primaryAttachment)
+            if capture.type == .selection {
+                return "Quick Selection · \(label)"
+            }
+            return "Attachment · \(label)"
+        }
         if isTextCapture {
             return "Quick Selection · text"
         }
@@ -184,7 +161,7 @@ struct ScopeCaptureDetailView: View {
     }
 
     private var channelLabel: String {
-        isTextCapture ? "SELECTION" : "CAPTURE"
+        capture.type == .selection ? "SELECTION" : "CAPTURE"
     }
 
     private var dimensions: String {
@@ -193,11 +170,11 @@ struct ScopeCaptureDetailView: View {
     }
 
     private var mediaWidth: Int? {
-        primaryShot?.width ?? primaryClip?.width ?? primaryVisualContext?.width
+        primaryShot?.width ?? primaryClip?.width ?? primaryVisualContext?.width ?? primaryAttachment?.width
     }
 
     private var mediaHeight: Int? {
-        primaryShot?.height ?? primaryClip?.height ?? primaryVisualContext?.height
+        primaryShot?.height ?? primaryClip?.height ?? primaryVisualContext?.height ?? primaryAttachment?.height
     }
 
     private var mediaAspectRatio: CGFloat {
@@ -208,10 +185,24 @@ struct ScopeCaptureDetailView: View {
     }
 
     private var fileSize: String {
+        if let primaryAttachment {
+            return primaryAttachment.formattedSize
+        }
         guard let url = primaryMediaURL,
               let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
               let bytes = attrs[.size] as? Int else { return "—" }
         return formatBytes(bytes)
+    }
+
+    private var sizeSummary: String {
+        let parts = [fileSize, dimensions].filter { $0 != "—" && !$0.isEmpty }
+        return parts.isEmpty ? "—" : parts.joined(separator: " · ")
+    }
+
+    private var footerSummary: String {
+        [dimensions, fileSize, sourceLabel]
+            .filter { $0 != "—" && !$0.isEmpty }
+            .joined(separator: " · ")
     }
 
     private var dateLabel: String {
@@ -229,6 +220,9 @@ struct ScopeCaptureDetailView: View {
     }
 
     private var filename: String {
+        if let primaryAttachment {
+            return primaryAttachment.originalName
+        }
         if let url = primaryMediaURL { return url.lastPathComponent }
         return primaryShot?.filename
             ?? primaryClip?.filename
@@ -252,7 +246,9 @@ struct ScopeCaptureDetailView: View {
     }
 
     private var imageByline: String {
-        "\(filename) · \(dimensions) · \(fileSize)"
+        [filename, dimensions, fileSize]
+            .filter { $0 != "—" && !$0.isEmpty }
+            .joined(separator: " · ")
     }
 
     // MARK: - Sections
@@ -320,7 +316,7 @@ struct ScopeCaptureDetailView: View {
                 if isTextCapture {
                     textPassageHero
                 } else {
-                    heroMedia
+                    mediaHeroStack
                 }
             }
             .padding(.top, 20)
@@ -422,6 +418,14 @@ struct ScopeCaptureDetailView: View {
         }
     }
 
+    private var mediaHeroStack: some View {
+        VStack(spacing: 12) {
+            heroMedia
+            selectionTextNote
+        }
+        .frame(maxWidth: .infinity)
+    }
+
     @ViewBuilder
     private var heroMedia: some View {
         switch primaryPreviewMedia {
@@ -454,8 +458,110 @@ struct ScopeCaptureDetailView: View {
         case .video(let url, let aspectRatio):
             CaptureVideoHero(url: url, aspectRatio: aspectRatio)
                 .onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider() }
+        case .file(let url, let attachment):
+            attachmentFileHero(url: url, attachment: attachment)
+                .onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider() }
         case .unavailable:
             unavailableMediaHero
+        }
+    }
+
+    private func attachmentFileHero(url: URL, attachment: RecordingAttachment) -> some View {
+        VStack(spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(ThemedScopeCanvas.surface.opacity(0.88))
+                    .frame(width: 122, height: 86)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 5)
+                            .stroke(ThemedScopeEdge.faint, lineWidth: 0.7)
+                    )
+
+                if attachment.kind == .audio {
+                    CaptureAttachmentWaveform(seed: attachment.filename.hashValue)
+                        .frame(width: 76, height: 34)
+                } else {
+                    Image(systemName: attachment.kind.icon)
+                        .font(.system(size: 34, weight: .semibold))
+                        .foregroundStyle(ThemedScopeAccent.capture.opacity(0.80))
+                }
+
+                if let extensionLabel = extensionLabel(for: attachment) {
+                    Text(extensionLabel)
+                        .font(ScopeType.mono(size: 8, weight: .semibold))
+                        .tracking(1.0)
+                        .foregroundStyle(ThemedScopeInk.primary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(ThemedScopeCanvas.canvas.opacity(0.92))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 2)
+                                .stroke(ThemedScopeEdge.faint, lineWidth: 0.5)
+                        )
+                        .padding(8)
+                        .frame(width: 122, height: 86, alignment: .topTrailing)
+                }
+            }
+
+            VStack(spacing: 5) {
+                Text(mediaLabel(for: attachment).uppercased())
+                    .font(ScopeType.mono(size: 9, weight: .semibold))
+                    .tracking(2.2)
+                    .foregroundStyle(ThemedScopeAccent.capture)
+                Text(url.lastPathComponent == attachment.filename ? attachment.originalName : url.lastPathComponent)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(ThemedScopeInk.primary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(attachment.formattedSize)
+                    .font(ScopeType.mono(size: 9, weight: .regular))
+                    .tracking(1.4)
+                    .foregroundStyle(ThemedScopeInk.faint)
+            }
+        }
+        .padding(.horizontal, 28)
+        .padding(.vertical, 34)
+        .frame(maxWidth: 720)
+        .background(
+            RoundedRectangle(cornerRadius: 4)
+                .fill(ThemedScopeCanvas.surface.opacity(0.55))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(ThemedScopeEdge.faint, lineWidth: 0.5)
+                )
+        )
+    }
+
+    @ViewBuilder
+    private var selectionTextNote: some View {
+        if capture.type == .selection,
+           let text = capture.text?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !text.isEmpty {
+            Text(text)
+                .font(.system(size: 12, design: .default))
+                .foregroundStyle(ThemedScopeInk.subtle)
+                .lineSpacing(4)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 14)
+                .frame(maxWidth: 720, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(ThemedScopeCanvas.surface.opacity(0.42))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(ThemedScopeEdge.faint, lineWidth: 0.5)
+                        )
+                )
+                .overlay(alignment: .leading) {
+                    Rectangle()
+                        .fill(ThemedScopeAccent.capture.opacity(0.35))
+                        .frame(width: 2)
+                }
         }
     }
 
@@ -485,7 +591,7 @@ struct ScopeCaptureDetailView: View {
                 rows: [
                     ("source", sourceLabel, true),
                     ("captured", "\(dateLabel) · \(timeLabel)", false),
-                    ("size", "\(fileSize) · \(dimensions)", false),
+                    ("size", sizeSummary, false),
                 ]
             )
             metaBlock(
@@ -581,7 +687,7 @@ struct ScopeCaptureDetailView: View {
     @ViewBuilder
     private func footRail(bodyPad: CGFloat) -> some View {
         HStack(spacing: 16) {
-            Text("· \(dimensions) · \(fileSize) · \(sourceLabel)")
+            Text("· \(footerSummary)")
                 .font(ScopeType.mono(size: 9, weight: .regular))
                 .tracking(2.2)
                 .foregroundStyle(ThemedScopeInk.faint)
@@ -636,6 +742,8 @@ struct ScopeCaptureDetailView: View {
                 NSPasteboard.general.writeObjects([image])
             }
         case .video(let url, _):
+            NSPasteboard.general.writeObjects([url as NSURL])
+        case .file(let url, _):
             NSPasteboard.general.writeObjects([url as NSURL])
         case .unavailable:
             break
@@ -699,62 +807,69 @@ struct ScopeCaptureDetailView: View {
         return formatter.string(fromByteCount: Int64(bytes))
     }
 
-    private var applicationSupportDirectory: URL {
-        FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-    }
-
-    private var appSupportTalkieDirectory: URL {
-        applicationSupportDirectory
-            .appending(path: "Talkie", directoryHint: .isDirectory)
-    }
-
-    private var trayScreenshotsDirectory: URL {
-        appSupportTalkieDirectory
-            .appending(path: "Tray", directoryHint: .isDirectory)
-            .appending(path: "screenshots", directoryHint: .isDirectory)
-    }
-
-    private var trayClipsDirectory: URL {
-        appSupportTalkieDirectory
-            .appending(path: "Tray", directoryHint: .isDirectory)
-            .appending(path: "clips", directoryHint: .isDirectory)
-    }
-
-    private func existingFileURL(filename: String, searchDirectories: [URL]) -> URL? {
-        let fileManager = FileManager.default
-        let expandedFilename = (filename as NSString).expandingTildeInPath
-        let absoluteURL = URL(fileURLWithPath: expandedFilename)
-
-        if expandedFilename.hasPrefix("/"),
-           fileManager.fileExists(atPath: absoluteURL.path) {
-            return absoluteURL
+    private func mediaLabel(for attachment: RecordingAttachment) -> String {
+        switch attachment.kind {
+        case .image:
+            return "image"
+        case .video:
+            return "video"
+        case .audio:
+            return "audio"
+        case .pdf:
+            return "PDF"
+        case .document:
+            return "document"
+        case .other:
+            return "attachment"
         }
+    }
 
-        let pathComponents = filename
-            .split(separator: "/")
-            .map(String.init)
-            .filter { !$0.isEmpty && $0 != "." && $0 != ".." }
+    private func extensionLabel(for attachment: RecordingAttachment) -> String? {
+        let originalExtension = (attachment.originalName as NSString).pathExtension
+        let storedExtension = (attachment.filename as NSString).pathExtension
+        let ext = originalExtension.isEmpty ? storedExtension : originalExtension
+        guard !ext.isEmpty else { return nil }
+        return String(ext.uppercased().prefix(5))
+    }
 
-        var candidates: [URL] = []
-        if !pathComponents.isEmpty {
-            candidates += searchDirectories.map { directory in
-                pathComponents.reduce(directory) { partial, component in
-                    partial.appending(path: component)
-                }
-            }
+}
 
-            if let lastComponent = pathComponents.last {
-                candidates += searchDirectories.map { directory in
-                    directory.appending(path: lastComponent)
-                }
+private struct CaptureAttachmentWaveform: View {
+    let seed: Int
+
+    var body: some View {
+        Canvas { ctx, size in
+            var rng = SplitMix(seed: UInt64(bitPattern: Int64(seed)))
+            let barCount = 15
+            let gap: CGFloat = 2
+            let barWidth = (size.width - gap * CGFloat(barCount - 1)) / CGFloat(barCount)
+            for index in 0..<barCount {
+                let x = CGFloat(index) * (barWidth + gap)
+                let unit = CGFloat(rng.nextUnit())
+                let height = max(5, size.height * (0.18 + unit * 0.76))
+                let y = (size.height - height) / 2
+                let rect = CGRect(x: x, y: y, width: barWidth, height: height)
+                let path = Path(roundedRect: rect, cornerRadius: barWidth / 2)
+                ctx.fill(path, with: .color(ThemedScopeAccent.capture.opacity(index % 3 == 0 ? 0.90 : 0.62)))
             }
         }
+        .allowsHitTesting(false)
+    }
 
-        return candidates.first { url in
-            var isDirectory: ObjCBool = false
-            return fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory)
-                && !isDirectory.boolValue
+    private struct SplitMix {
+        var state: UInt64
+
+        init(seed: UInt64) {
+            state = seed == 0 ? 0xDEADBEEF : seed
+        }
+
+        mutating func nextUnit() -> Double {
+            state &+= 0x9E3779B97F4A7C15
+            var z = state
+            z = (z ^ (z >> 30)) &* 0xBF58476D1CE4E5B9
+            z = (z ^ (z >> 27)) &* 0x94D049BB133111EB
+            z = z ^ (z >> 31)
+            return Double(z >> 11) / Double(UInt64(1) << 53)
         }
     }
 }

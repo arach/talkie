@@ -20,7 +20,9 @@ enum ComposeNoteStore {
         let id: UUID
         let instruction: String
         let scope: String
+        let originalText: String?
         let revisedText: String
+        let documentTextBefore: String?
         let documentText: String
         let providerName: String
         let modelId: String
@@ -30,7 +32,9 @@ enum ComposeNoteStore {
             id: UUID = UUID(),
             instruction: String,
             scope: String,
+            originalText: String? = nil,
             revisedText: String,
+            documentTextBefore: String? = nil,
             documentText: String,
             providerName: String,
             modelId: String,
@@ -39,7 +43,9 @@ enum ComposeNoteStore {
             self.id = id
             self.instruction = instruction
             self.scope = scope
+            self.originalText = originalText
             self.revisedText = revisedText
+            self.documentTextBefore = documentTextBefore
             self.documentText = documentText
             self.providerName = providerName
             self.modelId = modelId

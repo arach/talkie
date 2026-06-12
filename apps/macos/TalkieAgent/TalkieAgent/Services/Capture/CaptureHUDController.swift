@@ -41,7 +41,8 @@ final class CaptureHUDController: CaptureChordController {
             // uses ScreenCaptureKit, so it must never hold up showing the HUD.
             let expectedFrame = CaptureHUDPanel.expectedFrame(
                 for: NSEvent.mouseLocation,
-                position: Self.captureHUDPosition
+                position: Self.captureHUDPosition,
+                mode: initialMode
             )
             panel.show(
                 mode: initialMode,

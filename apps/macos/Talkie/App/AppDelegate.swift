@@ -1827,7 +1827,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     /// - C = Compose
     /// - R = Record (start a new memo recording)
     /// - D = Dictations
-    /// - N = Notes, S = Screenshots
+    /// - L = Library, N = Notes, S = Screenshots
     /// - J = Navigate down (vim-style)
     /// - K = Navigate up (vim-style)
     /// - O = Open/activate selected item

@@ -678,8 +678,21 @@ private struct ScopeDictionarySection: View {
 // MARK: - Actions section
 
 private struct ScopeActionsSection: View {
+    @Environment(SettingsManager.self) private var settings
+    private let workflowService = WorkflowService.shared
+
+    @State private var selectedAction: Workflow?
+    @State private var showingNewActionSheet = false
+
+    private var availableWorkflows: [Workflow] { workflowService.enabledWorkflows }
+    private var interstitialActions: [Workflow] { workflowService.actionsForInterstitial() }
+    private var draftsActions: [Workflow] { workflowService.actionsForDrafts() }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        @Bindable var settings = settings
+
+        VStack(alignment: .leading, spacing: 22) {
+
             HStack(alignment: .firstTextBaseline) {
                 Eyebrow("Placements")
                 Spacer()
@@ -689,19 +702,340 @@ private struct ScopeActionsSection: View {
                     .foregroundStyle(ScopeInk.subtle)
             }
 
-            VStack(alignment: .leading, spacing: Spacing.lg) {
-                ActionsSettingsContent(presentation: .consumer)
+            // Intro note
+            HStack(alignment: .top, spacing: 10) {
+                PhosphorDot(color: ScopeAmber.solid, size: 5)
+                    .padding(.top, 5)
+                Text("Buttons are one-tap workflows. Choose where each appears — right after recording, or while editing in drafts.")
+                    .font(.system(size: 13, design: .serif).italic())
+                    .foregroundStyle(ScopeInk.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(ScopeCanvas.surface)
+
+            // Default writing style card
+            scopeCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    cardHeader("B-00", title: "Default Writing Style")
+                    Text("Used when Talkie needs a default prompt for notes and quick buttons.")
+                        .font(.system(size: 12, design: .serif).italic())
+                        .foregroundStyle(ScopeInk.muted)
+
+                    TextEditor(text: $settings.composeAssistantPrompt)
+                        .font(.system(size: 12, design: .monospaced))
+                        .scrollContentBackground(.hidden)
+                        .frame(minHeight: 100, maxHeight: 160)
+                        .padding(10)
+                        .background(ScopeCanvas.canvas)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(ScopeEdge.normal, lineWidth: 0.5)
+                        )
+
+                    HStack {
+                        Button("Reset style") {
+                            settings.composeAssistantPrompt = SettingsManager.defaultComposeAssistantPrompt
+                        }
+                        .font(ScopeType.chrome)
+                        .buttonStyle(.plain)
+                        .foregroundStyle(ScopeInk.faint)
+
+                        Spacer()
+
+                        if let provider = settings.composeLLMProviderId,
+                           let model = settings.composeLLMModelId {
+                            Text("sticky: \(provider) / \(model)")
+                                .font(ScopeType.chrome)
+                                .tracking(ScopeType.Tracking.wide)
+                                .foregroundStyle(ScopeInk.faint)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+            }
+
+            // Available workflows card
+            scopeCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .firstTextBaseline) {
+                        cardHeader("B-01", title: "Available Workflows")
+                        Spacer()
+                        Text("\(availableWorkflows.count) AVAILABLE")
+                            .font(ScopeType.chrome)
+                            .tracking(ScopeType.Tracking.wide)
+                            .foregroundStyle(ScopeInk.subtle)
+                    }
+                    Text("Choose where each workflow should show up as a button.")
+                        .font(.system(size: 12, design: .serif).italic())
+                        .foregroundStyle(ScopeInk.muted)
+
+                    if availableWorkflows.isEmpty {
+                        emptyHint("No workflows yet — create one below to turn it into a button.")
+                    } else {
+                        VStack(spacing: 0) {
+                            ForEach(Array(availableWorkflows.enumerated()), id: \.element.id) { idx, wf in
+                                workflowToggleRow(wf, isLast: idx == availableWorkflows.count - 1)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // New workflow row
+            Button(action: { showingNewActionSheet = true }) {
+                HStack(spacing: 12) {
+                    ChannelLabel("NEW")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("New Workflow")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(ScopeInk.primary)
+                        Text("Create a custom LLM prompt workflow")
+                            .font(ScopeType.chrome)
+                            .tracking(ScopeType.Tracking.normal)
+                            .foregroundStyle(ScopeInk.muted)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(ScopeInk.faint)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .background(RoundedRectangle(cornerRadius: 6).fill(ScopeCanvas.surface))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(ScopeEdge.normal, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+
+            // After recording card
+            placementCard(
+                channel: "PL-01",
+                title: "After Recording",
+                detail: "Buttons shown right after you finish recording.",
+                workflows: interstitialActions,
+                emptyHint: "Turn on \"After Recording\" for a workflow above to see it here."
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(ScopeEdge.normal, lineWidth: 1)
+
+            // In drafts card
+            placementCard(
+                channel: "PL-02",
+                title: "In Drafts",
+                detail: "Buttons shown while editing in Compose and Drafts.",
+                workflows: draftsActions,
+                emptyHint: "Turn on \"Drafts\" for a workflow above to see it here."
             )
         }
+        .sheet(isPresented: $showingNewActionSheet) {
+            ActionEditorSheet(
+                isNew: true,
+                onSave: { definition in
+                    Task { try? await workflowService.save(definition) }
+                    showingNewActionSheet = false
+                },
+                onCancel: { showingNewActionSheet = false }
+            )
+            .frame(minWidth: 500, minHeight: 450)
+        }
+        .sheet(item: $selectedAction) { action in
+            ActionEditorSheet(
+                workflow: action.definition,
+                isNew: false,
+                onSave: { definition in
+                    Task { try? await workflowService.save(definition) }
+                    selectedAction = nil
+                },
+                onCancel: { selectedAction = nil }
+            )
+            .frame(minWidth: 500, minHeight: 450)
+        }
+    }
+
+    // MARK: - Card shell
+
+    @ViewBuilder
+    private func scopeCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .padding(16)
+            .background(RoundedRectangle(cornerRadius: 6).fill(ScopeCanvas.surface))
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(ScopeEdge.normal, lineWidth: 1))
+    }
+
+    private func cardHeader(_ channel: String, title: String) -> some View {
+        HStack(spacing: 8) {
+            ChannelLabel(channel)
+            Text(title.uppercased())
+                .font(ScopeType.eyebrow)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopeInk.primary)
+        }
+    }
+
+    // MARK: - Workflow toggle row
+
+    @ViewBuilder
+    private func workflowToggleRow(_ workflow: Workflow, isLast: Bool) -> some View {
+        let pref = getPreference(for: workflow.id)
+
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(workflow.color.color.opacity(0.14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .stroke(workflow.color.color.opacity(0.32), lineWidth: 0.5)
+                )
+                .frame(width: 28, height: 28)
+                .overlay(
+                    Image(systemName: workflow.icon)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(workflow.color.color)
+                )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(workflow.name)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(ScopeInk.primary)
+                Text("\(workflow.steps.count) step\(workflow.steps.count == 1 ? "" : "s")")
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.normal)
+                    .foregroundStyle(ScopeInk.faint)
+            }
+
+            Spacer()
+
+            Toggle("", isOn: Binding(
+                get: { pref.showInInterstitial },
+                set: { newValue in
+                    Task { try? await workflowService.setActionContext(for: workflow.id, showInInterstitial: newValue) }
+                }
+            ))
+            .toggleStyle(ScopePlacementToggle(label: "INT"))
+            .labelsHidden()
+
+            Toggle("", isOn: Binding(
+                get: { pref.showInDrafts },
+                set: { newValue in
+                    Task { try? await workflowService.setActionContext(for: workflow.id, showInDrafts: newValue) }
+                }
+            ))
+            .toggleStyle(ScopePlacementToggle(label: "DFT"))
+            .labelsHidden()
+
+            Button(action: { selectedAction = workflow }) {
+                Image(systemName: "pencil")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(ScopeInk.faint)
+                    .frame(width: 22, height: 22)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 3)
+                            .stroke(ScopeEdge.faint, lineWidth: 0.5)
+                    )
+            }
+            .buttonStyle(.plain)
+            .help("Edit workflow")
+        }
+        .padding(.vertical, 10)
+        .overlay(alignment: .bottom) {
+            if !isLast {
+                Rectangle()
+                    .fill(ScopeEdge.faint.opacity(0.6))
+                    .frame(height: 0.5)
+            }
+        }
+    }
+
+    // MARK: - Placement card
+
+    private func placementCard(channel: String, title: String, detail: String, workflows: [Workflow], emptyHint: String) -> some View {
+        scopeCard {
+            VStack(alignment: .leading, spacing: 12) {
+                cardHeader(channel, title: title)
+                Text(detail)
+                    .font(.system(size: 12, design: .serif).italic())
+                    .foregroundStyle(ScopeInk.muted)
+
+                if workflows.isEmpty {
+                    self.emptyHint(emptyHint)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(Array(workflows.enumerated()), id: \.element.id) { idx, wf in
+                            HStack(spacing: 12) {
+                                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                    .fill(wf.color.color.opacity(0.14))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                            .stroke(wf.color.color.opacity(0.32), lineWidth: 0.5)
+                                    )
+                                    .frame(width: 26, height: 26)
+                                    .overlay(
+                                        Image(systemName: wf.icon)
+                                            .font(.system(size: 11, weight: .semibold))
+                                            .foregroundStyle(wf.color.color)
+                                    )
+                                Text(wf.name)
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(ScopeInk.primary)
+                                Spacer()
+                            }
+                            .padding(.vertical, 9)
+                            .overlay(alignment: .bottom) {
+                                if idx < workflows.count - 1 {
+                                    Rectangle()
+                                        .fill(ScopeEdge.faint.opacity(0.6))
+                                        .frame(height: 0.5)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Empty hint
+
+    private func emptyHint(_ text: String) -> some View {
+        HStack(spacing: 8) {
+            PhosphorDot(color: ScopeInk.faint, size: 4)
+            Text(text)
+                .font(.system(size: 12, design: .serif).italic())
+                .foregroundStyle(ScopeInk.faint)
+        }
+        .padding(.vertical, 6)
+    }
+
+    // MARK: - Helpers
+
+    private func getPreference(for workflowId: UUID) -> WorkflowPreference {
+        let repo = WorkflowPreferencesRepository()
+        return (try? repo.fetch(for: workflowId)) ?? WorkflowPreference.defaults(for: workflowId)
+    }
+}
+
+// MARK: - Scope placement toggle chip
+
+private struct ScopePlacementToggle: ToggleStyle {
+    let label: String
+
+    func makeBody(configuration: Configuration) -> some View {
+        Button(action: { configuration.isOn.toggle() }) {
+            Text(label)
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .tracking(0.6)
+                .foregroundStyle(configuration.isOn ? ScopeAmber.solid : ScopeInk.subtle)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(
+                    configuration.isOn
+                        ? ScopeAmber.solid.opacity(0.12)
+                        : Color.clear
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 3)
+                        .stroke(
+                            configuration.isOn ? ScopeAmber.solid.opacity(0.45) : ScopeEdge.normal,
+                            lineWidth: 0.5
+                        )
+                )
+        }
+        .buttonStyle(.plain)
     }
 }
 

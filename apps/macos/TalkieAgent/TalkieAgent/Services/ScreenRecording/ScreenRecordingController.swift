@@ -532,7 +532,8 @@ private final class ScreenRecordingCountdownController {
     private func showHUD(for target: ScreenRecordingTarget) {
         let expectedFrame = CaptureHUDPanel.expectedFrame(
             for: NSEvent.mouseLocation,
-            position: Self.captureHUDPosition
+            position: Self.captureHUDPosition,
+            mode: .video
         )
 
         hudPanel.show(

@@ -15,24 +15,34 @@ struct TalkieAIProviderResolver {
 
     func configuredProvider() -> ComposeBorrowedProvider? {
         let settings = TalkieAppSettings.shared
-        let providerId = settings.composeDirectProviderId.trimmingCharacters(in: .whitespacesAndNewlines)
-        let modelId = settings.composeDirectModelId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let providerId = settings.composeDirectProviderId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let resolvedProviderId = providerId.isEmpty ? "openai" : providerId
+        let rawModelId = settings.composeDirectModelId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let modelId = TalkieAIProviderCredentialPayload.normalizedDefaultModel(
+            rawModelId.isEmpty ? nil : rawModelId,
+            for: resolvedProviderId
+        )
+        if let modelId, modelId != rawModelId {
+            settings.composeDirectModelId = modelId
+        }
 
         if let cachedProvider = ComposeProviderCredentialStore.shared.load(
-            providerId: providerId.isEmpty ? nil : providerId,
-            modelId: modelId.isEmpty ? nil : modelId
+            providerId: resolvedProviderId,
+            modelId: modelId
         ) {
             return cachedProvider
         }
 
         if let savedKeyProvider = keychainBackedProvider(
-            providerId: providerId.isEmpty ? "openai" : providerId,
-            modelId: modelId.isEmpty ? nil : modelId
+            providerId: resolvedProviderId,
+            modelId: modelId
         ) {
             return savedKeyProvider
         }
 
-        return legacyOpenAITTSProvider(modelId: modelId.isEmpty ? nil : modelId)
+        return legacyOpenAITTSProvider(modelId: modelId)
     }
 
     func provider(providerId requestedProviderId: String, modelId requestedModelId: String? = nil) -> ComposeBorrowedProvider? {
@@ -41,23 +51,27 @@ struct TalkieAIProviderResolver {
             .lowercased()
         guard !providerId.isEmpty else { return nil }
 
-        let modelId = requestedModelId?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let rawModelId = requestedModelId?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let modelId = TalkieAIProviderCredentialPayload.normalizedDefaultModel(
+            rawModelId?.isEmpty == true ? nil : rawModelId,
+            for: providerId
+        )
         if let cachedProvider = ComposeProviderCredentialStore.shared.load(
             providerId: providerId,
-            modelId: modelId?.isEmpty == true ? nil : modelId
+            modelId: modelId
         ) {
             return cachedProvider
         }
 
         if let savedKeyProvider = keychainBackedProvider(
             providerId: providerId,
-            modelId: modelId?.isEmpty == true ? nil : modelId
+            modelId: modelId
         ) {
             return savedKeyProvider
         }
 
         guard providerId == "openai" else { return nil }
-        return legacyOpenAITTSProvider(modelId: modelId?.isEmpty == true ? nil : modelId)
+        return legacyOpenAITTSProvider(modelId: modelId)
     }
 
     private func keychainBackedProvider(providerId: String, modelId: String?) -> ComposeBorrowedProvider? {

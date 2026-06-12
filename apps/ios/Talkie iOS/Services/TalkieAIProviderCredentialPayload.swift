@@ -152,6 +152,15 @@ struct TalkieAIProviderCredentialPayload: Codable, Equatable {
         }
     }
 
+    static func normalizedDefaultModel(_ modelId: String?, for providerId: String) -> String? {
+        let trimmed = modelId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !trimmed.isEmpty else { return nil }
+        if isLegacyDefaultModel(trimmed, for: providerId) {
+            return defaultModel(for: providerId)
+        }
+        return trimmed
+    }
+
     private static func isValidAPIKey(_ apiKey: String, providerId: String) -> Bool {
         AIProviderCatalog.isValidKeyFormat(apiKey, providerId: providerId)
     }
