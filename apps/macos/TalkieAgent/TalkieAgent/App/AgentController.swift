@@ -614,26 +614,11 @@ final class AgentController: ObservableObject {
         let isCancelledSetup = errorMsg.localizedCaseInsensitiveContains("setup incomplete")
         let isNoAudioCaptured = errorMsg.localizedCaseInsensitiveContains("no audio captured")
 
-        // Check if "setup incomplete" was likely a HAL failure (user waited >1s but no audio)
-        // If user cancelled within 1s, it's probably intentional. After 1s, audio should have started.
-        let waitedForAudio: Bool
-        if let startTime = recordingStartTime {
-            let elapsed = Date().timeIntervalSince(startTime)
-            waitedForAudio = elapsed > 1.0
-        } else {
-            waitedForAudio = false
-        }
-
-        let isLikelyHALFailure = isCancelledSetup && waitedForAudio
         let isRecoverableNoAudio = isShortRecording || isCancelledSetup || isNoAudioCaptured
-        let isGracefulCancel = isRecoverableNoAudio && !isLikelyHALFailure
+        let isGracefulCancel = isRecoverableNoAudio
         let shouldOfferRetry = isGracefulCancel && !isCancelled
 
-        if isLikelyHALFailure {
-            log.warning("⚠️ Audio setup failed after waiting - likely HAL corruption")
-            AppLogger.shared.log(.audio, "Audio setup failed", detail: "HAL likely corrupted")
-            FloatingPillController.shared.showError("Mic unavailable — another app may be using it")
-        } else if isGracefulCancel {
+        if isGracefulCancel {
             let reason = if isShortRecording {
                 "Too short to transcribe"
             } else if isNoAudioCaptured {
