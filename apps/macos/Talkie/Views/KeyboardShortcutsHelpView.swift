@@ -33,6 +33,7 @@ private enum KeyboardShortcutCatalog {
             [
                 ShortcutItem(keys: "C", description: "Compose"),
                 ShortcutItem(keys: "R", description: "Record"),
+                ShortcutItem(keys: "L", description: "Library"),
                 ShortcutItem(keys: "D", description: "Dictations"),
                 ShortcutItem(keys: "N", description: "Notes"),
                 ShortcutItem(keys: "S", description: "Screenshots"),
@@ -69,6 +70,7 @@ private enum KeyboardShortcutCatalog {
             [
                 ShortcutItem(keys: "C", description: "Compose"),
                 ShortcutItem(keys: "R", description: "Record"),
+                ShortcutItem(keys: "L", description: "Library"),
                 ShortcutItem(keys: "D", description: "Dictations"),
                 ShortcutItem(keys: "N", description: "Notes"),
                 ShortcutItem(keys: "S", description: "Screenshots"),
@@ -95,7 +97,7 @@ private enum KeyboardShortcutCatalog {
             "arrow.triangle.branch",
             [
                 ShortcutItem(keys: "⌘K → type", description: "Jump to any section"),
-                ShortcutItem(keys: "C R D N S", description: "Jump to Compose / Record / Dictations / Notes / Screenshots"),
+                ShortcutItem(keys: "C R L D N S", description: "Jump to Compose / Record / Library / Dictations / Notes / Screenshots"),
             ]
         ),
         (
@@ -133,7 +135,7 @@ private enum KeyboardShortcutCatalog {
     static let inlineHintRows: [ShortcutItem] = [
         ShortcutItem(keys: "J K O", description: "List move / open"),
         ShortcutItem(keys: "↑↓ ↵", description: "List navigate"),
-        ShortcutItem(keys: "C R D N S", description: "Jump screens"),
+        ShortcutItem(keys: "C R L D N S", description: "Jump screens"),
         ShortcutItem(keys: "⌘K", description: "Command palette"),
         ShortcutItem(keys: "?", description: "Cheat sheet"),
         ShortcutItem(keys: "⌘⇧?", description: "These hints"),

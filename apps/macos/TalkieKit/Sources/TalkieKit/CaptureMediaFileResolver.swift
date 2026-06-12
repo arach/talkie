@@ -47,6 +47,10 @@ public enum CaptureMediaFileResolver {
             .appending(path: "clips", directoryHint: .isDirectory)
     }
 
+    public static var attachmentsDirectory: URL {
+        AttachmentStorage.attachmentsDirectory
+    }
+
     public static func primaryMedia(for object: TalkieObject) -> CaptureMediaAsset? {
         if let shot = object.screenshots.first,
            let url = screenshotURL(filename: shot.filename) {
@@ -65,6 +69,10 @@ public enum CaptureMediaFileResolver {
             if let url = visualContextContactSheetURL(for: context) {
                 return .image(url)
             }
+        }
+
+        if let attachmentAsset = object.attachments.lazy.compactMap(mediaAsset(for:)).first {
+            return attachmentAsset
         }
 
         return nil
@@ -88,6 +96,30 @@ public enum CaptureMediaFileResolver {
             searchDirectories: [
                 VideoClipStorage.videosDirectory,
                 trayClipsDirectory,
+                appSupportTalkieDirectory,
+                applicationSupportDirectory,
+            ]
+        )
+    }
+
+    public static func mediaAsset(for attachment: RecordingAttachment) -> CaptureMediaAsset? {
+        guard let url = attachmentURL(filename: attachment.filename) else { return nil }
+
+        switch mediaKind(for: attachment) {
+        case .image:
+            return .image(url)
+        case .video:
+            return .video(url)
+        case .audio, .document, .pdf, .other:
+            return nil
+        }
+    }
+
+    public static func attachmentURL(filename: String) -> URL? {
+        existingFileURL(
+            filename: filename,
+            searchDirectories: [
+                attachmentsDirectory,
                 appSupportTalkieDirectory,
                 applicationSupportDirectory,
             ]
@@ -122,6 +154,22 @@ public enum CaptureMediaFileResolver {
                 applicationSupportDirectory,
             ]
         )
+    }
+
+    private static func mediaKind(for attachment: RecordingAttachment) -> AttachmentKind {
+        switch attachment.kind {
+        case .image, .video:
+            return attachment.kind
+        case .audio, .document, .pdf, .other:
+            let filenameExtension = (attachment.filename as NSString).pathExtension
+            let originalExtension = (attachment.originalName as NSString).pathExtension
+            let ext = originalExtension.isEmpty ? filenameExtension : originalExtension
+            let inferredKind = AttachmentKind.from(extension: ext)
+            guard inferredKind == .image || inferredKind == .video else {
+                return attachment.kind
+            }
+            return inferredKind
+        }
     }
 
     public static func existingFileURL(filename: String, searchDirectories: [URL]) -> URL? {

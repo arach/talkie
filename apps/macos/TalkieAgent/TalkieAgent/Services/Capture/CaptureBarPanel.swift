@@ -83,7 +83,12 @@ enum CaptureBarResult {
 @MainActor
 @Observable
 final class CaptureBarState {
-    var mode: CaptureBarMode = .screenshot
+    var mode: CaptureBarMode = .screenshot {
+        didSet {
+            guard mode != oldValue else { return }
+            onModeChanged?(mode)
+        }
+    }
     var showCameraOption: Bool = false
     var showTrayOption: Bool = false
     var showSelectionOption: Bool = false
@@ -97,6 +102,7 @@ final class CaptureBarState {
     /// Click callback from the SwiftUI view.
     /// `nil` result = interaction only (e.g. mode toggle), resets timeout but doesn't dismiss.
     var onAction: ((CaptureBarResult?) -> Void)?
+    var onModeChanged: ((CaptureBarMode) -> Void)?
 
     var screenRecordingIncludesSystemAudio: Bool = sharedBool(
         forKey: AgentSettingsKey.screenRecordingIncludesSystemAudio

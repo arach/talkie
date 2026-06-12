@@ -246,9 +246,10 @@ final class ComposeStore: ObservableObject {
     func acceptDiff() {
         guard let diff = pendingDiff else { state = .idle; return }
         let originalIndex = document.paragraphs.firstIndex(of: diff.original)
+        let documentTextBefore = documentBodyText
         document = document.replacing(diff.original, with: diff.proposed)
         persistDocument()
-        recordRevision(for: diff, originalIndex: originalIndex)
+        recordRevision(for: diff, originalIndex: originalIndex, documentTextBefore: documentTextBefore)
         pendingDiff = nil
         lastCommandTranscript = nil
         state = .idle
@@ -558,9 +559,10 @@ final class ComposeStore: ObservableObject {
                 "- Timestamp: \(Self.revisionDateFormatter.string(from: revision.createdAt))",
                 "- Scope: \(revision.scope)",
                 "- Instruction: \(revision.instruction)",
+                revision.originalText.map { "- Original text:\n\($0)" },
                 "- Revised text:",
                 revision.revisedText,
-            ].joined(separator: "\n")
+            ].compactMap { $0 }.joined(separator: "\n")
         }.joined(separator: "\n\n")
     }
 
@@ -652,13 +654,15 @@ final class ComposeStore: ObservableObject {
         }
     }
 
-    private func recordRevision(for diff: Diff, originalIndex: Int?) {
+    private func recordRevision(for diff: Diff, originalIndex: Int?, documentTextBefore: String) {
         guard !isMockDocument, let noteID = persistentNoteID else { return }
         let scope = originalIndex.map { "Paragraph \($0 + 1)" } ?? "Document"
         let record = ComposeNoteStore.RevisionRecord(
             instruction: lastCommandTranscript ?? "Quick transform",
             scope: scope,
+            originalText: diff.original,
             revisedText: diff.proposed,
+            documentTextBefore: documentTextBefore,
             documentText: document.paragraphs.joined(separator: "\n\n"),
             providerName: lastRevisionProviderName,
             modelId: lastRevisionModelId

@@ -14,7 +14,7 @@
 //    │   [crop]        [display]      [window]                     │
 //    │    A              S              D                          │
 //    │  Region        Screen         Window                        │
-//    ├─ RECORDING OPTIONS ─────────────────────────────────────────┤
+//    ├─ RECORDING OPTIONS (video mode only) ───────────────────────┤
 //    │  Audio on/off   Mic on/off     Bubble on/off                │
 //    ├─ BOTTOM STRIP (stripBottom gradient) ───────────────────────┤
 //    │  Optional contextual actions: note, paste latest, tray       │
@@ -30,7 +30,8 @@ import SwiftUI
 final class CaptureHUDPanel {
 
     static let panelWidth: CGFloat = 384
-    static let panelHeight: CGFloat = 194
+    static let screenshotPanelHeight: CGFloat = 156
+    static let videoPanelHeight: CGFloat = 194
 
     private var panel: NSPanel?
     let state = CaptureBarState()
@@ -43,8 +44,10 @@ final class CaptureHUDPanel {
     /// the same rect we're about to draw into, with no chance of drift.
     static func expectedFrame(
         for mouseLocation: NSPoint,
-        position: CaptureHUDPosition
+        position: CaptureHUDPosition,
+        mode: CaptureBarMode = .video
     ) -> NSRect {
+        let panelHeight = Self.panelHeight(for: mode)
         let cursorScreen = NSScreen.screens.first(where: { NSMouseInRect(mouseLocation, $0.frame, false) })
         let screen: NSScreen? = {
             switch position {
@@ -102,6 +105,10 @@ final class CaptureHUDPanel {
         }
     }
 
+    static func panelHeight(for mode: CaptureBarMode) -> CGFloat {
+        mode == .video ? videoPanelHeight : screenshotPanelHeight
+    }
+
     private static func clamp(_ v: CGFloat, min lo: CGFloat, max hi: CGFloat) -> CGFloat {
         Swift.max(lo, Swift.min(v, hi))
     }
@@ -121,6 +128,7 @@ final class CaptureHUDPanel {
         state.showTrayOption = showTrayOption
         state.showSelectionOption = showSelectionOption
         state.trayCount = trayCount
+        state.onModeChanged = nil
         self.palette = palette
 
         let hostingView = NSHostingView(rootView: CaptureHUDView(state: state, palette: palette))
@@ -130,7 +138,8 @@ final class CaptureHUDPanel {
 
         let origin = Self.expectedFrame(
             for: NSEvent.mouseLocation,
-            position: Self.captureHUDPosition
+            position: Self.captureHUDPosition,
+            mode: mode
         )
 
         let p = NSPanel(
@@ -162,10 +171,14 @@ final class CaptureHUDPanel {
         }
 
         self.panel = p
+        state.onModeChanged = { [weak self] mode in
+            self?.resize(for: mode)
+        }
     }
 
     func dismiss() {
         state.onAction = nil
+        state.onModeChanged = nil
 
         guard let p = panel else { return }
         panel = nil
@@ -192,6 +205,31 @@ final class CaptureHUDPanel {
 
     func toggleMode() {
         state.mode = (state.mode == .screenshot) ? .video : .screenshot
+    }
+
+    private func resize(for mode: CaptureBarMode) {
+        guard let panel else { return }
+        let height = Self.panelHeight(for: mode)
+        guard abs(panel.frame.height - height) > 0.5 else { return }
+
+        var frame = panel.frame
+        frame.origin.y = frame.maxY - height
+        frame.size.height = height
+
+        if let screen = NSScreen.screens.first(where: { NSIntersectsRect($0.frame, panel.frame) })
+            ?? NSScreen.main
+            ?? NSScreen.screens.first {
+            let margin: CGFloat = 8
+            let visible = screen.visibleFrame
+            if frame.minY < visible.minY + margin {
+                frame.origin.y = visible.minY + margin
+            }
+            if frame.maxY > visible.maxY - margin {
+                frame.origin.y = visible.maxY - margin - height
+            }
+        }
+
+        panel.setFrame(frame, display: true, animate: true)
     }
 
     private static var captureHUDPosition: CaptureHUDPosition {
@@ -225,10 +263,12 @@ private struct CaptureHUDView: View {
         VStack(spacing: 0) {
             topStrip
             primaryCells
-            recordingOptionsStrip
+            if isVideo {
+                recordingOptionsStrip
+            }
             bottomStrip
         }
-        .frame(width: CaptureHUDPanel.panelWidth, height: CaptureHUDPanel.panelHeight)
+        .frame(width: CaptureHUDPanel.panelWidth, height: CaptureHUDPanel.panelHeight(for: state.mode))
         .background(Color.captureHex(tokens.bgHex))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(

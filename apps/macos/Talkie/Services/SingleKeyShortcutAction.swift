@@ -9,6 +9,7 @@
 enum SingleKeyShortcutAction: String, CaseIterable, Identifiable {
     case compose = "c"
     case record = "r"
+    case library = "l"
     case dictations = "d"
     case notes = "n"
     case screenshots = "s"
@@ -19,6 +20,7 @@ enum SingleKeyShortcutAction: String, CaseIterable, Identifiable {
         switch self {
         case .compose: return "Compose"
         case .record: return "Record"
+        case .library: return "Library"
         case .dictations: return "Dictations"
         case .notes: return "Notes"
         case .screenshots: return "Screenshots"
@@ -38,6 +40,8 @@ enum SingleKeyShortcutAction: String, CaseIterable, Identifiable {
             NavigationState.shared.navigateToCompose()
         case .record:
             MemoRecordingController.shared.startRecording()
+        case .library:
+            NavigationState.shared.navigate(to: .recordings)
         case .dictations:
             NavigationState.shared.navigateToDictations()
         case .notes:

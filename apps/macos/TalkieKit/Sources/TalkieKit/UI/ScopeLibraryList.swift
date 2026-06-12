@@ -18,6 +18,7 @@
 
 import SwiftUI
 import AppKit
+import ImageIO
 
 // MARK: - Date bucket
 
@@ -278,17 +279,13 @@ public struct ScopeLibraryRow: View {
     public var body: some View {
         Button(action: onSelect) {
             HStack(alignment: .center, spacing: 12) {
-                // Channel tag
-                ChannelLabel(
-                    channelLetter,
-                    color: isSelected ? ScopeAmber.solid : channelColor,
-                    strokeColor: isSelected ? ScopeAmber.solid.opacity(0.5) : ScopeEdge.normal
+                ScopeLibraryLeadingMark(
+                    channelLetter: channelLetter,
+                    channelColor: isSelected ? ScopeAmber.solid : channelColor,
+                    strokeColor: isSelected ? ScopeAmber.solid.opacity(0.5) : ScopeEdge.normal,
+                    content: leadingContent,
+                    isSelected: isSelected
                 )
-                .frame(width: 26, alignment: .leading)
-
-                if hasVisualPreview {
-                    ScopeLibraryMediaThumbnail(recording: recording, isSelected: isSelected)
-                }
 
                 // Title + chrome
                 VStack(alignment: .leading, spacing: 3) {
@@ -373,7 +370,7 @@ public struct ScopeLibraryRow: View {
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .contentShape(Rectangle())
-        .modifier(CaptureRowDragModifier(fileURL: primaryMediaURL))
+        .modifier(CaptureRowDragModifier(fileURL: primaryDraggableFileURL))
     }
 
     private var timeAgo: String {
@@ -383,65 +380,339 @@ public struct ScopeLibraryRow: View {
     /// First visual media file on disk, if any. Captures (and notes /
     /// memos with media attached) drag as the file URL so the receiver
     /// sees a real file, not bitmap data. nil for audio/text-only rows.
-    private var primaryMediaURL: URL? {
-        CaptureMediaFileResolver.primaryMedia(for: recording)?.url
-    }
-
-    private var hasVisualPreview: Bool {
-        CaptureMediaFileResolver.primaryMedia(for: recording) != nil
-    }
-}
-
-private struct ScopeLibraryMediaThumbnail: View {
-    let recording: TalkieObject
-    let isSelected: Bool
-
-    @State private var image: NSImage?
-
-    private var media: CaptureMediaAsset? {
+    private var primaryMedia: CaptureMediaAsset? {
         CaptureMediaFileResolver.primaryMedia(for: recording)
     }
 
-    private var taskID: String {
-        media?.url.path ?? recording.id.uuidString
+    private var primaryAttachment: RecordingAttachment? {
+        recording.attachments.first
+    }
+
+    private var primaryDraggableFileURL: URL? {
+        primaryMedia?.url ?? recording.attachments.lazy
+            .compactMap { CaptureMediaFileResolver.attachmentURL(filename: $0.filename) }
+            .first
+    }
+
+    private var leadingContent: ScopeLibraryLeadingContent {
+        if let media = primaryMedia {
+            return .media(media)
+        }
+
+        if let attachment = primaryAttachment {
+            if attachment.kind == .audio {
+                return .waveform(seed: recording.id.uuidString.hashValue, color: channelColor)
+            }
+            return .file(
+                icon: attachment.kind.icon,
+                extensionLabel: Self.extensionLabel(for: attachment),
+                color: color(for: attachment.kind)
+            )
+        }
+
+        if recording.type == .dictation || recording.type == .segment || recording.hasAudio || recording.duration > 0 {
+            return .waveform(seed: recording.id.uuidString.hashValue, color: channelColor)
+        }
+
+        return .channel
+    }
+
+    private static func extensionLabel(for attachment: RecordingAttachment) -> String? {
+        let originalExtension = (attachment.originalName as NSString).pathExtension
+        let storedExtension = (attachment.filename as NSString).pathExtension
+        let ext = originalExtension.isEmpty ? storedExtension : originalExtension
+        guard !ext.isEmpty else { return nil }
+        return String(ext.uppercased().prefix(5))
+    }
+
+    private func color(for kind: AttachmentKind) -> Color {
+        switch kind {
+        case .image:
+            return ScopeKind.capture
+        case .video:
+            return ScopeTrace.solid
+        case .audio:
+            return ScopeKind.dict
+        case .pdf:
+            return ScopeAmber.solid
+        case .document:
+            return ScopeKind.note
+        case .other:
+            return ScopeInk.muted
+        }
+    }
+}
+
+private enum ScopeLibraryLeadingContent {
+    case media(CaptureMediaAsset)
+    case waveform(seed: Int, color: Color)
+    case file(icon: String, extensionLabel: String?, color: Color)
+    case channel
+}
+
+private struct ScopeLibraryLeadingMark: View {
+    static let width: CGFloat = 52
+
+    let channelLetter: String
+    let channelColor: Color
+    let strokeColor: Color
+    let content: ScopeLibraryLeadingContent
+    let isSelected: Bool
+
+    var body: some View {
+        Group {
+            switch content {
+            case .media(let media):
+                ScopeLibraryMediaThumbnail(
+                    media: media,
+                    channelLetter: channelLetter,
+                    isSelected: isSelected
+                )
+            case .waveform(let seed, let color):
+                ScopeLibraryWaveformThumbnail(
+                    seed: seed,
+                    color: color,
+                    channelLetter: channelLetter,
+                    isSelected: isSelected
+                )
+            case .file(let icon, let extensionLabel, let color):
+                ScopeLibraryFileThumbnail(
+                    icon: icon,
+                    extensionLabel: extensionLabel,
+                    color: color,
+                    channelLetter: channelLetter,
+                    isSelected: isSelected
+                )
+            case .channel:
+                ChannelLabel(
+                    channelLetter,
+                    color: channelColor,
+                    strokeColor: strokeColor
+                )
+            }
+        }
+        .frame(width: Self.width, alignment: .leading)
+    }
+}
+
+private struct ScopeLibraryWaveformThumbnail: View {
+    private static let thumbnailSize = CGSize(width: 52, height: 34)
+
+    let seed: Int
+    let color: Color
+    let channelLetter: String
+    let isSelected: Bool
+
+    var body: some View {
+        ScopeLibraryThumbnailShell(
+            channelLetter: channelLetter,
+            isSelected: isSelected,
+            topTrailing: {
+                Image(systemName: "waveform")
+                    .font(.system(size: 8.5, weight: .semibold))
+                    .foregroundStyle(ScopePanel.ink.opacity(0.9))
+                    .padding(3)
+            }
+        ) {
+            Canvas { ctx, size in
+                var rng = SplitMix(seed: UInt64(bitPattern: Int64(seed)))
+                let barCount = 13
+                let gap: CGFloat = 1.5
+                let barWidth = (size.width - gap * CGFloat(barCount - 1)) / CGFloat(barCount)
+                for index in 0..<barCount {
+                    let x = CGFloat(index) * (barWidth + gap)
+                    let unit = CGFloat(rng.nextUnit())
+                    let height = max(4, size.height * (0.18 + unit * 0.72))
+                    let y = (size.height - height) / 2
+                    let rect = CGRect(x: x, y: y, width: barWidth, height: height)
+                    let path = Path(roundedRect: rect, cornerRadius: barWidth / 2)
+                    ctx.fill(path, with: .color(color.opacity(index % 3 == 0 ? 0.9 : 0.62)))
+                }
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 7)
+        }
+        .frame(width: Self.thumbnailSize.width, height: Self.thumbnailSize.height)
+    }
+
+    private struct SplitMix {
+        var state: UInt64
+
+        init(seed: UInt64) {
+            state = seed == 0 ? 0xDEADBEEF : seed
+        }
+
+        mutating func nextUnit() -> Double {
+            state &+= 0x9E3779B97F4A7C15
+            var z = state
+            z = (z ^ (z >> 30)) &* 0xBF58476D1CE4E5B9
+            z = (z ^ (z >> 27)) &* 0x94D049BB133111EB
+            z = z ^ (z >> 31)
+            return Double(z >> 11) / Double(UInt64(1) << 53)
+        }
+    }
+}
+
+private struct ScopeLibraryFileThumbnail: View {
+    private static let thumbnailSize = CGSize(width: 52, height: 34)
+
+    let icon: String
+    let extensionLabel: String?
+    let color: Color
+    let channelLetter: String
+    let isSelected: Bool
+
+    var body: some View {
+        ScopeLibraryThumbnailShell(
+            channelLetter: channelLetter,
+            isSelected: isSelected,
+            topTrailing: {
+                if let extensionLabel {
+                    Text(extensionLabel)
+                        .font(.system(size: 6.5, weight: .bold, design: .monospaced))
+                        .foregroundStyle(ScopePanel.ink.opacity(0.9))
+                        .padding(.horizontal, 3)
+                        .padding(.vertical, 2)
+                }
+            }
+        ) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(color.opacity(0.82))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(width: Self.thumbnailSize.width, height: Self.thumbnailSize.height)
+    }
+}
+
+private struct ScopeLibraryThumbnailShell<Content: View, TopTrailing: View>: View {
+    let channelLetter: String
+    let isSelected: Bool
+    @ViewBuilder var topTrailing: () -> TopTrailing
+    @ViewBuilder var content: () -> Content
+
+    private var thumbnailSize: CGSize {
+        CGSize(width: 52, height: 34)
     }
 
     var body: some View {
         ZStack {
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(ScopeCanvas.canvasAlt)
+
             RoundedRectangle(cornerRadius: 3, style: .continuous)
                 .fill(ScopeCanvas.surface)
+                .frame(width: thumbnailSize.width - 4, height: thumbnailSize.height - 4)
+
+            content()
+
+            LinearGradient(
+                colors: [
+                    .white.opacity(0.18),
+                    .clear,
+                    ScopeInk.primary.opacity(0.06)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .allowsHitTesting(false)
+        }
+        .frame(width: thumbnailSize.width, height: thumbnailSize.height)
+        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+        .overlay(thumbnailBorder)
+        .overlay(alignment: .bottomLeading) { channelBadge }
+        .overlay(alignment: .topTrailing) { topTrailing() }
+        .shadow(color: ScopeInk.primary.opacity(isSelected ? 0.14 : 0.07), radius: 2.3, y: 1.1)
+    }
+
+    private var thumbnailBorder: some View {
+        RoundedRectangle(cornerRadius: 5, style: .continuous)
+            .strokeBorder(
+                isSelected ? ScopeAmber.solid.opacity(0.7) : ScopeEdge.strong,
+                lineWidth: isSelected ? 0.9 : 0.65
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .inset(by: 2)
+                    .strokeBorder(.white.opacity(0.42), lineWidth: 0.5)
+            )
+    }
+
+    private var channelBadge: some View {
+        Text(channelLetter.uppercased())
+            .font(ScopeType.channel)
+            .tracking(ScopeType.Tracking.wide)
+            .foregroundStyle(ScopePanel.ink.opacity(0.96))
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1)
+            .background(
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(ScopePanel.bg.opacity(0.82))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .strokeBorder(
+                        isSelected ? ScopeAmber.solid.opacity(0.9) : .white.opacity(0.18),
+                        lineWidth: 0.5
+                    )
+            )
+            .padding(.leading, 3)
+            .padding(.bottom, 3)
+    }
+}
+
+private struct ScopeLibraryMediaThumbnail: View {
+    private static let thumbnailSize = CGSize(width: 52, height: 34)
+    private static let imageInset: CGFloat = 2
+    private static let thumbnailMaxPixelSize = 180
+
+    let media: CaptureMediaAsset
+    let channelLetter: String
+    let isSelected: Bool
+
+    @State private var image: NSImage?
+
+    private var taskID: String {
+        media.url.path
+    }
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(ScopeCanvas.canvasAlt)
 
             if let image {
                 Image(nsImage: image)
+                    .interpolation(.medium)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: 36, height: 28)
+                    .frame(
+                        width: Self.thumbnailSize.width - (Self.imageInset * 2),
+                        height: Self.thumbnailSize.height - (Self.imageInset * 2)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
                     .clipped()
             } else {
-                Image(systemName: media?.isVideo == true ? "play.rectangle" : "photo")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(ScopeInk.faint)
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(ScopeCanvas.surface)
+                    .frame(
+                        width: Self.thumbnailSize.width - (Self.imageInset * 2),
+                        height: Self.thumbnailSize.height - (Self.imageInset * 2)
+                    )
+
+                Image(systemName: media.isVideo ? "play.rectangle" : "photo")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(ScopeInk.subtle)
             }
 
-            if media?.isVideo == true {
-                Circle()
-                    .fill(.black.opacity(0.45))
-                    .frame(width: 14, height: 14)
-                    .overlay(
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 6.5, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.92))
-                            .offset(x: 0.5)
-                    )
-            }
+            thumbnailSheen
         }
-        .frame(width: 36, height: 28)
-        .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                .strokeBorder(isSelected ? ScopeAmber.solid.opacity(0.45) : ScopeEdge.normal, lineWidth: 0.5)
-        )
-        .shadow(color: ScopeInk.primary.opacity(isSelected ? 0.12 : 0.06), radius: 2, y: 1)
+        .frame(width: Self.thumbnailSize.width, height: Self.thumbnailSize.height)
+        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+        .overlay(thumbnailBorder)
+        .overlay(alignment: .bottomLeading) { channelBadge }
+        .overlay(alignment: .topTrailing) { videoBadge }
+        .shadow(color: ScopeInk.primary.opacity(isSelected ? 0.16 : 0.08), radius: 2.5, y: 1.2)
         .task(id: taskID) {
             await loadThumbnail()
         }
@@ -451,11 +722,6 @@ private struct ScopeLibraryMediaThumbnail: View {
     }
 
     private func loadThumbnail() async {
-        guard let media else {
-            await MainActor.run { image = nil }
-            return
-        }
-
         let cacheKey = media.url.path
         if let cached = ScopeLibraryThumbnailCache.image(for: cacheKey) {
             await MainActor.run { image = cached }
@@ -465,12 +731,15 @@ private struct ScopeLibraryMediaThumbnail: View {
         let thumbnail: NSImage?
         switch media {
         case .image(let url):
-            let data = await Task.detached(priority: .utility) {
-                try? Data(contentsOf: url)
-            }.value
-            thumbnail = data.flatMap(NSImage.init(data:))
+            thumbnail = await ScopeLibraryImageThumbnailer.thumbnailAsync(
+                for: url,
+                maxPixelSize: Self.thumbnailMaxPixelSize
+            )
         case .video(let url):
-            thumbnail = await VideoFrameThumbnailer.thumbnailAsync(for: url, maxSize: 96)
+            thumbnail = await VideoFrameThumbnailer.thumbnailAsync(
+                for: url,
+                maxSize: CGFloat(Self.thumbnailMaxPixelSize)
+            )
         }
 
         guard !Task.isCancelled else { return }
@@ -479,6 +748,74 @@ private struct ScopeLibraryMediaThumbnail: View {
         }
         await MainActor.run {
             image = thumbnail
+        }
+    }
+
+    private var thumbnailBorder: some View {
+        RoundedRectangle(cornerRadius: 5, style: .continuous)
+            .strokeBorder(
+                isSelected ? ScopeAmber.solid.opacity(0.7) : ScopeEdge.strong,
+                lineWidth: isSelected ? 0.9 : 0.65
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .inset(by: Self.imageInset)
+                    .strokeBorder(.white.opacity(0.55), lineWidth: 0.5)
+            )
+    }
+
+    private var thumbnailSheen: some View {
+        LinearGradient(
+            colors: [
+                .white.opacity(0.24),
+                .clear,
+                ScopeInk.primary.opacity(0.07)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .allowsHitTesting(false)
+    }
+
+    private var channelBadge: some View {
+        Text(channelLetter.uppercased())
+            .font(ScopeType.channel)
+            .tracking(ScopeType.Tracking.wide)
+            .foregroundStyle(ScopePanel.ink.opacity(0.96))
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1)
+            .background(
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(ScopePanel.bg.opacity(0.82))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .strokeBorder(
+                        isSelected ? ScopeAmber.solid.opacity(0.9) : .white.opacity(0.18),
+                        lineWidth: 0.5
+                    )
+            )
+            .padding(.leading, 3)
+            .padding(.bottom, 3)
+    }
+
+    @ViewBuilder
+    private var videoBadge: some View {
+        if media.isVideo {
+            Circle()
+                .fill(ScopePanel.bg.opacity(0.78))
+                .frame(width: 15, height: 15)
+                .overlay(
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 6.5, weight: .bold))
+                        .foregroundStyle(ScopePanel.ink.opacity(0.95))
+                        .offset(x: 0.5)
+                )
+                .overlay(
+                    Circle()
+                        .strokeBorder(.white.opacity(0.18), lineWidth: 0.5)
+                )
+                .padding(3)
         }
     }
 }
@@ -497,6 +834,44 @@ private enum ScopeLibraryThumbnailCache {
 
     static func set(_ image: NSImage, for key: String) {
         images.setObject(image, forKey: key as NSString)
+    }
+}
+
+private enum ScopeLibraryImageThumbnailer {
+    static func thumbnailAsync(for url: URL, maxPixelSize: Int) async -> NSImage? {
+        let box = await Task.detached(priority: .utility) {
+            SendableThumbnailBox(decodeThumbnail(for: url, maxPixelSize: maxPixelSize))
+        }.value
+        return box.image
+    }
+
+    private static func decodeThumbnail(for url: URL, maxPixelSize: Int) -> NSImage? {
+        let options: [CFString: Any] = [
+            kCGImageSourceShouldCache: false
+        ]
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, options as CFDictionary) else {
+            return nil
+        }
+
+        let thumbnailOptions: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary) else {
+            return nil
+        }
+
+        return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+    }
+
+    private final class SendableThumbnailBox: @unchecked Sendable {
+        let image: NSImage?
+
+        init(_ image: NSImage?) {
+            self.image = image
+        }
     }
 }
 
