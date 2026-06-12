@@ -424,8 +424,8 @@ final class ScreenRecordingService: NSObject {
 
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-            guard let display = displayUnderCursor(from: content.displays) else {
-                log.error("No display found under cursor")
+            guard let display = display(for: selectedRect, preferredTarget: nil, from: content.displays) else {
+                log.error("No display found for selected region")
                 return nil
             }
             return ScreenRecordingTarget(kind: .region(display, selectedRect), windowTitle: nil, appName: nil, displayName: nil)
@@ -473,13 +473,14 @@ final class ScreenRecordingService: NSObject {
         let config = SCStreamConfiguration()
         config.showsCursor = true
         config.capturesAudio = false
+        config.scalesToFit = false
 
         switch target.kind {
         case .fullscreen(let display):
             filter = SCContentFilter(display: display, excludingWindows: [])
             let scale = scaleFactorForDisplay(display)
-            config.width = Int(display.width) * scale
-            config.height = Int(display.height) * scale
+            config.width = Self.videoDimension(CGFloat(display.width * scale))
+            config.height = Self.videoDimension(CGFloat(display.height * scale))
 
         case .region(let display, let rect):
             filter = SCContentFilter(display: display, excludingWindows: [])
@@ -494,13 +495,15 @@ final class ScreenRecordingService: NSObject {
             let relX = rect.origin.x - displayFrame.origin.x
             let relY = displayFrame.height - (rect.origin.y - displayFrame.origin.y) - rect.height  // Flip Y
             config.sourceRect = CGRect(x: relX, y: relY, width: rect.width, height: rect.height)
-            config.width = Int(rect.width) * scale
-            config.height = Int(rect.height) * scale
+            config.width = Self.videoDimension(rect.width * CGFloat(scale))
+            config.height = Self.videoDimension(rect.height * CGFloat(scale))
 
         case .window(let scWindow):
-            filter = SCContentFilter(desktopIndependentWindow: scWindow)
-            config.width = Int(scWindow.frame.width) * 2   // Retina
-            config.height = Int(scWindow.frame.height) * 2
+            let windowFilter = SCContentFilter(desktopIndependentWindow: scWindow)
+            filter = windowFilter
+            let scale = CGFloat(windowFilter.pointPixelScale)
+            config.width = Self.videoDimension(windowFilter.contentRect.width * scale)
+            config.height = Self.videoDimension(windowFilter.contentRect.height * scale)
         }
 
         // Tune capture cadence for storage-first AI workflows by default.
@@ -752,6 +755,14 @@ final class ScreenRecordingService: NSObject {
             }
         }
         return 2
+    }
+
+    private static func videoDimension(_ value: CGFloat) -> Int {
+        var dimension = max(2, Int(value.rounded(.down)))
+        if dimension % 2 != 0 {
+            dimension -= 1
+        }
+        return max(2, dimension)
     }
 
     private func screenNameForDisplay(_ display: SCDisplay) -> String? {

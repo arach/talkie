@@ -622,11 +622,19 @@ private struct AgentHomeOverviewPage: View {
                 } else {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(recentLibraryItems) { item in
-                            ScopeLibraryRow(
-                                recording: item,
-                                isSelected: false,
-                                onSelect: { onSelect(.library) }
-                            )
+                            HStack(alignment: .center, spacing: 0) {
+                                ScopeLibraryRow(
+                                    recording: item,
+                                    isSelected: false,
+                                    onSelect: { onSelect(.library) }
+                                )
+                                .frame(maxWidth: .infinity, alignment: .leading)
+
+                                OpsButton("Open in Talkie", icon: "arrow.up.forward.app", style: .ghost) {
+                                    AgentHomeTalkieLibraryOpener.open(item)
+                                }
+                                .padding(.trailing, OpsSpacing.xl)
+                            }
                             .overlay(alignment: .top) {
                                 if item.id != recentLibraryItems.first?.id {
                                     ScopeRule(.row)
@@ -1068,7 +1076,8 @@ private struct AgentHomeLibraryPage: View {
         AgentHomePageScaffold(
             title: "Library",
             subtitle: "Read-only history from Talkie's shared recordings table.",
-            scrolls: false
+            scrolls: false,
+            maxContentWidth: 1_260
         ) {
             VStack(alignment: .leading, spacing: OpsSpacing.xxxl) {
                 LazyVGrid(columns: AgentHomeGrid.columns, alignment: .leading, spacing: OpsSpacing.xl) {
@@ -1089,19 +1098,29 @@ private struct AgentHomeLibraryPage: View {
 
                             Spacer(minLength: 0)
 
+                            if let selectedItem {
+                                OpsButton("Open in Talkie", icon: "arrow.up.forward.app", style: .secondary) {
+                                    AgentHomeTalkieLibraryOpener.open(selectedItem)
+                                }
+                            }
+
                             OpsButton("Storage", icon: "internaldrive", style: .ghost, action: onOpenSettings)
                         }
                         .padding(OpsSpacing.xxl)
 
                         OpsDivider(color: OpsHairline.subtle)
 
-                        content
+                        libraryBody
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+        .onAppear { reconcileSelection() }
+        .onChange(of: store.items) { _, _ in
+            reconcileSelection()
         }
     }
 
@@ -1134,11 +1153,51 @@ private struct AgentHomeLibraryPage: View {
         }
     }
 
+    private var libraryBody: some View {
+        GeometryReader { proxy in
+            if proxy.size.width >= 860 {
+                HStack(spacing: 0) {
+                    content
+                        .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
+
+                    OpsDivider(color: OpsHairline.subtle)
+
+                    AgentHomeLibraryDetailPane(item: selectedItem) { item in
+                        AgentHomeTalkieLibraryOpener.open(item)
+                    }
+                    .frame(width: min(380, max(300, proxy.size.width * 0.34)))
+                    .frame(maxHeight: .infinity)
+                }
+            } else {
+                content
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    }
+
+    private var selectedItem: TalkieObject? {
+        guard let selectedID else { return nil }
+        return store.items.first { $0.id == selectedID }
+    }
+
     private var visibleDetail: String {
         if store.summary.total > store.items.count {
             return "\(store.items.count) recent shown"
         }
         return "All visible"
+    }
+
+    private func reconcileSelection() {
+        guard !store.items.isEmpty else {
+            selectedID = nil
+            return
+        }
+
+        if let selectedID, store.items.contains(where: { $0.id == selectedID }) {
+            return
+        }
+
+        selectedID = store.items.first?.id
     }
 }
 
@@ -1317,17 +1376,20 @@ private struct AgentHomePageScaffold<Content: View>: View {
     let title: String
     let subtitle: String
     let scrolls: Bool
+    let maxContentWidth: CGFloat
     let content: () -> Content
 
     init(
         title: String,
         subtitle: String,
         scrolls: Bool = true,
+        maxContentWidth: CGFloat = 980,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self.title = title
         self.subtitle = subtitle
         self.scrolls = scrolls
+        self.maxContentWidth = maxContentWidth
         self.content = content
     }
 
@@ -1337,12 +1399,12 @@ private struct AgentHomePageScaffold<Content: View>: View {
                 ScrollView {
                     pageContent
                         .padding(OpsSpacing.huge)
-                        .frame(maxWidth: 980, alignment: .leading)
+                        .frame(maxWidth: maxContentWidth, alignment: .leading)
                 }
             } else {
                 pageContent
                     .padding(OpsSpacing.huge)
-                    .frame(maxWidth: 980, maxHeight: .infinity, alignment: .topLeading)
+                    .frame(maxWidth: maxContentWidth, maxHeight: .infinity, alignment: .topLeading)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
         }
@@ -1587,6 +1649,144 @@ private struct AgentHomePermissionRow: View {
     }
 }
 
+private struct AgentHomeLibraryDetailPane: View {
+    let item: TalkieObject?
+    let onOpenInTalkie: (TalkieObject) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let item {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: OpsSpacing.xxl) {
+                        header(for: item)
+                        facts(for: item)
+                        media(for: item)
+                        textPreview(for: item)
+                    }
+                    .padding(OpsSpacing.xxl)
+                }
+                .background(OpsInk.bg)
+            } else {
+                AgentHomeEmptyInset(
+                    title: "Select a library item",
+                    detail: "Recordings and captures show a compact read-only summary here."
+                )
+                .padding(OpsSpacing.xxl)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+        }
+        .background(OpsInk.bg)
+    }
+
+    private func header(for item: TalkieObject) -> some View {
+        VStack(alignment: .leading, spacing: OpsSpacing.lg) {
+            HStack(alignment: .center, spacing: OpsSpacing.md) {
+                Image(systemName: item.type.icon)
+                    .font(OpsType.ui(OpsSize.lg, weight: .semibold))
+                    .foregroundStyle(tint(for: item.type))
+                    .frame(width: 28, height: 28)
+                    .background(
+                        RoundedRectangle(cornerRadius: OpsRadius.standard, style: .continuous)
+                            .fill(OpsSurface.tintFill(tint(for: item.type)))
+                    )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.type.displayName.uppercased())
+                        .font(OpsType.mono(OpsSize.micro, weight: .bold))
+                        .tracking(1.1)
+                        .foregroundStyle(OpsInk.dim)
+
+                    Text(item.createdAt, style: .relative)
+                        .font(OpsType.ui(OpsSize.xs))
+                        .foregroundStyle(OpsInk.muted)
+                }
+
+                Spacer(minLength: 0)
+            }
+
+            Text(item.agentHomeDisplayTitle)
+                .font(OpsType.ui(OpsSize.xl, weight: .semibold))
+                .foregroundStyle(OpsInk.ink)
+                .lineLimit(3)
+
+            OpsButton("Open in Talkie", icon: "arrow.up.forward.app", style: .secondary) {
+                onOpenInTalkie(item)
+            }
+        }
+    }
+
+    private func facts(for item: TalkieObject) -> some View {
+        AgentHomeKeyValueStack {
+            OpsKVRow("Source", value: item.source.displayName)
+            OpsKVRow("Created", value: item.createdAt.formatted(date: .abbreviated, time: .shortened))
+            OpsKVRow("Duration", value: item.duration > 0 ? Self.formatDuration(item.duration) : "-")
+            OpsKVRow("Words", value: item.wordCount > 0 ? "\(item.wordCount)" : "-")
+            OpsKVRow("Status", value: item.transcriptionStatus.displayName)
+        }
+    }
+
+    @ViewBuilder
+    private func media(for item: TalkieObject) -> some View {
+        if item.hasAudio || !item.screenshots.isEmpty || !item.clips.isEmpty || !item.attachments.isEmpty {
+            AgentHomeKeyValueStack {
+                OpsKVRow("Audio", value: item.hasAudio ? "Available" : "-")
+                OpsKVRow("Screenshots", value: "\(item.screenshots.count)")
+                OpsKVRow("Clips", value: "\(item.clips.count)")
+                OpsKVRow("Attachments", value: "\(item.attachments.count)")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func textPreview(for item: TalkieObject) -> some View {
+        if let preview = item.agentHomeTextPreview {
+            VStack(alignment: .leading, spacing: OpsSpacing.md) {
+                OpsSectionLabel("Preview")
+                Text(preview)
+                    .font(OpsType.ui(OpsSize.sm))
+                    .foregroundStyle(OpsInk.muted)
+                    .lineSpacing(4)
+                    .textSelection(.enabled)
+            }
+        } else {
+            AgentHomeEmptyInset(
+                title: "No text preview",
+                detail: "Open the item in Talkie for the full detail surface, media, and editing actions."
+            )
+        }
+    }
+
+    private func tint(for type: TalkieObjectType) -> Color {
+        switch type {
+        case .memo:
+            return OpsTint.amber.color
+        case .dictation:
+            return OpsTint.cyan.color
+        case .note:
+            return OpsInk.statusInfo
+        case .capture, .selection:
+            return OpsTint.green.color
+        case .segment:
+            return OpsInk.dim
+        }
+    }
+
+    private static func formatDuration(_ seconds: Double) -> String {
+        let total = max(0, Int(seconds.rounded()))
+        let hours = total / 3_600
+        let minutes = (total % 3_600) / 60
+        let seconds = total % 60
+        let paddedSeconds = seconds < 10 ? "0\(seconds)" : "\(seconds)"
+
+        if hours > 0 {
+            let paddedMinutes = minutes < 10 ? "0\(minutes)" : "\(minutes)"
+            return "\(hours):\(paddedMinutes):\(paddedSeconds)"
+        }
+
+        return "\(minutes):\(paddedSeconds)"
+    }
+}
+
 private struct AgentHomeEmptyInset: View {
     let title: String
     let detail: String
@@ -1612,6 +1812,21 @@ private enum AgentHomeGrid {
     ]
 }
 
+@MainActor
+private enum AgentHomeTalkieLibraryOpener {
+    static func open(_ item: TalkieObject) {
+        var components = URLComponents()
+        components.scheme = TalkieEnvironment.current.talkieURLScheme
+        components.host = "library"
+        components.queryItems = [
+            URLQueryItem(name: "recordingId", value: item.id.uuidString)
+        ]
+
+        guard let url = components.url else { return }
+        TalkieAppOpener.open(url)
+    }
+}
+
 // MARK: - Formatting extensions
 
 private extension AgentLiveTrayAssetSnapshot {
@@ -1624,6 +1839,77 @@ private extension AgentLiveTrayAssetSnapshot {
 private extension String {
     var agentHomeTrimmed: String {
         trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+private extension TalkieObject {
+    var agentHomeDisplayTitle: String {
+        if let title = title?.agentHomeTrimmed, !title.isEmpty {
+            return title
+        }
+
+        if type == .capture {
+            if let appName = appContext?.name?.agentHomeTrimmed, !appName.isEmpty {
+                return "\(appName) capture"
+            }
+            if let screenshot = screenshots.first {
+                return "\(screenshot.captureMode.capitalized) capture"
+            }
+        }
+
+        if let text = text?.agentHomeTrimmed, !text.isEmpty {
+            return Self.agentHomeSentence(from: text, limit: 90)
+        }
+
+        return "\(type.displayName) from \(createdAt.formatted(date: .abbreviated, time: .shortened))"
+    }
+
+    var agentHomeTextPreview: String? {
+        guard let text = text?.agentHomeTrimmed, !text.isEmpty else { return nil }
+
+        let collapsed = text
+            .components(separatedBy: .newlines)
+            .joined(separator: " ")
+            .agentHomeTrimmed
+
+        if collapsed.count <= 360 {
+            return collapsed
+        }
+
+        let prefix = String(collapsed.prefix(360))
+        if let lastSpace = prefix.lastIndex(of: " ") {
+            return String(prefix[..<lastSpace]) + "..."
+        }
+        return prefix + "..."
+    }
+
+    private static func agentHomeSentence(from text: String, limit: Int) -> String {
+        let collapsed = text
+            .components(separatedBy: .newlines)
+            .joined(separator: " ")
+            .agentHomeTrimmed
+
+        let enders: Set<Character> = [".", "!", "?"]
+        for index in collapsed.indices {
+            guard enders.contains(collapsed[index]) else { continue }
+            let next = collapsed.index(after: index)
+            guard next == collapsed.endIndex || collapsed[next].isWhitespace else { continue }
+            let sentence = String(collapsed[...index]).agentHomeTrimmed
+            if !sentence.isEmpty && sentence.count <= limit {
+                return sentence
+            }
+            break
+        }
+
+        if collapsed.count <= limit {
+            return collapsed
+        }
+
+        let prefix = String(collapsed.prefix(limit))
+        if let lastSpace = prefix.lastIndex(of: " ") {
+            return String(prefix[..<lastSpace]) + "..."
+        }
+        return prefix + "..."
     }
 }
 

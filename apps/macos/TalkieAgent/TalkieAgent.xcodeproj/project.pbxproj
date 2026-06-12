@@ -478,6 +478,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Talkie Agent Dev";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "TalkieAgent needs to send keystrokes to automatically paste transcriptions into your active app.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "TalkieAgent uses the camera when you show the camera bubble during screen recordings.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "TalkieAgent needs microphone access to continuously transcribe your speech in real-time.";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -517,6 +518,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Talkie Agent";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "TalkieAgent needs to send keystrokes to automatically paste transcriptions into your active app.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "TalkieAgent uses the camera when you show the camera bubble during screen recordings.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "TalkieAgent needs microphone access to continuously transcribe your speech in real-time.";
 				LD_RUNPATH_SEARCH_PATHS = (

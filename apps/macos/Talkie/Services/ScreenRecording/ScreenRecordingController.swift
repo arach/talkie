@@ -153,7 +153,7 @@ final class ScreenRecordingController {
         let metadataEvents = finalizedMetadataEvents(durationMs: durationMs)
 
         // Add to clip tray
-        ClipTray.shared.add(
+        await ClipTray.shared.add(
             tempURL: result.url,
             capturedAt: clipStartedAt,
             durationMs: durationMs,
@@ -180,6 +180,44 @@ final class ScreenRecordingController {
         if state == .recording {
             await stopRecording()
         }
+    }
+
+    /// Mark a screenshot captured while this screen recording is active.
+    /// The raw clip stays untouched; the marker lets visual-context processors
+    /// overlay or summarize the user's intentional highlight later.
+    func recordScreenshotHighlight(
+        capturedAt: Date,
+        filename: String,
+        captureMode: String,
+        width: Int?,
+        height: Int?,
+        windowTitle: String?,
+        appName: String?,
+        appBundleID: String?,
+        displayName: String?
+    ) {
+        guard state == .recording,
+              let startTime = recordingStartTime,
+              capturedAt >= startTime else {
+            return
+        }
+
+        let timestampMs = max(0, Int(capturedAt.timeIntervalSince(startTime) * 1000))
+        metadataEvents.append(RecordingVisualContextEvent(
+            startMs: timestampMs,
+            endMs: timestampMs,
+            type: .screenshot,
+            appName: appName,
+            appBundleID: appBundleID,
+            windowTitle: windowTitle,
+            displayName: displayName,
+            captureMode: captureMode,
+            assetKind: "screenshot",
+            assetFilename: filename,
+            width: width,
+            height: height
+        ))
+        log.info("Screen recording screenshot marker added at \(timestampMs)ms: \(filename)")
     }
 
     private func startResolvedRecording(
@@ -408,6 +446,7 @@ private final class ScreenRecordingCountdownController {
             screenFrame: screen.frame,
             targetRect: targetRect,
             isFullscreen: Self.isFullscreen(target),
+            isRegion: Self.isRegion(target),
             captureMode: Self.captureModeLabel(for: target),
             countdown: seconds
         )
@@ -516,7 +555,7 @@ private final class ScreenRecordingCountdownController {
         hudPanel.state.selectedCaptureMode = mode
         switch mode {
         case .region:
-            overlayView?.focusSelection()
+            finish(.selectMode(mode))
         case .fullscreen, .window:
             finish(.selectMode(mode))
         }
@@ -593,6 +632,13 @@ private final class ScreenRecordingCountdownController {
         return false
     }
 
+    private static func isRegion(_ target: ScreenRecordingTarget) -> Bool {
+        if case .region = target.kind {
+            return true
+        }
+        return false
+    }
+
     private static func screen(for targetRect: CGRect) -> NSScreen? {
         NSScreen.screens.max { lhs, rhs in
             intersectionArea(lhs.frame, targetRect) < intersectionArea(rhs.frame, targetRect)
@@ -630,6 +676,7 @@ private final class ScreenRecordingActiveOverlayController {
     private let target: ScreenRecordingTarget
     private let startedAt: Date
     private var panel: NSPanel?
+    private var stopPanel: NSPanel?
     private var timer: Timer?
 
     init(target: ScreenRecordingTarget, startedAt: Date) {
@@ -670,6 +717,8 @@ private final class ScreenRecordingActiveOverlayController {
         panel.setFrameOrigin(screen.frame.origin)
         panel.orderFrontRegardless()
 
+        showStopPanel(near: targetRect, on: screen)
+
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak view] _ in
             Task { @MainActor in
                 view?.needsDisplay = true
@@ -683,6 +732,47 @@ private final class ScreenRecordingActiveOverlayController {
         timer = nil
         panel?.orderOut(nil)
         panel = nil
+        stopPanel?.orderOut(nil)
+        stopPanel = nil
+    }
+
+    private func showStopPanel(near targetRect: CGRect, on screen: NSScreen) {
+        let panelSize = CGSize(width: 132, height: 38)
+        let visible = screen.visibleFrame
+        let x = min(
+            max(targetRect.midX - panelSize.width / 2, visible.minX + 12),
+            visible.maxX - panelSize.width - 12
+        )
+        let preferredAboveY = targetRect.maxY + 10
+        let y = preferredAboveY + panelSize.height <= visible.maxY
+            ? preferredAboveY
+            : max(visible.minY + 12, targetRect.minY - panelSize.height - 10)
+
+        let view = ScreenRecordingStopPillView(startedAt: startedAt) {
+            Task { @MainActor in
+                await ScreenRecordingController.shared.stopRecording()
+            }
+        }
+
+        let panel = NSPanel(
+            contentRect: NSRect(origin: .zero, size: panelSize),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.contentView = NSHostingView(rootView: view)
+        panel.level = .screenSaver + 2
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.ignoresMouseEvents = false
+        panel.sharingType = .none
+        panel.hidesOnDeactivate = false
+        panel.canHide = false
+        panel.setFrameOrigin(NSPoint(x: x.rounded(), y: y.rounded()))
+        panel.orderFrontRegardless()
+        stopPanel = panel
     }
 
     private static func screenRect(for target: ScreenRecordingTarget) -> CGRect {
@@ -713,6 +803,65 @@ private final class ScreenRecordingActiveOverlayController {
         let intersection = lhs.intersection(rhs)
         guard !intersection.isNull else { return 0 }
         return intersection.width * intersection.height
+    }
+}
+
+private struct ScreenRecordingStopPillView: View {
+    let startedAt: Date
+    let onStop: () -> Void
+
+    @State private var elapsedSeconds = 0
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(Color.red)
+                .frame(width: 8, height: 8)
+
+            Text(formatTime(elapsedSeconds))
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.92))
+                .frame(width: 36, alignment: .leading)
+
+            Button(action: onStop) {
+                Image(systemName: "stop.fill")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(Color.red.opacity(0.95)))
+            }
+            .buttonStyle(.plain)
+            .help("Stop screen recording")
+            .accessibilityLabel("Stop screen recording")
+        }
+        .padding(.leading, 12)
+        .padding(.trailing, 5)
+        .padding(.vertical, 5)
+        .background(
+            Capsule()
+                .fill(Color.black.opacity(0.78))
+        )
+        .overlay(
+            Capsule()
+                .stroke(Color.white.opacity(0.14), lineWidth: 1)
+        )
+        .task {
+            updateElapsed()
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                updateElapsed()
+            }
+        }
+    }
+
+    private func updateElapsed() {
+        elapsedSeconds = max(0, Int(Date().timeIntervalSince(startedAt)))
+    }
+
+    private func formatTime(_ totalSeconds: Int) -> String {
+        let minutes = totalSeconds / 60
+        let seconds = totalSeconds % 60
+        return "\(minutes):\(seconds < 10 ? "0" : "")\(seconds)"
     }
 }
 
@@ -760,35 +909,64 @@ private final class ScreenRecordingActiveOverlayView: NSView {
         ).intersection(bounds)
         guard !rawRect.isNull else { return .null }
 
-        let edgeInset: CGFloat = isFullscreen ? 10 : 8
+        let edgeInset: CGFloat = isFullscreen ? 0 : 2
         return rawRect
             .intersection(bounds.insetBy(dx: edgeInset, dy: edgeInset))
             .standardized
     }
 
     private var accent: NSColor {
-        NSColor(SettingsManager.shared.resolvedAccentColor)
-            .usingColorSpace(.sRGB)
-            ?? .controlAccentColor
+        NSColor(calibratedRed: 0.96, green: 0.66, blue: 0.34, alpha: 1)
     }
 
     private func drawTargetFrame(_ rect: CGRect) {
-        let hairline = NSBezierPath(rect: rect.insetBy(dx: 0.25, dy: 0.25))
-        hairline.lineWidth = 0.5
-        accent.withAlphaComponent(0.54).setStroke()
+        let hairline = NSBezierPath(rect: rect.insetBy(dx: 0.5, dy: 0.5))
+        hairline.lineWidth = 0.75
+        accent.withAlphaComponent(0.34).setStroke()
         hairline.stroke()
 
-        let bracketWidth: CGFloat = 3
-        let bracketRect = rect.insetBy(dx: bracketWidth / 2, dy: bracketWidth / 2)
-        let minDimension = max(1, min(bracketRect.width, bracketRect.height))
-        let length = min(max(28, minDimension * 0.16), max(18, minDimension * 0.36))
-        let topLeft = NSPoint(x: bracketRect.minX, y: bracketRect.maxY)
-        let bottomRight = NSPoint(x: bracketRect.maxX, y: bracketRect.minY)
+        drawCornerBrackets(in: rect)
+    }
 
-        strokeLine(from: topLeft, to: NSPoint(x: topLeft.x + length, y: topLeft.y), width: bracketWidth, color: accent.withAlphaComponent(0.82))
-        strokeLine(from: topLeft, to: NSPoint(x: topLeft.x, y: topLeft.y - length), width: bracketWidth, color: accent.withAlphaComponent(0.82))
-        strokeLine(from: NSPoint(x: bottomRight.x - length, y: bottomRight.y), to: bottomRight, width: bracketWidth, color: accent.withAlphaComponent(0.82))
-        strokeLine(from: bottomRight, to: NSPoint(x: bottomRight.x, y: bottomRight.y + length), width: bracketWidth, color: accent.withAlphaComponent(0.82))
+    private func drawCornerBrackets(in rect: CGRect) {
+        let bracketWidth: CGFloat = 1.8
+        let bracketRect = rect.insetBy(dx: bracketWidth / 2 + 0.5, dy: bracketWidth / 2 + 0.5)
+        let minDimension = max(1, min(bracketRect.width, bracketRect.height))
+        let length = min(max(20, minDimension * 0.12), 52)
+        let topLeft = NSPoint(x: bracketRect.minX, y: bracketRect.maxY)
+        let topRight = NSPoint(x: bracketRect.maxX, y: bracketRect.maxY)
+        let bottomLeft = NSPoint(x: bracketRect.minX, y: bracketRect.minY)
+        let bottomRight = NSPoint(x: bracketRect.maxX, y: bracketRect.minY)
+        let bracketColor = accent.withAlphaComponent(0.86)
+
+        strokeCorner(
+            from: NSPoint(x: topLeft.x + length, y: topLeft.y),
+            through: topLeft,
+            to: NSPoint(x: topLeft.x, y: topLeft.y - length),
+            width: bracketWidth,
+            color: bracketColor
+        )
+        strokeCorner(
+            from: NSPoint(x: topRight.x - length, y: topRight.y),
+            through: topRight,
+            to: NSPoint(x: topRight.x, y: topRight.y - length),
+            width: bracketWidth,
+            color: bracketColor
+        )
+        strokeCorner(
+            from: NSPoint(x: bottomLeft.x + length, y: bottomLeft.y),
+            through: bottomLeft,
+            to: NSPoint(x: bottomLeft.x, y: bottomLeft.y + length),
+            width: bracketWidth,
+            color: bracketColor
+        )
+        strokeCorner(
+            from: NSPoint(x: bottomRight.x - length, y: bottomRight.y),
+            through: bottomRight,
+            to: NSPoint(x: bottomRight.x, y: bottomRight.y + length),
+            width: bracketWidth,
+            color: bracketColor
+        )
     }
 
     private func drawRecordingBadge(near rect: CGRect) {
@@ -825,12 +1003,13 @@ private final class ScreenRecordingActiveOverlayView: NSView {
         )
     }
 
-    private func strokeLine(from start: NSPoint, to end: NSPoint, width: CGFloat, color: NSColor) {
+    private func strokeCorner(from start: NSPoint, through corner: NSPoint, to end: NSPoint, width: CGFloat, color: NSColor) {
         let path = NSBezierPath()
         path.lineWidth = width
         path.lineCapStyle = .round
         path.lineJoinStyle = .round
         path.move(to: start)
+        path.line(to: corner)
         path.line(to: end)
         color.setStroke()
         path.stroke()
@@ -844,6 +1023,7 @@ private final class ScreenRecordingCountdownView: NSView {
     }
 
     private enum DragOperation {
+        case drawNew
         case move
         case resizeTopLeft
         case resizeBottomRight
@@ -852,6 +1032,7 @@ private final class ScreenRecordingCountdownView: NSView {
     private let screenFrame: CGRect
     private let targetRect: CGRect
     private let isFullscreen: Bool
+    private let isRegion: Bool
     private let captureMode: String
     private let minSelectionSize = CGSize(width: 96, height: 72)
     private let edgeInset: CGFloat
@@ -877,20 +1058,22 @@ private final class ScreenRecordingCountdownView: NSView {
         screenFrame: CGRect,
         targetRect: CGRect,
         isFullscreen: Bool,
+        isRegion: Bool,
         captureMode: String,
         countdown: Int
     ) {
         self.screenFrame = screenFrame
         self.targetRect = targetRect
         self.isFullscreen = isFullscreen
+        self.isRegion = isRegion
         self.captureMode = captureMode
         self.countdown = countdown
-        self.edgeInset = isFullscreen ? 10 : 8
+        self.edgeInset = isFullscreen ? 0 : 2
         self.selectionRect = Self.initialSelectionRect(
             targetRect: targetRect,
             screenFrame: screenFrame,
             bounds: CGRect(origin: .zero, size: frame.size),
-            edgeInset: isFullscreen ? 10 : 8
+            edgeInset: isFullscreen ? 0 : 2
         )
         super.init(frame: frame)
         wantsLayer = true
@@ -903,6 +1086,8 @@ private final class ScreenRecordingCountdownView: NSView {
     override var acceptsFirstResponder: Bool { true }
 
     override var isOpaque: Bool { false }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
@@ -973,140 +1158,75 @@ private final class ScreenRecordingCountdownView: NSView {
         let backdrop = NSBezierPath(rect: bounds)
         backdrop.append(NSBezierPath(rect: rect))
         backdrop.windingRule = .evenOdd
-        NSColor(white: 0, alpha: isFullscreen ? 0.06 : 0.12).setFill()
+        let alpha: CGFloat = isFullscreen ? 0.06 : (phase == .confirming ? 0.18 : 0.14)
+        NSColor(white: 0, alpha: alpha).setFill()
         backdrop.fill()
     }
 
     private func drawTargetFrame(_ rect: CGRect) {
         let accent = resolvedAccentColor
-        let hairlineRect = rect.insetBy(dx: 0.25, dy: 0.25)
+        let hairlineRect = rect.insetBy(dx: 0.5, dy: 0.5)
         let hairline = NSBezierPath(rect: hairlineRect)
-        hairline.lineWidth = 0.5
-        accent.withAlphaComponent(0.72).setStroke()
+        hairline.lineWidth = 0.75
+        accent.withAlphaComponent(0.38).setStroke()
         hairline.stroke()
-
-        let innerHairline = NSBezierPath(rect: hairlineRect.insetBy(dx: 1, dy: 1))
-        innerHairline.lineWidth = 0.5
-        NSColor.white.withAlphaComponent(0.22).setStroke()
-        innerHairline.stroke()
 
         drawCornerBrackets(in: rect, accent: accent)
     }
 
     private var resolvedAccentColor: NSColor {
-        NSColor(SettingsManager.shared.resolvedAccentColor)
-            .usingColorSpace(.sRGB)
-            ?? .controlAccentColor
+        NSColor(calibratedRed: 0.96, green: 0.66, blue: 0.34, alpha: 1)
     }
 
     private func drawCornerBrackets(in rect: CGRect, accent: NSColor) {
-        let bracketWidth: CGFloat = 4
-        let bracketRect = rect.insetBy(dx: bracketWidth / 2, dy: bracketWidth / 2)
+        let bracketWidth: CGFloat = 1.8
+        let bracketRect = rect.insetBy(dx: bracketWidth / 2 + 0.5, dy: bracketWidth / 2 + 0.5)
         let minDimension = max(1, min(bracketRect.width, bracketRect.height))
-        let maxLength = max(18, minDimension * 0.42)
-        let length = min(max(34, minDimension * 0.18), maxLength)
+        let length = min(max(20, minDimension * 0.12), 52)
 
         let topLeft = NSPoint(x: bracketRect.minX, y: bracketRect.maxY)
+        let topRight = NSPoint(x: bracketRect.maxX, y: bracketRect.maxY)
+        let bottomLeft = NSPoint(x: bracketRect.minX, y: bracketRect.minY)
         let bottomRight = NSPoint(x: bracketRect.maxX, y: bracketRect.minY)
+        let bracketColor = accent.withAlphaComponent(0.88)
 
-        NSGraphicsContext.saveGraphicsState()
-        let shadow = NSShadow()
-        shadow.shadowColor = accent.withAlphaComponent(0.35)
-        shadow.shadowBlurRadius = 8
-        shadow.shadowOffset = .zero
-        shadow.set()
-
-        strokeLine(
-            from: topLeft,
-            to: NSPoint(x: topLeft.x + length, y: topLeft.y),
-            width: bracketWidth,
-            color: accent.withAlphaComponent(0.98)
-        )
-        strokeLine(
-            from: topLeft,
+        strokeCorner(
+            from: NSPoint(x: topLeft.x + length, y: topLeft.y),
+            through: topLeft,
             to: NSPoint(x: topLeft.x, y: topLeft.y - length),
             width: bracketWidth,
-            color: accent.withAlphaComponent(0.98)
+            color: bracketColor
         )
-        strokeLine(
-            from: NSPoint(x: bottomRight.x - length, y: bottomRight.y),
-            to: bottomRight,
+        strokeCorner(
+            from: NSPoint(x: topRight.x - length, y: topRight.y),
+            through: topRight,
+            to: NSPoint(x: topRight.x, y: topRight.y - length),
             width: bracketWidth,
-            color: accent.withAlphaComponent(0.98)
+            color: bracketColor
         )
-        strokeLine(
-            from: bottomRight,
+        strokeCorner(
+            from: NSPoint(x: bottomLeft.x + length, y: bottomLeft.y),
+            through: bottomLeft,
+            to: NSPoint(x: bottomLeft.x, y: bottomLeft.y + length),
+            width: bracketWidth,
+            color: bracketColor
+        )
+        strokeCorner(
+            from: NSPoint(x: bottomRight.x - length, y: bottomRight.y),
+            through: bottomRight,
             to: NSPoint(x: bottomRight.x, y: bottomRight.y + length),
             width: bracketWidth,
-            color: accent.withAlphaComponent(0.98)
-        )
-        NSGraphicsContext.restoreGraphicsState()
-
-        let extensionLength = min(38, max(16, minDimension * 0.18))
-        drawFadingExtension(
-            from: topLeft,
-            to: NSPoint(x: max(bounds.minX + 6, topLeft.x - extensionLength), y: topLeft.y),
-            width: bracketWidth * 0.72,
-            color: accent
-        )
-        drawFadingExtension(
-            from: topLeft,
-            to: NSPoint(x: topLeft.x, y: min(bounds.maxY - 6, topLeft.y + extensionLength)),
-            width: bracketWidth * 0.72,
-            color: accent
-        )
-        drawFadingExtension(
-            from: bottomRight,
-            to: NSPoint(x: min(bounds.maxX - 6, bottomRight.x + extensionLength), y: bottomRight.y),
-            width: bracketWidth * 0.72,
-            color: accent
-        )
-        drawFadingExtension(
-            from: bottomRight,
-            to: NSPoint(x: bottomRight.x, y: max(bounds.minY + 6, bottomRight.y - extensionLength)),
-            width: bracketWidth * 0.72,
-            color: accent
+            color: bracketColor
         )
     }
 
-    private func drawFadingExtension(
-        from start: NSPoint,
-        to end: NSPoint,
-        width: CGFloat,
-        color: NSColor
-    ) {
-        let deltaX = end.x - start.x
-        let deltaY = end.y - start.y
-        guard abs(deltaX) > 1 || abs(deltaY) > 1 else { return }
-
-        let segments = 8
-        for index in 0..<segments {
-            let t0 = CGFloat(index) / CGFloat(segments)
-            let t1 = CGFloat(index + 1) / CGFloat(segments)
-            let alpha = pow(1 - t0, 1.7) * 0.48
-            let segmentWidth = width * (1 - t0 * 0.42)
-            strokeLine(
-                from: interpolate(start, end, t0),
-                to: interpolate(start, end, t1),
-                width: segmentWidth,
-                color: color.withAlphaComponent(alpha)
-            )
-        }
-    }
-
-    private func interpolate(_ start: NSPoint, _ end: NSPoint, _ progress: CGFloat) -> NSPoint {
-        NSPoint(
-            x: start.x + (end.x - start.x) * progress,
-            y: start.y + (end.y - start.y) * progress
-        )
-    }
-
-    private func strokeLine(from start: NSPoint, to end: NSPoint, width: CGFloat, color: NSColor) {
+    private func strokeCorner(from start: NSPoint, through corner: NSPoint, to end: NSPoint, width: CGFloat, color: NSColor) {
         let path = NSBezierPath()
         path.lineWidth = width
         path.lineCapStyle = .round
         path.lineJoinStyle = .round
         path.move(to: start)
+        path.line(to: corner)
         path.line(to: end)
         color.setStroke()
         path.stroke()
@@ -1191,9 +1311,14 @@ private final class ScreenRecordingCountdownView: NSView {
     override func mouseDown(with event: NSEvent) {
         guard phase == .confirming, !isFullscreen else { return }
         let point = convert(event.locationInWindow, from: nil)
-        dragOperation = dragOperation(at: point)
+        let operation = dragOperation(at: point) ?? (isRegion ? .drawNew : nil)
+        guard let operation else { return }
+        dragOperation = operation
         dragStartPoint = point
         dragStartRect = selectionRect
+        if case .drawNew = operation {
+            setSelection(CGRect(origin: point, size: .zero))
+        }
     }
 
     override func mouseDragged(with event: NSEvent) {
@@ -1215,12 +1340,14 @@ private final class ScreenRecordingCountdownView: NSView {
 
         let point = convert(event.locationInWindow, from: nil)
         switch dragOperation(at: point) {
+        case .drawNew:
+            NSCursor.crosshair.set()
         case .move:
             NSCursor.openHand.set()
         case .resizeTopLeft, .resizeBottomRight:
             NSCursor.crosshair.set()
         case nil:
-            NSCursor.arrow.set()
+            (isRegion ? NSCursor.crosshair : NSCursor.arrow).set()
         }
     }
 
@@ -1288,6 +1415,17 @@ private final class ScreenRecordingCountdownView: NSView {
     private func updateSelection(operation: DragOperation, delta: CGSize) {
         var rect = dragStartRect
         switch operation {
+        case .drawNew:
+            let end = NSPoint(
+                x: dragStartPoint.x + delta.width,
+                y: dragStartPoint.y + delta.height
+            )
+            rect = CGRect(
+                x: min(dragStartPoint.x, end.x),
+                y: min(dragStartPoint.y, end.y),
+                width: abs(delta.width),
+                height: abs(delta.height)
+            )
         case .move:
             rect.origin.x += delta.width
             rect.origin.y += delta.height

@@ -539,6 +539,26 @@ final class LiveSettings: ObservableObject {
         didSet { save() }
     }
 
+    /// Storage/quality preset for Agent-owned screen recordings.
+    @Published var screenRecordingQualityPreset: ScreenRecordingQualityPreset {
+        didSet { save() }
+    }
+
+    /// Capture app/system audio in screen recordings.
+    @Published var screenRecordingIncludesSystemAudio: Bool {
+        didSet { save() }
+    }
+
+    /// Capture the selected microphone as a voiceover track in screen recordings.
+    @Published var screenRecordingIncludesMicrophone: Bool {
+        didSet { save() }
+    }
+
+    /// Show Agent's camera bubble while screen recording.
+    @Published var screenRecordingShowsCameraBubble: Bool {
+        didSet { save() }
+    }
+
     @Published var overlayStyle: OverlayStyle {
         didSet { save() }
     }
@@ -847,6 +867,17 @@ final class LiveSettings: ObservableObject {
         let seg = store.double(forKey: AgentSettingsKey.segmentDuration)
         self.segmentDuration = seg > 0 ? seg : 600
 
+        if let rawValue = store.string(forKey: AgentSettingsKey.screenRecordingQuality)
+            ?? UserDefaults.standard.string(forKey: AgentSettingsKey.screenRecordingQuality),
+           let preset = ScreenRecordingQualityPreset(rawValue: rawValue) {
+            self.screenRecordingQualityPreset = preset
+        } else {
+            self.screenRecordingQualityPreset = .agent
+        }
+        self.screenRecordingIncludesSystemAudio = store.object(forKey: AgentSettingsKey.screenRecordingIncludesSystemAudio) as? Bool ?? false
+        self.screenRecordingIncludesMicrophone = store.object(forKey: AgentSettingsKey.screenRecordingIncludesMicrophone) as? Bool ?? false
+        self.screenRecordingShowsCameraBubble = store.object(forKey: AgentSettingsKey.screenRecordingShowsCameraBubble) as? Bool ?? false
+
         // Load overlay style
         if let rawValue = store.string(forKey: AgentSettingsKey.overlayStyle),
            let style = OverlayStyle(rawValue: rawValue) {
@@ -1050,6 +1081,12 @@ final class LiveSettings: ObservableObject {
             "hotkey": hotkey.displayString,
             "pttHotkey": pttHotkey.displayString,
             "pttEnabled": pttEnabled,
+            "screenRecording": [
+                "quality": screenRecordingQualityPreset.rawValue,
+                "systemAudio": screenRecordingIncludesSystemAudio,
+                "microphone": screenRecordingIncludesMicrophone,
+                "cameraBubble": screenRecordingShowsCameraBubble
+            ],
             "overlay": [
                 "style": overlayStyle.rawValue,
                 "islandMotion": islandOverlayMotion,
@@ -1132,6 +1169,11 @@ final class LiveSettings: ObservableObject {
         store.set(selectedMicrophoneName, forKey: AgentSettingsKey.selectedMicrophoneName)
         store.set(dictationTTLHours, forKey: AgentSettingsKey.utteranceTTLHours)
         store.set(segmentDuration, forKey: AgentSettingsKey.segmentDuration)
+        store.set(screenRecordingQualityPreset.rawValue, forKey: AgentSettingsKey.screenRecordingQuality)
+        UserDefaults.standard.set(screenRecordingQualityPreset.rawValue, forKey: AgentSettingsKey.screenRecordingQuality)
+        store.set(screenRecordingIncludesSystemAudio, forKey: AgentSettingsKey.screenRecordingIncludesSystemAudio)
+        store.set(screenRecordingIncludesMicrophone, forKey: AgentSettingsKey.screenRecordingIncludesMicrophone)
+        store.set(screenRecordingShowsCameraBubble, forKey: AgentSettingsKey.screenRecordingShowsCameraBubble)
         store.set(overlayStyle.rawValue, forKey: AgentSettingsKey.overlayStyle)
         store.set(islandOverlayMotion, forKey: AgentSettingsKey.islandOverlayMotion)
         store.set(islandOverlayReactivity, forKey: AgentSettingsKey.islandOverlayReactivity)

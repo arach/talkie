@@ -95,9 +95,23 @@ final class SystemRoutes: RouteGroup {
             path: "library",
             description: "Navigate to unified library",
             isInternal: false
-        ) { _, _ in
+        ) { url, params in
             NSLog("[SystemRoutes] Navigate to library")
-            NavigationState.shared.navigate(to: .recordings)
+            let path = url.pathComponents.dropFirst().first
+            let idString = params["id"] ?? params["recordingId"]
+            let id = idString.flatMap(UUID.init(uuidString:))
+
+            if path == "memo", let id {
+                NavigationState.shared.navigateToMemo(id)
+            } else if path == "dictation", let id {
+                NavigationState.shared.navigateToDictation(id)
+            } else if let id {
+                NavigationState.shared.navigate(to: .recordings, params: [
+                    "recordingId": id.uuidString
+                ])
+            } else {
+                NavigationState.shared.navigate(to: .recordings)
+            }
         },
 
         Route(

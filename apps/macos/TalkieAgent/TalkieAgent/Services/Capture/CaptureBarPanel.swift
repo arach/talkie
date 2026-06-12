@@ -97,6 +97,47 @@ final class CaptureBarState {
     /// Click callback from the SwiftUI view.
     /// `nil` result = interaction only (e.g. mode toggle), resets timeout but doesn't dismiss.
     var onAction: ((CaptureBarResult?) -> Void)?
+
+    var screenRecordingIncludesSystemAudio: Bool = sharedBool(
+        forKey: AgentSettingsKey.screenRecordingIncludesSystemAudio
+    ) {
+        didSet {
+            Self.setSharedBool(
+                screenRecordingIncludesSystemAudio,
+                forKey: AgentSettingsKey.screenRecordingIncludesSystemAudio
+            )
+        }
+    }
+
+    var screenRecordingIncludesMicrophone: Bool = sharedBool(
+        forKey: AgentSettingsKey.screenRecordingIncludesMicrophone
+    ) {
+        didSet {
+            Self.setSharedBool(
+                screenRecordingIncludesMicrophone,
+                forKey: AgentSettingsKey.screenRecordingIncludesMicrophone
+            )
+        }
+    }
+
+    var screenRecordingShowsCameraBubble: Bool = sharedBool(
+        forKey: AgentSettingsKey.screenRecordingShowsCameraBubble
+    ) {
+        didSet {
+            Self.setSharedBool(
+                screenRecordingShowsCameraBubble,
+                forKey: AgentSettingsKey.screenRecordingShowsCameraBubble
+            )
+        }
+    }
+
+    private static func sharedBool(forKey key: String) -> Bool {
+        TalkieSharedSettings.object(forKey: key) as? Bool ?? false
+    }
+
+    private static func setSharedBool(_ value: Bool, forKey key: String) {
+        TalkieSharedSettings.set(value, forKey: key)
+    }
 }
 
 // MARK: - Panel
@@ -117,7 +158,9 @@ final class CaptureBarPanel {
         state.trayCount = trayCount
 
         let hostingView = NSHostingView(rootView: CaptureBarView(state: state))
+        hostingView.wantsLayer = true
         hostingView.layer?.isOpaque = false
+        hostingView.layer?.backgroundColor = NSColor.clear.cgColor
 
         // Size to fit content instead of a fixed frame
         let intrinsic = hostingView.fittingSize
@@ -136,7 +179,7 @@ final class CaptureBarPanel {
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         p.isOpaque = false
         p.backgroundColor = .clear
-        p.hasShadow = true
+        p.hasShadow = false
         p.isMovableByWindowBackground = false
         p.sharingType = .none
         p.hidesOnDeactivate = false  // Stay visible even when Talkie isn't active app
@@ -259,7 +302,6 @@ private struct CaptureBarView: View {
                         .fill(Color.red.opacity(0.04))
                 }
             }
-            .shadow(color: .black.opacity(0.25), radius: 14, y: 5)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14)

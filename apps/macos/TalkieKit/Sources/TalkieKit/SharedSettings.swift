@@ -79,6 +79,12 @@ public enum AgentSettingsKey {
     public static let pasteChordHotkey = "pasteChordHotkey"
     public static let pasteLastScreenshotHotkey = "hotkeyCapture.pasteLastScreenshot"
 
+    // MARK: Screen Recording
+    public static let screenRecordingQuality = "screenRecordingQuality"
+    public static let screenRecordingIncludesSystemAudio = "screenRecordingIncludesSystemAudio"
+    public static let screenRecordingIncludesMicrophone = "screenRecordingIncludesMicrophone"
+    public static let screenRecordingShowsCameraBubble = "screenRecordingShowsCameraBubble"
+
     // MARK: Model Selection
     public static let selectedModelId = "selectedModelId"
     public static let selectedTTSVoiceId = "selectedTTSVoiceId"

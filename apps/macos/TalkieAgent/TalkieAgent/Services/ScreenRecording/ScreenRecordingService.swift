@@ -4,7 +4,6 @@
 //
 //  SCStream + AVAssetWriter engine for screen video recording.
 //  Supports region, fullscreen, and window capture modes.
-//  Video-only (no audio) for MVP.
 //
 
 import AVFoundation
@@ -83,6 +82,12 @@ private struct ScreenRecordingPreset: Codable {
     var appName: String?
     var displayName: String?
     var capturedAt: Date
+}
+
+private struct ScreenRecordingAudioOptions {
+    var includesSystemAudio: Bool
+    var includesMicrophone: Bool
+    var microphoneDeviceID: String?
 }
 
 @MainActor
@@ -166,11 +171,18 @@ private final class ScreenRecordingPresetStore {
 final class ScreenRecordingService: NSObject {
     static let shared = ScreenRecordingService()
     private var recordingQualityPreset: ScreenRecordingQualityPreset {
-        guard let raw = UserDefaults.standard.string(forKey: "screenRecordingQuality"),
+        guard let raw = TalkieSharedSettings.string(forKey: AgentSettingsKey.screenRecordingQuality)
+                ?? UserDefaults.standard.string(forKey: AgentSettingsKey.screenRecordingQuality),
               let preset = ScreenRecordingQualityPreset(rawValue: raw) else {
             return .agent
         }
         return preset
+    }
+    private var recordingIncludesSystemAudio: Bool {
+        TalkieSharedSettings.object(forKey: AgentSettingsKey.screenRecordingIncludesSystemAudio) as? Bool ?? false
+    }
+    private var recordingIncludesMicrophone: Bool {
+        TalkieSharedSettings.object(forKey: AgentSettingsKey.screenRecordingIncludesMicrophone) as? Bool ?? false
     }
 
     // MARK: - State
@@ -207,6 +219,10 @@ final class ScreenRecordingService: NSObject {
     nonisolated(unsafe) private var _assetWriter: AVAssetWriter?
     @ObservationIgnored
     nonisolated(unsafe) private var _videoInput: AVAssetWriterInput?
+    @ObservationIgnored
+    nonisolated(unsafe) private var _systemAudioInput: AVAssetWriterInput?
+    @ObservationIgnored
+    nonisolated(unsafe) private var _microphoneInput: AVAssetWriterInput?
     @ObservationIgnored
     nonisolated(unsafe) private var _isRecording = false
     @ObservationIgnored
@@ -365,8 +381,8 @@ final class ScreenRecordingService: NSObject {
 
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-            guard let display = displayUnderCursor(from: content.displays) else {
-                log.error("No display found under cursor")
+            guard let display = display(for: selectedRect, preferredTarget: nil, from: content.displays) else {
+                log.error("No display found for selected region")
                 return nil
             }
             return ScreenRecordingTarget(kind: .region(display, selectedRect), windowTitle: nil, appName: nil, displayName: nil)
@@ -413,14 +429,22 @@ final class ScreenRecordingService: NSObject {
         let filter: SCContentFilter
         let config = SCStreamConfiguration()
         config.showsCursor = true
-        config.capturesAudio = false
+        let audioOptions = await resolvedAudioOptions()
+        config.capturesAudio = audioOptions.includesSystemAudio
+        config.captureMicrophone = audioOptions.includesMicrophone
+        if let microphoneDeviceID = audioOptions.microphoneDeviceID {
+            config.microphoneCaptureDeviceID = microphoneDeviceID
+        }
+        config.sampleRate = 48_000
+        config.channelCount = 2
+        config.scalesToFit = false
 
         switch target.kind {
         case .fullscreen(let display):
             filter = SCContentFilter(display: display, excludingWindows: [])
             let scale = scaleFactorForDisplay(display)
-            config.width = Int(display.width) * scale
-            config.height = Int(display.height) * scale
+            config.width = Self.videoDimension(CGFloat(display.width * scale))
+            config.height = Self.videoDimension(CGFloat(display.height * scale))
 
         case .region(let display, let rect):
             filter = SCContentFilter(display: display, excludingWindows: [])
@@ -435,13 +459,15 @@ final class ScreenRecordingService: NSObject {
             let relX = rect.origin.x - displayFrame.origin.x
             let relY = displayFrame.height - (rect.origin.y - displayFrame.origin.y) - rect.height  // Flip Y
             config.sourceRect = CGRect(x: relX, y: relY, width: rect.width, height: rect.height)
-            config.width = Int(rect.width) * scale
-            config.height = Int(rect.height) * scale
+            config.width = Self.videoDimension(rect.width * CGFloat(scale))
+            config.height = Self.videoDimension(rect.height * CGFloat(scale))
 
         case .window(let scWindow):
-            filter = SCContentFilter(desktopIndependentWindow: scWindow)
-            config.width = Int(scWindow.frame.width) * 2   // Retina
-            config.height = Int(scWindow.frame.height) * 2
+            let windowFilter = SCContentFilter(desktopIndependentWindow: scWindow)
+            filter = windowFilter
+            let scale = CGFloat(windowFilter.pointPixelScale)
+            config.width = Self.videoDimension(windowFilter.contentRect.width * scale)
+            config.height = Self.videoDimension(windowFilter.contentRect.height * scale)
         }
 
         // Tune capture cadence for storage-first AI workflows by default.
@@ -469,11 +495,36 @@ final class ScreenRecordingService: NSObject {
                 return false
             }
             writer.add(input)
+
+            var systemAudioInput: AVAssetWriterInput?
+            if audioOptions.includesSystemAudio {
+                let audioInput = makeAudioInput()
+                if writer.canAdd(audioInput) {
+                    writer.add(audioInput)
+                    systemAudioInput = audioInput
+                } else {
+                    log.warning("Cannot add system audio input to asset writer")
+                }
+            }
+
+            var microphoneInput: AVAssetWriterInput?
+            if audioOptions.includesMicrophone {
+                let audioInput = makeAudioInput()
+                if writer.canAdd(audioInput) {
+                    writer.add(audioInput)
+                    microphoneInput = audioInput
+                } else {
+                    log.warning("Cannot add microphone input to asset writer")
+                }
+            }
+
             writer.startWriting()
 
             setWriterState(
                 writer: writer,
-                input: input,
+                videoInput: input,
+                systemAudioInput: systemAudioInput,
+                microphoneInput: microphoneInput,
                 recordedWidth: config.width,
                 recordedHeight: config.height
             )
@@ -481,6 +532,20 @@ final class ScreenRecordingService: NSObject {
             // Start SCStream
             let scStream = SCStream(filter: filter, configuration: config, delegate: self)
             try scStream.addStreamOutput(self, type: .screen, sampleHandlerQueue: outputQueue)
+            if audioOptions.includesSystemAudio {
+                do {
+                    try scStream.addStreamOutput(self, type: .audio, sampleHandlerQueue: outputQueue)
+                } catch {
+                    log.warning("System audio stream output unavailable: \(error.localizedDescription)")
+                }
+            }
+            if audioOptions.includesMicrophone {
+                do {
+                    try scStream.addStreamOutput(self, type: .microphone, sampleHandlerQueue: outputQueue)
+                } catch {
+                    log.warning("Microphone stream output unavailable: \(error.localizedDescription)")
+                }
+            }
             try await scStream.startCapture()
 
             self.stream = scStream
@@ -490,7 +555,7 @@ final class ScreenRecordingService: NSObject {
             state = .recording
             ScreenRecordingPresetStore.shared.save(target: target)
 
-            log.info("Screen recording started → \(url.lastPathComponent) (\(config.width)x\(config.height), \(recordingQualityPreset.rawValue), \(recordingQualityPreset.bitrateSummary), \(recordingQualityPreset.fpsSummary))")
+            log.info("Screen recording started → \(url.lastPathComponent) (\(config.width)x\(config.height), \(recordingQualityPreset.rawValue), \(recordingQualityPreset.bitrateSummary), \(recordingQualityPreset.fpsSummary), systemAudio=\(audioOptions.includesSystemAudio), microphone=\(audioOptions.includesMicrophone))")
 
             // Safety valve: auto-stop after max duration (routes through controller for proper cleanup)
             maxDurationTimer = Timer.scheduledTimer(withTimeInterval: maxDuration, repeats: false) { _ in
@@ -544,7 +609,7 @@ final class ScreenRecordingService: NSObject {
     }
 
     private func finishWriting() {
-        let (writer, input) = prepareWriterForFinish()
+        let (writer, videoInput, systemAudioInput, microphoneInput) = prepareWriterForFinish()
 
         guard let writer else {
             stopContinuation?.resume(returning: nil)
@@ -553,7 +618,9 @@ final class ScreenRecordingService: NSObject {
             return
         }
 
-        input?.markAsFinished()
+        videoInput?.markAsFinished()
+        systemAudioInput?.markAsFinished()
+        microphoneInput?.markAsFinished()
         let url = recordingURL
 
         writer.finishWriting { [weak self] in
@@ -601,9 +668,13 @@ final class ScreenRecordingService: NSObject {
         writerLock.lock()
         if _isRecording {
             _videoInput?.markAsFinished()
+            _systemAudioInput?.markAsFinished()
+            _microphoneInput?.markAsFinished()
             _assetWriter?.cancelWriting()
             _assetWriter = nil
             _videoInput = nil
+            _systemAudioInput = nil
+            _microphoneInput = nil
             _isRecording = false
         }
         writerLock.unlock()
@@ -695,6 +766,14 @@ final class ScreenRecordingService: NSObject {
         return 2
     }
 
+    private static func videoDimension(_ value: CGFloat) -> Int {
+        var dimension = max(2, Int(value.rounded(.down)))
+        if dimension % 2 != 0 {
+            dimension -= 1
+        }
+        return max(2, dimension)
+    }
+
     private func screenNameForDisplay(_ display: SCDisplay) -> String? {
         let displayFrame = CGRect(
             x: CGFloat(display.frame.origin.x),
@@ -736,13 +815,17 @@ final class ScreenRecordingService: NSObject {
 
     private func setWriterState(
         writer: AVAssetWriter,
-        input: AVAssetWriterInput,
+        videoInput: AVAssetWriterInput,
+        systemAudioInput: AVAssetWriterInput?,
+        microphoneInput: AVAssetWriterInput?,
         recordedWidth: Int,
         recordedHeight: Int
     ) {
         writerLock.lock()
         _assetWriter = writer
-        _videoInput = input
+        _videoInput = videoInput
+        _systemAudioInput = systemAudioInput
+        _microphoneInput = microphoneInput
         _isRecording = true
         _isWriterStarted = false
         _recordedWidth = recordedWidth
@@ -754,6 +837,8 @@ final class ScreenRecordingService: NSObject {
         writerLock.lock()
         _assetWriter = nil
         _videoInput = nil
+        _systemAudioInput = nil
+        _microphoneInput = nil
         _isRecording = false
         _isWriterStarted = false
         writerLock.unlock()
@@ -767,13 +852,80 @@ final class ScreenRecordingService: NSObject {
         return (width, height)
     }
 
-    private func prepareWriterForFinish() -> (writer: AVAssetWriter?, input: AVAssetWriterInput?) {
+    private func prepareWriterForFinish() -> (
+        writer: AVAssetWriter?,
+        videoInput: AVAssetWriterInput?,
+        systemAudioInput: AVAssetWriterInput?,
+        microphoneInput: AVAssetWriterInput?
+    ) {
         writerLock.lock()
         let writer = _assetWriter
-        let input = _videoInput
+        let videoInput = _videoInput
+        let systemAudioInput = _systemAudioInput
+        let microphoneInput = _microphoneInput
         _isRecording = false
         writerLock.unlock()
-        return (writer, input)
+        return (writer, videoInput, systemAudioInput, microphoneInput)
+    }
+
+    private func makeAudioInput() -> AVAssetWriterInput {
+        let settings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: 48_000,
+            AVNumberOfChannelsKey: 2,
+            AVEncoderBitRateKey: 128_000,
+        ]
+        let input = AVAssetWriterInput(mediaType: .audio, outputSettings: settings)
+        input.expectsMediaDataInRealTime = true
+        return input
+    }
+
+    private func resolvedAudioOptions() async -> ScreenRecordingAudioOptions {
+        let includesSystemAudio = recordingIncludesSystemAudio
+        var includesMicrophone = recordingIncludesMicrophone
+        var microphoneDeviceID: String?
+
+        if includesMicrophone {
+            switch AVCaptureDevice.authorizationStatus(for: .audio) {
+            case .authorized:
+                break
+            case .notDetermined:
+                includesMicrophone = await AVCaptureDevice.requestAccess(for: .audio)
+            default:
+                includesMicrophone = false
+                log.warning("Microphone audio requested for screen recording but permission is not granted")
+            }
+        }
+
+        if includesMicrophone {
+            microphoneDeviceID = configuredMicrophoneCaptureDeviceID()
+        }
+
+        return ScreenRecordingAudioOptions(
+            includesSystemAudio: includesSystemAudio,
+            includesMicrophone: includesMicrophone,
+            microphoneDeviceID: microphoneDeviceID
+        )
+    }
+
+    private func configuredMicrophoneCaptureDeviceID() -> String? {
+        let store = TalkieSharedSettings
+        let modeRaw = store.string(forKey: AgentSettingsKey.selectedMicrophoneMode)
+            ?? MicrophoneSelectionMode.systemDefault.rawValue
+        let mode = MicrophoneSelectionMode(rawValue: modeRaw) ?? .systemDefault
+
+        guard mode == .fixedUID,
+              let uid = store.string(forKey: AgentSettingsKey.selectedMicrophoneUID),
+              !uid.isEmpty else {
+            return nil
+        }
+
+        if AVCaptureDevice.devices(for: .audio).contains(where: { $0.uniqueID == uid }) {
+            return uid
+        }
+
+        log.warning("Selected microphone unavailable for screen recording, falling back to system default")
+        return nil
     }
 }
 
@@ -781,8 +933,24 @@ final class ScreenRecordingService: NSObject {
 
 extension ScreenRecordingService: SCStreamOutput {
     nonisolated func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
-        guard type == .screen else { return }
+        switch type {
+        case .screen:
+            appendScreenSampleBuffer(sampleBuffer)
+        case .audio:
+            appendAudioSampleBuffer(sampleBuffer, source: .system)
+        case .microphone:
+            appendAudioSampleBuffer(sampleBuffer, source: .microphone)
+        @unknown default:
+            return
+        }
+    }
 
+    private enum AudioSource {
+        case system
+        case microphone
+    }
+
+    private nonisolated func appendScreenSampleBuffer(_ sampleBuffer: CMSampleBuffer) {
         // Check attachment status to filter idle/blank frames
         guard let attachments = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]],
               let statusValue = attachments.first?[.status] as? Int,
@@ -797,6 +965,40 @@ extension ScreenRecordingService: SCStreamOutput {
         guard let writer = _assetWriter,
               let input = _videoInput,
               _isRecording else {
+            writerLock.unlock()
+            return
+        }
+
+        if !_isWriterStarted {
+            writer.startSession(atSourceTime: timestamp)
+            _isWriterStarted = true
+        }
+        writerLock.unlock()
+
+        if input.isReadyForMoreMediaData {
+            input.append(sampleBuffer)
+        }
+    }
+
+    private nonisolated func appendAudioSampleBuffer(_ sampleBuffer: CMSampleBuffer, source: AudioSource) {
+        let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+
+        writerLock.lock()
+        guard let writer = _assetWriter,
+              _isRecording else {
+            writerLock.unlock()
+            return
+        }
+
+        let input: AVAssetWriterInput?
+        switch source {
+        case .system:
+            input = _systemAudioInput
+        case .microphone:
+            input = _microphoneInput
+        }
+
+        guard let input else {
             writerLock.unlock()
             return
         }

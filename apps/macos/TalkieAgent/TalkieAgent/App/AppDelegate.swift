@@ -240,6 +240,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }
         agentMenuPrewarmTask?.cancel()
         agentMenuRefreshTask?.cancel()
+        AgentCameraBubbleController.shared.teardown()
+        ScreenRecordingService.shared.teardown()
     }
 
     // MARK: - URL Handling
@@ -1499,7 +1501,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         case .screenRecord(let mode):
             await ScreenRecordingController.shared.startRecording(mode: mode)
         case .toggleCamera:
-            log.info("Camera capture action ignored in Agent screenshot HUD")
+            AgentCameraBubbleController.shared.toggle()
         case .saveSelection:
             log.info("Selection note action ignored in Agent screenshot HUD")
         case .viewTray:
@@ -1581,6 +1583,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 data: result.data,
                 id: stored.id,
                 capturedAt: result.capturedAt,
+                captureMode: mode.rawValue,
+                width: result.width,
+                height: result.height,
+                windowTitle: result.windowTitle,
+                appName: result.appName,
+                appBundleID: result.appBundleID,
+                displayName: result.displayName
+            )
+            ScreenRecordingController.shared.recordScreenshotHighlight(
+                capturedAt: result.capturedAt,
+                filename: stored.filename,
                 captureMode: mode.rawValue,
                 width: result.width,
                 height: result.height,

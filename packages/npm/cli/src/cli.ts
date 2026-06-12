@@ -3,6 +3,7 @@ import { closeDb } from "./db";
 import { registerMemosCommand } from "./commands/memos";
 import { registerDictationsCommand } from "./commands/dictations";
 import { registerSearchCommand } from "./commands/search";
+import { registerCapturesCommand } from "./commands/captures";
 import { registerWorkflowsCommand } from "./commands/workflows";
 import { registerStatsCommand } from "./commands/stats";
 import { registerInstallCommand } from "./commands/install";
@@ -20,7 +21,7 @@ export function createProgram(): Command {
     .description(
       `Voice-first productivity for macOS
 
-  Query your voice memos, dictations, and workflows from the terminal.
+  Query your voice memos, dictations, captures, and workflows from the terminal.
   Requires Talkie.app — install it with: talkie install
 
   Quick start:
@@ -30,6 +31,7 @@ export function createProgram(): Command {
     talkie pair               show Mac Bridge pairing QR (iOS app companion)
     talkie terminal pair      add iOS SSH terminal access (--ios-only)
     talkie memos              list recent voice memos
+    talkie captures           list screenshots and video captures
     talkie search <query>     full-text search across everything
     talkie stats              usage overview
     talkie install            download & install Talkie.app
@@ -43,6 +45,7 @@ export function createProgram(): Command {
   registerMemosCommand(program);
   registerDictationsCommand(program);
   registerSearchCommand(program);
+  registerCapturesCommand(program);
   registerWorkflowsCommand(program);
   registerStatsCommand(program);
   registerInstallCommand(program);

@@ -858,6 +858,17 @@ final class MemoRecordingController {
 
         if let screenshot {
             capturedScreenshots.append(screenshot)
+            ScreenRecordingController.shared.recordScreenshotHighlight(
+                capturedAt: start.addingTimeInterval(Double(screenshot.timestampMs) / 1000.0),
+                filename: screenshot.filename,
+                captureMode: screenshot.captureMode,
+                width: screenshot.width,
+                height: screenshot.height,
+                windowTitle: screenshot.windowTitle,
+                appName: screenshot.appName,
+                appBundleID: screenshot.appBundleID,
+                displayName: screenshot.displayName
+            )
             mirrorScreenshotToTrayIfNeeded(screenshot, fallbackMode: mode)
             Log(.system).info("Screenshot \(capturedScreenshots.count) captured at \(screenshot.timestampMs)ms mode=\(mode.rawValue)")
         }

@@ -243,7 +243,8 @@ private final class OverlayView: NSView {
     private struct WindowCandidate: Sendable {
         let id: CGWindowID
         let frameCG: CGRect
-        let frameCocoa: CGRect
+        let snapFrameCocoa: CGRect
+        let highlightFrameCocoa: CGRect
     }
 
     let mode: OverlayMode
@@ -266,6 +267,7 @@ private final class OverlayView: NSView {
     private var dragStart: NSPoint?
     private var dragCurrent: NSPoint?
     private var lastDragDrawRect: NSRect = .zero
+    private var suppressWindowSnapping = false
     private var highlightedWindowID: CGWindowID?
     private var highlightedWindowFrame: CGRect?
     private var pendingWindowHoverUpdate = false
@@ -278,7 +280,11 @@ private final class OverlayView: NSView {
 
     private let windowHoverUpdateInterval: CFAbsoluteTime = 1.0 / 90.0
     private let windowCacheRefreshIntervalNs: UInt64 = 1_200_000_000 // 1.2s
+    private let windowSnapDistance: CGFloat = 12
     private var richCaptureUIEnabled: Bool { false }
+    private var selectionAccent: NSColor {
+        NSColor(calibratedRed: 0.96, green: 0.66, blue: 0.34, alpha: 1)
+    }
     private var overlayCursor: NSCursor {
         Self.cursor(for: mode)
     }
@@ -357,10 +363,7 @@ private final class OverlayView: NSView {
         super.viewDidMoveToWindow()
         guard window != nil else { return }
         activateCursor()
-        if mode == .window {
-            let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
-            refreshWindowCandidatesIfNeeded(primaryHeight: primaryHeight, forceRefresh: false)
-        }
+        refreshWindowCandidatesForCurrentScreen(forceRefresh: false)
     }
 
     override func setFrameSize(_ newSize: NSSize) {
@@ -384,6 +387,7 @@ private final class OverlayView: NSView {
         dragStart = nil
         dragCurrent = nil
         lastDragDrawRect = .zero
+        suppressWindowSnapping = false
         deactivateCursor()
     }
 
@@ -418,24 +422,15 @@ private final class OverlayView: NSView {
 
     private func drawRegionSelection() {
         guard let start = dragStart, let current = dragCurrent else { return }
-        let rect = NSRect(
-            x: min(start.x, current.x),
-            y: min(start.y, current.y),
-            width: abs(current.x - start.x),
-            height: abs(current.y - start.y)
-        )
+        let selection = regionSelection(start: start, current: current)
+        let rect = selection.rect
         guard rect.width > 2, rect.height > 2 else { return }
 
-        if richCaptureUIEnabled {
-            drawRegionBackdrop(excluding: rect)
-        }
+        drawRegionBackdrop(excluding: rect)
 
-        NSColor(white: 0, alpha: 0.12).setFill()
-        rect.fill()
-
-        let border = NSBezierPath(rect: rect)
-        NSColor.white.withAlphaComponent(0.92).setStroke()
-        border.lineWidth = 1
+        let border = NSBezierPath(rect: rect.insetBy(dx: 0.5, dy: 0.5))
+        selectionAccent.withAlphaComponent(selection.didSnap ? 0.95 : 0.82).setStroke()
+        border.lineWidth = selection.didSnap ? 1.5 : 1
         border.stroke()
 
         if richCaptureUIEnabled {
@@ -462,12 +457,93 @@ private final class OverlayView: NSView {
         label.draw(at: point, withAttributes: attrs)
     }
 
+    private func regionSelection(
+        start: NSPoint,
+        current: NSPoint,
+        allowsWindowSnapping: Bool? = nil
+    ) -> (rect: NSRect, didSnap: Bool) {
+        let rawRect = Self.dragRect(start: start, current: current)
+        let shouldSnap = allowsWindowSnapping ?? !suppressWindowSnapping
+        guard shouldSnap, rawRect.width > 2, rawRect.height > 2 else {
+            return (rawRect, false)
+        }
+
+        return snappedRegionSelection(for: rawRect)
+    }
+
+    private func snappedRegionSelection(for rawRect: NSRect) -> (rect: NSRect, didSnap: Bool) {
+        guard !windowCandidates.isEmpty else { return (rawRect, false) }
+
+        var bestLeft: (value: CGFloat, distance: CGFloat)?
+        var bestRight: (value: CGFloat, distance: CGFloat)?
+        var bestBottom: (value: CGFloat, distance: CGFloat)?
+        var bestTop: (value: CGFloat, distance: CGFloat)?
+
+        func consider(_ target: CGFloat, for edge: CGFloat, best: inout (value: CGFloat, distance: CGFloat)?) {
+            let distance = abs(target - edge)
+            guard distance <= windowSnapDistance else { return }
+            if let currentBest = best {
+                guard distance < currentBest.distance else { return }
+            }
+            best = (target, distance)
+        }
+
+        for candidate in windowCandidates {
+            guard let frame = localSnapFrame(for: candidate) else { continue }
+
+            let overlapsSelectionVertically = frame.maxY >= rawRect.minY - windowSnapDistance
+                && frame.minY <= rawRect.maxY + windowSnapDistance
+            if overlapsSelectionVertically {
+                consider(frame.minX, for: rawRect.minX, best: &bestLeft)
+                consider(frame.maxX, for: rawRect.minX, best: &bestLeft)
+                consider(frame.minX, for: rawRect.maxX, best: &bestRight)
+                consider(frame.maxX, for: rawRect.maxX, best: &bestRight)
+            }
+
+            let overlapsSelectionHorizontally = frame.maxX >= rawRect.minX - windowSnapDistance
+                && frame.minX <= rawRect.maxX + windowSnapDistance
+            if overlapsSelectionHorizontally {
+                consider(frame.minY, for: rawRect.minY, best: &bestBottom)
+                consider(frame.maxY, for: rawRect.minY, best: &bestBottom)
+                consider(frame.minY, for: rawRect.maxY, best: &bestTop)
+                consider(frame.maxY, for: rawRect.maxY, best: &bestTop)
+            }
+        }
+
+        let left = bestLeft?.value ?? rawRect.minX
+        let right = bestRight?.value ?? rawRect.maxX
+        let bottom = bestBottom?.value ?? rawRect.minY
+        let top = bestTop?.value ?? rawRect.maxY
+        guard right - left > 5, top - bottom > 5 else { return (rawRect, false) }
+
+        let snappedRect = NSRect(x: left, y: bottom, width: right - left, height: top - bottom).standardized
+        let didSnap = bestLeft != nil || bestRight != nil || bestBottom != nil || bestTop != nil
+        return (snappedRect, didSnap)
+    }
+
+    private func localSnapFrame(for candidate: WindowCandidate) -> NSRect? {
+        let screenRect = NSRect(origin: screenOrigin, size: bounds.size)
+        let clippedFrame = candidate.snapFrameCocoa.intersection(screenRect)
+        guard !clippedFrame.isNull, clippedFrame.width > 4, clippedFrame.height > 4 else { return nil }
+        return NSRect(
+            x: clippedFrame.minX - screenOrigin.x,
+            y: clippedFrame.minY - screenOrigin.y,
+            width: clippedFrame.width,
+            height: clippedFrame.height
+        ).standardized
+    }
+
+    private static func dragRect(start: NSPoint, current: NSPoint) -> NSRect {
+        NSRect(
+            x: min(start.x, current.x),
+            y: min(start.y, current.y),
+            width: abs(current.x - start.x),
+            height: abs(current.y - start.y)
+        ).standardized
+    }
+
     private func drawWindowHighlight() {
         guard let frame = highlightedWindowFrame else { return }
-        if richCaptureUIEnabled {
-            NSColor(white: 0, alpha: 0.08).setFill()
-            bounds.fill()
-        }
 
         let local = NSRect(
             x: frame.origin.x - screenOrigin.x,
@@ -475,19 +551,20 @@ private final class OverlayView: NSView {
             width: frame.width,
             height: frame.height
         )
+        drawRegionBackdrop(excluding: local)
 
         let fill = NSBezierPath(roundedRect: local, xRadius: 6, yRadius: 6)
-        NSColor(white: 0.5, alpha: 0.24).setFill()
+        selectionAccent.withAlphaComponent(0.07).setFill()
         fill.fill()
 
         let border = NSBezierPath(roundedRect: local, xRadius: 6, yRadius: 6)
-        NSColor.white.withAlphaComponent(0.92).setStroke()
-        border.lineWidth = 1.5
+        selectionAccent.withAlphaComponent(0.82).setStroke()
+        border.lineWidth = 1
         border.stroke()
     }
 
     private func drawRegionBackdrop(excluding rect: NSRect) {
-        NSColor(white: 0, alpha: 0.08).setFill()
+        NSColor(white: 0, alpha: 0.16).setFill()
 
         let top = NSRect(x: 0, y: rect.maxY, width: bounds.width, height: max(0, bounds.maxY - rect.maxY))
         let bottom = NSRect(x: 0, y: 0, width: bounds.width, height: max(0, rect.minY))
@@ -508,9 +585,15 @@ private final class OverlayView: NSView {
         }
 
         let point = convert(event.locationInWindow, from: nil)
+        refreshWindowCandidatesForCurrentScreen(forceRefresh: true)
+        suppressWindowSnapping = event.modifierFlags.contains(.option)
         dragStart = point
         dragCurrent = point
-        lastDragDrawRect = dragInvalidationRect(for: point, current: point)
+        lastDragDrawRect = dragInvalidationRect(
+            for: point,
+            current: point,
+            allowsWindowSnapping: !suppressWindowSnapping
+        )
         // Full-view invalidate so the frozen snapshot paints across the
         // whole desktop on the first draw of the drag. Without this the
         // snapshot would only paint inside the small drag-region rect.
@@ -518,12 +601,18 @@ private final class OverlayView: NSView {
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard mode == .region, dragStart != nil else { return }
+        guard mode == .region, let start = dragStart else { return }
         overlayCursor.set()
+        refreshWindowCandidatesForCurrentScreen(forceRefresh: false)
         let previousRect = lastDragDrawRect
         let nextPoint = convert(event.locationInWindow, from: nil)
+        suppressWindowSnapping = event.modifierFlags.contains(.option)
         dragCurrent = nextPoint
-        let nextRect = dragInvalidationRect(for: dragStart ?? nextPoint, current: nextPoint)
+        let nextRect = dragInvalidationRect(
+            for: start,
+            current: nextPoint,
+            allowsWindowSnapping: !suppressWindowSnapping
+        )
         lastDragDrawRect = nextRect
         invalidateDragRegion(previous: previousRect, current: nextRect)
     }
@@ -531,16 +620,14 @@ private final class OverlayView: NSView {
     override func mouseUp(with event: NSEvent) {
         guard mode == .region, let start = dragStart, let current = dragCurrent else { return }
         overlayCursor.set()
+        refreshWindowCandidatesForCurrentScreen(forceRefresh: false)
+        suppressWindowSnapping = event.modifierFlags.contains(.option)
 
-        let rect = NSRect(
-            x: min(start.x, current.x),
-            y: min(start.y, current.y),
-            width: abs(current.x - start.x),
-            height: abs(current.y - start.y)
-        )
+        let rect = regionSelection(start: start, current: current).rect
         guard rect.width > 5, rect.height > 5 else {
             dragStart = nil
             dragCurrent = nil
+            suppressWindowSnapping = false
             let previousRect = lastDragDrawRect
             lastDragDrawRect = .zero
             invalidateDragRegion(previous: previousRect, current: .zero)
@@ -555,6 +642,24 @@ private final class OverlayView: NSView {
         )
         complete()
         onRegionSelected?(screenRect)
+    }
+
+    override func flagsChanged(with event: NSEvent) {
+        guard mode == .region, let start = dragStart, let current = dragCurrent else {
+            super.flagsChanged(with: event)
+            return
+        }
+
+        overlayCursor.set()
+        let previousRect = lastDragDrawRect
+        suppressWindowSnapping = event.modifierFlags.contains(.option)
+        let nextRect = dragInvalidationRect(
+            for: start,
+            current: current,
+            allowsWindowSnapping: !suppressWindowSnapping
+        )
+        lastDragDrawRect = nextRect
+        invalidateDragRegion(previous: previousRect, current: nextRect)
     }
 
     override func mouseMoved(with event: NSEvent) {
@@ -628,13 +733,18 @@ private final class OverlayView: NSView {
             if screenPoint.x >= frame.minX, screenPoint.x <= frame.maxX,
                mouseYInCG >= frame.minY, mouseYInCG <= frame.maxY {
                 if includeFrame {
-                    highlightedWindowFrame = candidate.frameCocoa
+                    highlightedWindowFrame = candidate.highlightFrameCocoa
                 }
                 return candidate.id
             }
         }
 
         return nil
+    }
+
+    private func refreshWindowCandidatesForCurrentScreen(forceRefresh: Bool) {
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+        refreshWindowCandidatesIfNeeded(primaryHeight: primaryHeight, forceRefresh: forceRefresh)
     }
 
     private func refreshWindowCandidatesIfNeeded(primaryHeight: CGFloat, forceRefresh: Bool) {
@@ -691,10 +801,23 @@ private final class OverlayView: NSView {
 
             let frameCG = CGRect(x: x, y: y, width: w, height: h)
             let frameCocoa = CGRect(x: x, y: primaryHeight - y - h, width: w, height: h)
-            candidates.append(WindowCandidate(id: windowID, frameCG: frameCG, frameCocoa: frameCocoa))
+            candidates.append(
+                WindowCandidate(
+                    id: windowID,
+                    frameCG: frameCG,
+                    snapFrameCocoa: frameCocoa.standardized,
+                    highlightFrameCocoa: Self.trimmedWindowHighlightFrame(frameCocoa)
+                )
+            )
         }
 
         return candidates
+    }
+
+    nonisolated private static func trimmedWindowHighlightFrame(_ frame: CGRect) -> CGRect {
+        let horizontalInset = min(6, frame.width * 0.04)
+        let verticalInset = min(20, frame.height * 0.08)
+        return frame.insetBy(dx: horizontalInset, dy: verticalInset).standardized
     }
 
     func handleControlKey(_ event: NSEvent) -> Bool {
@@ -750,13 +873,16 @@ private final class OverlayView: NSView {
         NSCursor.pop()
     }
 
-    private func dragInvalidationRect(for start: NSPoint, current: NSPoint) -> NSRect {
-        let rect = NSRect(
-            x: min(start.x, current.x),
-            y: min(start.y, current.y),
-            width: abs(current.x - start.x),
-            height: abs(current.y - start.y)
-        )
+    private func dragInvalidationRect(
+        for start: NSPoint,
+        current: NSPoint,
+        allowsWindowSnapping: Bool = true
+    ) -> NSRect {
+        let rect = regionSelection(
+            start: start,
+            current: current,
+            allowsWindowSnapping: allowsWindowSnapping
+        ).rect
         // Include border + size label area.
         return rect.insetBy(dx: -4, dy: -24)
     }

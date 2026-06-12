@@ -124,6 +124,7 @@ public struct RecordingVisualContextEvent: Codable, Sendable, Equatable {
     public enum EventType: String, Codable, Sendable {
         case captureTarget
         case activeWindow
+        case screenshot
     }
 
     public var startMs: Int
@@ -136,6 +137,10 @@ public struct RecordingVisualContextEvent: Codable, Sendable, Equatable {
     public var displayID: UInt32?
     public var captureMode: String?
     public var bounds: RecordingVisualContextRect?
+    public var assetKind: String?
+    public var assetFilename: String?
+    public var width: Int?
+    public var height: Int?
 
     public init(
         startMs: Int,
@@ -147,7 +152,11 @@ public struct RecordingVisualContextEvent: Codable, Sendable, Equatable {
         displayName: String? = nil,
         displayID: UInt32? = nil,
         captureMode: String? = nil,
-        bounds: RecordingVisualContextRect? = nil
+        bounds: RecordingVisualContextRect? = nil,
+        assetKind: String? = nil,
+        assetFilename: String? = nil,
+        width: Int? = nil,
+        height: Int? = nil
     ) {
         self.startMs = startMs
         self.endMs = endMs
@@ -159,6 +168,10 @@ public struct RecordingVisualContextEvent: Codable, Sendable, Equatable {
         self.displayID = displayID
         self.captureMode = captureMode
         self.bounds = bounds
+        self.assetKind = assetKind
+        self.assetFilename = assetFilename
+        self.width = width
+        self.height = height
     }
 }
 
@@ -502,6 +515,18 @@ public enum VisualContextStorage {
             subject = [event.appName, event.windowTitle.map { "window: \"\($0)\"" }]
                 .compactMap { $0 }
                 .joined(separator: ", ")
+        case .screenshot:
+            let size = event.width.flatMap { width in event.height.map { "\(width)x\($0)" } }
+            subject = [
+                "Screenshot marker",
+                event.assetFilename,
+                event.captureMode,
+                size,
+                event.appName,
+                event.windowTitle.map { "window: \"\($0)\"" }
+            ]
+            .compactMap { $0 }
+            .joined(separator: ", ")
         }
 
         let text = subject.isEmpty ? event.type.rawValue : subject
