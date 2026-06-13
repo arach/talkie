@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import TalkieCore
 
 public enum VideoClipStorage {
 

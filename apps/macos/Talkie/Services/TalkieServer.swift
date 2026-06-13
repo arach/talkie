@@ -1385,12 +1385,16 @@ final class TalkieServer {
         do {
             let repository = LocalRepository()
             let memo: MemoModel?
+            let assets: TalkieObjectAssets?
             if let memoData = try await repository.fetchMemo(id: request.memoId) {
                 memo = memoData.memo
+                assets = nil
             } else if let recording = try await TalkieObjectRepository().fetchRecording(id: request.memoId) {
                 memo = recording.toMemoModel()
+                assets = recording.assets
             } else {
                 memo = nil
+                assets = nil
             }
 
             guard let memo else {
@@ -1402,6 +1406,7 @@ final class TalkieServer {
                 transcript: request.context.transcript,
                 title: request.context.title,
                 date: date,
+                assets: assets,
                 memo: memo
             )
             workflowContext.outputs = request.context.outputs

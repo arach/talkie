@@ -544,6 +544,11 @@ final class LiveSettings: ObservableObject {
         didSet { save() }
     }
 
+    /// Delay before reusing the last screen recording target. 0 starts immediately.
+    @Published var screenRecordingCountdownSeconds: Int {
+        didSet { save() }
+    }
+
     /// Capture app/system audio in screen recordings.
     @Published var screenRecordingIncludesSystemAudio: Bool {
         didSet { save() }
@@ -874,6 +879,8 @@ final class LiveSettings: ObservableObject {
         } else {
             self.screenRecordingQualityPreset = .agent
         }
+        let countdown = store.integer(forKey: AgentSettingsKey.screenRecordingCountdownSeconds)
+        self.screenRecordingCountdownSeconds = [0, 1, 3, 5].contains(countdown) ? countdown : 0
         self.screenRecordingIncludesSystemAudio = store.object(forKey: AgentSettingsKey.screenRecordingIncludesSystemAudio) as? Bool ?? false
         self.screenRecordingIncludesMicrophone = store.object(forKey: AgentSettingsKey.screenRecordingIncludesMicrophone) as? Bool ?? false
         self.screenRecordingShowsCameraBubble = store.object(forKey: AgentSettingsKey.screenRecordingShowsCameraBubble) as? Bool ?? false
@@ -1171,6 +1178,8 @@ final class LiveSettings: ObservableObject {
         store.set(segmentDuration, forKey: AgentSettingsKey.segmentDuration)
         store.set(screenRecordingQualityPreset.rawValue, forKey: AgentSettingsKey.screenRecordingQuality)
         UserDefaults.standard.set(screenRecordingQualityPreset.rawValue, forKey: AgentSettingsKey.screenRecordingQuality)
+        store.set(screenRecordingCountdownSeconds, forKey: AgentSettingsKey.screenRecordingCountdownSeconds)
+        UserDefaults.standard.set(screenRecordingCountdownSeconds, forKey: AgentSettingsKey.screenRecordingCountdownSeconds)
         store.set(screenRecordingIncludesSystemAudio, forKey: AgentSettingsKey.screenRecordingIncludesSystemAudio)
         store.set(screenRecordingIncludesMicrophone, forKey: AgentSettingsKey.screenRecordingIncludesMicrophone)
         store.set(screenRecordingShowsCameraBubble, forKey: AgentSettingsKey.screenRecordingShowsCameraBubble)

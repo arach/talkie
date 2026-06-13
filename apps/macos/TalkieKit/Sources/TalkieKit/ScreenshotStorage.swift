@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import TalkieCore
 
 public enum ScreenshotStorage {
 

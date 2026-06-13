@@ -9,6 +9,7 @@
 //
 
 import Foundation
+import TalkieCore
 
 public enum LiveTrayNotifications {
     /// Distributed notification name posted after TalkieAgent mutates live tray

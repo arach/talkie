@@ -17,7 +17,7 @@ This is the quick human-readable map of the workflow step vocabulary available t
 
 - `shell`
   - run a local executable with arguments, stdin, environment, and timeout
-  - best for tiny text-processing helpers, local scripts, or file utilities
+  - best for tiny text-processing helpers, local scripts, file utilities, or `ffmpeg`/`ffprobe` over attached clips
 - `saveFile`
   - write content to disk
 - `clipboard`
@@ -61,5 +61,6 @@ This is the quick human-readable map of the workflow step vocabulary available t
 
 - When the user wants something cute or fast, start with `shell`, `llm`, `speak`, `notification`, or `saveFile`.
 - When they want a “smart memo” workflow, start from `{{TRANSCRIPT}}`.
+- When they want to process video, use `{{CLIP_PATH}}` / `{{VIDEO_PATH}}` for the first attached clip, `{{CLIP_PATHS}}` for all clips, and `{{CLIP_CONTEXT}}` for readable clip metadata.
 - When they want a chain, give each step a clear `outputKey` and reference it later with `{{output_key}}`.
 - Prefer the smallest viable workflow first. Then add pinning, auto-run, or action-surface configuration only if requested.

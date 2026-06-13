@@ -8,6 +8,7 @@
 // Re-export all public types
 @_exported import Foundation
 @_exported import SwiftUI
+@_exported import TalkieCore
 
 // Console components are available via:
 // - ConsoleView

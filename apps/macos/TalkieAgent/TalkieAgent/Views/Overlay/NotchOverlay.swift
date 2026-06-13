@@ -11,6 +11,8 @@ import AppKit
 import TalkieKit
 import Combine
 
+private let notchParticleFrameInterval: TimeInterval = 1.0 / 30.0
+
 // MARK: - Notch Detection
 
 struct NotchInfo {
@@ -1135,7 +1137,6 @@ struct NotchOverlayView: View {
         Circle()
             .fill(stateColor)
             .frame(width: 6, height: 6)
-            .shadow(color: stateColor.opacity(0.8), radius: 3)
             .modifier(NotchPulseModifier(isAnimating: controller.state == .listening))
     }
 
@@ -1154,7 +1155,7 @@ struct NotchOverlayView: View {
         case .refining:
             return Color.purple
         case .idle:
-            return Color.white.opacity(0.5)
+            return Color.white
         }
     }
 
@@ -1176,20 +1177,18 @@ struct ProcessingDots: View {
             let t = timeline.date.timeIntervalSinceReferenceDate
             let currentPhase = Int(t * 2.8) % 4
 
-            HStack(spacing: 2) {
+            HStack(spacing: 2.5) {
                 ForEach(0..<3, id: \.self) { i in
                     Circle()
-                        .fill(color.opacity(dotOpacity(for: i, phase: currentPhase)))
-                        .frame(width: 3, height: 3)
+                        .fill(dotFill(for: i, phase: currentPhase))
+                        .frame(width: 4, height: 4)
                 }
             }
         }
     }
 
-    private func dotOpacity(for index: Int, phase: Int) -> Double {
-        // Phase 0: all dim, 1-3: sequential dots bright
-        if phase == 0 { return 0.4 }
-        return index == (phase - 1) ? 1.0 : 0.4
+    private func dotFill(for index: Int, phase: Int) -> Color {
+        index == (phase - 1) ? color : Color.white
     }
 }
 
@@ -1323,28 +1322,20 @@ struct NotchParticles: View {
 
     // Access tuning for configurable particles
     @ObservedObject private var tuning = NotchTuning.shared
-    // Smoothed level for organic motion (no jumps)
-    @State private var smoothedLevel: CGFloat = 0.15
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 0.016)) { timeline in
+        TimelineView(.animation(minimumInterval: notchParticleFrameInterval)) { timeline in
             Canvas { context, size in
                 let time = timeline.date.timeIntervalSinceReferenceDate
                 let centerY = size.height / 2
-                let particleCount = tuning.particleCount
+                let particleCount = max(6, min(12, tuning.particleCount))
                 let baseSpeed = tuning.particleSpeed
                 let baseSize = CGFloat(tuning.particleSize)
-                let baseOpacity = tuning.particleOpacity
 
                 // Target level from audio (amplified for responsiveness)
-                let targetLevel = min(1.0, CGFloat(audioLevel) * 2.0)
-                // Use smoothed level for wave calculations
-                let level = max(0.15, smoothedLevel)
+                let level = max(0.15, min(1.0, CGFloat(audioLevel) * 2.0))
 
-                // More particles for denser effect
-                let actualParticleCount = particleCount + 6
-
-                for i in 0..<actualParticleCount {
+                for i in 0..<particleCount {
                     let seed = Double(i) * 1.618033988749
 
                     // X: faster flow (1.5x speed boost)
@@ -1383,7 +1374,6 @@ struct NotchParticles: View {
                     let sizeVariation = CGFloat(0.7 + sin(seed * 5) * 0.3)
                     let particleSize = baseSize + levelBonus * sizeVariation
 
-                    // Opacity with edge fade for trail effect
                     let edgeFade: Double
                     switch flowDirection {
                     case .right:
@@ -1392,21 +1382,16 @@ struct NotchParticles: View {
                         edgeFade = min((1.0 - xProgress) * 3, 1.0) * min(xProgress * 2, 1.0)
                     }
 
-                    let opacity = (baseOpacity + Double(level) * 0.25) * edgeFade * (0.6 + sin(seed * 3) * 0.4)
+                    let visibleSize = particleSize * max(0.30, CGFloat(edgeFade))
 
                     // Draw particle
                     let rect = CGRect(
-                        x: x - particleSize / 2,
-                        y: y - particleSize / 2,
-                        width: particleSize,
-                        height: particleSize
+                        x: x - visibleSize / 2,
+                        y: y - visibleSize / 2,
+                        width: visibleSize,
+                        height: visibleSize
                     )
-                    context.fill(Circle().path(in: rect), with: .color(.white.opacity(max(0.12, opacity))))
-                }
-
-                // Smooth level update (60fps responsiveness without jumps)
-                DispatchQueue.main.async {
-                    smoothedLevel = smoothedLevel * 0.85 + targetLevel * 0.15
+                    context.fill(Circle().path(in: rect), with: .color(.white))
                 }
             }
         }

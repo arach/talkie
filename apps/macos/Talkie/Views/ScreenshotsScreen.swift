@@ -7,6 +7,7 @@
 //
 
 import AppKit
+import AVKit
 import ImageIO
 import SwiftUI
 import TalkieKit
@@ -26,6 +27,153 @@ private struct ScreenshotItem: Identifiable {
     let trayItem: TrayItem?
     let parent: TalkieObject?
     let screenshot: RecordingScreenshot?
+    let clip: RecordingClip?
+    let visualContext: RecordingVisualContext?
+}
+
+private enum MarkupMediaKind {
+    case screenshot
+    case video
+    case selection
+
+    var label: String {
+        switch self {
+        case .screenshot: return "Screenshot"
+        case .video: return "Video"
+        case .selection: return "Selection"
+        }
+    }
+
+    var sourceLabel: String {
+        switch self {
+        case .screenshot: return "screenshot"
+        case .video: return "video"
+        case .selection: return "selection"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .screenshot: return "photo"
+        case .video: return "play.rectangle.fill"
+        case .selection: return "text.quote"
+        }
+    }
+
+    var badgeText: String {
+        switch self {
+        case .screenshot: return "IMG"
+        case .video: return "VIDEO"
+        case .selection: return "TEXT"
+        }
+    }
+}
+
+private enum MarkupMediaFilter: String, CaseIterable {
+    case all
+    case screenshots
+    case videos
+
+    var label: String {
+        switch self {
+        case .all: return "All"
+        case .screenshots: return "Images"
+        case .videos: return "Videos"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .all: return "square.stack"
+        case .screenshots: return "photo"
+        case .videos: return "play.rectangle"
+        }
+    }
+
+    func includes(_ item: ScreenshotItem) -> Bool {
+        switch self {
+        case .all: return true
+        case .screenshots: return item.mediaKind == .screenshot
+        case .videos: return item.mediaKind == .video
+        }
+    }
+}
+
+private extension ScreenshotItem {
+    var mediaKind: MarkupMediaKind {
+        if clip != nil || visualContext != nil || trayItem?.isClip == true {
+            return .video
+        }
+        if trayItem?.isText == true {
+            return .selection
+        }
+        return .screenshot
+    }
+
+    var mediaLabel: String {
+        mediaKind.label
+    }
+
+    var mediaBadgeText: String {
+        mediaKind.badgeText
+    }
+
+    var isVideo: Bool {
+        mediaKind == .video
+    }
+
+    var appName: String? {
+        screenshot?.appName
+            ?? clip?.appName
+            ?? visualContext?.appName
+            ?? trayItem?.appName
+    }
+
+    var windowTitle: String? {
+        screenshot?.windowTitle
+            ?? clip?.windowTitle
+            ?? visualContext?.windowTitle
+            ?? trayItem?.windowTitle
+    }
+
+    var displayName: String? {
+        screenshot?.displayName
+            ?? clip?.displayName
+            ?? visualContext?.displayName
+            ?? trayItem?.displayName
+    }
+
+    var mediaDimensions: String? {
+        if let screenshot, let width = screenshot.width, let height = screenshot.height {
+            return "\(width)×\(height)"
+        }
+        if let clip, let width = clip.width, let height = clip.height {
+            return "\(width)×\(height)"
+        }
+        if let visualContext, let width = visualContext.width, let height = visualContext.height {
+            return "\(width)×\(height)"
+        }
+        if let trayItem, trayItem.width > 0, trayItem.height > 0 {
+            return "\(trayItem.width)×\(trayItem.height)"
+        }
+        return nil
+    }
+
+    var durationLabel: String? {
+        if let clip {
+            return Self.formatDuration(ms: clip.durationMs)
+        }
+        if let durationMs = visualContext?.durationMs {
+            return Self.formatDuration(ms: durationMs)
+        }
+        return trayItem?.durationLabel
+    }
+
+    private static func formatDuration(ms: Int) -> String {
+        let seconds = max(ms, 0) / 1000
+        if seconds < 60 { return "\(seconds)s" }
+        return "\(seconds / 60)m\(seconds % 60)s"
+    }
 }
 
 // MARK: - View Mode
@@ -51,10 +199,12 @@ struct ScreenshotsScreen: View {
     @State private var selectionAnchorID: String?
     @State private var isLoading = true
     @State private var searchText = ""
+    @State private var videoMarkupItemID: String?
 
     // Grid (thumbnail wall) vs list (dense metadata rows). Persisted so the
     // choice sticks across launches.
     @AppStorage("screenshotsViewMode") private var viewMode: ScreenshotsViewMode = .grid
+    @AppStorage("markupMediaFilter") private var mediaFilter: MarkupMediaFilter = .all
 
     // ── Preview (Quick Look) takeover ────────────────────────────
     // When set, the whole screen swaps to a clean read-only preview of
@@ -88,11 +238,11 @@ struct ScreenshotsScreen: View {
 
     // Capture-pill keep-out. `pillKeepoutHalf` is half the resting pill's
     // footprint (≈114pt wide) plus margin; `fullHeaderControlsWidth` is the
-    // rough span of the expanded header cluster (count + view toggle + search
-    // + tray + markup + folder). Used to decide when the header must collapse
+    // rough span of the expanded header cluster (count + view toggle + media
+    // filter + search + tray + markup + folder). Used to decide when the header must collapse
     // so its controls never slide under the centered pill.
     private static let pillKeepoutHalf: CGFloat = 65
-    private static let fullHeaderControlsWidth: CGFloat = 470
+    private static let fullHeaderControlsWidth: CGFloat = 590
 
     // MARK: - Derived
 
@@ -112,18 +262,22 @@ struct ScreenshotsScreen: View {
                     pinned: item.pinned,
                     trayItem: item,
                     parent: nil,
-                    screenshot: nil
+                    screenshot: nil,
+                    clip: nil,
+                    visualContext: nil
                 )
             }
     }
 
     private var allItems: [ScreenshotItem] {
         let tray = trayScreenshotItems
-        let combined = tray + libraryItems
+        let combined = (tray + libraryItems).filter { mediaFilter.includes($0) }
 
         guard !searchText.isEmpty else { return combined }
         let query = searchText.lowercased()
         return combined.filter { item in
+            if item.mediaLabel.lowercased().contains(query) { return true }
+            if item.fileURL.lastPathComponent.lowercased().contains(query) { return true }
             if let label = item.label, label.lowercased().contains(query) { return true }
             if let parent = item.parent {
                 if let title = parent.title, title.lowercased().contains(query) { return true }
@@ -133,6 +287,14 @@ struct ScreenshotsScreen: View {
             if let ss = item.screenshot {
                 if let app = ss.appName, app.lowercased().contains(query) { return true }
                 if let win = ss.windowTitle, win.lowercased().contains(query) { return true }
+            }
+            if let clip = item.clip {
+                if let app = clip.appName, app.lowercased().contains(query) { return true }
+                if let win = clip.windowTitle, win.lowercased().contains(query) { return true }
+            }
+            if let context = item.visualContext {
+                if let app = context.appName, app.lowercased().contains(query) { return true }
+                if let win = context.windowTitle, win.lowercased().contains(query) { return true }
             }
             return false
         }
@@ -157,12 +319,17 @@ struct ScreenshotsScreen: View {
         return allItems.first { $0.id == previewItemID }
     }
 
+    private var videoMarkupItem: ScreenshotItem? {
+        guard let videoMarkupItemID else { return nil }
+        return allItems.first { $0.id == videoMarkupItemID }
+    }
+
     // MARK: - Body
 
     var body: some View {
         ZStack {
             galleryBody
-                .opacity(previewItem == nil ? 1 : 0)
+                .opacity(previewItem == nil && videoMarkupItem == nil ? 1 : 0)
 
             if let item = previewItem {
                 ScreenshotPreviewOverlay(
@@ -179,8 +346,23 @@ struct ScreenshotsScreen: View {
                 )
                 .transition(.opacity)
             }
+
+            if let item = videoMarkupItem {
+                VideoMarkupHostView(
+                    item: item,
+                    layerCount: layerCount(for: item),
+                    onShare: { shareFile(item.fileURL) },
+                    onReveal: { NSWorkspace.shared.activateFileViewerSelecting([item.fileURL]) },
+                    onClose: {
+                        videoMarkupItemID = nil
+                        Task { await loadLibrary() }
+                    }
+                )
+                .transition(.opacity)
+            }
         }
         .animation(.easeInOut(duration: 0.18), value: previewItemID)
+        .animation(.easeInOut(duration: 0.18), value: videoMarkupItemID)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .captureMarkupHost(url: $markupURL) {
             // Refresh layer counts / annotated thumbnails on return.
@@ -189,6 +371,10 @@ struct ScreenshotsScreen: View {
         .task { await loadLibrary() }
         .onChange(of: allItems.map(\.id)) { _, visibleIDs in
             pruneSelection(visibleIDs: visibleIDs)
+        }
+        .onChange(of: mediaFilter) { _, _ in
+            visibleCount = Self.pageSize
+            clearSelection()
         }
     }
 
@@ -255,7 +441,7 @@ struct ScreenshotsScreen: View {
             // the TALKIE pill, same as Models. Controls ride the trailing slot;
             // the count chrome drops when the pane is tight.
             ScopeTopBand(
-                title: "Screenshots",
+                title: "Markup",
                 chrome: headerCompact ? nil : headerCountLine,
                 trailing: { headerControls(compact: headerCompact) }
             )
@@ -289,6 +475,17 @@ struct ScreenshotsScreen: View {
             HStack(spacing: 0) {
                 viewModeButton(.grid, "square.grid.2x2")
                 viewModeButton(.list, "list.bullet")
+            }
+            .padding(2)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Theme.current.foreground.opacity(0.06))
+            )
+
+            HStack(spacing: 0) {
+                ForEach(MarkupMediaFilter.allCases, id: \.self) { filter in
+                    mediaFilterButton(filter, compact: compact)
+                }
             }
             .padding(2)
             .background(
@@ -349,8 +546,12 @@ struct ScreenshotsScreen: View {
 
     private var headerCountLine: String {
         let total = allItems.count
+        let videos = allItems.filter(\.isVideo).count
+        let images = allItems.filter { $0.mediaKind == .screenshot }.count
         let today = allItems.filter { Calendar.current.isDateInToday($0.date) }.count
         var parts = ["\(total) capture\(total == 1 ? "" : "s")"]
+        if images > 0 { parts.append("\(images) image\(images == 1 ? "" : "s")") }
+        if videos > 0 { parts.append("\(videos) video\(videos == 1 ? "" : "s")") }
         if today > 0 { parts.append("\(today) today") }
         return parts.joined(separator: " · ")
     }
@@ -372,6 +573,35 @@ struct ScreenshotsScreen: View {
         }
         .buttonStyle(.plain)
         .help(mode == .grid ? "Grid view" : "List view")
+    }
+
+    @ViewBuilder
+    private func mediaFilterButton(_ filter: MarkupMediaFilter, compact: Bool) -> some View {
+        let active = mediaFilter == filter
+        Button {
+            mediaFilter = filter
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: filter.icon)
+                    .font(.system(size: 10, weight: .medium))
+                if !compact || filter == mediaFilter {
+                    Text(filter.label)
+                        .font(ScopeType.mono(size: 9, weight: .semibold))
+                        .tracking(ScopeType.Tracking.normal)
+                        .textCase(.uppercase)
+                }
+            }
+            .foregroundStyle(active ? ScopeAmber.solid : Theme.current.foregroundMuted)
+            .frame(minWidth: compact ? 24 : 54)
+            .frame(height: 20)
+            .padding(.horizontal, compact ? 2 : 5)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(active ? ScopeAmber.tintSubtle : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+        .help(filter.label)
     }
 
     // Shared infinite-scroll sentinel: bump the visible window as it appears.
@@ -521,11 +751,27 @@ struct ScreenshotsScreen: View {
 
     private var emptyState: some View {
         ContentUnavailableView {
-            Label("No Screenshots", systemImage: "camera.viewfinder")
+            Label(emptyStateTitle, systemImage: mediaFilter.icon)
         } description: {
-            Text("Capture screenshots during memos or use Hyper+S to add them to the tray.")
+            Text(emptyStateDescription)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var emptyStateTitle: String {
+        switch mediaFilter {
+        case .all: return "No Markup Sources"
+        case .screenshots: return "No Images"
+        case .videos: return "No Videos"
+        }
+    }
+
+    private var emptyStateDescription: String {
+        switch mediaFilter {
+        case .all: return "Capture an image or video to mark it up."
+        case .screenshots: return "Capture or choose an image to mark it up."
+        case .videos: return "Record or attach a clip to mark it up."
+        }
     }
 
     // MARK: - Screenshot Card
@@ -585,8 +831,11 @@ struct ScreenshotsScreen: View {
         if let label = item.label?.trimmingCharacters(in: .whitespacesAndNewlines), !label.isEmpty {
             return label
         }
-        if let app = item.screenshot?.appName, !app.isEmpty {
+        if let app = item.appName, !app.isEmpty {
             return app
+        }
+        if item.isVideo, let duration = item.durationLabel {
+            return "Video · \(duration)"
         }
         return item.date.formatted(date: .omitted, time: .shortened)
     }
@@ -597,23 +846,18 @@ struct ScreenshotsScreen: View {
     /// per-row disk reads that would tank scroll perf on hundreds of rows).
     private func rowColumns(_ item: ScreenshotItem) -> ScreenshotRowColumns {
         // App / window context — already carried on both models.
-        let app = item.screenshot?.appName
-            ?? item.trayItem?.appName
-            ?? item.screenshot?.windowTitle
-            ?? item.trayItem?.windowTitle
+        let app = item.appName
+            ?? item.windowTitle
 
         // Dimensions — width/height live on both record types in memory.
-        var dimensions: String?
-        if let ss = item.screenshot, let w = ss.width, let h = ss.height {
-            dimensions = "\(w)×\(h)"
-        } else if let trayItem = item.trayItem, trayItem.width > 0 {
-            dimensions = "\(trayItem.width)×\(trayItem.height)"
-        }
+        let dimensions = item.mediaDimensions
 
         return ScreenshotRowColumns(
+            kind: item.mediaKind,
             app: app?.trimmingCharacters(in: .whitespaces).screenshotActionNilIfEmpty,
             source: sourceLabel(item).uppercased(),
-            dimensions: dimensions
+            dimensions: dimensions,
+            duration: item.durationLabel
         )
     }
 
@@ -628,6 +872,7 @@ struct ScreenshotsScreen: View {
         )
         .aspectRatio(1, contentMode: .fit)
         .overlay(selectionOverlay(isSelected: selected))
+        .overlay(alignment: .topLeading) { mediaCardBadge(item) }
         .contentShape(Rectangle())
         .accessibilityLabel(itemAccessibilityLabel(item))
         .accessibilityAddTraits(selected ? .isSelected : [])
@@ -644,13 +889,15 @@ struct ScreenshotsScreen: View {
 
     @ViewBuilder
     private func trayContextMenu(_ item: ScreenshotItem, trayItem: TrayItem) -> some View {
-        Button("Copy Image") { copyItem(item) }
+        Button(item.isVideo ? "Copy Video" : "Copy Image") { copyItem(item) }
+
+        if canAnnotate(item) {
+            Button(item.isVideo ? "Markup Video…" : "Annotate…") { annotateItem(item) }
+        }
+
+        workflowContextMenuItems(for: item)
 
         if case .screenshot(let ts) = trayItem {
-            Button("Annotate…") { annotateItem(item) }
-
-            workflowContextMenuItems(for: item)
-
             if let ocrText = ts.ocrText, !ocrText.isEmpty {
                 Button("Copy Detected Text") {
                     NSPasteboard.general.clearContents()
@@ -715,10 +962,16 @@ struct ScreenshotsScreen: View {
         }
     }
 
+    private func mediaCardBadge(_ item: ScreenshotItem) -> some View {
+        MediaKindPill(kind: item.mediaKind)
+            .padding(5)
+            .allowsHitTesting(false)
+    }
+
     @ViewBuilder
     private func libraryContextMenu(_ item: ScreenshotItem) -> some View {
-        Button("Copy Image") { copyItem(item) }
-        Button("Annotate…") { annotateItem(item) }
+        Button(item.isVideo ? "Copy Video" : "Copy Image") { copyItem(item) }
+        Button(item.isVideo ? "Markup Video…" : "Annotate…") { annotateItem(item) }
 
         workflowContextMenuItems(for: item)
 
@@ -766,7 +1019,7 @@ struct ScreenshotsScreen: View {
         let objectType = item.parent?.type ?? TalkieObjectType.capture
         return workflowService.workflowsAccepting(
             objectType,
-            assetKind: .screenshot,
+            assetKind: item.isVideo ? .clip : .screenshot,
             surface: .captureContextMenu
         )
     }
@@ -777,6 +1030,7 @@ struct ScreenshotsScreen: View {
     }
 
     private func canAnnotate(_ item: ScreenshotItem) -> Bool {
+        if item.isVideo { return true }
         guard let trayItem = item.trayItem else { return true }
         if case .screenshot = trayItem { return true }
         return false
@@ -786,6 +1040,10 @@ struct ScreenshotsScreen: View {
         guard canAnnotate(item) else { return }
         // Leaving Quick Look (if open) for the markup takeover.
         previewItemID = nil
+        if item.isVideo {
+            videoMarkupItemID = item.id
+            return
+        }
         markupURL = item.fileURL
     }
 
@@ -799,6 +1057,10 @@ struct ScreenshotsScreen: View {
     private func copyItem(_ item: ScreenshotItem) {
         if let trayItem = item.trayItem {
             _ = TrayActionService.shared.copySelected(ids: [trayItem.id], in: [trayItem])
+        } else if item.isVideo {
+            let pb = NSPasteboard.general
+            pb.clearContents()
+            pb.writeObjects([item.fileURL as NSURL])
         } else if let data = try? Data(contentsOf: item.fileURL) {
             let pb = NSPasteboard.general
             pb.clearContents()
@@ -811,6 +1073,10 @@ struct ScreenshotsScreen: View {
             _ = TrayActionService.shared.deleteSelected(ids: [trayItem.id], in: [trayItem])
         } else if let parent = item.parent, let ss = item.screenshot {
             Task { await removeAttachedScreenshot(ss, from: parent) }
+        } else if let parent = item.parent, let clip = item.clip {
+            Task { await removeAttachedClip(clip, from: parent) }
+        } else if let parent = item.parent, let visualContext = item.visualContext {
+            Task { await removeAttachedVisualContext(visualContext, from: parent) }
         }
         selectedIDs.remove(item.id)
         if selectedID == item.id { selectedID = selectedIDs.first }
@@ -834,6 +1100,10 @@ struct ScreenshotsScreen: View {
         if !selectedIDs.contains(item.id) {
             selectedIDs = [item.id]
             selectionAnchorID = item.id
+        }
+        if item.isVideo {
+            videoMarkupItemID = item.id
+            return
         }
         previewItemID = item.id
     }
@@ -877,20 +1147,23 @@ struct ScreenshotsScreen: View {
 
     private func sourceLabel(_ item: ScreenshotItem) -> String {
         if let mode = item.screenshot?.captureMode, !mode.isEmpty { return mode }
+        if let mode = item.clip?.captureMode, !mode.isEmpty { return mode }
+        if let mode = item.visualContext?.captureMode, !mode.isEmpty { return mode }
         if let trayItem = item.trayItem {
             switch trayItem {
             case .screenshot: return "screenshot"
-            case .clip:       return "clip"
+            case .clip(let clip): return clip.captureMode.isEmpty ? "video" : clip.captureMode
             case .selection:  return "selection"
             }
         }
-        return "screenshot"
+        return item.mediaKind.sourceLabel
     }
 
     private func imageDimensions(_ item: ScreenshotItem) -> String? {
-        if let ss = item.screenshot, let w = ss.width, let h = ss.height {
-            return "\(w) × \(h)"
+        if let dimensions = item.mediaDimensions {
+            return dimensions.replacing("×", with: " × ")
         }
+        guard !item.isVideo else { return nil }
         // Tray items have no stored metadata; read true pixel dims from the
         // file header (cheap) rather than the small in-memory thumbnail.
         if let (w, h) = pixelSize(of: item.fileURL) {
@@ -919,7 +1192,7 @@ struct ScreenshotsScreen: View {
     }
 
     private func layerCount(for item: ScreenshotItem) -> Int {
-        CaptureMarkupStorage.load(forImageURL: item.fileURL)?.layers.count ?? 0
+        CaptureMarkupStorage.load(forAssetURL: item.fileURL)?.layers.count ?? 0
     }
 
     private func relativeAge(_ date: Date) -> String {
@@ -941,7 +1214,7 @@ struct ScreenshotsScreen: View {
     /// the inspector header and also for the recording-attached library row,
     /// which already carries the `RecordingScreenshot`.
     private func appBundleLine(_ item: ScreenshotItem) -> String? {
-        item.screenshot?.appName ?? item.trayItem?.appName
+        item.appName
     }
 
     /// Bundle id carried on the record (set at capture time). The inspector
@@ -952,13 +1225,13 @@ struct ScreenshotsScreen: View {
     }
 
     private func windowTitleLine(_ item: ScreenshotItem) -> String? {
-        let title = item.screenshot?.windowTitle ?? item.trayItem?.windowTitle
+        let title = item.windowTitle
         guard let title, !title.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
         return title
     }
 
     private func displayLine(_ item: ScreenshotItem) -> String? {
-        item.screenshot?.displayName ?? item.trayItem?.displayName
+        item.displayName
     }
 
     /// Inline OCR text for tray items (stored on the model, not the sidecar).
@@ -972,7 +1245,10 @@ struct ScreenshotsScreen: View {
     /// Recording-offset for library captures — the `timestampMs` field records
     /// how far into the parent recording the shot was taken.
     private func recordingOffsetLine(_ item: ScreenshotItem) -> String? {
-        guard item.parent != nil, let ms = item.screenshot?.timestampMs, ms > 0 else { return nil }
+        let ms = item.screenshot?.timestampMs
+            ?? item.clip?.timestampMs
+            ?? item.visualContext?.timestampMs
+        guard item.parent != nil, let ms, ms > 0 else { return nil }
         let totalSeconds = ms / 1000
         let m = totalSeconds / 60
         let s = totalSeconds % 60
@@ -1346,7 +1622,7 @@ struct ScreenshotsScreen: View {
     }
 
     private func itemAccessibilityLabel(_ item: ScreenshotItem) -> String {
-        let source = item.trayItem == nil ? "Library screenshot" : "Tray capture"
+        let source = item.trayItem == nil ? "Library \(item.mediaLabel.lowercased())" : "Tray \(item.mediaLabel.lowercased())"
         let context = item.label?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let context, !context.isEmpty {
             return "\(source), \(context)"
@@ -1361,7 +1637,13 @@ struct ScreenshotsScreen: View {
 
         do {
             let objects = try await repository.fetchRecordingsWithSQL(
-                whereClause: "assetsJSON IS NOT NULL AND json_array_length(json_extract(assetsJSON, '$.screenshots')) > 0",
+                whereClause: """
+                    assetsJSON IS NOT NULL AND (
+                        json_array_length(json_extract(assetsJSON, '$.screenshots')) > 0 OR
+                        json_array_length(json_extract(assetsJSON, '$.clips')) > 0 OR
+                        json_array_length(json_extract(assetsJSON, '$.visualContexts')) > 0
+                    )
+                    """,
                 sortBy: .createdAt,
                 ascending: false,
                 limit: 200,
@@ -1379,14 +1661,48 @@ struct ScreenshotsScreen: View {
                         pinned: false,
                         trayItem: nil,
                         parent: obj,
-                        screenshot: ss
+                        screenshot: ss,
+                        clip: nil,
+                        visualContext: nil
+                    ))
+                }
+
+                for clip in obj.clips {
+                    guard let url = CaptureMediaFileResolver.clipURL(filename: clip.filename) else { continue }
+                    items.append(ScreenshotItem(
+                        id: "clip-\(clip.filename)",
+                        fileURL: url,
+                        date: obj.createdAt.addingTimeInterval(Double(clip.timestampMs) / 1000.0),
+                        label: clip.windowTitle ?? clip.appName ?? obj.title,
+                        pinned: false,
+                        trayItem: nil,
+                        parent: obj,
+                        screenshot: nil,
+                        clip: clip,
+                        visualContext: nil
+                    ))
+                }
+
+                for context in obj.visualContexts {
+                    guard let url = CaptureMediaFileResolver.visualContextSourceURL(for: context) else { continue }
+                    items.append(ScreenshotItem(
+                        id: "visual-\(context.id.uuidString)",
+                        fileURL: url,
+                        date: context.startedAt,
+                        label: context.windowTitle ?? context.appName ?? context.displayName ?? obj.title,
+                        pinned: false,
+                        trayItem: nil,
+                        parent: obj,
+                        screenshot: nil,
+                        clip: nil,
+                        visualContext: context
                     ))
                 }
             }
 
             await MainActor.run {
                 objectsWithScreenshots = objects
-                libraryItems = items
+                libraryItems = items.sorted { $0.date > $1.date }
             }
         } catch {
             Log(.ui).error("Failed to load screenshots: \(error)")
@@ -1418,6 +1734,58 @@ struct ScreenshotsScreen: View {
             Log(.ui).error("Failed to remove screenshot: \(error)")
         }
     }
+
+    private func removeAttachedClip(_ clip: RecordingClip, from parent: TalkieObject) async {
+        do {
+            guard let fresh = try await repository.fetchRecording(id: parent.id) else { return }
+
+            var assets = fresh.assets ?? TalkieObjectAssets()
+            let remaining = (assets.clips ?? []).filter { $0.filename != clip.filename }
+            assets.clips = remaining.isEmpty ? nil : remaining
+
+            try await repository.updateAssets(id: parent.id, assetsJSON: assets.isEmpty ? nil : assets.toJSON())
+
+            if let fileURL = CaptureMediaFileResolver.clipURL(filename: clip.filename) {
+                try? FileManager.default.removeItem(at: fileURL)
+                CaptureMarkupStorage.deleteSidecar(forAssetURL: fileURL)
+                TKSidecarStore.delete(forAsset: fileURL)
+            }
+
+            await MainActor.run {
+                libraryItems.removeAll { $0.clip?.filename == clip.filename }
+                if !libraryItems.contains(where: { $0.parent?.id == parent.id }) {
+                    objectsWithScreenshots.removeAll { $0.id == parent.id }
+                }
+            }
+        } catch {
+            Log(.ui).error("Failed to remove video clip: \(error)")
+        }
+    }
+
+    private func removeAttachedVisualContext(_ visualContext: RecordingVisualContext, from parent: TalkieObject) async {
+        do {
+            guard let fresh = try await repository.fetchRecording(id: parent.id) else { return }
+
+            var assets = fresh.assets ?? TalkieObjectAssets()
+            let remaining = (assets.visualContexts ?? []).filter { $0.id != visualContext.id }
+            assets.visualContexts = remaining.isEmpty ? nil : remaining
+
+            try await repository.updateAssets(id: parent.id, assetsJSON: assets.isEmpty ? nil : assets.toJSON())
+
+            let bundleURL = VisualContextStorage.bundleURL(for: visualContext)
+            try? FileManager.default.removeItem(at: bundleURL)
+            CaptureMarkupStorage.deleteSidecar(forAssetURL: bundleURL.appendingPathComponent(visualContext.sourceClipFilename))
+
+            await MainActor.run {
+                libraryItems.removeAll { $0.visualContext?.id == visualContext.id }
+                if !libraryItems.contains(where: { $0.parent?.id == parent.id }) {
+                    objectsWithScreenshots.removeAll { $0.id == parent.id }
+                }
+            }
+        } catch {
+            Log(.ui).error("Failed to remove visual context: \(error)")
+        }
+    }
 }
 
 // MARK: - Library Card View (loads thumbnail from disk)
@@ -1439,7 +1807,7 @@ private struct LibraryCardView: View {
                         .aspectRatio(contentMode: .fit)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    Image(systemName: "photo")
+                    Image(systemName: item.mediaKind.icon)
                         .font(.system(size: 14, weight: .light))
                         .foregroundStyle(.white.opacity(0.2))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1448,16 +1816,13 @@ private struct LibraryCardView: View {
 
             // Data strip matching AdaptiveCardView style
             HStack(spacing: 3) {
-                if let ss = item.screenshot {
-                    Image(systemName: captureIcon(ss.captureMode))
-                        .font(.system(size: 6, weight: .bold))
-                        .foregroundColor(.white.opacity(0.4))
-                    if let w = ss.width, let h = ss.height {
-                        Text("\(w)×\(h)")
-                            .font(.system(size: 7, weight: .medium, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.35))
-                    }
-                }
+                Image(systemName: item.isVideo ? "play.rectangle.fill" : captureIcon(item.screenshot?.captureMode ?? sourceMode))
+                    .font(.system(size: 6, weight: .bold))
+                    .foregroundColor(.white.opacity(0.4))
+                Text(item.durationLabel ?? item.mediaDimensions ?? item.mediaBadgeText)
+                    .font(.system(size: 7, weight: .medium, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.35))
+                    .lineLimit(1)
                 Spacer()
                 Text(compactTimeAgo(item.date))
                     .font(.system(size: 7, weight: .medium, design: .monospaced))
@@ -1476,14 +1841,25 @@ private struct LibraryCardView: View {
             RoundedRectangle(cornerRadius: 4, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.1), lineWidth: 0.5)
         )
+        .overlay(alignment: .topLeading) {
+            MediaKindPill(kind: item.mediaKind)
+                .padding(5)
+        }
         .task { thumbnail = await loadThumbnail() }
     }
 
     private func loadThumbnail() async -> NSImage? {
         let url = item.fileURL
+        if item.isVideo {
+            return await VideoFrameThumbnailer.thumbnailAsync(for: url, maxSize: 280)
+        }
         return await Task.detached {
             ScreenshotTray.generateThumbnail(for: url, maxSize: 280)
         }.value
+    }
+
+    private var sourceMode: String {
+        item.clip?.captureMode ?? item.visualContext?.captureMode ?? "photo"
     }
 
     private func captureIcon(_ mode: String) -> String {
@@ -1596,7 +1972,7 @@ private struct ScreenshotImageView: View {
                     .aspectRatio(contentMode: fill ? .fill : .fit)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                Image(systemName: "photo")
+                Image(systemName: item.mediaKind.icon)
                     .font(.system(size: 18, weight: .light))
                     .foregroundStyle(ScopePalette.inkSubtle)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1619,6 +1995,9 @@ private struct ScreenshotImageView: View {
         // Thumbnail path (grid / small inspector preview): fast in-memory
         // image for tray items, else a downscaled decode from disk.
         if let img = item.trayItem?.image { return img }
+        if item.isVideo {
+            return await VideoFrameThumbnailer.thumbnailAsync(for: url, maxSize: maxSize)
+        }
         let size = maxSize
         return await Task.detached {
             ScreenshotTray.generateThumbnail(for: url, maxSize: size)
@@ -1631,9 +2010,11 @@ private struct ScreenshotImageView: View {
 /// In-memory column values for a list row. Built on the screen side from
 /// `RecordingScreenshot` / `TrayScreenshot` fields only — never a disk read.
 private struct ScreenshotRowColumns {
+    let kind: MarkupMediaKind
     let app: String?
     let source: String
     let dimensions: String?
+    let duration: String?
 }
 
 /// Fixed widths so the header and every row line up as a table. The title
@@ -1641,6 +2022,7 @@ private struct ScreenshotRowColumns {
 /// fixed columns.
 private enum ScreenshotListLayout {
     static let thumb: CGFloat = 56
+    static let kind: CGFloat = 76
     static let source: CGFloat = 96
     static let dimensions: CGFloat = 84
     static let age: CGFloat = 60
@@ -1654,6 +2036,7 @@ private struct ScreenshotListHeader: View {
         HStack(spacing: ScreenshotListLayout.columnSpacing) {
             Color.clear.frame(width: ScreenshotListLayout.thumb, height: 1)
             headerCell("NAME · APP", width: nil, alignment: .leading)
+            headerCell("TYPE", width: ScreenshotListLayout.kind, alignment: .leading)
             headerCell("SOURCE", width: ScreenshotListLayout.source, alignment: .leading)
             headerCell("DIMENSIONS", width: ScreenshotListLayout.dimensions, alignment: .trailing)
             headerCell("AGE", width: ScreenshotListLayout.age, alignment: .trailing)
@@ -1672,6 +2055,40 @@ private struct ScreenshotListHeader: View {
             .lineLimit(1)
             .frame(width: width, alignment: alignment)
             .frame(maxWidth: width == nil ? .infinity : nil, alignment: alignment)
+    }
+}
+
+private struct MediaKindPill: View {
+    let kind: MarkupMediaKind
+
+    private var tint: Color {
+        switch kind {
+        case .screenshot: return ScopeKind.capture
+        case .video: return ScopeTrace.solid
+        case .selection: return ScopeKind.note
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: kind.icon)
+                .font(.system(size: 8, weight: .semibold))
+            Text(kind.badgeText)
+                .font(ScopeType.mono(size: 8, weight: .semibold))
+                .tracking(ScopeType.Tracking.normal)
+        }
+        .foregroundStyle(tint)
+        .padding(.horizontal, 5)
+        .frame(height: 18)
+        .background(
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(tint.opacity(0.10))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .strokeBorder(tint.opacity(0.26), lineWidth: 0.5)
+        )
+        .fixedSize(horizontal: true, vertical: false)
     }
 }
 
@@ -1712,6 +2129,9 @@ private struct ScreenshotRowView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
+            MediaKindPill(kind: columns.kind)
+                .frame(width: ScreenshotListLayout.kind, alignment: .leading)
+
             Text(columns.source)
                 .font(ScopeType.mono(size: 9))
                 .tracking(ScopeType.Tracking.normal)
@@ -1719,9 +2139,9 @@ private struct ScreenshotRowView: View {
                 .lineLimit(1)
                 .frame(width: ScreenshotListLayout.source, alignment: .leading)
 
-            Text(columns.dimensions ?? "—")
+            Text(columns.duration ?? columns.dimensions ?? "—")
                 .font(ScopeType.mono(size: 10))
-                .foregroundStyle(columns.dimensions == nil ? ScopeInk.faint : ScopeInk.subtle)
+                .foregroundStyle((columns.duration ?? columns.dimensions) == nil ? ScopeInk.faint : ScopeInk.subtle)
                 .lineLimit(1)
                 .frame(width: ScreenshotListLayout.dimensions, alignment: .trailing)
 
@@ -1893,7 +2313,8 @@ private struct ScreenshotInspector: View {
     @State private var showDetectedText = false
     @State private var ocrCopied = false
 
-    private var appLabel: String { appName ?? sourceLabel }
+    private var appLabel: String { appName ?? item.mediaLabel }
+    private var mediaGroupTitle: String { item.isVideo ? "video" : "image" }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -1913,7 +2334,7 @@ private struct ScreenshotInspector: View {
             }
             .padding(.horizontal, 12)
             // Match the page band height so the inspector's header lines up
-            // with the "Screenshots" title band across the divider — the two
+            // with the "Markup" title band across the divider — the two
             // panes open on the same horizontal, and content starts level.
             // No fill or bottom rule: the header rides the same canvas as the
             // grid header, so the top reads as one continuous band broken only
@@ -1931,7 +2352,7 @@ private struct ScreenshotInspector: View {
                             .foregroundStyle(ScopePalette.ink)
                             .lineLimit(1)
                             .truncationMode(.middle)
-                        Text("\(appLabel) · captured \(ageLabel) ago")
+                        Text("\(item.mediaLabel) · \(appLabel) · captured \(ageLabel) ago")
                             .font(.system(size: 12))
                             .foregroundStyle(ScopePalette.inkFaint)
                             .lineLimit(1)
@@ -1939,6 +2360,7 @@ private struct ScreenshotInspector: View {
 
                     // ── Source group ─────────────────────────────────
                     MetaGroup(title: "source") {
+                        MetaRow(label: "type", value: item.mediaLabel)
                         MetaRow(label: "capture", value: sourceLabel)
                         if let appName { MetaRow(label: "app", value: appName) }
                         if let bundle = disk?.appBundleID ?? appBundleID { MetaRow(label: "bundle", value: bundle) }
@@ -1946,11 +2368,12 @@ private struct ScreenshotInspector: View {
                         if let displayName { MetaRow(label: "display", value: displayName) }
                     }
 
-                    // ── Image group ──────────────────────────────────
-                    MetaGroup(title: "image") {
+                    // ── Media group ──────────────────────────────────
+                    MetaGroup(title: mediaGroupTitle) {
                         if let dims = dimensions ?? disk?.pixelSize {
                             MetaRow(label: "dimensions", value: dims)
                         }
+                        if let duration = item.durationLabel { MetaRow(label: "duration", value: duration) }
                         if let format = disk?.format { MetaRow(label: "format", value: format) }
                         if let color = disk?.colorModel { MetaRow(label: "color", value: color) }
                         if let dpi = disk?.dpi { MetaRow(label: "dpi", value: "\(dpi)") }
@@ -2395,7 +2818,7 @@ private struct ScreenshotPreviewOverlay: View {
                     .truncationMode(.middle)
                 Spacer()
                 Button(action: onClose) {
-                    Text("done · back to screenshots")
+                    Text("done · back to markup")
                         .font(ScopeType.mono(size: 9, weight: .semibold))
                         .tracking(ScopeType.Tracking.normal)
                         .textCase(.uppercase)
@@ -2522,6 +2945,207 @@ private struct PreviewClusterVerb: View {
         }
         .buttonStyle(.plain)
     }
+}
+
+// MARK: - Video Markup Host
+
+private struct VideoMarkupHostView: View {
+    let item: ScreenshotItem
+    let layerCount: Int
+    let onShare: () -> Void
+    let onReveal: () -> Void
+    let onClose: () -> Void
+
+    @State private var document: CaptureMarkupDocument?
+
+    private var layers: [CaptureMarkupLayer] {
+        document?.layers ?? []
+    }
+
+    private var footerLine: String {
+        var parts = [item.fileURL.lastPathComponent, item.mediaLabel]
+        if let duration = item.durationLabel { parts.append(duration) }
+        if let dimensions = item.mediaDimensions { parts.append(dimensions) }
+        return parts.joined(separator: " · ")
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Button(action: onClose) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 9, weight: .semibold))
+                        Text("back")
+                            .font(ScopeType.mono(size: 9))
+                            .tracking(ScopeType.Tracking.normal)
+                            .textCase(.uppercase)
+                    }
+                    .foregroundStyle(ScopePalette.inkFaint)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .overlay(RoundedRectangle(cornerRadius: 3).stroke(ScopePalette.rule, lineWidth: 0.5))
+                }
+                .buttonStyle(.plain)
+
+                MediaKindPill(kind: .video)
+                Text("Video Markup · \(item.fileURL.lastPathComponent)")
+                    .font(ScopeType.mono(size: 9, weight: .semibold))
+                    .tracking(ScopeType.Tracking.normal)
+                    .foregroundStyle(ScopePalette.ink)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer()
+                if layerCount > 0 {
+                    Text("\(layerCount) mark\(layerCount == 1 ? "" : "s")")
+                        .font(ScopeType.mono(size: 8.5, weight: .semibold))
+                        .tracking(ScopeType.Tracking.normal)
+                        .foregroundStyle(ScopePalette.amberDeep)
+                }
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 30)
+            .background(ScopePalette.bgSunk)
+            .overlay(alignment: .bottom) { ScopeRule(.subtle) }
+
+            HStack(spacing: 0) {
+                ZStack(alignment: .topLeading) {
+                    Color.black
+                    InlineClipPlayer(url: item.fileURL)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    if !layers.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(layers.prefix(4)) { layer in
+                                VideoLayerChip(layer: layer)
+                            }
+                        }
+                        .padding(12)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                if !layers.isEmpty {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("· layers")
+                            .font(ScopeType.mono(size: 9, weight: .semibold))
+                            .tracking(ScopeType.Tracking.wide)
+                            .foregroundStyle(ScopePalette.inkFaint)
+                            .padding(.horizontal, 12)
+                            .frame(height: 30)
+                        ScopeRule(.subtle)
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 8) {
+                                ForEach(layers) { layer in
+                                    VideoLayerRow(layer: layer)
+                                }
+                            }
+                            .padding(12)
+                        }
+                    }
+                    .frame(width: 260)
+                    .background(ScopePalette.bgRaised)
+                    .overlay(alignment: .leading) { ScopeRule(.subtle, axis: .vertical) }
+                }
+            }
+
+            HStack(spacing: 10) {
+                Text(footerLine)
+                    .font(ScopeType.mono(size: 9))
+                    .tracking(ScopeType.Tracking.normal)
+                    .foregroundStyle(ScopePalette.inkFainter)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer()
+                PreviewClusterVerb(label: "share", systemImage: "square.and.arrow.up", action: onShare)
+                PreviewClusterVerb(label: "reveal", systemImage: "folder", action: onReveal)
+                Button(action: onClose) {
+                    Text("done · back to markup")
+                        .font(ScopeType.mono(size: 9, weight: .semibold))
+                        .tracking(ScopeType.Tracking.normal)
+                        .textCase(.uppercase)
+                        .foregroundStyle(ScopePalette.inkFaint)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .overlay(RoundedRectangle(cornerRadius: 3).stroke(ScopePalette.rule, lineWidth: 0.5))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 14)
+            .frame(height: 30)
+            .background(ScopePalette.bgSunk)
+            .overlay(alignment: .top) { ScopeRule(.subtle) }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(ScopePalette.bg)
+        .task(id: item.id) {
+            document = CaptureMarkupStorage.load(forAssetURL: item.fileURL)
+        }
+    }
+}
+
+private struct VideoLayerChip: View {
+    let layer: CaptureMarkupLayer
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "scope")
+                .font(.system(size: 9, weight: .semibold))
+            Text(layerTimeLabel(layer))
+                .font(ScopeType.mono(size: 9, weight: .semibold))
+            if let text = layer.text ?? layer.label {
+                Text(text)
+                    .font(ScopeType.mono(size: 9))
+                    .lineLimit(1)
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 8)
+        .frame(height: 24)
+        .background(RoundedRectangle(cornerRadius: 4).fill(Color.black.opacity(0.58)))
+    }
+}
+
+private struct VideoLayerRow: View {
+    let layer: CaptureMarkupLayer
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(layer.kind.rawValue.uppercased())
+                    .font(ScopeType.mono(size: 8.5, weight: .semibold))
+                    .tracking(ScopeType.Tracking.normal)
+                    .foregroundStyle(ScopePalette.amberDeep)
+                Spacer()
+                Text(layerTimeLabel(layer))
+                    .font(ScopeType.mono(size: 8.5))
+                    .foregroundStyle(ScopePalette.inkFainter)
+            }
+            if let text = layer.text ?? layer.label {
+                Text(text)
+                    .font(ScopeType.mono(size: 10))
+                    .foregroundStyle(ScopePalette.inkFaint)
+                    .lineLimit(3)
+            }
+        }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 4).fill(ScopePalette.bgSunk))
+    }
+}
+
+private func layerTimeLabel(_ layer: CaptureMarkupLayer) -> String {
+    guard let start = layer.startTime else { return "all" }
+    if let end = layer.endTime, end > start {
+        return "\(formatLayerTime(start))-\(formatLayerTime(end))"
+    }
+    return formatLayerTime(start)
+}
+
+private func formatLayerTime(_ seconds: Double) -> String {
+    let total = max(0, Int(seconds.rounded()))
+    let minutes = total / 60
+    let remainder = total % 60
+    let paddedSeconds = remainder < 10 ? "0\(remainder)" : "\(remainder)"
+    return "\(minutes):\(paddedSeconds)"
 }
 
 // MARK: - Screenshot Grid Drag Source

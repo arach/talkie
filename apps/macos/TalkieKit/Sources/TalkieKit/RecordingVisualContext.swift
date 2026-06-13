@@ -125,6 +125,7 @@ public struct RecordingVisualContextEvent: Codable, Sendable, Equatable {
         case captureTarget
         case activeWindow
         case screenshot
+        case captureMarkup
     }
 
     public var startMs: Int
@@ -141,6 +142,7 @@ public struct RecordingVisualContextEvent: Codable, Sendable, Equatable {
     public var assetFilename: String?
     public var width: Int?
     public var height: Int?
+    public var markupLayers: [CaptureMarkupLayer]?
 
     public init(
         startMs: Int,
@@ -156,7 +158,8 @@ public struct RecordingVisualContextEvent: Codable, Sendable, Equatable {
         assetKind: String? = nil,
         assetFilename: String? = nil,
         width: Int? = nil,
-        height: Int? = nil
+        height: Int? = nil,
+        markupLayers: [CaptureMarkupLayer]? = nil
     ) {
         self.startMs = startMs
         self.endMs = endMs
@@ -172,6 +175,7 @@ public struct RecordingVisualContextEvent: Codable, Sendable, Equatable {
         self.assetFilename = assetFilename
         self.width = width
         self.height = height
+        self.markupLayers = markupLayers
     }
 }
 
@@ -524,6 +528,17 @@ public enum VisualContextStorage {
                 size,
                 event.appName,
                 event.windowTitle.map { "window: \"\($0)\"" }
+            ]
+            .compactMap { $0 }
+            .joined(separator: ", ")
+        case .captureMarkup:
+            let count = event.markupLayers?.count ?? 0
+            let size = event.width.flatMap { width in event.height.map { "\(width)x\($0)" } }
+            subject = [
+                "Capture markup",
+                "\(count) layer\(count == 1 ? "" : "s")",
+                event.captureMode,
+                size
             ]
             .compactMap { $0 }
             .joined(separator: ", ")

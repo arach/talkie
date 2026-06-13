@@ -136,9 +136,10 @@ final class ScreenCaptureOverlay {
         window.animationBehavior = .none
         window.isOpaque = false
         window.backgroundColor = .clear
+        window.hasShadow = false
         window.ignoresMouseEvents = false
         window.acceptsMouseMovedEvents = true
-        window.sharingType = .readOnly
+        window.sharingType = .none
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.hidesOnDeactivate = false
 
@@ -353,6 +354,16 @@ private final class OverlayView: NSView {
 
     override func resetCursorRects() {
         addCursorRect(bounds, cursor: overlayCursor)
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard !completed else { return nil }
+        switch mode {
+        case .region:
+            return super.hitTest(point)
+        case .window:
+            return windowIDUnderCursor(includeFrame: true, forceRefresh: false) == nil ? nil : self
+        }
     }
 
     override func viewDidMoveToWindow() {

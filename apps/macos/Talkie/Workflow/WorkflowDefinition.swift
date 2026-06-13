@@ -1344,6 +1344,14 @@ struct ShellStepConfig: Codable {
         "/opt/homebrew/bin/jq",
         "/usr/local/bin/jq",
 
+        // Media processing
+        "/opt/homebrew/bin/ffmpeg",
+        "/usr/local/bin/ffmpeg",
+        "\(NSHomeDirectory())/.local/bin/ffmpeg",
+        "/opt/homebrew/bin/ffprobe",
+        "/usr/local/bin/ffprobe",
+        "\(NSHomeDirectory())/.local/bin/ffprobe",
+
         // HTTP clients
         "/usr/bin/curl",
 
@@ -1520,6 +1528,8 @@ struct ShellStepConfig: Codable {
         case python = "python3"
         case node = "node"
         case osascript = "osascript (AppleScript)"
+        case ffmpeg = "ffmpeg"
+        case ffprobe = "ffprobe"
 
         var defaultExecutable: String {
             switch self {
@@ -1531,6 +1541,8 @@ struct ShellStepConfig: Codable {
             case .python: return "/usr/bin/python3"
             case .node: return "/opt/homebrew/bin/node"
             case .osascript: return "/usr/bin/osascript"
+            case .ffmpeg: return "/opt/homebrew/bin/ffmpeg"
+            case .ffprobe: return "/opt/homebrew/bin/ffprobe"
             }
         }
 
@@ -1544,6 +1556,8 @@ struct ShellStepConfig: Codable {
             case .python: return "Execute Python scripts"
             case .node: return "Execute Node.js scripts"
             case .osascript: return "Run AppleScript commands"
+            case .ffmpeg: return "Process attached video clips"
+            case .ffprobe: return "Inspect attached video metadata"
             }
         }
 
@@ -1576,6 +1590,25 @@ struct ShellStepConfig: Codable {
                 return ShellStepConfig(executable: "/opt/homebrew/bin/node", arguments: ["-e", "console.log(require('fs').readFileSync(0, 'utf-8').toUpperCase())"], stdin: "{{TRANSCRIPT}}")
             case .osascript:
                 return ShellStepConfig(executable: "/usr/bin/osascript", arguments: ["-e", "display notification \"{{TITLE}}\" with title \"Talkie\""])
+            case .ffmpeg:
+                return ShellStepConfig(
+                    executable: "/opt/homebrew/bin/ffmpeg",
+                    arguments: ["-y", "-i", "{{CLIP_PATH}}", "-vf", "scale=1280:-2", "{{DATETIME}}-clip-preview.mp4"],
+                    workingDirectory: URL.downloadsDirectory.path,
+                    timeout: 120
+                )
+            case .ffprobe:
+                return ShellStepConfig(
+                    executable: "/opt/homebrew/bin/ffprobe",
+                    arguments: [
+                        "-v", "error",
+                        "-show_entries", "format=duration,size",
+                        "-show_entries", "stream=codec_name,width,height,r_frame_rate",
+                        "-of", "default=noprint_wrappers=1",
+                        "{{CLIP_PATH}}",
+                    ],
+                    timeout: 30
+                )
             }
         }
     }
