@@ -139,9 +139,10 @@ public final class ScreenCaptureOverlay {
         window.animationBehavior = .none
         window.isOpaque = false
         window.backgroundColor = .clear
+        window.hasShadow = false
         window.ignoresMouseEvents = false
         window.acceptsMouseMovedEvents = true
-        window.sharingType = .readOnly
+        window.sharingType = .none
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.hidesOnDeactivate = false
 

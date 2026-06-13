@@ -34,6 +34,7 @@ import AppKit
 
 struct ScopeLibraryView: View {
     @Environment(\.navigationState) private var navigationState
+    private static let compactThreshold: CGFloat = 880
 
     /// Initial type filter — set by navigation to open with a specific tab.
     var initialTypeFilter: RecordingTypeFilter
@@ -51,6 +52,8 @@ struct ScopeLibraryView: View {
     @State private var suppressFilterReload = false
     @State private var pendingScrollID: UUID?
     @FocusState private var searchFieldFocused: Bool
+    @State private var isCompactLayout = false
+    @State private var showingCompactInspector = false
 
     /// Show the recording overlay (start a new memo).
     @State private var showingRecordingView = false
@@ -93,20 +96,44 @@ struct ScopeLibraryView: View {
     var body: some View {
         ZStack {
             GeometryReader { geo in
-                let compact = geo.size.width < 880
+                let compact = geo.size.width < Self.compactThreshold
 
-                if compact {
-                    listColumn
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    LibrarySplitLayout(
-                        committedListWidth: $listColumnWidth,
-                        availableWidth: geo.size.width,
-                        minListWidth: 460,
-                        inspectorMinWidth: 280,
-                        list: { listColumn },
-                        inspector: { inspectorColumn }
-                    )
+                ZStack {
+                    if compact {
+                        listColumn
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        LibrarySplitLayout(
+                            committedListWidth: $listColumnWidth,
+                            availableWidth: geo.size.width,
+                            minListWidth: 460,
+                            inspectorMinWidth: 280,
+                            list: { listColumn },
+                            inspector: { inspectorColumn }
+                        )
+                    }
+
+                    if compact, showingCompactInspector {
+                        CompactInspectorSlideSheet(
+                            availableSize: geo.size,
+                            onDismiss: { closeCompactInspector() },
+                            content: { inspectorColumn }
+                        )
+                        .transition(
+                            .asymmetric(
+                                insertion: .move(edge: geo.size.width < 620 ? .bottom : .trailing)
+                                    .combined(with: .opacity),
+                                removal: .move(edge: geo.size.width < 620 ? .bottom : .trailing)
+                                    .combined(with: .opacity)
+                            )
+                        )
+                        .zIndex(5)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.22), value: showingCompactInspector)
+                .onAppear { updateCompactLayout(compact) }
+                .onChange(of: compact) { _, newValue in
+                    updateCompactLayout(newValue)
                 }
             }
 
@@ -121,7 +148,7 @@ struct ScopeLibraryView: View {
                     },
                     onMemoCreated: { memoId in
                         await viewModel.refresh()
-                        selectedRecordingIDs = [memoId]
+                        selectRecording(memoId)
                     },
                     onNewRecording: { /* stay in overlay */ }
                 )
@@ -167,6 +194,11 @@ struct ScopeLibraryView: View {
         }
         .onChange(of: viewModel.recordings.map(\.id)) { _, _ in
             reconcileSelectionWithVisibleRecordings()
+        }
+        .onChange(of: selectedRecordingIDs) { _, newValue in
+            if newValue.isEmpty || newValue.count > 1 {
+                closeCompactInspector()
+            }
         }
         .onChange(of: searchText) { _, newValue in
             searchTask?.cancel()
@@ -236,8 +268,31 @@ struct ScopeLibraryView: View {
         let items = Array(viewModel.recordings.prefix(9))
         guard items.indices.contains(n - 1) else { return }
         let recording = items[n - 1]
-        selectedRecordingIDs = [recording.id]
+        selectRecording(recording.id)
         pendingScrollID = recording.id
+    }
+
+    private func updateCompactLayout(_ compact: Bool) {
+        isCompactLayout = compact
+        if !compact {
+            closeCompactInspector()
+        }
+    }
+
+    private func selectRecording(_ id: UUID, revealInspector: Bool = true) {
+        selectedRecordingIDs = [id]
+        guard revealInspector, isCompactLayout else { return }
+        showingCompactInspector = true
+    }
+
+    private func clearSelection() {
+        selectedRecordingIDs.removeAll()
+        closeCompactInspector()
+    }
+
+    private func closeCompactInspector() {
+        guard showingCompactInspector else { return }
+        showingCompactInspector = false
     }
 
     private func startCmdMonitor() {
@@ -302,7 +357,7 @@ struct ScopeLibraryView: View {
                     Task { await viewModel.deleteRecording(record) }
                 }
             }
-            selectedRecordingIDs.removeAll()
+            clearSelection()
         } label: {
             EmptyView()
         }
@@ -382,7 +437,7 @@ struct ScopeLibraryView: View {
         }
 
         if let id = resolved {
-            selectedRecordingIDs = [id]
+            selectRecording(id)
         }
 
         for key in consumedKeys {
@@ -400,7 +455,7 @@ struct ScopeLibraryView: View {
         let stillVisible = selectedRecordingIDs.intersection(visibleIds)
 
         if stillVisible.isEmpty, let first = viewModel.recordings.first {
-            selectedRecordingIDs = [first.id]
+            selectRecording(first.id, revealInspector: false)
         } else if stillVisible.count != selectedRecordingIDs.count {
             selectedRecordingIDs = stillVisible
         }
@@ -615,7 +670,7 @@ struct ScopeLibraryView: View {
                                 recording: recording,
                                 isSelected: selectedRecordingIDs.contains(recording.id),
                                 shortcutNumber: cmdHeld ? firstNineShortcuts[recording.id] : nil,
-                                onSelect: { selectedRecordingIDs = [recording.id] }
+                                onSelect: { selectRecording(recording.id) }
                             )
                             .id(recording.id)
                             .overlay(alignment: .top) {
@@ -757,7 +812,7 @@ struct ScopeLibraryView: View {
                 MultiSelectInspector(
                     count: selectedRecordingIDs.count,
                     itemName: "recordings",
-                    onClearSelection: { selectedRecordingIDs.removeAll() }
+                    onClearSelection: { clearSelection() }
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let recording = selectedRecording {
@@ -769,7 +824,10 @@ struct ScopeLibraryView: View {
                     case .note:
                         ScopeNoteDetailView(
                             note: recording,
-                            onDelete: { selectedRecordingIDs.remove(recording.id) }
+                            onDelete: {
+                                selectedRecordingIDs.remove(recording.id)
+                                closeCompactInspector()
+                            }
                         )
                     case .capture, .selection:
                         // Selections are text-content captures (Quick
@@ -778,12 +836,16 @@ struct ScopeLibraryView: View {
                         // content.
                         ScopeCaptureDetailView(
                             capture: recording,
-                            onDelete: { selectedRecordingIDs.remove(recording.id) }
+                            onDelete: {
+                                selectedRecordingIDs.remove(recording.id)
+                                closeCompactInspector()
+                            }
                         )
                     default:
                         TalkieView(recording: recording, onDelete: {
                             Task { await viewModel.deleteRecording(recording) }
                             selectedRecordingIDs.remove(recording.id)
+                            closeCompactInspector()
                         })
                     }
                 }
@@ -791,13 +853,110 @@ struct ScopeLibraryView: View {
             } else {
                 ScopeLibraryEmptyState(
                     recordings: viewModel.recordings,
-                    onSelectRecording: { id in selectedRecordingIDs = [id] }
+                    onSelectRecording: { id in selectRecording(id) }
                 )
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+}
+
+// MARK: - Compact inspector sheet
+
+private struct CompactInspectorSlideSheet<Content: View>: View {
+    let availableSize: CGSize
+    let onDismiss: () -> Void
+    @ViewBuilder let content: () -> Content
+
+    private var usesBottomSheet: Bool {
+        availableSize.width < 620
+    }
+
+    private var panelWidth: CGFloat {
+        let maxAvailable = max(360, availableSize.width - 36)
+        return min(760, min(maxAvailable, max(560, availableSize.width * 0.82)))
+    }
+
+    private var panelHeight: CGFloat {
+        let maxAvailable = max(360, availableSize.height - 28)
+        return min(maxAvailable, max(420, availableSize.height * 0.84))
+    }
+
+    var body: some View {
+        ZStack {
+            Button(action: onDismiss) {
+                Color.black.opacity(0.12)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close details")
+
+            if usesBottomSheet {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    panel
+                        .frame(height: panelHeight)
+                }
+            } else {
+                HStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    panel
+                        .frame(width: panelWidth)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onExitCommand(perform: onDismiss)
+    }
+
+    private var panel: some View {
+        content()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(ThemedScopeCanvas.canvas)
+            .clipShape(RoundedRectangle(cornerRadius: usesBottomSheet ? 8 : 0))
+            .overlay(edgeRule, alignment: usesBottomSheet ? .top : .leading)
+            .overlay(closeButton, alignment: .topTrailing)
+            .shadow(
+                color: Color.black.opacity(usesBottomSheet ? 0.18 : 0.16),
+                radius: usesBottomSheet ? 20 : 28,
+                x: usesBottomSheet ? 0 : -10,
+                y: usesBottomSheet ? -8 : 0
+            )
+    }
+
+    @ViewBuilder
+    private var edgeRule: some View {
+        if usesBottomSheet {
+            Rectangle()
+                .fill(ThemedScopeEdge.normal)
+                .frame(height: 1)
+        } else {
+            Rectangle()
+                .fill(ThemedScopeEdge.normal)
+                .frame(width: 1)
+        }
+    }
+
+    private var closeButton: some View {
+        Button(action: onDismiss) {
+            Image(systemName: "xmark")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(ThemedScopeInk.subtle)
+                .frame(width: 28, height: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(ThemedScopeCanvas.surface.opacity(0.92))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(ThemedScopeEdge.faint, lineWidth: 0.5)
+                )
+        }
+        .buttonStyle(.plain)
+        .help("Close details")
+        .padding(12)
+    }
 }
 
 // MARK: - Resizable split layout

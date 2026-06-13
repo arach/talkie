@@ -7,10 +7,13 @@
 //  borrowing another app's UX layer.
 //
 
+import AppKit
 import SwiftUI
 import TalkieKit
 
 struct AgentHomeShellView: View {
+    private static let inspectorAutoCollapseWidth: CGFloat = 900
+
     let onDismiss: () -> Void
 
     @StateObject private var store = AgentHomeActivityStore()
@@ -22,7 +25,7 @@ struct AgentHomeShellView: View {
     @State private var selectedSection: AgentHomeShellSection = .overview
     @AppStorage("talkie.agentHome.sidebar.compact") private var railCompact = true
     @AppStorage("talkie.agentHome.sidebar.labelWidth") private var navigationSidebarLabelWidth = 120.0
-    @AppStorage("talkie.agentHome.inspector.collapsed") private var inspectorCollapsed = false
+    @AppStorage("talkie.agentHome.inspector.collapsed") private var inspectorCollapsed = true
 
     @State private var serverStatus: TalkieAgentServerStatus = .stopped
     @State private var traySnapshot = AgentLiveTrayAssetSnapshot.empty
@@ -61,6 +64,17 @@ struct AgentHomeShellView: View {
                 // isn't clipped by the 40pt rail.
                 .overlay(alignment: .topLeading) {
                     SidebarTooltipOverlay(surface: OpsInk.surface, foreground: OpsInk.ink)
+                }
+                .background {
+                    GeometryReader { proxy in
+                        Color.clear
+                            .onAppear {
+                                collapseInspectorIfNeeded(width: proxy.size.width)
+                            }
+                            .onChange(of: proxy.size.width) { _, newWidth in
+                                collapseInspectorIfNeeded(width: newWidth)
+                            }
+                    }
                 }
         // Agent Home follows the user's appearance setting (NSApp.appearance,
         // driven by LiveSettings.applyAppearance): adaptive Ops tokens resolve
@@ -169,6 +183,11 @@ struct AgentHomeShellView: View {
 
     private func closeSettings() {
         homeController.isShowingSettings = false
+    }
+
+    private func collapseInspectorIfNeeded(width: CGFloat) {
+        guard width < Self.inspectorAutoCollapseWidth, !inspectorCollapsed else { return }
+        inspectorCollapsed = true
     }
 
     @ViewBuilder
@@ -492,12 +511,36 @@ private struct AgentHomeOverviewPage: View {
     let onSelect: (AgentHomeShellSection) -> Void
     let onOpenSettings: () -> Void
 
+    @State private var previewItemID: UUID?
+    @State private var showingLibraryPreview = false
+
     var body: some View {
-        AgentHomePageScaffold(title: "Agent Home", subtitle: "TalkieKit console for the live TalkieAgent runtime.") {
-            VStack(alignment: .leading, spacing: OpsSpacing.xxxl) {
-                metrics
-                libraryPreview
-                shortcuts
+        GeometryReader { proxy in
+            ZStack {
+                AgentHomePageScaffold(title: "Agent Home", subtitle: "TalkieKit console for the live TalkieAgent runtime.") {
+                    VStack(alignment: .leading, spacing: OpsSpacing.xxxl) {
+                        metrics
+                        libraryPreview
+                        shortcuts
+                    }
+                }
+
+                if showingLibraryPreview, let previewItem {
+                    AgentHomeLibrarySlideSheet(
+                        availableSize: proxy.size,
+                        onDismiss: closeLibraryPreview
+                    ) {
+                        AgentHomeLibraryDetailPane(item: previewItem) { item in
+                            AgentHomeTalkieLibraryOpener.open(item)
+                        }
+                    }
+                    .transition(.move(edge: proxy.size.width < 620 ? .bottom : .trailing).combined(with: .opacity))
+                    .zIndex(10)
+                }
+            }
+            .animation(OpsAnimation.chromeResize, value: showingLibraryPreview)
+            .onChange(of: libraryItems) { _, _ in
+                reconcileLibraryPreview()
             }
         }
     }
@@ -625,8 +668,8 @@ private struct AgentHomeOverviewPage: View {
                             HStack(alignment: .center, spacing: 0) {
                                 ScopeLibraryRow(
                                     recording: item,
-                                    isSelected: false,
-                                    onSelect: { onSelect(.library) }
+                                    isSelected: showingLibraryPreview && previewItemID == item.id,
+                                    onSelect: { previewLibraryItem(item) }
                                 )
                                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -678,8 +721,28 @@ private struct AgentHomeOverviewPage: View {
         "\(librarySummary.memos) memos / \(librarySummary.dictations) dictations / \(librarySummary.captures) captures"
     }
 
+    private var previewItem: TalkieObject? {
+        guard let previewItemID else { return nil }
+        return libraryItems.first { $0.id == previewItemID }
+    }
+
     private var recentLibraryItems: [TalkieObject] {
         Array(libraryItems.prefix(6))
+    }
+
+    private func previewLibraryItem(_ item: TalkieObject) {
+        previewItemID = item.id
+        showingLibraryPreview = true
+    }
+
+    private func closeLibraryPreview() {
+        showingLibraryPreview = false
+    }
+
+    private func reconcileLibraryPreview() {
+        guard previewItemID != nil, previewItem == nil else { return }
+        previewItemID = nil
+        showingLibraryPreview = false
     }
 
     private var serverTint: Color {
@@ -1067,10 +1130,14 @@ private struct AgentHomePermissionsPage: View {
 }
 
 private struct AgentHomeLibraryPage: View {
+    private static let compactDetailThreshold: CGFloat = 860
+
     @ObservedObject var store: AgentHomeLibraryStore
     let onOpenSettings: () -> Void
 
     @State private var selectedID: UUID?
+    @State private var isCompactLayout = false
+    @State private var showingDetailSheet = false
 
     var body: some View {
         AgentHomePageScaffold(
@@ -1148,29 +1215,53 @@ private struct AgentHomeLibraryPage: View {
                 selectedID: selectedID,
                 emptyTitle: "NO LIBRARY ITEMS YET",
                 emptyDetail: "New memos, dictations, captures, notes, and selections will appear here after Talkie writes them.",
-                onSelect: { item in selectedID = item.id }
+                onSelect: { item in selectItem(item) }
             )
         }
     }
 
     private var libraryBody: some View {
         GeometryReader { proxy in
-            if proxy.size.width >= 860 {
-                HStack(spacing: 0) {
+            let compact = proxy.size.width < Self.compactDetailThreshold
+
+            ZStack {
+                if compact {
                     content
-                        .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    HStack(spacing: 0) {
+                        content
+                            .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
 
-                    OpsDivider(color: OpsHairline.subtle)
+                        OpsDivider(color: OpsHairline.subtle)
 
-                    AgentHomeLibraryDetailPane(item: selectedItem) { item in
-                        AgentHomeTalkieLibraryOpener.open(item)
+                        AgentHomeLibraryDetailPane(item: selectedItem) { item in
+                            AgentHomeTalkieLibraryOpener.open(item)
+                        }
+                        .frame(width: min(380, max(300, proxy.size.width * 0.34)))
+                        .frame(maxHeight: .infinity)
                     }
-                    .frame(width: min(380, max(300, proxy.size.width * 0.34)))
-                    .frame(maxHeight: .infinity)
                 }
-            } else {
-                content
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                if compact, showingDetailSheet, let selectedItem {
+                    AgentHomeLibrarySlideSheet(
+                        availableSize: proxy.size,
+                        onDismiss: closeDetailSheet
+                    ) {
+                        AgentHomeLibraryDetailPane(item: selectedItem) { item in
+                            AgentHomeTalkieLibraryOpener.open(item)
+                        }
+                    }
+                    .transition(.move(edge: proxy.size.width < 620 ? .bottom : .trailing).combined(with: .opacity))
+                    .zIndex(10)
+                }
+            }
+            .animation(OpsAnimation.chromeResize, value: showingDetailSheet)
+            .onAppear {
+                updateCompactLayout(compact)
+            }
+            .onChange(of: compact) { _, newValue in
+                updateCompactLayout(newValue)
             }
         }
     }
@@ -1190,6 +1281,7 @@ private struct AgentHomeLibraryPage: View {
     private func reconcileSelection() {
         guard !store.items.isEmpty else {
             selectedID = nil
+            closeDetailSheet()
             return
         }
 
@@ -1198,6 +1290,24 @@ private struct AgentHomeLibraryPage: View {
         }
 
         selectedID = store.items.first?.id
+    }
+
+    private func updateCompactLayout(_ compact: Bool) {
+        isCompactLayout = compact
+        if !compact {
+            closeDetailSheet()
+        }
+    }
+
+    private func selectItem(_ item: TalkieObject, revealDetail: Bool = true) {
+        selectedID = item.id
+        guard revealDetail, isCompactLayout else { return }
+        showingDetailSheet = true
+    }
+
+    private func closeDetailSheet() {
+        guard showingDetailSheet else { return }
+        showingDetailSheet = false
     }
 }
 
@@ -1649,9 +1759,106 @@ private struct AgentHomePermissionRow: View {
     }
 }
 
+private struct AgentHomeLibrarySlideSheet<Content: View>: View {
+    let availableSize: CGSize
+    let onDismiss: () -> Void
+    @ViewBuilder let content: () -> Content
+
+    private var usesBottomSheet: Bool {
+        availableSize.width < 620
+    }
+
+    private var panelWidth: CGFloat {
+        let maxAvailable = max(320, availableSize.width - 32)
+        return min(560, min(maxAvailable, max(360, availableSize.width * 0.84)))
+    }
+
+    private var panelHeight: CGFloat {
+        let maxAvailable = max(320, availableSize.height - 24)
+        return min(maxAvailable, max(360, availableSize.height * 0.84))
+    }
+
+    var body: some View {
+        ZStack {
+            Button(action: onDismiss) {
+                Color.black.opacity(0.16)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close library preview")
+
+            if usesBottomSheet {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    panel
+                        .frame(height: panelHeight)
+                }
+            } else {
+                HStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    panel
+                        .frame(width: panelWidth)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onExitCommand(perform: onDismiss)
+    }
+
+    private var panel: some View {
+        content()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(OpsInk.bg)
+            .clipShape(RoundedRectangle(cornerRadius: usesBottomSheet ? OpsRadius.card : 0, style: .continuous))
+            .overlay(edgeRule, alignment: usesBottomSheet ? .top : .leading)
+            .overlay(closeButton, alignment: .topTrailing)
+            .shadow(
+                color: Color.black.opacity(usesBottomSheet ? 0.22 : 0.18),
+                radius: usesBottomSheet ? 18 : 24,
+                x: usesBottomSheet ? 0 : -8,
+                y: usesBottomSheet ? -8 : 0
+            )
+    }
+
+    @ViewBuilder
+    private var edgeRule: some View {
+        if usesBottomSheet {
+            Rectangle()
+                .fill(OpsHairline.standard)
+                .frame(height: 1)
+        } else {
+            Rectangle()
+                .fill(OpsHairline.standard)
+                .frame(width: 1)
+        }
+    }
+
+    private var closeButton: some View {
+        Button(action: onDismiss) {
+            Image(systemName: "xmark")
+                .font(OpsType.ui(OpsSize.xs, weight: .semibold))
+                .foregroundStyle(OpsInk.muted)
+                .frame(width: 28, height: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: OpsRadius.standard, style: .continuous)
+                        .fill(OpsInk.surface.opacity(0.94))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: OpsRadius.standard, style: .continuous)
+                        .stroke(OpsHairline.subtle, lineWidth: OpsStroke.thin)
+                )
+        }
+        .buttonStyle(.plain)
+        .help("Close preview")
+        .padding(OpsSpacing.xl)
+    }
+}
+
 private struct AgentHomeLibraryDetailPane: View {
     let item: TalkieObject?
     let onOpenInTalkie: (TalkieObject) -> Void
+
+    @State private var copiedItemID: UUID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -1709,8 +1916,45 @@ private struct AgentHomeLibraryDetailPane: View {
                 .foregroundStyle(OpsInk.ink)
                 .lineLimit(3)
 
-            OpsButton("Open in Talkie", icon: "arrow.up.forward.app", style: .secondary) {
-                onOpenInTalkie(item)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: OpsSpacing.md) {
+                    actions(for: item)
+                }
+
+                VStack(alignment: .leading, spacing: OpsSpacing.md) {
+                    actions(for: item)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func actions(for item: TalkieObject) -> some View {
+        OpsButton("Open in Talkie", icon: "arrow.up.forward.app", style: .secondary) {
+            onOpenInTalkie(item)
+        }
+
+        if item.agentHomeCopyableText != nil {
+            OpsButton(
+                copiedItemID == item.id ? "Copied" : "Copy Text",
+                icon: copiedItemID == item.id ? "checkmark" : "doc.on.doc",
+                style: .ghost
+            ) {
+                copyText(for: item)
+            }
+        }
+    }
+
+    private func copyText(for item: TalkieObject) {
+        guard let text = item.agentHomeCopyableText else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        copiedItemID = item.id
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.2))
+            if copiedItemID == item.id {
+                copiedItemID = nil
             }
         }
     }
@@ -1881,6 +2125,11 @@ private extension TalkieObject {
             return String(prefix[..<lastSpace]) + "..."
         }
         return prefix + "..."
+    }
+
+    var agentHomeCopyableText: String? {
+        guard let text = text?.agentHomeTrimmed, !text.isEmpty else { return nil }
+        return text
     }
 
     private static func agentHomeSentence(from text: String, limit: Int) -> String {

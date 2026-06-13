@@ -184,5 +184,5 @@
       ]
     }
   },
-  "preferredProviderOrder": ["gemini", "anthropic", "openai", "groq"]
+  "preferredProviderOrder": ["openai", "anthropic", "gemini", "groq"]
 }

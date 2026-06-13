@@ -67,7 +67,7 @@ extension NavigationSection {
         case .workflows: return "Workflows"
         case .activityLog: return "ActivityLog"
         case .systemConsole: return "Console"
-        case .screenshots: return "Screenshots"
+        case .screenshots: return "Markup"
         case .pendingActions: return "PendingActions"
         case .recentlyDeleted: return "RecentlyDeleted"
         case .talkieService: return "TalkieService"
@@ -896,6 +896,7 @@ struct AppNavigation: View {
 
         entries.append(.item(SidebarItem(id: .home, title: "Home", icon: "house", selectedIcon: "house.fill")))
         entries.append(.item(SidebarItem(id: .recordings, title: "Library", icon: "rectangle.stack", selectedIcon: "rectangle.stack.fill")))
+        entries.append(.item(SidebarItem(id: .screenshots, title: "Markup", icon: "pencil.tip.crop.circle")))
         #if DEBUG
         if showLegacyScreens {
             entries.append(.item(SidebarItem(id: .allMemos, title: "Memos", icon: "square.stack", selectedIcon: "square.stack.fill")))
@@ -907,13 +908,12 @@ struct AppNavigation: View {
             entries.append(.item(SidebarItem(id: .contextRules, title: "Context", icon: "square.stack.3d.forward.dottedline", selectedIcon: "square.stack.3d.forward.dottedline.fill")))
         }
 
-        entries.append(.section(id: "activity", title: "Activity"))
-        entries.append(.item(SidebarItem(id: .aiResults, title: "Actions", icon: "chart.line.uptrend.xyaxis", selectedIcon: "chart.xyaxis.line")))
         if pendingActionsManager.hasActiveActions {
+            entries.append(.section(id: "activity", title: "Activity"))
             entries.append(.item(SidebarItem(id: .pendingActions, title: "Pending", icon: "clock.arrow.circlepath", selectedIcon: "clock.fill")))
         }
 
-        entries.append(.section(id: "tools", title: "Tools"))
+        entries.append(.section(id: "intelligence", title: "Intelligence"))
         // Scope theme renames this slot from "Stats" to "Learn" — the
         // screen for that theme is `ScopeLearnScreen`, an agent-powered
         // discovery interstitial that replaces the data-listing Stats
@@ -924,9 +924,13 @@ struct AppNavigation: View {
             entries.append(.item(SidebarItem(id: .liveDashboard, title: "Stats", icon: "waveform.path.ecg", selectedIcon: "chart.bar.fill")))
         }
         entries.append(.item(SidebarItem(id: .models, title: "Models", icon: "brain", selectedIcon: "brain.fill")))
+        entries.append(.item(SidebarItem(id: .aiResults, title: "Actions", icon: "chart.line.uptrend.xyaxis", selectedIcon: "chart.xyaxis.line")))
+
+        if settings.hasUnlockedAdvancedFeatures || settings.isProToolsActive {
+            entries.append(.section(id: "tools", title: "Tools"))
+        }
         if settings.hasUnlockedAdvancedFeatures {
             entries.append(.item(SidebarItem(id: .workflows, title: "Workflows", icon: "wand.and.stars", selectedIcon: "wand.and.rays.inverse")))
-            entries.append(.item(SidebarItem(id: .screenshots, title: "Screenshots", icon: "camera.viewfinder", selectedIcon: "camera.fill")))
         }
         if settings.isProToolsActive {
             entries.append(.item(SidebarItem(id: .systemConsole, title: "Console", icon: "terminal")))
@@ -1141,11 +1145,11 @@ struct AppNavigation: View {
                             .wrapInTalkieSection("Console")
                     }
                 case .screenshots:
-                    // Screenshots renders its own mono instrument header in
+                    // Markup renders its own mono instrument header in
                     // the grid pane; suppress the universal title to avoid a
                     // duplicate header row.
                     ScreenshotsScreen()
-                        .wrapInTalkieSection("Screenshots", showHeader: false)
+                        .wrapInTalkieSection("Markup", showHeader: false)
                 case .pendingActions:
                     PendingActionsScreen()
                         .wrapInTalkieSection("PendingActions")
@@ -1830,7 +1834,7 @@ private struct GlobalActionBar: View {
             Button {
                 nav.navigate(to: .screenshots)
             } label: {
-                Label("Screenshots", systemImage: "camera.viewfinder")
+                Label("Markup", systemImage: "pencil.tip.crop.circle")
             }
         } label: {
             Image(systemName: "plus")

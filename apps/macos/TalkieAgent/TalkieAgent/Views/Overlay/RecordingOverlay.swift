@@ -12,8 +12,17 @@ import Combine
 
 private let recordingOverlayProcessingBoxWidth: CGFloat = 34
 private let recordingOverlayProcessingBoxHeight: CGFloat = 24
+private let recordingOverlayProcessingIslandWidth: CGFloat = 176
+private let recordingOverlayProcessingIslandHeight: CGFloat = 32
+private let recordingOverlayStopTransitionDuration: Duration = .milliseconds(260)
+private let recordingOverlayParticleFrameInterval: TimeInterval = 1.0 / 30.0
 private let islandOverlayEdgeMargin: CGFloat = 6
 private let islandOverlayTopEdgeMargin: CGFloat = 2
+
+// Island surface tone: near-opaque black with a whisper of translucency (so it doesn't
+// read as a dead rectangle) plus a soft white rim rather than a stark hairline.
+private let islandSurfaceBackground = Color.black.opacity(0.94)
+private let islandSurfaceBorder = Color.white.opacity(0.22)
 
 @MainActor
 private func recordingOverlayPlacementFrame(for screen: NSScreen) -> CGRect {
@@ -46,8 +55,18 @@ struct RecordingIndicatorSurfaceModifier: ViewModifier {
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .fill(backgroundFill)
                     .overlay(
+                        // Top-lit rim: brighter along the top edge, fading toward the base,
+                        // so the pill reads as a lit surface instead of a flat outline.
+                        // Stays invisible when borderColor is clear (idle state).
                         RoundedRectangle(cornerRadius: cornerRadius)
-                            .stroke(borderColor, lineWidth: 0.25)
+                            .strokeBorder(
+                                LinearGradient(
+                                    colors: [borderColor, borderColor.opacity(0.4)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                ),
+                                lineWidth: 0.75
+                            )
                     )
             )
     }
@@ -114,11 +133,14 @@ final class RecordingOverlayController: NSObject, ObservableObject, NSWindowDele
     @Published var elapsedTime: TimeInterval = 0
     @Published var transcript: String = ""
     @Published var captureIntent: String = "Paste"  // Shows current intent during recording
+    @Published var isShowingStopTransition: Bool = false
+    @Published var stopTransitionAudioLevel: Float = 0.18
 
     private var timer: Timer?
     private var startTime: Date?
     private var keyMonitor: Any?  // Event monitor for mid-recording modifiers
     private var isHiding = false  // Track if we're in the middle of a hide animation
+    private var stopTransitionTask: Task<Void, Never>?
 
     private override init() {
         super.init()
@@ -254,6 +276,9 @@ final class RecordingOverlayController: NSObject, ObservableObject, NSWindowDele
         timer = nil
         moveCommitTask?.cancel()
         moveCommitTask = nil
+        stopTransitionTask?.cancel()
+        stopTransitionTask = nil
+        isShowingStopTransition = false
         startTime = nil
         elapsedTime = 0
         transcript = ""
@@ -284,7 +309,15 @@ final class RecordingOverlayController: NSObject, ObservableObject, NSWindowDele
         })
     }
 
-    func updateState(_ state: LiveState) {
+    func updateState(_ state: LiveState, previousState: LiveState? = nil) {
+        let oldState = previousState ?? self.state
+
+        if oldState == .listening && state == .transcribing {
+            beginStopTransition()
+        } else if state != .transcribing {
+            finishStopTransition()
+        }
+
         self.state = state
 
         if state == .listening {
@@ -307,6 +340,28 @@ final class RecordingOverlayController: NSObject, ObservableObject, NSWindowDele
         updateWindowPosition(for: state)
     }
 
+    private func beginStopTransition() {
+        stopTransitionTask?.cancel()
+        stopTransitionAudioLevel = max(0.12, AudioLevelMonitor.shared.level)
+        isShowingStopTransition = true
+
+        stopTransitionTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: recordingOverlayStopTransitionDuration)
+            guard let self, !Task.isCancelled, self.state == .transcribing else { return }
+            withAnimation(.easeOut(duration: 0.16)) {
+                self.isShowingStopTransition = false
+            }
+            self.updateWindowPosition(for: .transcribing)
+            self.stopTransitionTask = nil
+        }
+    }
+
+    private func finishStopTransition() {
+        stopTransitionTask?.cancel()
+        stopTransitionTask = nil
+        isShowingStopTransition = false
+    }
+
     /// Update window position and size based on current state
     private func updateWindowPosition(for state: LiveState) {
         guard let panel = window else { return }
@@ -322,11 +377,19 @@ final class RecordingOverlayController: NSObject, ObservableObject, NSWindowDele
             width = overlaySize.width
             height = overlaySize.height
         case .transcribing:
-            width = recordingOverlayProcessingBoxWidth
-            height = recordingOverlayProcessingBoxHeight
+            if isShowingStopTransition {
+                let overlaySize = listeningOverlaySize()
+                width = overlaySize.width
+                height = overlaySize.height
+            } else {
+                let overlaySize = processingOverlaySize()
+                width = overlaySize.width
+                height = overlaySize.height
+            }
         case .routing, .refining:
-            width = recordingOverlayProcessingBoxWidth
-            height = recordingOverlayProcessingBoxHeight
+            let overlaySize = processingOverlaySize()
+            width = overlaySize.width
+            height = overlaySize.height
         }
         guard let screen else { return }
         let targetFrame = targetFrame(
@@ -359,6 +422,14 @@ final class RecordingOverlayController: NSObject, ObservableObject, NSWindowDele
         return CGSize(
             width: OverlayIndicatorOverridesStore.shared.topBarWidth(fallback: tuning.overlayWidth),
             height: OverlayIndicatorOverridesStore.shared.topBarHeight(fallback: tuning.overlayHeight)
+        )
+    }
+
+    private func processingOverlaySize() -> CGSize {
+        let listeningSize = listeningOverlaySize()
+        return CGSize(
+            width: min(listeningSize.width, recordingOverlayProcessingIslandWidth),
+            height: min(listeningSize.height, recordingOverlayProcessingIslandHeight)
         )
     }
 
@@ -724,7 +795,7 @@ private struct OverlaySettingsFloatingPreviewView: View {
 
     private var backgroundFill: Color {
         if settings.effectiveOverlayStyle == .island {
-            return Color.black.opacity(0.92)
+            return islandSurfaceBackground
         }
 
         let opacity = overlayOverrides.topBarBackgroundOpacity(fallback: overlayTuning.backgroundOpacity)
@@ -733,7 +804,7 @@ private struct OverlaySettingsFloatingPreviewView: View {
 
     private var borderColor: Color {
         if settings.effectiveOverlayStyle == .island {
-            return Color.white.opacity(0.12)
+            return islandSurfaceBorder
         }
 
         return TalkieTheme.textSecondary.opacity(0.1)
@@ -804,9 +875,9 @@ struct RecordingOverlayView: View {
                 animationDirection: .inbound,
                 width: processingWidth,
                 height: processingHeight,
-                cornerRadius: cornerRadiusForState,
-                backgroundFill: backgroundFill,
-                borderColor: borderColor,
+                cornerRadius: listeningCornerRadius,
+                backgroundFill: listeningBackgroundFill,
+                borderColor: listeningBorderColor,
                 audioLevel: nil,
                 controlVisibility: .always,
                 content: audioMonitor.isSilent ? AnyView(
@@ -828,17 +899,40 @@ struct RecordingOverlayView: View {
             )
             .transition(.opacity)
 
-        case .transcribing, .routing, .refining, .idle:
-            ZStack {
-                if controller.state == .transcribing {
-                    ProcessingSpinnerView(
-                        tint: whisperService.isWarmingUp ? warmupCyan : processingOrange
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .transition(.opacity)
-                }
+        case .transcribing where controller.isShowingStopTransition:
+            AgentOverlay(
+                animationStyle: recordingAnimationStyle,
+                animationDirection: .outbound,
+                width: listeningOverlaySize.width,
+                height: listeningOverlaySize.height,
+                cornerRadius: listeningCornerRadius,
+                backgroundFill: listeningBackgroundFill,
+                borderColor: listeningBorderColor,
+                audioLevel: controller.stopTransitionAudioLevel,
+                controlVisibility: .hidden,
+                content: nil,
+                leadingControl: nil,
+                trailingControl: nil
+            )
+            .transition(.opacity)
 
-                if controller.state == .routing || showCheckmark {
+        case .transcribing, .routing, .refining:
+            ProcessingLifecycleIslandView(
+                title: processingTitle,
+                tint: processingTint,
+                systemImage: processingSystemImage,
+                showsSpinner: controller.state == .transcribing || controller.state == .refining
+            )
+            .frame(width: processingWidth, height: processingHeight)
+            .recordingIndicatorSurface(
+                backgroundFill: backgroundFill,
+                borderColor: borderColor,
+                cornerRadius: cornerRadiusForState
+            )
+
+        case .idle:
+            ZStack {
+                if showCheckmark {
                     CompletionDotView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .transition(.opacity)
@@ -891,9 +985,9 @@ struct RecordingOverlayView: View {
         let baseWidth = listeningOverlaySize.width
         switch controller.state {
         case .listening: return baseWidth
-        case .transcribing: return recordingOverlayProcessingBoxWidth
-        case .routing: return recordingOverlayProcessingBoxWidth
-        case .refining: return recordingOverlayProcessingBoxWidth
+        case .transcribing: return processingOverlaySize.width
+        case .routing: return processingOverlaySize.width
+        case .refining: return processingOverlaySize.width
         case .idle: return baseWidth
         }
     }
@@ -902,9 +996,9 @@ struct RecordingOverlayView: View {
         let baseHeight = listeningOverlaySize.height
         switch controller.state {
         case .listening: return baseHeight
-        case .transcribing: return recordingOverlayProcessingBoxHeight
-        case .routing: return recordingOverlayProcessingBoxHeight
-        case .refining: return recordingOverlayProcessingBoxHeight
+        case .transcribing: return processingOverlaySize.height
+        case .routing: return processingOverlaySize.height
+        case .refining: return processingOverlaySize.height
         case .idle: return baseHeight
         }
     }
@@ -920,39 +1014,36 @@ struct RecordingOverlayView: View {
         )
     }
 
+    private var processingOverlaySize: CGSize {
+        CGSize(
+            width: min(listeningOverlaySize.width, recordingOverlayProcessingIslandWidth),
+            height: min(listeningOverlaySize.height, recordingOverlayProcessingIslandHeight)
+        )
+    }
+
     private var cornerRadiusForState: CGFloat {
         switch controller.state {
         case .listening:
-            if settings.effectiveOverlayStyle == .island {
-                return processingHeight / 2
-            }
-            return overlayOverrides.topBarCornerRadius(fallback: overlayTuning.cornerRadius)
+            return listeningCornerRadius
         case .transcribing:
-            return 12
+            return processingHeight / 2
         case .routing, .refining:
-            return 12
+            return processingHeight / 2
         case .idle:
-            if settings.effectiveOverlayStyle == .island {
-                return processingHeight / 2
-            }
-            return overlayOverrides.topBarCornerRadius(fallback: overlayTuning.cornerRadius)
+            return listeningCornerRadius
         }
     }
 
     private var backgroundFill: Color {
         switch controller.state {
         case .listening:
-            if settings.effectiveOverlayStyle == .island {
-                return Color.black.opacity(0.92)
-            }
-            let opacity = overlayOverrides.topBarBackgroundOpacity(fallback: overlayTuning.backgroundOpacity)
-            return Color(white: 0, opacity: opacity * 0.7)
+            return listeningBackgroundFill
         case .transcribing:
-            return (whisperService.isWarmingUp ? warmupCyan : processingOrange).opacity(0.06)
+            return islandSurfaceBackground
         case .routing:
-            return processingOrange.opacity(0.06)
+            return islandSurfaceBackground
         case .refining:
-            return Color.purple.opacity(0.06)
+            return islandSurfaceBackground
         case .idle:
             return Color.clear
         }
@@ -961,19 +1052,78 @@ struct RecordingOverlayView: View {
     private var borderColor: Color {
         switch controller.state {
         case .listening:
-            if settings.effectiveOverlayStyle == .island {
-                return Color.white.opacity(0.12)
-            }
-            return TalkieTheme.textSecondary.opacity(0.1)
+            return listeningBorderColor
         case .transcribing:
-            return (whisperService.isWarmingUp ? warmupCyan : processingOrange).opacity(0.18)
+            return processingTint.opacity(0.5)
         case .routing:
-            return processingOrange.opacity(0.18)
+            return processingTint.opacity(0.5)
         case .refining:
-            return Color.purple.opacity(0.18)
+            return processingTint.opacity(0.5)
         case .idle:
             return Color.clear
         }
+    }
+
+    private var processingTitle: String {
+        switch controller.state {
+        case .transcribing:
+            return whisperService.isWarmingUp ? "Warming up" : "Transcribing"
+        case .routing:
+            return "Transcribed"
+        case .refining:
+            return "Refining"
+        case .listening, .idle:
+            return ""
+        }
+    }
+
+    private var processingTint: Color {
+        switch controller.state {
+        case .transcribing:
+            return whisperService.isWarmingUp ? warmupCyan : processingOrange
+        case .routing:
+            return SemanticColor.success
+        case .refining:
+            return Color.purple
+        case .listening, .idle:
+            return processingOrange
+        }
+    }
+
+    private var processingSystemImage: String {
+        switch controller.state {
+        case .routing:
+            return "checkmark"
+        case .refining:
+            return "sparkles"
+        case .transcribing:
+            return "waveform"
+        case .listening, .idle:
+            return "circle.fill"
+        }
+    }
+
+    private var listeningCornerRadius: CGFloat {
+        if settings.effectiveOverlayStyle == .island {
+            return listeningOverlaySize.height / 2
+        }
+        return overlayOverrides.topBarCornerRadius(fallback: overlayTuning.cornerRadius)
+    }
+
+    private var listeningBackgroundFill: Color {
+        if settings.effectiveOverlayStyle == .island {
+            return islandSurfaceBackground
+        }
+
+        let opacity = overlayOverrides.topBarBackgroundOpacity(fallback: overlayTuning.backgroundOpacity)
+        return Color(white: 0, opacity: opacity * 0.7)
+    }
+
+    private var listeningBorderColor: Color {
+        if settings.effectiveOverlayStyle == .island {
+            return islandSurfaceBorder
+        }
+        return TalkieTheme.textSecondary.opacity(0.1)
     }
 
     private var recordingAnimationStyle: AgentOverlay.AnimationStyle {
@@ -1005,10 +1155,9 @@ struct ProcessingDotsView: View {
         HStack(spacing: 3) {
             ForEach(0..<3, id: \.self) { index in
                 Circle()
-                    .fill(tint.opacity(dotOpacity(for: index)))
+                    .fill(dotFill(for: index))
                     .frame(width: 3, height: 3)
                     .scaleEffect(dotScale(for: index))
-                    .shadow(color: tint.opacity(animationPhase == indexPhase(for: index) ? 0.28 : 0), radius: 3)
             }
         }
         .frame(width: 18, height: 6)
@@ -1026,12 +1175,8 @@ struct ProcessingDotsView: View {
         }
     }
 
-    private func dotOpacity(for index: Int) -> Double {
-        if animationPhase == 0 {
-            return 0.26
-        }
-
-        return animationPhase == indexPhase(for: index) ? 0.95 : 0.3
+    private func dotFill(for index: Int) -> Color {
+        animationPhase == indexPhase(for: index) ? tint : Color.white
     }
 
     private func dotScale(for index: Int) -> CGFloat {
@@ -1043,12 +1188,56 @@ struct ProcessingDotsView: View {
     }
 }
 
+private struct ProcessingLifecycleIslandView: View {
+    let title: String
+    let tint: Color
+    let systemImage: String
+    let showsSpinner: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ZStack {
+                Circle()
+                    .stroke(tint, lineWidth: 1)
+                    .frame(width: 18, height: 18)
+
+                if showsSpinner {
+                    BrailleSpinner(size: 9, speed: 0.10)
+                        .foregroundStyle(tint)
+                        .frame(width: 12, height: 12)
+                } else {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(tint)
+                }
+            }
+
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if showsSpinner {
+                ProcessingDotsView(tint: tint)
+                    .frame(width: 18, height: 8)
+            } else {
+                Circle()
+                    .fill(tint)
+                    .frame(width: 5, height: 5)
+            }
+        }
+        .padding(.horizontal, 10)
+    }
+}
+
 private struct ProcessingSpinnerView: View {
     let tint: Color
 
     var body: some View {
         BrailleSpinner(size: 10, speed: 0.11)
-            .foregroundStyle(tint.opacity(0.85))
+            .foregroundStyle(tint)
             .frame(width: recordingOverlayProcessingBoxWidth, height: recordingOverlayProcessingBoxHeight)
     }
 }
@@ -1061,7 +1250,7 @@ struct CompletionDotView: View {
     var body: some View {
         // Single dot - the three processing dots collapse into one
         Circle()
-            .fill(processingOrange.opacity(0.9))
+            .fill(processingOrange)
             .frame(width: 4, height: 4)
     }
 }
@@ -1073,7 +1262,7 @@ struct InfinityParticlesView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            TimelineView(.animation(minimumInterval: 0.016)) { timeline in
+            TimelineView(.animation(minimumInterval: recordingOverlayParticleFrameInterval)) { timeline in
                 Canvas { context, size in
                     let time = timeline.date.timeIntervalSinceReferenceDate
 
@@ -1089,11 +1278,11 @@ struct InfinityParticlesView: View {
                     let baseLoopHeight: CGFloat = 12  // Better proportions for true ∞ shape
 
                     // Breathing effect - gentle pulsing of the loop size
-                    let breathingCycle = sin(time * 0.8) * 0.12 + 1.0  // Slow, subtle breathing
+                    let breathingCycle = sin(time * 0.8) * 0.08 + 1.0  // Slow, subtle breathing
                     let loopWidth = baseLoopWidth * CGFloat(breathingCycle)
                     let loopHeight = baseLoopHeight * CGFloat(breathingCycle)
 
-                    let particleCount = 24  // Smooth flow
+                    let particleCount = 12
 
                     for i in 0..<particleCount {
                         // Each particle has a phase offset around the infinity loop
@@ -1109,15 +1298,8 @@ struct InfinityParticlesView: View {
                         let y = centerY + CGFloat(sin(t) * cos(t) / denom) * loopHeight
 
                         // Particle size with subtle breathing - particles "breathe" too
-                        let sizeBreath = 0.85 + sin(time * 1.5 + Double(i) * 0.3) * 0.25
+                        let sizeBreath = 0.9 + sin(time * 1.5 + Double(i) * 0.3) * 0.18
                         let particleSize: CGFloat = 2.0 * CGFloat(sizeBreath)
-
-                        // Opacity variation creates depth - particles fade in and out gently
-                        // Use same opacity range as WavyParticlesView for consistency
-                        let baseOpacity = 0.56
-                        let breathOpacity = sin(time * 1.2 + Double(i) * 0.5) * 0.18
-                        let flowOpacity = sin(phase * 1.5) * 0.12
-                        let opacity = baseOpacity + breathOpacity + flowOpacity
 
                         let rect = CGRect(
                             x: x - particleSize / 2,
@@ -1126,30 +1308,7 @@ struct InfinityParticlesView: View {
                             height: particleSize
                         )
                         // Use explicit white for overlay context
-                        context.fill(Circle().path(in: rect), with: .color(Color.white.opacity(max(0.34, min(0.90, opacity)))))
-                    }
-
-                    // Add a subtle glow trail effect - a few larger, more transparent particles
-                    for i in 0..<6 {
-                        let trailPhase = Double(i) / 6.0 * 2.0 * .pi
-                        let phase = trailPhase + time * 1.0 - 0.25  // Slightly behind the main particles
-
-                        let t = phase
-                        let denom = 1.0 + sin(t) * sin(t)
-                        let x = centerX + CGFloat(cos(t) / denom) * loopWidth
-                        let y = centerY + CGFloat(sin(t) * cos(t) / denom) * loopHeight
-
-                        let glowSize: CGFloat = 4.5 * CGFloat(breathingCycle)
-                        let glowOpacity = 0.10 + sin(time * 0.8) * 0.025
-
-                        let rect = CGRect(
-                            x: x - glowSize / 2,
-                            y: y - glowSize / 2,
-                            width: glowSize,
-                            height: glowSize
-                        )
-                        // Use explicit white for overlay context
-                        context.fill(Circle().path(in: rect), with: .color(Color.white.opacity(glowOpacity)))
+                        context.fill(Circle().path(in: rect), with: .color(.white))
                     }
                 }
             }
@@ -1166,14 +1325,14 @@ struct SuccessParticlesView: View {
     private let successGreen = Color(red: 0.4, green: 1.0, blue: 0.5)
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 0.016)) { timeline in
+        TimelineView(.animation(minimumInterval: recordingOverlayParticleFrameInterval)) { timeline in
             Canvas { context, size in
                 let time = timeline.date.timeIntervalSinceReferenceDate
                 let centerX = size.width / 2
                 let centerY = size.height / 2
 
                 // Converging particles that form a checkmark feeling
-                let particleCount = 12
+                let particleCount = 8
 
                 for i in 0..<particleCount {
                     let seed = Double(i) * 1.618
@@ -1187,15 +1346,13 @@ struct SuccessParticlesView: View {
                     let y = centerY + CGFloat(sin(angle) * radius)
 
                     let particleSize: CGFloat = 2.0
-                    let opacity = 0.7
-
                     let rect = CGRect(
                         x: x - particleSize / 2,
                         y: y - particleSize / 2,
                         width: particleSize,
                         height: particleSize
                     )
-                    context.fill(Circle().path(in: rect), with: .color(successGreen.opacity(opacity)))
+                    context.fill(Circle().path(in: rect), with: .color(successGreen))
                 }
             }
         }
@@ -1212,17 +1369,17 @@ struct OverlayButton<Content: View>: View {
     var body: some View {
         Button(action: action) {
             content()
-                .foregroundStyle(Color.white.opacity(isHovered ? 0.96 : 0.50))
+                .foregroundStyle(isHovered ? Color.black : Color.white.opacity(0.62))
                 .frame(width: 22, height: 22)
                 .background {
                     Circle()
-                        .fill(Color.white.opacity(isHovered ? 0.22 : 0.035))
+                        .fill(isHovered ? Color.white : Color.white.opacity(0.04))
                 }
                 .overlay {
                     Circle()
-                        .strokeBorder(Color.white.opacity(isHovered ? 0.30 : 0.09), lineWidth: 1)
+                        .strokeBorder(Color.white.opacity(isHovered ? 1.0 : 0.22), lineWidth: 1)
                 }
-                .shadow(color: Color.white.opacity(isHovered ? 0.18 : 0), radius: 5)
+                .shadow(color: Color.white.opacity(isHovered ? 0.22 : 0), radius: 5)
                 .scaleEffect(isHovered ? 1.04 : 1.0)
         }
         .buttonStyle(.plain)
@@ -1244,7 +1401,6 @@ struct WavyParticlesView: View {
     let speedMultiplier: Double
     @ObservedObject private var audioMonitor = AudioLevelMonitor.shared
     @ObservedObject private var tuning = ParticleTuning.shared
-    @State private var smoothedLevel: CGFloat = 0.2
 
     init(
         calm: Bool,
@@ -1259,7 +1415,7 @@ struct WavyParticlesView: View {
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 0.016)) { timeline in
+        TimelineView(.animation(minimumInterval: recordingOverlayParticleFrameInterval)) { timeline in
             Canvas { context, size in
                 let time = timeline.date.timeIntervalSinceReferenceDate
                 let centerY = size.height / 2
@@ -1271,12 +1427,14 @@ struct WavyParticlesView: View {
 
                 // Use tuning values, with calm mode applying a reduction factor
                 let calmFactor = calm ? 0.42 : 1.0
-                let smoothingFactor = tuning.smoothingFactor * calmFactor
                 let levelFloor: CGFloat = levelOverride == nil ? 0.08 : 0.01
-                let level = max(levelFloor, smoothedLevel)
+                let level = max(levelFloor, targetLevel)
 
                 // Particle count from tuning
-                let particleCount = calm ? Int(Double(tuning.particleCount) * 0.9) : tuning.particleCount
+                let tunedParticleCount = calm
+                    ? Int(Double(tuning.particleCount) * 0.45)
+                    : Int(Double(tuning.particleCount) * 0.55)
+                let particleCount = max(12, min(36, tunedParticleCount))
 
                 for i in 0..<particleCount {
                     let seed = Double(i) * 1.618033988749
@@ -1307,17 +1465,10 @@ struct WavyParticlesView: View {
                     let baseSize = CGFloat(tuning.baseSize)
                     let levelBonus = level * 6.0  // More responsive size change with voice
                     let sizeVariation = CGFloat(0.5 + sin(seed * 5) * 0.5)  // 0.0-1.0 range
-                    let particleSize = baseSize + levelBonus * sizeVariation
-
-                    // Opacity from tuning - more responsive to voice
-                    let visibilityBoost = levelOverride == nil ? 1.18 : max(0.12, Double(level) * 1.65)
-                    let opacity = min(
-                        0.96,
-                        max(
-                            0.24,
-                            (tuning.baseOpacity + Double(level) * 0.56 * (0.6 + sin(seed * 3) * 0.4)) * visibilityBoost
-                        )
-                    )
+                    let edgeScale = direction == .inbound
+                        ? min(xProgress * 3.0, 1.0) * min((1.0 - xProgress) * 2.0, 1.0)
+                        : min((1.0 - xProgress) * 3.0, 1.0) * min(xProgress * 2.0, 1.0)
+                    let particleSize = (baseSize + levelBonus * sizeVariation) * max(0.35, CGFloat(edgeScale))
 
                     let rect = CGRect(
                         x: x - particleSize / 2,
@@ -1326,12 +1477,7 @@ struct WavyParticlesView: View {
                         height: particleSize
                     )
                     // Use explicit white for overlay context (TalkieTheme colors can resolve incorrectly in overlays)
-                    context.fill(Circle().path(in: rect), with: .color(Color.white.opacity(opacity)))
-                }
-
-                // Smooth level update - needed inside Canvas for 60fps responsiveness
-                DispatchQueue.main.async {
-                    smoothedLevel = smoothedLevel * (1.0 - CGFloat(smoothingFactor)) + targetLevel * CGFloat(smoothingFactor)
+                    context.fill(Circle().path(in: rect), with: .color(.white))
                 }
             }
         }
@@ -1346,7 +1492,6 @@ struct WaveformBarsView: View {
     let levelOverride: Float?
     @ObservedObject private var audioMonitor = AudioLevelMonitor.shared
     @ObservedObject private var tuning = WaveformTuning.shared
-    @State private var barLevels: [CGFloat] = Array(repeating: 0.1, count: 48)
 
     init(
         sensitive: Bool,
@@ -1359,9 +1504,10 @@ struct WaveformBarsView: View {
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 0.016)) { timeline in
+        TimelineView(.animation(minimumInterval: recordingOverlayParticleFrameInterval)) { timeline in
             Canvas { context, size in
-                let barCount = tuning.barCount
+                let time = timeline.date.timeIntervalSinceReferenceDate
+                let barCount = max(8, min(32, tuning.barCount))
                 let gap = CGFloat(tuning.barGap)
                 let barWidth: CGFloat = (size.width - CGFloat(barCount - 1) * gap) / CGFloat(barCount)
                 let maxBarHeight = size.height * CGFloat(tuning.maxHeightRatio)
@@ -1383,9 +1529,6 @@ struct WaveformBarsView: View {
                     targetLevel = rawLevel
                 }
 
-                // Ensure barLevels array is the right size
-                let currentLevels = barLevels.count == barCount ? barLevels : Array(repeating: 0.1, count: barCount)
-
                 for i in 0..<barCount {
                     let x = CGFloat(i) * (barWidth + gap)
 
@@ -1394,7 +1537,10 @@ struct WaveformBarsView: View {
                     let variationBase: CGFloat = sensitive ? 0.8 : (1.0 - CGFloat(tuning.variationAmount))
                     let variationRange = CGFloat(tuning.variationAmount) * (sensitive ? 0.67 : 1.0)
                     let variation: CGFloat = variationBase + CGFloat(sin(seed * 3)) * variationRange
-                    let barLevel = currentLevels[i] * variation
+                    let flowIndex = direction == .inbound ? i : barCount - 1 - i
+                    let flowPhase = Double(flowIndex) / Double(max(barCount - 1, 1))
+                    let movement = 0.70 + 0.30 * CGFloat(sin(time * 4.2 - flowPhase * 6.0 + seed))
+                    let barLevel = max(0.08, targetLevel * variation * movement)
 
                     // Bar height based on level
                     let minHeight: CGFloat
@@ -1413,43 +1559,10 @@ struct WaveformBarsView: View {
                         height: barHeight
                     )
 
-                    // Color/opacity - use explicit white for overlay context
-                    let baseOpacity = levelOverride == nil
-                        ? (sensitive ? tuning.baseOpacity * 1.25 : tuning.baseOpacity)
-                        : 0.02
-                    let visibilityBoost = levelOverride == nil ? 1.0 : max(0.08, Double(barLevel) * 1.6)
-                    let opacity = (baseOpacity + Double(barLevel) * tuning.levelOpacityBoost) * visibilityBoost
                     context.fill(
                         RoundedRectangle(cornerRadius: CGFloat(tuning.cornerRadius)).path(in: barRect),
-                        with: .color(Color.white.opacity(opacity))
+                        with: .color(.white)
                     )
-                }
-
-                // Update bar levels with audio, respecting the requested flow direction
-                // Note: DispatchQueue.main.async is needed here for smooth 60fps updates
-                DispatchQueue.main.async {
-                    var newLevels = currentLevels.count == barCount ? currentLevels : Array(repeating: 0.1, count: barCount)
-                    let smoothFactor: CGFloat = sensitive ? CGFloat(tuning.smoothingFactor) * 1.2 : CGFloat(tuning.smoothingFactor)
-                    let edgeIndex = direction == .inbound ? barCount - 1 : 0
-                    let lastLevel = barCount > 0 ? newLevels[edgeIndex] : 0.1
-                    let smoothed = lastLevel * (1 - smoothFactor) + targetLevel * smoothFactor
-
-                    if direction == .inbound {
-                        for i in 0..<(barCount - 1) {
-                            newLevels[i] = newLevels[i + 1]
-                        }
-                        if barCount > 0 {
-                            newLevels[barCount - 1] = smoothed
-                        }
-                    } else {
-                        for i in stride(from: barCount - 1, through: 1, by: -1) {
-                            newLevels[i] = newLevels[i - 1]
-                        }
-                        if barCount > 0 {
-                            newLevels[0] = smoothed
-                        }
-                    }
-                    barLevels = newLevels
                 }
             }
         }
@@ -1475,7 +1588,7 @@ struct IslandPillShapesView: View {
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 0.016)) { timeline in
+        TimelineView(.animation(minimumInterval: recordingOverlayParticleFrameInterval)) { timeline in
             Canvas { context, size in
                 let time = timeline.date.timeIntervalSinceReferenceDate
                 let islandSettings = settings.islandVisualizationSettings
@@ -1484,7 +1597,7 @@ struct IslandPillShapesView: View {
                 let density = CGFloat(islandSettings.shape)
                 let level = max(0.10, smoothedLevel)
                 let speedAmount = max(0.12, speed)
-                let particleCount = Int(18 + density * 22)
+                let particleCount = Int(16 + density * 16)
                 let flowSpeed = 0.18 + Double(speedAmount) * 0.52
                 let waveSpeed = 1.25 + Double(speedAmount) * 1.15
                 let flowRight = direction == .inbound
@@ -1509,24 +1622,29 @@ struct IslandPillShapesView: View {
                     let edgeFade = flowRight
                         ? min(xProgress * 3.0, 1.0) * min((1.0 - xProgress) * 2.0, 1.0)
                         : min((1.0 - xProgress) * 3.0, 1.0) * min(xProgress * 2.0, 1.0)
-                    let shimmer = 0.72 + sin(time * 2.2 + seed * 3.0) * 0.18
-                    let opacityScale = 0.58 + sin(seed * 3.0) * 0.34
-                    let rawOpacity = (0.28 + Double(level) * (0.40 + Double(reactivity) * 0.22))
-                        * edgeFade
-                        * shimmer
-                        * opacityScale
-                    let opacity = min(1.0, max(0.42, rawOpacity * 1.8))
+                    let visibleSize = particleSize * max(0.34, CGFloat(edgeFade))
+
+                    // Luminous opacity: horizontal edge fade + per-particle depth + a gentle
+                    // shimmer. This is pure per-frame math (no main-thread dispatch), so it
+                    // restores the soft glow without touching the performance work.
+                    let shimmer = 0.74 + sin(time * 2.1 + seed * 3.0) * 0.16
+                    let depth = 0.58 + sin(seed * 3.0) * 0.42
+                    let rawOpacity = (0.30 + Double(level) * (0.34 + Double(reactivity) * 0.18))
+                        * Double(edgeFade) * shimmer * depth
+                    let opacity = min(0.96, max(0.30, rawOpacity * 1.9))
 
                     let rect = CGRect(
-                        x: x - particleSize / 2,
-                        y: y - particleSize / 2,
-                        width: particleSize,
-                        height: particleSize
+                        x: x - visibleSize / 2,
+                        y: y - visibleSize / 2,
+                        width: visibleSize,
+                        height: visibleSize
                     )
                     context.fill(Circle().path(in: rect), with: .color(Color.white.opacity(opacity)))
                 }
 
-                if speed > 0.05 {
+                // Single soft glint sweep — one fill per frame, negligible cost, adds a
+                // "lit glass" highlight gliding across the pill.
+                if speedAmount > 0.05 {
                     let glintWidth = max(18, size.width * (0.10 + level * 0.08))
                     let glintXProgress = CGFloat((time * (0.18 + Double(speedAmount) * 0.34)).truncatingRemainder(dividingBy: 1))
                     let glintX = flowRight
@@ -1535,7 +1653,7 @@ struct IslandPillShapesView: View {
                     let glintRect = CGRect(x: glintX, y: 2.2, width: glintWidth, height: 0.8)
                     context.fill(
                         RoundedRectangle(cornerRadius: 0.5).path(in: glintRect),
-                        with: .color(Color.white.opacity(0.11 + level * 0.16))
+                        with: .color(Color.white.opacity(0.10 + level * 0.14))
                     )
                 }
             }

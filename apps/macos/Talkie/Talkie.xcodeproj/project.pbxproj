@@ -144,6 +144,7 @@
 		422E4D19541B60DE20FA7ABE /* CenterGuidesOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AA4AD56A1FE7BA063AE1FD /* CenterGuidesOverlay.swift */; };
 		44138A7AF176B32C0EAE287F /* PaletteCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7567CFCAF8663ADB7229BEA2 /* PaletteCommand.swift */; };
 		44589070EF08A8DC27EA9A63 /* FilterChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E611C1F1D5E4BAF506C1202 /* FilterChip.swift */; };
+		C0D3D0290000000000000002 /* LiveCaptureMarkupOverlayController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D3D0290000000000000001 /* LiveCaptureMarkupOverlayController.swift */; };
 		4470F8B8C77766B9CFBBA63F /* ScreenRecordingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7C6DA57E00B393707C2DCFF /* ScreenRecordingController.swift */; };
 		45D926540DD32947275F2C3B /* TalkieServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84A73CE1C82339B07ED6BD9A /* TalkieServer.swift */; };
 		46BCB0361A074CFCE3C32252 /* AIResultsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 890A7C8CEFE2B934F8D361D7 /* AIResultsViews.swift */; };
@@ -1002,6 +1003,7 @@
 		E7565A75ED8D5CB7FB0F107C /* MemoStorageStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoStorageStatus.swift; sourceTree = "<group>"; };
 		E75FED0DCD51602D30AD94C8 /* DesignAuditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignAuditor.swift; sourceTree = "<group>"; };
 		E7A29BD3BCBE1132CAB4B2E4 /* CaptureHUDController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureHUDController.swift; sourceTree = "<group>"; };
+		C0D3D0290000000000000001 /* LiveCaptureMarkupOverlayController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCaptureMarkupOverlayController.swift; sourceTree = "<group>"; };
 		E7C6DA57E00B393707C2DCFF /* ScreenRecordingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenRecordingController.swift; sourceTree = "<group>"; };
 		E83621DAA7CE21C9252D55E0 /* HelperProcessState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperProcessState.swift; sourceTree = "<group>"; };
 		E870A84708A98E2FF0C99171 /* TOActionBarSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TOActionBarSection.swift; sourceTree = "<group>"; };
@@ -1131,6 +1133,7 @@
 		1C50E762028AC7D34D43A0D3 /* ScreenRecording */ = {
 			isa = PBXGroup;
 			children = (
+				C0D3D0290000000000000001 /* LiveCaptureMarkupOverlayController.swift */,
 				E7C6DA57E00B393707C2DCFF /* ScreenRecordingController.swift */,
 				F3199EF6486200D02269885B /* ScreenRecordingService.swift */,
 			);
@@ -2633,6 +2636,7 @@
 				5CC35CD8780D5A38BAEB70B4 /* ScopeWorkflowStepCard.swift in Sources */,
 				F120C165035DF40E635775B5 /* ScreenCaptureOverlay.swift in Sources */,
 				FC79ED2E8CF24E398F2956EE /* ScreenCapturePermissionManager.swift in Sources */,
+				C0D3D0290000000000000002 /* LiveCaptureMarkupOverlayController.swift in Sources */,
 				4470F8B8C77766B9CFBBA63F /* ScreenRecordingController.swift in Sources */,
 				E433315C3E421A4B741F6BEE /* ScreenRecordingService.swift in Sources */,
 				3D89EC2E4B25A0037B692ABF /* ScreenshotCaptureService.swift in Sources */,

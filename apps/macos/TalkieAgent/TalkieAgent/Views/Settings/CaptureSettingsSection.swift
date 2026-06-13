@@ -221,6 +221,18 @@ struct CaptureSettingsSection: View {
                 }
             }
 
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                Text("COUNTDOWN")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundColor(TalkieTheme.textTertiary)
+
+                HStack(spacing: Spacing.sm) {
+                    ForEach([0, 1, 3, 5], id: \.self) { seconds in
+                        screenRecordingCountdownButton(seconds)
+                    }
+                }
+            }
+
             Rectangle()
                 .fill(Design.divider)
                 .frame(height: 0.5)
@@ -274,6 +286,29 @@ struct CaptureSettingsSection: View {
                 RoundedRectangle(cornerRadius: CornerRadius.xs)
                     .stroke(isSelected ? OpsTint.amber.color.opacity(0.35) : Design.divider, lineWidth: 0.5)
             )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func screenRecordingCountdownButton(_ seconds: Int) -> some View {
+        let isSelected = settings.screenRecordingCountdownSeconds == seconds
+        let title = seconds == 0 ? "Off" : "\(seconds)s"
+
+        return Button {
+            settings.screenRecordingCountdownSeconds = seconds
+        } label: {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(isSelected ? TalkieTheme.textPrimary : TalkieTheme.textSecondary)
+                .frame(maxWidth: .infinity, minHeight: 32)
+                .background(
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
+                        .fill(isSelected ? OpsTint.amber.color.opacity(0.14) : TalkieTheme.surfaceElevated.opacity(0.5))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
+                        .stroke(isSelected ? OpsTint.amber.color.opacity(0.35) : Design.divider, lineWidth: 0.5)
+                )
         }
         .buttonStyle(.plain)
     }

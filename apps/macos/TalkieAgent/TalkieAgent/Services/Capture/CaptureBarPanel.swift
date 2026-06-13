@@ -102,6 +102,11 @@ final class CaptureBarState {
     /// Click callback from the SwiftUI view.
     /// `nil` result = interaction only (e.g. mode toggle), resets timeout but doesn't dismiss.
     var onAction: ((CaptureBarResult?) -> Void)?
+    /// Optional commit callback for HUDs that expose an explicit Start/Capture button.
+    /// Controllers own the exact commit behavior because screenshot region capture can
+    /// have an armed overlay that should stay alive until the user picks a region.
+    var onStart: (() -> Void)?
+    var onCancel: (() -> Void)?
     var onModeChanged: ((CaptureBarMode) -> Void)?
 
     var screenRecordingIncludesSystemAudio: Bool = sharedBool(
@@ -216,6 +221,8 @@ final class CaptureBarPanel {
 
     func dismiss() {
         state.onAction = nil
+        state.onStart = nil
+        state.onCancel = nil
 
         guard let p = panel else { return }
         panel = nil

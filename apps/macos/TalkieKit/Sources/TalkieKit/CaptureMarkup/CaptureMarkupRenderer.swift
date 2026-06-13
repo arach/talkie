@@ -166,6 +166,28 @@ public enum CaptureMarkupRenderer {
             if let label = layer.label {
                 drawLabel(label, near: rect, in: context, size: size)
             }
+        case .ellipse:
+            guard let frame = layer.frame else { return }
+            let rect = frame.pixelRect(in: size)
+            context.setStrokeColor(color)
+            context.setLineWidth(strokeLineWidth(layer, size: size))
+            context.strokeEllipse(in: rect)
+            if let label = layer.label {
+                drawLabel(label, near: rect, in: context, size: size)
+            }
+        case .ink:
+            guard let points = layer.points, points.count >= 2 else { return }
+            let lineWidth = strokeLineWidth(layer, size: size)
+            context.setStrokeColor(color)
+            context.setLineWidth(lineWidth)
+            context.setLineCap(.round)
+            context.setLineJoin(.round)
+            context.beginPath()
+            context.move(to: points[0].pixelPoint(in: size))
+            for point in points.dropFirst() {
+                context.addLine(to: point.pixelPoint(in: size))
+            }
+            context.strokePath()
         case .arrow:
             guard let from = layer.from, let to = layer.to else { return }
             let start = from.pixelPoint(in: size)
@@ -240,6 +262,9 @@ public enum CaptureMarkupRenderer {
         }
         if let to = layer.to {
             converted.to = convert(point: to)
+        }
+        if let points = layer.points {
+            converted.points = points.map(convert(point:))
         }
         return converted
     }

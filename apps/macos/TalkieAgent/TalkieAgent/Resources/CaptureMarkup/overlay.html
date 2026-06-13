@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Talkie Live Markup</title>
+  <link rel="stylesheet" href="overlay.css" />
+</head>
+<body>
+  <canvas id="overlay-canvas" aria-label="Live markup canvas"></canvas>
+
+  <div class="markup-dock" id="markup-dock">
+    <div class="style-panel" id="style-panel" hidden>
+      <div class="style-group">
+        <span class="style-label">Note</span>
+        <button type="button" class="note-style active" data-note-style="sticky" title="Sticky note">Sticky</button>
+        <button type="button" class="note-style" data-note-style="bubble" title="Rounded note">Bubble</button>
+        <button type="button" class="note-style" data-note-style="glass" title="Glass note">Glass</button>
+      </div>
+
+      <span class="divider" aria-hidden="true"></span>
+
+      <div class="style-group">
+        <span class="style-label">Line</span>
+        <button type="button" class="line-style active" data-line-style="solid" title="Solid line">Solid</button>
+        <button type="button" class="line-style" data-line-style="dashed" title="Dashed line">Dash</button>
+        <button type="button" class="line-style" data-line-style="glow" title="Glow line">Glow</button>
+      </div>
+
+      <span class="divider" aria-hidden="true"></span>
+
+      <div class="style-group compact">
+        <span class="style-label">Color</span>
+        <button type="button" class="swatch active" data-color="#D03A1C" title="Red"></button>
+        <button type="button" class="swatch" data-color="#4F7DFF" title="Blue"></button>
+        <button type="button" class="swatch" data-color="#12A594" title="Teal"></button>
+        <button type="button" class="swatch swatch-light" data-color="#FFFFFF" title="White"></button>
+      </div>
+
+      <span class="divider" aria-hidden="true"></span>
+
+      <div class="style-group compact">
+        <span class="style-label">Stroke</span>
+        <button type="button" class="width active" data-width="4" title="Medium stroke">M</button>
+        <button type="button" class="width" data-width="7" title="Heavy stroke">H</button>
+      </div>
+    </div>
+
+    <div class="toolbar" id="toolbar">
+      <div class="tool-segment" role="group" aria-label="Markup tools">
+        <button type="button" class="tool glyph-tool" data-tool="select" data-glyph="↖" title="Select and move — S" aria-label="Select and move">Select</button>
+        <button type="button" class="tool glyph-tool active" data-tool="ink" data-glyph="✎" title="Pen — P" aria-label="Pen">Pen</button>
+        <button type="button" class="tool glyph-tool" data-tool="ellipse" data-glyph="○" title="Circle — C" aria-label="Circle">Circle</button>
+        <button type="button" class="tool glyph-tool" data-tool="arrow" data-glyph="↗" title="Arrow — A" aria-label="Arrow">Arrow</button>
+        <button type="button" class="tool glyph-tool" data-tool="note" data-glyph="T" title="Note — N" aria-label="Note">Note</button>
+      </div>
+
+      <div class="mode-switch" role="group" aria-label="Markup mode">
+        <button type="button" class="mode active" data-mode="agent" title="Agent instruction markup — 1">Agent</button>
+        <button type="button" class="mode" data-mode="demo" title="Presentation markup — 2">Demo</button>
+      </div>
+
+      <button type="button" class="style-toggle" data-action="toggle-style" title="Show style drawer — T/L" aria-controls="style-panel" aria-expanded="false">
+        <span class="style-chip-swatch" aria-hidden="true"></span>
+        <span class="style-chip-label">Sticky · Solid</span>
+      </button>
+
+      <div class="commit-cluster" role="group" aria-label="Markup actions">
+        <button type="button" class="action glyph-action" data-action="undo" data-glyph="↶" title="Undo" aria-label="Undo">Undo</button>
+        <button type="button" class="action done" data-action="done" title="Done">Done</button>
+        <button type="button" class="action glyph-action cancel" data-action="cancel" data-glyph="×" title="Cancel" aria-label="Cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="overlay.js"></script>
+</body>
+</html>

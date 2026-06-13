@@ -60,9 +60,27 @@ final class CaptureIslandController {
             // (pin toggles, deletions). assetsDidChange carries no payload, so
             // gate on recency + de-dupe by id.
             guard latest.id != shownItemID else { return }
-            guard Date().timeIntervalSince(latest.capturedAt) < 5 else { return }
+            guard isFreshForPresentation(latest) else { return }
             present(latest)
         }
+    }
+
+    private func isFreshForPresentation(_ item: AgentLiveTrayItem) -> Bool {
+        let now = Date()
+        if now.timeIntervalSince(item.capturedAt) < 5 {
+            return true
+        }
+
+        guard item.isClip else { return false }
+        let values = try? item.fileURL.resourceValues(forKeys: [
+            .contentModificationDateKey,
+            .creationDateKey,
+        ])
+        guard let savedAt = values?.contentModificationDate ?? values?.creationDate else {
+            return false
+        }
+
+        return now.timeIntervalSince(savedAt) < max(8, dismissSeconds + 2)
     }
 
     private func present(_ item: AgentLiveTrayItem) {
@@ -93,10 +111,11 @@ final class CaptureIslandController {
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         p.isOpaque = false
         p.backgroundColor = .clear
-        p.hasShadow = true
+        p.hasShadow = false
         p.isMovableByWindowBackground = false
         p.hidesOnDeactivate = false
         p.acceptsMouseMovedEvents = true
+        p.sharingType = .none
 
         positionTopCenter(p)
 

@@ -782,6 +782,16 @@ struct CameraSettingsView: View {
                     screenRecordingPresetOption(preset)
                 }
             }
+
+            Text("Reusable target countdown")
+                .font(Theme.current.fontXS)
+                .foregroundColor(Theme.current.foregroundMuted)
+
+            HStack(spacing: Spacing.sm) {
+                ForEach([0, 1, 3, 5], id: \.self) { seconds in
+                    screenRecordingCountdownOption(seconds)
+                }
+            }
         }
         .settingsSectionCard(padding: Spacing.md)
     }
@@ -818,6 +828,29 @@ struct CameraSettingsView: View {
                 RoundedRectangle(cornerRadius: CornerRadius.sm)
                     .stroke(isSelected ? Color.accentColor.opacity(0.3) : Theme.current.divider.opacity(0.5), lineWidth: 0.5)
             )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func screenRecordingCountdownOption(_ seconds: Int) -> some View {
+        let isSelected = settingsManager.screenRecordingCountdownSeconds == seconds
+        let title = seconds == 0 ? "Off" : "\(seconds)s"
+
+        return Button {
+            settingsManager.screenRecordingCountdownSeconds = seconds
+        } label: {
+            Text(title)
+                .font(Theme.current.fontSMBold)
+                .foregroundColor(isSelected ? Theme.current.foreground : Theme.current.foregroundSecondary)
+                .frame(maxWidth: .infinity, minHeight: 34)
+                .background(
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .fill(isSelected ? Theme.current.backgroundTertiary : Color.clear)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .stroke(isSelected ? Color.accentColor.opacity(0.3) : Theme.current.divider.opacity(0.5), lineWidth: 0.5)
+                )
         }
         .buttonStyle(.plain)
     }

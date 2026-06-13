@@ -212,14 +212,13 @@ final class AgentController: ObservableObject {
             // in the same turn as the state transition. AppDelegate also
             // observes state for menu/chrome coordination, but this path is
             // the latency-sensitive one.
-            RecordingOverlayController.shared.state = newState
             RecordingOverlayController.shared.elapsedTime = elapsed
             let notchActive = NotchInfo.detect().hasNotch && LiveSettings.shared.notchOverlayEnabled
             if notchActive {
                 NotchOverlayController.shared.updateState(newState)
                 RecordingOverlayController.shared.hide()
             } else {
-                RecordingOverlayController.shared.updateState(newState)
+                RecordingOverlayController.shared.updateState(newState, previousState: oldState)
             }
 
             // Stop elapsed time timer when no longer actively recording
@@ -1412,6 +1411,9 @@ final class AgentController: ObservableObject {
                     return
                 }
                 self.processDidFire = true
+                if self.state == .transcribing {
+                    try? await Task.sleep(for: .milliseconds(90))
+                }
                 await self.process(segmentPaths: audioPaths)
             }
         }
@@ -1652,7 +1654,11 @@ final class AgentController: ObservableObject {
         stateMachine.transition(.stopRecording)
 
         recordingEndTime = Date()
-        audio.stopCapture()
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            try? await Task.sleep(for: .milliseconds(16))
+            self?.audio.stopCapture()
+        }
 
         // Safety timeout: if no audio file is produced, reset to idle with error
         Task { @MainActor [weak self] in
