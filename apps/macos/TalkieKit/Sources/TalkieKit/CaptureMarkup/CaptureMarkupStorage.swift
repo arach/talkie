@@ -9,19 +9,31 @@ public enum CaptureMarkupStorage {
     public static let sidecarSuffix = ".markup.json"
 
     public static func sidecarURL(forImageURL imageURL: URL) -> URL {
-        let base = imageURL.deletingPathExtension().lastPathComponent
-        return imageURL.deletingLastPathComponent()
+        sidecarURL(forAssetURL: imageURL)
+    }
+
+    public static func sidecarURL(forAssetURL assetURL: URL) -> URL {
+        let base = assetURL.deletingPathExtension().lastPathComponent
+        return assetURL.deletingLastPathComponent()
             .appendingPathComponent(base + sidecarSuffix)
     }
 
     public static func load(forImageURL imageURL: URL) -> CaptureMarkupDocument? {
-        let url = sidecarURL(forImageURL: imageURL)
+        load(forAssetURL: imageURL)
+    }
+
+    public static func load(forAssetURL assetURL: URL) -> CaptureMarkupDocument? {
+        let url = sidecarURL(forAssetURL: assetURL)
         guard let data = try? Data(contentsOf: url) else { return nil }
         return try? JSONDecoder().decode(CaptureMarkupDocument.self, from: data)
     }
 
     public static func save(_ document: CaptureMarkupDocument, forImageURL imageURL: URL) throws {
-        let url = sidecarURL(forImageURL: imageURL)
+        try save(document, forAssetURL: imageURL)
+    }
+
+    public static func save(_ document: CaptureMarkupDocument, forAssetURL assetURL: URL) throws {
+        let url = sidecarURL(forAssetURL: assetURL)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(document)
@@ -29,7 +41,11 @@ public enum CaptureMarkupStorage {
     }
 
     public static func deleteSidecar(forImageURL imageURL: URL) {
-        let url = sidecarURL(forImageURL: imageURL)
+        deleteSidecar(forAssetURL: imageURL)
+    }
+
+    public static func deleteSidecar(forAssetURL assetURL: URL) {
+        let url = sidecarURL(forAssetURL: assetURL)
         try? FileManager.default.removeItem(at: url)
     }
 

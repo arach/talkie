@@ -95,7 +95,7 @@ final class ScreenRecordingController {
         }
 
         let countdown = ScreenRecordingCountdownController(target: target)
-        switch await countdown.begin() {
+        switch await countdown.begin(seconds: Self.reusableCountdownSeconds) {
         case .start(let confirmedTarget):
             let mode = Self.captureMode(for: confirmedTarget)
             let started = await startResolvedRecording(target: confirmedTarget, mode: mode)
@@ -154,7 +154,13 @@ final class ScreenRecordingController {
 
         let captureMode = Self.captureModeString(for: result.target)
         let clipStartedAt = startTime ?? Date().addingTimeInterval(-Double(durationMs) / 1000.0)
-        let metadataEvents = finalizedMetadataEvents(durationMs: durationMs)
+        var metadataEvents = finalizedMetadataEvents(durationMs: durationMs)
+        if let markupEvent = activeOverlayController?.captureMarkupEvent(
+            recordingStartTime: clipStartedAt,
+            durationMs: durationMs
+        ) {
+            metadataEvents.append(markupEvent)
+        }
 
         do {
             let stored = try await AgentLiveTrayAssetStore.shared.storeClip(
@@ -317,6 +323,13 @@ final class ScreenRecordingController {
         }
     }
 
+    private static var reusableCountdownSeconds: Int {
+        let sharedValue = TalkieSharedSettings.object(forKey: AgentSettingsKey.screenRecordingCountdownSeconds) as? Int
+        let localValue = UserDefaults.standard.object(forKey: AgentSettingsKey.screenRecordingCountdownSeconds) as? Int
+        let value = sharedValue ?? localValue ?? 0
+        return min(max(value, 0), 10)
+    }
+
     private func startMetadataSampler(
         for target: ScreenRecordingTarget,
         captureMode: String,
@@ -458,6 +471,10 @@ private final class ScreenRecordingCountdownController {
     private var countdownTask: Task<Void, Never>?
     private var targetResolutionTask: Task<Void, Never>?
     private var paletteTask: Task<Void, Never>?
+    private var mouseMonitor: Any?
+    private var mousePollTimer: Timer?
+    private var globalKeyMonitor: Any?
+    private var localKeyMonitor: Any?
     private var continuation: CheckedContinuation<Result, Never>?
     private var didFinish = false
 
@@ -465,7 +482,7 @@ private final class ScreenRecordingCountdownController {
         self.target = target
     }
 
-    func begin(seconds: Int = 3) async -> Result {
+    func begin(seconds: Int = 0) async -> Result {
         await withCheckedContinuation { continuation in
             self.continuation = continuation
             show(seconds: seconds)
@@ -484,7 +501,6 @@ private final class ScreenRecordingCountdownController {
             screenFrame: screen.frame,
             targetRect: targetRect,
             isFullscreen: Self.isFullscreen(target),
-            isRegion: Self.isRegion(target),
             captureMode: Self.captureModeLabel(for: target),
             countdown: seconds
         )
@@ -513,7 +529,7 @@ private final class ScreenRecordingCountdownController {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
-        panel.ignoresMouseEvents = false
+        panel.ignoresMouseEvents = true
         panel.acceptsMouseMovedEvents = true
         panel.sharingType = .none
         panel.hidesOnDeactivate = false
@@ -525,6 +541,8 @@ private final class ScreenRecordingCountdownController {
 
         self.panel = panel
         self.overlayView = view
+        installMousePassThroughMonitor()
+        installKeyMonitors()
 
         showHUD(for: target)
     }
@@ -545,6 +563,9 @@ private final class ScreenRecordingCountdownController {
             palette: WallpaperLuminanceSampler.fallbackPalette()
         )
         hudPanel.state.selectedCaptureMode = Self.captureMode(for: target)
+        hudPanel.state.onStart = { [weak self] in
+            self?.overlayView?.confirmCurrentSelection()
+        }
         hudPanel.state.onAction = { [weak self] result in
             guard let self else { return }
             guard let result else {
@@ -606,7 +627,10 @@ private final class ScreenRecordingCountdownController {
 
     private func confirm(screenRect: CGRect, adjusted: Bool, seconds: Int) {
         guard !didFinish else { return }
-        overlayView?.beginCountdown(seconds: seconds)
+        let countdownSeconds = max(0, seconds)
+        if countdownSeconds > 0 {
+            overlayView?.beginCountdown(seconds: countdownSeconds)
+        }
 
         targetResolutionTask?.cancel()
         targetResolutionTask = Task { @MainActor [weak self] in
@@ -626,7 +650,12 @@ private final class ScreenRecordingCountdownController {
                 return
             }
 
-            var remaining = seconds
+            guard countdownSeconds > 0 else {
+                finish(.start(resolvedTarget))
+                return
+            }
+
+            var remaining = countdownSeconds
             while remaining > 0 {
                 overlayView?.countdown = remaining
                 try? await Task.sleep(for: .seconds(1))
@@ -647,6 +676,8 @@ private final class ScreenRecordingCountdownController {
         targetResolutionTask = nil
         paletteTask?.cancel()
         paletteTask = nil
+        removeMousePassThroughMonitor()
+        removeKeyMonitors()
         hudPanel.dismiss()
 
         panel?.orderOut(nil)
@@ -655,6 +686,73 @@ private final class ScreenRecordingCountdownController {
 
         continuation?.resume(returning: result)
         continuation = nil
+    }
+
+    private func installMousePassThroughMonitor() {
+        removeMousePassThroughMonitor()
+        mouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged, .leftMouseUp]) { [weak self] _ in
+            Task { @MainActor in
+                self?.updateMousePassThrough()
+            }
+        }
+        mousePollTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.updateMousePassThrough()
+            }
+        }
+        updateMousePassThrough()
+    }
+
+    private func removeMousePassThroughMonitor() {
+        if let mouseMonitor {
+            NSEvent.removeMonitor(mouseMonitor)
+            self.mouseMonitor = nil
+        }
+        mousePollTimer?.invalidate()
+        mousePollTimer = nil
+        panel?.ignoresMouseEvents = true
+    }
+
+    private func installKeyMonitors() {
+        removeKeyMonitors()
+        globalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            let keyEvent = ScreenRecordingOverlayKeyEvent(event)
+            Task { @MainActor in
+                _ = self?.handleKeyEvent(keyEvent)
+            }
+        }
+        localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            let keyEvent = ScreenRecordingOverlayKeyEvent(event)
+            let handled = MainActor.assumeIsolated {
+                guard let self else { return false }
+                return self.handleKeyEvent(keyEvent)
+            }
+            return handled ? nil : event
+        }
+    }
+
+    private func removeKeyMonitors() {
+        if let globalKeyMonitor {
+            NSEvent.removeMonitor(globalKeyMonitor)
+            self.globalKeyMonitor = nil
+        }
+        if let localKeyMonitor {
+            NSEvent.removeMonitor(localKeyMonitor)
+            self.localKeyMonitor = nil
+        }
+    }
+
+    private func handleKeyEvent(_ event: ScreenRecordingOverlayKeyEvent) -> Bool {
+        guard !didFinish else { return true }
+        return overlayView?.handleKeyEvent(event) ?? false
+    }
+
+    private func updateMousePassThrough() {
+        guard let panel, let overlayView else { return }
+        let mouseLocation = NSEvent.mouseLocation
+        let shouldReceiveMouse = overlayView.shouldReceiveMouse(atScreenPoint: mouseLocation)
+        panel.ignoresMouseEvents = !shouldReceiveMouse
+        overlayView.updateCursor(atScreenPoint: mouseLocation)
     }
 
     private static func screenRect(for target: ScreenRecordingTarget) -> CGRect {
@@ -670,13 +768,6 @@ private final class ScreenRecordingCountdownController {
 
     private static func isFullscreen(_ target: ScreenRecordingTarget) -> Bool {
         if case .fullscreen = target.kind {
-            return true
-        }
-        return false
-    }
-
-    private static func isRegion(_ target: ScreenRecordingTarget) -> Bool {
-        if case .region = target.kind {
             return true
         }
         return false
@@ -721,6 +812,9 @@ private final class ScreenRecordingActiveOverlayController {
     private var panel: NSPanel?
     private var stopPanel: NSPanel?
     private var timer: Timer?
+    private var markupOverlayController: LiveCaptureMarkupOverlayController?
+    private var markupSessionStartedAt: Date?
+    private var markupLayers: [CaptureMarkupLayer] = []
 
     init(target: ScreenRecordingTarget, startedAt: Date) {
         self.target = target
@@ -777,24 +871,25 @@ private final class ScreenRecordingActiveOverlayController {
         panel = nil
         stopPanel?.orderOut(nil)
         stopPanel = nil
+        markupOverlayController?.dismiss(discardLayers: false)
+        markupOverlayController = nil
     }
 
     private func showStopPanel(near targetRect: CGRect, on screen: NSScreen) {
-        let panelSize = CGSize(width: 132, height: 38)
+        let panelSize = CGSize(width: 220, height: 44)
         let visible = screen.visibleFrame
         let x = min(
-            max(targetRect.midX - panelSize.width / 2, visible.minX + 12),
+            max(visible.midX - panelSize.width / 2, visible.minX + 12),
             visible.maxX - panelSize.width - 12
         )
-        let preferredAboveY = targetRect.maxY + 10
-        let y = preferredAboveY + panelSize.height <= visible.maxY
-            ? preferredAboveY
-            : max(visible.minY + 12, targetRect.minY - panelSize.height - 10)
+        let y = visible.maxY - panelSize.height - 56
 
         let view = ScreenRecordingStopPillView(startedAt: startedAt) {
             Task { @MainActor in
                 await ScreenRecordingController.shared.stopRecording()
             }
+        } onMarkupTool: { [weak self] tool in
+            self?.showMarkupOverlay(tool: tool, targetRect: targetRect, on: screen)
         }
 
         let panel = NSPanel(
@@ -803,7 +898,9 @@ private final class ScreenRecordingActiveOverlayController {
             backing: .buffered,
             defer: false
         )
-        panel.contentView = NSHostingView(rootView: view)
+        let hostingView = NSHostingView(rootView: view.frame(width: panelSize.width, height: panelSize.height))
+        hostingView.frame = NSRect(origin: .zero, size: panelSize)
+        panel.contentView = hostingView
         panel.level = .screenSaver + 2
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isOpaque = false
@@ -816,6 +913,70 @@ private final class ScreenRecordingActiveOverlayController {
         panel.setFrameOrigin(NSPoint(x: x.rounded(), y: y.rounded()))
         panel.orderFrontRegardless()
         stopPanel = panel
+    }
+
+    func captureMarkupEvent(recordingStartTime: Date, durationMs: Int) -> RecordingVisualContextEvent? {
+        let layers = recordingRelativeMarkupLayers(recordingStartTime: recordingStartTime)
+        guard !layers.isEmpty else { return nil }
+
+        let startCandidates = layers.compactMap { $0.startTime }.map { Int(($0 * 1000).rounded()) }
+        let endCandidates = layers.compactMap { ($0.endTime ?? $0.startTime).map { Int(($0 * 1000).rounded()) } }
+        let startMs = max(0, startCandidates.min() ?? 0)
+        let endMs = min(max(0, durationMs), max(startMs, endCandidates.max() ?? durationMs))
+        let targetRect = Self.screenRect(for: target)
+
+        return RecordingVisualContextEvent(
+            startMs: startMs,
+            endMs: endMs,
+            type: .captureMarkup,
+            displayName: target.displayName,
+            captureMode: Self.captureModeString(for: target),
+            bounds: RecordingVisualContextRect(targetRect),
+            assetKind: "capture-markup",
+            width: Int(targetRect.width.rounded()),
+            height: Int(targetRect.height.rounded()),
+            markupLayers: layers
+        )
+    }
+
+    private func showMarkupOverlay(tool: ScreenRecordingMarkupTool, targetRect: CGRect, on screen: NSScreen) {
+        let controller: LiveCaptureMarkupOverlayController
+        if let markupOverlayController {
+            controller = markupOverlayController
+        } else {
+            let created = LiveCaptureMarkupOverlayController()
+            created.onLayersChanged = { [weak self] layers in
+                self?.markupLayers = layers
+            }
+            created.onDone = { [weak self] layers in
+                self?.markupLayers = layers
+            }
+            created.onCancel = { [weak self] in
+                self?.markupLayers.removeAll()
+            }
+            markupOverlayController = created
+            controller = created
+        }
+
+        if !controller.isVisible {
+            markupSessionStartedAt = Date()
+            controller.show(on: screen, targetRect: targetRect)
+        }
+        controller.setTool(tool.rawValue)
+    }
+
+    private func recordingRelativeMarkupLayers(recordingStartTime: Date) -> [CaptureMarkupLayer] {
+        let offsetSeconds = max(0, (markupSessionStartedAt ?? startedAt).timeIntervalSince(recordingStartTime))
+        return markupLayers.map { layer in
+            var converted = layer
+            if let startTime = converted.startTime {
+                converted.startTime = startTime + offsetSeconds
+            }
+            if let endTime = converted.endTime {
+                converted.endTime = endTime + offsetSeconds
+            }
+            return converted
+        }
     }
 
     private static func screenRect(for target: ScreenRecordingTarget) -> CGRect {
@@ -836,6 +997,14 @@ private final class ScreenRecordingActiveOverlayController {
         return false
     }
 
+    private static func captureModeString(for target: ScreenRecordingTarget) -> String {
+        switch target.kind {
+        case .fullscreen: return "fullscreen"
+        case .region: return "region"
+        case .window: return "window"
+        }
+    }
+
     private static func screen(for targetRect: CGRect) -> NSScreen? {
         NSScreen.screens.max { lhs, rhs in
             intersectionArea(lhs.frame, targetRect) < intersectionArea(rhs.frame, targetRect)
@@ -849,9 +1018,38 @@ private final class ScreenRecordingActiveOverlayController {
     }
 }
 
+private enum ScreenRecordingMarkupTool: String, CaseIterable {
+    case select
+    case ink
+    case ellipse
+    case arrow
+    case note
+
+    var systemImage: String {
+        switch self {
+        case .select: return "cursorarrow"
+        case .ink: return "pencil.tip"
+        case .ellipse: return "circle"
+        case .arrow: return "arrow.up.right"
+        case .note: return "text.bubble"
+        }
+    }
+
+    var help: String {
+        switch self {
+        case .select: return "Select and move marks"
+        case .ink: return "Draw with pen"
+        case .ellipse: return "Draw circle"
+        case .arrow: return "Draw arrow"
+        case .note: return "Add note for agent"
+        }
+    }
+}
+
 private struct ScreenRecordingStopPillView: View {
     let startedAt: Date
     let onStop: () -> Void
+    let onMarkupTool: (ScreenRecordingMarkupTool) -> Void
 
     @State private var elapsedSeconds = 0
 
@@ -876,13 +1074,35 @@ private struct ScreenRecordingStopPillView: View {
             .buttonStyle(.plain)
             .help("Stop screen recording")
             .accessibilityLabel("Stop screen recording")
+
+            Divider()
+                .frame(height: 22)
+                .overlay(Color.white.opacity(0.16))
+
+            Button {
+                onMarkupTool(.ink)
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "pencil.and.outline")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("Markup")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .frame(height: 28)
+                .padding(.horizontal, 10)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.white.opacity(0.9))
+            .background(Capsule().fill(Color.white.opacity(0.10)))
+            .help("Open markup tools")
+            .accessibilityLabel("Open markup tools")
         }
         .padding(.leading, 12)
-        .padding(.trailing, 5)
+        .padding(.trailing, 8)
         .padding(.vertical, 5)
         .background(
             Capsule()
-                .fill(Color.black.opacity(0.78))
+                .fill(Color.black.opacity(0.82))
         )
         .overlay(
             Capsule()
@@ -1066,16 +1286,15 @@ private final class ScreenRecordingCountdownView: NSView {
     }
 
     private enum DragOperation {
-        case drawNew
-        case move
         case resizeTopLeft
+        case resizeTopRight
+        case resizeBottomLeft
         case resizeBottomRight
     }
 
     private let screenFrame: CGRect
     private let targetRect: CGRect
     private let isFullscreen: Bool
-    private let isRegion: Bool
     private let captureMode: String
     private let minSelectionSize = CGSize(width: 96, height: 72)
     private let edgeInset: CGFloat
@@ -1101,14 +1320,12 @@ private final class ScreenRecordingCountdownView: NSView {
         screenFrame: CGRect,
         targetRect: CGRect,
         isFullscreen: Bool,
-        isRegion: Bool,
         captureMode: String,
         countdown: Int
     ) {
         self.screenFrame = screenFrame
         self.targetRect = targetRect
         self.isFullscreen = isFullscreen
-        self.isRegion = isRegion
         self.captureMode = captureMode
         self.countdown = countdown
         self.edgeInset = isFullscreen ? 0 : 2
@@ -1158,6 +1375,11 @@ private final class ScreenRecordingCountdownView: NSView {
     func focusSelection() {
         phase = .confirming
         needsDisplay = true
+    }
+
+    func confirmCurrentSelection() {
+        guard phase == .confirming else { return }
+        onConfirm?(screenRect(for: selectionRect), didAdjust)
     }
 
     private static func initialSelectionRect(
@@ -1277,16 +1499,8 @@ private final class ScreenRecordingCountdownView: NSView {
 
     private func drawConfirmation(in target: CGRect) {
         let label = "\(Int(target.width.rounded())) x \(Int(target.height.rounded()))"
-        let badgeSize = CGSize(width: max(104, CGFloat(label.count) * 8 + 44), height: 28)
-        let badgeX = min(
-            max(target.midX - badgeSize.width / 2, bounds.minX + 10),
-            bounds.maxX - badgeSize.width - 10
-        )
-        let preferAboveY = target.maxY + 10
-        let badgeY = preferAboveY + badgeSize.height < bounds.maxY
-            ? preferAboveY
-            : max(bounds.minY + 10, target.minY - badgeSize.height - 10)
-        let badgeRect = CGRect(x: badgeX, y: badgeY, width: badgeSize.width, height: badgeSize.height)
+        let badgeRect = confirmationBadgeRect(for: target, label: label)
+        let startRect = startButtonRect(for: target)
 
         let badge = NSBezierPath(roundedRect: badgeRect, xRadius: 10, yRadius: 10)
         NSColor(white: 0.05, alpha: 0.78).setFill()
@@ -1297,16 +1511,56 @@ private final class ScreenRecordingCountdownView: NSView {
 
         drawCentered(
             label,
-            in: CGRect(x: badgeRect.minX + 10, y: badgeRect.minY + 6, width: badgeRect.width - 34, height: 16),
+            in: CGRect(x: badgeRect.minX + 10, y: badgeRect.minY + 6, width: badgeRect.width - 20, height: 16),
             font: .monospacedDigitSystemFont(ofSize: 11, weight: .semibold),
             color: .white
         )
+
+        let startShadow = NSBezierPath(roundedRect: startRect.offsetBy(dx: 0, dy: -1.5), xRadius: 13, yRadius: 13)
+        NSColor.black.withAlphaComponent(0.34).setFill()
+        startShadow.fill()
+
+        let startPill = NSBezierPath(roundedRect: startRect, xRadius: 13, yRadius: 13)
+        resolvedAccentColor.withAlphaComponent(0.94).setFill()
+        startPill.fill()
+        NSColor.white.withAlphaComponent(0.36).setStroke()
+        startPill.lineWidth = 1
+        startPill.stroke()
+
+        let startLabel = startRect.width > 112 ? "Start Recording" : "Start"
         drawCentered(
-            "↵",
-            in: CGRect(x: badgeRect.maxX - 28, y: badgeRect.minY + 6, width: 18, height: 16),
-            font: .systemFont(ofSize: 12, weight: .semibold),
-            color: resolvedAccentColor.withAlphaComponent(0.92)
+            startLabel,
+            in: CGRect(x: startRect.minX + 12, y: startRect.minY + 10, width: startRect.width - 24, height: 18),
+            font: .systemFont(ofSize: 13, weight: .bold),
+            color: NSColor.black.withAlphaComponent(0.84)
         )
+    }
+
+    private func confirmationBadgeRect(for target: CGRect, label: String) -> CGRect {
+        let labelWidth = CGFloat(label.count) * 8
+        let badgeSize = CGSize(width: max(92, labelWidth + 22), height: 30)
+        let badgeX = min(
+            max(target.midX - badgeSize.width / 2, bounds.minX + 10),
+            bounds.maxX - badgeSize.width - 10
+        )
+        let preferAboveY = target.maxY + 10
+        let badgeY = preferAboveY + badgeSize.height < bounds.maxY
+            ? preferAboveY
+            : max(bounds.minY + 10, target.minY - badgeSize.height - 10)
+        return CGRect(x: badgeX, y: badgeY, width: badgeSize.width, height: badgeSize.height)
+    }
+
+    private func startButtonRect(for target: CGRect) -> CGRect {
+        let width = min(146, max(78, target.width - 24))
+        let height: CGFloat = 38
+        let x = min(
+            max(target.midX - width / 2, bounds.minX + 12),
+            bounds.maxX - width - 12
+        )
+        let preferredY = target.maxY - height - 14
+        let fallbackY = target.midY - height / 2
+        let y = target.height >= height + 28 ? preferredY : fallbackY
+        return CGRect(x: x, y: min(max(y, bounds.minY + 12), bounds.maxY - height - 12), width: width, height: height)
     }
 
     private func drawCountdown(in target: CGRect) {
@@ -1352,16 +1606,18 @@ private final class ScreenRecordingCountdownView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
-        guard phase == .confirming, !isFullscreen else { return }
+        guard phase == .confirming else { return }
         let point = convert(event.locationInWindow, from: nil)
-        let operation = dragOperation(at: point) ?? (isRegion ? .drawNew : nil)
+        if startButtonContains(point) {
+            confirmCurrentSelection()
+            return
+        }
+        guard !isFullscreen else { return }
+        let operation = dragOperation(at: point)
         guard let operation else { return }
         dragOperation = operation
         dragStartPoint = point
         dragStartRect = selectionRect
-        if case .drawNew = operation {
-            setSelection(CGRect(origin: point, size: .zero))
-        }
     }
 
     override func mouseDragged(with event: NSEvent) {
@@ -1376,106 +1632,156 @@ private final class ScreenRecordingCountdownView: NSView {
     }
 
     override func mouseMoved(with event: NSEvent) {
-        guard phase == .confirming, !isFullscreen else {
+        updateCursor(at: convert(event.locationInWindow, from: nil))
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        shouldReceiveMouse(at: point) ? self : nil
+    }
+
+    func shouldReceiveMouse(atScreenPoint point: NSPoint) -> Bool {
+        let local = NSPoint(x: point.x - screenFrame.origin.x, y: point.y - screenFrame.origin.y)
+        return shouldReceiveMouse(at: local)
+    }
+
+    func updateCursor(atScreenPoint point: NSPoint) {
+        let local = NSPoint(x: point.x - screenFrame.origin.x, y: point.y - screenFrame.origin.y)
+        updateCursor(at: local)
+    }
+
+    private func shouldReceiveMouse(at point: NSPoint) -> Bool {
+        guard phase == .confirming else { return false }
+        if startButtonContains(point) { return true }
+        guard !isFullscreen else { return false }
+        return dragOperation(at: point) != nil
+    }
+
+    private func updateCursor(at point: NSPoint) {
+        guard phase == .confirming else {
             NSCursor.arrow.set()
             return
         }
 
-        let point = convert(event.locationInWindow, from: nil)
+        if startButtonContains(point) {
+            NSCursor.pointingHand.set()
+            return
+        }
+
+        guard !isFullscreen else {
+            NSCursor.arrow.set()
+            return
+        }
+
         switch dragOperation(at: point) {
-        case .drawNew:
-            NSCursor.crosshair.set()
-        case .move:
-            NSCursor.openHand.set()
-        case .resizeTopLeft, .resizeBottomRight:
+        case .resizeTopLeft, .resizeTopRight, .resizeBottomLeft, .resizeBottomRight:
             NSCursor.crosshair.set()
         case nil:
-            (isRegion ? NSCursor.crosshair : NSCursor.arrow).set()
+            NSCursor.arrow.set()
         }
     }
 
     override func keyDown(with event: NSEvent) {
+        if handleKeyEvent(ScreenRecordingOverlayKeyEvent(event)) {
+            return
+        }
+        super.keyDown(with: event)
+    }
+
+    func handleKeyEvent(_ event: ScreenRecordingOverlayKeyEvent) -> Bool {
         if event.keyCode == 53 {
             onCancel?()
-            return
+            return true
         }
 
         if event.isCaptureModeSwitchArrow {
             onBarModeSelected?(event.keyCode == 123 ? .screenshot : .video)
-            return
+            return true
         }
 
         if event.keyCode == 36 || event.keyCode == 76 || event.isOpeningCaptureChordKey(initialMode: .video) {
-            guard phase == .confirming else { return }
-            onConfirm?(screenRect(for: selectionRect), didAdjust)
-            return
+            guard phase == .confirming else { return true }
+            confirmCurrentSelection()
+            return true
         }
 
         switch event.charactersIgnoringModifiers?.lowercased() {
         case "a":
             onModeSelected?(.region)
-            return
+            return true
         case "s":
             onModeSelected?(.fullscreen)
-            return
+            return true
         case "d":
             onModeSelected?(.window)
-            return
+            return true
         default:
             break
         }
 
-        guard phase == .confirming, !isFullscreen else { return }
+        guard phase == .confirming, !isFullscreen else { return false }
         let step: CGFloat = event.modifierFlags.contains(.shift) ? 10 : 1
         let resizes = event.modifierFlags.contains(.option)
 
         switch event.keyCode {
         case 123: // left
             resizes ? resizeBy(width: -step, height: 0) : moveBy(dx: -step, dy: 0)
+            return true
         case 124: // right
             resizes ? resizeBy(width: step, height: 0) : moveBy(dx: step, dy: 0)
+            return true
         case 125: // down
             resizes ? resizeBy(width: 0, height: -step) : moveBy(dx: 0, dy: -step)
+            return true
         case 126: // up
             resizes ? resizeBy(width: 0, height: step) : moveBy(dx: 0, dy: step)
+            return true
         default:
-            super.keyDown(with: event)
+            return false
         }
     }
 
     private func dragOperation(at point: NSPoint) -> DragOperation? {
         let rect = selectionRect.standardized
-        guard rect.insetBy(dx: -12, dy: -12).contains(point) else { return nil }
+        guard rect.insetBy(dx: -14, dy: -14).contains(point) else { return nil }
 
-        let topLeftHandle = CGRect(x: rect.minX - 14, y: rect.maxY - 20, width: 28, height: 34)
-        let bottomRightHandle = CGRect(x: rect.maxX - 14, y: rect.minY - 14, width: 28, height: 34)
-        if topLeftHandle.contains(point) { return .resizeTopLeft }
-        if bottomRightHandle.contains(point) { return .resizeBottomRight }
-        if rect.contains(point) { return .move }
+        for handle in resizeHandleRects(for: rect) where handle.rect.contains(point) {
+            return handle.operation
+        }
         return nil
+    }
+
+    private func resizeHandleRects(for rect: CGRect) -> [(operation: DragOperation, rect: CGRect)] {
+        let hitSize: CGFloat = 34
+        let half = hitSize / 2
+        return [
+            (.resizeTopLeft, CGRect(x: rect.minX - half, y: rect.maxY - half, width: hitSize, height: hitSize)),
+            (.resizeTopRight, CGRect(x: rect.maxX - half, y: rect.maxY - half, width: hitSize, height: hitSize)),
+            (.resizeBottomLeft, CGRect(x: rect.minX - half, y: rect.minY - half, width: hitSize, height: hitSize)),
+            (.resizeBottomRight, CGRect(x: rect.maxX - half, y: rect.minY - half, width: hitSize, height: hitSize)),
+        ]
+    }
+
+    private func startButtonContains(_ point: NSPoint) -> Bool {
+        let rect = selectionRect.standardized
+        guard rect.width > 1, rect.height > 1 else { return false }
+        return startButtonRect(for: rect).contains(point)
     }
 
     private func updateSelection(operation: DragOperation, delta: CGSize) {
         var rect = dragStartRect
         switch operation {
-        case .drawNew:
-            let end = NSPoint(
-                x: dragStartPoint.x + delta.width,
-                y: dragStartPoint.y + delta.height
-            )
-            rect = CGRect(
-                x: min(dragStartPoint.x, end.x),
-                y: min(dragStartPoint.y, end.y),
-                width: abs(delta.width),
-                height: abs(delta.height)
-            )
-        case .move:
-            rect.origin.x += delta.width
-            rect.origin.y += delta.height
         case .resizeTopLeft:
             rect.origin.x += delta.width
             rect.size.width -= delta.width
             rect.size.height += delta.height
+        case .resizeTopRight:
+            rect.size.width += delta.width
+            rect.size.height += delta.height
+        case .resizeBottomLeft:
+            rect.origin.x += delta.width
+            rect.origin.y += delta.height
+            rect.size.width -= delta.width
+            rect.size.height -= delta.height
         case .resizeBottomRight:
             rect.origin.y += delta.height
             rect.size.width += delta.width
@@ -1517,7 +1823,22 @@ private final class ScreenRecordingCountdownView: NSView {
     }
 }
 
-private extension NSEvent {
+private struct ScreenRecordingOverlayKeyEvent: Sendable {
+    let keyCode: UInt16
+    let charactersIgnoringModifiers: String?
+
+    private let modifierFlagsRawValue: NSEvent.ModifierFlags.RawValue
+
+    init(_ event: NSEvent) {
+        keyCode = event.keyCode
+        charactersIgnoringModifiers = event.charactersIgnoringModifiers
+        modifierFlagsRawValue = event.modifierFlags.rawValue
+    }
+
+    var modifierFlags: NSEvent.ModifierFlags {
+        NSEvent.ModifierFlags(rawValue: modifierFlagsRawValue)
+    }
+
     var isCaptureModeSwitchArrow: Bool {
         guard keyCode == 123 || keyCode == 124 else { return false }
         let synthesizedArrowFlags: NSEvent.ModifierFlags = [.numericPad, .function]
@@ -1526,6 +1847,18 @@ private extension NSEvent {
             .subtracting(synthesizedArrowFlags)
         let hyperModifiers: NSEvent.ModifierFlags = [.command, .option, .control, .shift]
         return activeModifiers.isEmpty || activeModifiers.isSuperset(of: hyperModifiers)
+    }
+
+    func isOpeningCaptureChordKey(initialMode: CaptureBarMode) -> Bool {
+        let expectedKey = switch initialMode {
+        case .screenshot: "s"
+        case .video: "r"
+        }
+        guard charactersIgnoringModifiers?.lowercased() == expectedKey else { return false }
+
+        let hyperModifiers: NSEvent.ModifierFlags = [.command, .option, .control, .shift]
+        let activeModifiers = modifierFlags.intersection(.deviceIndependentFlagsMask)
+        return activeModifiers.isSuperset(of: hyperModifiers)
     }
 }
 

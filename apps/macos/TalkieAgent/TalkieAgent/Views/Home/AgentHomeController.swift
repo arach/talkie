@@ -51,11 +51,11 @@ final class AgentHomeController: NSObject, ObservableObject, NSWindowDelegate {
                 self?.dismiss()
             }
         )
-        .frame(minWidth: 1_020, minHeight: 640)
+        .frame(minWidth: 680, minHeight: 500)
 
         let hostingView = NSHostingView(rootView: view)
         let homeWindow = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1_180, height: 760),
+            contentRect: NSRect(x: 0, y: 0, width: 760, height: 560),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
@@ -63,12 +63,12 @@ final class AgentHomeController: NSObject, ObservableObject, NSWindowDelegate {
 
         // Native title bar is the only top chrome (no custom OpsShell titlebar).
         homeWindow.title = "Talkie Agent"
-        homeWindow.minSize = NSSize(width: 1_020, height: 640)
+        homeWindow.minSize = NSSize(width: 680, height: 500)
         homeWindow.contentView = hostingView
         homeWindow.isMovableByWindowBackground = false
         homeWindow.isReleasedWhenClosed = false
         homeWindow.delegate = self
-        homeWindow.setFrameAutosaveName("TalkieAgent.AgentHome")
+        homeWindow.setFrameAutosaveName("TalkieAgent.AgentHome.compact")
         homeWindow.center()
         homeWindow.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)

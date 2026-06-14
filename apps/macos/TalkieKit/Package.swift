@@ -11,6 +11,9 @@ let package = Package(
     ],
     products: [
         .library(
+            name: "TalkieCore",
+            targets: ["TalkieCore"]),
+        .library(
             name: "TalkieKit",
             targets: ["TalkieKit"]),
     ],
@@ -19,8 +22,11 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "TalkieCore"),
+        .target(
             name: "TalkieKit",
             dependencies: [
+                "TalkieCore",
                 .product(name: "GRDB", package: "GRDB.swift"),
             ],
             resources: [

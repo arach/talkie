@@ -3,6 +3,11 @@
   "description": "Machine-readable workflow step catalog for Talkie agent authoring.",
   "variables": [
     "{{TRANSCRIPT}}",
+    "{{CLIP_COUNT}}",
+    "{{CLIP_PATH}}",
+    "{{CLIP_PATHS}}",
+    "{{CLIP_CONTEXT}}",
+    "{{VIDEO_PATH}}",
     "{{PREVIOUS_OUTPUT}}",
     "{{OUTPUT}}",
     "{{some_output_key}}"

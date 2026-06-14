@@ -81,6 +81,7 @@ public enum AgentSettingsKey {
 
     // MARK: Screen Recording
     public static let screenRecordingQuality = "screenRecordingQuality"
+    public static let screenRecordingCountdownSeconds = "screenRecordingCountdownSeconds"
     public static let screenRecordingIncludesSystemAudio = "screenRecordingIncludesSystemAudio"
     public static let screenRecordingIncludesMicrophone = "screenRecordingIncludesMicrophone"
     public static let screenRecordingShowsCameraBubble = "screenRecordingShowsCameraBubble"

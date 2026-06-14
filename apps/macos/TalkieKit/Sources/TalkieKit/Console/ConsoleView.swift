@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import TalkieCore
 
 // MARK: - Console View
 

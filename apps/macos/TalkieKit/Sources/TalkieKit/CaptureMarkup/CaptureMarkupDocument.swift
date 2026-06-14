@@ -2,14 +2,14 @@
 //  CaptureMarkupDocument.swift
 //  TalkieKit
 //
-//  Non-destructive screenshot markup sidecar schema.
+//  Non-destructive capture/media markup sidecar schema.
 //
 
 import CoreGraphics
 import Foundation
 
 public struct CaptureMarkupDocument: Codable, Sendable, Equatable {
-    public static let currentVersion = 2
+    public static let currentVersion = 3
 
     public var version: Int
     public var imageWidth: Double
@@ -71,10 +71,12 @@ public struct CaptureMarkupViewport: Codable, Sendable, Equatable {
 
 public enum CaptureMarkupLayerKind: String, Codable, Sendable {
     case rect
+    case ellipse
     case arrow
     case label
     case guide
     case highlight
+    case ink
     /// A cloned region of the source image: pixels copied from `source` and
     /// drawn at `frame`. Non-destructive — no bitmap is stored; the pixels are
     /// recomputed from the original image on every render.
@@ -130,6 +132,9 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
     public var source: CaptureMarkupRect?
     public var from: CaptureMarkupPoint?
     public var to: CaptureMarkupPoint?
+    /// Freehand path points for `.ink` layers, normalized to the same basis as
+    /// `frame`/`from`/`to`.
+    public var points: [CaptureMarkupPoint]?
     public var text: String?
     public var color: String
     /// Relative stroke weight (the web canvas interprets `2` as the historical
@@ -140,6 +145,7 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
     /// Relative label font size, same convention as `strokeWidth`. Only
     /// meaningful for `.label` layers.
     public var fontSize: Double?
+    public var lineHeight: Double?
     /// Label typeface family: "sans" | "serif" | "mono". Optional so older
     /// sidecars (and shape tags) keep the historical mono rendering.
     public var fontFamily: String?
@@ -160,6 +166,21 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
     public var backgroundAlpha: Double?
     public var borderColor: String?
     public var borderAlpha: Double?
+    public var borderWidth: Double?
+    public var cornerRadius: Double?
+    public var paddingX: Double?
+    public var paddingY: Double?
+    /// Optional visual preset/effect hints for live markup. Renderers that do
+    /// not know these fields can ignore them and still draw the base layer.
+    public var intent: String?
+    public var stylePreset: String?
+    public var noteStyle: String?
+    public var lineStyle: String?
+    public var lineDash: [Double]?
+    public var shadow: Bool?
+    public var shadowColor: String?
+    public var shadowBlur: Double?
+    public var shadowOffsetY: Double?
     /// Arrow endpoint styling. Values are "none" | "open" | "filled" | "dot"
     /// | "bar". Optional preserves legacy arrows: end pointer only unless
     /// `label == "line"`.
@@ -169,6 +190,11 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
     public var label: String?
     public var orientation: String?
     public var interval: Double?
+    /// Optional media timing for video or time-based artifacts. Values are
+    /// seconds from the start of the source asset. A nil range means the layer
+    /// applies to the whole still image or the current untimed artifact.
+    public var startTime: Double?
+    public var endTime: Double?
     /// Agent turn provenance for layers produced by capture markup runs.
     /// Optional so older sidecars and hand-drawn layers remain unchanged.
     public var turnPass: Int?
@@ -186,10 +212,12 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         case source
         case from
         case to
+        case points
         case text
         case color
         case strokeWidth
         case fontSize
+        case lineHeight
         case fontFamily
         case bold
         case italic
@@ -200,12 +228,27 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         case backgroundAlpha
         case borderColor
         case borderAlpha
+        case borderWidth
+        case cornerRadius
+        case paddingX
+        case paddingY
+        case intent
+        case stylePreset
+        case noteStyle
+        case lineStyle
+        case lineDash
+        case shadow
+        case shadowColor
+        case shadowBlur
+        case shadowOffsetY
         case pointerStart
         case pointerEnd
         case pointerStyle
         case label
         case orientation
         case interval
+        case startTime
+        case endTime
         case turnPass
         case turnInstruction
         case turnModel
@@ -222,10 +265,12 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         source: CaptureMarkupRect? = nil,
         from: CaptureMarkupPoint? = nil,
         to: CaptureMarkupPoint? = nil,
+        points: [CaptureMarkupPoint]? = nil,
         text: String? = nil,
         color: String = "#4F7DFF",
         strokeWidth: Double? = nil,
         fontSize: Double? = nil,
+        lineHeight: Double? = nil,
         fontFamily: String? = nil,
         bold: Bool? = nil,
         italic: Bool? = nil,
@@ -236,12 +281,27 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         backgroundAlpha: Double? = nil,
         borderColor: String? = nil,
         borderAlpha: Double? = nil,
+        borderWidth: Double? = nil,
+        cornerRadius: Double? = nil,
+        paddingX: Double? = nil,
+        paddingY: Double? = nil,
+        intent: String? = nil,
+        stylePreset: String? = nil,
+        noteStyle: String? = nil,
+        lineStyle: String? = nil,
+        lineDash: [Double]? = nil,
+        shadow: Bool? = nil,
+        shadowColor: String? = nil,
+        shadowBlur: Double? = nil,
+        shadowOffsetY: Double? = nil,
         pointerStart: String? = nil,
         pointerEnd: String? = nil,
         pointerStyle: String? = nil,
         label: String? = nil,
         orientation: String? = nil,
         interval: Double? = nil,
+        startTime: Double? = nil,
+        endTime: Double? = nil,
         turnPass: Int? = nil,
         turnInstruction: String? = nil,
         turnModel: String? = nil,
@@ -256,10 +316,12 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         self.source = source
         self.from = from
         self.to = to
+        self.points = points
         self.text = text
         self.color = color
         self.strokeWidth = strokeWidth
         self.fontSize = fontSize
+        self.lineHeight = lineHeight
         self.fontFamily = fontFamily
         self.bold = bold
         self.italic = italic
@@ -270,12 +332,27 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         self.backgroundAlpha = backgroundAlpha
         self.borderColor = borderColor
         self.borderAlpha = borderAlpha
+        self.borderWidth = borderWidth
+        self.cornerRadius = cornerRadius
+        self.paddingX = paddingX
+        self.paddingY = paddingY
+        self.intent = intent
+        self.stylePreset = stylePreset
+        self.noteStyle = noteStyle
+        self.lineStyle = lineStyle
+        self.lineDash = lineDash
+        self.shadow = shadow
+        self.shadowColor = shadowColor
+        self.shadowBlur = shadowBlur
+        self.shadowOffsetY = shadowOffsetY
         self.pointerStart = pointerStart
         self.pointerEnd = pointerEnd
         self.pointerStyle = pointerStyle
         self.label = label
         self.orientation = orientation
         self.interval = interval
+        self.startTime = startTime
+        self.endTime = endTime
         self.turnPass = turnPass
         self.turnInstruction = turnInstruction
         self.turnModel = turnModel
@@ -293,10 +370,12 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         source = try container.decodeIfPresent(CaptureMarkupRect.self, forKey: .source)
         from = try container.decodeIfPresent(CaptureMarkupPoint.self, forKey: .from)
         to = try container.decodeIfPresent(CaptureMarkupPoint.self, forKey: .to)
+        points = try container.decodeIfPresent([CaptureMarkupPoint].self, forKey: .points)
         text = try container.decodeIfPresent(String.self, forKey: .text)
         color = try container.decodeIfPresent(String.self, forKey: .color) ?? "#4F7DFF"
         strokeWidth = try container.decodeIfPresent(Double.self, forKey: .strokeWidth)
         fontSize = try container.decodeIfPresent(Double.self, forKey: .fontSize)
+        lineHeight = try container.decodeIfPresent(Double.self, forKey: .lineHeight)
         fontFamily = try container.decodeIfPresent(String.self, forKey: .fontFamily)
         bold = try container.decodeIfPresent(Bool.self, forKey: .bold)
         italic = try container.decodeIfPresent(Bool.self, forKey: .italic)
@@ -307,12 +386,27 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         backgroundAlpha = try container.decodeIfPresent(Double.self, forKey: .backgroundAlpha)
         borderColor = try container.decodeIfPresent(String.self, forKey: .borderColor)
         borderAlpha = try container.decodeIfPresent(Double.self, forKey: .borderAlpha)
+        borderWidth = try container.decodeIfPresent(Double.self, forKey: .borderWidth)
+        cornerRadius = try container.decodeIfPresent(Double.self, forKey: .cornerRadius)
+        paddingX = try container.decodeIfPresent(Double.self, forKey: .paddingX)
+        paddingY = try container.decodeIfPresent(Double.self, forKey: .paddingY)
+        intent = try container.decodeIfPresent(String.self, forKey: .intent)
+        stylePreset = try container.decodeIfPresent(String.self, forKey: .stylePreset)
+        noteStyle = try container.decodeIfPresent(String.self, forKey: .noteStyle)
+        lineStyle = try container.decodeIfPresent(String.self, forKey: .lineStyle)
+        lineDash = try container.decodeIfPresent([Double].self, forKey: .lineDash)
+        shadow = try container.decodeIfPresent(Bool.self, forKey: .shadow)
+        shadowColor = try container.decodeIfPresent(String.self, forKey: .shadowColor)
+        shadowBlur = try container.decodeIfPresent(Double.self, forKey: .shadowBlur)
+        shadowOffsetY = try container.decodeIfPresent(Double.self, forKey: .shadowOffsetY)
         pointerStart = try container.decodeIfPresent(String.self, forKey: .pointerStart)
         pointerEnd = try container.decodeIfPresent(String.self, forKey: .pointerEnd)
         pointerStyle = try container.decodeIfPresent(String.self, forKey: .pointerStyle)
         label = try container.decodeIfPresent(String.self, forKey: .label)
         orientation = try container.decodeIfPresent(String.self, forKey: .orientation)
         interval = try container.decodeIfPresent(Double.self, forKey: .interval)
+        startTime = try container.decodeIfPresent(Double.self, forKey: .startTime)
+        endTime = try container.decodeIfPresent(Double.self, forKey: .endTime)
         turnPass = try container.decodeIfPresent(Int.self, forKey: .turnPass)
         turnInstruction = try container.decodeIfPresent(String.self, forKey: .turnInstruction)
         turnModel = try container.decodeIfPresent(String.self, forKey: .turnModel)

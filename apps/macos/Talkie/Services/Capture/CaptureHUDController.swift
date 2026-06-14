@@ -71,6 +71,27 @@ final class CaptureHUDController: CaptureChordController {
                 }
             }
 
+            let commitSelectedMode: () -> Void = { [weak self] in
+                guard let self else { return }
+                timeout.cancel()
+                let selected = self.panel.state.selectedCaptureMode
+                switch self.panel.state.mode {
+                case .screenshot:
+                    if selected == .region, self.armedRegionOverlay != nil {
+                        resetTimeout()
+                    } else {
+                        resume(.screenshot(selected))
+                    }
+                case .video:
+                    resume(.screenRecord(selected))
+                }
+            }
+
+            self.panel.state.onStart = commitSelectedMode
+            self.panel.state.onCancel = {
+                timeout.cancel()
+                resume(nil)
+            }
             self.panel.state.onAction = { result in
                 if let result {
                     timeout.cancel()
@@ -173,17 +194,7 @@ final class CaptureHUDController: CaptureChordController {
                     // Commit the preselected mode. The HUD highlights
                     // REGION by default, so ↵ on first open fires a
                     // region capture without needing the A keystroke.
-                    timeout.cancel()
-                    let selected = self.panel.state.selectedCaptureMode
-                    switch self.panel.state.mode {
-                    case .screenshot:
-                        if selected == .region, self.armedRegionOverlay != nil {
-                            resetTimeout()
-                        } else {
-                            resume(.screenshot(selected))
-                        }
-                    case .video:      resume(.screenRecord(selected))
-                    }
+                    commitSelectedMode()
                 }
 
                 if event.keyCode == 53 {  // Escape
@@ -237,14 +248,7 @@ final class CaptureHUDController: CaptureChordController {
         armedRegionOverlay = overlay
         armedRegionTask = Task { @MainActor [weak self] in
             guard !Task.isCancelled else { return }
-            let rect = await overlay.selectRegion(
-                freezesDesktop: false,
-                onModeSwitch: { [weak self] mode in
-                    guard let self else { return }
-                    self.panel.state.mode = mode
-                    self.syncArmedRegionOverlay(resume: resume)
-                }
-            )
+            let rect = await overlay.selectRegion(freezesDesktop: false)
             guard !Task.isCancelled else { return }
             if self?.armedRegionOverlay === overlay {
                 self?.armedRegionOverlay = nil

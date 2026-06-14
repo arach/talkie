@@ -9,6 +9,7 @@
 
 import Foundation
 import GRDB
+import TalkieCore
 
 // MARK: - TalkieObject Model
 

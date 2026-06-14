@@ -178,6 +178,8 @@ final class CaptureHUDPanel {
 
     func dismiss() {
         state.onAction = nil
+        state.onStart = nil
+        state.onCancel = nil
         state.onModeChanged = nil
 
         guard let p = panel else { return }
@@ -298,7 +300,7 @@ private struct CaptureHUDView: View {
             modeTab(kind: .screenshot)
             modeTab(kind: .video)
 
-            Spacer(minLength: 0)
+            Spacer(minLength: 8)
 
             modeSwitchHint
         }
@@ -442,7 +444,7 @@ private struct CaptureHUDView: View {
         .buttonStyle(.plain)
         .onHover { inside in
             hoveredKey = inside ? key : (hoveredKey == key ? nil : hoveredKey)
-            if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+            inside ? NSCursor.pointingHand.set() : NSCursor.arrow.set()
         }
     }
 
@@ -569,7 +571,7 @@ private struct CaptureHUDView: View {
         .help("\(title) \(enabled ? "on" : "off") for screen recording")
         .onHover { inside in
             hoveredKey = inside ? id : (hoveredKey == id ? nil : hoveredKey)
-            if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+            inside ? NSCursor.pointingHand.set() : NSCursor.arrow.set()
         }
     }
 
@@ -628,13 +630,36 @@ private struct CaptureHUDView: View {
 
     private var keyboardLegend: some View {
         HStack(spacing: 8) {
-            HStack(spacing: 4) {
-                smallKeyCap("↵")
-                Text("Start")
+            Button(action: cancelChord) {
+                HStack(spacing: 4) {
+                    smallKeyCap("Esc")
+                    Text("Cancel")
+                }
+                .contentShape(Rectangle())
             }
-            HStack(spacing: 4) {
-                smallKeyCap("Esc")
-                Text("Cancel")
+            .buttonStyle(.plain)
+            .help("Cancel capture")
+            .accessibilityLabel("Cancel capture")
+            .onHover { inside in
+                hoveredKey = inside ? "legend-cancel" : (hoveredKey == "legend-cancel" ? nil : hoveredKey)
+                inside ? NSCursor.pointingHand.set() : NSCursor.arrow.set()
+            }
+
+            Spacer(minLength: 12)
+
+            Button(action: commitStart) {
+                HStack(spacing: 4) {
+                    smallKeyCap("↵", color: accent)
+                    Text("Start")
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(isVideo ? "Start screen recording" : "Capture selected mode")
+            .accessibilityLabel(isVideo ? "Start screen recording" : "Capture selected mode")
+            .onHover { inside in
+                hoveredKey = inside ? "legend-start" : (hoveredKey == "legend-start" ? nil : hoveredKey)
+                inside ? NSCursor.pointingHand.set() : NSCursor.arrow.set()
             }
         }
         .font(.system(size: 9, weight: .medium))
@@ -698,7 +723,7 @@ private struct CaptureHUDView: View {
         .buttonStyle(.plain)
         .onHover { inside in
             hoveredKey = inside ? id : (hoveredKey == id ? nil : hoveredKey)
-            if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+            inside ? NSCursor.pointingHand.set() : NSCursor.arrow.set()
         }
     }
 
@@ -741,6 +766,14 @@ private struct CaptureHUDView: View {
         } else {
             state.onAction?(.screenshot(mode))
         }
+    }
+
+    private func commitStart() {
+        state.onStart?()
+    }
+
+    private func cancelChord() {
+        state.onCancel?()
     }
 }
 

@@ -1,0 +1,407 @@
+:root {
+  color-scheme: dark;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+
+  --talkie-accent: #DFA13A;
+  --talkie-accent-bright: #F5C96D;
+  --talkie-accent-soft: rgba(223, 161, 58, 0.07);
+  --talkie-accent-line: rgba(223, 161, 58, 0.55);
+  --talkie-ink: #0E0F12;
+
+  /* Flat opaque surfaces: no gradient, no translucency. */
+  --surface: #16181D;
+  --surface-raised: #1B1E24;
+  --surface-inset: #101216;
+
+  /* hairline structure */
+  --hairline: rgba(255, 255, 255, 0.10);
+  --hairline-strong: rgba(255, 255, 255, 0.16);
+
+  /* tight radius scale */
+  --r-panel: 8px;
+  --r-key: 4px;
+  --r-chip: 3px;
+
+  /* one tight lift, not a float */
+  --lift: 0 2px 10px rgba(0, 0, 0, 0.40);
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+body {
+  cursor: crosshair;
+  user-select: none;
+}
+
+body[data-tool="note"] {
+  cursor: text;
+}
+
+body[data-tool="select"] {
+  cursor: default;
+}
+
+body[data-tool="select"].dragging {
+  cursor: grabbing;
+}
+
+#overlay-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: transparent;
+  z-index: 1;
+}
+
+.markup-dock {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  z-index: 2;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 28px);
+}
+
+.toolbar,
+.style-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  box-shadow: var(--lift);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.toolbar {
+  flex-wrap: nowrap;
+  max-width: min(620px, calc(100vw - 28px));
+  gap: 4px;
+}
+
+.style-panel {
+  flex-wrap: wrap;
+  max-width: min(720px, calc(100vw - 28px));
+  padding: 7px 11px;
+  row-gap: 6px;
+  column-gap: 12px;
+  background: var(--surface-raised);
+}
+
+.style-panel[hidden] {
+  display: none;
+}
+
+.style-panel button {
+  height: 24px;
+  padding: 0 7px;
+  border-radius: var(--r-key);
+  background: transparent;
+  box-shadow: none;
+}
+
+.style-panel button:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+button {
+  border: 0;
+  border-radius: var(--r-key);
+  color: rgba(255, 255, 255, 0.78);
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: none;
+  transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+
+button:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+button:focus {
+  outline: none;
+}
+
+button:focus-visible {
+  outline: 1px solid rgba(255, 255, 255, 0.26);
+  outline-offset: 1px;
+}
+
+.tool-segment,
+.mode-switch {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 2px;
+  border-radius: var(--r-key);
+  background: var(--surface-inset);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+
+/* crisp 1px wells between segmented keys */
+.tool-segment > * + *,
+.mode-switch > * + * {
+  box-shadow: inset 1px 0 0 var(--hairline);
+}
+
+.commit-cluster {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tool,
+.mode,
+.note-style,
+.line-style,
+.action,
+.width,
+.style-toggle {
+  height: 28px;
+  padding: 0 9px;
+}
+
+/* unified active state: faint flat fill + crisp amber bottom rule (tool-tab) */
+.tool.active,
+.mode.active,
+.width.active,
+.style-toggle.active,
+.note-style.active,
+.line-style.active {
+  color: var(--talkie-accent-bright);
+  background: var(--talkie-accent-soft);
+  box-shadow: inset 0 -2px 0 var(--talkie-accent);
+}
+
+/* Done is the single saturated element: flat amber fill, no gloss. */
+.action.done {
+  color: var(--talkie-ink);
+  background: var(--talkie-accent);
+  box-shadow: none;
+  font-weight: 700;
+}
+
+.action.done:hover {
+  background: var(--talkie-accent-bright);
+}
+
+.glyph-tool,
+.glyph-action {
+  width: 28px;
+  padding: 0;
+  overflow: hidden;
+  color: transparent;
+}
+
+.glyph-tool.active,
+.glyph-action.active {
+  color: transparent;
+}
+
+/* normalize the text-glyph metrics so the toolset reads as one weight */
+.glyph-tool::before,
+.glyph-action::before {
+  content: attr(data-glyph);
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.tool.active::before {
+  color: var(--talkie-accent-bright);
+}
+
+.glyph-action::before {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.action.cancel {
+  color: rgba(255, 255, 255, 0.5);
+  background: transparent;
+}
+
+.glyph-action.cancel {
+  color: transparent;
+}
+
+.style-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 122px;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.style-chip-swatch {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 2px;
+  background: var(--chip-color, #D03A1C);
+}
+
+.style-chip-label {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.style-group {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.style-group.compact {
+  gap: 6px;
+}
+
+.style-label {
+  padding: 0 5px 0 1px;
+  color: rgba(223, 161, 58, 0.68);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.note-style,
+.line-style {
+  padding: 0 7px;
+}
+
+/* Square sample chips. */
+.swatch {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-chip);
+  background: var(--swatch);
+}
+
+.style-panel .swatch {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  background: var(--swatch);
+}
+
+.swatch[data-color="#D03A1C"] { --swatch: #D03A1C; }
+.swatch[data-color="#4F7DFF"] { --swatch: #4F7DFF; }
+.swatch[data-color="#12A594"] { --swatch: #12A594; }
+.swatch[data-color="#FFFFFF"] { --swatch: #FFFFFF; }
+
+.swatch-light {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.22);
+}
+
+.swatch.active {
+  border-color: var(--talkie-accent);
+  box-shadow: inset 0 0 0 1px var(--talkie-accent);
+}
+
+.divider {
+  display: block;
+  width: 1px;
+  height: 22px;
+  margin: 0;
+  background: var(--hairline-strong);
+}
+
+.style-panel .divider {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .markup-dock {
+    bottom: 18px;
+  }
+
+  .toolbar {
+    gap: 4px;
+    max-width: calc(100vw - 20px);
+    padding: 4px;
+  }
+
+  .tool,
+  .mode,
+  .action,
+  .style-toggle {
+    height: 27px;
+    padding: 0 7px;
+  }
+
+  .glyph-tool,
+  .glyph-action {
+    width: 27px;
+    padding: 0;
+  }
+
+  .style-toggle {
+    min-width: 112px;
+    padding: 0 7px;
+  }
+
+  .style-chip-label {
+    max-width: 88px;
+  }
+}
+
+/* Note content stays warm because it is a user artifact, not chrome. */
+.note-editor {
+  position: fixed;
+  z-index: 3;
+  width: min(300px, calc(100vw - 32px));
+  min-height: 48px;
+  max-height: 160px;
+  resize: none;
+  padding: 11px 14px;
+  border: 1px solid rgba(217, 145, 43, 0.55);
+  border-radius: 13px;
+  color: rgba(23, 25, 31, 0.96);
+  background: rgba(255, 247, 223, 0.97);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.26);
+  outline: none;
+  font: 650 15px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+}
+
+.note-editor[data-mode="demo"] {
+  border-color: rgba(255, 255, 255, 0.22);
+  color: rgba(255, 255, 255, 0.95);
+  background: rgba(19, 22, 30, 0.9);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.34);
+}
+
+.note-editor::placeholder {
+  color: rgba(84, 65, 33, 0.52);
+}
+
+.note-editor[data-mode="demo"]::placeholder {
+  color: rgba(255, 255, 255, 0.46);
+}

@@ -189,6 +189,62 @@ func captureMarkupPatchRoundTrip() throws {
     #expect(decoded.layers[0].source == CaptureMarkupRect(x: 0.1, y: 0.1, width: 0.2, height: 0.2))
 }
 
+@Test("Capture markup ellipse and ink round-trip")
+func captureMarkupEllipseAndInkRoundTrip() throws {
+    let ellipse = CaptureMarkupLayer(
+        kind: .ellipse,
+        frame: CaptureMarkupRect(x: 0.2, y: 0.3, width: 0.4, height: 0.2),
+        color: "#D03A1C",
+        strokeWidth: 3,
+        author: .user
+    )
+    let ink = CaptureMarkupLayer(
+        kind: .ink,
+        points: [
+            CaptureMarkupPoint(x: 0.1, y: 0.1),
+            CaptureMarkupPoint(x: 0.2, y: 0.16),
+            CaptureMarkupPoint(x: 0.34, y: 0.14),
+        ],
+        color: "#12A594",
+        strokeWidth: 5,
+        author: .user
+    )
+    let document = CaptureMarkupDocument(imageWidth: 400, imageHeight: 300, layers: [ellipse, ink])
+    let data = try JSONEncoder().encode(document)
+    let decoded = try JSONDecoder().decode(CaptureMarkupDocument.self, from: data)
+    #expect(decoded == document)
+    #expect(decoded.layers[0].kind == .ellipse)
+    #expect(decoded.layers[1].points?.count == 3)
+}
+
+@Test("Capture markup renders ellipse and ink layers without error")
+func captureMarkupRenderEllipseAndInk() throws {
+    let image = makeSolidImage(width: 200, height: 120)
+    let document = CaptureMarkupDocument(
+        imageWidth: 200,
+        imageHeight: 120,
+        layers: [
+            CaptureMarkupLayer(
+                kind: .ellipse,
+                frame: CaptureMarkupRect(x: 0.15, y: 0.2, width: 0.5, height: 0.35),
+                strokeWidth: 3
+            ),
+            CaptureMarkupLayer(
+                kind: .ink,
+                points: [
+                    CaptureMarkupPoint(x: 0.1, y: 0.8),
+                    CaptureMarkupPoint(x: 0.25, y: 0.7),
+                    CaptureMarkupPoint(x: 0.4, y: 0.76),
+                ],
+                strokeWidth: 4
+            ),
+        ]
+    )
+    let output = CaptureMarkupRenderer.render(image: image, document: document, scale: 1)
+    #expect(output?.width == 200)
+    #expect(output?.height == 120)
+}
+
 @Test("Capture markup renders a patch (clone) layer without error")
 func captureMarkupRenderPatch() throws {
     let image = makeSolidImage(width: 200, height: 120)

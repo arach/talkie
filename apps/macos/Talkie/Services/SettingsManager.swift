@@ -2140,6 +2140,7 @@ final class SettingsManager {
     private let captureHUDPositionKey = "captureHUDPosition"
     private let screenshotCapturePresetKey = "screenshotCapturePreset"
     private let screenRecordingQualityKey = "screenRecordingQuality"
+    private let screenRecordingCountdownSecondsKey = AgentSettingsKey.screenRecordingCountdownSeconds
 
     var captureHUDPosition: CaptureHUDPosition {
         get {
@@ -2188,6 +2189,22 @@ final class SettingsManager {
         set {
             UserDefaults.standard.set(newValue.rawValue, forKey: screenRecordingQualityKey)
             persistDeclarativeSettings { $0.capture.screenRecordingQuality = newValue }
+            captureHUDPositionRevision += 1
+        }
+    }
+
+    var screenRecordingCountdownSeconds: Int {
+        get {
+            _ = settingsConfigurationRevision
+            let sharedValue = TalkieSharedSettings.object(forKey: screenRecordingCountdownSecondsKey) as? Int
+            let localValue = UserDefaults.standard.object(forKey: screenRecordingCountdownSecondsKey) as? Int
+            let value = sharedValue ?? localValue ?? 0
+            return [0, 1, 3, 5].contains(value) ? value : 0
+        }
+        set {
+            let value = [0, 1, 3, 5].contains(newValue) ? newValue : 0
+            TalkieSharedSettings.set(value, forKey: screenRecordingCountdownSecondsKey)
+            UserDefaults.standard.set(value, forKey: screenRecordingCountdownSecondsKey)
             captureHUDPositionRevision += 1
         }
     }

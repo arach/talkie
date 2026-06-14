@@ -2241,13 +2241,10 @@ private struct ScopeWorkflowCenterColumn: View {
     // Turns is conversational — owns its own height. Drag the seam
     // above it to grow / shrink; collapse hides it entirely.
     @State private var turnsCollapsed: Bool = false
-    @State private var turnsHeight: CGFloat = 180
+    @State private var turnsHeight: CGFloat = 220
 
-    // Live turn state. Real agent wiring lands in the next slice —
-    // for now the composer appends a user turn on send, then a
-    // simulated agent turn after a short delay so the flow reads
-    // as connected.
-    @State private var turns: [ScopeTurn] = ScopeSampleTurns.all
+    // Live turn state for the workflow builder conversation.
+    @State private var turns: [ScopeTurn] = []
     @State private var isSending: Bool = false
 
     var body: some View {
@@ -2322,16 +2319,7 @@ private struct ScopeWorkflowCenterColumn: View {
     }
 
     private func resolveBuilderModel() async -> (provider: LLMProvider, modelId: String)? {
-        let registry = LLMProviderRegistry.shared
-
-        if let providerId = registry.selectedProviderId,
-           let modelId = registry.selectedModelId,
-           let provider = registry.providers.first(where: { $0.id == providerId }),
-           await provider.isAvailable {
-            return (provider, modelId)
-        }
-
-        return await registry.firstAvailableProvider()
+        await LLMProviderRegistry.shared.resolveProviderAndModel()
     }
 
     private func streamOrGenerateBuilderReply(
@@ -2685,7 +2673,9 @@ private struct ScopeWorkflowComposer: View {
     let onSend: (String) -> Void
 
     @State private var draft: String = ""
-    @State private var recording: Bool = false
+    @State private var isRecording: Bool = false
+    @State private var isTranscribing: Bool = false
+    @State private var dictationError: String?
     @State private var showingModelMenu: Bool = false
     @FocusState private var draftFocused: Bool
     private var registry: LLMProviderRegistry { LLMProviderRegistry.shared }
@@ -2695,11 +2685,12 @@ private struct ScopeWorkflowComposer: View {
            let model = registry.allModels.first(where: { $0.id == id }) {
             return model
         }
-        return registry.allModels.first
+
+        return defaultModelFromProviderOrder()
     }
 
     private var currentModelLabel: String {
-        currentModel?.displayName ?? currentModel?.name ?? "no model"
+        currentModel?.displayName ?? currentModel?.name ?? "GPT-5.5"
     }
 
     private var trimmedDraft: String {
@@ -2707,7 +2698,13 @@ private struct ScopeWorkflowComposer: View {
     }
 
     private var canSend: Bool {
-        !trimmedDraft.isEmpty && !isSending && !recording
+        !trimmedDraft.isEmpty && !isSending && !isRecording && !isTranscribing
+    }
+
+    private var inputPlaceholder: String {
+        if isRecording { return "Listening... click mic again to stop" }
+        if isTranscribing { return "Transcribing..." }
+        return "Tell the builder what to change..."
     }
 
     private func performSend() {
@@ -2715,6 +2712,24 @@ private struct ScopeWorkflowComposer: View {
         let body = trimmedDraft
         draft = ""
         onSend(body)
+    }
+
+    private func defaultModelFromProviderOrder() -> LLMModel? {
+        var seen = Set<String>()
+        for providerId in LLMConfig.shared.preferredProviderOrder + registry.providers.map(\.id) {
+            guard seen.insert(providerId).inserted else { continue }
+            guard let provider = registry.provider(for: providerId) else { continue }
+
+            let defaultModelId = provider.defaultModelId.isEmpty ? "gpt-5.5" : provider.defaultModelId
+            if let defaultModel = registry.allModels.first(where: { $0.provider == providerId && $0.id == defaultModelId }) {
+                return defaultModel
+            }
+            if let firstProviderModel = registry.allModels.first(where: { $0.provider == providerId }) {
+                return firstProviderModel
+            }
+        }
+
+        return registry.allModels.first
     }
 
     var body: some View {
@@ -2736,10 +2751,19 @@ private struct ScopeWorkflowComposer: View {
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(ScopeInk.subtle)
                 Spacer()
-                if recording {
+                if isRecording {
                     Text("listening")
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundStyle(ScopeBrass.solid)
+                } else if isTranscribing {
+                    Text("transcribing")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(ScopeBrass.solid)
+                } else if let dictationError {
+                    Text(dictationError)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(Color(red: 0.71, green: 0.21, blue: 0.13))
+                        .lineLimit(1)
                 } else if isSending {
                     Text("sending")
                         .font(.system(size: 10, design: .monospaced))
@@ -2747,31 +2771,27 @@ private struct ScopeWorkflowComposer: View {
                 }
             }
 
-            // Input row — mic on the left replaces the old `›` chevron
-            HStack(alignment: .top, spacing: 8) {
-                ScopeMicButton(recording: $recording)
+            HStack(alignment: .bottom, spacing: 8) {
+                TextField(
+                    inputPlaceholder,
+                    text: $draft,
+                    axis: .vertical
+                )
+                .textFieldStyle(.plain)
+                .lineLimit(2...7)
+                .font(.system(size: 13, design: .monospaced))
+                .foregroundStyle(ScopeInk.primary)
+                .focused($draftFocused)
+                .onSubmit { performSend() }
+                .disabled(isSending || isRecording || isTranscribing)
+                .frame(minHeight: 56, alignment: .topLeading)
+                .padding(.top, 3)
 
-                if recording {
-                    Text("(speak — release ⎇ to send, ⌘. to cancel)")
-                        .font(.system(size: 13, design: .monospaced))
-                        .foregroundStyle(ScopeInk.subtle)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 3)
-                } else {
-                    TextField(
-                        "Tell the builder what to change…",
-                        text: $draft,
-                        axis: .vertical
-                    )
-                    .textFieldStyle(.plain)
-                    .lineLimit(1...4)
-                    .font(.system(size: 13, design: .monospaced))
-                    .foregroundStyle(ScopeInk.primary)
-                    .focused($draftFocused)
-                    .onSubmit { performSend() }
-                    .disabled(isSending)
-                    .padding(.top, 3)
-                }
+                ScopeMicButton(
+                    isRecording: isRecording,
+                    isTranscribing: isTranscribing,
+                    action: toggleDictation
+                )
 
                 Button(action: performSend) {
                     Text("send")
@@ -2796,7 +2816,7 @@ private struct ScopeWorkflowComposer: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
-                    .stroke(recording ? ScopeBrass.solid : ScopeEdge.normal, lineWidth: 1)
+                    .stroke(isRecording ? ScopeBrass.solid : ScopeEdge.normal, lineWidth: 1)
             )
 
         }
@@ -2805,6 +2825,51 @@ private struct ScopeWorkflowComposer: View {
         .padding(.bottom, 16)
         .overlay(alignment: .top) {
             ScopeRule(.row)
+        }
+    }
+
+    private func toggleDictation() {
+        if isRecording {
+            Task { await stopDictation() }
+        } else if !isTranscribing {
+            startDictation()
+        }
+    }
+
+    private func startDictation() {
+        isRecording = true
+        dictationError = nil
+        do {
+            try EphemeralTranscriber.shared.startCapture(purpose: .skillsChatDictation)
+        } catch {
+            isRecording = false
+            dictationError = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func stopDictation() async {
+        guard isRecording else { return }
+        isRecording = false
+        isTranscribing = true
+        do {
+            let text = try await EphemeralTranscriber.shared.stopAndTranscribe()
+            isTranscribing = false
+            let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !cleaned.isEmpty else {
+                dictationError = "No speech captured."
+                return
+            }
+            dictationError = nil
+            if draft.isEmpty {
+                draft = cleaned
+            } else {
+                draft = draft.trimmingCharacters(in: .whitespacesAndNewlines) + " " + cleaned
+            }
+            draftFocused = true
+        } catch {
+            isTranscribing = false
+            dictationError = error.localizedDescription
         }
     }
 }
@@ -3950,19 +4015,6 @@ private struct ScopeTurn: Identifiable, Hashable {
     }
 }
 
-private enum ScopeSampleTurns {
-    static let all: [ScopeTurn] = [
-        .init(id: "t1", role: .user,  time: "10:34",
-              body: "Add a fallback step that calls Claude if Whisper confidence is below 0.6."),
-        .init(id: "t2", role: .agent, time: "10:34",
-              body: "Added a conditional step between 02 and 03."),
-        .init(id: "t3", role: .user,  time: "10:36",
-              body: "Bump the LLM temperature on step 05 to 0.8."),
-        .init(id: "t4", role: .agent, time: "10:36",
-              body: "Step 05 temperature → 0.8."),
-    ]
-}
-
 // Provider id → display name. Falls back to the id if the registry
 // doesn't know about that provider.
 @MainActor
@@ -4153,31 +4205,37 @@ private struct ScopeTurnsResizeHandle: View {
 }
 
 private struct ScopeMicButton: View {
-    @Binding var recording: Bool
+    let isRecording: Bool
+    let isTranscribing: Bool
+    let action: () -> Void
+
+    private var iconName: String {
+        if isTranscribing { return "waveform" }
+        return isRecording ? "stop.fill" : "mic"
+    }
 
     var body: some View {
-        Button {
-            recording.toggle()
-        } label: {
-            Image(systemName: recording ? "mic.fill" : "mic")
+        Button(action: action) {
+            Image(systemName: iconName)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(recording ? ScopeCanvas.canvas : ScopeBrass.solid)
-                .frame(width: 26, height: 24)
+                .foregroundStyle(isRecording ? ScopeCanvas.canvas : ScopeBrass.solid)
+                .frame(width: 30, height: 28)
                 .background(
                     RoundedRectangle(cornerRadius: 5)
-                        .fill(recording ? ScopeBrass.solid : Color.clear)
+                        .fill(isRecording ? ScopeBrass.solid : Color.clear)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 5)
-                        .stroke(recording ? ScopeBrass.solid : ScopeEdge.normal, lineWidth: 1)
+                        .stroke(isRecording ? ScopeBrass.solid : ScopeEdge.normal, lineWidth: 1)
                 )
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(isTranscribing)
         .onHover { hovering in
             if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
         }
-        .help(recording ? "Stop dictation" : "Start dictation")
+        .help(isRecording ? "Stop dictation" : isTranscribing ? "Transcribing..." : "Start dictation")
     }
 }
 

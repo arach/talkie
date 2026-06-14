@@ -24,6 +24,7 @@ struct WorkflowContext {
     var title: String
     var date: Date
     var outputs: [String: String] = [:]
+    var assets: TalkieObjectAssets? = nil
 
     /// Tracks output keys in insertion order (Dictionary doesn't guarantee order)
     var outputOrder: [String] = []
@@ -53,6 +54,7 @@ struct WorkflowContext {
         result = result.replacingOccurrences(of: "{{TITLE}}", with: sanitizeForFilename(title))
         result = result.replacingOccurrences(of: "{{DATE}}", with: Self.dateFormatter.string(from: date))
         result = result.replacingOccurrences(of: "{{DATETIME}}", with: Self.datetimeFormatter.string(from: date))
+        result = resolveClipVariables(in: result)
 
         // Replace output keys
         for (key, value) in outputs {
@@ -73,6 +75,139 @@ struct WorkflowContext {
         }
 
         return result
+    }
+
+    private func resolveClipVariables(in template: String) -> String {
+        let items = workflowClipContextItems()
+        let paths = items.map(\.url.path)
+        let firstPath = paths.first ?? ""
+        let pathList = paths.joined(separator: "\n")
+        let context = clipContext(from: items)
+
+        var result = template
+        result = result.replacingOccurrences(of: "{{CLIP_COUNT}}", with: "\(paths.count)")
+        result = result.replacingOccurrences(of: "{{CLIP_PATH_JSON}}", with: jsonStringLiteral(firstPath))
+        result = result.replacingOccurrences(of: "{{CLIP_PATH}}", with: firstPath)
+        result = result.replacingOccurrences(of: "{{VIDEO_PATH_JSON}}", with: jsonStringLiteral(firstPath))
+        result = result.replacingOccurrences(of: "{{VIDEO_PATH}}", with: firstPath)
+        result = result.replacingOccurrences(of: "{{CLIP_PATHS_JSON}}", with: jsonStringLiteral(pathList))
+        result = result.replacingOccurrences(of: "{{CLIP_PATHS}}", with: pathList)
+        result = result.replacingOccurrences(of: "{{VIDEO_PATHS_JSON}}", with: jsonStringLiteral(pathList))
+        result = result.replacingOccurrences(of: "{{VIDEO_PATHS}}", with: pathList)
+        result = result.replacingOccurrences(of: "{{CLIP_CONTEXT_JSON}}", with: jsonStringLiteral(context))
+        result = result.replacingOccurrences(of: "{{CLIP_CONTEXT}}", with: context)
+        return result
+    }
+
+    private func workflowClipContextItems() -> [WorkflowClipContextItem] {
+        var items: [WorkflowClipContextItem] = []
+
+        for clip in assets?.clips ?? [] {
+            guard let url = CaptureMediaFileResolver.clipURL(filename: clip.filename) else { continue }
+            items.append(.init(
+                url: url,
+                timestampMs: clip.timestampMs,
+                durationMs: clip.durationMs,
+                width: clip.width,
+                height: clip.height,
+                captureMode: clip.captureMode,
+                appName: clip.appName,
+                windowTitle: clip.windowTitle,
+                displayName: clip.displayName,
+                source: "clip"
+            ))
+        }
+
+        for context in assets?.visualContexts ?? [] {
+            guard let url = CaptureMediaFileResolver.visualContextSourceURL(for: context) else { continue }
+            items.append(.init(
+                url: url,
+                timestampMs: context.timestampMs,
+                durationMs: context.durationMs ?? 0,
+                width: context.width,
+                height: context.height,
+                captureMode: context.captureMode,
+                appName: context.appName,
+                windowTitle: context.windowTitle,
+                displayName: context.displayName,
+                source: "visualContext"
+            ))
+        }
+
+        for attachment in assets?.attachments ?? [] {
+            guard let media = CaptureMediaFileResolver.mediaAsset(for: attachment),
+                  media.isVideo else { continue }
+            items.append(.init(
+                url: media.url,
+                timestampMs: 0,
+                durationMs: 0,
+                width: nil,
+                height: nil,
+                captureMode: "attachment",
+                appName: nil,
+                windowTitle: nil,
+                displayName: attachment.originalName,
+                source: "attachment"
+            ))
+        }
+
+        for storedClip in VideoClipStorage.clips(for: memo.id) {
+            items.append(.init(
+                url: storedClip.url,
+                timestampMs: storedClip.timestampMs,
+                durationMs: 0,
+                width: nil,
+                height: nil,
+                captureMode: nil,
+                appName: nil,
+                windowTitle: nil,
+                displayName: storedClip.url.lastPathComponent,
+                source: "storage"
+            ))
+        }
+
+        var seen = Set<String>()
+        return items
+            .sorted { lhs, rhs in
+                if lhs.timestampMs != rhs.timestampMs { return lhs.timestampMs < rhs.timestampMs }
+                return lhs.url.path.localizedStandardCompare(rhs.url.path) == .orderedAscending
+            }
+            .filter { seen.insert($0.url.standardizedFileURL.path).inserted }
+    }
+
+    private func clipContext(from items: [WorkflowClipContextItem]) -> String {
+        guard !items.isEmpty else {
+            return "No video clips are attached to this memo or capture."
+        }
+
+        return items.enumerated().map { index, item in
+            var lines = [
+                "Clip \(index + 1)",
+                "File: \(item.url.path)",
+                "Source: \(item.source)",
+                "Timestamp: \(item.timestampMs)ms",
+            ]
+            if item.durationMs > 0 {
+                lines.append("Duration: \(item.durationMs)ms")
+            }
+            if let captureMode = item.captureMode, !captureMode.isEmpty {
+                lines.append("Capture mode: \(captureMode)")
+            }
+            if let width = item.width, let height = item.height {
+                lines.append("Video size: \(width)x\(height)")
+            }
+            if let appName = item.appName, !appName.isEmpty {
+                lines.append("App: \(appName)")
+            }
+            if let windowTitle = item.windowTitle, !windowTitle.isEmpty {
+                lines.append("Window: \(windowTitle)")
+            }
+            if let displayName = item.displayName, !displayName.isEmpty {
+                lines.append("Display: \(displayName)")
+            }
+            return lines.joined(separator: "\n")
+        }
+        .joined(separator: "\n\n")
     }
 
     /// Encode a string as a JSON string literal for webhook body templates.
@@ -105,6 +240,19 @@ struct WorkflowContext {
         }
         return result
     }
+}
+
+private struct WorkflowClipContextItem {
+    let url: URL
+    let timestampMs: Int
+    let durationMs: Int
+    let width: Int?
+    let height: Int?
+    let captureMode: String?
+    let appName: String?
+    let windowTitle: String?
+    let displayName: String?
+    let source: String
 }
 
 // MARK: - Workflow Executor
@@ -569,7 +717,8 @@ class WorkflowExecutor {
         return try await executeWorkflow(
             workflow,
             for: memo,
-            initialOutputs: initialOutputs
+            initialOutputs: initialOutputs,
+            assets: recording.assets
         )
     }
 
@@ -616,14 +765,16 @@ class WorkflowExecutor {
         return try await executeWorkflow(
             workflow,
             for: memo,
-            initialOutputs: initialOutputs
+            initialOutputs: initialOutputs,
+            assets: nil
         )
     }
 
     private func executeWorkflow(
         _ workflow: WorkflowDefinition,
         for memo: MemoModel,
-        initialOutputs: [String: String]
+        initialOutputs: [String: String],
+        assets: TalkieObjectAssets?
     ) async throws -> [String: String] {
         let startsWithTranscribe = workflow.steps.first?.type == .transcribe
 
@@ -647,6 +798,7 @@ class WorkflowExecutor {
             transcript: transcript,
             title: memo.title ?? "Untitled",
             date: memo.createdAt,
+            assets: assets,
             memo: memo
         )
 
