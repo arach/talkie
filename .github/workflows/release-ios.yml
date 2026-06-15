@@ -11,6 +11,11 @@ on:
         description: 'Build number, defaults to BUILD_NUMBER from the repo'
         required: false
         type: string
+      upload_binary:
+        description: 'Build and upload the IPA; disable to only prepare App Store Connect metadata'
+        required: false
+        default: true
+        type: boolean
       wait_for_processing:
         description: 'Wait for App Store Connect processing to complete'
         required: false
@@ -117,11 +122,25 @@ jobs:
           echo "APP_STORE_CONNECT_KEY_ID=$APP_STORE_CONNECT_KEY_ID" >> "$GITHUB_ENV"
           echo "APP_STORE_CONNECT_ISSUER_ID=$APP_STORE_CONNECT_ISSUER_ID" >> "$GITHUB_ENV"
 
+      - name: Prepare App Store version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ruby scripts/asc-prepare-ios-version.rb \
+            --bundle-id "$TALKIE_APP_IDENTIFIER" \
+            --version "$VERSION" \
+            --key-id "$APP_STORE_CONNECT_KEY_ID" \
+            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+            --private-key-path "$APP_STORE_CONNECT_API_KEY_PATH"
+
       - name: Sync version metadata
+        if: ${{ inputs.upload_binary }}
         shell: bash
         run: ./scripts/sync-version.sh "$VERSION" --build "$BUILD_NUMBER"
 
       - name: Archive iOS app
+        if: ${{ inputs.upload_binary }}
         shell: bash
         run: |
           set -euo pipefail
@@ -153,6 +172,7 @@ jobs:
           echo "TALKIE_IOS_ARCHIVE_PATH=$archive_path" >> "$GITHUB_ENV"
 
       - name: Export App Store IPA
+        if: ${{ inputs.upload_binary }}
         shell: bash
         run: |
           set -euo pipefail
@@ -204,6 +224,7 @@ jobs:
           echo "TALKIE_IOS_IPA_PATH=$ipa_path" >> "$GITHUB_ENV"
 
       - name: Upload to App Store Connect
+        if: ${{ inputs.upload_binary }}
         shell: bash
         run: |
           set -euo pipefail
@@ -222,7 +243,24 @@ jobs:
 
           xcrun altool "${upload_args[@]}"
 
+      - name: Attach build to App Store version
+        if: ${{ !inputs.upload_binary || inputs.wait_for_processing }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ruby scripts/asc-prepare-ios-version.rb \
+            --bundle-id "$TALKIE_APP_IDENTIFIER" \
+            --version "$VERSION" \
+            --build "$BUILD_NUMBER" \
+            --attach-build \
+            --build-timeout 1800 \
+            --key-id "$APP_STORE_CONNECT_KEY_ID" \
+            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+            --private-key-path "$APP_STORE_CONNECT_API_KEY_PATH"
+
       - name: Upload IPA artifact
+        if: ${{ inputs.upload_binary }}
         uses: actions/upload-artifact@v7.0.1
         with:
           name: Talkie-iOS-${{ steps.version.outputs.version }}-${{ steps.version.outputs.build_number }}-ipa
