@@ -687,6 +687,105 @@ final class ScreenshotCaptureService {
     }
 }
 
+// MARK: - macOS Screenshot Folder Lookup
+
+/// Lightweight finder for screenshots captured by macOS Screenshot.app /
+/// keyboard shortcuts. This does not watch the folder; it performs a shallow
+/// metadata scan only when the user asks to annotate the latest system grab.
+struct SystemScreenshotCandidate: Identifiable, Equatable {
+    let id: URL
+    let url: URL
+    let capturedAt: Date
+    let sourceDirectory: URL
+}
+
+enum SystemScreenshotLocator {
+    static var configuredDirectory: URL {
+        let defaults = UserDefaults(suiteName: "com.apple.screencapture")
+        let rawLocation = defaults?.string(forKey: "location")?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let rawLocation, !rawLocation.isEmpty else {
+            return FileManager.default.homeDirectoryForCurrentUser
+                .appending(path: "Desktop", directoryHint: .isDirectory)
+        }
+
+        return URL(
+            fileURLWithPath: (rawLocation as NSString).expandingTildeInPath,
+            isDirectory: true
+        ).standardizedFileURL
+    }
+
+    static func latestScreenshot() -> SystemScreenshotCandidate? {
+        recentScreenshots(limit: 1).first
+    }
+
+    static func recentScreenshots(limit: Int = 12) -> [SystemScreenshotCandidate] {
+        let directory = configuredDirectory
+        let keys: Set<URLResourceKey> = [
+            .isDirectoryKey,
+            .creationDateKey,
+            .contentModificationDateKey
+        ]
+
+        guard let urls = try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: Array(keys),
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else {
+            return []
+        }
+
+        return urls.compactMap { url -> SystemScreenshotCandidate? in
+            guard isSupportedScreenshotImage(url),
+                  isLikelySystemScreenshotName(url.deletingPathExtension().lastPathComponent),
+                  let values = try? url.resourceValues(forKeys: keys),
+                  values.isDirectory != true else {
+                return nil
+            }
+
+            let capturedAt = values.creationDate
+                ?? values.contentModificationDate
+                ?? .distantPast
+
+            return SystemScreenshotCandidate(
+                id: url,
+                url: url,
+                capturedAt: capturedAt,
+                sourceDirectory: directory
+            )
+        }
+        .sorted { $0.capturedAt > $1.capturedAt }
+        .prefix(max(limit, 0))
+        .map { $0 }
+    }
+
+    private static func isSupportedScreenshotImage(_ url: URL) -> Bool {
+        switch url.pathExtension.lowercased() {
+        case "png", "jpg", "jpeg", "heic", "tif", "tiff", "gif", "bmp":
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func isLikelySystemScreenshotName(_ stem: String) -> Bool {
+        let configuredName = UserDefaults(suiteName: "com.apple.screencapture")?
+            .string(forKey: "name")?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let prefixes = [configuredName, "Screenshot", "Screen Shot"]
+            .compactMap { value -> String? in
+                guard let value, !value.isEmpty else { return nil }
+                return value
+            }
+
+        return prefixes.contains { prefix in
+            stem.range(of: prefix, options: [.anchored, .caseInsensitive]) != nil
+        }
+    }
+}
+
 @MainActor
 final class CapturePerformanceMonitor {
     static let shared = CapturePerformanceMonitor()

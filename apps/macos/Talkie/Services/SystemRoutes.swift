@@ -8,6 +8,7 @@
 
 import Foundation
 import AppKit
+import TalkieKit
 
 @MainActor
 final class SystemRoutes: RouteGroup {
@@ -259,6 +260,22 @@ final class SystemRoutes: RouteGroup {
         },
 
         Route(
+            path: "capture/markup/latest-system-screenshot",
+            description: "Open capture markup for the latest macOS system screenshot",
+            isInternal: false
+        ) { _, _ in
+            Self.openLatestSystemScreenshotForMarkup()
+        },
+
+        Route(
+            path: "capture/markup/latest",
+            description: "Open capture markup for the latest macOS system screenshot",
+            isInternal: false
+        ) { _, _ in
+            Self.openLatestSystemScreenshotForMarkup()
+        },
+
+        Route(
             path: "models",
             description: "Navigate to models view",
             isInternal: false
@@ -421,6 +438,18 @@ final class SystemRoutes: RouteGroup {
 
         return routes
     }()
+
+    private static func openLatestSystemScreenshotForMarkup() {
+        guard let latest = SystemScreenshotLocator.latestScreenshot() else {
+            let directory = SystemScreenshotLocator.configuredDirectory.path
+            Log(.system).info("No macOS screenshot found in \(directory)")
+            ToastService.shared.showError("No macOS screenshot found in \(directory)")
+            return
+        }
+
+        Log(.system).info("Open latest macOS screenshot: \(latest.url.path)")
+        CaptureMarkupCoordinator.shared.openSessionIfNeeded(imageURL: latest.url)
+    }
 }
 
 // MARK: - Notification Names

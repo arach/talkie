@@ -98,30 +98,44 @@ struct SettingsView: View {
         HStack(spacing: 0) {
             // MARK: - Sidebar
             VStack(spacing: 0) {
-                // Settings Header — back affordance (in-shell) + eyebrow
-                HStack(spacing: 8) {
-                    if onClose != nil {
-                        Button(action: close) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(OpsInk.muted)
-                                .frame(width: 18, height: 18)
+                // Settings header — "Titled": back chip + display title + rule.
+                // (Replaces the old tiny "‹ SETTINGS" eyebrow.)
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 10) {
+                        if onClose != nil {
+                            Button(action: close) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(OpsInk.muted)
+                                    .frame(width: 22, height: 22)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                            .fill(OpsInk.bg)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                                    .stroke(OpsHairline.subtle, lineWidth: 0.5)
+                                            )
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .help("Back to Agent Home")
                         }
-                        .buttonStyle(.plain)
-                        .help("Back to Agent Home")
+
+                        Text("Settings")
+                            .font(OpsType.ui(OpsSize.xl, weight: .semibold))
+                            .foregroundStyle(OpsInk.ink)
+
+                        Spacer(minLength: 0)
                     }
+                    .padding(.horizontal, 14)
+                    .padding(.top, 18)
+                    .padding(.bottom, 12)
 
-                    Text("SETTINGS")
-                        .font(OpsType.mono(OpsSize.xxs, weight: .bold))
-                        .tracking(1.5)
-                        .foregroundStyle(OpsTint.amber.color)
-
-                    Spacer(minLength: 0)
+                    OpsDivider(color: OpsHairline.subtle)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 8)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 14)
-                .padding(.top, 20)
-                .padding(.bottom, 12)
 
                 // Menu Sections
                 ScrollView(.vertical, showsIndicators: false) {

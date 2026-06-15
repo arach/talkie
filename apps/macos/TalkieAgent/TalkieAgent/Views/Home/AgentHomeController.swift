@@ -9,6 +9,18 @@ import TalkieKit
 
 private let agentHomeControllerLog = Log(.ui)
 
+/// Deep-link targets that external entry points (the status-bar menu, XPC)
+/// can navigate Agent Home into. `AgentHomeShellView` maps these onto its
+/// private section enum — keeping the section model file-local while still
+/// allowing "open the Logs tab" from outside the shell.
+enum AgentHomeRoute: String, Sendable {
+    case home
+    case history
+    case conversations
+    case permissions
+    case logs
+}
+
 @MainActor
 final class AgentHomeController: NSObject, ObservableObject, NSWindowDelegate {
     static let shared = AgentHomeController()
@@ -17,6 +29,10 @@ final class AgentHomeController: NSObject, ObservableObject, NSWindowDelegate {
     private var window: NSWindow?
 
     @Published var isShowingSettings = false
+
+    /// Set by `show(section:)`; the shell observes this, applies it to its
+    /// selection, then clears it back to nil.
+    @Published var pendingSection: AgentHomeRoute?
 
     var isVisible: Bool {
         window?.isVisible == true
@@ -30,6 +46,13 @@ final class AgentHomeController: NSObject, ObservableObject, NSWindowDelegate {
 
     func showSettings() {
         show(openingSettings: true)
+    }
+
+    /// Open Agent Home and deep-link to a specific primary tab (e.g. the
+    /// status-bar menu's "Permissions" / "Logs" entries).
+    func show(section: AgentHomeRoute) {
+        pendingSection = section
+        show(openingSettings: false)
     }
 
     private func show(openingSettings: Bool) {
@@ -68,7 +91,10 @@ final class AgentHomeController: NSObject, ObservableObject, NSWindowDelegate {
         homeWindow.isMovableByWindowBackground = false
         homeWindow.isReleasedWhenClosed = false
         homeWindow.delegate = self
-        homeWindow.setFrameAutosaveName("TalkieAgent.AgentHome.compact")
+        // Versioned autosave key: the previous key restored a stale, undersized
+        // frame (smaller than minSize), which clipped the settings layout. Bumping
+        // the key discards old saved frames so the window opens at its real default.
+        homeWindow.setFrameAutosaveName("TalkieAgent.AgentHome.compact.v2")
         homeWindow.center()
         homeWindow.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)

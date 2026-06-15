@@ -880,7 +880,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 Task { @MainActor in
                     guard let self else { return }
                     self.dismissAgentMenuPopover()
-                    self.openLogsDirectory()
+                    AgentHomeController.shared.show(section: .logs)
                 }
             },
             openPermissions: { [weak self] in
@@ -2974,47 +2974,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     @objc private func showPermissions() {
-        // If window already exists and is visible, just switch to permissions tab
-        if let window = settingsWindow, window.isVisible {
-            let contentView = QuickSettingsView(initialTab: .permissions)
-                .frame(minWidth: 650, minHeight: 550)
-            window.contentView = NSHostingView(rootView: contentView)
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
-
-        // Close old window if it exists but isn't visible
-        settingsWindow?.close()
-        settingsWindow = nil
-
-        // Create settings window with permissions tab selected
-        let contentView = QuickSettingsView(initialTab: .permissions)
-            .frame(minWidth: 650, minHeight: 550)
-
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 720, height: 600),
-            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
-            backing: .buffered,
-            defer: false
-        )
-        window.titlebarAppearsTransparent = true
-        window.titleVisibility = .visible
-        window.title = "Settings"
-        window.contentView = NSHostingView(rootView: contentView)
-        window.center()
-        window.isMovableByWindowBackground = false
-        window.isReleasedWhenClosed = false
-        window.delegate = self
-
-        // Store in settings window (consolidate into one window)
-        settingsWindow = window
-
-        AgentAppPresentationController.shared.retainRegularPresentation(for: "settings")
-
-        // Show window
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        // Deep-link into Agent Home's Permissions tab (the new app surface)
+        // instead of spawning the legacy standalone QuickSettings window.
+        AgentHomeController.shared.show(section: .permissions)
     }
 
     // MARK: - NSWindowDelegate

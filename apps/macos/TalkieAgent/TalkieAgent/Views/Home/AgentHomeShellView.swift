@@ -22,7 +22,8 @@ struct AgentHomeShellView: View {
     @ObservedObject private var homeController = AgentHomeController.shared
     @ObservedObject private var settings = LiveSettings.shared
 
-    @State private var selectedSection: AgentHomeShellSection = .overview
+    @State private var selectedSection: AgentHomeShellSection = .home
+    @State private var overflowMenu = AgentRailOverflowMenu()
     @AppStorage("talkie.agentHome.sidebar.compact") private var railCompact = true
     @AppStorage("talkie.agentHome.sidebar.labelWidth") private var navigationSidebarLabelWidth = 120.0
     @AppStorage("talkie.agentHome.inspector.collapsed") private var inspectorCollapsed = true
@@ -83,6 +84,10 @@ struct AgentHomeShellView: View {
             store.startRefreshing()
             libraryStore.start()
             permissionManager.refreshAll()
+            applyPendingRoute()
+        }
+        .onChange(of: homeController.pendingSection) { _, _ in
+            applyPendingRoute()
         }
         .onDisappear {
             store.stopRefreshing()
@@ -106,10 +111,15 @@ struct AgentHomeShellView: View {
             selection: Binding<AgentHomeShellSection?>(
                 get: { selectedSection },
                 set: { next in
-                    if let next {
-                        selectedSection = next
-                        closeSettings()   // primary nav stays live; selecting it exits settings
+                    guard let next else { return }
+                    if next == .more {
+                        // The "…" overflow doesn't navigate — it pops a native
+                        // flyout of the demoted (stop-gap) sections.
+                        presentOverflowMenu()
+                        return
                     }
+                    selectedSection = next
+                    closeSettings()   // primary nav stays live; selecting it exits settings
                 }
             ),
             entries: AgentHomeShellSection.sidebarEntries,
@@ -190,10 +200,41 @@ struct AgentHomeShellView: View {
         inspectorCollapsed = true
     }
 
+    /// Honor a deep-link requested by an external entry point (status-bar
+    /// menu, XPC) — navigate to the routed tab, then clear the request.
+    private func applyPendingRoute() {
+        guard let route = homeController.pendingSection else { return }
+        selectedSection = route.shellSection
+        closeSettings()
+        homeController.pendingSection = nil
+    }
+
+    /// Pop the "…" overflow flyout listing the demoted, soon-to-retire
+    /// sections. Selecting one navigates to it (and exits settings).
+    private func presentOverflowMenu() {
+        overflowMenu.present(
+            items: AgentHomeShellSection.overflowSections.map { section in
+                AgentRailOverflowMenu.Item(title: section.title, systemImage: section.icon) {
+                    selectedSection = section
+                    closeSettings()
+                }
+            }
+        )
+    }
+
     @ViewBuilder
     private var runtimeContent: some View {
         switch selectedSection {
-        case .overview:
+        case .conversations:
+            // The conversation surface stands on its own — no top status strip.
+            AgentHomeView(
+                onDismiss: onDismiss,
+                onOpenSettings: openSettings
+            )
+        case .more:
+            // Sentinel — never selected (the overflow pops a menu instead).
+            Color.clear
+        case .home:
             AgentHomeOverviewPage(
                 store: store,
                 settings: settings,
@@ -252,12 +293,7 @@ struct AgentHomeShellView: View {
                 onOpenSettings: openSettings
             )
         case .logs:
-            AgentHomeLogsPage(
-                store: store,
-                serverStatus: serverStatus,
-                lastOperationalRefresh: lastOperationalRefresh,
-                onOpenSettings: openSettings
-            )
+            AgentHomeLogsConsolePage()
         case .assistant:
             AgentHomeAssistantPage(
                 onDismiss: onDismiss,
@@ -405,27 +441,34 @@ struct AgentHomeShellView: View {
 // MARK: - Navigation
 
 private enum AgentHomeShellSection: String, CaseIterable, Hashable {
-    case overview
-    case library
+    // Primary rail
+    case home          // dashboard: status + recent history + quick actions
+    case library       // presented as "History"
+    case conversations
+    case permissions
+    case logs
+    // Overflow trigger — pops the "…" flyout; never renders a page.
+    case more
+    // Demoted / stop-gap sections (reachable only through the overflow).
     case capture
     case tray
     case dictation
     case overlays
     case server
-    case permissions
-    case logs
     case assistant
 
     var title: String {
         switch self {
-        case .overview: return "Overview"
-        case .library: return "Library"
+        case .home: return "Home"
+        case .library: return "History"
+        case .conversations: return "Conversations"
+        case .permissions: return "Permissions"
+        case .more: return "More"
         case .capture: return "Capture"
         case .tray: return "Tray"
         case .dictation: return "Dictation"
         case .overlays: return "Overlays"
         case .server: return "Server"
-        case .permissions: return "Permissions"
         case .logs: return "Logs"
         case .assistant: return "Assistant"
         }
@@ -433,29 +476,33 @@ private enum AgentHomeShellSection: String, CaseIterable, Hashable {
 
     var subtitle: String {
         switch self {
-        case .overview: return "Runtime posture"
+        case .home: return "Status & recent history"
         case .library: return "History + media"
+        case .conversations: return "Talk to the agent"
+        case .permissions: return "macOS access"
+        case .more: return "Capture · Tray · Server…"
         case .capture: return "Context + screen"
         case .tray: return "Live asset ownership"
         case .dictation: return "Mic, model, routing"
         case .overlays: return "Pill + indicator"
         case .server: return "Bridge + agents"
-        case .permissions: return "macOS access"
-        case .logs: return "Diagnostics"
+        case .logs: return "Recent activity"
         case .assistant: return "Conversation"
         }
     }
 
     var icon: String {
         switch self {
-        case .overview: return "rectangle.3.group"
+        case .home: return "house"
         case .library: return "clock.arrow.circlepath"
+        case .conversations: return "bubble.left.and.bubble.right"
+        case .permissions: return "lock.shield"
+        case .more: return "ellipsis"
         case .capture: return "viewfinder"
         case .tray: return "tray.full"
         case .dictation: return "waveform"
         case .overlays: return "rectangle.inset.topright.filled"
         case .server: return "server.rack"
-        case .permissions: return "lock.shield"
         case .logs: return "doc.text.magnifyingglass"
         case .assistant: return "bubble.left.and.bubble.right"
         }
@@ -463,36 +510,55 @@ private enum AgentHomeShellSection: String, CaseIterable, Hashable {
 
     var selectedIcon: String {
         switch self {
-        case .overview: return "rectangle.3.group.fill"
+        case .home: return "house.fill"
         case .library: return "clock.arrow.circlepath"
+        case .conversations: return "bubble.left.and.bubble.right.fill"
+        case .permissions: return "lock.shield.fill"
+        case .more: return "ellipsis"
         case .capture: return "viewfinder.circle.fill"
         case .tray: return "tray.full.fill"
         case .dictation: return "waveform.circle.fill"
         case .overlays: return "rectangle.inset.topright.filled"
         case .server: return "server.rack"
-        case .permissions: return "lock.shield.fill"
         case .logs: return "doc.text.magnifyingglass"
         case .assistant: return "bubble.left.and.bubble.right.fill"
         }
     }
 
+    /// Sections that hang off the "…" overflow. Kept reachable as a stop-gap;
+    /// these pages were never carefully designed and are slated to retire.
+    static var overflowSections: [AgentHomeShellSection] {
+        [.capture, .tray, .dictation, .overlays, .server]
+    }
+
+    /// The simplified primary rail: Home · History · Conversations ·
+    /// Permissions · Logs, then a single "…" overflow. No group headers;
+    /// Settings lives in the footer.
     static var sidebarEntries: [SidebarEntry<AgentHomeShellSection>] {
-        [
-            .section(id: "home", title: "Home"),
-            .item(.init(id: .overview, title: AgentHomeShellSection.overview.title, icon: AgentHomeShellSection.overview.icon, selectedIcon: AgentHomeShellSection.overview.selectedIcon, tooltipLabel: AgentHomeShellSection.overview.subtitle)),
-            .item(.init(id: .library, title: AgentHomeShellSection.library.title, icon: AgentHomeShellSection.library.icon, selectedIcon: AgentHomeShellSection.library.selectedIcon, tooltipLabel: AgentHomeShellSection.library.subtitle)),
-            .section(id: "runtime", title: "Runtime"),
-            .item(.init(id: .capture, title: AgentHomeShellSection.capture.title, icon: AgentHomeShellSection.capture.icon, selectedIcon: AgentHomeShellSection.capture.selectedIcon, tooltipLabel: AgentHomeShellSection.capture.subtitle)),
-            .item(.init(id: .tray, title: AgentHomeShellSection.tray.title, icon: AgentHomeShellSection.tray.icon, selectedIcon: AgentHomeShellSection.tray.selectedIcon, tooltipLabel: AgentHomeShellSection.tray.subtitle)),
-            .item(.init(id: .dictation, title: AgentHomeShellSection.dictation.title, icon: AgentHomeShellSection.dictation.icon, selectedIcon: AgentHomeShellSection.dictation.selectedIcon, tooltipLabel: AgentHomeShellSection.dictation.subtitle)),
-            .item(.init(id: .overlays, title: AgentHomeShellSection.overlays.title, icon: AgentHomeShellSection.overlays.icon, selectedIcon: AgentHomeShellSection.overlays.selectedIcon, tooltipLabel: AgentHomeShellSection.overlays.subtitle)),
-            .section(id: "ops", title: "Operations"),
-            .item(.init(id: .server, title: AgentHomeShellSection.server.title, icon: AgentHomeShellSection.server.icon, selectedIcon: AgentHomeShellSection.server.selectedIcon, tooltipLabel: AgentHomeShellSection.server.subtitle)),
-            .item(.init(id: .permissions, title: AgentHomeShellSection.permissions.title, icon: AgentHomeShellSection.permissions.icon, selectedIcon: AgentHomeShellSection.permissions.selectedIcon, tooltipLabel: AgentHomeShellSection.permissions.subtitle)),
-            .item(.init(id: .logs, title: AgentHomeShellSection.logs.title, icon: AgentHomeShellSection.logs.icon, selectedIcon: AgentHomeShellSection.logs.selectedIcon, tooltipLabel: AgentHomeShellSection.logs.subtitle)),
-            .section(id: "work", title: "Work"),
-            .item(.init(id: .assistant, title: AgentHomeShellSection.assistant.title, icon: AgentHomeShellSection.assistant.icon, selectedIcon: AgentHomeShellSection.assistant.selectedIcon, tooltipLabel: AgentHomeShellSection.assistant.subtitle)),
+        func entry(_ id: AgentHomeShellSection) -> SidebarEntry<AgentHomeShellSection> {
+            .item(.init(id: id, title: id.title, icon: id.icon, selectedIcon: id.selectedIcon, tooltipLabel: id.subtitle))
+        }
+        return [
+            entry(.home),
+            entry(.library),
+            entry(.conversations),
+            entry(.permissions),
+            entry(.logs),
+            entry(.more),
         ]
+    }
+}
+
+private extension AgentHomeRoute {
+    /// Map an external deep-link target onto the shell's private section enum.
+    var shellSection: AgentHomeShellSection {
+        switch self {
+        case .home: return .home
+        case .history: return .library
+        case .conversations: return .conversations
+        case .permissions: return .permissions
+        case .logs: return .logs
+        }
     }
 }
 
@@ -517,7 +583,7 @@ private struct AgentHomeOverviewPage: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack {
-                AgentHomePageScaffold(title: "Agent Home", subtitle: "TalkieKit console for the live TalkieAgent runtime.") {
+                AgentHomePageScaffold(title: "Home", subtitle: "Runtime status, recent history, and quick actions.") {
                     VStack(alignment: .leading, spacing: OpsSpacing.xxxl) {
                         metrics
                         libraryPreview
@@ -642,7 +708,7 @@ private struct AgentHomeOverviewPage: View {
                 HStack(alignment: .top, spacing: OpsSpacing.xl) {
                     AgentHomeSectionHeader(
                         icon: "clock.arrow.circlepath",
-                        title: "Recent library",
+                        title: "Recent history",
                         subtitle: "Latest useful work across dictations, captures, memos, notes, and selections."
                     )
 
@@ -701,11 +767,10 @@ private struct AgentHomeOverviewPage: View {
                 )
 
                 LazyVGrid(columns: AgentHomeGrid.columns, alignment: .leading, spacing: OpsSpacing.md) {
+                    AgentHomeRouteButton(section: .conversations, onSelect: onSelect)
                     AgentHomeRouteButton(section: .library, onSelect: onSelect)
-                    AgentHomeRouteButton(section: .capture, onSelect: onSelect)
-                    AgentHomeRouteButton(section: .tray, onSelect: onSelect)
-                    AgentHomeRouteButton(section: .dictation, onSelect: onSelect)
-                    AgentHomeRouteButton(section: .server, onSelect: onSelect)
+                    AgentHomeRouteButton(section: .permissions, onSelect: onSelect)
+                    AgentHomeRouteButton(section: .logs, onSelect: onSelect)
                 }
 
                 OpsButton("Open shared settings", icon: "gearshape", style: .secondary, action: onOpenSettings)
@@ -1141,7 +1206,7 @@ private struct AgentHomeLibraryPage: View {
 
     var body: some View {
         AgentHomePageScaffold(
-            title: "Library",
+            title: "History",
             subtitle: "Read-only history from Talkie's shared recordings table.",
             scrolls: false,
             maxContentWidth: 1_260
@@ -1311,47 +1376,43 @@ private struct AgentHomeLibraryPage: View {
     }
 }
 
-private struct AgentHomeLogsPage: View {
-    @ObservedObject var store: AgentHomeActivityStore
-    let serverStatus: TalkieAgentServerStatus
-    let lastOperationalRefresh: Date?
-    let onOpenSettings: () -> Void
+/// First-class Logs surface: the live agent log feed rendered through the
+/// shared TalkieKit `ConsoleView` (level filters, category picker, search,
+/// tail autoscroll), backed by `AppLogger.shared.entries`. Replaces the old
+/// status-bar afterthought + summary-card stop-gap.
+private struct AgentHomeLogsConsolePage: View {
+    @ObservedObject private var logger = AppLogger.shared
+
+    private var consoleEntries: [ConsoleEntry] {
+        logger.entries.map { entry in
+            ConsoleEntry(
+                id: entry.id,
+                timestamp: entry.timestamp,
+                level: entry.level.consoleLevel,
+                category: entry.category.uppercased(),
+                message: entry.message,
+                detail: entry.detail
+            )
+        }
+    }
 
     var body: some View {
-        AgentHomePageScaffold(title: "Logs", subtitle: "Operational diagnostics and recent activity posture.") {
-            VStack(alignment: .leading, spacing: OpsSpacing.xxxl) {
-                LazyVGrid(columns: AgentHomeGrid.columns, alignment: .leading, spacing: OpsSpacing.xl) {
-                    AgentHomeMetricCard(title: "Runtime refresh", value: store.lastRefreshed.map { AgentHomeRelative.shortLabel(for: $0) } ?? "—", detail: "Agent runtime client", icon: "arrow.clockwise", tint: OpsInk.statusInfo)
-                    AgentHomeMetricCard(title: "Ops snapshot", value: lastOperationalRefresh.map { AgentHomeRelative.shortLabel(for: $0) } ?? "—", detail: "Server/tray/local stats", icon: "gauge.with.needle", tint: OpsTint.amber.color)
-                    AgentHomeMetricCard(title: "Failures", value: "\(serverStatus.consecutiveFailures)", detail: "Bridge health", icon: "exclamationmark.triangle", tint: serverStatus.consecutiveFailures == 0 ? OpsInk.statusOk : OpsInk.statusWarn)
-                    AgentHomeMetricCard(title: "Restarts", value: "\(serverStatus.restartCount)", detail: serverStatus.lastError ?? "No current error", icon: "arrow.triangle.2.circlepath", tint: OpsInk.muted)
-                }
+        // Explicit module qualifier: the agent's Debug/DebugKit.swift defines a
+        // local `ConsoleView`, so unqualified would resolve to that one.
+        TalkieKit.ConsoleView(
+            entries: .constant(consoleEntries),
+            theme: .ops,
+            title: "Logs",
+            showLiveIndicator: false,
+            onClear: { logger.clear() },
+            onOpenLogs: openLogsFolder
+        )
+    }
 
-                OpsCard {
-                    VStack(alignment: .leading, spacing: OpsSpacing.xl) {
-                        AgentHomeSectionHeader(
-                            icon: "doc.text.magnifyingglass",
-                            title: "Diagnostic posture",
-                            subtitle: "Agent Home stays lightweight and points to durable logs instead of embedding a firehose."
-                        )
-
-                        AgentHomeKeyValueStack {
-                            OpsKVRow("Runtime activities", value: "\(store.executorJobs.count)")
-                            OpsKVRow("Completed jobs", value: "\(store.completedJobs.count)")
-                            OpsKVRow("Bridge state", value: serverStatus.processState.rawValue)
-                            OpsKVRow("Last error", value: serverStatus.lastError ?? "—", valueColor: serverStatus.lastError == nil ? OpsInk.muted : OpsInk.statusError, valueLineLimit: 3)
-                        }
-
-                        Text("New diagnostics should continue using TalkieLogger categories. This page is the operational summary; verbose traces stay in the existing log viewers and Console.app.")
-                            .font(OpsType.ui(OpsSize.base))
-                            .foregroundStyle(OpsInk.muted)
-                            .lineSpacing(4)
-
-                        OpsButton("Open diagnostics settings", icon: "gearshape", style: .secondary, action: onOpenSettings)
-                    }
-                }
-            }
-        }
+    private func openLogsFolder() {
+        let dir = URL.applicationSupportDirectory
+            .appendingPathComponent("TalkieAgent/logs", isDirectory: true)
+        NSWorkspace.shared.open(dir)
     }
 }
 
@@ -1437,11 +1498,11 @@ private struct AgentHomeInspectorContent: View {
                     OpsButton(permissionManager.allRequiredGranted ? "Permissions ready" : "Fix permissions", icon: "lock.shield", style: .secondary) {
                         onSelect(.permissions)
                     }
-                    OpsButton("Library", icon: "clock.arrow.circlepath", style: .ghost) {
+                    OpsButton("History", icon: "clock.arrow.circlepath", style: .ghost) {
                         onSelect(.library)
                     }
-                    OpsButton("Assistant", icon: "bubble.left.and.bubble.right", style: .ghost) {
-                        onSelect(.assistant)
+                    OpsButton("Conversations", icon: "bubble.left.and.bubble.right", style: .ghost) {
+                        onSelect(.conversations)
                     }
                 }
             }
@@ -1456,8 +1517,12 @@ private struct AgentHomeInspectorContent: View {
 
     private var sectionBlurb: String {
         switch selectedSection {
-        case .overview:
-            return "Top-level runtime posture and ownership map."
+        case .conversations:
+            return "Talk to the agent — the live conversation surface."
+        case .more:
+            return "Demoted runtime panes, reachable from the overflow."
+        case .home:
+            return "At a glance: runtime status, recent history, and quick actions."
         case .library:
             return "Read-only view of Talkie's shared library history."
         case .capture:
@@ -1473,7 +1538,7 @@ private struct AgentHomeInspectorContent: View {
         case .permissions:
             return "macOS access required for recording, paste, and screen context."
         case .logs:
-            return "Small operational summary; durable logs stay in the logging stack."
+            return "Live log feed — filter by level or subsystem, copy lines or the whole log."
         case .assistant:
             return "Existing conversation surface retained inside the new shell."
         }
@@ -2193,6 +2258,56 @@ private extension PermissionStatus {
         case .restricted:
             return OpsInk.dim
         }
+    }
+}
+
+// MARK: - Rail overflow flyout
+
+/// Native NSMenu flyout for the "…" rail overflow. Holds the demoted
+/// (stop-gap) sections; each item runs its closure when chosen. Kept small
+/// and AppKit-side because the shared TalkieKit sidebar carries no popover
+/// affordance of its own.
+@MainActor
+private final class AgentRailOverflowMenu: NSObject {
+    struct Item {
+        let title: String
+        let systemImage: String
+        let action: () -> Void
+    }
+
+    private final class ActionBox {
+        let run: () -> Void
+        init(_ run: @escaping () -> Void) { self.run = run }
+    }
+
+    func present(items: [Item]) {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        for item in items {
+            let menuItem = NSMenuItem(title: item.title, action: #selector(fire(_:)), keyEquivalent: "")
+            menuItem.target = self
+            menuItem.representedObject = ActionBox(item.action)
+            if let image = NSImage(systemSymbolName: item.systemImage, accessibilityDescription: item.title) {
+                image.isTemplate = true
+                menuItem.image = image
+            }
+            menu.addItem(menuItem)
+        }
+
+        // popUp runs a nested event loop and fires the chosen item's action
+        // synchronously, so capturing view state in the closures is safe.
+        let screenPoint = NSEvent.mouseLocation
+        if let window = NSApp.keyWindow ?? NSApp.mainWindow, let contentView = window.contentView {
+            let windowPoint = window.convertPoint(fromScreen: screenPoint)
+            let viewPoint = contentView.convert(windowPoint, from: nil)
+            menu.popUp(positioning: nil, at: viewPoint, in: contentView)
+        } else {
+            menu.popUp(positioning: nil, at: .zero, in: nil)
+        }
+    }
+
+    @objc private func fire(_ sender: NSMenuItem) {
+        (sender.representedObject as? ActionBox)?.run()
     }
 }
 

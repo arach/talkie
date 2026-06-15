@@ -34,7 +34,25 @@ struct LogEntry: Identifiable, Equatable {
     }
 }
 
-// MARK: - App Log Store
+// MARK: - Bridge to shared ConsoleView (TalkieKit)
+
+extension OSLogEntryLog.Level {
+    /// Map the agent's OSLog severity onto TalkieKit's shared console levels.
+    /// `.notice` is treated as a warning so flushed (critical-mode) lines stand out.
+    var consoleLevel: ConsoleLogLevel {
+        switch self {
+        case .debug: return .debug
+        case .info: return .info
+        case .notice: return .warning
+        case .error: return .error
+        case .fault: return .fault
+        case .undefined: return .info
+        @unknown default: return .info
+        }
+    }
+}
+
+// MARK: - App Logger (Unified logging - os.log + in-memory)
 
 @MainActor
 final class AppLogger: ObservableObject {
