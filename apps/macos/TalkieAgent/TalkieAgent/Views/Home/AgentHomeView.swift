@@ -28,6 +28,13 @@ struct AgentHomeView: View {
     @State private var continuation: AgentHomeContinuationContext?
     @State private var voicePromptTarget: AgentHomePromptTarget?
     @State private var openWorkTurnIds: Set<String> = []
+    /// The agent the composer chip points at. nil → the runtime's preferred
+    /// default. (Routing the invocation to a chosen agent is a follow-up;
+    /// today the runtime selects the agent.)
+    @State private var selectedAgentId: String?
+    /// Agent voice (TTS) — read replies aloud. Toggled by the reader-header
+    /// speaker. Persisted; actual playback wiring is separate.
+    @AppStorage("talkie.agentHome.speakReplies") private var speakReplies = false
     @FocusState private var agentPromptFocused: Bool
 
     var body: some View {
@@ -53,16 +60,33 @@ struct AgentHomeView: View {
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 12) {
-                newConversationButton
+            // Header: "CONVERSATIONS" + a quiet "+" (no big button, no
+            // runtime badge, no adapter roster). Starting a conversation drops
+            // you into the main area; the agent is picked there, in the input.
+            HStack(spacing: 8) {
+                Text("CONVERSATIONS")
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .tracking(1.4)
+                    .foregroundStyle(ScopeInk.subtle)
 
-                AgentHomeRuntimeBadge(ping: store.runtimePing)
+                Spacer(minLength: 0)
 
-                AgentHomeAgents(agents: store.agents)
+                Button(action: startNewTopic) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(ScopeInk.faint)
+                        .frame(width: 22, height: 22)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(ScopeEdge.subtle, lineWidth: 0.5)
+                        )
+                }
+                .buttonStyle(.plain)
+                .help("New conversation (⌘N)")
             }
             .padding(.horizontal, 16)
-            .padding(.top, 18)
-            .padding(.bottom, 8)
+            .padding(.top, 16)
+            .padding(.bottom, 6)
 
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(alignment: .leading, spacing: 0) {
@@ -89,58 +113,53 @@ struct AgentHomeView: View {
 
             Spacer(minLength: 0)
 
-            Divider()
-                .overlay(ScopeEdge.subtle)
-
-            HStack(spacing: 6) {
-                Button(action: onOpenSettings) {
-                    Label("Settings", systemImage: "gearshape")
-                        .font(.system(size: 11.5, weight: .medium))
-                        .foregroundStyle(ScopeInk.faint)
-                }
-                .buttonStyle(.plain)
-
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            sidebarFooter
         }
         .background(ScopeCanvas.canvasAlt)
     }
 
-    private var newConversationButton: some View {
-        Button(action: startNewTopic) {
-            HStack(spacing: 0) {
+    /// Two distinct, deliberately-separated footer entries: the relocated
+    /// adapter roster as a subtle "N agents configured" settings entry, and
+    /// global Settings below it — a rule between so they don't read as one.
+    private var sidebarFooter: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Divider().overlay(ScopeEdge.subtle)
+
+            Button(action: onOpenSettings) {
                 HStack(spacing: 8) {
-                    Text("+")
-                        .font(.system(size: 14, weight: .regular))
+                    Image(systemName: "person.2")
+                        .font(.system(size: 11))
+                        .foregroundStyle(ScopeInk.faint)
+                    Text("\(store.agents.count) agents configured")
+                        .font(.system(size: 11))
+                        .foregroundStyle(ScopeInk.muted)
+                    Spacer(minLength: 0)
+                    Text("Manage ›")
+                        .font(.system(size: 10))
                         .foregroundStyle(ScopeInk.subtle)
-                        .offset(y: -1)
-
-                    Text("New conversation")
-                        .font(.system(size: 12.5, weight: .medium))
-                        .foregroundStyle(ScopeInk.primary)
                 }
-
-                Spacer(minLength: 8)
-
-                Text("⌘N")
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(ScopeInk.subtle)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.white)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(ScopeEdge.subtle, lineWidth: 0.5)
-                    )
-                    .shadow(color: Color.black.opacity(0.02), radius: 1, x: 0, y: 1)
-            )
+            .buttonStyle(.plain)
+            .help("Manage agents & adapters")
+
+            Divider().overlay(ScopeEdge.subtle)
+
+            Button(action: onOpenSettings) {
+                HStack(spacing: 6) {
+                    Label("Settings", systemImage: "gearshape")
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundStyle(ScopeInk.faint)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
     }
 
     // MARK: Reader
@@ -166,6 +185,8 @@ struct AgentHomeView: View {
                         voiceCapture: voiceCapture,
                         error: store.invokeError,
                         isFocused: $agentPromptFocused,
+                        agents: store.agents,
+                        selectedAgentId: $selectedAgentId,
                         onClearContinuation: { continuation = nil },
                         onSend: sendAgentPrompt,
                         onCancelTalkBack: cancelTalkBack,
@@ -228,13 +249,21 @@ struct AgentHomeView: View {
 
             Spacer(minLength: 12)
 
+            // Agent VOICE (TTS) — a speaker, not a mic. Reads replies aloud.
             if !isIdle {
-                AgentHomeTalkBackButton(
-                    isRecording: voiceCapture.phase == .recording,
-                    isProcessing: voiceCapture.phase == .processing,
-                    action: talkBack
-                )
+                AgentHomeVoiceReplyToggle(isOn: $speakReplies)
             }
+
+            // This conversation's settings.
+            Button(action: onOpenSettings) {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(ScopeInk.faint)
+                    .frame(width: 26, height: 26)
+                    .background(Circle().fill(ScopeInk.primary.opacity(0.04)))
+            }
+            .buttonStyle(.plain)
+            .help("Conversation settings")
 
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
@@ -277,6 +306,8 @@ struct AgentHomeView: View {
                 voiceCapture: voiceCapture,
                 error: store.invokeError,
                 isFocused: $agentPromptFocused,
+                agents: store.agents,
+                selectedAgentId: $selectedAgentId,
                 onClearContinuation: { continuation = nil },
                 onSend: sendAgentPrompt,
                 onCancelTalkBack: cancelTalkBack,
@@ -470,141 +501,6 @@ private struct AgentHomeContinuationContext: Equatable {
     }
 }
 
-// MARK: - Agent status badge
-
-private struct AgentHomeRuntimeBadge: View {
-    let ping: AgentRuntimePing?
-
-    var body: some View {
-        let healthy = ping?.scoutBridge == .configured
-        let label = ping == nil ? "Offline" : "Ready"
-        let dot: Color = ping == nil ? .red : (healthy ? .green : .orange)
-
-        HStack(spacing: 6) {
-            Circle().fill(dot).frame(width: 6, height: 6)
-            Text(label.uppercased())
-                .font(ScopeType.chrome)
-                .tracking(ScopeType.Tracking.wide)
-                .foregroundStyle(ScopeInk.faint)
-            Spacer(minLength: 0)
-        }
-        .help(ping == nil ? "Talkie is not answering yet." : "Talkie is ready to answer here.")
-    }
-}
-
-private struct AgentHomeAgents: View {
-    let agents: [AgentRuntimeAgentSnapshot]
-
-    private var availableCount: Int {
-        agents.filter(\.isAvailable).count
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 6) {
-                Text("AGENTS")
-                    .font(.system(size: 9.5, weight: .semibold))
-                    .foregroundStyle(ScopeInk.subtle)
-
-                Spacer(minLength: 4)
-
-                Text(agents.isEmpty ? "checking" : "\(availableCount)/\(agents.count)")
-                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                    .foregroundStyle(ScopeInk.subtle)
-            }
-
-            VStack(alignment: .leading, spacing: 3) {
-                if agents.isEmpty {
-                    AgentHomeAgentsPlaceholder()
-                } else {
-                    ForEach(agents) { agent in
-                        AgentHomeAgentRow(agent: agent)
-                    }
-                }
-            }
-        }
-        .padding(.top, 4)
-    }
-}
-
-private struct AgentHomeAgentsPlaceholder: View {
-    var body: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(ScopeInk.subtle.opacity(0.35))
-                .frame(width: 6, height: 6)
-
-            Text("Checking agent sessions")
-                .font(.system(size: 11))
-                .foregroundStyle(ScopeInk.subtle)
-        }
-        .frame(height: 20)
-    }
-}
-
-private struct AgentHomeAgentRow: View {
-    let agent: AgentRuntimeAgentSnapshot
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(statusColor)
-                .frame(width: 6, height: 6)
-
-            Text(agent.name)
-                .font(.system(size: 11.5, weight: agent.isPreferred == true ? .semibold : .medium))
-                .foregroundStyle(agent.isAvailable ? ScopeInk.primary : ScopeInk.subtle)
-                .lineLimit(1)
-
-            Spacer(minLength: 4)
-
-            if agent.isPreferred == true {
-                Text("default")
-                    .font(.system(size: 9.5, weight: .medium))
-                    .foregroundStyle(ScopeInk.subtle)
-            } else if let count = agent.activeSessions, count > 0 {
-                Text("\(count) live")
-                    .font(.system(size: 9.5, weight: .medium))
-                    .foregroundStyle(ScopeAmber.solid)
-            } else {
-                Text(statusLabel)
-                    .font(.system(size: 9.5, weight: .medium))
-                    .foregroundStyle(ScopeInk.subtle)
-            }
-        }
-        .frame(height: 20)
-        .help(helpText)
-    }
-
-    private var statusColor: Color {
-        if agent.isAvailable {
-            return (agent.activeSessions ?? 0) > 0 ? ScopeAmber.solid : .green
-        }
-
-        switch agent.status {
-        case "misconfigured":
-            return .orange
-        case "missing", "unavailable":
-            return .red
-        default:
-            return ScopeInk.subtle.opacity(0.45)
-        }
-    }
-
-    private var statusLabel: String {
-        if agent.isAvailable { return "ready" }
-        if agent.status == "misconfigured" { return "setup" }
-        if agent.status == "unavailable" { return "offline" }
-        return "missing"
-    }
-
-    private var helpText: String {
-        let detail = agent.detail?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
-        let path = agent.executablePath?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
-        return [detail, path].compactMap { $0 }.joined(separator: "\n")
-    }
-}
-
 // MARK: - Sidebar atoms
 
 private struct AgentHomeGroupLabel: View {
@@ -704,51 +600,74 @@ private struct AgentHomeConversationRow: View {
 
 // MARK: - Talk-back button (header)
 
-private struct AgentHomeTalkBackButton: View {
-    let isRecording: Bool
-    let isProcessing: Bool
-    let action: () -> Void
+/// Active agent selector — lives inside the composer input. Shows the
+/// current/preferred agent; the menu switches it. (Routing the invocation
+/// to a chosen agent is a follow-up; today the runtime picks the agent.)
+private struct AgentHomeAgentChip: View {
+    let agents: [AgentRuntimeAgentSnapshot]
+    @Binding var selectedAgentId: String?
 
-    @State private var hovered = false
+    private var active: AgentRuntimeAgentSnapshot? {
+        if let selectedAgentId, let match = agents.first(where: { $0.id == selectedAgentId }) {
+            return match
+        }
+        return agents.first(where: { $0.isPreferred == true }) ?? agents.first
+    }
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: iconName)
-                    .font(.system(size: 10, weight: .semibold))
-                Text(label)
-                    .font(.system(size: 11, weight: .semibold))
+        Menu {
+            ForEach(agents) { agent in
+                Button {
+                    selectedAgentId = agent.id
+                } label: {
+                    if agent.id == active?.id {
+                        Label(agent.name, systemImage: "checkmark")
+                    } else {
+                        Text(agent.name)
+                    }
+                }
             }
-            .foregroundStyle(hovered ? .white : ScopeBrass.solid)
-            .padding(.horizontal, 10)
+        } label: {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill((active?.isAvailable ?? false) ? Color.green : ScopeInk.subtle)
+                    .frame(width: 6, height: 6)
+                Text(active?.name ?? "Agent")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(ScopeBrass.solid)
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 7, weight: .semibold))
+                    .foregroundStyle(ScopeBrass.solid)
+            }
+            .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(
-                Capsule().fill(hovered ? ScopeAmber.solid : ScopeAmber.tint)
-            )
-            .overlay(
-                Capsule().stroke(ScopeAmber.solid.opacity(hovered ? 0 : 0.30), lineWidth: 0.5)
-            )
+            .background(Capsule().fill(ScopeAmber.tint))
+            .overlay(Capsule().stroke(ScopeAmber.solid.opacity(0.30), lineWidth: 0.5))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Switch agent")
+    }
+}
+
+/// Agent voice (TTS) toggle — a speaker, not a mic. Reads replies aloud.
+private struct AgentHomeVoiceReplyToggle: View {
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Button {
+            isOn.toggle()
+        } label: {
+            Image(systemName: isOn ? "speaker.wave.2.fill" : "speaker.slash")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(isOn ? ScopeBrass.solid : ScopeInk.faint)
+                .frame(width: 26, height: 26)
+                .background(Circle().fill(isOn ? ScopeAmber.tint : ScopeInk.primary.opacity(0.04)))
         }
         .buttonStyle(.plain)
-        .disabled(isProcessing)
-        .onHover { hovered = $0 }
-        .animation(.easeOut(duration: 0.12), value: hovered)
-        .help(helpText)
-    }
-
-    private var iconName: String {
-        if isProcessing { return "hourglass" }
-        return isRecording ? "stop.fill" : "mic.fill"
-    }
-
-    private var label: String {
-        if isProcessing { return "Sending" }
-        return isRecording ? "Stop" : "Talk back"
-    }
-
-    private var helpText: String {
-        if isProcessing { return "Transcribing voice reply" }
-        return isRecording ? "Stop and send this voice reply" : "Record a voice reply in Agent Home"
+        .help(isOn ? "Agent voice on — replies are read aloud" : "Agent voice off — tap to read replies aloud")
     }
 }
 
@@ -1237,6 +1156,8 @@ private struct AgentHomeIdleHero: View {
     @ObservedObject var voiceCapture: AgentHomeVoiceCapture
     let error: String?
     var isFocused: FocusState<Bool>.Binding
+    let agents: [AgentRuntimeAgentSnapshot]
+    @Binding var selectedAgentId: String?
     let onClearContinuation: () -> Void
     let onSend: () -> Void
     let onCancelTalkBack: () -> Void
@@ -1275,6 +1196,8 @@ private struct AgentHomeIdleHero: View {
                 voiceCapture: voiceCapture,
                 error: error,
                 isFocused: isFocused,
+                agents: agents,
+                selectedAgentId: $selectedAgentId,
                 onClearContinuation: onClearContinuation,
                 onSend: onSend,
                 onCancelTalkBack: onCancelTalkBack,
@@ -1432,6 +1355,8 @@ private struct AgentHomeComposer: View {
     @ObservedObject var voiceCapture: AgentHomeVoiceCapture
     let error: String?
     var isFocused: FocusState<Bool>.Binding
+    let agents: [AgentRuntimeAgentSnapshot]
+    @Binding var selectedAgentId: String?
     let onClearContinuation: () -> Void
     let onSend: () -> Void
     let onCancelTalkBack: () -> Void
@@ -1444,16 +1369,12 @@ private struct AgentHomeComposer: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .center, spacing: 10) {
-                Button(action: onTalkBack) {
-                    Image(systemName: voiceButtonIcon)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(ScopeBrass.solid)
-                        .frame(width: 28, height: 28)
-                        .background(Circle().fill(ScopeAmber.tint))
-                }
-                .buttonStyle(.plain)
-                .disabled(voiceCapture.phase == .processing || isSending)
-                .help(voiceButtonHelp)
+                // Agent selector lives INSIDE the input.
+                AgentHomeAgentChip(agents: agents, selectedAgentId: $selectedAgentId)
+
+                Rectangle()
+                    .fill(ScopeEdge.subtle)
+                    .frame(width: 0.5, height: 20)
 
                 TextField(placeholder, text: $text, axis: .vertical)
                     .textFieldStyle(.plain)
@@ -1463,21 +1384,35 @@ private struct AgentHomeComposer: View {
                     .focused(isFocused)
                     .onSubmit { if canSend { onSend() } }
 
-                Button(action: onSend) {
-                    Image(systemName: isSending ? "hourglass" : "paperplane.fill")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(canSend ? .white : ScopeInk.subtle)
-                        .frame(width: 28, height: 28)
-                        .background(
-                            Circle().fill(canSend ? ScopeAmber.solid : ScopeInk.primary.opacity(0.06))
-                        )
+                // Mic (voice input) + send, consolidated as one control cluster.
+                HStack(spacing: 8) {
+                    Button(action: onTalkBack) {
+                        Image(systemName: voiceButtonIcon)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(ScopeBrass.solid)
+                            .frame(width: 28, height: 28)
+                            .background(Circle().fill(ScopeAmber.tint))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(voiceCapture.phase == .processing || isSending)
+                    .help(voiceButtonHelp)
+
+                    Button(action: onSend) {
+                        Image(systemName: isSending ? "hourglass" : "paperplane.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(canSend ? .white : ScopeInk.subtle)
+                            .frame(width: 28, height: 28)
+                            .background(
+                                Circle().fill(canSend ? ScopeAmber.solid : ScopeInk.primary.opacity(0.06))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canSend)
+                    .help("Send")
                 }
-                .buttonStyle(.plain)
-                .disabled(!canSend)
-                .help("Send")
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 14)
                     .fill(Color.white)

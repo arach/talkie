@@ -170,6 +170,9 @@ struct AttachmentThumbnail: View {
             )
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            screenshotAttachmentMenu(fileURL: fileURL)
+        }
         .task {
             image = await loadThumbnail()
         }
@@ -253,6 +256,9 @@ struct LargeAttachmentView: View {
             )
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            screenshotAttachmentMenu(fileURL: fileURL)
+        }
         .task {
             image = await loadImage()
         }
@@ -271,6 +277,57 @@ struct LargeAttachmentView: View {
         let seconds = totalSeconds % 60
         return String(format: "%d:%02d", minutes, seconds)
     }
+}
+
+// MARK: - Screenshot Attachment Actions
+
+@ViewBuilder
+private func screenshotAttachmentMenu(fileURL: URL) -> some View {
+    Button {
+        CaptureMarkupCoordinator.shared.openSession(imageURL: fileURL)
+    } label: {
+        Label("Annotate…", systemImage: "sparkles.rectangle.stack")
+    }
+
+    Button {
+        copyScreenshotAttachment(fileURL)
+    } label: {
+        Label("Copy Image", systemImage: "doc.on.doc")
+    }
+
+    Divider()
+
+    Button {
+        openScreenshotAttachmentInPreview(fileURL)
+    } label: {
+        Label("Open in Preview.app", systemImage: "arrow.up.right.square")
+    }
+
+    Button {
+        NSWorkspace.shared.activateFileViewerSelecting([fileURL])
+    } label: {
+        Label("Reveal in Finder", systemImage: "folder")
+    }
+}
+
+private func copyScreenshotAttachment(_ fileURL: URL) {
+    guard let image = NSImage(contentsOf: fileURL) else { return }
+    let pasteboard = NSPasteboard.general
+    pasteboard.clearContents()
+    pasteboard.writeObjects([image])
+}
+
+private func openScreenshotAttachmentInPreview(_ fileURL: URL) {
+    guard let previewURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Preview") else {
+        NSWorkspace.shared.open(fileURL)
+        return
+    }
+
+    NSWorkspace.shared.open(
+        [fileURL],
+        withApplicationAt: previewURL,
+        configuration: NSWorkspace.OpenConfiguration()
+    )
 }
 
 // MARK: - Workflow Picker

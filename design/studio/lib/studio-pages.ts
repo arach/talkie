@@ -365,6 +365,16 @@ export const STUDIO_PAGES: StudioPage[] = [
     blurb: "One conversation surface: topics, parent turns, branch threads, and agent work folding back in-line.",
   },
   {
+    href: "/mac-agent-conversation",
+    label: "Agent Conversation",
+    bucket: "surfaces",
+    platform: "mac",
+    family: "agent",
+    status: "concept",
+    swift: ["apps/macos/TalkieAgent/TalkieAgent/Views/Home/AgentHomeView.swift"],
+    blurb: "Conversations tab revamp: no top status strip, quiet new-conversation + agent picker, per-conversation settings top-right, active agent beside the input, adapters demoted to a subtle footer entry.",
+  },
+  {
     href: "/mac-agent-tray",
     label: "Agent Tray",
     bucket: "surfaces",
@@ -373,6 +383,19 @@ export const STUDIO_PAGES: StudioPage[] = [
     status: "concept",
     swift: ["apps/macos/TalkieAgent/TalkieAgent/Views/Components/AgentMenuPopoverView.swift"],
     blurb: "Menu-bar pop-out reworked: NOW+INPUT collapse into one capture composer; recent + tools pick up scope language.",
+  },
+  {
+    href: "/mac-agent-shell",
+    label: "Agent Shell",
+    bucket: "surfaces",
+    platform: "mac",
+    family: "agent",
+    status: "concept",
+    swift: [
+      "apps/macos/TalkieAgent/TalkieAgent/Views/Home/AgentHomeShellView.swift",
+      "apps/macos/TalkieAgent/TalkieAgent/Views/Settings/SettingsView.swift",
+    ],
+    blurb: "Main rail simplified to a primary trio (Agents · History · Permissions) + “…” overflow + footer Settings; nicer section-picker header; Agents = status strip over assistant well.",
   },
   {
     href: "/mac-walkie",

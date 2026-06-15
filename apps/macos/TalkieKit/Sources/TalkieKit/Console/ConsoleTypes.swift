@@ -145,4 +145,16 @@ public struct ConsoleTheme {
         surface: Color(red: 0.92, green: 0.92, blue: 0.92),
         accentColor: Color(red: 0.2, green: 0.6, blue: 0.2)
     )
+
+    /// Ops theme — matches TalkieKit's shared Ops design system and adapts to
+    /// light/dark with the host app's appearance.
+    public static let ops = ConsoleTheme(
+        background: OpsInk.bg,
+        backgroundSecondary: OpsInk.chrome,
+        foreground: OpsInk.ink,
+        foregroundMuted: OpsInk.muted,
+        divider: OpsHairline.standard,
+        surface: OpsInk.surface,
+        accentColor: OpsInk.statusOk
+    )
 }

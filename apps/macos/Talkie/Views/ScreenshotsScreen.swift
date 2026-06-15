@@ -523,6 +523,15 @@ struct ScreenshotsScreen: View {
             }
 
             Button {
+                annotateLatestSystemScreenshot()
+            } label: {
+                Image(systemName: "desktopcomputer")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help("Annotate latest macOS screenshot")
+
+            Button {
                 if let item = selectedAnnotatableItem {
                     annotateItem(item)
                 }
@@ -1045,6 +1054,17 @@ struct ScreenshotsScreen: View {
             return
         }
         markupURL = item.fileURL
+    }
+
+    private func annotateLatestSystemScreenshot() {
+        guard let latest = SystemScreenshotLocator.latestScreenshot() else {
+            let directory = SystemScreenshotLocator.configuredDirectory.path
+            ToastService.shared.showError("No macOS screenshot found in \(directory)")
+            return
+        }
+
+        previewItemID = nil
+        markupURL = latest.url
     }
 
     private func shareFile(_ url: URL) {

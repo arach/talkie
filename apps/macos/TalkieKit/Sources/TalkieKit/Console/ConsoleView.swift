@@ -47,6 +47,7 @@ public struct ConsoleView: View {
     @State private var filterLevel: ConsoleLogLevel? = nil
     @State private var filterCategory: String? = nil
     @State private var searchQuery = ""
+    @State private var copiedAll = false
 
     public init(
         entries: Binding<[ConsoleEntry]>,
@@ -105,6 +106,23 @@ public struct ConsoleView: View {
         return Array(Set(entries.map { $0.category })).sorted()
     }
 
+    /// Copy every currently-visible (filtered) line to the pasteboard.
+    private func copyAll() {
+        let text = filteredEntries.map(Self.formatLine).joined(separator: "\n")
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        copiedAll = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            copiedAll = false
+        }
+    }
+
+    private static func formatLine(_ entry: ConsoleEntry) -> String {
+        let time = TalkieDate.consoleTime(entry.timestamp)
+        let detail = entry.detail.map { " — \($0)" } ?? ""
+        return "[\(time)] [\(entry.level.rawValue)] [\(entry.category)] \(entry.message)" + detail
+    }
+
     public var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -160,6 +178,16 @@ public struct ConsoleView: View {
                 }
             }
 
+            // Copy-all button — grabs every visible (filtered) line at once.
+            if !filteredEntries.isEmpty {
+                ConsoleIconButton(
+                    icon: copiedAll ? "checkmark" : "doc.on.doc",
+                    theme: theme,
+                    action: copyAll
+                )
+                .help("Copy all visible logs")
+            }
+
             // Clear button
             if let onClear = onClear {
                 ConsoleButton(label: "CLEAR", theme: theme, action: onClear)
@@ -193,60 +221,77 @@ public struct ConsoleView: View {
     // MARK: - Filter Bar
 
     private var filterBar: some View {
-        HStack(spacing: 6) {
-            // Level filter chips
-            levelFilterChip(nil, label: "ALL")
-            ForEach(ConsoleLogLevel.allCases, id: \.self) { level in
-                levelFilterChip(level, label: level.rawValue)
-            }
+        VStack(spacing: 6) {
+            // Row 1 — level filter chips + search + count
+            HStack(spacing: 6) {
+                levelFilterChip(nil, label: "ALL")
+                ForEach(ConsoleLogLevel.allCases, id: \.self) { level in
+                    levelFilterChip(level, label: level.rawValue)
+                }
 
-            Spacer()
+                Spacer()
 
-            // Category picker (if multiple categories)
-            if availableCategories.count > 1 {
-                Picker("", selection: $filterCategory) {
-                    Text("All").tag(nil as String?)
-                    ForEach(availableCategories, id: \.self) { category in
-                        Text(category).tag(category as String?)
+                // Search field
+                HStack(spacing: 4) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 10))
+                        .foregroundColor(theme.foregroundMuted)
+
+                    TextField("Search...", text: $searchQuery)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(theme.foreground)
+                        .frame(width: 120)
+
+                    if !searchQuery.isEmpty {
+                        Button(action: { searchQuery = "" }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 10))
+                                .foregroundColor(theme.foregroundMuted)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
-                .pickerStyle(.menu)
-                .frame(width: 100)
-            }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(theme.surface)
+                .cornerRadius(4)
 
-            // Search field
-            HStack(spacing: 4) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 10))
+                Text("\(filteredEntries.count)")
+                    .font(.system(size: 9, design: .monospaced))
                     .foregroundColor(theme.foregroundMuted)
+            }
 
-                TextField("Search...", text: $searchQuery)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(theme.foreground)
-                    .frame(width: 120)
-
-                if !searchQuery.isEmpty {
-                    Button(action: { searchQuery = "" }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 10))
-                            .foregroundColor(theme.foregroundMuted)
+            // Row 2 — subsystem/category navigation as scannable chips (was a
+            // menu dropdown). Scrolls horizontally when categories overflow.
+            if availableCategories.count > 1 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 5) {
+                        categoryChip(nil, label: "ALL")
+                        ForEach(availableCategories, id: \.self) { category in
+                            categoryChip(category, label: category)
+                        }
                     }
-                    .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(theme.surface)
-            .cornerRadius(4)
-
-            Text("\(filteredEntries.count)")
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundColor(theme.foregroundMuted)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(theme.background)
+    }
+
+    private func categoryChip(_ category: String?, label: String) -> some View {
+        let isSelected = filterCategory == category
+        return Button(action: { filterCategory = category }) {
+            Text(label)
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .foregroundColor(isSelected ? theme.background : theme.foregroundMuted)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(isSelected ? theme.foreground.opacity(0.85) : theme.surface)
+                .cornerRadius(3)
+        }
+        .buttonStyle(.plain)
     }
 
     private func levelFilterChip(_ level: ConsoleLogLevel?, label: String) -> some View {
@@ -404,7 +449,9 @@ struct ConsoleEntryRow: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 3)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(isHovering ? theme.backgroundSecondary : Color.clear)
+        .contentShape(Rectangle())
         .onHover { hovering in
             isHovering = hovering
             if !hovering { isCopied = false }

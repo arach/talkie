@@ -324,6 +324,28 @@ struct CommandRegistry {
 
         if TalkieSharedSettings.bool(forKey: AgentSettingsKey.featureCaptureEnabled) {
             cmds.append(PaletteCommand(
+                title: "Annotate Latest macOS Screenshot",
+                subtitle: "Capture",
+                icon: "sparkles.rectangle.stack",
+                keywords: [
+                    "screenshot", "screen grab", "screen shot", "system",
+                    "latest", "desktop", "markup", "annotate"
+                ]
+            ) {
+                Task { @MainActor in
+                    SettingsManager.shared.isCommandPalettePresented = false
+
+                    guard let latest = SystemScreenshotLocator.latestScreenshot() else {
+                        let directory = SystemScreenshotLocator.configuredDirectory.path
+                        ToastService.shared.showError("No macOS screenshot found in \(directory)")
+                        return
+                    }
+
+                    CaptureMarkupCoordinator.shared.openSessionIfNeeded(imageURL: latest.url)
+                }
+            })
+
+            cmds.append(PaletteCommand(
                 title: "Toggle Camera Bubble",
                 subtitle: "Capture",
                 icon: "video.circle",
