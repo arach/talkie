@@ -36,6 +36,34 @@ public extension Color {
     }
 }
 
+private extension Color {
+    static func scopeAdaptive(light lightHex: String, dark darkHex: String) -> Color {
+        #if canImport(AppKit)
+        return Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
+            let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            return NSColor(scopeHex: isDark ? darkHex : lightHex)
+        }))
+        #else
+        return Color.hex(lightHex)
+        #endif
+    }
+}
+
+#if canImport(AppKit)
+private extension NSColor {
+    convenience init(scopeHex hex: String) {
+        var rgb: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&rgb)
+        self.init(
+            srgbRed: CGFloat((rgb & 0xFF0000) >> 16) / 255,
+            green: CGFloat((rgb & 0x00FF00) >> 8) / 255,
+            blue: CGFloat(rgb & 0x0000FF) / 255,
+            alpha: 1
+        )
+    }
+}
+#endif
+
 // MARK: - Surfaces
 
 /// Page-level surfaces. Cool-neutral chassis: near-white with the
@@ -49,15 +77,15 @@ public extension Color {
 public enum ScopeCanvas {
     /// Primary page background — cool-gray page substrate from the
     /// 2026-05-21 Scope canon. Frosted instrument case; never blue.
-    public static let canvas = Color.hex("F8F8F7")
+    public static let canvas = Color.scopeAdaptive(light: "F8F8F7", dark: "0E0F10")
     /// "Bay" — sidebar / embedded structural surface. One step down
     /// from canvas so it reads as a distinct surface, no yellow.
     /// Mapped to `tacticalBackgroundSecondary` in SettingsManager.
-    public static let canvasAlt = Color.hex("ECECEB")
+    public static let canvasAlt = Color.scopeAdaptive(light: "ECECEB", dark: "17191B")
     /// Card surface — cool neutral pane lift / mild emphasis.
-    public static let surface = Color.hex("EFEFEE")
+    public static let surface = Color.scopeAdaptive(light: "EFEFEE", dark: "14181A")
     /// 85% canvas — for floating overlays / pill chrome.
-    public static let canvasOverlay = Color.hex("F8F8F7").opacity(0.85)
+    public static let canvasOverlay = Color.scopeAdaptive(light: "F8F8F7", dark: "0E0F10").opacity(0.85)
 }
 
 // MARK: - Ink (text)
@@ -67,15 +95,15 @@ public enum ScopeCanvas {
 /// no warm undertone, reads as ink-on-paper rather than ink-on-tobacco.
 public enum ScopeInk {
     /// Headline / primary text. Cool near-black.
-    public static let primary  = Color.hex("0F1112")
+    public static let primary  = Color.scopeAdaptive(light: "0F1112", dark: "F0EDE6")
     /// Subheadline / body lead.
-    public static let dim      = Color.hex("1F2123")
+    public static let dim      = Color.scopeAdaptive(light: "1F2123", dark: "DCD6CC")
     /// Body / paragraph — neutral slate.
-    public static let muted    = Color.hex("4D5256")
+    public static let muted    = Color.scopeAdaptive(light: "4D5256", dark: "B8B2A4")
     /// Secondary / captions — neutral mid.
-    public static let faint    = Color.hex("737878")
+    public static let faint    = Color.scopeAdaptive(light: "737878", dark: "8A8478")
     /// Tertiary / metadata — neutral light.
-    public static let subtle   = Color.hex("9A9E9E")
+    public static let subtle   = Color.scopeAdaptive(light: "9A9E9E", dark: "6F695F")
 }
 
 // MARK: - Edges (hairlines)
@@ -84,7 +112,7 @@ public enum ScopeInk {
 /// homepage edge-* tokens. Derived from the new cool ink primary so
 /// hairlines no longer carry warm-brown tint.
 public enum ScopeEdge {
-    private static let base = Color.hex("0F1112")
+    private static let base = Color.scopeAdaptive(light: "0F1112", dark: "F0EDE6")
 
     /// 30% — strong, framed cards.
     public static let strong  = base.opacity(0.30)
@@ -195,9 +223,9 @@ public enum ScopeCardEmphasis {
 
     public var color: Color {
         switch self {
-        case .normal: return Color.hex("0F1112").opacity(0.18)
-        case .strong: return Color.hex("0F1112").opacity(0.30)
-        case .muted:  return Color.hex("0F1112").opacity(0.10)
+        case .normal: return ScopeEdge.normal
+        case .strong: return ScopeEdge.strong
+        case .muted:  return ScopeEdge.subtle
         }
     }
 }
@@ -209,13 +237,13 @@ public enum ScopeCardEmphasis {
 /// green — the contrast is the precision, not the saturation.
 public enum ScopeTrace {
     /// Solid trace — the inked signal.
-    public static let solid  = Color.hex("1F2123")
+    public static let solid  = Color.scopeAdaptive(light: "1F2123", dark: "DCD6CC")
     /// Glow halo around active traces.
-    public static let glow   = Color.hex("1F2123").opacity(0.18)
+    public static let glow   = Color.scopeAdaptive(light: "1F2123", dark: "DCD6CC").opacity(0.18)
     /// Dim trace — recently active.
-    public static let dim    = Color.hex("1F2123").opacity(0.28)
+    public static let dim    = Color.scopeAdaptive(light: "1F2123", dark: "DCD6CC").opacity(0.28)
     /// Faint trace — graticule, idle states.
-    public static let faint  = Color.hex("1F2123").opacity(0.08)
+    public static let faint  = Color.scopeAdaptive(light: "1F2123", dark: "DCD6CC").opacity(0.08)
 }
 
 // MARK: - Amber (chrome accent)
@@ -353,16 +381,16 @@ public enum ScopePalette {
     //   bg      → ScopeCanvas.surface  (pane / base panel)
     //   bgRaised→ ScopeCanvas.canvas   (search field, footer, raised lift)
     //   bgSunk  → ScopeCanvas.canvasAlt (section-header sink)
-    public static let bg = Color.hex("EFEFEE")          // base panel
-    public static let bgRaised = Color.hex("F8F8F7")    // search field, footer
-    public static let bgSunk = Color.hex("ECECEB")      // section header strip
+    public static let bg = ScopeCanvas.surface          // base panel
+    public static let bgRaised = ScopeCanvas.canvas      // search field, footer
+    public static let bgSunk = ScopeCanvas.canvasAlt     // section header strip
 
     // Ink ladder — cool-neutral 0F1112 base, matches the `ScopeInk` family
     // (no warm undertone). Same opacity steps as before.
-    public static let ink = Color.hex("0F1112")
-    public static let inkFaint = Color.hex("0F1112").opacity(0.62)
-    public static let inkFainter = Color.hex("0F1112").opacity(0.40)
-    public static let inkSubtle = Color.hex("0F1112").opacity(0.24)
+    public static let ink = ScopeInk.primary
+    public static let inkFaint = ScopeInk.primary.opacity(0.62)
+    public static let inkFainter = ScopeInk.primary.opacity(0.40)
+    public static let inkSubtle = ScopeInk.primary.opacity(0.24)
 
     // Amber accent — canonical website copper (identical to
     // `ScopeAmber.solid`; `amberDeep` matches `ScopeBrass.deep`).
@@ -374,10 +402,10 @@ public enum ScopePalette {
 
     // Rules + edges — cool-neutral 0F1112 base (matches `ScopeEdge`), so
     // hairlines read as the same crisp neutral lines used elsewhere.
-    public static let edge = Color.hex("0F1112").opacity(0.10)
-    public static let edgeStrong = Color.hex("0F1112").opacity(0.22)
-    public static let rule = Color.hex("0F1112").opacity(0.10)
-    public static let ruleStrong = Color.hex("0F1112").opacity(0.18)
+    public static let edge = ScopeInk.primary.opacity(0.10)
+    public static let edgeStrong = ScopeInk.primary.opacity(0.22)
+    public static let rule = ScopeInk.primary.opacity(0.10)
+    public static let ruleStrong = ScopeInk.primary.opacity(0.18)
 }
 
 // MARK: - Typography presets

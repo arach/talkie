@@ -2,587 +2,597 @@
 //  ModelsContentView.swift
 //  Talkie macOS
 //
-//  Comprehensive model management UI for LLM providers
+//  Provider-first model selection for Talkie.
 //
 
 import SwiftUI
-import os
+import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "Views")
-// MARK: - Notifications
-
-extension NSNotification.Name {
-    static let navigateToSettings = NSNotification.Name("navigateToSettings")
-    static let navigateToAgentSettings = NSNotification.Name("navigateToAgentSettings")
-    static let navigateToEngineMonitor = NSNotification.Name("navigateToEngineMonitor")
-    static let navigateToAgentMonitor = NSNotification.Name("navigateToAgentMonitor")
-
-    @available(*, deprecated, renamed: "navigateToAgentSettings")
-    static let navigateToLiveSettings = navigateToAgentSettings
-    @available(*, deprecated, renamed: "navigateToAgentMonitor")
-    static let navigateToLiveMonitor = navigateToAgentMonitor
-
-    #if DEBUG
-    /// Debug navigation for screenshots: talkie://d/{path}
-    static let debugNavigate = NSNotification.Name("debugNavigate")
-    #endif
-}
+private let modelsLog = Log(.ui)
 
 struct ModelsContentView: View {
     private let registry = LLMProviderRegistry.shared
-    @Environment(SettingsManager.self) private var settingsManager: SettingsManager
-    private let whisperService = WhisperService.shared
     private let parakeetService = ParakeetService.shared
-    @State private var downloadingWhisperModel: WhisperModel?
-    @State private var whisperDownloadTask: Task<Void, Never>?
-    @State private var downloadingParakeetModel: ParakeetModel?
+
+    @Environment(SettingsManager.self) private var settingsManager
+    @State private var downloadingParakeet = false
     @State private var parakeetDownloadTask: Task<Void, Never>?
 
-    // Responsive breakpoints
-    private let stackBreakpoint: CGFloat = 900    // Below: stack sections vertically (needs ~750px for side-by-side)
-    private let compactBreakpoint: CGFloat = 600  // Below: single-column grids
-
     var body: some View {
-        GeometryReader { geometry in
-            let isNarrow = geometry.size.width < stackBreakpoint
-            let isCompact = geometry.size.width < compactBreakpoint
+        TalkiePage("Models", title: "Models", style: .page) {
+            VStack(alignment: .leading, spacing: 18) {
+                ModelsInventorySummary(
+                    voiceStatus: voiceStatus,
+                    configuredProviderCount: configuredProviderCount,
+                    providerCount: providerRows.count,
+                    selectedProviderName: selectedProviderName,
+                    selectedModelName: selectedModelName
+                )
 
-            TalkiePage("Models", style: .pageOnly) {
-                // Responsive layout: side-by-side when wide, stacked when narrow
-                if isNarrow {
-                    VStack(alignment: .leading, spacing: 20) {
-                        cloudProvidersSectionView(isCompact: isCompact)
-                        speechToTextSectionView(isCompact: isCompact)
-                    }
-                } else {
-                    cloudProvidersSectionView(isCompact: isCompact)
+                VoiceModelSection(
+                    status: voiceStatus,
+                    isDownloading: downloadingParakeet,
+                    downloadProgress: parakeetService.downloadProgress,
+                    onDownload: downloadParakeet,
+                    onDelete: deleteParakeet
+                )
 
-                    Divider()
-
-                    speechToTextSectionView(isCompact: isCompact)
-                }
+                ProviderModelsSection(
+                    rows: providerRows,
+                    activeProviderId: activeProviderId,
+                    selectedModelId: selectedModelId(for:),
+                    onSelectModel: selectModel,
+                    onUseProvider: useProvider,
+                    onConfigureProvider: configureProvider
+                )
             }
+            .frame(maxWidth: 980, alignment: .leading)
         }
-        .background(settingsManager.midnightBase)
         .task {
+            normalizeVoiceModel()
             await registry.refreshModels()
         }
     }
-    // MARK: - Section Views (for responsive layout)
 
-    @ViewBuilder
-    private func cloudProvidersSectionView(isCompact: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(settingsManager.midnightAccentCloud)
-                    .frame(width: 3, height: 14)
-
-                Text("CLOUD PROVIDERS")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .foregroundColor(settingsManager.midnightTextSecondary)
-                Spacer()
-                Text("API CONFIGURATION")
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .foregroundColor(settingsManager.midnightTextTertiary)
-            }
-
-            cloudProvidersGridView(isCompact: isCompact)
-        }
-    }
-
-    @ViewBuilder
-    private func speechToTextSectionView(isCompact: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(settingsManager.midnightAccentSTT)
-                    .frame(width: 3, height: 14)
-
-                Text("SPEECH-TO-TEXT")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .foregroundColor(settingsManager.midnightTextSecondary)
-                Spacer()
-                Text("HIGH FIDELITY AUDIO")
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .foregroundColor(settingsManager.midnightTextTertiary)
-            }
-
-            speechToTextColumnView(isCompact: isCompact)
-        }
-    }
-
-    // MARK: - Cloud Providers
-
-    @State private var configuringProvider: String?
-
-    @ViewBuilder
-    private var cloudProvidersSection: some View {
-        @Bindable var settings = settingsManager
-
-
-        LazyVGrid(columns: [
-            GridItem(.flexible(), spacing: 8),
-            GridItem(.flexible(), spacing: 8),
-            GridItem(.flexible(), spacing: 8),
-            GridItem(.flexible(), spacing: 8)
-        ], spacing: 8) {
-            CompactProviderCard(
-                name: "OpenAI",
-                isConfigured: settingsManager.openaiApiKey != nil,
-                icon: "brain.head.profile",
-                modelCount: 4,
-                highlights: [
-                    "GPT-4o: Best reasoning + vision",
-                    "GPT-4o Mini: Fast, cost-effective",
-                    "128K context, JSON mode"
-                ],
-                isConfiguring: configuringProvider == "openai",
-                apiKeyBinding: Binding(
-                    get: { settingsManager.openaiApiKey ?? "" },
-                    set: { settingsManager.openaiApiKey = $0.isEmpty ? nil : $0 }
-                ),
-                onConfigure: {
-                    withAnimation {
-                        configuringProvider = configuringProvider == "openai" ? nil : "openai"
-                    }
-                },
-                onCancel: {
-                    withAnimation {
-                        configuringProvider = nil
-                    }
-                },
-                onSave: {
-                                        withAnimation {
-                        configuringProvider = nil
-                    }
-                }
-            )
-
-            CompactProviderCard(
-                name: "Anthropic",
-                isConfigured: settingsManager.anthropicApiKey != nil,
-                icon: "sparkles",
-                modelCount: 3,
-                highlights: [
-                    "Sonnet 3.5: Top analysis + coding",
-                    "Haiku 3.5: Ultra-fast responses",
-                    "200K context, extended thinking"
-                ],
-                isConfiguring: configuringProvider == "anthropic",
-                apiKeyBinding: Binding(
-                    get: { settingsManager.anthropicApiKey ?? "" },
-                    set: { settingsManager.anthropicApiKey = $0.isEmpty ? nil : $0 }
-                ),
-                onConfigure: {
-                    withAnimation {
-                        configuringProvider = configuringProvider == "anthropic" ? nil : "anthropic"
-                    }
-                },
-                onCancel: {
-                    withAnimation {
-                        configuringProvider = nil
-                    }
-                },
-                onSave: {
-                                        withAnimation {
-                        configuringProvider = nil
-                    }
-                }
-            )
-
-            CompactProviderCard(
-                name: "Gemini",
-                isConfigured: settingsManager.hasValidApiKey,
-                icon: "cloud.fill",
-                modelCount: 2,
-                highlights: [
-                    "1.5 Pro: Large context (2M tokens)",
-                    "1.5 Flash: Low latency",
-                    "Free tier available"
-                ],
-                isConfiguring: configuringProvider == "gemini",
-                apiKeyBinding: $settings.geminiApiKey,
-                onConfigure: {
-                    withAnimation {
-                        configuringProvider = configuringProvider == "gemini" ? nil : "gemini"
-                    }
-                },
-                onCancel: {
-                    withAnimation {
-                        configuringProvider = nil
-                    }
-                },
-                onSave: {
-                                        withAnimation {
-                        configuringProvider = nil
-                    }
-                }
-            )
-
-            CompactProviderCard(
-                name: "Groq",
-                isConfigured: settingsManager.groqApiKey != nil,
-                icon: "bolt.fill",
-                modelCount: 4,
-                highlights: [
-                    "Llama 3.3 70B: Powerful open model",
-                    "Ultra-fast inference (500+ tok/s)",
-                    "Free tier, low-cost scaling"
-                ],
-                isConfiguring: configuringProvider == "groq",
-                apiKeyBinding: Binding(
-                    get: { settingsManager.groqApiKey ?? "" },
-                    set: { settingsManager.groqApiKey = $0.isEmpty ? nil : $0 }
-                ),
-                onConfigure: {
-                    withAnimation {
-                        configuringProvider = configuringProvider == "groq" ? nil : "groq"
-                    }
-                },
-                onCancel: {
-                    withAnimation {
-                        configuringProvider = nil
-                    }
-                },
-                onSave: {
-                                        withAnimation {
-                        configuringProvider = nil
-                    }
-                }
-            )
-        }
-        .padding(.horizontal, 24)
-    }
-
-    // MARK: - Cloud Providers Grid (Showcase Style)
-
-    @State private var expandedCloudProvider: String?
-
-    @ViewBuilder
-    private func cloudProvidersGridView(isCompact: Bool) -> some View {
-        let columns: [GridItem] = isCompact
-            ? [GridItem(.flexible())]  // Single column when compact
-            : [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]  // 2 columns otherwise
-
-        LazyVGrid(columns: columns, spacing: 8) {
-            ExpandableCloudProviderCard(
-                providerId: "openai",
-                name: "OpenAI",
-                tagline: "Industry standard for reasoning and vision",
-                isConfigured: settingsManager.openaiApiKey != nil,
-                isExpanded: expandedCloudProvider == "openai",
-                onToggle: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        expandedCloudProvider = expandedCloudProvider == "openai" ? nil : "openai"
-                    }
-                },
-                onConfigure: {
-                    // Deep link to Settings - API Keys section
-                    NavigationState.shared.navigateToSettings(.aiProviders)
-                }
-            )
-
-            ExpandableCloudProviderCard(
-                providerId: "anthropic",
-                name: "Anthropic",
-                tagline: "Extended thinking and nuanced understanding",
-                isConfigured: settingsManager.anthropicApiKey != nil,
-                isExpanded: expandedCloudProvider == "anthropic",
-                onToggle: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        expandedCloudProvider = expandedCloudProvider == "anthropic" ? nil : "anthropic"
-                    }
-                },
-                onConfigure: {
-                    NavigationState.shared.navigateToSettings(.aiProviders)
-                }
-            )
-
-            ExpandableCloudProviderCard(
-                providerId: "gemini",
-                name: "Gemini",
-                tagline: "Multimodal powerhouse with massive context",
-                isConfigured: settingsManager.hasValidApiKey,
-                isExpanded: expandedCloudProvider == "gemini",
-                onToggle: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        expandedCloudProvider = expandedCloudProvider == "gemini" ? nil : "gemini"
-                    }
-                },
-                onConfigure: {
-                    NavigationState.shared.navigateToSettings(.aiProviders)
-                }
-            )
-
-            ExpandableCloudProviderCard(
-                providerId: "groq",
-                name: "Groq",
-                tagline: "Ultra-fast inference at scale",
-                isConfigured: settingsManager.groqApiKey != nil,
-                isExpanded: expandedCloudProvider == "groq",
-                onToggle: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        expandedCloudProvider = expandedCloudProvider == "groq" ? nil : "groq"
-                    }
-                },
-                onConfigure: {
-                    NavigationState.shared.navigateToSettings(.aiProviders)
-                }
-            )
-        }
-    }
-
-    // MARK: - Speech-to-Text Column (Compact Grid)
-
-    @ViewBuilder
-    private func speechToTextColumnView(isCompact: Bool) -> some View {
-        let sttColumns: [GridItem] = isCompact
-            ? [GridItem(.flexible())]  // Single column when compact
-            : [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]  // 2 columns otherwise
-
-        VStack(alignment: .leading, spacing: 12) {
-            #if arch(arm64)
-            // Parakeet family section
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 6) {
-                    Text("PARAKEET")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .foregroundColor(.cyan)
-                    Text("— NVIDIA")
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(settingsManager.midnightTextTertiary)
-                }
-
-                LazyVGrid(columns: sttColumns, spacing: 8) {
-                    ForEach(ParakeetModel.allCases, id: \.rawValue) { model in
-                        STTModelCard(
-                            name: model.sttCardName,
-                            family: .parakeet,
-                            size: model.sttCardSize,
-                            speedTier: model.sttSpeedTier,
-                            languageInfo: model.sttLanguages,
-                            isDownloaded: parakeetService.isModelDownloaded(model),
-                            isDownloading: downloadingParakeetModel == model,
-                            downloadProgress: downloadingParakeetModel == model ? 0.5 : 0,
-                            onDownload: { downloadParakeetModel(model) },
-                            onDelete: { deleteParakeetModel(model) }
-                        )
-                    }
-                }
-            }
-
-            // Whisper family section
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 6) {
-                    Text("WHISPER")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .foregroundColor(.orange)
-                    Text("— OpenAI")
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(settingsManager.midnightTextTertiary)
-                }
-
-                LazyVGrid(columns: sttColumns, spacing: 8) {
-                    ForEach(WhisperModel.allCases, id: \.rawValue) { model in
-                        STTModelCard(
-                            name: model.sttCardName,
-                            family: .whisper,
-                            size: model.sttCardSize,
-                            speedTier: model.sttSpeedTier,
-                            languageInfo: model.sttLanguages,
-                            isDownloaded: whisperService.isModelDownloaded(model),
-                            isDownloading: downloadingWhisperModel == model,
-                            downloadProgress: downloadingWhisperModel == model ? 0.5 : 0,
-                            onDownload: { downloadWhisperModel(model) },
-                            onDelete: { deleteWhisperModel(model) }
-                        )
-                    }
-                }
-            }
-            #else
-            HStack(spacing: 8) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundColor(.orange)
-                Text("STT requires Apple Silicon")
-                    .font(.system(size: 11))
-                    .foregroundColor(Theme.current.foregroundSecondary)
-            }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.orange.opacity(0.1))
-            .cornerRadius(CornerRadius.sm)
-            #endif
-        }
-    }
-
-    // Legacy section (for reference)
-    private var speechToTextSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            #if arch(arm64)
-            LazyVGrid(columns: [
-                GridItem(.flexible(), spacing: 8),
-                GridItem(.flexible(), spacing: 8),
-                GridItem(.flexible(), spacing: 8),
-                GridItem(.flexible(), spacing: 8)
-            ], spacing: 8) {
-                // Whisper family card
-                WhisperFamilyCard(
-                    models: WhisperModel.allCases,
-                    whisperService: whisperService,
-                    downloadingModel: downloadingWhisperModel,
-                    onDownload: { model in downloadWhisperModel(model) },
-                    onDelete: { model in deleteWhisperModel(model) },
-                    onCancel: { cancelWhisperDownload() }
-                )
-
-                // Parakeet family card
-                ParakeetFamilyCard(
-                    models: ParakeetModel.allCases,
-                    parakeetService: parakeetService,
-                    downloadingModel: downloadingParakeetModel,
-                    onDownload: { model in downloadParakeetModel(model) },
-                    onDelete: { model in deleteParakeetModel(model) },
-                    onCancel: { cancelParakeetDownload() }
-                )
-            }
-            #else
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.orange)
-                    Text("Local STT requires Apple Silicon (M1/M2/M3)")
-                        .font(settingsManager.fontXS)
-                        .foregroundColor(Theme.current.foregroundSecondary)
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.orange.opacity(0.1))
-                .cornerRadius(CornerRadius.xs)
-            }
-            #endif
-        }
-        .padding(.horizontal, 24)
-    }
-
-    // MARK: - Whisper Actions
-
-    private func downloadWhisperModel(_ model: WhisperModel) {
-        logger.debug("[Whisper] Download button clicked for: \(model.displayName)")
+    private var voiceStatus: VoiceModelStatus {
         #if arch(arm64)
-        guard !whisperService.isModelDownloaded(model) else {
-            logger.debug("[Whisper] Model already downloaded: \(model.displayName)")
-            return
+        if downloadingParakeet {
+            return .downloading
         }
-
-        logger.debug("[Whisper] Starting download for: \(model.rawValue)")
-        downloadingWhisperModel = model
-
-        whisperDownloadTask = Task {
-            do {
-                try await whisperService.downloadModel(model)
-                await MainActor.run {
-                    downloadingWhisperModel = nil
-                    whisperDownloadTask = nil
-                }
-                logger.debug("[Whisper] Downloaded: \(model.displayName)")
-            } catch is CancellationError {
-                await MainActor.run {
-                    downloadingWhisperModel = nil
-                    whisperDownloadTask = nil
-                }
-                logger.debug("[Whisper] Download cancelled")
-            } catch {
-                await MainActor.run {
-                    downloadingWhisperModel = nil
-                    whisperDownloadTask = nil
-                }
-                logger.debug("[Whisper] Download failed: \(error)")
-            }
+        if parakeetService.isModelDownloaded(.v3) {
+            return .ready
         }
+        return .available
         #else
-        logger.debug("[Whisper] Download requires Apple Silicon (arm64)")
+        return .unavailable
         #endif
     }
 
-    private func cancelWhisperDownload() {
-        whisperDownloadTask?.cancel()
-        downloadingWhisperModel = nil
-        whisperDownloadTask = nil
-    }
+    private var providerRows: [ProviderModelRowState] {
+        let configs = LLMConfig.shared.providers
+        let orderedIds = LLMConfig.shared.preferredProviderOrder + configs.keys.sorted()
+        var seen = Set<String>()
 
-    private func deleteWhisperModel(_ model: WhisperModel) {
-        #if arch(arm64)
-        do {
-            try whisperService.deleteModel(model)
-            logger.debug("[Whisper] Deleted: \(model.displayName)")
-        } catch {
-            logger.debug("[Whisper] Delete failed: \(error)")
+        return orderedIds.compactMap { providerId in
+            guard seen.insert(providerId).inserted,
+                  let config = configs[providerId],
+                  registry.provider(for: providerId) != nil
+            else {
+                return nil
+            }
+
+            let options = modelOptions(for: config)
+            return ProviderModelRowState(
+                id: providerId,
+                name: config.name,
+                isConfigured: settingsManager.hasAPIKey(forProviderId: providerId),
+                defaultModelId: config.defaultModel,
+                modelOptions: options
+            )
         }
-        #endif
     }
 
-    // MARK: - Parakeet Actions
+    private var configuredProviderCount: Int {
+        providerRows.filter(\.isConfigured).count
+    }
 
-    private func downloadParakeetModel(_ model: ParakeetModel) {
-        logger.debug("[Parakeet] Download button clicked for: \(model.displayName)")
+    private var activeProviderId: String? {
+        if let selected = registry.selectedProviderId,
+           providerRows.contains(where: { $0.id == selected }) {
+            return selected
+        }
+        return providerRows.first(where: \.isConfigured)?.id
+    }
+
+    private var selectedProviderName: String {
+        guard let activeProviderId,
+              let row = providerRows.first(where: { $0.id == activeProviderId })
+        else {
+            return "None"
+        }
+        return row.name
+    }
+
+    private var selectedModelName: String {
+        guard let activeProviderId,
+              let row = providerRows.first(where: { $0.id == activeProviderId })
+        else {
+            return "No provider configured"
+        }
+
+        let id = selectedModelId(for: row)
+        return row.modelOptions.first(where: { $0.id == id })?.name ?? id
+    }
+
+    private func modelOptions(for config: LLMConfig.ProviderConfig) -> [ProviderModelOption] {
+        let options = config.models.map { model in
+            ProviderModelOption(
+                id: model.id,
+                name: model.displayName,
+                detail: model.description,
+                isRecommended: model.recommended ?? false
+            )
+        }
+
+        if options.isEmpty {
+            return [
+                ProviderModelOption(
+                    id: config.defaultModel,
+                    name: config.defaultModel,
+                    detail: nil,
+                    isRecommended: true
+                ),
+            ]
+        }
+
+        return options
+    }
+
+    private func selectedModelId(for row: ProviderModelRowState) -> String {
+        let selectedModel = registry.selectedProviderId == row.id ? registry.selectedModelId : nil
+        if let selectedModel,
+           row.modelOptions.contains(where: { $0.id == selectedModel }) {
+            return selectedModel
+        }
+        if row.modelOptions.contains(where: { $0.id == row.defaultModelId }) {
+            return row.defaultModelId
+        }
+        return row.modelOptions.first?.id ?? row.defaultModelId
+    }
+
+    private func selectModel(providerId: String, modelId: String) {
+        registry.selectedProviderId = providerId
+        registry.selectedModelId = modelId
+    }
+
+    private func useProvider(_ row: ProviderModelRowState) {
+        guard row.isConfigured else {
+            configureProvider(row.id)
+            return
+        }
+        selectModel(providerId: row.id, modelId: selectedModelId(for: row))
+    }
+
+    private func configureProvider(_ providerId: String) {
+        NavigationState.shared.navigateToSettings(.aiProviders)
+    }
+
+    private func normalizeVoiceModel() {
+        if settingsManager.liveTranscriptionModelId != TalkieDefaults.dictationModelId {
+            settingsManager.liveTranscriptionModelId = TalkieDefaults.dictationModelId
+        }
+    }
+
+    private func downloadParakeet() {
         #if arch(arm64)
-        guard !parakeetService.isModelDownloaded(model) else {
-            logger.debug("[Parakeet] Model already downloaded: \(model.displayName)")
+        guard !parakeetService.isModelDownloaded(.v3), parakeetDownloadTask == nil else {
             return
         }
 
-        logger.debug("[Parakeet] Starting download for: \(model.rawValue)")
-        downloadingParakeetModel = model
-
+        downloadingParakeet = true
         parakeetDownloadTask = Task {
             do {
-                try await parakeetService.downloadModel(model)
-                await MainActor.run {
-                    downloadingParakeetModel = nil
-                    parakeetDownloadTask = nil
-                }
-                logger.debug("[Parakeet] Downloaded: \(model.displayName)")
+                try await parakeetService.downloadModel(.v3)
             } catch is CancellationError {
-                await MainActor.run {
-                    downloadingParakeetModel = nil
-                    parakeetDownloadTask = nil
-                }
-                logger.debug("[Parakeet] Download cancelled")
+                modelsLog.debug("Parakeet download cancelled")
             } catch {
-                await MainActor.run {
-                    downloadingParakeetModel = nil
-                    parakeetDownloadTask = nil
-                }
-                logger.debug("[Parakeet] Download failed: \(error)")
+                modelsLog.error("Parakeet download failed: \(error.localizedDescription)")
+            }
+
+            await MainActor.run {
+                downloadingParakeet = false
+                parakeetDownloadTask = nil
             }
         }
-        #else
-        logger.debug("[Parakeet] Download requires Apple Silicon (arm64)")
         #endif
     }
 
-    private func cancelParakeetDownload() {
-        parakeetDownloadTask?.cancel()
-        downloadingParakeetModel = nil
-        parakeetDownloadTask = nil
-    }
-
-    private func deleteParakeetModel(_ model: ParakeetModel) {
+    private func deleteParakeet() {
         #if arch(arm64)
         do {
-            try parakeetService.deleteModel(model)
-            logger.debug("[Parakeet] Deleted: \(model.displayName)")
+            try parakeetService.deleteModel(.v3)
         } catch {
-            logger.debug("[Parakeet] Delete failed: \(error)")
+            modelsLog.error("Parakeet delete failed: \(error.localizedDescription)")
         }
         #endif
     }
-
 }
 
+private struct ProviderModelOption: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let detail: String?
+    let isRecommended: Bool
+}
+
+private struct ProviderModelRowState: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let isConfigured: Bool
+    let defaultModelId: String
+    let modelOptions: [ProviderModelOption]
+}
+
+private enum VoiceModelStatus: Equatable {
+    case ready
+    case downloading
+    case available
+    case unavailable
+
+    var label: String {
+        switch self {
+        case .ready: return "Ready"
+        case .downloading: return "Downloading"
+        case .available: return "Available"
+        case .unavailable: return "Unavailable"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .ready: return "Installed locally"
+        case .downloading: return "Installing local model"
+        case .available: return "Not installed"
+        case .unavailable: return "Requires Apple Silicon"
+        }
+    }
+}
+
+private struct ModelsInventorySummary: View {
+    let voiceStatus: VoiceModelStatus
+    let configuredProviderCount: Int
+    let providerCount: Int
+    let selectedProviderName: String
+    let selectedModelName: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Inventory")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.current.foreground)
+                Spacer()
+                Text("\(configuredProviderCount)/\(providerCount) providers")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(Theme.current.foregroundMuted)
+            }
+
+            HStack(spacing: 12) {
+                InventoryPill(title: "Voice", value: "Parakeet", detail: voiceStatus.label)
+                InventoryPill(title: "Provider", value: selectedProviderName, detail: selectedModelName)
+            }
+        }
+    }
+}
+
+private struct InventoryPill: View {
+    let title: String
+    let value: String
+    let detail: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title.uppercased())
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(Theme.current.foregroundMuted)
+                Text(value)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.current.foreground)
+            }
+
+            Spacer(minLength: 8)
+
+            Text(detail)
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.current.foregroundSecondary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.current.surface1)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Theme.current.border, lineWidth: 1)
+        )
+        .clipShape(.rect(cornerRadius: 8))
+    }
+}
+
+private struct VoiceModelSection: View {
+    let status: VoiceModelStatus
+    let isDownloading: Bool
+    let downloadProgress: Float
+    let onDownload: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        ModelsSection(title: "Voice", trailing: "1 model") {
+            VStack(spacing: 0) {
+                HStack(spacing: 12) {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Theme.current.accent)
+                        .frame(width: 24, height: 24)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Parakeet")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Theme.current.foreground)
+                        Text(status.detail)
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.current.foregroundSecondary)
+                    }
+
+                    Spacer()
+
+                    ModelsStatusBadge(label: status.label, isActive: status == .ready)
+
+                    voiceAction
+                }
+                .padding(12)
+
+                if isDownloading {
+                    ProgressView(value: Double(downloadProgress))
+                        .progressViewStyle(.linear)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 12)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var voiceAction: some View {
+        switch status {
+        case .ready:
+            Menu {
+                Button("Remove", systemImage: "trash", role: .destructive, action: onDelete)
+            } label: {
+                Image(systemName: "ellipsis")
+                    .frame(width: 28, height: 28)
+            }
+            .menuStyle(.borderlessButton)
+        case .downloading:
+            ProgressView()
+                .controlSize(.small)
+                .frame(width: 28, height: 28)
+        case .available:
+            Button("Download", systemImage: "arrow.down.circle", action: onDownload)
+                .buttonStyle(.bordered)
+        case .unavailable:
+            EmptyView()
+        }
+    }
+}
+
+private struct ProviderModelsSection: View {
+    let rows: [ProviderModelRowState]
+    let activeProviderId: String?
+    let selectedModelId: (ProviderModelRowState) -> String
+    let onSelectModel: (String, String) -> Void
+    let onUseProvider: (ProviderModelRowState) -> Void
+    let onConfigureProvider: (String) -> Void
+
+    var body: some View {
+        ModelsSection(title: "Providers", trailing: "\(rows.count) supported") {
+            VStack(spacing: 0) {
+                ForEach(rows) { row in
+                    ProviderModelRow(
+                        row: row,
+                        isActive: activeProviderId == row.id,
+                        selectedModelId: selectedModelId(row),
+                        onSelectModel: { modelId in
+                            onSelectModel(row.id, modelId)
+                        },
+                        onUseProvider: {
+                            onUseProvider(row)
+                        },
+                        onConfigureProvider: {
+                            onConfigureProvider(row.id)
+                        }
+                    )
+
+                    if row.id != rows.last?.id {
+                        Divider()
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct ProviderModelRow: View {
+    let row: ProviderModelRowState
+    let isActive: Bool
+    let selectedModelId: String
+    let onSelectModel: (String) -> Void
+    let onUseProvider: () -> Void
+    let onConfigureProvider: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ProviderInitial(name: row.name, isActive: isActive)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Text(row.name)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.current.foreground)
+                    ModelsStatusBadge(label: statusLabel, isActive: isActive)
+                }
+
+                Text(modelDetail)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.current.foregroundSecondary)
+                    .lineLimit(1)
+            }
+            .frame(minWidth: 170, alignment: .leading)
+
+            Spacer(minLength: 12)
+
+            ProviderModelPicker(
+                options: row.modelOptions,
+                selection: selectedModelId,
+                isEnabled: row.isConfigured,
+                onChange: onSelectModel
+            )
+            .frame(width: 260)
+
+            if row.isConfigured {
+                Button(isActive ? "In Use" : "Use", systemImage: isActive ? "checkmark.circle.fill" : "arrow.right.circle") {
+                    onUseProvider()
+                }
+                .buttonStyle(.bordered)
+                .disabled(isActive)
+            } else {
+                Button("Configure", systemImage: "key", action: onConfigureProvider)
+                    .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(12)
+        .contentShape(Rectangle())
+    }
+
+    private var statusLabel: String {
+        if isActive { return "In use" }
+        return row.isConfigured ? "Ready" : "Not set"
+    }
+
+    private var modelDetail: String {
+        if let selected = row.modelOptions.first(where: { $0.id == selectedModelId }) {
+            return selected.detail ?? selected.id
+        }
+        return selectedModelId
+    }
+}
+
+private struct ProviderModelPicker: View {
+    let options: [ProviderModelOption]
+    let selection: String
+    let isEnabled: Bool
+    let onChange: (String) -> Void
+
+    var body: some View {
+        Picker("Model", selection: binding) {
+            ForEach(options) { option in
+                Text(optionLabel(option))
+                    .tag(option.id)
+            }
+        }
+        .labelsHidden()
+        .pickerStyle(.menu)
+        .disabled(!isEnabled || options.isEmpty)
+    }
+
+    private var binding: Binding<String> {
+        Binding(
+            get: { selection },
+            set: { onChange($0) }
+        )
+    }
+
+    private func optionLabel(_ option: ProviderModelOption) -> String {
+        option.isRecommended ? "\(option.name) recommended" : option.name
+    }
+}
+
+private struct ProviderInitial: View {
+    let name: String
+    let isActive: Bool
+
+    var body: some View {
+        Text(String(name.prefix(1)).uppercased())
+            .font(.system(size: 12, weight: .bold, design: .monospaced))
+            .foregroundStyle(isActive ? Theme.current.background : Theme.current.foregroundSecondary)
+            .frame(width: 30, height: 30)
+            .background(isActive ? Theme.current.accent : Theme.current.surface2)
+            .overlay(
+                RoundedRectangle(cornerRadius: 7)
+                    .stroke(Theme.current.border, lineWidth: 1)
+            )
+            .clipShape(.rect(cornerRadius: 7))
+    }
+}
+
+private struct ModelsStatusBadge: View {
+    let label: String
+    let isActive: Bool
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(isActive ? Theme.current.accent : Theme.current.foregroundMuted)
+                .frame(width: 6, height: 6)
+            Text(label.uppercased())
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .foregroundStyle(isActive ? Theme.current.accent : Theme.current.foregroundMuted)
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background((isActive ? Theme.current.accent : Theme.current.surface2).opacity(isActive ? 0.12 : 1))
+        .clipShape(.capsule)
+    }
+}
+
+private struct ModelsSection<Content: View>: View {
+    let title: String
+    let trailing: String
+    let content: Content
+
+    init(title: String, trailing: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.trailing = trailing
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.current.foreground)
+                Spacer()
+                Text(trailing.uppercased())
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(Theme.current.foregroundMuted)
+            }
+
+            content
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.current.surface1)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Theme.current.border, lineWidth: 1)
+                )
+                .clipShape(.rect(cornerRadius: 8))
+        }
+    }
+}
 
 #Preview {
     ModelsContentView()
-        .frame(width: 800, height: 600)
+        .environment(SettingsManager.shared)
+        .frame(width: 900, height: 720)
 }

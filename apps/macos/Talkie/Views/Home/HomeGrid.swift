@@ -638,7 +638,9 @@ struct HomeRowView: View {
                     .frame(maxWidth: .infinity, alignment: .top)
                     .contentShape(Rectangle())
                     .overlay {
-                        HomeKeyboardSelectionRing(isSelected: selectedCardID == card.id)
+                        if selectedCardID == card.id {
+                            HomeKeyboardSelectionRing()
+                        }
                     }
                     .simultaneousGesture(
                         TapGesture().onEnded {
@@ -832,19 +834,17 @@ private struct HomeCardKeyboardPreview: Equatable {
 }
 
 private struct HomeKeyboardSelectionRing: View {
-    let isSelected: Bool
-
     var body: some View {
         RoundedRectangle(cornerRadius: CornerRadius.cardLarge, style: .continuous)
             .strokeBorder(
-                isSelected ? Theme.current.accent.opacity(0.85) : .clear,
-                lineWidth: isSelected ? 1.5 : 0
+                Theme.current.accent.opacity(0.85),
+                lineWidth: 1.5
             )
             .background {
                 RoundedRectangle(cornerRadius: CornerRadius.cardLarge, style: .continuous)
-                    .fill(isSelected ? Theme.current.accent.opacity(0.08) : .clear)
+                    .fill(Theme.current.accent.opacity(0.08))
             }
-            .shadow(color: isSelected ? Theme.current.accent.opacity(0.22) : .clear, radius: 10, y: 3)
+            .shadow(color: Theme.current.accent.opacity(0.22), radius: 10, y: 3)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }

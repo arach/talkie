@@ -275,7 +275,7 @@ enum TalkieRCParser {
     }
 }
 
-struct GlobalRCConfig: Sendable {
+struct GlobalRCConfig: Equatable, Sendable {
     var tabsDir: String?
     var secretsFiles: [String]
     var env: [String: String]

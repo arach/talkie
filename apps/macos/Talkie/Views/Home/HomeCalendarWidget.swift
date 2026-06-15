@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import AppKit
 import TalkieKit
 
 struct HomeCalendarWidget: View, HomeWidget {
@@ -266,8 +267,6 @@ private struct CalendarDayCell: View {
     let day: HomeCalendarWidget.CalendarDay
     let onTap: (Date) -> Void
 
-    @State private var isHovered = false
-
     private let cellSize: CGFloat = 26
 
     var body: some View {
@@ -285,9 +284,13 @@ private struct CalendarDayCell: View {
                 }
 
                 // Hover highlight
-                if isHovered && day.isCurrentMonth {
-                    Circle()
-                        .fill(Theme.current.surfaceHover)
+                if day.isCurrentMonth {
+                    HomeHoverChrome(
+                        style: HomeHoverChromeStyle(
+                            cornerRadius: cellSize / 2,
+                            hoverFill: NSColor(Theme.current.surfaceHover)
+                        )
+                    )
                         .frame(width: cellSize, height: cellSize)
                 }
 
@@ -312,9 +315,6 @@ private struct CalendarDayCell: View {
         }
         .buttonStyle(.plain)
         .disabled(!day.isCurrentMonth)
-        .onHover { hovering in
-            isHovered = hovering
-        }
     }
 
     private var dayTextColor: Color {

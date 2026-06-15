@@ -16,9 +16,9 @@
 //  Costs:
 //    • CVDisplayLink fires every refresh (~60–120 Hz) but its callback
 //      is microscopic — bumps a counter and posts to main once per
-//      0.5s window.
+//      1s window.
 //    • HUD view re-renders only when @Published values change, which
-//      is at most ~2x/sec.
+//      is at most ~1x/sec.
 //
 
 #if DEBUG
@@ -44,10 +44,10 @@ final class FrameRateMonitor: ObservableObject {
     /// last sampling window. Useful for catching runaway re-renders.
     @Published var bodyInvalidationsPerSec: [String: Int] = [:]
 
-    /// Length of each sampling/logging window. 250ms = 4 Hz log cadence,
-    /// fine-grained enough to see scroll-induced FPS drops while still
-    /// averaging out single-frame noise.
-    private static let windowSeconds: Double = 0.25
+    /// Length of each sampling/logging window. Keep this slow enough that
+    /// the debug HUD does not become its own source of SwiftUI churn while
+    /// profiling navigation and sidebar interactions.
+    private static let windowSeconds: Double = 1.0
 
     private var displayLink: CVDisplayLink?
     private var frameCount: Int = 0

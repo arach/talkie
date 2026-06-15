@@ -17,6 +17,7 @@ import UniformTypeIdentifiers
 
 enum TalkieInternalDrag {
     static let typeIdentifier = "to.talkie.app.internal-drag"
+    static let utType = UTType(exportedAs: typeIdentifier)
     static let pasteboardType = NSPasteboard.PasteboardType(typeIdentifier)
 
     static func isInternal(_ providers: [NSItemProvider]) -> Bool {

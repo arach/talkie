@@ -21,6 +21,23 @@ import TalkieKit
 
 private let appNavigationLog = Log(.ui)
 
+extension NSNotification.Name {
+    static let navigateToSettings = NSNotification.Name("navigateToSettings")
+    static let navigateToAgentSettings = NSNotification.Name("navigateToAgentSettings")
+    static let navigateToEngineMonitor = NSNotification.Name("navigateToEngineMonitor")
+    static let navigateToAgentMonitor = NSNotification.Name("navigateToAgentMonitor")
+
+    @available(*, deprecated, renamed: "navigateToAgentSettings")
+    static let navigateToLiveSettings = navigateToAgentSettings
+
+    @available(*, deprecated, renamed: "navigateToAgentMonitor")
+    static let navigateToLiveMonitor = navigateToAgentMonitor
+
+    #if DEBUG
+    static let debugNavigate = NSNotification.Name("debugNavigate")
+    #endif
+}
+
 enum NavigationSection: Hashable {
     case home           // Main Talkie home/dashboard
     case drafts         // Quick text editing with voice dictation and AI polish (was scratchPad)
@@ -473,15 +490,17 @@ struct AppNavigation: View {
             trailingContent
         }
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button {
-                    withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
-                        sidebarHidden.toggle()
+            if sidebarHidden {
+                ToolbarItem(placement: .navigation) {
+                    Button {
+                        withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
+                            sidebarHidden.toggle()
+                        }
+                    } label: {
+                        Image(systemName: "sidebar.left")
                     }
-                } label: {
-                    Image(systemName: "sidebar.left")
+                    .help("Show sidebar")
                 }
-                .help(sidebarHidden ? "Show sidebar" : "Hide sidebar")
             }
         }
     }
@@ -505,13 +524,9 @@ struct AppNavigation: View {
             } detail: {
                 mainContentView
             }
-            // Drop the system-provided NavigationSplitView sidebar toggle
-            // — the inline collapse button inside the content column header
-            // (e.g. ScopeWorkflowListColumn) carries that intent now. When
-            // the column is collapsed, SidebarButtonOverlayModifier surfaces
-            // a "show sidebar" button so the user can bring it back.
-            .toolbar(removing: .sidebarToggle)
-            .modifier(SidebarButtonOverlayModifier(columnVisibility: $columnVisibility))
+            // Let the native split control be the single titlebar affordance
+            // for the workflow/settings content column. The inline button in
+            // the column header still carries the hide intent while expanded.
         }
     }
 
@@ -1080,15 +1095,7 @@ struct AppNavigation: View {
                         RecordingsScreen(initialTypeFilter: RecordingTypeFilter.notes)
                     }
                 case .models:
-                    if SettingsManager.shared.isScopeTheme {
-                        // Scope owns its own top band via ScopeTopBand —
-                        // no wrapInTalkieSection so we don't double-stack
-                        // 44pt chrome rows above the page.
-                        ScopeModelsView()
-                    } else {
-                        ModelsContentView()
-                            .wrapInTalkieSection("Models")
-                    }
+                    ModelsContentView()
                 case .allowedCommands:
                     AllowedCommandsView()
                         .wrapInTalkieSection("AllowedCommands")
@@ -1393,15 +1400,15 @@ private struct AppWideDropDelegate: DropDelegate {
     let handleAudioDrop: ([NSItemProvider]) -> Bool
 
     func validateDrop(info: DropInfo) -> Bool {
-        AudioDropService.shouldAcceptDrop(providers: providers(from: info))
+        shouldAcceptDrop(info)
     }
 
     func dropEntered(info: DropInfo) {
-        isDropTargeted = AudioDropService.shouldAcceptDrop(providers: providers(from: info))
+        isDropTargeted = shouldAcceptDrop(info)
     }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
-        let shouldAccept = AudioDropService.shouldAcceptDrop(providers: providers(from: info))
+        let shouldAccept = shouldAcceptDrop(info)
         isDropTargeted = shouldAccept
         return DropProposal(operation: shouldAccept ? .copy : .cancel)
     }
@@ -1412,15 +1419,28 @@ private struct AppWideDropDelegate: DropDelegate {
 
     func performDrop(info: DropInfo) -> Bool {
         isDropTargeted = false
-        let itemProviders = providers(from: info)
-        guard AudioDropService.shouldAcceptDrop(providers: itemProviders) else {
+        guard let itemProviders = acceptableProviders(from: info) else {
             return true
         }
         return handleAudioDrop(itemProviders)
     }
 
+    private func shouldAcceptDrop(_ info: DropInfo) -> Bool {
+        guard let itemProviders = acceptableProviders(from: info) else {
+            return false
+        }
+        return AudioDropService.shouldAcceptDrop(providers: itemProviders)
+    }
+
+    private func acceptableProviders(from info: DropInfo) -> [NSItemProvider]? {
+        let itemProviders = providers(from: info)
+        guard !itemProviders.isEmpty else { return nil }
+        guard !TalkieInternalDrag.isInternal(itemProviders) else { return nil }
+        return itemProviders
+    }
+
     private func providers(from info: DropInfo) -> [NSItemProvider] {
-        info.itemProviders(for: AudioDropService.supportedUTTypes)
+        info.itemProviders(for: AudioDropService.supportedUTTypes + [TalkieInternalDrag.utType])
     }
 }
 

@@ -112,7 +112,7 @@ struct ModelsSettingsView: View {
                     Text(category.rawValue)
                         .font(Theme.current.fontXSBold)
                 }
-                .foregroundColor(isSelected ? category.color : Theme.current.foregroundSecondary)
+                .foregroundStyle(isSelected ? category.color : Theme.current.foregroundSecondary)
                 .padding(.horizontal, Spacing.md)
                 .padding(.top, Spacing.sm)
                 .padding(.bottom, Spacing.xs)
@@ -121,7 +121,7 @@ struct ModelsSettingsView: View {
                 Rectangle()
                     .fill(isSelected ? category.color : Color.clear)
                     .frame(height: 2)
-                    .cornerRadius(1)
+                    .clipShape(.rect(cornerRadius: 1))
             }
         }
         .buttonStyle(.plain)
@@ -135,196 +135,114 @@ struct TranscriptionModelsContent: View {
     @Environment(SettingsManager.self) private var settingsManager
     @Environment(EngineClient.self) private var engineClient
 
-    @State private var showingDeleteConfirmation: (Bool, String?) = (false, nil)
+    private let modelId = TalkieDefaults.dictationModelId
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.xl) {
-            // Parakeet Models Section (recommended, show first)
-            parakeetSection
-
-            // Whisper Models Section
-            whisperSection
-        }
+        #if arch(arm64)
+        voiceModelSection
         .onAppear {
+            normalizeVoiceModel()
             engineClient.refreshStatus()
         }
-        .alert("Delete Model?", isPresented: Binding(
-            get: { showingDeleteConfirmation.0 },
-            set: { if !$0 { showingDeleteConfirmation = (false, nil) } }
-        )) {
-            Button("Cancel", role: .cancel) {}
-            Button("Delete", role: .destructive) {
-                if let modelId = showingDeleteConfirmation.1 {
-                    deleteModel(modelId)
-                }
-            }
-        } message: {
-            Text("This will remove the model from your system. You can download it again later.")
-        }
+        #else
+        localSpeechUnavailable
+        #endif
     }
 
-    // MARK: - Parakeet Section
-
-    private var parakeetSection: some View {
+    private var voiceModelSection: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
-            sectionHeader(
-                title: "PARAKEET",
-                subtitle: "NVIDIA's real-time streaming ASR",
-                color: .cyan,
-                repoURL: ParakeetModelCatalog.repoURL,
-                paperURL: ParakeetModelCatalog.paperURL
+            SettingsSectionHeader(
+                title: "VOICE MODEL",
+                subtitle: "Local speech recognition uses one supported model."
             )
 
-            LazyVGrid(columns: [
-                GridItem(.flexible(), spacing: 12),
-                GridItem(.flexible(), spacing: 12)
-            ], spacing: 12) {
-                ForEach(ParakeetModelCatalog.metadata, id: \.model) { meta in
-                    parakeetCard(for: meta)
+            HStack(spacing: Spacing.md) {
+                Image(systemName: "waveform")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Theme.current.accent)
+                    .frame(width: 32, height: 32)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Parakeet")
+                        .font(Theme.current.fontBodyMedium)
+                        .foregroundStyle(Theme.current.foreground)
+                    Text(modelId)
+                        .font(Theme.current.fontXS)
+                        .foregroundStyle(Theme.current.foregroundSecondary)
                 }
+
+                Spacer()
+
+                modelStatusBadge
+                modelAction
             }
+            .padding(Spacing.md)
+            .background(Theme.current.surface1)
+            .clipShape(.rect(cornerRadius: CornerRadius.sm))
         }
         .settingsSectionCard(padding: Spacing.md)
     }
 
-    private func parakeetCard(for meta: ParakeetModelMetadata) -> some View {
-        let modelId = "parakeet:\(meta.model.rawValue)"
+    private var modelStatusBadge: some View {
         let status = engineClient.modelStatus(for: modelId)
+        let label = status.isDownloading
+            ? "Downloading"
+            : status.isLoaded
+                ? "Loaded"
+                : status.isDownloaded ? "Ready" : "Not installed"
 
-        var card = STTModelCard(
-            name: "Parakeet \(meta.displayName)",
-            family: .parakeet,
-            size: formatSize(meta.sizeMB),
-            speedTier: .realtime,
-            languageInfo: meta.languagesBadge,
-            isDownloaded: status.isDownloaded,
-            isDownloading: status.isDownloading,
-            downloadProgress: status.downloadProgress,
-            onDownload: { downloadModel(modelId) },
-            onDelete: { showingDeleteConfirmation = (true, modelId) }
-        )
-        card.isLoaded = status.isLoaded
-        card.onCancel = { Task { await engineClient.cancelDownload() } }
-        return card
-    }
-
-    // MARK: - Whisper Section
-
-    private var whisperSection: some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
-            sectionHeader(
-                title: "WHISPER",
-                subtitle: "OpenAI's multilingual speech recognition",
-                color: .orange,
-                repoURL: WhisperModelCatalog.repoURL,
-                paperURL: WhisperModelCatalog.paperURL
-            )
-
-            LazyVGrid(columns: [
-                GridItem(.flexible(), spacing: 12),
-                GridItem(.flexible(), spacing: 12)
-            ], spacing: 12) {
-                ForEach(WhisperModelCatalog.metadata, id: \.model) { meta in
-                    whisperCard(for: meta)
-                }
-            }
+        return HStack(spacing: 5) {
+            Circle()
+                .fill(status.isDownloaded || status.isLoaded ? Theme.current.accent : Theme.current.foregroundMuted)
+                .frame(width: 6, height: 6)
+            Text(label.uppercased())
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .foregroundStyle(status.isDownloaded || status.isLoaded ? Theme.current.accent : Theme.current.foregroundMuted)
         }
-        .settingsSectionCard(padding: Spacing.md)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Theme.current.surface2)
+        .clipShape(.capsule)
     }
 
-    private func whisperCard(for meta: WhisperModelMetadata) -> some View {
-        let modelId = "whisper:\(meta.model.rawValue)"
+    @ViewBuilder
+    private var modelAction: some View {
         let status = engineClient.modelStatus(for: modelId)
 
-        let speedTier: STTModelCard.SpeedTier = {
-            switch meta.model {
-            case .tiny: return .realtime
-            case .base: return .fast
-            case .small: return .balanced
-            case .distilLargeV3: return .accurate
+        if status.isDownloading {
+            HStack(spacing: Spacing.sm) {
+                ProgressView(value: status.downloadProgress)
+                    .frame(width: 90)
+                Button("Cancel") {
+                    Task { await engineClient.cancelDownload() }
+                }
+                .buttonStyle(.borderless)
             }
-        }()
-
-        var card = STTModelCard(
-            name: "Whisper \(meta.displayName)",
-            family: .whisper,
-            size: formatSize(meta.sizeMB),
-            speedTier: speedTier,
-            languageInfo: "99+",
-            isDownloaded: status.isDownloaded,
-            isDownloading: status.isDownloading,
-            downloadProgress: status.downloadProgress,
-            onDownload: { downloadModel(modelId) },
-            onDelete: { showingDeleteConfirmation = (true, modelId) }
-        )
-        card.isLoaded = status.isLoaded
-        card.onCancel = { Task { await engineClient.cancelDownload() } }
-        return card
+        } else if !status.isDownloaded {
+            Button("Download", systemImage: "arrow.down.circle") {
+                downloadModel(modelId)
+            }
+            .buttonStyle(.bordered)
+        }
     }
 
-    // MARK: - Section Header
-
-    private func sectionHeader(
-        title: String,
-        subtitle: String,
-        color: Color,
-        repoURL: URL?,
-        paperURL: URL?
-    ) -> some View {
+    private var localSpeechUnavailable: some View {
         HStack(spacing: Spacing.sm) {
-            Rectangle()
-                .fill(color)
-                .frame(width: 3, height: 16)
-                .clipShape(RoundedRectangle(cornerRadius: 1))
-
-            Text(title)
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundColor(Theme.current.foreground)
-
-            Text("•")
-                .foregroundColor(Theme.current.foregroundMuted)
-
-            Text(subtitle)
-                .font(.system(size: 10))
-                .foregroundColor(Theme.current.foregroundMuted)
-
+            Image(systemName: "exclamationmark.triangle")
+                .foregroundStyle(.orange)
+            Text("Local speech recognition requires Apple Silicon.")
+                .font(Theme.current.fontSM)
+                .foregroundStyle(Theme.current.foregroundSecondary)
             Spacer()
-
-            if let repoURL {
-                Link(destination: repoURL) {
-                    HStack(spacing: 3) {
-                        Image(systemName: "link")
-                            .font(.system(size: 9))
-                        Text("Repo")
-                            .font(.system(size: 9))
-                    }
-                    .foregroundColor(Theme.current.foregroundMuted)
-                }
-                .buttonStyle(.plain)
-            }
-
-            if let paperURL {
-                Link(destination: paperURL) {
-                    HStack(spacing: 3) {
-                        Image(systemName: "doc.text")
-                            .font(.system(size: 9))
-                        Text("Paper")
-                            .font(.system(size: 9))
-                    }
-                    .foregroundColor(Theme.current.foregroundMuted)
-                }
-                .buttonStyle(.plain)
-            }
         }
+        .padding(Spacing.md)
+        .settingsSectionCard(padding: Spacing.md)
     }
 
-    // MARK: - Helpers
-
-    private func formatSize(_ mb: Int) -> String {
-        if mb >= 1000 {
-            return String(format: "%.1f GB", Double(mb) / 1000.0)
+    private func normalizeVoiceModel() {
+        if settingsManager.liveTranscriptionModelId != modelId {
+            settingsManager.liveTranscriptionModelId = modelId
         }
-        return "\(mb) MB"
     }
 
     private func downloadModel(_ modelId: String) {
@@ -338,10 +256,32 @@ struct TranscriptionModelsContent: View {
             }
         }
     }
+}
 
-    private func deleteModel(_ modelId: String) {
-        log.info("Deleting model: \(modelId)")
-        // TODO: Implement model deletion via EngineClient
+private struct SettingsSectionHeader: View {
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(spacing: Spacing.sm) {
+            Rectangle()
+                .fill(Theme.current.accent)
+                .frame(width: 3, height: 16)
+                .clipShape(.rect(cornerRadius: 1))
+
+            Text(title)
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(Theme.current.foreground)
+
+            Text("·")
+                .foregroundStyle(Theme.current.foregroundMuted)
+
+            Text(subtitle)
+                .font(.system(size: 10))
+                .foregroundStyle(Theme.current.foregroundMuted)
+
+            Spacer()
+        }
     }
 }
 

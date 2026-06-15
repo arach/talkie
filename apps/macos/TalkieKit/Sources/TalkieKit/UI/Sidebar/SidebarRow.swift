@@ -32,7 +32,6 @@ public struct SidebarRow<Selection: Hashable, Content: View>: View {
     @Environment(\.sidebarAccent) private var accentColor
 
     @State private var isHovering = false
-    @State private var rowFrame: CGRect = .zero
 
     public init(
         section: Selection,
@@ -91,24 +90,13 @@ public struct SidebarRow<Selection: Hashable, Content: View>: View {
         .accessibilityLabel(tooltipLabel ?? "")
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .accessibilityHint("Activate to navigate")
-        .background {
-            if transition.isCompact {
-                GeometryReader { geo in
-                    Color.clear
-                        .onAppear { rowFrame = geo.frame(in: .global) }
-                        .onChange(of: geo.frame(in: .global)) { _, newFrame in
-                            rowFrame = newFrame
-                        }
-                }
-            }
-        }
-        .onContinuousHover { phase in
+        .onContinuousHover(coordinateSpace: .global) { phase in
             switch phase {
-            case .active:
+            case .active(let location):
                 isHovering = true
                 if transition.isCompact, let label = tooltipLabel {
                     let tooltip = SidebarTooltipState.shared
-                    let anchor = CGPoint(x: rowFrame.maxX, y: rowFrame.midY)
+                    let anchor = CGPoint(x: location.x + SidebarLayout.railWidth / 2, y: location.y)
                     if tooltip.label == label {
                         tooltip.updateAnchor(anchor)
                     } else {

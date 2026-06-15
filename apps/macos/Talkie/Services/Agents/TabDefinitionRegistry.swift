@@ -36,7 +36,7 @@ final class TabDefinitionRegistry {
     private let fileManager = FileManager.default
 
     private static let defaultTabsDir = "~/.talkie/tabs"
-    private static let globalRCPath = "~/.talkierc"
+    nonisolated private static let globalRCPath = "~/.talkierc"
 
     var tabsDirectoryURL: URL {
         let dir = globalConfig.tabsDir ?? Self.defaultTabsDir
@@ -161,17 +161,22 @@ final class TabDefinitionRegistry {
     private func loadGlobalConfig() {
         let url = globalRCURL
         guard fileManager.fileExists(atPath: url.path) else {
-            globalConfig = GlobalRCConfig(tabsDir: nil, secretsFiles: [], env: [:], defaults: [:])
+            setGlobalConfig(GlobalRCConfig(tabsDir: nil, secretsFiles: [], env: [:], defaults: [:]))
             return
         }
 
         do {
             let content = try String(contentsOf: url, encoding: .utf8)
-            globalConfig = try TalkieRCParser.parseGlobalRC(content)
+            setGlobalConfig(try TalkieRCParser.parseGlobalRC(content))
         } catch {
             log.warning("Failed to parse ~/.talkierc", detail: error.localizedDescription)
-            globalConfig = GlobalRCConfig(tabsDir: nil, secretsFiles: [], env: [:], defaults: [:])
+            setGlobalConfig(GlobalRCConfig(tabsDir: nil, secretsFiles: [], env: [:], defaults: [:]))
         }
+    }
+
+    private func setGlobalConfig(_ config: GlobalRCConfig) {
+        guard globalConfig != config else { return }
+        globalConfig = config
     }
 
     private func loadAllTabs() {
@@ -441,6 +446,7 @@ final class TabDefinitionRegistry {
             nil,
             { _, info, numEvents, eventPaths, _, _ in
                 guard let info else { return }
+                guard TabDefinitionRegistry.eventPathsIncludeGlobalRC(eventPaths) else { return }
                 let registry = Unmanaged<TabDefinitionRegistry>.fromOpaque(info).takeUnretainedValue()
                 Task { @MainActor in
                     registry.loadGlobalConfig()
@@ -456,6 +462,22 @@ final class TabDefinitionRegistry {
             FSEventStreamStart(stream)
             globalFSEventStream = stream
         }
+    }
+
+    nonisolated private static func eventPathsIncludeGlobalRC(_ eventPaths: UnsafeMutableRawPointer?) -> Bool {
+        guard let eventPaths else { return false }
+
+        let targetPath = URL(fileURLWithPath: (globalRCPath as NSString).expandingTildeInPath)
+            .standardizedFileURL
+            .path
+        let paths = unsafeBitCast(eventPaths, to: NSArray.self)
+        for case let path as String in paths {
+            if URL(fileURLWithPath: path).standardizedFileURL.path == targetPath {
+                return true
+            }
+        }
+
+        return false
     }
 
     private func stopWatching() {

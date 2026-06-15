@@ -16,7 +16,6 @@ struct WidgetCard<Content: View>: View {
     let content: Content
     var padding: CGFloat = Spacing.md
 
-    @State private var isHovered = false
     private var isTechnical: Bool { TechnicalStyle.isActive }
 
     init(padding: CGFloat = Spacing.md, @ViewBuilder content: () -> Content) {
@@ -45,7 +44,7 @@ struct WidgetCard<Content: View>: View {
                             .fill(
                                 LinearGradient(
                                     colors: [
-                                        Color.white.opacity(isHovered ? 0.08 : 0.03),
+                                        Color.white.opacity(0.03),
                                         Color.white.opacity(0.01),
                                         Color.clear
                                     ],
@@ -59,15 +58,12 @@ struct WidgetCard<Content: View>: View {
                     RoundedRectangle(cornerRadius: radius)
                         .strokeBorder(
                             isTechnical
-                                ? (isHovered ? TechnicalStyle.borderHover(baseLevel: 1) : TechnicalStyle.borderLevel1)
-                                : Theme.current.border.opacity(isHovered ? 0.25 : 0.1),
+                                ? TechnicalStyle.borderLevel1
+                                : Theme.current.border.opacity(0.1),
                             lineWidth: borderWidth
                         )
                 }
             )
-            .scaleEffect(isHovered && !isTechnical ? 1.005 : 1.0)
-            .animation(.spring(response: 0.2, dampingFraction: 0.8), value: isHovered)
-            .onHover { isHovered = $0 }
     }
 }
 
@@ -80,13 +76,11 @@ struct StatWidget: View {
     let label: String
     var detail: String? = nil
 
-    @State private var isHovered = false
     private let settings = SettingsManager.shared
     private var isTechnical: Bool { TechnicalStyle.isActive }
 
     var body: some View {
         let radius = CornerRadius.card
-        let borderWidth = settings.currentBorderWidth
 
         VStack(spacing: Spacing.sm) {
             // Icon
@@ -122,9 +116,6 @@ struct StatWidget: View {
             fallbackFill: Theme.current.surface2,
             fallbackStroke: Theme.current.divider
         )
-        .scaleEffect(isHovered ? 1.01 : 1.0)
-        .animation(.spring(response: 0.2, dampingFraction: 0.8), value: isHovered)
-        .onHover { isHovered = $0 }
     }
 }
 
@@ -134,7 +125,6 @@ struct StatWidget: View {
 struct StreakWidget: View {
     let days: Int
 
-    @State private var isHovered = false
     private let settings = SettingsManager.shared
 
     private var flameIcon: String {
@@ -166,9 +156,6 @@ struct StreakWidget: View {
             fallbackFill: Theme.current.surface2,
             fallbackStroke: Theme.current.divider
         )
-        .scaleEffect(isHovered ? 1.01 : 1.0)
-        .animation(.spring(response: 0.2, dampingFraction: 0.8), value: isHovered)
-        .onHover { isHovered = $0 }
     }
 }
 
@@ -179,8 +166,6 @@ struct ActionWidget: View {
     let icon: String
     let title: String
     let action: () -> Void
-
-    @State private var isHovered = false
 
     var body: some View {
         Button(action: action) {
@@ -201,11 +186,8 @@ struct ActionWidget: View {
                 fallbackFill: Theme.current.surface2,
                 fallbackStroke: Theme.current.divider
             )
-            .scaleEffect(isHovered ? 1.015 : 1.0)
-            .animation(.spring(response: 0.2, dampingFraction: 0.8), value: isHovered)
         }
         .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
     }
 }
 

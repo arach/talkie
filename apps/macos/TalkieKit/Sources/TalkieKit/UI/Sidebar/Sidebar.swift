@@ -517,9 +517,7 @@ private struct RailIcon<Selection: Hashable>: View {
 
     @Environment(\.sidebarStyle) private var style
 
-    @State private var isHovering = false
     @State private var isPressing = false
-    @State private var rowFrame: CGRect = .zero
 
     private var glyphName: String {
         if isSelected, let s = item.selectedIcon { return s }
@@ -533,11 +531,9 @@ private struct RailIcon<Selection: Hashable>: View {
         item.tooltipLabel ?? item.title
     }
 
-    /// Selected = accent; hovered = primary; otherwise muted secondary.
-    /// Spring on color makes the hover/select transition feel intentional.
+    /// Selected = accent; otherwise muted secondary. Hover is handled by the shared rail underlay.
     private var iconColor: Color {
         if isSelected { return accent }
-        if isHovering { return Color.primary }
         return Color.secondary
     }
 
@@ -551,7 +547,6 @@ private struct RailIcon<Selection: Hashable>: View {
             // click feedback — applies across all styles (was kinetic-
             // only) so every click feels acknowledged.
             .scaleEffect(isPressing ? 0.92 : 1.0)
-            .animation(.easeOut(duration: 0.08), value: isHovering)
             .animation(.spring(response: 0.20, dampingFraction: 0.65), value: isPressing)
             .contentShape(Rectangle())
             .onTapGesture { onTap() }
@@ -560,21 +555,13 @@ private struct RailIcon<Selection: Hashable>: View {
                     .onChanged { _ in isPressing = true }
                     .onEnded   { _ in isPressing = false }
             )
-        .background {
-            GeometryReader { geo in
-                Color.clear
-                    .onAppear { rowFrame = geo.frame(in: .global) }
-                    .onChange(of: geo.frame(in: .global)) { _, new in rowFrame = new }
-            }
-        }
-        .onContinuousHover { phase in
+        .onContinuousHover(coordinateSpace: .global) { phase in
             switch phase {
-            case .active:
-                isHovering = true
+            case .active(let location):
                 onHoverChange(true)
                 if isCompact, let label = tooltipLabel {
                     let tooltip = SidebarTooltipState.shared
-                    let anchor = CGPoint(x: rowFrame.maxX, y: rowFrame.midY)
+                    let anchor = CGPoint(x: location.x + SidebarLayout.railWidth / 2, y: location.y)
                     if tooltip.label == label {
                         tooltip.updateAnchor(anchor)
                     } else {
@@ -582,7 +569,6 @@ private struct RailIcon<Selection: Hashable>: View {
                     }
                 }
             case .ended:
-                isHovering = false
                 onHoverChange(false)
                 if isCompact, let label = tooltipLabel {
                     SidebarTooltipState.shared.dismiss(matching: label)

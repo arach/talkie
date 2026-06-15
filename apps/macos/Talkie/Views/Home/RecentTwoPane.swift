@@ -173,6 +173,15 @@ private enum RecentPaneTokens {
     static let hoverBg     = Color(red: 0.95, green: 0.95, blue: 0.94).opacity(0.5)
 }
 
+private extension HomeHoverChromeStyle {
+    static func recentPaneRow() -> HomeHoverChromeStyle {
+        HomeHoverChromeStyle(
+            cornerRadius: 0,
+            hoverFill: NSColor(RecentPaneTokens.hoverBg)
+        )
+    }
+}
+
 // MARK: - ⌘ glyph badge
 //
 // Small ⌘+key chip that fades in while Command is held. Mirrors the
@@ -346,7 +355,6 @@ private struct RecentRowView: View {
     let row: RecentRow
     let tint: Color
     @Environment(\.cmdHeld) private var cmdHeld
-    @State private var hovered = false
 
     private var showBadge: Bool { cmdHeld && row.shortcutNumber != nil }
 
@@ -400,10 +408,9 @@ private struct RecentRowView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .background(hovered ? RecentPaneTokens.hoverBg : Color.clear)
+            .background(HomeHoverChrome(style: .recentPaneRow()))
         }
         .buttonStyle(.plain)
-        .onHover { hovered = $0 }
         .overlay(ScopeRule(.subtle), alignment: .top)
         .modifier(RecentRowContextMenu(actions: row.menuActions))
     }
@@ -434,7 +441,6 @@ private struct RecentRowContextMenu: ViewModifier {
 private struct EmptyCTARow: View {
     let cta: RecentCTA
     let tint: Color
-    @State private var hovered = false
 
     var body: some View {
         Button(action: cta.onTap) {
@@ -470,10 +476,9 @@ private struct EmptyCTARow: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(hovered ? RecentPaneTokens.hoverBg : Color.clear)
+            .background(HomeHoverChrome(style: .recentPaneRow()))
         }
         .buttonStyle(.plain)
-        .onHover { hovered = $0 }
         .overlay(
             ScopeRule(.row),
             alignment: .top

@@ -42,8 +42,6 @@ struct HomeShortcutsWidget: View, HomeWidget {
 private struct ShortcutRow: View {
     let action: SingleKeyShortcutAction
 
-    @State private var isHovered = false
-
     var body: some View {
         Button {
             Task { @MainActor in
@@ -60,16 +58,16 @@ private struct ShortcutRow: View {
 
                 Text(action.shortcutKey)
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundStyle(isHovered ? Theme.current.foreground : Theme.current.foregroundMuted)
+                    .foregroundStyle(Theme.current.foregroundMuted)
                     .frame(width: 20, height: 20)
                     .background(
                         RoundedRectangle(cornerRadius: 5)
-                            .fill(isHovered ? Theme.current.surface3 : Theme.current.surface2)
+                            .fill(Theme.current.surface2)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 5)
                             .strokeBorder(
-                                isHovered ? Theme.current.border.opacity(0.35) : Theme.current.border.opacity(0.14),
+                                Theme.current.border.opacity(0.14),
                                 lineWidth: 0.5
                             )
                     )
@@ -77,16 +75,14 @@ private struct ShortcutRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
+            .background(HomeHoverChrome(style: .standardRow(cornerRadius: 8)))
         }
-        .buttonStyle(ShortcutRowButtonStyle(isHovered: isHovered))
-        .onHover { isHovered = $0 }
+        .buttonStyle(ShortcutRowButtonStyle())
         .help("\(action.title) (\(action.shortcutKey))")
     }
 }
 
 private struct ShortcutRowButtonStyle: ButtonStyle {
-    let isHovered: Bool
-
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background(
@@ -95,24 +91,16 @@ private struct ShortcutRowButtonStyle: ButtonStyle {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(borderColor, lineWidth: 0.5)
+                    .strokeBorder(.clear, lineWidth: 0.5)
             )
-            .scaleEffect(configuration.isPressed ? 0.985 : (isHovered ? 1.01 : 1.0))
+            .scaleEffect(configuration.isPressed ? 0.985 : 1.0)
             .animation(.spring(response: 0.22, dampingFraction: 0.84), value: configuration.isPressed)
-            .animation(.spring(response: 0.24, dampingFraction: 0.84), value: isHovered)
     }
 
     private func backgroundColor(isPressed: Bool) -> Color {
         if isPressed {
             return Theme.current.surface3.opacity(0.9)
         }
-        if isHovered {
-            return Theme.current.surface2.opacity(0.82)
-        }
         return Color.clear
-    }
-
-    private var borderColor: Color {
-        isHovered ? Theme.current.border.opacity(0.25) : .clear
     }
 }
