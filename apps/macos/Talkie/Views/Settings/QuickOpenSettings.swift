@@ -6,9 +6,9 @@
 //
 
 import SwiftUI
-import os
+import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "QuickOpenSettings")
+private let logger = Log(.ui)
 
 // MARK: - Quick Open Settings View
 

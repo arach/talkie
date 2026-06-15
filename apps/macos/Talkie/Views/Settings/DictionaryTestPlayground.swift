@@ -529,7 +529,7 @@ struct DictionaryTestPlayground: View {
                 recentMemos = memos
             }
         } catch {
-            print("[DictionaryTestPlayground] Failed to load memos: \(error)")
+            TalkieConsole.info("[DictionaryTestPlayground] Failed to load memos: \(error)")
         }
 
         // Load live dictations (from unified recordings table)
@@ -542,7 +542,7 @@ struct DictionaryTestPlayground: View {
                 recentDictations = withText
             }
         } catch {
-            print("[DictionaryTestPlayground] Failed to load dictations: \(error)")
+            TalkieConsole.info("[DictionaryTestPlayground] Failed to load dictations: \(error)")
         }
     }
 

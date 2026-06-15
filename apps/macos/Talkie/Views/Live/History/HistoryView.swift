@@ -358,7 +358,7 @@ struct HistoryView: View {
                 // Non-critical: duration metadata is optional
                 // Log for debugging if audio file issues occur
                 #if DEBUG
-                print("[HistoryView] Failed to load audio duration for \(url.lastPathComponent): \(error.localizedDescription)")
+                TalkieConsole.info("[HistoryView] Failed to load audio duration for \(url.lastPathComponent): \(error.localizedDescription)")
                 #endif
             }
         }
@@ -462,7 +462,7 @@ struct HistoryView: View {
         )
         // TODO: Audio drop transcription should route through TalkieAgent XPC
         // TalkieAgent owns all writes to LiveDatabase
-        print("[HistoryView] Audio drop transcription not implemented - should route through TalkieAgent XPC")
+        TalkieConsole.info("[HistoryView] Audio drop transcription not implemented - should route through TalkieAgent XPC")
         showDropError("Audio drop not available - Talkie Agent handles transcription")
         isTranscribingDrop = false
         dropMessage = nil
@@ -2004,20 +2004,20 @@ private struct MinimalAudioCard: View {
     /// Seek to a position - loads audio first if not already loaded
     private func seekToPosition(_ progress: Double) {
         guard let url = dictation.metadata.audioURL else {
-            print("⚠️ seekToPosition: No audio URL")
+            TalkieConsole.info("⚠️ seekToPosition: No audio URL")
             return
         }
 
-        print("🎯 seekToPosition: \(Int(progress * 100))% - isLoaded: \(isThisLoaded)")
+        TalkieConsole.info("🎯 seekToPosition: \(Int(progress * 100))% - isLoaded: \(isThisLoaded)")
 
         // If audio isn't loaded yet, load it first then seek
         if !isThisLoaded {
-            print("📂 Loading audio first...")
+            TalkieConsole.info("📂 Loading audio first...")
             playback.play(url: url, id: dictation.id.uuidString)
             playback.pause()  // Load but don't auto-play
         }
         playback.seek(to: progress)
-        print("✅ Seeked to \(Int(progress * 100))%")
+        TalkieConsole.info("✅ Seeked to \(Int(progress * 100))%")
     }
 
     private func revealInFinder() {
@@ -2771,10 +2771,10 @@ private struct SmartActionsCard: View {
     }
 
     private func executeAction(_ action: QuickActionKind) {
-        NSLog("[HistoryView] executeAction called: \(action.displayName)")
+        TalkieConsole.critical("[HistoryView] executeAction called: \(action.displayName)")
 
         guard let live = liveDictation else {
-            NSLog("[HistoryView] No liveDictation found for dictation ID: \(dictation.id), liveID: \(dictation.liveID?.description ?? "nil")")
+            TalkieConsole.critical("[HistoryView] No liveDictation found for dictation ID: \(dictation.id), liveID: \(dictation.liveID?.description ?? "nil")")
             // Fallback for legacy dictations without LiveDictation
             if action == .copyToClipboard {
                 NSPasteboard.general.clearContents()
@@ -2784,7 +2784,7 @@ private struct SmartActionsCard: View {
             return
         }
 
-        NSLog("[HistoryView] Found liveDictation with ID: \(live.recordingID ?? "nil")")
+        TalkieConsole.critical("[HistoryView] Found liveDictation with ID: \(live.recordingID ?? "nil")")
 
         // Show feedback
         showFeedback(for: action)

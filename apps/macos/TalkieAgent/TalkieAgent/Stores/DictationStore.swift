@@ -7,9 +7,9 @@
 
 import Foundation
 import AppKit
-import os.log
+import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.agent", category: "DictationStore")
+private let logger = Log(.database)
 
 // MARK: - Dictation Metadata
 

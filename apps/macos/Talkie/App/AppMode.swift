@@ -25,11 +25,11 @@ enum AppMode {
     static func set(_ mode: AppMode) {
         // Only allow setting once
         guard current == .full else {
-            NSLog("⚠️ [AppMode] Attempted to change mode after initialization")
+            TalkieConsole.critical("⚠️ [AppMode] Attempted to change mode after initialization")
             return
         }
         current = mode
-        NSLog("🚀 [AppMode] Set to: \(mode)")
+        TalkieConsole.critical("🚀 [AppMode] Set to: \(mode)")
     }
 
     /// Check if we're in lite mode
@@ -49,8 +49,8 @@ extension AppMode {
         guard current == mode else { return }
 
         let message = "⚠️ [\(component)] skipped in \(mode) mode"
-        NSLog("%@", message)
-        NSLog("   at %@:%d", file, line)
+        TalkieConsole.critical("%@", message)
+        TalkieConsole.critical("   at %@:%d", file, line)
         // Don't crash - let caller handle gracefully
     }
 }

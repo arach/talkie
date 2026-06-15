@@ -15,10 +15,9 @@
 //
 
 import Foundation
-import os
 import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "JSONExport")
+private let logger = Log(.database)
 
 // MARK: - Export Models
 

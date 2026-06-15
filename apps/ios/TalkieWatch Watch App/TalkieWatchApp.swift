@@ -7,6 +7,7 @@
 
 import SwiftUI
 import WatchKit
+import TalkieMobileKit
 
 // MARK: - Deep Link Handler
 
@@ -17,7 +18,7 @@ final class DeepLinkHandler: ObservableObject {
     @Published var pendingPresetId: String?
 
     func handle(url: URL) {
-        print("⌚️ [Watch] Deep link received: \(url)")
+        WatchConsole.info("⌚️ [Watch] Deep link received: \(url)")
 
         // URL format: talkie://record/quick or talkie://record/thought
         guard url.scheme == "talkie",
@@ -27,7 +28,7 @@ final class DeepLinkHandler: ObservableObject {
 
         // Get preset ID from path
         let presetId = url.pathComponents.count > 1 ? url.pathComponents[1] : "quick"
-        print("⌚️ [Watch] Starting recording with preset: \(presetId)")
+        WatchConsole.info("⌚️ [Watch] Starting recording with preset: \(presetId)")
 
         pendingPresetId = presetId
 
@@ -49,6 +50,10 @@ final class DeepLinkHandler: ObservableObject {
 struct TalkieWatchApp: App {
     @StateObject private var sessionManager = WatchSessionManager.shared
     @StateObject private var deepLinkHandler = DeepLinkHandler.shared
+
+    init() {
+        TalkieLogger.configure(source: .talkieWatch)
+    }
 
     var body: some Scene {
         WindowGroup {

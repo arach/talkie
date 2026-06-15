@@ -1136,7 +1136,7 @@ struct TalkieList<Item: Identifiable, RowContent: View>: View {
         VStack {
             TalkieList("MemoList", items: memos) { memo in
                 TalkieRow("MemoRow", id: memo.id.uuidString) {
-                    print("Tapped: \(memo.title)")
+                    TalkieConsole.info("Tapped: \(memo.title)")
                 } content: {
                     Text(memo.title)
                         .padding()

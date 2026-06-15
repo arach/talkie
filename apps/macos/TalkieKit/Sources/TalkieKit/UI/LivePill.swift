@@ -300,17 +300,17 @@ public struct LivePill: View {
         .onChange(of: isEngineConnected) { _, connected in
             let tag = identifier.map { "[\($0)] " } ?? ""
             if !connected {
-                print("[LivePill] \(tag)⚠️ Engine disconnected - mic: \(micDeviceName ?? "nil")")
+                TalkieLogger.info(.system, "[LivePill] \(tag)⚠️ Engine disconnected - mic: \(micDeviceName ?? "nil")")
             } else {
-                print("[LivePill] \(tag)✓ Engine connected")
+                TalkieLogger.info(.system, "[LivePill] \(tag)✓ Engine connected")
             }
         }
         .onChange(of: micDeviceName) { oldMic, newMic in
             let tag = identifier.map { "[\($0)] " } ?? ""
             if oldMic != nil && newMic == nil {
-                print("[LivePill] \(tag)⚠️ Microphone lost")
+                TalkieLogger.info(.system, "[LivePill] \(tag)⚠️ Microphone lost")
             } else if oldMic == nil && newMic != nil {
-                print("[LivePill] \(tag)✓ Microphone available: \(newMic!)")
+                TalkieLogger.info(.system, "[LivePill] \(tag)✓ Microphone available: \(newMic!)")
             }
         }
     }

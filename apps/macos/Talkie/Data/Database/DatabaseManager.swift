@@ -503,20 +503,20 @@ final class DatabaseManager: @unchecked Sendable {
         // Migration v3: Vercel-compatible workflow tables
         migrator.registerMigration("v3_vercel_workflow_schema") { db in
             // 🧹 Clean slate for workflow execution data (keep memos safe!)
-            print("🧹 Cleaning workflow execution data for fresh start...")
+            TalkieConsole.info("🧹 Cleaning workflow execution data for fresh start...")
 
             // Drop old workflow execution tables if they exist
             if try db.tableExists("workflow_events") {
                 try db.execute(sql: "DROP TABLE workflow_events")
-                print("   Dropped workflow_events")
+                TalkieConsole.info("   Dropped workflow_events")
             }
             if try db.tableExists("workflow_steps") {
                 try db.execute(sql: "DROP TABLE workflow_steps")
-                print("   Dropped workflow_steps")
+                TalkieConsole.info("   Dropped workflow_steps")
             }
             if try db.tableExists("workflow_runs") {
                 try db.execute(sql: "DELETE FROM workflow_runs")
-                print("   Cleared workflow_runs data")
+                TalkieConsole.info("   Cleared workflow_runs data")
             }
 
             // Check if workflow_runs table structure exists
@@ -524,7 +524,7 @@ final class DatabaseManager: @unchecked Sendable {
 
             if tableExists {
                 // ALTER existing table to add new columns
-                print("📦 Extending workflow_runs table with Vercel-compatible fields...")
+                TalkieConsole.info("📦 Extending workflow_runs table with Vercel-compatible fields...")
 
                 // Add new columns (if they don't exist)
                 try? db.alter(table: "workflow_runs") { t in
@@ -548,7 +548,7 @@ final class DatabaseManager: @unchecked Sendable {
                 // No backfill needed - we deleted all old data!
             } else {
                 // CREATE new table with full Vercel-compatible schema
-                print("📦 Creating new workflow_runs table with Vercel-compatible schema...")
+                TalkieConsole.info("📦 Creating new workflow_runs table with Vercel-compatible schema...")
                 try db.create(table: "workflow_runs") { t in
                     // Identity
                     t.column("id", .text).primaryKey()
@@ -611,7 +611,7 @@ final class DatabaseManager: @unchecked Sendable {
                          ifNotExists: true)
 
             // CREATE workflow_steps table (new!)
-            print("📦 Creating workflow_steps table...")
+            TalkieConsole.info("📦 Creating workflow_steps table...")
             try db.create(table: "workflow_steps") { t in
                 // Identity
                 t.column("id", .text).primaryKey()
@@ -665,7 +665,7 @@ final class DatabaseManager: @unchecked Sendable {
                          columns: ["runId", "stepNumber"])
 
             // CREATE workflow_events table (event sourcing!)
-            print("📦 Creating workflow_events table...")
+            TalkieConsole.info("📦 Creating workflow_events table...")
             try db.create(table: "workflow_events") { t in
                 // Identity
                 t.column("id", .text).primaryKey()
@@ -702,12 +702,12 @@ final class DatabaseManager: @unchecked Sendable {
                          on: "workflow_events",
                          columns: ["createdAt"])
 
-            print("✅ Vercel-compatible workflow schema migrated successfully!")
+            TalkieConsole.info("✅ Vercel-compatible workflow schema migrated successfully!")
         }
 
         // Migration v4: Add soft delete support
         migrator.registerMigration("v4_soft_delete") { db in
-            print("📦 Adding soft delete support...")
+            TalkieConsole.info("📦 Adding soft delete support...")
 
             // Add deletedAt column for soft delete
             try db.alter(table: "voice_memos") { t in
@@ -719,7 +719,7 @@ final class DatabaseManager: @unchecked Sendable {
                          on: "voice_memos",
                          columns: ["deletedAt"])
 
-            print("✅ Soft delete migration complete!")
+            TalkieConsole.info("✅ Soft delete migration complete!")
         }
 
         // Migration v5: App stats table (single row, fast reads for Home/Stats views)
@@ -743,7 +743,7 @@ final class DatabaseManager: @unchecked Sendable {
         // This table stores user preferences for workflows (pins, order, enabled)
         // The workflow definitions themselves are stored as JSON files
         migrator.registerMigration("v6_workflow_preferences") { db in
-            print("📦 Creating workflow_preferences table...")
+            TalkieConsole.info("📦 Creating workflow_preferences table...")
 
             try db.create(table: "workflow_preferences") { t in
                 // Primary key is the workflow ID (from JSON file)
@@ -776,13 +776,13 @@ final class DatabaseManager: @unchecked Sendable {
                          on: "workflow_preferences",
                          columns: ["autoRun", "autoRunOrder"])
 
-            print("✅ Workflow preferences table created!")
+            TalkieConsole.info("✅ Workflow preferences table created!")
         }
 
         // Migration v7: Action context fields for workflow preferences
         // Allows actions (single-step workflows) to be shown in specific UI contexts
         migrator.registerMigration("v7_action_contexts") { db in
-            print("📦 Adding action context fields to workflow_preferences...")
+            TalkieConsole.info("📦 Adding action context fields to workflow_preferences...")
 
             // Add showInInterstitial column
             try db.alter(table: "workflow_preferences") { t in
@@ -809,13 +809,13 @@ final class DatabaseManager: @unchecked Sendable {
                          on: "workflow_preferences",
                          columns: ["showInDrafts", "isEnabled"])
 
-            print("✅ Action context fields migration complete!")
+            TalkieConsole.info("✅ Action context fields migration complete!")
         }
 
         // Migration v8: Unified recordings table
         // Combines voice_memos and dictations into a single table
         migrator.registerMigration("v8_unified_recordings") { db in
-            print("📦 Creating unified recordings table...")
+            TalkieConsole.info("📦 Creating unified recordings table...")
 
             // Create the unified recordings table
             try db.create(table: "recordings") { t in
@@ -869,7 +869,7 @@ final class DatabaseManager: @unchecked Sendable {
             }
 
             // Create indexes for performance
-            print("📦 Creating recordings indexes...")
+            TalkieConsole.info("📦 Creating recordings indexes...")
 
             // Most common query: Sort by createdAt DESC (newest first)
             try db.create(index: "idx_recordings_createdAt",
@@ -913,11 +913,11 @@ final class DatabaseManager: @unchecked Sendable {
                 t.column("notes")
             }
 
-            print("✅ Unified recordings table created!")
+            TalkieConsole.info("✅ Unified recordings table created!")
 
             // MARK: - Migrate Existing Memos
 
-            print("📦 Migrating existing memos to recordings...")
+            TalkieConsole.info("📦 Migrating existing memos to recordings...")
 
             // Copy all voice_memos to recordings
             // Derive source from originDeviceId:
@@ -981,13 +981,13 @@ final class DatabaseManager: @unchecked Sendable {
             """)
 
             let memoCount = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recordings WHERE type = 'memo'") ?? 0
-            print("✅ Migrated \(memoCount) memos to recordings table!")
+            TalkieConsole.info("✅ Migrated \(memoCount) memos to recordings table!")
         }
 
         // Migration v9: Add audioFilename column to recordings
         // Preserves original audio filenames from migrated memos
         migrator.registerMigration("v9_audio_filename") { db in
-            print("📦 Adding audioFilename column to recordings...")
+            TalkieConsole.info("📦 Adding audioFilename column to recordings...")
 
             // Add audioFilename column
             try db.alter(table: "recordings") { t in
@@ -1007,14 +1007,14 @@ final class DatabaseManager: @unchecked Sendable {
             """)
 
             let updatedCount = db.changesCount
-            print("✅ Backfilled \(updatedCount) audio filenames!")
+            TalkieConsole.info("✅ Backfilled \(updatedCount) audio filenames!")
         }
 
         // Migration v10: Backfill audioFilename for dictations from live.sqlite
         // The v8 migration and DictationMigrationService didn't copy audioFilename
         // NOTE: This is a legacy migration - TalkieAgent now writes directly to talkie_grdb.sqlite
         migrator.registerMigration("v10_dictation_audio_filename") { db in
-            print("📦 Checking for legacy live.sqlite to backfill audioFilename...")
+            TalkieConsole.info("📦 Checking for legacy live.sqlite to backfill audioFilename...")
 
             // Check if live.sqlite exists
             let appSupport = FileManager.default.urls(
@@ -1027,7 +1027,7 @@ final class DatabaseManager: @unchecked Sendable {
                 .path
 
             guard FileManager.default.fileExists(atPath: livePath) else {
-                print("✅ No legacy live.sqlite found - skipping backfill")
+                TalkieConsole.info("✅ No legacy live.sqlite found - skipping backfill")
                 return
             }
 
@@ -1041,7 +1041,7 @@ final class DatabaseManager: @unchecked Sendable {
             """) ?? false
 
             guard tableExists else {
-                print("✅ No dictations table in live.sqlite - skipping backfill")
+                TalkieConsole.info("✅ No dictations table in live.sqlite - skipping backfill")
                 try? db.execute(sql: "DETACH DATABASE live")
                 return
             }
@@ -1064,13 +1064,13 @@ final class DatabaseManager: @unchecked Sendable {
             """)
 
             let updatedCount = db.changesCount
-            print("✅ Backfilled \(updatedCount) dictation audio filenames!")
+            TalkieConsole.info("✅ Backfilled \(updatedCount) dictation audio filenames!")
 
             // Detach live database (non-fatal if locked by another process)
             do {
                 try db.execute(sql: "DETACH DATABASE live")
             } catch {
-                print("⚠️ Could not detach live database (likely locked): \(error.localizedDescription)")
+                TalkieConsole.info("⚠️ Could not detach live database (likely locked): \(error.localizedDescription)")
                 // Non-fatal - the update already succeeded
             }
         }
@@ -1078,7 +1078,7 @@ final class DatabaseManager: @unchecked Sendable {
         // Migration v11: Add unique constraint for dictations to prevent duplicates
         // Also clean up any existing duplicates first
         migrator.registerMigration("v11_dictation_unique_constraint") { db in
-            print("📦 Adding unique constraint for dictations...")
+            TalkieConsole.info("📦 Adding unique constraint for dictations...")
 
             // First, delete duplicates keeping the one with audioFilename
             try db.execute(sql: """
@@ -1096,7 +1096,7 @@ final class DatabaseManager: @unchecked Sendable {
             """)
             let deletedDuplicates = db.changesCount
             if deletedDuplicates > 0 {
-                print("✅ Cleaned up \(deletedDuplicates) duplicate dictations")
+                TalkieConsole.info("✅ Cleaned up \(deletedDuplicates) duplicate dictations")
             }
 
             // Add unique partial index for live dictations by timestamp
@@ -1106,14 +1106,14 @@ final class DatabaseManager: @unchecked Sendable {
                 ON recordings(type, source, createdAt)
                 WHERE type = 'dictation' AND source = 'live'
             """)
-            print("✅ Added unique constraint for live dictations")
+            TalkieConsole.info("✅ Added unique constraint for live dictations")
         }
 
         // Migration v12: Standardize audio filenames to {id}.m4a format
         // Audio is now always stored as {recording_id}.m4a - no more arbitrary filenames
         // hasAudio is computed from filesystem, audioFilename column is deprecated
         migrator.registerMigration("v12_standardize_audio_filenames") { db in
-            print("📦 Standardizing audio filenames to {id}.m4a format...")
+            TalkieConsole.info("📦 Standardizing audio filenames to {id}.m4a format...")
 
             // Fetch all recordings with non-standard audio filenames
             let rows = try Row.fetchAll(db, sql: """
@@ -1144,11 +1144,11 @@ final class DatabaseManager: @unchecked Sendable {
                     renamedCount += 1
                 } else {
                     // File might not exist or rename failed - that's OK, hasAudio will be false
-                    print("⚠️ Could not rename audio for \(id): \(oldFilename)")
+                    TalkieConsole.info("⚠️ Could not rename audio for \(id): \(oldFilename)")
                 }
             }
 
-            print("✅ Renamed \(renamedCount) audio files, \(skippedCount) already in correct format")
+            TalkieConsole.info("✅ Renamed \(renamedCount) audio files, \(skippedCount) already in correct format")
 
             // Note: We don't drop audioFilename/hasAudio columns - GRDB ignores extra columns
             // Keeping them allows rollback if needed
@@ -1157,18 +1157,18 @@ final class DatabaseManager: @unchecked Sendable {
         // Migration v13: Add revision history support for interstitial sessions
         // Stores full revision history (original text, all LLM edits, accepted/rejected) as JSON
         migrator.registerMigration("v13_revision_history") { db in
-            print("📦 Adding revision history support for interstitial sessions...")
+            TalkieConsole.info("📦 Adding revision history support for interstitial sessions...")
 
             // Add revisionHistoryJSON column to voice_memos
             try db.alter(table: "voice_memos") { t in
                 t.add(column: "revisionHistoryJSON", .text)
             }
 
-            print("✅ Revision history column added!")
+            TalkieConsole.info("✅ Revision history column added!")
         }
 
         migrator.registerMigration("v14_sync_history_counts") { db in
-            print("📦 Adding local/remote counts to sync history...")
+            TalkieConsole.info("📦 Adding local/remote counts to sync history...")
 
             // Add count snapshot columns to sync_history
             try db.alter(table: "sync_history") { t in
@@ -1176,12 +1176,12 @@ final class DatabaseManager: @unchecked Sendable {
                 t.add(column: "remoteCount", .integer)
             }
 
-            print("✅ Sync history counts added!")
+            TalkieConsole.info("✅ Sync history counts added!")
         }
 
         // Migration v15: Multi-provider sync operations tracking
         migrator.registerMigration("v15_sync_operations") { db in
-            print("📦 Adding sync operations tracking for multi-provider sync...")
+            TalkieConsole.info("📦 Adding sync operations tracking for multi-provider sync...")
 
             // Track local changes that need to be synced to cloud providers
             try db.create(table: "sync_operations") { t in
@@ -1206,22 +1206,22 @@ final class DatabaseManager: @unchecked Sendable {
                          on: "sync_operations",
                          columns: ["memoId"])
 
-            print("✅ Sync operations tracking added!")
+            TalkieConsole.info("✅ Sync operations tracking added!")
         }
 
         // Migration v16: Persist per-run SyncClient activity logs with sync history
         migrator.registerMigration("v16_sync_history_activity_log") { db in
-            print("📦 Adding activity log payload to sync history...")
+            TalkieConsole.info("📦 Adding activity log payload to sync history...")
             try db.alter(table: "sync_history") { t in
                 t.add(column: "activityJSON", .text)
             }
-            print("✅ Sync history activity log payload added!")
+            TalkieConsole.info("✅ Sync history activity log payload added!")
         }
 
         // Migration v17: Memo material-change history
         // Stores only meaningful memo field changes (not sync churn/internal fields).
         migrator.registerMigration("v17_memo_change_history") { db in
-            print("📦 Adding memo change history table and triggers...")
+            TalkieConsole.info("📦 Adding memo change history table and triggers...")
 
             try db.create(table: "memo_change_history", ifNotExists: true) { t in
                 t.column("id", .text).primaryKey()
@@ -1318,14 +1318,14 @@ final class DatabaseManager: @unchecked Sendable {
                 END
                 """)
 
-            print("✅ Memo change history added!")
+            TalkieConsole.info("✅ Memo change history added!")
         }
 
         // Migration v18: Explicit sync inbox + external reference linkage for recordings
         // - sync_inbox_records: provider-agnostic ingest tracking (sync-only)
         // - recordings.external*: stable external identity + linkage metadata
         migrator.registerMigration("v18_sync_inbox_and_external_refs") { db in
-            print("📦 Adding sync inbox table and external recording references...")
+            TalkieConsole.info("📦 Adding sync inbox table and external recording references...")
 
             try db.create(table: "sync_inbox_records", ifNotExists: true) { t in
                 t.column("id", .text).primaryKey()
@@ -1415,7 +1415,7 @@ final class DatabaseManager: @unchecked Sendable {
                 """)
             }
 
-            print("✅ Sync inbox + external recording references added!")
+            TalkieConsole.info("✅ Sync inbox + external recording references added!")
         }
 
         // Migration v19: Consolidated assets column (segments, screenshots, clips, attachments)

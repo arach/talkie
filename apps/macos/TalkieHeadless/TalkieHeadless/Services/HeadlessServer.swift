@@ -35,11 +35,11 @@ final class HeadlessServer {
         listener?.stateUpdateHandler = { state in
             switch state {
             case .ready:
-                print("[HeadlessServer] Listening on port \(port)")
+                HeadlessConsole.info("[HeadlessServer] Listening on port \(port)")
             case .failed(let error):
-                print("[HeadlessServer] Failed: \(error)")
+                HeadlessConsole.info("[HeadlessServer] Failed: \(error)")
             case .cancelled:
-                print("[HeadlessServer] Cancelled")
+                HeadlessConsole.info("[HeadlessServer] Cancelled")
             default:
                 break
             }
@@ -100,7 +100,7 @@ final class HeadlessServer {
                 }
 
                 if let error = error {
-                    print("[HeadlessServer] Receive error: \(error)")
+                    HeadlessConsole.info("[HeadlessServer] Receive error: \(error)")
                     connection.cancel()
                     return
                 }
@@ -148,7 +148,7 @@ final class HeadlessServer {
     }
 
     private func routeRequest(method: String, path: String, body: Data?, connection: NWConnection) async {
-        print("[HeadlessServer] \(method) \(path)")
+        HeadlessConsole.info("[HeadlessServer] \(method) \(path)")
 
         switch (method, path) {
         case ("GET", "/health"):
@@ -236,7 +236,7 @@ final class HeadlessServer {
                 let sessionId = UUID().uuidString
                 transcriptionSessions[sessionId] = captureSessionId
 
-                print("[HeadlessServer] Transcribe started: \(sessionId) -> Live:\(captureSessionId)")
+                HeadlessConsole.info("[HeadlessServer] Transcribe started: \(sessionId) -> Live:\(captureSessionId)")
 
                 let response: [String: Any] = [
                     "sessionId": sessionId,
@@ -244,7 +244,7 @@ final class HeadlessServer {
                 ]
                 sendJSON(connection: connection, status: 200, body: response)
             } catch {
-                print("[HeadlessServer] Transcribe start error: \(error)")
+                HeadlessConsole.info("[HeadlessServer] Transcribe start error: \(error)")
                 sendJSON(connection: connection, status: 500, body: [
                     "error": error.localizedDescription
                 ])
@@ -277,7 +277,7 @@ final class HeadlessServer {
             do {
                 // Stop capture and get audio file path
                 let audioPath = try await liveClient.stopCapture(sessionId: captureSessionId)
-                print("[HeadlessServer] Got audio file: \(audioPath)")
+                HeadlessConsole.info("[HeadlessServer] Got audio file: \(audioPath)")
 
                 // Transcribe via Engine
                 guard await engineClient.isConnected else {
@@ -297,7 +297,7 @@ final class HeadlessServer {
                 // Clean up audio file
                 try? FileManager.default.removeItem(atPath: audioPath)
 
-                print("[HeadlessServer] Transcription complete: \(transcript.prefix(50))... (\(duration)s)")
+                HeadlessConsole.info("[HeadlessServer] Transcription complete: \(transcript.prefix(50))... (\(duration)s)")
 
                 let response: [String: Any] = [
                     "text": transcript,
@@ -305,7 +305,7 @@ final class HeadlessServer {
                 ]
                 sendJSON(connection: connection, status: 200, body: response)
             } catch {
-                print("[HeadlessServer] Transcribe stop error: \(error)")
+                HeadlessConsole.info("[HeadlessServer] Transcribe stop error: \(error)")
                 transcriptionSessions.removeValue(forKey: sessionId)
                 sendJSON(connection: connection, status: 500, body: [
                     "error": error.localizedDescription

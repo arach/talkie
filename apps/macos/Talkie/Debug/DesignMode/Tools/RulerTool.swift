@@ -101,7 +101,7 @@ struct MeasureTool: View {
         }
         .allowsHitTesting(true)
         .onAppear {
-            print("🎨 MeasureTool: Active - drag to measure, Shift for straight, ESC to exit")
+            TalkieConsole.info("🎨 MeasureTool: Active - drag to measure, Shift for straight, ESC to exit")
             setupKeyboardMonitor()
         }
         .onDisappear {

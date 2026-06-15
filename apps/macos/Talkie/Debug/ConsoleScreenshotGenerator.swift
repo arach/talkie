@@ -42,7 +42,7 @@ final class ConsoleScreenshotGenerator {
             try pngData.write(to: outputURL)
             return outputURL
         } catch {
-            print("❌ Failed to write console screenshot: \(error)")
+            TalkieConsole.info("❌ Failed to write console screenshot: \(error)")
             return nil
         }
     }

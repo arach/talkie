@@ -13,10 +13,10 @@
 
 import SwiftUI
 import Combine
-import os
 import Observation
+import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "SessionLayout")
+private let logger = Log(.ui)
 
 @MainActor
 @Observable

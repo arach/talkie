@@ -125,7 +125,7 @@ struct LiveRecordingHealthCard: View {
                 configuration: NSWorkspace.OpenConfiguration()
             )
         } else {
-            NSLog("[Talkie] Helper app not found for bundle ID: \(ServiceManager.liveBundleId)")
+            TalkieConsole.critical("[Talkie] Helper app not found for bundle ID: \(ServiceManager.liveBundleId)")
         }
     }
 }
@@ -310,7 +310,7 @@ struct EngineHealthCard: View {
             isHealthy: false,
             statusText: "Offline",
             detailText: "Talkie Agent is not running. Agent recording features are unavailable.",
-            action: { print("Start Agent") },
+            action: { TalkieConsole.info("Start Agent") },
             actionLabel: "Start Agent"
         )
 
@@ -320,7 +320,7 @@ struct EngineHealthCard: View {
             isHealthy: false,
             statusText: "Offline",
             detailText: "TalkieAgent is not running, so local transcription is unavailable.",
-            action: { print("Start Agent") },
+            action: { TalkieConsole.info("Start Agent") },
             actionLabel: "Start Agent"
         )
     }

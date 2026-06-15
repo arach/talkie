@@ -9,10 +9,9 @@
 
 import Foundation
 import CryptoKit
-import os
 import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "APIKeyStore")
+private let logger = Log(.system)
 
 /// Encrypted storage for API keys - simpler than Keychain, no prompts
 final class APIKeyStore {

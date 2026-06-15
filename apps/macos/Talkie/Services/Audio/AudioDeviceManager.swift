@@ -9,11 +9,10 @@
 import Foundation
 import CoreAudio
 import AVFoundation
-import os
 import Observation
 import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "AudioDeviceManager")
+private let logger = Log(.audio)
 
 /// Result of resolving which device to use for recording
 struct DeviceResolution {

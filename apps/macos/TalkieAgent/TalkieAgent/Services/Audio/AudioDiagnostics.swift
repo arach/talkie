@@ -8,10 +8,9 @@
 import Foundation
 import AVFoundation
 import AppKit
-import os.log
 import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.agent", category: "AudioDiagnostics")
+private let logger = Log(.audio)
 
 // MARK: - Diagnostic Check Item
 

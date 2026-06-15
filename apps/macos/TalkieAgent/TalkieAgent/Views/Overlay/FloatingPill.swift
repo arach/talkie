@@ -9,9 +9,8 @@ import SwiftUI
 import TalkieKit
 import AppKit
 import Combine
-import os
 
-private let pillLogger = Logger(subsystem: "to.talkie.app.agent", category: "FloatingPill")
+private let pillLogger = Log(.ui)
 
 /// Hosting view that lets clicks pass through the transparent parts of the
 /// oversized pill window used for hover/dev-info headroom.
@@ -566,35 +565,35 @@ final class FloatingPillController: ObservableObject {
 
     func handleTap() {
         let modifiers = NSEvent.modifierFlags
-        NSLog("[FloatingPill] handleTap: state=%@, modifiers=%d", state.rawValue, modifiers.rawValue)
+        AgentConsole.critical("[FloatingPill] handleTap: state=%@, modifiers=%d", state.rawValue, modifiers.rawValue)
 
         // Check if callback is set
         guard let callback = onTap else {
-            NSLog("[FloatingPill] ⚠️ onTap callback is nil!")
+            AgentConsole.critical("[FloatingPill] ⚠️ onTap callback is nil!")
             pillLogger.error("onTap callback not set - pill tap will not work")
             return
         }
 
-        NSLog("[FloatingPill] Calling onTap callback...")
+        AgentConsole.critical("[FloatingPill] Calling onTap callback...")
         callback(state, modifiers)
-        NSLog("[FloatingPill] onTap callback completed")
+        AgentConsole.critical("[FloatingPill] onTap callback completed")
     }
 
     /// Handle tap on the queue badge - retry or clear pending transcriptions
     func handleQueueTap() {
         let modifiers = NSEvent.modifierFlags
-        NSLog("[FloatingPill] handleQueueTap: pendingCount=%d, modifiers=%d", pendingQueueCount, modifiers.rawValue)
+        AgentConsole.critical("[FloatingPill] handleQueueTap: pendingCount=%d, modifiers=%d", pendingQueueCount, modifiers.rawValue)
 
         if modifiers.contains(.option) {
             // Option+click: Clear/dismiss pending items
             TranscriptionRetryManager.shared.clearPending()
-            NSLog("[FloatingPill] Cleared pending transcriptions")
+            AgentConsole.critical("[FloatingPill] Cleared pending transcriptions")
         } else {
             // Regular click: Retry pending transcriptions
             Task {
                 await TranscriptionRetryManager.shared.retryFailedTranscriptions()
             }
-            NSLog("[FloatingPill] Triggered retry of pending transcriptions")
+            AgentConsole.critical("[FloatingPill] Triggered retry of pending transcriptions")
         }
     }
 

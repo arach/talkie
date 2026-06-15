@@ -2,12 +2,12 @@
 //  AppLogger.swift
 //  talkie
 //
-//  Centralized logging using os.Logger for the Talkie app.
+//  Centralized logging for the Talkie app.
 //
 
-import os
 import Foundation
 import SwiftUI
+import TalkieMobileKit
 
 /// In-memory log entry for display in debug UI
 struct LogEntry: Identifiable {
@@ -82,63 +82,61 @@ class LogStore: ObservableObject {
     }
 }
 
-/// Wrapper around os.Logger that also captures to LogStore
+/// Wrapper around TalkieLogger that also captures to LogStore
 struct CapturedLogger {
-    private let osLogger: Logger
     private let category: String
+    private let logCategory: LogCategory
 
-    init(subsystem: String, category: String) {
-        self.osLogger = Logger(subsystem: subsystem, category: category)
+    init(category: String, logCategory: LogCategory) {
         self.category = category
+        self.logCategory = logCategory
     }
 
     func debug(_ message: String, detail: String? = nil) {
-        osLogger.debug("\(message)")
+        TalkieLogger.debug(logCategory, message, detail: detail)
         // Capture debug with detail to LogStore for API responses
         LogStore.shared.add(level: .debug, category: category, message: message, detail: detail)
     }
 
     func info(_ message: String, detail: String? = nil) {
-        osLogger.info("\(message)")
+        TalkieLogger.info(logCategory, message, detail: detail)
         LogStore.shared.add(level: .info, category: category, message: message, detail: detail)
     }
 
     func warning(_ message: String, detail: String? = nil) {
-        osLogger.warning("\(message)")
+        TalkieLogger.warning(logCategory, message, detail: detail)
         LogStore.shared.add(level: .warning, category: category, message: message, detail: detail)
     }
 
     func error(_ message: String, detail: String? = nil) {
-        osLogger.error("\(message)")
+        TalkieLogger.error(logCategory, message, detail: detail)
         LogStore.shared.add(level: .error, category: category, message: message, detail: detail)
     }
 }
 
 /// Centralized loggers for different subsystems of the app
 enum AppLogger {
-    private static let subsystem = "jdi.talkie-os"
-
     /// General app lifecycle and background tasks
-    static let app = CapturedLogger(subsystem: subsystem, category: "App")
+    static let app = CapturedLogger(category: "App", logCategory: .system)
 
     /// Audio recording operations
-    static let recording = CapturedLogger(subsystem: subsystem, category: "Recording")
+    static let recording = CapturedLogger(category: "Recording", logCategory: .audio)
 
     /// Audio playback operations
-    static let playback = CapturedLogger(subsystem: subsystem, category: "Playback")
+    static let playback = CapturedLogger(category: "Playback", logCategory: .audio)
 
     /// Speech transcription
-    static let transcription = CapturedLogger(subsystem: subsystem, category: "Transcription")
+    static let transcription = CapturedLogger(category: "Transcription", logCategory: .transcription)
 
     /// Core Data and persistence
-    static let persistence = CapturedLogger(subsystem: subsystem, category: "Persistence")
+    static let persistence = CapturedLogger(category: "Persistence", logCategory: .database)
 
     /// UI and view-related logging
-    static let ui = CapturedLogger(subsystem: subsystem, category: "UI")
+    static let ui = CapturedLogger(category: "UI", logCategory: .ui)
 
     /// On-device AI processing
-    static let ai = CapturedLogger(subsystem: subsystem, category: "AI")
+    static let ai = CapturedLogger(category: "AI", logCategory: .system)
 
     /// CloudKit and sync operations
-    static let sync = CapturedLogger(subsystem: subsystem, category: "Sync")
+    static let sync = CapturedLogger(category: "Sync", logCategory: .sync)
 }

@@ -34,7 +34,7 @@ struct LogEntry: Identifiable, Equatable {
     }
 }
 
-// MARK: - App Logger (Unified logging - os.log + in-memory)
+// MARK: - App Log Store
 
 @MainActor
 final class AppLogger: ObservableObject {
@@ -42,30 +42,12 @@ final class AppLogger: ObservableObject {
 
     @Published private(set) var entries: [LogEntry] = []
     private let maxEntries = 500
-    private let subsystem = "to.talkie.app.agent"
-
-    private var loggers: [String: Logger] = [:]
-
-    /// File writer for cross-app log viewing in Talkie
-    private let fileWriter = TalkieLogFileWriter(source: .talkieLive)
 
     private init() {}
-
-    private func logger(for category: String) -> Logger {
-        if let existing = loggers[category] {
-            return existing
-        }
-        let new = Logger(subsystem: subsystem, category: category)
-        loggers[category] = new
-        return new
-    }
 
     /// Log a message - logs to console, in-memory, AND file for cross-app viewing
     /// Warnings and errors use critical mode (immediate flush) with file:line context
     func log(_ category: EventType, _ message: String, detail: String? = nil, level: OSLogEntryLog.Level = .info, file: String = #file, line: Int = #line) {
-        let fullMessage = detail != nil ? "\(message): \(detail!)" : message
-
-        // Log to console (visible in Xcode debugger and Console.app)
         let timestamp = Date().formatted(.dateTime.hour().minute().second().secondFraction(.fractional(2)))
         let filename = URL(fileURLWithPath: file).deletingPathExtension().lastPathComponent
         let levelStr = switch level {
@@ -76,25 +58,20 @@ final class AppLogger: ObservableObject {
         case .fault: "[FAULT]"
         default: "[LOG]"
         }
-        let logLine = "[\(timestamp)] \(levelStr) [\(category.rawValue)] \(fullMessage) ← \(filename):\(line)"
-        NSLog("%@", logLine)
-
-        // Write to file for cross-app viewing in Talkie
-        // Warnings and errors use critical mode (immediate flush) with file:line context
-        let logType = mapEventType(category)
-        let isCritical = level == .notice || level == .error || level == .fault
-        let writeMode: LogWriteMode = isCritical ? .critical : .bestEffort
-
-        // Add file:line context to warnings and errors for debugging
-        let fileDetail: String?
-        if isCritical {
-            let baseDetail = detail ?? ""
-            fileDetail = baseDetail.isEmpty ? "[\(filename):\(line)]" : "\(baseDetail) [\(filename):\(line)]"
-        } else {
-            fileDetail = detail
+        let locationDetail = detail.map { "\($0) [\(filename):\(line)]" } ?? "[\(filename):\(line)]"
+        let logCategory = AgentConsole.category(named: category.rawValue)
+        switch level {
+        case .debug:
+            TalkieLogger.debug(logCategory, message, detail: locationDetail)
+        case .error:
+            TalkieLogger.error(logCategory, message, detail: locationDetail)
+        case .fault:
+            TalkieLogger.fault(logCategory, message, detail: locationDetail, critical: true)
+        case .notice:
+            TalkieLogger.warning(logCategory, message, detail: locationDetail)
+        default:
+            TalkieLogger.info(logCategory, message, detail: locationDetail)
         }
-
-        fileWriter.log(logType, message, detail: fileDetail, mode: writeMode)
 
         // Keep in-memory copy (newest first)
         let entry = LogEntry(
@@ -112,21 +89,9 @@ final class AppLogger: ObservableObject {
         }
 
         // Feed to TalkieReporter for error report context
+        let fullMessage = detail != nil ? "\(message): \(detail!)" : message
+        let logLine = "[\(timestamp)] \(levelStr) [\(category.rawValue)] \(fullMessage) <- \(filename):\(line)"
         TalkieReporter.shared.addLog(logLine)
-    }
-
-    /// Map local EventType to TalkieKit's LogEventType
-    private func mapEventType(_ type: EventType) -> LogEventType {
-        switch type {
-        case .system: return .system
-        case .audio: return .record
-        case .transcription: return .transcribe
-        case .database: return .system
-        case .file: return .system
-        case .error: return .error
-        case .ui: return .system
-        case .performance: return .system  // Performance logs use system category
-        }
     }
 
     func clear() {
@@ -426,4 +391,3 @@ struct LogViewerConsole: View {
         NSPasteboard.general.setString(predicate, forType: .string)
     }
 }
-

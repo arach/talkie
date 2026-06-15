@@ -8,12 +8,12 @@
 
 import Foundation
 import AppKit
-import os
+import OSLog
 import UserNotifications
 import Darwin
 import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "Startup")
+private let logger = Log(.system)
 private let signposter = OSSignposter(subsystem: "to.talkie.app.performance", category: "Startup")
 
 /// Coordinates app startup to minimize time-to-interactive

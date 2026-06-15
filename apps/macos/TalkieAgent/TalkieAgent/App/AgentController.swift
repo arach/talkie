@@ -847,7 +847,7 @@ final class AgentController: ObservableObject {
     ///   - interstitial: If true (Shift-click), route to Talkie Core interstitial instead of paste
     ///   - hotkeyTimestamp: Precise timestamp from Carbon callback for performance measurement
     func toggleListening(interstitial: Bool = false, hotkeyTimestamp: HotKeyTimestamp? = nil) async {
-        NSLog("[AgentController] toggleListening: state=%@, interstitial=%d", self.state.rawValue, interstitial ? 1 : 0)
+        AgentConsole.critical("[AgentController] toggleListening: state=%@, interstitial=%d", self.state.rawValue, interstitial ? 1 : 0)
         log.info("[AgentController] toggleListening: state=\(self.state.rawValue), interstitial=\(interstitial)")
 
         switch state {
@@ -1623,14 +1623,14 @@ final class AgentController: ObservableObject {
     }
 
     private func stop(interstitial: Bool = false) {
-        NSLog("[AgentController] stop() called with interstitial=\(interstitial)")
+        AgentConsole.critical("[AgentController] stop() called with interstitial=\(interstitial)")
         log.info("stop() called with interstitial=\(interstitial)")
 
         // Only override intent if explicitly requesting interstitial mode
         // This preserves any intent set earlier during recording.
         if interstitial && !intent.isInterstitial {
             intent = .interstitial
-            NSLog("[AgentController] Stopping with interstitial routing (Shift-click)")
+            AgentConsole.critical("[AgentController] Stopping with interstitial routing (Shift-click)")
             log.info("Stopping with interstitial routing (Shift-click)")
         }
         log.info("intent after stop(): \(intent)")
@@ -1971,7 +1971,7 @@ final class AgentController: ObservableObject {
 
             // Save as Memo mode: Shift+A to auto-promote to permanent memo
             if case .saveMemo = intent {
-                NSLog("[AgentController] === SAVE AS MEMO MODE ACTIVATED ===")
+                AgentConsole.critical("[AgentController] === SAVE AS MEMO MODE ACTIVATED ===")
                 log.info("=== SAVE AS MEMO MODE ACTIVATED ===")
                 AppLogger.shared.log(.system, "Saving as memo", detail: "Shift+A mode")
 
@@ -2059,10 +2059,10 @@ final class AgentController: ObservableObject {
             }
 
             // Interstitial mode: Shift or Shift+S to route to Talkie Core for editing
-            NSLog("[AgentController] Checking intent for interstitial: \(self.intent)")
+            AgentConsole.critical("[AgentController] Checking intent for interstitial: \(self.intent)")
             log.info("Checking intent for interstitial: \(self.intent)")
             if intent.isInterstitial {
-                NSLog("[AgentController] === INTERSTITIAL MODE ACTIVATED ===")
+                AgentConsole.critical("[AgentController] === INTERSTITIAL MODE ACTIVATED ===")
                 log.info("=== INTERSTITIAL MODE ACTIVATED ===")
                 AppLogger.shared.log(.system, "Routing to interstitial", detail: "Shift-click mode")
 

@@ -9,11 +9,10 @@
 //
 
 import Foundation
-import os
 import Observation
 import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "AutoRunProcessor")
+private let logger = Log(.workflow)
 
 // MARK: - Auto-Run Processor
 

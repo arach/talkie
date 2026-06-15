@@ -82,19 +82,19 @@ public class StoryboardGenerator<StepType: RawRepresentable & CaseIterable & Has
 
     /// Generate storyboard and save to file
     public func generate(outputPath: String? = nil) async {
-        print("🎬 Generating storyboards for \(config.scenarios.count) scenario(s)...")
+        DebugKitConsole.info("🎬 Generating storyboards for \(config.scenarios.count) scenario(s)...")
 
         // Create hidden window for rendering
         let window = createRenderWindow()
 
         // Generate a storyboard for each scenario
         for (scenarioIndex, scenario) in config.scenarios.enumerated() {
-            print("\n📋 Scenario \(scenarioIndex + 1)/\(config.scenarios.count): \(scenario.name)")
+            DebugKitConsole.info("\n📋 Scenario \(scenarioIndex + 1)/\(config.scenarios.count): \(scenario.name)")
             var screenshots: [NSImage] = []
 
             // Capture each step
             for step in StepType.allCases {
-                print("  📸 Capturing step \(step.rawValue + 1)/\(StepType.allCases.count)...")
+                DebugKitConsole.info("  📸 Capturing step \(step.rawValue + 1)/\(StepType.allCases.count)...")
 
                 // Apply scenario configuration for this step
                 scenario.configure(step: step)
@@ -119,9 +119,9 @@ public class StoryboardGenerator<StepType: RawRepresentable & CaseIterable & Has
             }
 
             // Composite screenshots
-            print("  🎨 Compositing \(screenshots.count) screenshots...")
+            DebugKitConsole.info("  🎨 Compositing \(screenshots.count) screenshots...")
             guard let composite = createComposite(screenshots: screenshots) else {
-                print("❌ Failed to create composite")
+                DebugKitConsole.info("❌ Failed to create composite")
                 continue
             }
 
@@ -136,7 +136,7 @@ public class StoryboardGenerator<StepType: RawRepresentable & CaseIterable & Has
                 return dir.appendingPathComponent(newName).path
             }
             let finalPath = saveStoryboard(composite, to: scenarioPath, scenarioName: scenario.name)
-            print("✅ Storyboard saved to: \(finalPath)")
+            DebugKitConsole.info("✅ Storyboard saved to: \(finalPath)")
         }
 
         window.close()

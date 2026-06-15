@@ -30,33 +30,33 @@ public class CLICommandHandler {
     /// Check command line arguments and execute debug command if present
     /// Returns true if a debug command was executed (app should exit)
     public func handleCommandLineArguments() async -> Bool {
-        NSLog("[CLICommandHandler] handleCommandLineArguments START")
+        DebugKitConsole.formatted("[CLICommandHandler] handleCommandLineArguments START")
         let args = CommandLine.arguments
-        NSLog("[CLICommandHandler] Args count: %d", args.count)
+        DebugKitConsole.formatted("[CLICommandHandler] Args count: %d", args.count)
 
         // Look for --debug=<command>
-        NSLog("[CLICommandHandler] Looking for debug arg...")
+        DebugKitConsole.formatted("[CLICommandHandler] Looking for debug arg...")
         guard let debugArg = args.first(where: { $0.hasPrefix("--debug=") }) else {
-            NSLog("[CLICommandHandler] No debug arg found")
+            DebugKitConsole.formatted("[CLICommandHandler] No debug arg found")
             return false
         }
-        NSLog("[CLICommandHandler] Found debug arg: %@", debugArg)
+        DebugKitConsole.formatted("[CLICommandHandler] Found debug arg: %@", debugArg)
 
         let command = String(debugArg.dropFirst("--debug=".count))
-        NSLog("[CLICommandHandler] Parsed command: %@", command)
+        DebugKitConsole.formatted("[CLICommandHandler] Parsed command: %@", command)
 
         // Get additional arguments (everything after the --debug flag)
         let additionalArgs = args.dropFirst(args.firstIndex(of: debugArg)! + 1)
-        NSLog("[CLICommandHandler] Additional args: %@", Array(additionalArgs).joined(separator: ", "))
+        DebugKitConsole.formatted("[CLICommandHandler] Additional args: %@", Array(additionalArgs).joined(separator: ", "))
 
-        NSLog("[CLICommandHandler] Executing command: %@", command)
+        DebugKitConsole.formatted("[CLICommandHandler] Executing command: %@", command)
         await executeCommand(command, args: Array(additionalArgs))
-        NSLog("[CLICommandHandler] Command execution finished")
+        DebugKitConsole.formatted("[CLICommandHandler] Command execution finished")
         return true
     }
 
     private func executeCommand(_ command: String, args: [String]) async {
-        NSLog("[CLICommandHandler] executeCommand: %@", command)
+        DebugKitConsole.formatted("[CLICommandHandler] executeCommand: %@", command)
 
         if command == "help" {
             printHelp()
@@ -64,23 +64,23 @@ public class CLICommandHandler {
             return
         }
 
-        NSLog("[CLICommandHandler] Looking for handler in %d registered commands", commands.count)
+        DebugKitConsole.formatted("[CLICommandHandler] Looking for handler in %d registered commands", commands.count)
         guard let handler = commands[command] else {
-            NSLog("[CLICommandHandler] ❌ Unknown command: %@", command)
-            print("❌ Unknown debug command: \(command)")
-            print("")
+            DebugKitConsole.formatted("[CLICommandHandler] ❌ Unknown command: %@", command)
+            DebugKitConsole.info("❌ Unknown debug command: \(command)")
+            DebugKitConsole.info("")
             printHelp()
             exit(1)
             return
         }
 
-        NSLog("[CLICommandHandler] Found handler, calling it...")
+        DebugKitConsole.formatted("[CLICommandHandler] Found handler, calling it...")
         await handler(args)
-        NSLog("[CLICommandHandler] Handler completed")
+        DebugKitConsole.formatted("[CLICommandHandler] Handler completed")
     }
 
     private func printHelp() {
-        print("""
+        DebugKitConsole.info("""
         Debug Commands
         ==============
 
@@ -93,13 +93,13 @@ public class CLICommandHandler {
         let sortedCommands = commands.keys.sorted()
         for command in sortedCommands {
             if let description = commandDescriptions[command] {
-                print("  \(command)")
-                print("      \(description)")
-                print("")
+                DebugKitConsole.info("  \(command)")
+                DebugKitConsole.info("      \(description)")
+                DebugKitConsole.info("")
             }
         }
 
-        print("""
+        DebugKitConsole.info("""
           help
               Show this help message
 

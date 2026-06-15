@@ -492,7 +492,7 @@ struct ScopeHomeView: View {
                 await RecordingsViewModel.shared.loadRecordings()
                 NavigationState.shared.navigate(to: .recordings, params: ["recordingId": id.uuidString])
             } catch {
-                print("⚠️ ScopeHomeView: failed to create note: \(error)")
+                TalkieConsole.info("⚠️ ScopeHomeView: failed to create note: \(error)")
             }
         }
     }

@@ -7,9 +7,8 @@
 //
 
 import Foundation
-import os
 
-private let logger = Logger(subsystem: "to.talkie.app.kit", category: "LLM")
+private let logger = Log(.workflow)
 
 // MARK: - Core Protocol
 

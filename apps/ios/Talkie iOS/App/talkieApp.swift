@@ -41,6 +41,8 @@ struct talkieApp: App {
     static let showOnboardingNotification = Notification.Name("showOnboarding")
 
     init() {
+        TalkieLogger.configure(source: .talkieMemos)
+
         let initStart = Date()
         Self.logPhase("bg-task-register", from: initStart) { registerBackgroundTasks() }
         Self.logPhase("app-settings-load", from: initStart) { _ = TalkieAppSettings.shared }

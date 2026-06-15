@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import Foundation
 import WebKit
 
@@ -180,7 +181,7 @@ final class WindowSnapshotDriver: NSObject, WKNavigationDelegate {
 
             do {
                 try png.write(to: self.outputURL)
-                print(self.outputURL.path)
+                fputs("\(self.outputURL.path)\n", stdout)
                 self.application.terminate(nil)
             } catch {
                 fputs("failed to write snapshot: \(error)\n", stderr)

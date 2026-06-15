@@ -10,6 +10,7 @@ import Foundation
 import SwiftUI
 import OSLog
 import Observation
+import TalkieKit
 
 // MARK: - Signpost Configuration
 
@@ -18,10 +19,6 @@ let talkiePerformanceLog = OSLog(subsystem: "live.talkie.performance", category:
 
 /// Signposter for UI performance tracking (for Instruments)
 let talkieSignposter = OSSignposter(subsystem: "live.talkie.performance", category: .pointsOfInterest)
-
-/// Logger for events readable via OSLogStore (for in-app Performance Monitor)
-/// os_signpost may not be immediately queryable, so we also use os_log
-let talkieEventLogger = Logger(subsystem: "live.talkie.performance", category: "Events")
 
 // MARK: - Instrumentation Helpers
 
@@ -306,7 +303,7 @@ final class PerformanceMonitor {
 
         #if DEBUG
         // Only print in debug builds to avoid UI lag
-        // print("📊 PerformanceMonitor: Action started - [\(type)] \(name)")
+        // TalkieConsole.info("📊 PerformanceMonitor: Action started - [\(type)] \(name)")
         #endif
 
         // Keep last 50 actions
@@ -331,7 +328,7 @@ final class PerformanceMonitor {
 
         #if DEBUG
         // Only print in debug builds to avoid UI lag
-        // print("📊 PerformanceMonitor: Action completed - \(action.actionName) (processing: \(Int(action.processingTime * 1000))ms)")
+        // TalkieConsole.info("📊 PerformanceMonitor: Action completed - \(action.actionName) (processing: \(Int(action.processingTime * 1000))ms)")
         #endif
 
         activeActionID = nil
@@ -342,7 +339,7 @@ final class PerformanceMonitor {
         guard let actionID = activeActionID,
               let index = actions.firstIndex(where: { $0.id == actionID }) else {
             // No active action - log error anyway
-            print("❌ Action error: \(error)")
+            TalkieConsole.info("❌ Action error: \(error)")
             return
         }
 
@@ -351,7 +348,7 @@ final class PerformanceMonitor {
         action.completedAt = Date()  // Mark as completed (failed)
         actions[index] = action
 
-        print("❌ Action error: \(error)")
+        TalkieConsole.info("❌ Action error: \(error)")
 
         activeActionID = nil
     }
@@ -368,7 +365,7 @@ final class PerformanceMonitor {
         action.warnings.append(warning)
         actions[index] = action
 
-        print("⚠️ Action warning (\(action.actionName)): \(warning)")
+        TalkieConsole.info("⚠️ Action warning (\(action.actionName)): \(warning)")
     }
 
     /// Mark the most recent action as rendered (when view appears)
@@ -385,7 +382,7 @@ final class PerformanceMonitor {
         let tti = action.timeToInteractive ?? 0
         let renderTime = action.renderingTime ?? 0
 
-        // print("🎨 PerformanceMonitor: View rendered - \(action.actionName) (TTI: \(Int(tti * 1000))ms, render: \(Int(renderTime * 1000))ms)")
+        // TalkieConsole.info("🎨 PerformanceMonitor: View rendered - \(action.actionName) (TTI: \(Int(tti * 1000))ms, render: \(Int(renderTime * 1000))ms)")
     }
 
     /// Add an operation to the current active action
@@ -412,7 +409,7 @@ final class PerformanceMonitor {
         action.operations.append(op)
         actions[index] = action
 
-        // print("📊 PerformanceMonitor: [\(category.rawValue)] \(name) (\(Int(duration * 1000))ms) @ +\(Int(relativeTime * 1000))ms")
+        // TalkieConsole.info("📊 PerformanceMonitor: [\(category.rawValue)] \(name) (\(Int(duration * 1000))ms) @ +\(Int(relativeTime * 1000))ms")
     }
 
     /// Legacy event handler for backwards compatibility
@@ -1390,7 +1387,7 @@ private struct MonitorContentView: View {
         pasteboard.clearContents()
         pasteboard.setString(markdown, forType: .string)
 
-        print("📋 Copied \(actions.count) performance actions to clipboard")
+        TalkieConsole.info("📋 Copied \(actions.count) performance actions to clipboard")
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {

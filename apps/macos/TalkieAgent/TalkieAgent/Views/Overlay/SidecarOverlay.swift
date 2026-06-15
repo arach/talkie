@@ -9,9 +9,8 @@
 import SwiftUI
 import TalkieKit
 import AppKit
-import os
 
-private let log = Logger(subsystem: "to.talkie.app.agent", category: "SidecarOverlay")
+private let log = Log(.ui)
 
 // MARK: - Touch-Enabled Panel
 

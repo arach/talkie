@@ -76,36 +76,6 @@ public enum LocalCheckoutLocator {
         return hasTalkieServerEntryPoint(at: sourceURL) ? sourceURL : nil
     }
 
-    public static func talkieSpeechExecutableURL(
-        compileTimeFilePath: String,
-        environment: [String: String] = ProcessInfo.processInfo.environment,
-        currentDirectoryPath: String = FileManager.default.currentDirectoryPath,
-        homeDirectoryURL: URL = FileManager.default.homeDirectoryForCurrentUser
-    ) -> URL? {
-        if let override = sanitizedPath(environment["TALKIE_SPEECH_EXECUTABLE_PATH"]) {
-            let executableURL = URL(fileURLWithPath: override)
-            if FileManager.default.isExecutableFile(atPath: executableURL.path) {
-                return executableURL
-            }
-        }
-
-        guard let macOSRoot = talkieMacOSRootURL(
-            compileTimeFilePath: compileTimeFilePath,
-            environment: environment,
-            currentDirectoryPath: currentDirectoryPath,
-            homeDirectoryURL: homeDirectoryURL
-        ) else {
-            return nil
-        }
-
-        let executableURL = macOSRoot
-            .appendingPathComponent("TalkieSpeech", isDirectory: true)
-            .appendingPathComponent(".build", isDirectory: true)
-            .appendingPathComponent("debug", isDirectory: true)
-            .appendingPathComponent("TalkieSpeech")
-        return FileManager.default.isExecutableFile(atPath: executableURL.path) ? executableURL : nil
-    }
-
     private static func candidateRepositoryRoots(
         compileTimeFilePath: String,
         currentDirectoryPath: String,

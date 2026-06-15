@@ -8,10 +8,10 @@
 import Foundation
 import AppKit
 import SwiftUI
-import os
 import Observation
+import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "QuickOpen")
+private let logger = Log(.system)
 
 // MARK: - Quick Open Target
 

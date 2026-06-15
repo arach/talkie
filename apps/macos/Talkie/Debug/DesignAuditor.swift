@@ -652,7 +652,7 @@ class DesignAuditor {
             return nil
         }
 
-        print("📂 Loaded audit from: \(latestRun.0)")
+        TalkieConsole.info("📂 Loaded audit from: \(latestRun.0)")
         return report
     }
 
@@ -731,11 +731,11 @@ class DesignAuditor {
 
         guard let data = try? Data(contentsOf: reportPath),
               let report = try? decoder.decode(FullAuditReport.self, from: data) else {
-            print("❌ Could not load run-\(String(format: "%03d", runNumber))")
+            TalkieConsole.info("❌ Could not load run-\(String(format: "%03d", runNumber))")
             return nil
         }
 
-        print("📂 Loaded audit from: \(dirname)")
+        TalkieConsole.info("📂 Loaded audit from: \(dirname)")
         return report
     }
 
@@ -746,9 +746,9 @@ class DesignAuditor {
 
         do {
             try FileManager.default.removeItem(at: runDir)
-            print("🗑️ Deleted: \(dirname)")
+            TalkieConsole.info("🗑️ Deleted: \(dirname)")
         } catch {
-            print("❌ Failed to delete \(dirname): \(error)")
+            TalkieConsole.info("❌ Failed to delete \(dirname): \(error)")
         }
     }
 
@@ -790,9 +790,9 @@ class DesignAuditor {
             }
             #endif
 
-            print("✅ Saved audit to: run-\(String(format: "%03d", actualRunNumber))")
+            TalkieConsole.info("✅ Saved audit to: run-\(String(format: "%03d", actualRunNumber))")
         } catch {
-            print("❌ Failed to save audit: \(error)")
+            TalkieConsole.info("❌ Failed to save audit: \(error)")
         }
     }
 
@@ -808,7 +808,7 @@ class DesignAuditor {
     func captureScreenshots(to directory: URL, onProgress: ScreenshotProgressCallback?) async {
         // Find the main Talkie window
         guard let mainWindow = NSApp.windows.first(where: { $0.title.contains("Talkie") && !$0.title.contains("Settings") }) else {
-            print("⚠️ No main window found for screenshot capture")
+            TalkieConsole.info("⚠️ No main window found for screenshot capture")
             return
         }
 
@@ -818,7 +818,7 @@ class DesignAuditor {
             // Build debug navigation path for this screen
             let debugPath = buildDebugPath(for: screen)
 
-            print("📸 Capturing \(screen.title) (talkie://d/\(debugPath))...")
+            TalkieConsole.info("📸 Capturing \(screen.title) (talkie://d/\(debugPath))...")
 
             // Navigate to screen using debug URL system
             #if DEBUG
@@ -843,7 +843,7 @@ class DesignAuditor {
                    let pngData = bitmapImage.representation(using: .png, properties: [:]) {
                     try? pngData.write(to: fileURL)
                     savedPath = fileURL.path
-                    print("  ✅ Saved: \(filename)")
+                    TalkieConsole.info("  ✅ Saved: \(filename)")
                 }
             }
 
@@ -917,14 +917,14 @@ class DesignAuditor {
         // Convert Int to CGWindowID (UInt32) - don't use as? cast which always fails
         let windowNumber = CGWindowID(window.windowNumber)
         guard windowNumber > 0 else {
-            print("⚠️ Invalid window number: \(window.windowNumber)")
+            TalkieConsole.info("⚠️ Invalid window number: \(window.windowNumber)")
             return nil
         }
 
         try? await Task.sleep(for: .milliseconds(100))
 
         guard let cgImage = await ScreenshotCaptureService.shared.captureWindowImage(windowID: windowNumber) else {
-            print("⚠️ Window capture failed for window \(windowNumber)")
+            TalkieConsole.info("⚠️ Window capture failed for window \(windowNumber)")
             return nil
         }
 
@@ -940,7 +940,7 @@ class DesignAuditor {
         for sourceFile in screen.sourceFiles {
             let filePath = "\(basePath)/\(sourceFile)"
             guard let content = try? String(contentsOfFile: filePath, encoding: .utf8) else {
-                print("  Could not read: \(sourceFile)")
+                TalkieConsole.info("  Could not read: \(sourceFile)")
                 continue
             }
 
@@ -988,7 +988,7 @@ class DesignAuditor {
 
     /// Audit all screens with screenshot capture
     func auditAll() async -> FullAuditReport {
-        print("🔍 Starting full design audit...")
+        TalkieConsole.info("🔍 Starting full design audit...")
 
         // Gather metadata first
         let runNumber = getNextRunNumber()
@@ -997,17 +997,17 @@ class DesignAuditor {
         let gitCommit = getGitCommit()
         let themeName = getCurrentThemeName()
 
-        print("📋 Run #\(runNumber)")
-        print("   Version: \(appVersion ?? "unknown")")
-        print("   Branch: \(gitBranch ?? "unknown")")
-        print("   Commit: \(gitCommit ?? "unknown")")
-        print("   Theme: \(themeName ?? "default")")
+        TalkieConsole.info("📋 Run #\(runNumber)")
+        TalkieConsole.info("   Version: \(appVersion ?? "unknown")")
+        TalkieConsole.info("   Branch: \(gitBranch ?? "unknown")")
+        TalkieConsole.info("   Commit: \(gitCommit ?? "unknown")")
+        TalkieConsole.info("   Theme: \(themeName ?? "default")")
 
         var results: [ScreenAuditResult] = []
 
         // Run static code analysis
         for screen in AppScreen.allCases {
-            print("  Auditing \(screen.title)...")
+            TalkieConsole.info("  Auditing \(screen.title)...")
             let result = performCodeAnalysis(screen: screen)
             results.append(result)
         }
@@ -1019,10 +1019,10 @@ class DesignAuditor {
         do {
             try FileManager.default.createDirectory(at: screenshotsDirectory, withIntermediateDirectories: true)
         } catch {
-            print("❌ Failed to create screenshots directory: \(error)")
+            TalkieConsole.info("❌ Failed to create screenshots directory: \(error)")
         }
 
-        print("📸 Capturing screenshots...")
+        TalkieConsole.info("📸 Capturing screenshots...")
         await captureScreenshots(to: screenshotsDirectory)
 
         let report = FullAuditReport(
@@ -1039,8 +1039,8 @@ class DesignAuditor {
         // Save to disk
         saveAudit(report, runNumber: runNumber)
 
-        print("✅ Audit complete!")
-        print("📁 Results saved to: run-\(String(format: "%03d", runNumber))")
+        TalkieConsole.info("✅ Audit complete!")
+        TalkieConsole.info("📁 Results saved to: run-\(String(format: "%03d", runNumber))")
         return report
     }
 
@@ -1065,7 +1065,7 @@ class DesignAuditor {
         do {
             try FileManager.default.createDirectory(at: runDirectory, withIntermediateDirectories: true)
         } catch {
-            print("❌ Failed to create run directory: \(error)")
+            TalkieConsole.info("❌ Failed to create run directory: \(error)")
         }
 
         let report = FullAuditReport(
@@ -1098,7 +1098,7 @@ class DesignAuditor {
         do {
             try FileManager.default.createDirectory(at: screenshotsDirectory, withIntermediateDirectories: true)
         } catch {
-            print("❌ Failed to create screenshots directory: \(error)")
+            TalkieConsole.info("❌ Failed to create screenshots directory: \(error)")
         }
 
         // Capture screenshots with progress callback
@@ -1123,11 +1123,11 @@ class DesignAuditor {
 
     /// Audit a specific section
     func audit(section: ScreenSection) -> FullAuditReport {
-        print("🔍 Auditing \(section.rawValue) section...")
+        TalkieConsole.info("🔍 Auditing \(section.rawValue) section...")
         var results: [ScreenAuditResult] = []
 
         for screen in section.screens {
-            print("  Auditing \(screen.title)...")
+            TalkieConsole.info("  Auditing \(screen.title)...")
             let result = performCodeAnalysis(screen: screen)
             results.append(result)
         }
@@ -1146,11 +1146,11 @@ class DesignAuditor {
 
     /// Audit a single screen with optional screenshot capture
     func audit(screen: AppScreen, withScreenshot: Bool = false, screenshotDirectory: URL? = nil) async -> ScreenAuditResult {
-        NSLog("[DesignAuditor.audit] START: %@", screen.title)
-        print("🔍 Auditing \(screen.title)...")
-        NSLog("[DesignAuditor.audit] Calling performCodeAnalysis...")
+        TalkieConsole.critical("[DesignAuditor.audit] START: %@", screen.title)
+        TalkieConsole.info("🔍 Auditing \(screen.title)...")
+        TalkieConsole.critical("[DesignAuditor.audit] Calling performCodeAnalysis...")
         var result = performCodeAnalysis(screen: screen)
-        NSLog("[DesignAuditor.audit] performCodeAnalysis complete")
+        TalkieConsole.critical("[DesignAuditor.audit] performCodeAnalysis complete")
 
         if withScreenshot, let screenshotDir = screenshotDirectory {
             // Ensure directory exists
@@ -1167,7 +1167,7 @@ class DesignAuditor {
     func captureScreenshot(for screen: AppScreen, to directory: URL) async {
         // Find the main Talkie window
         guard let mainWindow = NSApp.windows.first(where: { $0.title.contains("Talkie") && !$0.title.contains("Settings") }) else {
-            print("⚠️ No main window found for screenshot capture")
+            TalkieConsole.info("⚠️ No main window found for screenshot capture")
             return
         }
 
@@ -1176,7 +1176,7 @@ class DesignAuditor {
         // Build debug navigation path for this screen
         let debugPath = buildDebugPath(for: screen)
 
-        print("📸 Capturing \(screen.title) (talkie://d/\(debugPath))...")
+        TalkieConsole.info("📸 Capturing \(screen.title) (talkie://d/\(debugPath))...")
 
         // Navigate to screen using debug URL system
         #if DEBUG
@@ -1199,7 +1199,7 @@ class DesignAuditor {
                let bitmapImage = NSBitmapImageRep(data: tiffData),
                let pngData = bitmapImage.representation(using: .png, properties: [:]) {
                 try? pngData.write(to: fileURL)
-                print("  ✅ Saved: \(filename)")
+                TalkieConsole.info("  ✅ Saved: \(filename)")
             }
         }
     }
@@ -1210,14 +1210,14 @@ class DesignAuditor {
     func generateHTMLReport(from report: FullAuditReport, to outputPath: URL) {
         let html = buildHTMLReport(report)
         try? html.write(to: outputPath, atomically: true, encoding: .utf8)
-        print("✅ HTML report saved to: \(outputPath.path)")
+        TalkieConsole.info("✅ HTML report saved to: \(outputPath.path)")
     }
 
     /// Generate Markdown report
     func generateMarkdownReport(from report: FullAuditReport, to outputPath: URL) {
         let markdown = buildMarkdownReport(report)
         try? markdown.write(to: outputPath, atomically: true, encoding: .utf8)
-        print("✅ Markdown report saved to: \(outputPath.path)")
+        TalkieConsole.info("✅ Markdown report saved to: \(outputPath.path)")
     }
 
     // MARK: - Pattern Extraction

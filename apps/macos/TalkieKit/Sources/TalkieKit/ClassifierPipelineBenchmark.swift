@@ -291,54 +291,54 @@ public final class ClassifierPipelineBenchmark {
     public func printResults(_ result: ClassifierPipelineBenchmarkResult) {
         let n = result.totalCases
         let h = result.fanOut.headCount
-        print("")
-        print("CLASSIFIER PIPELINE BENCHMARK (\(n) cases, trained head)")
-        print(String(repeating: "─", count: 54))
+        TalkieLogger.info(.system, "")
+        TalkieLogger.info(.system, "CLASSIFIER PIPELINE BENCHMARK (\(n) cases, trained head)")
+        TalkieLogger.info(.system, String(repeating: "─", count: 54))
 
         func fmt(_ ms: Double) -> String { String(format: "%.2fms", ms) }
 
-        print("EMBEDDING         median    p95")
-        print("  Word-Averaged   \(fmt(result.wordEmbedding.median).padding(toLength: 10, withPad: " ", startingAt: 0))\(fmt(result.wordEmbedding.p95))")
+        TalkieLogger.info(.system, "EMBEDDING         median    p95")
+        TalkieLogger.info(.system, "  Word-Averaged   \(fmt(result.wordEmbedding.median).padding(toLength: 10, withPad: " ", startingAt: 0))\(fmt(result.wordEmbedding.p95))")
         if let se = result.sentenceEmbedding {
-            print("  Sentence-Level  \(fmt(se.median).padding(toLength: 10, withPad: " ", startingAt: 0))\(fmt(se.p95))")
+            TalkieLogger.info(.system, "  Sentence-Level  \(fmt(se.median).padding(toLength: 10, withPad: " ", startingAt: 0))\(fmt(se.p95))")
         } else {
-            print("  Sentence-Level  (unavailable)")
+            TalkieLogger.info(.system, "  Sentence-Level  (unavailable)")
         }
 
-        print("")
-        print("CLASSIFIER        median    p95")
-        print("  Hand-Crafted    \(fmt(result.handCrafted.median).padding(toLength: 10, withPad: " ", startingAt: 0))\(fmt(result.handCrafted.p95))")
-        print("  Trained Head    \(fmt(result.singleHead.median).padding(toLength: 10, withPad: " ", startingAt: 0))\(fmt(result.singleHead.p95))")
-        print("  Fan-Out (\(h))     \(fmt(result.fanOut.allHeads.median).padding(toLength: 10, withPad: " ", startingAt: 0))\(fmt(result.fanOut.allHeads.p95))")
+        TalkieLogger.info(.system, "")
+        TalkieLogger.info(.system, "CLASSIFIER        median    p95")
+        TalkieLogger.info(.system, "  Hand-Crafted    \(fmt(result.handCrafted.median).padding(toLength: 10, withPad: " ", startingAt: 0))\(fmt(result.handCrafted.p95))")
+        TalkieLogger.info(.system, "  Trained Head    \(fmt(result.singleHead.median).padding(toLength: 10, withPad: " ", startingAt: 0))\(fmt(result.singleHead.p95))")
+        TalkieLogger.info(.system, "  Fan-Out (\(h))     \(fmt(result.fanOut.allHeads.median).padding(toLength: 10, withPad: " ", startingAt: 0))\(fmt(result.fanOut.allHeads.p95))")
 
-        print("")
-        print("TRAINING")
-        print("  Cases:          \(result.trainingCaseCount)")
-        print("  Time:           \(String(format: "%.1fms", result.trainingTimeMs))")
+        TalkieLogger.info(.system, "")
+        TalkieLogger.info(.system, "TRAINING")
+        TalkieLogger.info(.system, "  Cases:          \(result.trainingCaseCount)")
+        TalkieLogger.info(.system, "  Time:           \(String(format: "%.1fms", result.trainingTimeMs))")
 
-        print("")
-        print("ACCURACY (vs labels)")
-        print("  Hand-Crafted:   \(String(format: "%.1f%%", result.hcAccuracy * 100)) (\(result.hcCorrect)/\(n))")
-        print("  Trained Head:   \(String(format: "%.1f%%", result.trainedHeadAccuracy * 100)) (\(result.trainedHeadCorrect)/\(n))")
+        TalkieLogger.info(.system, "")
+        TalkieLogger.info(.system, "ACCURACY (vs labels)")
+        TalkieLogger.info(.system, "  Hand-Crafted:   \(String(format: "%.1f%%", result.hcAccuracy * 100)) (\(result.hcCorrect)/\(n))")
+        TalkieLogger.info(.system, "  Trained Head:   \(String(format: "%.1f%%", result.trainedHeadAccuracy * 100)) (\(result.trainedHeadCorrect)/\(n))")
 
-        print("")
-        print("AGREEMENT")
-        print("  HC vs Trained:  \(String(format: "%.1f%%", result.hcVsTrainedAgreement * 100)) (\(result.hcVsTrainedAgree)/\(n))")
+        TalkieLogger.info(.system, "")
+        TalkieLogger.info(.system, "AGREEMENT")
+        TalkieLogger.info(.system, "  HC vs Trained:  \(String(format: "%.1f%%", result.hcVsTrainedAgreement * 100)) (\(result.hcVsTrainedAgree)/\(n))")
 
         if !result.perDifficulty.isEmpty {
-            print("")
-            print("PER DIFFICULTY")
+            TalkieLogger.info(.system, "")
+            TalkieLogger.info(.system, "PER DIFFICULTY")
             for (diff, hcAcc, trainedAcc, agree, count) in result.perDifficulty {
                 let d = diff.padding(toLength: 10, withPad: " ", startingAt: 0)
                 let hcPct = String(format: "%3.0f%%", hcAcc * 100)
                 let trPct = String(format: "%3.0f%%", trainedAcc * 100)
                 let agPct = String(format: "%3.0f%%", agree * 100)
-                print("  \(d) HC:\(hcPct)  Trained:\(trPct)  Agree:\(agPct)  (n=\(count))")
+                TalkieLogger.info(.system, "  \(d) HC:\(hcPct)  Trained:\(trPct)  Agree:\(agPct)  (n=\(count))")
             }
         }
 
-        print(String(repeating: "─", count: 54))
-        print("")
+        TalkieLogger.info(.system, String(repeating: "─", count: 54))
+        TalkieLogger.info(.system, "")
     }
 
     // MARK: - Embedding Helpers

@@ -77,7 +77,7 @@ struct StatsScreen: View {
                 topApps = results.4
             }
         } catch {
-            print("StatsScreen.loadStats error: \(error)")
+            TalkieConsole.info("StatsScreen.loadStats error: \(error)")
         }
     }
 

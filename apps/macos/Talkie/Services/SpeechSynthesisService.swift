@@ -7,10 +7,10 @@
 //
 
 import AVFoundation
-import os
 import Observation
+import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "SpeechSynthesis")
+private let logger = Log(.audio)
 
 // MARK: - Speech Synthesis Service
 

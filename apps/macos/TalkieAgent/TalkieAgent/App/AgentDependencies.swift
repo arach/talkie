@@ -1,7 +1,7 @@
 import Foundation
-import os.log
+import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.agent", category: "Dependencies")
+private let logger = Log(.system)
 
 // MARK: - Audio Reboot Result
 
@@ -98,11 +98,11 @@ struct EngineTranscriptionService: TranscriptionService {
         }
 
         let fileName = URL(fileURLWithPath: request.audioPath).lastPathComponent
-        logger.notice("═══════════════════════════════════════════════════════════")
-        logger.notice("  🎙️ TRANSCRIBING VIA EMBEDDED ENGINE")
-        logger.notice("  Model: \(self.modelId)")
-        logger.notice("  Audio: \(fileName)")
-        logger.notice("═══════════════════════════════════════════════════════════")
+        logger.info("═══════════════════════════════════════════════════════════")
+        logger.info("  🎙️ TRANSCRIBING VIA EMBEDDED ENGINE")
+        logger.info("  Model: \(self.modelId)")
+        logger.info("  Audio: \(fileName)")
+        logger.info("═══════════════════════════════════════════════════════════")
 
         let startTime = Date()
 
@@ -116,12 +116,12 @@ struct EngineTranscriptionService: TranscriptionService {
         let elapsed = Date().timeIntervalSince(startTime)
 
         let wordTimingCount = timedTranscription?.words.count ?? 0
-        logger.notice("═══════════════════════════════════════════════════════════")
-        logger.notice("  ✅ ENGINE TRANSCRIPTION COMPLETE")
-        logger.notice("  Time: \(String(format: "%.2f", elapsed))s")
-        logger.notice("  Result: \(text.prefix(80))...")
-        logger.notice("  Word timings: \(wordTimingCount)")
-        logger.notice("═══════════════════════════════════════════════════════════")
+        logger.info("═══════════════════════════════════════════════════════════")
+        logger.info("  ✅ ENGINE TRANSCRIPTION COMPLETE")
+        logger.info("  Time: \(String(format: "%.2f", elapsed))s")
+        logger.info("  Result: \(text.prefix(80))...")
+        logger.info("  Word timings: \(wordTimingCount)")
+        logger.info("═══════════════════════════════════════════════════════════")
 
         return Transcript(text: text, confidence: nil, timedTranscription: timedTranscription)
     }

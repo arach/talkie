@@ -16,6 +16,7 @@
 		53AF328B2F26B2E40000561A /* TalkieKeys.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 53AF32842F26B2E30000561A /* TalkieKeys.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		53AF32922F26B4640000561A /* TalkieMobileKit in Frameworks */ = {isa = PBXBuildFile; productRef = 53AF32912F26B4640000561A /* TalkieMobileKit */; };
 		53AF32942F26B5090000561A /* TalkieMobileKit in Frameworks */ = {isa = PBXBuildFile; productRef = 53AF32932F26B5090000561A /* TalkieMobileKit */; };
+		53AF32972F26B5090000561A /* TalkieMobileKit in Frameworks */ = {isa = PBXBuildFile; productRef = 53AF32962F26B5090000561A /* TalkieMobileKit */; };
 		53B43EC32EDB539200C09544 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 53B43EC22EDB539100C09544 /* WidgetKit.framework */; };
 		53B43EC52EDB539200C09544 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 53B43EC42EDB539200C09544 /* SwiftUI.framework */; };
 		53B43ED62EDB539400C09544 /* TalkieWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 53B43EC02EDB539100C09544 /* TalkieWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -285,6 +286,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				53AF32972F26B5090000561A /* TalkieMobileKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -529,6 +531,9 @@
 				53BF5B8D2EED010000FDEB2A /* TalkieWatch Watch App */,
 			);
 			name = "TalkieWatch Watch App";
+			packageProductDependencies = (
+				53AF32962F26B5090000561A /* TalkieMobileKit */,
+			);
 			productName = "TalkieWatch Watch App";
 			productReference = 53BF5B8C2EED010000FDEB2A /* TalkieWatch Watch App.app */;
 			productType = "com.apple.product-type.application";
@@ -1537,6 +1542,11 @@
 			productName = TalkieMobileKit;
 		};
 		53AF32932F26B5090000561A /* TalkieMobileKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 53AF32902F26B4640000561A /* XCLocalSwiftPackageReference "TalkieMobileKit" */;
+			productName = TalkieMobileKit;
+		};
+		53AF32962F26B5090000561A /* TalkieMobileKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 53AF32902F26B4640000561A /* XCLocalSwiftPackageReference "TalkieMobileKit" */;
 			productName = TalkieMobileKit;

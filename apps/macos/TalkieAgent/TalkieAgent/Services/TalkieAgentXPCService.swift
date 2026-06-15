@@ -78,8 +78,8 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         listener = NSXPCListener(machServiceName: kTalkieAgentXPCServiceName)
         listener?.delegate = self
         listener?.resume()
-        NSLog("[TalkieAgentXPC] ✓ Service started: \(kTalkieAgentXPCServiceName)")
-        NSLog("[TalkieAgentXPC] ℹ️ State notifications are optional - recording will work even if no observers connect")
+        AgentConsole.critical("[TalkieAgentXPC] ✓ Service started: \(kTalkieAgentXPCServiceName)")
+        AgentConsole.critical("[TalkieAgentXPC] ℹ️ State notifications are optional - recording will work even if no observers connect")
 
         // Observe audio level (throttled to 2Hz - "sign of life" indicator)
         audioLevelCancellable = AudioLevelMonitor.shared.$level
@@ -104,7 +104,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         listener?.invalidate()
         listener = nil
         observers.removeAll()
-        NSLog("[TalkieAgentXPC] Service stopped")
+        AgentConsole.critical("[TalkieAgentXPC] Service stopped")
     }
 
     // MARK: - State Updates (Called by AgentController)
@@ -133,18 +133,18 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         let idString = recordingId.uuidString
         for connection in observers {
             guard let observer = connection.remoteObjectProxyWithErrorHandler({ error in
-                NSLog("[TalkieAgentXPC] Error sending dictationWasPasted: \(error)")
+                AgentConsole.critical("[TalkieAgentXPC] Error sending dictationWasPasted: \(error)")
             }) as? TalkieAgentStateObserverProtocol else { continue }
             observer.dictationWasPasted(recordingId: idString)
         }
-        NSLog("[TalkieAgentXPC] ✓ Notified \(observers.count) observers about dictation paste (recording: \(idString.prefix(8)))")
+        AgentConsole.critical("[TalkieAgentXPC] ✓ Notified \(observers.count) observers about dictation paste (recording: \(idString.prefix(8)))")
     }
 
     private func broadcastStateChange(state: String, elapsedTime: TimeInterval) {
         // Notify all connected observers immediately (XPC)
         for connection in observers {
             guard let observer = connection.remoteObjectProxyWithErrorHandler({ error in
-                NSLog("[TalkieAgentXPC] ⚠️ Error sending state to observer: \(error)")
+                AgentConsole.critical("[TalkieAgentXPC] ⚠️ Error sending state to observer: \(error)")
             }) as? TalkieAgentStateObserverProtocol else { continue }
 
             // Fire-and-forget notification
@@ -153,7 +153,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
 
         // Only log and send URL when state actually changes
         if state != lastLoggedState {
-            NSLog("[TalkieAgentXPC] ✓ State changed to '\(state)' (broadcasting to \(observers.count) observers)")
+            AgentConsole.critical("[TalkieAgentXPC] ✓ State changed to '\(state)' (broadcasting to \(observers.count) observers)")
             lastLoggedState = state
 
             // Send URL notification to Talkie (decoupled, no connection required)
@@ -176,7 +176,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         // Notify all connected observers (XPC)
         for connection in observers {
             guard let observer = connection.remoteObjectProxyWithErrorHandler({ error in
-                NSLog("[TalkieAgentXPC] ⚠️ Error sending dictation notification to observer: \(error)")
+                AgentConsole.critical("[TalkieAgentXPC] ⚠️ Error sending dictation notification to observer: \(error)")
             }) as? TalkieAgentStateObserverProtocol else { continue }
 
             observer.dictationWasAdded()
@@ -185,7 +185,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         // Also send URL notification
         TalkieNotifier.shared.dictationAdded()
 
-        NSLog("[TalkieAgentXPC] ✓ Notified \(observers.count) observers about new dictation")
+        AgentConsole.critical("[TalkieAgentXPC] ✓ Notified \(observers.count) observers about new dictation")
     }
 
     private func broadcastAudioLevel(_ level: Float) {
@@ -214,7 +214,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         // Notify all connected observers (XPC)
         for connection in observers {
             guard let observer = connection.remoteObjectProxyWithErrorHandler({ error in
-                NSLog("[TalkieAgentXPC] ⚠️ Error sending ambient command to observer: \(error)")
+                AgentConsole.critical("[TalkieAgentXPC] ⚠️ Error sending ambient command to observer: \(error)")
             }) as? TalkieAgentStateObserverProtocol else { continue }
 
             observer.ambientCommandReceived(command: command, duration: duration, bufferContext: bufferContext)
@@ -223,7 +223,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         // Also send URL notification for decoupled handling
         TalkieNotifier.shared.ambientCommand(command)
 
-        NSLog("[TalkieAgentXPC] ✓ Ambient command broadcasted to \(observers.count) observers: '\(command.prefix(50))...'")
+        AgentConsole.critical("[TalkieAgentXPC] ✓ Ambient command broadcasted to \(observers.count) observers: '\(command.prefix(50))...'")
     }
 
     // MARK: - Voice Navigation
@@ -238,13 +238,13 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         // Notify all connected observers (XPC)
         for connection in observers {
             guard let observer = connection.remoteObjectProxyWithErrorHandler({ error in
-                NSLog("[TalkieAgentXPC] ⚠️ Error sending voice navigation to observer: \(error)")
+                AgentConsole.critical("[TalkieAgentXPC] ⚠️ Error sending voice navigation to observer: \(error)")
             }) as? TalkieAgentStateObserverProtocol else { continue }
 
             observer.voiceNavigationReceived(intent: intent, confidence: confidence, rawText: rawText)
         }
 
-        NSLog("[TalkieAgentXPC] ✓ Voice navigation broadcasted: \(intent) (confidence: \(String(format: "%.0f%%", confidence * 100)))")
+        AgentConsole.critical("[TalkieAgentXPC] ✓ Voice navigation broadcasted: \(intent) (confidence: \(String(format: "%.0f%%", confidence * 100)))")
     }
 
     // MARK: - TalkieAgentXPCServiceProtocol
@@ -270,15 +270,15 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
     nonisolated func toggleRecording(reply: @escaping (Bool) -> Void) {
         Task { @MainActor in
             guard let agentController = self.agentController else {
-                NSLog("[TalkieAgentXPC] ⚠️ Cannot toggle - AgentController not set")
+                AgentConsole.critical("[TalkieAgentXPC] ⚠️ Cannot toggle - AgentController not set")
                 reply(false)
                 return
             }
 
             // Toggle recording
-            NSLog("[TalkieAgentXPC] Toggle recording requested")
+            AgentConsole.critical("[TalkieAgentXPC] Toggle recording requested")
             await agentController.toggleListening(interstitial: false)
-            NSLog("[TalkieAgentXPC] ✓ Toggle completed")
+            AgentConsole.critical("[TalkieAgentXPC] ✓ Toggle completed")
             reply(true)
         }
     }
@@ -298,7 +298,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
             // Check screen recording permission
             let hasScreenRecording = checkScreenRecordingPermission()
 
-            NSLog("[TalkieAgentXPC] Permissions: mic=\(hasMicrophone), accessibility=\(hasAccessibility), screenRecording=\(hasScreenRecording)")
+            AgentConsole.critical("[TalkieAgentXPC] Permissions: mic=\(hasMicrophone), accessibility=\(hasAccessibility), screenRecording=\(hasScreenRecording)")
             reply(hasMicrophone, hasAccessibility, hasScreenRecording)
         }
     }
@@ -317,7 +317,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
                 detail: "bundle=\(Bundle.main.bundleIdentifier ?? "unknown"), executable=\(Bundle.main.executableURL?.path ?? "unknown")"
             )
             let granted = await MicrophonePermission.request()
-            NSLog("[TalkieAgentXPC] Microphone permission request result: \(granted)")
+            AgentConsole.critical("[TalkieAgentXPC] Microphone permission request result: \(granted)")
             reply(granted)
         }
     }
@@ -335,7 +335,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
                 PermissionManager.shared.requestAccessibility()
             }
 
-            NSLog("[TalkieAgentXPC] Accessibility permission request result: \(refreshed)")
+            AgentConsole.critical("[TalkieAgentXPC] Accessibility permission request result: \(refreshed)")
             reply(refreshed)
         }
     }
@@ -343,7 +343,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
     nonisolated func requestScreenRecordingPermission(reply: @escaping (Bool) -> Void) {
         Task { @MainActor in
             let granted = await ScreenshotService.shared.requestPermission()
-            NSLog("[TalkieAgentXPC] Screen recording permission request result: \(granted)")
+            AgentConsole.critical("[TalkieAgentXPC] Screen recording permission request result: \(granted)")
             reply(granted)
         }
     }
@@ -352,23 +352,23 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         Task { @MainActor in
             // IOHIDCheckAccess returns kIOHIDAccessTypeGranted (0) when allowed.
             let granted = IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted
-            NSLog("[TalkieAgentXPC] Input Monitoring permission: \(granted)")
+            AgentConsole.critical("[TalkieAgentXPC] Input Monitoring permission: \(granted)")
             reply(granted)
         }
     }
 
     nonisolated func pasteText(_ text: String, toAppWithBundleID bundleID: String?, reply: @escaping (Bool) -> Void) {
         Task { @MainActor in
-            NSLog("[TalkieAgentXPC] Paste request: \(text.count) chars to \(bundleID ?? "frontmost")")
+            AgentConsole.critical("[TalkieAgentXPC] Paste request: \(text.count) chars to \(bundleID ?? "frontmost")")
             let success = await TextInserter.shared.insert(text, intoAppWithBundleID: bundleID)
-            NSLog("[TalkieAgentXPC] Paste result: \(success ? "success" : "failed")")
+            AgentConsole.critical("[TalkieAgentXPC] Paste result: \(success ? "success" : "failed")")
             reply(success)
         }
     }
 
     nonisolated func appendMessage(_ text: String, sessionId: String, projectPath: String?, submit: Bool, reply: @escaping (Bool, String?) -> Void) {
         Task { @MainActor in
-            NSLog("[TalkieAgentXPC] appendMessage for session: \(sessionId), projectPath: \(projectPath ?? "nil"), submit: \(submit), text: \(text.prefix(50))...")
+            AgentConsole.critical("[TalkieAgentXPC] appendMessage for session: \(sessionId), projectPath: \(projectPath ?? "nil"), submit: \(submit), text: \(text.prefix(50))...")
 
             // Try to find terminal context
             var context: SessionContext? = nil
@@ -383,7 +383,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
 
             // 3. If still not found, do a terminal scan and try again
             if context == nil {
-                NSLog("[TalkieAgentXPC] No cached context, attempting terminal scan...")
+                AgentConsole.critical("[TalkieAgentXPC] No cached context, attempting terminal scan...")
                 BridgeContextMapper.shared.refreshFromScan()
 
                 // Try sessionId first
@@ -400,7 +400,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
             if context == nil {
                 let scanResult = TerminalScanner.shared.scanAllTerminals()
                 if let claudeTerminal = scanResult.terminals.first(where: { $0.isClaudeSession }) {
-                    NSLog("[TalkieAgentXPC] Using fallback Claude terminal: \(claudeTerminal.windowTitle) (\(claudeTerminal.bundleID))")
+                    AgentConsole.critical("[TalkieAgentXPC] Using fallback Claude terminal: \(claudeTerminal.windowTitle) (\(claudeTerminal.bundleID))")
                     context = SessionContext(
                         app: claudeTerminal.appName,
                         bundleId: claudeTerminal.bundleID,
@@ -413,7 +413,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
             }
 
             guard let ctx = context else {
-                NSLog("[TalkieAgentXPC] Could not find terminal for session: \(sessionId), project: \(projectPath ?? "nil")")
+                AgentConsole.critical("[TalkieAgentXPC] Could not find terminal for session: \(sessionId), project: \(projectPath ?? "nil")")
                 let scanResult = TerminalScanner.shared.scanAllTerminals()
                 let terminalInfo = scanResult.terminals.map { "\($0.appName): \($0.windowTitle)" }.joined(separator: ", ")
                 let error = """
@@ -430,18 +430,18 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
                 return
             }
 
-            NSLog("[TalkieAgentXPC] Appending to \(ctx.app) (\(ctx.bundleId)), submit=\(submit), textLen=\(text.count)")
+            AgentConsole.critical("[TalkieAgentXPC] Appending to \(ctx.app) (\(ctx.bundleId)), submit=\(submit), textLen=\(text.count)")
 
             // Use TextInserter to append the text (and optionally press Enter)
             let success: Bool
 
             // Handle empty text + submit as "just press Enter" (for force submit from iOS)
             if text.isEmpty && submit {
-                NSLog("[TalkieAgentXPC] Empty text with submit - pressing Enter only")
+                AgentConsole.critical("[TalkieAgentXPC] Empty text with submit - pressing Enter only")
                 success = await TextInserter.shared.simulateEnterInApp(bundleId: ctx.bundleId)
             } else if text.isEmpty {
                 // Empty text without submit - nothing to do
-                NSLog("[TalkieAgentXPC] Empty text without submit - no action")
+                AgentConsole.critical("[TalkieAgentXPC] Empty text without submit - no action")
                 reply(true, nil)
                 return
             } else if submit {
@@ -460,10 +460,10 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
             }
 
             if success {
-                NSLog("[TalkieAgentXPC] Message appended\(submit ? " + submitted" : "") to \(ctx.app)")
+                AgentConsole.critical("[TalkieAgentXPC] Message appended\(submit ? " + submitted" : "") to \(ctx.app)")
                 reply(true, nil)
             } else {
-                NSLog("[TalkieAgentXPC] Message append failed for \(ctx.app)")
+                AgentConsole.critical("[TalkieAgentXPC] Message append failed for \(ctx.app)")
                 let error = """
                     Failed to insert text into \(ctx.app).
 
@@ -493,7 +493,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
 
     nonisolated func listClaudeWindows(reply: @escaping (Data?) -> Void) {
         Task { @MainActor in
-            NSLog("[TalkieAgentXPC] listClaudeWindows requested")
+            AgentConsole.critical("[TalkieAgentXPC] listClaudeWindows requested")
 
             if #available(macOS 14.0, *) {
                 let windows = await ScreenshotService.shared.findClaudeWindows()
@@ -519,13 +519,13 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
                 }
 
                 if let jsonData = try? JSONSerialization.data(withJSONObject: windowDicts) {
-                    NSLog("[TalkieAgentXPC] Found \(windows.count) Claude windows")
+                    AgentConsole.critical("[TalkieAgentXPC] Found \(windows.count) Claude windows")
                     reply(jsonData)
                 } else {
                     reply(nil)
                 }
             } else {
-                NSLog("[TalkieAgentXPC] ScreenshotService requires macOS 14+")
+                AgentConsole.critical("[TalkieAgentXPC] ScreenshotService requires macOS 14+")
                 reply(nil)
             }
         }
@@ -533,7 +533,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
 
     nonisolated func captureWindow(windowID: UInt32, reply: @escaping (Data?, String?) -> Void) {
         Task { @MainActor in
-            NSLog("[TalkieAgentXPC] captureWindow requested: \(windowID)")
+            AgentConsole.critical("[TalkieAgentXPC] captureWindow requested: \(windowID)")
 
             if #available(macOS 14.0, *) {
                 guard let image = await ScreenshotService.shared.captureWindow(windowID: CGWindowID(windowID)) else {
@@ -546,7 +546,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
                     return
                 }
 
-                NSLog("[TalkieAgentXPC] Captured window \(windowID): \(jpegData.count) bytes")
+                AgentConsole.critical("[TalkieAgentXPC] Captured window \(windowID): \(jpegData.count) bytes")
                 reply(jpegData, nil)
             } else {
                 reply(nil, "Requires macOS 14+")
@@ -556,7 +556,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
 
     nonisolated func captureMainDisplay(maxDimension: UInt32, quality: Double, reply: @escaping (Data?, String?) -> Void) {
         Task { @MainActor in
-            NSLog("[TalkieAgentXPC] captureMainDisplay requested: maxDimension=\(maxDimension) quality=\(quality)")
+            AgentConsole.critical("[TalkieAgentXPC] captureMainDisplay requested: maxDimension=\(maxDimension) quality=\(quality)")
 
             if #available(macOS 14.0, *) {
                 let requestedDimension = maxDimension > 0 ? Int(maxDimension) : nil
@@ -572,7 +572,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
                     return
                 }
 
-                NSLog("[TalkieAgentXPC] Captured main display: \(jpegData.count) bytes")
+                AgentConsole.critical("[TalkieAgentXPC] Captured main display: \(jpegData.count) bytes")
                 reply(jpegData, nil)
             } else {
                 reply(nil, "Requires macOS 14+")
@@ -582,7 +582,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
 
     nonisolated func captureTerminalWindows(reply: @escaping (Data?, String?) -> Void) {
         Task { @MainActor in
-            NSLog("[TalkieAgentXPC] captureTerminalWindows requested")
+            AgentConsole.critical("[TalkieAgentXPC] captureTerminalWindows requested")
 
             if #available(macOS 14.0, *) {
                 let terminals = await ScreenshotService.shared.captureTerminalWindows()
@@ -605,7 +605,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
                 ]
 
                 if let jsonData = try? JSONSerialization.data(withJSONObject: result) {
-                    NSLog("[TalkieAgentXPC] Captured \(screenshots.count) terminal windows")
+                    AgentConsole.critical("[TalkieAgentXPC] Captured \(screenshots.count) terminal windows")
                     reply(jsonData, nil)
                 } else {
                     reply(nil, "Failed to encode response")
@@ -629,25 +629,25 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
 
     nonisolated func retranscribe(dictationId: String, modelId: String, reply: @escaping (String?, String?) -> Void) {
         Task { @MainActor in
-            NSLog("[TalkieAgentXPC] Retranscribe requested: id=\(dictationId), model=\(modelId)")
+            AgentConsole.critical("[TalkieAgentXPC] Retranscribe requested: id=\(dictationId), model=\(modelId)")
 
             // Parse UUID from string
             guard let uuid = UUID(uuidString: dictationId) else {
-                NSLog("[TalkieAgentXPC] Retranscribe failed: invalid UUID \(dictationId)")
+                AgentConsole.critical("[TalkieAgentXPC] Retranscribe failed: invalid UUID \(dictationId)")
                 reply(nil, "Invalid dictation ID")
                 return
             }
 
             // 1. Fetch dictation from database
             guard let dictation = UnifiedDatabase.fetch(id: uuid) else {
-                NSLog("[TalkieAgentXPC] Retranscribe failed: dictation \(dictationId) not found")
+                AgentConsole.critical("[TalkieAgentXPC] Retranscribe failed: dictation \(dictationId) not found")
                 reply(nil, "Dictation not found")
                 return
             }
 
             // 2. Get audio file path
             guard let audioFilename = dictation.audioFilename else {
-                NSLog("[TalkieAgentXPC] Retranscribe failed: no audio file for dictation \(dictationId)")
+                AgentConsole.critical("[TalkieAgentXPC] Retranscribe failed: no audio file for dictation \(dictationId)")
                 reply(nil, "No audio file available for this dictation")
                 return
             }
@@ -655,7 +655,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
             let audioPath = AudioStorage.audioDirectory.appendingPathComponent(audioFilename).path
 
             guard FileManager.default.fileExists(atPath: audioPath) else {
-                NSLog("[TalkieAgentXPC] Retranscribe failed: audio file not found at \(audioPath)")
+                AgentConsole.critical("[TalkieAgentXPC] Retranscribe failed: audio file not found at \(audioPath)")
                 reply(nil, "Audio file not found")
                 return
             }
@@ -674,10 +674,10 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
                 // 5. Notify observers that dictation was updated
                 self.broadcastDictationAdded()
 
-                NSLog("[TalkieAgentXPC] Retranscribe succeeded: \(newText.prefix(50))...")
+                AgentConsole.critical("[TalkieAgentXPC] Retranscribe succeeded: \(newText.prefix(50))...")
                 reply(newText, nil)
             } catch {
-                NSLog("[TalkieAgentXPC] Retranscribe failed: \(error.localizedDescription)")
+                AgentConsole.critical("[TalkieAgentXPC] Retranscribe failed: \(error.localizedDescription)")
                 reply(nil, error.localizedDescription)
             }
         }
@@ -870,14 +870,14 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         Task { @MainActor in
             // Check if normal recording is in progress
             if let controller = self.agentController, controller.state != .idle {
-                NSLog("[TalkieAgentXPC] Cannot start ephemeral capture - recording in progress (state: \(controller.state))")
+                AgentConsole.critical("[TalkieAgentXPC] Cannot start ephemeral capture - recording in progress (state: \(controller.state))")
                 reply(nil, "Recording already in progress")
                 return
             }
 
             // Check microphone permission
             guard MicrophonePermission.isGranted else {
-                NSLog("[TalkieAgentXPC] Ephemeral capture failed - no microphone permission")
+                AgentConsole.critical("[TalkieAgentXPC] Ephemeral capture failed - no microphone permission")
                 reply(nil, "Microphone permission not granted")
                 return
             }
@@ -901,7 +901,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
             // Warm up the capture system
             let warmedUp = await capture.warmUp()
             guard warmedUp else {
-                NSLog("[TalkieAgentXPC] Ephemeral capture failed - warm up failed")
+                AgentConsole.critical("[TalkieAgentXPC] Ephemeral capture failed - warm up failed")
                 self.ephemeralSessions.removeValue(forKey: sessionId)
                 reply(nil, "Audio capture initialization failed")
                 return
@@ -911,10 +911,10 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
             do {
                 let captureSession = try await capture.startCapture(config: .ephemeral)
                 session.captureSession = captureSession
-                NSLog("[TalkieAgentXPC] ✓ Ephemeral capture started: \(sessionId)")
+                AgentConsole.critical("[TalkieAgentXPC] ✓ Ephemeral capture started: \(sessionId)")
                 reply(sessionId, nil)
             } catch {
-                NSLog("[TalkieAgentXPC] Ephemeral capture start failed: \(error.localizedDescription)")
+                AgentConsole.critical("[TalkieAgentXPC] Ephemeral capture start failed: \(error.localizedDescription)")
                 self.ephemeralSessions.removeValue(forKey: sessionId)
                 reply(nil, error.localizedDescription)
             }
@@ -924,7 +924,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
     nonisolated func stopEphemeralCapture(sessionId: String, reply: @escaping (String?, String?) -> Void) {
         Task { @MainActor in
             guard let session = self.ephemeralSessions[sessionId] else {
-                NSLog("[TalkieAgentXPC] Ephemeral capture stop failed - session not found: \(sessionId)")
+                AgentConsole.critical("[TalkieAgentXPC] Ephemeral capture stop failed - session not found: \(sessionId)")
                 reply(nil, "Session not found")
                 return
             }
@@ -937,14 +937,14 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
             self.ephemeralSessions.removeValue(forKey: sessionId)
 
             if let error = session.error {
-                NSLog("[TalkieAgentXPC] Ephemeral capture failed: \(error)")
+                AgentConsole.critical("[TalkieAgentXPC] Ephemeral capture failed: \(error)")
                 reply(nil, error)
             } else if let captureResult = result, captureResult.isValid {
                 let audioPath = captureResult.fileURL.path
-                NSLog("[TalkieAgentXPC] ✓ Ephemeral capture stopped: \(audioPath)")
+                AgentConsole.critical("[TalkieAgentXPC] ✓ Ephemeral capture stopped: \(audioPath)")
                 reply(audioPath, nil)
             } else {
-                NSLog("[TalkieAgentXPC] Ephemeral capture failed - no audio captured or recording too short")
+                AgentConsole.critical("[TalkieAgentXPC] Ephemeral capture failed - no audio captured or recording too short")
                 reply(nil, "No audio was captured")
             }
         }
@@ -952,7 +952,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
 
     nonisolated func showSettings(reply: @escaping (Bool) -> Void) {
         Task { @MainActor in
-            NSLog("[TalkieAgentXPC] showSettings requested")
+            AgentConsole.critical("[TalkieAgentXPC] showSettings requested")
             NSApp.activate(ignoringOtherApps: true)
             // Post notification that AppDelegate listens for
             NotificationCenter.default.post(name: .showSettingsFromXPC, object: nil)
@@ -963,7 +963,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
     nonisolated func simulatePaste(reply: @escaping (Bool) -> Void) {
         Task { @MainActor in
             let success = TextInserter.shared.simulatePaste()
-            NSLog("[TalkieAgentXPC] simulatePaste: \(success ? "success" : "failed")")
+            AgentConsole.critical("[TalkieAgentXPC] simulatePaste: \(success ? "success" : "failed")")
             reply(success)
         }
     }
@@ -971,14 +971,14 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
     nonisolated func attachScreenshots(dictationId: String, screenshotsJSON: String, reply: @escaping (Bool) -> Void) {
         Task { @MainActor in
             guard let uuid = UUID(uuidString: dictationId) else {
-                NSLog("[TalkieAgentXPC] attachScreenshots: invalid UUID \(dictationId)")
+                AgentConsole.critical("[TalkieAgentXPC] attachScreenshots: invalid UUID \(dictationId)")
                 reply(false)
                 return
             }
 
             // Merge screenshots into the dictation record
             let success = UnifiedDatabase.mergeScreenshots(id: uuid, screenshotsJSON: screenshotsJSON)
-            NSLog("[TalkieAgentXPC] attachScreenshots(\(dictationId.prefix(8))): \(success ? "merged" : "failed")")
+            AgentConsole.critical("[TalkieAgentXPC] attachScreenshots(\(dictationId.prefix(8))): \(success ? "merged" : "failed")")
             reply(success)
         }
     }
@@ -1005,7 +1005,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
                 appName: appName,
                 displayName: displayName
             ) ?? false
-            NSLog("[TalkieAgentXPC] recordLiveScreenshot: \(success ? "recorded" : "ignored")")
+            AgentConsole.critical("[TalkieAgentXPC] recordLiveScreenshot: \(success ? "recorded" : "ignored")")
             reply(success)
         }
     }
@@ -1068,13 +1068,13 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
     func addObserverConnection(_ connection: NSXPCConnection) {
         observers.append(connection)
         updateConnectionStatus()
-        NSLog("[TalkieAgentXPC] ✓ Talkie connected (total observers: \(observers.count))")
+        AgentConsole.critical("[TalkieAgentXPC] ✓ Talkie connected (total observers: \(observers.count))")
     }
 
     func removeObserverConnection(_ connection: NSXPCConnection) {
         observers.removeAll { $0 === connection }
         updateConnectionStatus()
-        NSLog("[TalkieAgentXPC] ⚠️ Talkie disconnected (remaining observers: \(observers.count))")
+        AgentConsole.critical("[TalkieAgentXPC] ⚠️ Talkie disconnected (remaining observers: \(observers.count))")
     }
 
     private func updateConnectionStatus() {
@@ -1084,9 +1084,9 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         if wasConnected != isTalkieConnected {
             lastConnectionChange = Date()
             if isTalkieConnected {
-                NSLog("[TalkieAgentXPC] 🟢 Talkie is now connected")
+                AgentConsole.critical("[TalkieAgentXPC] 🟢 Talkie is now connected")
             } else {
-                NSLog("[TalkieAgentXPC] 🔴 Talkie disconnected")
+                AgentConsole.critical("[TalkieAgentXPC] 🔴 Talkie disconnected")
             }
         }
     }
@@ -1108,12 +1108,12 @@ extension TalkieAgentXPCService: NSXPCListenerDelegate {
             Task { @MainActor in
                 guard let self, let conn = newConnection else { return }
                 self.removeObserverConnection(conn)
-                NSLog("[TalkieAgentXPC] Connection invalidated")
+                AgentConsole.critical("[TalkieAgentXPC] Connection invalidated")
             }
         }
 
         newConnection.interruptionHandler = {
-            NSLog("[TalkieAgentXPC] Connection interrupted")
+            AgentConsole.critical("[TalkieAgentXPC] Connection interrupted")
         }
 
         // Add to observers
@@ -1123,7 +1123,7 @@ extension TalkieAgentXPCService: NSXPCListenerDelegate {
         }
 
         newConnection.resume()
-        NSLog("[TalkieAgentXPC] Accepted new connection")
+        AgentConsole.critical("[TalkieAgentXPC] Accepted new connection")
         return true
     }
 }

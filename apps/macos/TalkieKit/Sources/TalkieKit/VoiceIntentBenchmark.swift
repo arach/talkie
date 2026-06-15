@@ -86,35 +86,35 @@ public final class VoiceIntentBenchmark {
 
     /// Print benchmark results to console
     public func printResults(_ result: VoiceIntentBenchmarkResult) {
-        print("\n" + String(repeating: "=", count: 60))
-        print("VOICE INTENT RECOGNITION BENCHMARK")
-        print(String(repeating: "=", count: 60))
-        print("Total: \(result.totalCases) | Passed: \(result.passed) | Failed: \(result.failed)")
-        print("Accuracy: \(result.passRate)")
-        print(String(repeating: "-", count: 60))
+        TalkieLogger.info(.system, "\n" + String(repeating: "=", count: 60))
+        TalkieLogger.info(.system, "VOICE INTENT RECOGNITION BENCHMARK")
+        TalkieLogger.info(.system, String(repeating: "=", count: 60))
+        TalkieLogger.info(.system, "Total: \(result.totalCases) | Passed: \(result.passed) | Failed: \(result.failed)")
+        TalkieLogger.info(.system, "Accuracy: \(result.passRate)")
+        TalkieLogger.info(.system, String(repeating: "-", count: 60))
 
         if !result.failures.isEmpty {
-            print("\nFAILURES (\(result.failures.count)):")
+            TalkieLogger.info(.system, "\nFAILURES (\(result.failures.count)):")
             for (input, expected, actual, confidence) in result.failures.prefix(20) {
-                print("  \"\(input)\"")
-                print("    Expected: \(expected) | Got: \(actual) (conf: \(String(format: "%.2f", confidence)))")
+                TalkieLogger.info(.system, "  \"\(input)\"")
+                TalkieLogger.info(.system, "    Expected: \(expected) | Got: \(actual) (conf: \(String(format: "%.2f", confidence)))")
             }
             if result.failures.count > 20 {
-                print("  ... and \(result.failures.count - 20) more failures")
+                TalkieLogger.info(.system, "  ... and \(result.failures.count - 20) more failures")
             }
         }
 
         if !result.lowConfidence.isEmpty {
-            print("\nLOW CONFIDENCE MATCHES (\(result.lowConfidence.count)):")
+            TalkieLogger.info(.system, "\nLOW CONFIDENCE MATCHES (\(result.lowConfidence.count)):")
             for (input, intent, confidence) in result.lowConfidence.prefix(10) {
-                print("  \"\(input)\" -> \(intent) (conf: \(String(format: "%.2f", confidence)))")
+                TalkieLogger.info(.system, "  \"\(input)\" -> \(intent) (conf: \(String(format: "%.2f", confidence)))")
             }
             if result.lowConfidence.count > 10 {
-                print("  ... and \(result.lowConfidence.count - 10) more")
+                TalkieLogger.info(.system, "  ... and \(result.lowConfidence.count - 10) more")
             }
         }
 
-        print(String(repeating: "=", count: 60) + "\n")
+        TalkieLogger.info(.system, String(repeating: "=", count: 60) + "\n")
     }
 
     // MARK: - Built-in Test Cases

@@ -7,12 +7,9 @@
 
 import Darwin
 import Foundation
-import OSLog
+import TalkieKit
 
-private let talkieAgentRuntimeLog = Logger(
-    subsystem: "to.talkie.app.agent",
-    category: "TalkieAgentRuntime"
-)
+private let talkieAgentRuntimeLog = Log(.system)
 
 private enum TalkieAgentRuntimeError: LocalizedError {
     case missingNodeExecutable(searchedPaths: [String])
@@ -93,7 +90,7 @@ final class TalkieAgentRuntime {
         do {
             try ensureProcessRunning()
         } catch {
-            talkieAgentRuntimeLog.error("Failed to start node sidecar: \(error.localizedDescription, privacy: .public)")
+            talkieAgentRuntimeLog.error("Failed to start node sidecar: \(error.localizedDescription)")
         }
     }
 
@@ -115,7 +112,7 @@ final class TalkieAgentRuntime {
 
             do {
                 try stdinHandle.write(contentsOf: payloadData)
-                talkieAgentRuntimeLog.info("Runtime request op=\(op, privacy: .public)")
+                talkieAgentRuntimeLog.info("Runtime request op=\(op)")
             } catch {
                 completePending(throwing: TalkieAgentRuntimeError.writeFailed(error.localizedDescription))
             }
@@ -137,7 +134,7 @@ final class TalkieAgentRuntime {
 
         let processBox = ProcessBox(process)
         let pid = process.processIdentifier
-        talkieAgentRuntimeLog.info("Stopping node sidecar pid=\(pid, privacy: .public) signal=SIGTERM")
+        talkieAgentRuntimeLog.info("Stopping node sidecar pid=\(pid) signal=SIGTERM")
         cleanupProcessState()
 
         if process.isRunning {
@@ -147,7 +144,7 @@ final class TalkieAgentRuntime {
         Task { @MainActor [processBox] in
             try? await Task.sleep(for: .seconds(2))
             guard processBox.process.isRunning else { return }
-            talkieAgentRuntimeLog.error("Node sidecar did not exit after SIGTERM; sending SIGKILL pid=\(pid, privacy: .public)")
+            talkieAgentRuntimeLog.error("Node sidecar did not exit after SIGTERM; sending SIGKILL pid=\(pid)")
             _ = Darwin.kill(pid, SIGKILL)
         }
 
@@ -209,7 +206,7 @@ private extension TalkieAgentRuntime {
         do {
             try process.run()
             self.process = process
-            talkieAgentRuntimeLog.info("Spawned node sidecar pid=\(process.processIdentifier, privacy: .public)")
+            talkieAgentRuntimeLog.info("Spawned node sidecar pid=\(process.processIdentifier)")
         } catch {
             cleanupProcessState()
             throw error
@@ -348,7 +345,7 @@ private extension TalkieAgentRuntime {
 
             completePending(returning: response)
         } catch {
-            talkieAgentRuntimeLog.error("Runtime response op=\(pendingRequest.op, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+            talkieAgentRuntimeLog.error("Runtime response op=\(pendingRequest.op) error=\(error.localizedDescription)")
             completePending(throwing: error)
         }
     }
@@ -357,15 +354,15 @@ private extension TalkieAgentRuntime {
         let line = String(decoding: data, as: UTF8.self)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !line.isEmpty else { return }
-        talkieAgentRuntimeLog.error("Runtime stderr: \(line, privacy: .public)")
+        talkieAgentRuntimeLog.error("Runtime stderr: \(line)")
     }
 
     func logResponse(_ response: [String: Any], op: String) {
         if Self.boolValue(response["ok"]) == true {
-            talkieAgentRuntimeLog.info("Runtime response op=\(op, privacy: .public) ok=true")
+            talkieAgentRuntimeLog.info("Runtime response op=\(op) ok=true")
         } else {
             let error = response["error"] as? String ?? "Unknown runtime error"
-            talkieAgentRuntimeLog.error("Runtime response op=\(op, privacy: .public) error=\(error, privacy: .public)")
+            talkieAgentRuntimeLog.error("Runtime response op=\(op) error=\(error)")
         }
     }
 
@@ -375,14 +372,14 @@ private extension TalkieAgentRuntime {
         let op = pendingRequest?.op
 
         guard terminatedProcess === process else {
-            talkieAgentRuntimeLog.debug("Ignoring stale node sidecar termination status=\(status, privacy: .public) reason=\(reason, privacy: .public)")
+            talkieAgentRuntimeLog.debug("Ignoring stale node sidecar termination status=\(status) reason=\(reason)")
             return
         }
 
         cleanupProcessState()
         let error = TalkieAgentRuntimeError.processExited(op: op, status: status, reason: reason)
         failPending(error)
-        talkieAgentRuntimeLog.error("Node sidecar exited status=\(status, privacy: .public) reason=\(reason, privacy: .public)")
+        talkieAgentRuntimeLog.error("Node sidecar exited status=\(status) reason=\(reason)")
 
         guard !isStopping else { return }
         scheduleRestart()
@@ -393,7 +390,7 @@ private extension TalkieAgentRuntime {
 
         let delay = restartDelaySeconds
         restartDelaySeconds = min(restartDelaySeconds * 2, 30)
-        talkieAgentRuntimeLog.warning("Scheduling node sidecar restart in \(delay, privacy: .public)s")
+        talkieAgentRuntimeLog.warning("Scheduling node sidecar restart in \(delay)s")
 
         restartTask = Task { @MainActor in
             do {
@@ -405,7 +402,7 @@ private extension TalkieAgentRuntime {
                 restartTask = nil
             } catch {
                 restartTask = nil
-                talkieAgentRuntimeLog.error("Failed to restart node sidecar: \(error.localizedDescription, privacy: .public)")
+                talkieAgentRuntimeLog.error("Failed to restart node sidecar: \(error.localizedDescription)")
                 scheduleRestart()
             }
         }

@@ -147,7 +147,7 @@ final class MessageQueue {
             let data = try JSONEncoder().encode(messages)
             try data.write(to: storageURL)
         } catch {
-            print("[MessageQueue] Save error: \(error)")
+            TalkieConsole.info("[MessageQueue] Save error: \(error)")
         }
     }
 
@@ -157,7 +157,7 @@ final class MessageQueue {
             let data = try Data(contentsOf: storageURL)
             messages = try JSONDecoder().decode([QueuedMessage].self, from: data)
         } catch {
-            print("[MessageQueue] Load error: \(error)")
+            TalkieConsole.info("[MessageQueue] Load error: \(error)")
         }
     }
 }

@@ -34,18 +34,18 @@ actor HeadlessLiveClient {
         let mode = LiveServiceMode.production
         #endif
 
-        print("[LiveClient] Connecting to \(mode.rawValue)...")
+        HeadlessConsole.info("[LiveClient] Connecting to \(mode.rawValue)...")
 
         let conn = NSXPCConnection(machServiceName: mode.rawValue)
         conn.remoteObjectInterface = NSXPCInterface(with: TalkieAgentXPCServiceProtocol.self)
 
         conn.invalidationHandler = { [weak self] in
-            print("[LiveClient] Connection invalidated")
+            HeadlessConsole.info("[LiveClient] Connection invalidated")
             Task { await self?.handleDisconnection() }
         }
 
         conn.interruptionHandler = { [weak self] in
-            print("[LiveClient] Connection interrupted")
+            HeadlessConsole.info("[LiveClient] Connection interrupted")
             Task { await self?.handleDisconnection() }
         }
 
@@ -53,9 +53,9 @@ actor HeadlessLiveClient {
 
         // Test connection with getCurrentState (with timeout)
         guard let proxy = conn.remoteObjectProxyWithErrorHandler({ error in
-            print("[LiveClient] XPC proxy error: \(error)")
+            HeadlessConsole.info("[LiveClient] XPC proxy error: \(error)")
         }) as? TalkieAgentXPCServiceProtocol else {
-            print("[LiveClient] Failed to get proxy")
+            HeadlessConsole.info("[LiveClient] Failed to get proxy")
             conn.invalidate()
             return
         }
@@ -84,7 +84,7 @@ actor HeadlessLiveClient {
         }
 
         guard let (state, _, pid) = result else {
-            print("[LiveClient] Connection timeout - TalkieAgent may not be running or XPC listener not started")
+            HeadlessConsole.info("[LiveClient] Connection timeout - TalkieAgent may not be running or XPC listener not started")
             conn.invalidate()
             return
         }
@@ -92,7 +92,7 @@ actor HeadlessLiveClient {
         self.connection = conn
         self.liveProxy = proxy
         self.isConnected = true
-        print("[LiveClient] Connected! TalkieAgent state: \(state), pid: \(pid)")
+        HeadlessConsole.info("[LiveClient] Connected! TalkieAgent state: \(state), pid: \(pid)")
     }
 
     private func handleDisconnection() {
@@ -100,14 +100,14 @@ actor HeadlessLiveClient {
         liveProxy = nil
         connection?.invalidate()
         connection = nil
-        print("[LiveClient] Disconnected")
+        HeadlessConsole.info("[LiveClient] Disconnected")
     }
 
     /// Start ephemeral audio capture
     func startCapture() async throws -> String {
         // Reconnect if needed
         if !isConnected {
-            print("[LiveClient] Not connected, attempting reconnect...")
+            HeadlessConsole.info("[LiveClient] Not connected, attempting reconnect...")
             await connect()
         }
 
@@ -132,7 +132,7 @@ actor HeadlessLiveClient {
     func stopCapture(sessionId: String) async throws -> String {
         // Reconnect if needed
         if !isConnected {
-            print("[LiveClient] Not connected, attempting reconnect...")
+            HeadlessConsole.info("[LiveClient] Not connected, attempting reconnect...")
             await connect()
         }
 
@@ -157,7 +157,7 @@ actor HeadlessLiveClient {
     func preflight() async -> PreflightStatus {
         // Attempt reconnect if needed
         if !isConnected {
-            print("[LiveClient] Preflight: attempting connection...")
+            HeadlessConsole.info("[LiveClient] Preflight: attempting connection...")
             await connect()
         }
 

@@ -88,7 +88,7 @@ private struct ModeTab: View {
         ModeSelectorBar(
             modes: KeyboardMode.builtIn,
             selectedModeId: .constant("fn"),
-            onResetMode: { mode in print("Reset \(mode)") }
+            onResetMode: { mode in AppLogger.ui.info("Reset \(mode)") }
         )
 
         ModeSelectorBar(

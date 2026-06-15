@@ -80,41 +80,11 @@ final class LocalCheckoutLocatorTests: XCTestCase {
         XCTAssertEqual(result?.standardizedFileURL.path, explicitServerURL.standardizedFileURL.path)
     }
 
-    func testFindsTalkieSpeechExecutableViaCurrentHomeRemap() throws {
-        let homeURL = temporaryDirectoryURL.appendingPathComponent("art", isDirectory: true)
-        let executableURL = homeURL
-            .appendingPathComponent("dev", isDirectory: true)
-            .appendingPathComponent("talkie", isDirectory: true)
-            .appendingPathComponent("macOS", isDirectory: true)
-            .appendingPathComponent("TalkieSpeech", isDirectory: true)
-            .appendingPathComponent(".build", isDirectory: true)
-            .appendingPathComponent("debug", isDirectory: true)
-            .appendingPathComponent("TalkieSpeech")
-
-        try makeExecutable(at: executableURL)
-
-        let result = LocalCheckoutLocator.talkieSpeechExecutableURL(
-            compileTimeFilePath: "/Users/example/dev/talkie/apps/macos/TalkieAgent/TalkieAgent/Services/TalkieSpeechSupervisor.swift",
-            currentDirectoryPath: temporaryDirectoryURL.path,
-            homeDirectoryURL: homeURL
-        )
-
-        XCTAssertEqual(result?.standardizedFileURL.path, executableURL.standardizedFileURL.path)
-    }
-
     private func makeFile(at url: URL) throws {
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
         FileManager.default.createFile(atPath: url.path, contents: Data())
-    }
-
-    private func makeExecutable(at url: URL) throws {
-        try makeFile(at: url)
-        try FileManager.default.setAttributes(
-            [.posixPermissions: 0o755],
-            ofItemAtPath: url.path
-        )
     }
 }

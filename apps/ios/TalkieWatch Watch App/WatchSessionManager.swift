@@ -113,11 +113,11 @@ final class WatchSessionManager: NSObject, ObservableObject {
         preset: WatchPreset? = nil,
         autoRoute: Bool = false
     ) {
-        print("⌚️ [Watch] sendAudio called with: \(fileURL.lastPathComponent), preset: \(preset?.name ?? "none"), autoRoute: \(autoRoute)")
-        print("⌚️ [Watch] File exists: \(FileManager.default.fileExists(atPath: fileURL.path))")
+        WatchConsole.info("⌚️ [Watch] sendAudio called with: \(fileURL.lastPathComponent), preset: \(preset?.name ?? "none"), autoRoute: \(autoRoute)")
+        WatchConsole.info("⌚️ [Watch] File exists: \(FileManager.default.fileExists(atPath: fileURL.path))")
 
         guard let session = session, session.activationState == .activated else {
-            print("⌚️ [Watch] ❌ Session not activated")
+            WatchConsole.info("⌚️ [Watch] ❌ Session not activated")
             lastSentStatus = .failed("Watch not connected")
             return
         }
@@ -135,7 +135,7 @@ final class WatchSessionManager: NSObject, ObservableObject {
         }
         saveRecentMemos()
 
-        print("⌚️ [Watch] Session state: \(session.activationState.rawValue), reachable: \(session.isReachable)")
+        WatchConsole.info("⌚️ [Watch] Session state: \(session.activationState.rawValue), reachable: \(session.isReachable)")
 
         // Build metadata
         var metadata: [String: Any] = [
@@ -166,17 +166,17 @@ final class WatchSessionManager: NSObject, ObservableObject {
 
         guard session.isReachable else {
             // iPhone not reachable - queue for background transfer
-            print("⌚️ [Watch] iPhone not reachable, using background transfer")
+            WatchConsole.info("⌚️ [Watch] iPhone not reachable, using background transfer")
             transferInBackground(fileURL: fileURL, memoId: memo.id, metadata: metadata)
             return
         }
 
         lastSentStatus = .sending
-        print("⌚️ [Watch] 📤 Sending file to iPhone...")
+        WatchConsole.info("⌚️ [Watch] 📤 Sending file to iPhone...")
 
         // Send immediately if reachable
         session.transferFile(fileURL, metadata: metadata)
-        print("⌚️ [Watch] transferFile() called")
+        WatchConsole.info("⌚️ [Watch] transferFile() called")
 
         // Start timeout in case delegate doesn't fire
         startSendingTimeout(memoId: memo.id)
@@ -219,7 +219,7 @@ final class WatchSessionManager: NSObject, ObservableObject {
 
                 // If still sending, assume it went through (queued by system)
                 if lastSentStatus == .sending {
-                    print("⌚️ [Watch] ⏰ Timeout - assuming transfer queued")
+                    WatchConsole.info("⌚️ [Watch] ⏰ Timeout - assuming transfer queued")
                     lastSentStatus = .sent
                     updateMemoStatus(memoId, status: .sent)
 
@@ -270,9 +270,9 @@ final class WatchSessionManager: NSObject, ObservableObject {
             aiAudioPlayer = try AVAudioPlayer(contentsOf: audioURL)
             aiAudioPlayer?.prepareToPlay()
             aiAudioPlayer?.play()
-            print("⌚️ [Watch] 🔊 Playing AI answer on Watch")
+            WatchConsole.info("⌚️ [Watch] 🔊 Playing AI answer on Watch")
         } catch {
-            print("⌚️ [Watch] ❌ AI audio playback failed: \(error.localizedDescription)")
+            WatchConsole.info("⌚️ [Watch] ❌ AI audio playback failed: \(error.localizedDescription)")
         }
     }
 }
@@ -283,7 +283,7 @@ extension WatchSessionManager: WCSessionDelegate {
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
         Task { @MainActor in
             if let error = error {
-                print("⌚️ [Watch] Session activation failed: \(error.localizedDescription)")
+                WatchConsole.info("⌚️ [Watch] Session activation failed: \(error.localizedDescription)")
             } else {
                 let stateStr = switch activationState {
                     case .notActivated: "notActivated"
@@ -295,17 +295,17 @@ extension WatchSessionManager: WCSessionDelegate {
                 let watchBundleID = Bundle.main.bundleIdentifier ?? "unknown"
                 let expectedCompanionID = watchBundleID.replacingOccurrences(of: ".watchkitapp", with: "")
 
-                print("⌚️ [Watch] ========== SESSION INFO ==========")
-                print("⌚️ [Watch] Watch Name: \(device.name)")
-                print("⌚️ [Watch] Watch Model: \(device.model)")
-                print("⌚️ [Watch] Watch OS: \(device.systemVersion)")
-                print("⌚️ [Watch] Watch Bundle ID: \(watchBundleID)")
-                print("⌚️ [Watch] Expected iOS Bundle: \(expectedCompanionID)")
-                print("⌚️ [Watch] State: \(stateStr)")
-                print("⌚️ [Watch] Reachable: \(session.isReachable)")
-                print("⌚️ [Watch] Companion installed: \(session.isCompanionAppInstalled)")
-                print("⌚️ [Watch] Outstanding transfers: \(session.outstandingFileTransfers.count)")
-                print("⌚️ [Watch] =====================================")
+                WatchConsole.info("⌚️ [Watch] ========== SESSION INFO ==========")
+                WatchConsole.info("⌚️ [Watch] Watch Name: \(device.name)")
+                WatchConsole.info("⌚️ [Watch] Watch Model: \(device.model)")
+                WatchConsole.info("⌚️ [Watch] Watch OS: \(device.systemVersion)")
+                WatchConsole.info("⌚️ [Watch] Watch Bundle ID: \(watchBundleID)")
+                WatchConsole.info("⌚️ [Watch] Expected iOS Bundle: \(expectedCompanionID)")
+                WatchConsole.info("⌚️ [Watch] State: \(stateStr)")
+                WatchConsole.info("⌚️ [Watch] Reachable: \(session.isReachable)")
+                WatchConsole.info("⌚️ [Watch] Companion installed: \(session.isCompanionAppInstalled)")
+                WatchConsole.info("⌚️ [Watch] Outstanding transfers: \(session.outstandingFileTransfers.count)")
+                WatchConsole.info("⌚️ [Watch] =====================================")
                 self.isReachable = session.isReachable
             }
         }
@@ -315,7 +315,7 @@ extension WatchSessionManager: WCSessionDelegate {
         Task { @MainActor in
             self.isReachable = session.isReachable
             let device = WKInterfaceDevice.current()
-            print("⌚️ [Watch] Reachability → \(session.isReachable) | Companion: \(session.isCompanionAppInstalled) | Watch: \(device.name)")
+            WatchConsole.info("⌚️ [Watch] Reachability → \(session.isReachable) | Companion: \(session.isCompanionAppInstalled) | Watch: \(device.name)")
         }
     }
 
@@ -328,7 +328,7 @@ extension WatchSessionManager: WCSessionDelegate {
             let memoIdString = metadata["memoId"] as? String
 
             if let error = error {
-                print("⌚️ [Watch] ❌ File transfer FAILED: \(error.localizedDescription)")
+                WatchConsole.info("⌚️ [Watch] ❌ File transfer FAILED: \(error.localizedDescription)")
                 self.lastSentStatus = .failed(error.localizedDescription)
 
                 // Update memo status
@@ -337,9 +337,9 @@ extension WatchSessionManager: WCSessionDelegate {
                 }
             } else {
                 let file = fileTransfer.file
-                print("⌚️ [Watch] ✅ File transfer complete!")
-                print("⌚️ [Watch]    File: \(file.fileURL.lastPathComponent)")
-                print("⌚️ [Watch]    Metadata: \(metadata)")
+                WatchConsole.info("⌚️ [Watch] ✅ File transfer complete!")
+                WatchConsole.info("⌚️ [Watch]    File: \(file.fileURL.lastPathComponent)")
+                WatchConsole.info("⌚️ [Watch]    Metadata: \(metadata)")
                 self.lastSentStatus = .sent
 
                 // Update memo status to sent
@@ -359,7 +359,7 @@ extension WatchSessionManager: WCSessionDelegate {
     // Handle messages from iPhone (memo status updates)
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
         Task { @MainActor in
-            print("⌚️ [Watch] 📩 Received message: \(message)")
+            WatchConsole.info("⌚️ [Watch] 📩 Received message: \(message)")
 
             if let type = message["type"] as? String, type == "memoUpdate",
                let memoId = message["memoId"] as? String,
@@ -383,7 +383,7 @@ extension WatchSessionManager: WCSessionDelegate {
 
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
         Task { @MainActor in
-            print("⌚️ [Watch] 📩 Received application context: \(applicationContext)")
+            WatchConsole.info("⌚️ [Watch] 📩 Received application context: \(applicationContext)")
 
             // Handle bulk memo updates from iPhone
             if let updates = applicationContext["memoUpdates"] as? [[String: Any]] {

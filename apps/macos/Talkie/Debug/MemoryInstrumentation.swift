@@ -7,11 +7,10 @@
 //
 
 import Foundation
-import os
 
 #if DEBUG
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "Memory")
+private let logger = Log(.system)
 
 // MARK: - Memory Monitor
 
@@ -321,6 +320,7 @@ extension MemoryMonitor {
 // MARK: - View Modifier for Depth Tracking
 
 import SwiftUI
+import TalkieKit
 
 /// Modifier to track view hierarchy depth
 struct TrackViewDepth: ViewModifier {

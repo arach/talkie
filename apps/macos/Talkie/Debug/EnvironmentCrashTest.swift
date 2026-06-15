@@ -127,11 +127,11 @@ extension EnvironmentCrashTestView {
     /// Run with: Talkie.app/Contents/MacOS/Talkie --debug=environment-crash
     @MainActor
     static func triggerImmediateCrash() {
-        print("🔴 Triggering environment crash test...")
-        print("   This simulates the crash from the crash report.")
-        print("   A view will try to access @Environment(AgentSettings.self)")
-        print("   without AgentSettings being provided.")
-        print("")
+        TalkieConsole.info("🔴 Triggering environment crash test...")
+        TalkieConsole.info("   This simulates the crash from the crash report.")
+        TalkieConsole.info("   A view will try to access @Environment(AgentSettings.self)")
+        TalkieConsole.info("   without AgentSettings being provided.")
+        TalkieConsole.info("")
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 200),

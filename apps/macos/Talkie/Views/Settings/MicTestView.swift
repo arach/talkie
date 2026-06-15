@@ -7,9 +7,9 @@
 
 import SwiftUI
 import AVFoundation
-import os
+import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "MicTest")
+private let logger = Log(.ui)
 
 // MARK: - Mic Test View
 

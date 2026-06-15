@@ -9,13 +9,13 @@ import Foundation
 
 enum SkillFileFormatTests {
     static func runAll() {
-        print("🧪 Running SkillFileFormat tests...")
+        TalkieConsole.info("🧪 Running SkillFileFormat tests...")
         testAtomicSkillRoundTrip()
         testFrontmatterOnlyParsesWithEmptySteps()
         testBodyOnlyThrows()
         testBundledDailyStandupStarterParses()
         testBundledStarterRoundTrips()
-        print("✅ SkillFileFormat tests completed")
+        TalkieConsole.info("✅ SkillFileFormat tests completed")
     }
 
     private static func testAtomicSkillRoundTrip() {
@@ -57,7 +57,7 @@ enum SkillFileFormatTests {
             let reparsed = try parseSkillFile(serialized)
             let reserialized = serializeSkill(reparsed)
             expect(serialized == reserialized, "Expected canonical serialize(parse(x)) to be stable")
-            print("  ✓ atomic skill round-trip")
+            TalkieConsole.info("  ✓ atomic skill round-trip")
         } catch {
             fail("Atomic skill round-trip threw: \(error)")
         }
@@ -78,7 +78,7 @@ enum SkillFileFormatTests {
             let definition = try parseSkillFile(markdown)
             expect(definition.name == "Empty Skill", "Expected metadata-only name")
             expect(definition.steps.isEmpty, "Expected no steps")
-            print("  ✓ frontmatter-only parses with empty steps")
+            TalkieConsole.info("  ✓ frontmatter-only parses with empty steps")
         } catch {
             fail("Frontmatter-only parse threw: \(error)")
         }
@@ -89,7 +89,7 @@ enum SkillFileFormatTests {
             _ = try parseSkillFile("WHEN voice \"standup\"\nDO slack.post")
             fail("Expected body-only file to throw")
         } catch SkillFileFormatError.missingFrontmatter {
-            print("  ✓ body-only file throws missingFrontmatter")
+            TalkieConsole.info("  ✓ body-only file throws missingFrontmatter")
         } catch {
             fail("Expected missingFrontmatter, got: \(error)")
         }
@@ -117,7 +117,7 @@ enum SkillFileFormatTests {
             }
 
             expect(webhook.url == SkillFileFormat.slackWebhookURLPlaceholder, "Expected bundled Daily Standup to read Slack URL from UserDefaults placeholder")
-            print("  ✓ bundled Daily Standup starter parses")
+            TalkieConsole.info("  ✓ bundled Daily Standup starter parses")
         } catch {
             fail("Bundled Daily Standup parse threw: \(error)")
         }
@@ -152,7 +152,7 @@ enum SkillFileFormatTests {
             }
         }
 
-        print("  ✓ bundled starters round-trip")
+        TalkieConsole.info("  ✓ bundled starters round-trip")
     }
 
     private static func expect(_ condition: @autoclosure () -> Bool, _ message: String) {
@@ -162,7 +162,7 @@ enum SkillFileFormatTests {
     }
 
     private static func fail(_ message: String) {
-        print("  ❌ \(message)")
+        TalkieConsole.info("  ❌ \(message)")
         assertionFailure(message)
     }
 }

@@ -49,7 +49,7 @@ struct SeekableWaveform: View {
                                 let clickX = value.location.x
                                 let width = geometry.size.width
                                 let seekProgress = max(0, min(1, clickX / width))
-                                print("👆 Waveform clicked at \(Int(seekProgress * 100))% (x: \(Int(clickX)), width: \(Int(width)))")
+                                TalkieConsole.info("👆 Waveform clicked at \(Int(seekProgress * 100))% (x: \(Int(clickX)), width: \(Int(width)))")
                                 onSeek(seekProgress)
                             }
                     )
@@ -202,7 +202,7 @@ struct WaveformVisualization: View {
                     .onTapGesture { location in
                         if let onSeek = onSeek {
                             let newProgress = max(0, min(1, location.x / geo.size.width))
-                            print("👆 Waveform tapped at \(Int(newProgress * 100))%")
+                            TalkieConsole.info("👆 Waveform tapped at \(Int(newProgress * 100))%")
                             onSeek(newProgress)
                         }
                     }
@@ -405,20 +405,20 @@ struct WaveformCard: View {
     /// Seek to a position - loads audio first if not already loaded
     private func seekToPosition(_ progress: Double) {
         guard let url = dictation.metadata.audioURL else {
-            print("⚠️ seekToPosition: No audio URL")
+            TalkieConsole.info("⚠️ seekToPosition: No audio URL")
             return
         }
 
-        print("🎯 seekToPosition: \(Int(progress * 100))% - isLoaded: \(isThisLoaded)")
+        TalkieConsole.info("🎯 seekToPosition: \(Int(progress * 100))% - isLoaded: \(isThisLoaded)")
 
         // If audio isn't loaded yet, load it first then seek
         if !isThisLoaded {
-            print("📂 Loading audio first...")
+            TalkieConsole.info("📂 Loading audio first...")
             playback.play(url: url, id: dictation.id.uuidString)
             playback.pause()  // Load but don't auto-play
         }
         playback.seek(to: progress)
-        print("✅ Seeked to \(Int(progress * 100))%")
+        TalkieConsole.info("✅ Seeked to \(Int(progress * 100))%")
     }
 
     private func revealInFinder(_ url: URL) {

@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import os
 import TalkieKit
 
 private let log = Log(.system)

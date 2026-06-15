@@ -8,9 +8,8 @@
 
 import SwiftUI
 import TalkieKit
-import os
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "AgentSettings")
+private let logger = Log(.ui)
 
 // MARK: - Audio Device Selector with Level Meter
 

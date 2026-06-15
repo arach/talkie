@@ -18,8 +18,8 @@ import AppKit
 let processStart = CFAbsoluteTimeGetCurrent()
 let args = ProcessInfo.processInfo.arguments
 
-NSLog("[main.swift] ========== TALKIE PROCESS START ==========")
-NSLog("[main.swift] PID: \(ProcessInfo.processInfo.processIdentifier)")
+TalkieConsole.critical("[main.swift] ========== TALKIE PROCESS START ==========")
+TalkieConsole.critical("[main.swift] PID: \(ProcessInfo.processInfo.processIdentifier)")
 
 // ============================================================
 // STEP 2: Detect mode and SET IT FIRST (before any singletons)
@@ -71,9 +71,9 @@ if let payloadPath = payloadPath {
         }
         // Clean up payload file after reading (contains sensitive text)
         try? FileManager.default.removeItem(atPath: payloadPath)
-        NSLog("[main.swift] Read payload from file, cleaned up")
+        TalkieConsole.critical("[main.swift] Read payload from file, cleaned up")
     } catch {
-        NSLog("[main.swift] Failed to read payload: \(error.localizedDescription)")
+        TalkieConsole.critical("[main.swift] Failed to read payload: \(error.localizedDescription)")
     }
 }
 
@@ -85,8 +85,8 @@ if isInterstitial, let text = text {
     // ========== LITE MODE ==========
     //
     let elapsed = (CFAbsoluteTimeGetCurrent() - processStart) * 1000
-    NSLog("[main.swift] >>> LITE MODE in \(String(format: "%.1f", elapsed))ms")
-    NSLog("[main.swift] recordId: \(recordId ?? -1), text: \(text.prefix(50))...")
+    TalkieConsole.critical("[main.swift] >>> LITE MODE in \(String(format: "%.1f", elapsed))ms")
+    TalkieConsole.critical("[main.swift] recordId: \(recordId ?? -1), text: \(text.prefix(50))...")
 
     // Initialize minimal NSApplication and run lite mode
     // We're on the main thread at startup, so use MainActor.assumeIsolated
@@ -102,7 +102,7 @@ if isInterstitial, let text = text {
     // ========== FULL MODE ==========
     //
     let elapsed = (CFAbsoluteTimeGetCurrent() - processStart) * 1000
-    NSLog("[main.swift] >>> FULL MODE in \(String(format: "%.1f", elapsed))ms")
+    TalkieConsole.critical("[main.swift] >>> FULL MODE in \(String(format: "%.1f", elapsed))ms")
 
     TalkieApp.main()
 }

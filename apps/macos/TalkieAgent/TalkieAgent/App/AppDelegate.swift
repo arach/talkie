@@ -113,7 +113,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
             if !alive.isEmpty {
                 let alivePIDs = alive.map { String($0.processIdentifier) }.joined(separator: ", ")
-                NSLog("[TalkieAgent] Another instance already running (PID: %@) — exiting duplicate (PID: %d)", alivePIDs, myPID)
+                AgentConsole.critical("[TalkieAgent] Another instance already running (PID: %@) — exiting duplicate (PID: %d)", alivePIDs, myPID)
                 NSApplication.shared.terminate(nil)
                 return
             }
@@ -121,7 +121,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             // All other instances are terminated/zombie — we're the valid one, continue
             if !terminated.isEmpty {
                 let zombiePIDs = terminated.map { String($0.processIdentifier) }.joined(separator: ", ")
-                NSLog("[TalkieAgent] Found zombie instances (PID: %@) — taking over as PID %d", zombiePIDs, myPID)
+                AgentConsole.critical("[TalkieAgent] Found zombie instances (PID: %@) — taking over as PID %d", zombiePIDs, myPID)
             }
         }
 
@@ -229,7 +229,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     func applicationWillTerminate(_ notification: Notification) {
         TalkieAgentServerSupervisor.shared.stopSync()
-        TalkieSpeechSupervisor.shared.stopSync()
         TalkieHelperRuntimeStateStore.clear(for: .agent)
         TalkieAgentXPCService.shared.stopService()
 
@@ -256,7 +255,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         // Handle talkieagent:// URLs
         guard url.scheme?.hasPrefix("talkieagent") == true else { return }
 
-        NSLog("[TalkieAgent] Received URL: \(url.absoluteString)")
+        AgentConsole.critical("[TalkieAgent] Received URL: \(url.absoluteString)")
 
         switch url.host {
         case "home", "agent":
@@ -1864,9 +1863,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             modifiers: settings.hotkey.modifiers,
             keyCode: settings.hotkey.keyCode
         ) { [weak self] timestamp in
-            NSLog("[HotKey] Toggle hotkey callback fired (dispatch: %dms)", timestamp.elapsedMs())
+            AgentConsole.critical("[HotKey] Toggle hotkey callback fired (dispatch: %dms)", timestamp.elapsedMs())
             guard let self else {
-                NSLog("[HotKey] ⚠️ self is nil in hotkey callback!")
+                AgentConsole.critical("[HotKey] ⚠️ self is nil in hotkey callback!")
                 return
             }
 
@@ -1934,7 +1933,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         guard BootSequence.shared.isComplete else { return }
 
         let settings = LiveSettings.shared
-        NSLog("[HotKey] hotkeyDidChange: re-registering (keyCode=%d, modifiers=%d)", settings.hotkey.keyCode, settings.hotkey.modifiers)
+        AgentConsole.critical("[HotKey] hotkeyDidChange: re-registering (keyCode=%d, modifiers=%d)", settings.hotkey.keyCode, settings.hotkey.modifiers)
         log.info("Received .hotkeyDidChange notification")
         log.debug("Current hotkey: \(settings.hotkey.displayString) (keyCode=\(settings.hotkey.keyCode), modifiers=\(settings.hotkey.modifiers))")
 

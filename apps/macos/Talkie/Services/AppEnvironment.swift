@@ -8,10 +8,9 @@
 
 import Foundation
 import AppKit
-import os
 import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "AppEnvironment")
+private let logger = Log(.system)
 
 @MainActor
 final class AppEnvironment {

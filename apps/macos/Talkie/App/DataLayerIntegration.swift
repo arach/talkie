@@ -15,25 +15,25 @@ import CoreData
 /// Call this in TalkieApp.swift or AppDelegate on app launch
 @MainActor
 func initializeDataLayer() async throws {
-    print("🚀 Initializing GRDB data layer...")
+    TalkieConsole.info("🚀 Initializing GRDB data layer...")
 
     // 1. Initialize GRDB database (runs on background thread)
     try await DatabaseManager.shared.initialize()
-    print("✅ GRDB database initialized")
+    TalkieConsole.info("✅ GRDB database initialized")
 
     // 2. Check if migration is needed
     let migrationComplete = UserDefaults.standard.bool(forKey: "grdb_migration_complete")
 
     if !migrationComplete {
-        print("⚠️ Migration required - show MigrationView to user")
+        TalkieConsole.info("⚠️ Migration required - show MigrationView to user")
         // App should show MigrationView at this point
         // After migration completes, it will set the flag
     } else {
-        print("✅ Migration already complete")
+        TalkieConsole.info("✅ Migration already complete")
     }
 
     // 3. CloudKit sync is managed by CloudKitSyncManager (started in StartupCoordinator)
-    print("✅ Data layer ready")
+    TalkieConsole.info("✅ Data layer ready")
 }
 
 // MARK: - Migration Check View
@@ -97,7 +97,7 @@ struct MainAppView: View {
                      do {
                          try await initializeDataLayer()
                      } catch {
-                         print("❌ Failed to initialize data layer: \(error)")
+                         TalkieConsole.info("❌ Failed to initialize data layer: \(error)")
                      }
                  }
          }
@@ -110,16 +110,16 @@ struct MainAppView: View {
 /// Run this to compare old vs new performance
 @MainActor
 func performanceTest() async {
-    print("\n📊 PERFORMANCE TEST: Old vs New\n")
+    TalkieConsole.info("\n📊 PERFORMANCE TEST: Old vs New\n")
 
     // Test 1: Fetch 50 memos sorted by date
-    print("Test 1: Fetch 50 memos sorted by date")
+    TalkieConsole.info("Test 1: Fetch 50 memos sorted by date")
 
     let oldStart = Date()
     // OLD WAY (Core Data): Fetch ALL, sort in Swift, take 50
     // ... (your existing code)
     let oldTime = Date().timeIntervalSince(oldStart)
-    print("  OLD: \(Int(oldTime * 1000))ms")
+    TalkieConsole.info("  OLD: \(Int(oldTime * 1000))ms")
 
     let newStart = Date()
     let repository = LocalRepository()
@@ -132,12 +132,12 @@ func performanceTest() async {
         filters: []
     )
     let newTime = Date().timeIntervalSince(newStart)
-    print("  NEW: \(Int(newTime * 1000))ms")
-    print("  🎯 Speedup: \(Int(oldTime / newTime))x faster\n")
+    TalkieConsole.info("  NEW: \(Int(newTime * 1000))ms")
+    TalkieConsole.info("  🎯 Speedup: \(Int(oldTime / newTime))x faster\n")
 
     // Test 2: Memory usage
-    print("Test 2: Memory footprint")
-    print("  OLD: Loads all memos into memory (~10MB for 10k memos)")
-    print("  NEW: Loads only 50 memos (~50KB)")
-    print("  🎯 Memory savings: 200x less\n")
+    TalkieConsole.info("Test 2: Memory footprint")
+    TalkieConsole.info("  OLD: Loads all memos into memory (~10MB for 10k memos)")
+    TalkieConsole.info("  NEW: Loads only 50 memos (~50KB)")
+    TalkieConsole.info("  🎯 Memory savings: 200x less\n")
 }

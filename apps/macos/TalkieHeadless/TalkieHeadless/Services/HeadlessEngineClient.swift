@@ -34,7 +34,7 @@ actor HeadlessEngineClient {
         let mode = EmbeddedEngineServiceMode.production
         #endif
 
-        print("[EngineClient] Connecting to embedded engine via \(mode.rawValue)...")
+        HeadlessConsole.info("[EngineClient] Connecting to embedded engine via \(mode.rawValue)...")
 
         let conn = NSXPCConnection(machServiceName: mode.rawValue)
         conn.remoteObjectInterface = NSXPCInterface(with: TalkieAgentEngineProtocol.self)
@@ -51,9 +51,9 @@ actor HeadlessEngineClient {
 
         // Test connection with ping
         guard let proxy = conn.remoteObjectProxyWithErrorHandler({ error in
-            print("[EngineClient] XPC error: \(error)")
+            HeadlessConsole.info("[EngineClient] XPC error: \(error)")
         }) as? TalkieAgentEngineProtocol else {
-            print("[EngineClient] Failed to get proxy")
+            HeadlessConsole.info("[EngineClient] Failed to get proxy")
             return
         }
 
@@ -68,10 +68,10 @@ actor HeadlessEngineClient {
             self.connection = conn
             self.engineProxy = proxy
             self.isConnected = true
-            print("[EngineClient] Connected to embedded engine!")
+            HeadlessConsole.info("[EngineClient] Connected to embedded engine!")
         } else {
             conn.invalidate()
-            print("[EngineClient] Ping failed")
+            HeadlessConsole.info("[EngineClient] Ping failed")
         }
     }
 
@@ -80,7 +80,7 @@ actor HeadlessEngineClient {
         engineProxy = nil
         connection?.invalidate()
         connection = nil
-        print("[EngineClient] Disconnected")
+        HeadlessConsole.info("[EngineClient] Disconnected")
     }
 
     func transcribe(audioPath: String, modelId: String = "parakeet:v3") async throws -> String {
@@ -111,7 +111,7 @@ actor HeadlessEngineClient {
     func checkConnection() async -> Bool {
         // Attempt reconnect if needed
         if !isConnected {
-            print("[EngineClient] Preflight: attempting connection...")
+            HeadlessConsole.info("[EngineClient] Preflight: attempting connection...")
             await connect()
         }
 

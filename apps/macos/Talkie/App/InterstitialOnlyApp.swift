@@ -56,9 +56,9 @@ enum InterstitialOnlyApp {
         let launchSignpostID = liteSignposter.makeSignpostID()
         let launchState = liteSignposter.beginInterval("LiteLaunch", id: launchSignpostID)
 
-        NSLog("[LITE] Starting with text: \(text.prefix(50))...")
+        TalkieConsole.critical("[LITE] Starting with text: \(text.prefix(50))...")
         if let audioFilename = audioFilename {
-            NSLog("[LITE] Audio filename: \(audioFilename)")
+            TalkieConsole.critical("[LITE] Audio filename: \(audioFilename)")
         }
 
         // Step 1: Create the panel immediately (no waiting for DB)
@@ -67,7 +67,7 @@ enum InterstitialOnlyApp {
             recordId: recordId,
             audioFilename: audioFilename,
             onDismiss: {
-                NSLog("[LITE] Dismissed")
+                TalkieConsole.critical("[LITE] Dismissed")
                 NSApplication.shared.terminate(nil)
             }
         )
@@ -86,7 +86,7 @@ enum InterstitialOnlyApp {
         os_signpost(.event, log: liteInterstitialLog, name: "LiteInterstitial",
                     "launch_complete")
 
-        NSLog("[LITE] Panel visible in \(String(format: "%.1f", elapsed))ms")
+        TalkieConsole.critical("[LITE] Panel visible in \(String(format: "%.1f", elapsed))ms")
 
         // Step 3: Initialize database in background (for persistence)
         Task {
@@ -95,9 +95,9 @@ enum InterstitialOnlyApp {
                 await MainActor.run {
                     viewModel.databaseReady = true
                 }
-                NSLog("[LITE] Database initialized")
+                TalkieConsole.critical("[LITE] Database initialized")
             } catch {
-                NSLog("[LITE] Database init failed: \(error.localizedDescription)")
+                TalkieConsole.critical("[LITE] Database init failed: \(error.localizedDescription)")
                 await MainActor.run {
                     viewModel.databaseError = error.localizedDescription
                 }
@@ -300,7 +300,7 @@ private final class LiteInterstitialViewModel {
         lastInstruction = ""
         viewState = .editing
 
-        NSLog("[LITE] Accepted revision: \(revision.shortInstruction)")
+        TalkieConsole.critical("[LITE] Accepted revision: \(revision.shortInstruction)")
     }
 
     /// Reject the proposed changes
@@ -318,7 +318,7 @@ private final class LiteInterstitialViewModel {
         lastInstruction = ""
         viewState = .editing
 
-        NSLog("[LITE] Rejected revision")
+        TalkieConsole.critical("[LITE] Rejected revision")
     }
 
     // MARK: - Revision History (matches InterstitialManager)
@@ -341,7 +341,7 @@ private final class LiteInterstitialViewModel {
         text = revision.textAfter
         previewingRevision = nil
 
-        NSLog("[LITE] Restored from revision: \(revision.shortInstruction)")
+        TalkieConsole.critical("[LITE] Restored from revision: \(revision.shortInstruction)")
     }
 
     // MARK: - Actions
@@ -349,7 +349,7 @@ private final class LiteInterstitialViewModel {
     func copyToClipboard() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
-        NSLog("[LITE] Copied to clipboard: \(text.count) chars")
+        TalkieConsole.critical("[LITE] Copied to clipboard: \(text.count) chars")
     }
 
     func saveAndDismiss() {
@@ -358,7 +358,7 @@ private final class LiteInterstitialViewModel {
         if databaseReady {
             saveToDatabase()
         } else {
-            NSLog("[LITE] Warning: Closing without save (DB not ready)")
+            TalkieConsole.critical("[LITE] Warning: Closing without save (DB not ready)")
             // Text is already copied to clipboard, so user won't lose it
         }
 
@@ -393,7 +393,7 @@ private final class LiteInterstitialViewModel {
             try EphemeralTranscriber.shared.startCapture(purpose: .interstitialCommand)
             isRecordingInstruction = true
             voiceInstruction = nil
-            NSLog("[LITE] Started voice instruction capture")
+            TalkieConsole.critical("[LITE] Started voice instruction capture")
 
             // Monitor audio level
             Task {
@@ -404,7 +404,7 @@ private final class LiteInterstitialViewModel {
             }
         } catch {
             polishError = error.localizedDescription
-            NSLog("[LITE] Failed to start voice capture: \(error)")
+            TalkieConsole.critical("[LITE] Failed to start voice capture: \(error)")
         }
     }
 
@@ -426,7 +426,7 @@ private final class LiteInterstitialViewModel {
 
             if !instruction.isEmpty {
                 voiceInstruction = instruction
-                NSLog("[LITE] Voice instruction: \(instruction)")
+                TalkieConsole.critical("[LITE] Voice instruction: \(instruction)")
                 await polish(instruction: instruction)
 
                 // End voice → polish flow signpost
@@ -442,7 +442,7 @@ private final class LiteInterstitialViewModel {
             polishError = error.localizedDescription
 
             liteSignposter.endInterval("LiteVoiceToPolish", voiceFlowState, "failed")
-            NSLog("[LITE] Voice instruction failed: \(error)")
+            TalkieConsole.critical("[LITE] Voice instruction failed: \(error)")
         }
     }
 
@@ -461,13 +461,13 @@ private final class LiteInterstitialViewModel {
 
         guard databaseReady else {
             saveError = "Database not ready"
-            NSLog("[LITE] Skipping DB save: database not ready")
+            TalkieConsole.critical("[LITE] Skipping DB save: database not ready")
             return
         }
 
         // Prefer audioFilename lookup (more reliable than Int64 ID which is from different table)
         guard let audioFilename = audioFilename else {
-            NSLog("[LITE] Skipping DB save: no audioFilename")
+            TalkieConsole.critical("[LITE] Skipping DB save: no audioFilename")
             saveError = "No audio filename for lookup"
             return
         }
@@ -487,16 +487,16 @@ private final class LiteInterstitialViewModel {
 
                 let changedRows = db.changesCount
                 if changedRows > 0 {
-                    NSLog("[LITE] Updated recording in database (audioFilename: \(audioFilename))")
+                    TalkieConsole.critical("[LITE] Updated recording in database (audioFilename: \(audioFilename))")
                     saveSuccess = true
                 } else {
-                    NSLog("[LITE] Recording not found for audioFilename: \(audioFilename)")
+                    TalkieConsole.critical("[LITE] Recording not found for audioFilename: \(audioFilename)")
                     saveError = "Recording not found"
                 }
             }
         } catch {
             saveError = error.localizedDescription
-            NSLog("[LITE] DB save failed: \(error.localizedDescription)")
+            TalkieConsole.critical("[LITE] DB save failed: \(error.localizedDescription)")
         }
     }
 
@@ -519,7 +519,7 @@ private final class LiteInterstitialViewModel {
         os_signpost(.event, log: liteInterstitialLog, name: "LiteInterstitial",
                     "polish_start")
 
-        NSLog("[LITE] Polishing with instruction: \(instruction.prefix(50))...")
+        TalkieConsole.critical("[LITE] Polishing with instruction: \(instruction.prefix(50))...")
 
         do {
             let registry = LLMProviderRegistry.shared
@@ -537,7 +537,7 @@ private final class LiteInterstitialViewModel {
                 polishError = "No LLM provider configured. Add an API key in Settings."
                 isPolishing = false
                 prePolishText = ""
-                NSLog("[LITE] No LLM provider available")
+                TalkieConsole.critical("[LITE] No LLM provider available")
                 return
             }
 
@@ -597,10 +597,10 @@ private final class LiteInterstitialViewModel {
                 lastInstruction = voiceInstruction ?? instruction
                 currentDiff = diff
                 viewState = .reviewing
-                NSLog("[LITE] Polish ready for review: \(diff.changeCount) changes via \(resolved.provider.name)/\(resolved.modelId) in \(String(format: "%.0f", polishDuration * 1000))ms")
+                TalkieConsole.critical("[LITE] Polish ready for review: \(diff.changeCount) changes via \(resolved.provider.name)/\(resolved.modelId) in \(String(format: "%.0f", polishDuration * 1000))ms")
             } else {
                 // No changes - just clear state
-                NSLog("[LITE] Polish produced no changes")
+                TalkieConsole.critical("[LITE] Polish produced no changes")
             }
             voiceInstruction = nil
 
@@ -611,7 +611,7 @@ private final class LiteInterstitialViewModel {
 
             polishError = error.localizedDescription
             prePolishText = ""  // Clear on error
-            NSLog("[LITE] Polish failed: \(error.localizedDescription)")
+            TalkieConsole.critical("[LITE] Polish failed: \(error.localizedDescription)")
         }
 
         isPolishing = false

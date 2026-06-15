@@ -6,10 +6,9 @@
 //
 
 import SwiftUI
-import os
 import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "Views")
+private let logger = Log(.ui)
 
 // MARK: - Legacy Tool Content Views (keeping for reference)
 

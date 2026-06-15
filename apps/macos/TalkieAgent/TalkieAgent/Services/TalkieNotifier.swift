@@ -16,9 +16,8 @@
 import Foundation
 import AppKit
 import TalkieKit
-import os.log
 
-private let logger = Logger(subsystem: "to.talkie.app.agent", category: "Notifier")
+private let logger = Log(.system)
 
 /// Notification name prefix for distributed notifications from TalkieAgent → Talkie
 /// Format: to.talkie.app.agent.{path} (e.g., to.talkie.app.agent.recording.started)
@@ -204,20 +203,20 @@ final class TalkieNotifier {
     // MARK: - Debug
 
     func printMetrics() {
-        print("")
-        print("╔══════════════════════════════════════╗")
-        print("║     TALKIE NOTIFIER METRICS          ║")
-        print("╚══════════════════════════════════════╝")
-        print("")
-        print("Total sent: \(totalNotifications)")
-        print("Skipped (Talkie not running): \(skippedCount)")
-        print("Failures: \(failureCount)")
-        print("")
-        print("By type:")
+        AgentConsole.info("")
+        AgentConsole.info("╔══════════════════════════════════════╗")
+        AgentConsole.info("║     TALKIE NOTIFIER METRICS          ║")
+        AgentConsole.info("╚══════════════════════════════════════╝")
+        AgentConsole.info("")
+        AgentConsole.info("Total sent: \(totalNotifications)")
+        AgentConsole.info("Skipped (Talkie not running): \(skippedCount)")
+        AgentConsole.info("Failures: \(failureCount)")
+        AgentConsole.info("")
+        AgentConsole.info("By type:")
         for (path, count) in notificationCounts.sorted(by: { $0.value > $1.value }) {
-            print("  \(path): \(count)")
+            AgentConsole.info("  \(path): \(count)")
         }
-        print("")
+        AgentConsole.info("")
     }
 
     func resetMetrics() {

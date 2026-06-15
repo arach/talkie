@@ -10,14 +10,13 @@
 
 import AVFoundation
 import AppKit
-import os
 import os.signpost
 import Observation
 import TalkieKit
 import CoreAudio
 import AudioToolbox
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "EphemeralTranscriber")
+private let logger = Log(.audio)
 
 // MARK: - Performance Instrumentation
 
