@@ -8,9 +8,9 @@
 
 import SwiftUI
 import Carbon.HIToolbox
-import os
+import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "AgentSettings")
+private let logger = Log(.ui)
 
 // MARK: - Recording Coordinator
 

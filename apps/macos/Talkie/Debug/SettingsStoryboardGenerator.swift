@@ -249,7 +249,7 @@ class SettingsStoryboardGenerator {
         let view = createView(for: page)
 
         for size in WindowSize.allCases {
-            print("📸 Capturing \(page.title) (\(size.rawValue))...")
+            TalkieConsole.info("📸 Capturing \(page.title) (\(size.rawValue))...")
 
             // Resize window for this capture
             window.setContentSize(size.size)
@@ -270,7 +270,7 @@ class SettingsStoryboardGenerator {
                    let pngData = bitmapImage.representation(using: .png, properties: [:]) {
                     try? pngData.write(to: fileURL)
                     results[size] = fileURL
-                    print("  ✅ Saved: \(filename)")
+                    TalkieConsole.info("  ✅ Saved: \(filename)")
                 }
             }
         }
@@ -281,35 +281,35 @@ class SettingsStoryboardGenerator {
 
     /// Capture a single settings page screenshot at a specific size
     func captureSinglePage(_ page: SettingsPage, size: WindowSize = .medium, to directory: URL) async -> URL? {
-        NSLog("[captureSinglePage] START: page=%@, size=%@", page.title, size.rawValue)
+        TalkieConsole.critical("[captureSinglePage] START: page=%@, size=%@", page.title, size.rawValue)
 
         // Create directory if needed
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        NSLog("[captureSinglePage] Directory ready")
+        TalkieConsole.critical("[captureSinglePage] Directory ready")
 
-        print("📸 Capturing \(page.title) (\(size.rawValue))...")
+        TalkieConsole.info("📸 Capturing \(page.title) (\(size.rawValue))...")
 
         // Create isolated view window for rendering
-        NSLog("[captureSinglePage] Creating window...")
+        TalkieConsole.critical("[captureSinglePage] Creating window...")
         let window = createRenderWindow(size: size.size)
-        NSLog("[captureSinglePage] Window created")
+        TalkieConsole.critical("[captureSinglePage] Window created")
         window.title = "Settings — \(page.title)"
 
-        NSLog("[captureSinglePage] Creating view...")
+        TalkieConsole.critical("[captureSinglePage] Creating view...")
         let view = createView(for: page)
-        NSLog("[captureSinglePage] View created, setting as content...")
+        TalkieConsole.critical("[captureSinglePage] View created, setting as content...")
         window.contentView = NSHostingView(rootView: view)
-        NSLog("[captureSinglePage] Content set, showing window...")
+        TalkieConsole.critical("[captureSinglePage] Content set, showing window...")
         window.makeKeyAndOrderFront(nil)
-        NSLog("[captureSinglePage] Window shown, waiting for render...")
+        TalkieConsole.critical("[captureSinglePage] Window shown, waiting for render...")
 
         // Wait for window to render fully
         try? await Task.sleep(for: .milliseconds(600))
-        NSLog("[captureSinglePage] Wait complete, capturing...")
+        TalkieConsole.critical("[captureSinglePage] Wait complete, capturing...")
 
         var result: URL?
         if let screenshot = await captureWindow(window) {
-            NSLog("[captureSinglePage] Screenshot captured")
+            TalkieConsole.critical("[captureSinglePage] Screenshot captured")
             // Use pathSegment for filename: settings-appearance-medium.png
             let pathSegment = page.settingsSection.pathSegment
             let filename = "settings-\(pathSegment)-\(size.rawValue).png"
@@ -320,16 +320,16 @@ class SettingsStoryboardGenerator {
                let pngData = bitmapImage.representation(using: .png, properties: [:]) {
                 try? pngData.write(to: fileURL)
                 result = fileURL
-                print("  ✅ Saved: \(filename)")
-                NSLog("[captureSinglePage] Saved: %@", filename)
+                TalkieConsole.info("  ✅ Saved: \(filename)")
+                TalkieConsole.critical("[captureSinglePage] Saved: %@", filename)
             }
         } else {
-            NSLog("[captureSinglePage] Screenshot capture FAILED")
+            TalkieConsole.critical("[captureSinglePage] Screenshot capture FAILED")
         }
 
-        NSLog("[captureSinglePage] Closing window...")
+        TalkieConsole.critical("[captureSinglePage] Closing window...")
         window.close()
-        NSLog("[captureSinglePage] END")
+        TalkieConsole.critical("[captureSinglePage] END")
         return result
     }
 
@@ -345,11 +345,11 @@ class SettingsStoryboardGenerator {
         }
 
         // Fallback: render isolated views
-        print("⚠️ No real settings window found, using isolated views...")
+        TalkieConsole.info("⚠️ No real settings window found, using isolated views...")
         let window = createRenderWindow()
 
         for page in SettingsPage.allCases {
-            print("📸 Capturing \(page.title)...")
+            TalkieConsole.info("📸 Capturing \(page.title)...")
 
             // Set window title to match current page
             window.title = "Settings — \(page.title)"
@@ -372,7 +372,7 @@ class SettingsStoryboardGenerator {
                    let pngData = bitmapImage.representation(using: .png, properties: [:]) {
                     try? pngData.write(to: fileURL)
                     results[page] = fileURL
-                    print("  ✅ Saved: \(filename)")
+                    TalkieConsole.info("  ✅ Saved: \(filename)")
                 }
             }
         }
@@ -385,7 +385,7 @@ class SettingsStoryboardGenerator {
     private func captureRealSettingsWindow(to directory: URL) async -> [SettingsPage: URL]? {
         // Find the real Settings window by title
         guard let settingsWindow = NSApp.windows.first(where: { $0.title.contains("Settings") || $0.title.contains("Preferences") }) else {
-            print("📷 No Settings window open - will open and capture...")
+            TalkieConsole.info("📷 No Settings window open - will open and capture...")
 
             // Try to open settings window via NavigationState
             NavigationState.shared.navigate(to: .settings)
@@ -413,7 +413,7 @@ class SettingsStoryboardGenerator {
             let pathSegment = page.settingsSection.pathSegment
             let debugPath = "settings/\(pathSegment)"
 
-            print("📸 Navigating to /d/\(debugPath)...")
+            TalkieConsole.info("📸 Navigating to /d/\(debugPath)...")
 
             // Post debug navigate notification (same system as talkie://d/ URLs)
             #if DEBUG
@@ -437,7 +437,7 @@ class SettingsStoryboardGenerator {
                    let pngData = bitmapImage.representation(using: .png, properties: [:]) {
                     try? pngData.write(to: fileURL)
                     results[page] = fileURL
-                    print("  ✅ Captured: \(filename)")
+                    TalkieConsole.info("  ✅ Captured: \(filename)")
                 }
             }
         }
@@ -487,7 +487,7 @@ class SettingsStoryboardGenerator {
         let window = createRenderWindow()
 
         for (index, page) in pages.enumerated() {
-            print("📸 Grid: Capturing \(page.title)...")
+            TalkieConsole.info("📸 Grid: Capturing \(page.title)...")
 
             let view = withOverlay ? createViewWithOverlay(for: page) : createView(for: page)
             window.contentView = NSHostingView(rootView: view)
@@ -537,7 +537,7 @@ class SettingsStoryboardGenerator {
            let bitmapImage = NSBitmapImageRep(data: tiffData),
            let pngData = bitmapImage.representation(using: .png, properties: [:]) {
             try? pngData.write(to: outputPath)
-            print("✅ Grid saved to: \(outputPath.path)")
+            TalkieConsole.info("✅ Grid saved to: \(outputPath.path)")
         }
     }
 
@@ -553,7 +553,7 @@ class SettingsStoryboardGenerator {
         for page in SettingsPage.allCases {
             let filePath = "\(settingsDir)/\(page.sourceFile)"
             guard let content = try? String(contentsOfFile: filePath, encoding: .utf8) else {
-                print("⚠️ Could not read: \(page.sourceFile)")
+                TalkieConsole.info("⚠️ Could not read: \(page.sourceFile)")
                 continue
             }
 
@@ -689,7 +689,7 @@ class SettingsStoryboardGenerator {
         }
 
         try? report.write(to: outputPath, atomically: true, encoding: .utf8)
-        print("✅ Analysis report saved to: \(outputPath.path)")
+        TalkieConsole.info("✅ Analysis report saved to: \(outputPath.path)")
     }
 
     // MARK: - Private

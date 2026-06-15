@@ -332,8 +332,8 @@ struct DiffReviewView: View {
 
     return DiffReviewView(
         diff: testDiff,
-        onAccept: { print("Accept") },
-        onReject: { print("Reject") }
+        onAccept: { TalkieConsole.info("Accept") },
+        onReject: { TalkieConsole.info("Reject") }
     )
     .frame(width: 600, height: 350)
 }

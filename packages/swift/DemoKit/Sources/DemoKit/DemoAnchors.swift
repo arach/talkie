@@ -50,9 +50,9 @@ public class DemoAnchorRegistry {
 
     /// Debug: print all registered anchors
     public func dump() {
-        print("📍 DemoAnchors (\(anchors.count) registered):")
+        DemoKitConsole.info("📍 DemoAnchors (\(anchors.count) registered):")
         for (id, frame) in anchors.sorted(by: { $0.key < $1.key }) {
-            print("   \(id): center=(\(Int(frame.midX)), \(Int(frame.midY))) size=\(Int(frame.width))x\(Int(frame.height))")
+            DemoKitConsole.info("   \(id): center=(\(Int(frame.midX)), \(Int(frame.midY))) size=\(Int(frame.width))x\(Int(frame.height))")
         }
     }
 

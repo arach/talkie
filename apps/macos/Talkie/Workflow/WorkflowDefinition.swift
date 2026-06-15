@@ -6,12 +6,11 @@
 //
 
 import Foundation
-import os
 import SwiftUI
 import Observation
 import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "Workflow")
+private let logger = Log(.workflow)
 
 // MARK: - Workflow Input Contract
 

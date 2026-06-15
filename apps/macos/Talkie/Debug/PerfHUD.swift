@@ -25,11 +25,31 @@
 import Foundation
 import SwiftUI
 import QuartzCore
-import os
 import os.signpost
+import TalkieKit
 
-private let perfLogger = Logger(subsystem: "to.talkie.app.performance", category: "FPS")
+private let perfLogger = Log(.system)
 private let navigationSignpostLog = OSLog(subsystem: "to.talkie.app.performance", category: "Navigation")
+
+private final class BodyAccessAccumulator: @unchecked Sendable {
+    private let lock = NSLock()
+    private var counts: [String: Int] = [:]
+
+    func increment(_ name: String) {
+        lock.lock()
+        counts[name, default: 0] += 1
+        lock.unlock()
+    }
+
+    func drain() -> [String: Int] {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let snapshot = counts
+        counts.removeAll(keepingCapacity: true)
+        return snapshot
+    }
+}
 
 @MainActor
 final class FrameRateMonitor: ObservableObject {
@@ -60,8 +80,8 @@ final class FrameRateMonitor: ObservableObject {
     /// baseline, and typing into the editor pushes that into the hundreds.
     /// Each Task allocation isn't free, and the MainActor queue gets so
     /// backed up that the main thread starves on actual UI work (typing).
-    /// An os_unfair_lock-backed dictionary makes the increment ~nanoseconds.
-    private let bodyAccumulator = OSAllocatedUnfairLock<[String: Int]>(initialState: [:])
+    /// A lock-backed dictionary keeps the increment cheap and synchronous.
+    private let bodyAccumulator = BodyAccessAccumulator()
     private var lastTickTime: CFTimeInterval?
     private var minFrameInterval: Double = .infinity
     private var maxFrameInterval: Double = 0
@@ -109,7 +129,7 @@ final class FrameRateMonitor: ObservableObject {
         let from = currentSection
         currentSection = name
         if from != name {
-            perfLogger.info("event=section_changed from=\(from, privacy: .public) to=\(name, privacy: .public)")
+            perfLogger.info("event=section_changed from=\(from) to=\(name)")
         }
     }
 
@@ -117,7 +137,7 @@ final class FrameRateMonitor: ObservableObject {
         let from = sidebarMode
         sidebarMode = mode
         if from != mode && from != "?" {
-            perfLogger.info("event=sidebar_toggle from=\(from, privacy: .public) to=\(mode, privacy: .public)")
+            perfLogger.info("event=sidebar_toggle from=\(from) to=\(mode)")
         }
     }
 
@@ -126,9 +146,9 @@ final class FrameRateMonitor: ObservableObject {
         interaction = kind
         if from != kind {
             if kind.isEmpty {
-                perfLogger.info("event=interaction_end from=\(from, privacy: .public)")
+                perfLogger.info("event=interaction_end from=\(from)")
             } else {
-                perfLogger.info("event=interaction_begin kind=\(kind, privacy: .public)")
+                perfLogger.info("event=interaction_begin kind=\(kind)")
             }
         }
     }
@@ -137,9 +157,9 @@ final class FrameRateMonitor: ObservableObject {
     /// Goes into the same stream so the FPS timeline stays correlated.
     func logEvent(_ name: String, _ detail: String = "") {
         if detail.isEmpty {
-            perfLogger.info("event=\(name, privacy: .public)")
+            perfLogger.info("event=\(name)")
         } else {
-            perfLogger.info("event=\(name, privacy: .public) \(detail, privacy: .public)")
+            perfLogger.info("event=\(name) \(detail)")
         }
     }
 
@@ -157,7 +177,7 @@ final class FrameRateMonitor: ObservableObject {
         if let activeNavigationTrace,
            normalizedTraceValue(activeNavigationTrace.to) == normalizedTarget,
            now - activeNavigationTrace.startTime < 2 {
-            perfLogger.info("event=nav_intent_coalesced id=\(activeNavigationTrace.id, privacy: .public) source=\(source, privacy: .public) to=\(target, privacy: .public)")
+            perfLogger.info("event=nav_intent_coalesced id=\(activeNavigationTrace.id) source=\(source) to=\(target)")
             return
         }
 
@@ -184,7 +204,7 @@ final class FrameRateMonitor: ObservableObject {
         os_signpost(.begin, log: navigationSignpostLog, name: "Navigation Data", signpostID: dataID,
                     "id=%d source=%{public}s from=%{public}s to=%{public}s", id, source, from, target)
 
-        perfLogger.info("event=nav_click id=\(id, privacy: .public) source=\(source, privacy: .public) from=\(from, privacy: .public) to=\(target, privacy: .public)")
+        perfLogger.info("event=nav_click id=\(id) source=\(source) from=\(from) to=\(target)")
     }
 
     func markNavigationShellVisible(section: String, source: String) {
@@ -199,7 +219,7 @@ final class FrameRateMonitor: ObservableObject {
 
         os_signpost(.end, log: navigationSignpostLog, name: "Navigation Shell", signpostID: trace.shellSignpostID,
                     "id=%d source=%{public}s section=%{public}s deltaMs=%d", trace.id, source, section, deltaMs)
-        perfLogger.info("event=nav_shell_visible id=\(trace.id, privacy: .public) source=\(source, privacy: .public) section=\(section, privacy: .public) deltaMs=\(deltaMs, privacy: .public)")
+        perfLogger.info("event=nav_shell_visible id=\(trace.id) source=\(source) section=\(section) deltaMs=\(deltaMs)")
     }
 
     func markNavigationDataVisible(section: String, source: String, detail: String = "") {
@@ -216,9 +236,9 @@ final class FrameRateMonitor: ObservableObject {
                     "id=%d source=%{public}s section=%{public}s deltaMs=%d detail=%{public}s", trace.id, source, section, deltaMs, detail)
 
         if detail.isEmpty {
-            perfLogger.info("event=nav_data_visible id=\(trace.id, privacy: .public) source=\(source, privacy: .public) section=\(section, privacy: .public) deltaMs=\(deltaMs, privacy: .public)")
+            perfLogger.info("event=nav_data_visible id=\(trace.id) source=\(source) section=\(section) deltaMs=\(deltaMs)")
         } else {
-            perfLogger.info("event=nav_data_visible id=\(trace.id, privacy: .public) source=\(source, privacy: .public) section=\(section, privacy: .public) deltaMs=\(deltaMs, privacy: .public) \(detail, privacy: .public)")
+            perfLogger.info("event=nav_data_visible id=\(trace.id) source=\(source) section=\(section) deltaMs=\(deltaMs) \(detail)")
         }
 
         activeNavigationTrace = nil
@@ -241,7 +261,7 @@ final class FrameRateMonitor: ObservableObject {
 
         os_signpost(.begin, log: navigationSignpostLog, name: "Recordings Observation", signpostID: signpostID,
                     "id=%d filter=%{public}s sort=%{public}s limit=%d", id, filter, sort, limit)
-        perfLogger.info("event=recordings_observation_start id=\(id, privacy: .public) filter=\(filter, privacy: .public) sort=\(sort, privacy: .public) limit=\(limit, privacy: .public)")
+        perfLogger.info("event=recordings_observation_start id=\(id) filter=\(filter) sort=\(sort) limit=\(limit)")
     }
 
     func markRecordingsObservation(stage: String) {
@@ -250,7 +270,7 @@ final class FrameRateMonitor: ObservableObject {
 
         os_signpost(.event, log: navigationSignpostLog, name: "Recordings Observation Mark", signpostID: trace.signpostID,
                     "id=%d stage=%{public}s deltaMs=%d", trace.id, stage, deltaMs)
-        perfLogger.info("event=recordings_observation_stage id=\(trace.id, privacy: .public) stage=\(stage, privacy: .public) deltaMs=\(deltaMs, privacy: .public)")
+        perfLogger.info("event=recordings_observation_stage id=\(trace.id) stage=\(stage) deltaMs=\(deltaMs)")
     }
 
     func finishRecordingsObservation(displayed: Int, total: Int) {
@@ -259,7 +279,7 @@ final class FrameRateMonitor: ObservableObject {
 
         os_signpost(.end, log: navigationSignpostLog, name: "Recordings Observation", signpostID: trace.signpostID,
                     "id=%d status=ready displayed=%d total=%d deltaMs=%d", trace.id, displayed, total, deltaMs)
-        perfLogger.info("event=recordings_observation_ready id=\(trace.id, privacy: .public) displayed=\(displayed, privacy: .public) total=\(total, privacy: .public) deltaMs=\(deltaMs, privacy: .public)")
+        perfLogger.info("event=recordings_observation_ready id=\(trace.id) displayed=\(displayed) total=\(total) deltaMs=\(deltaMs)")
 
         activeRecordingsObservation = nil
     }
@@ -270,7 +290,7 @@ final class FrameRateMonitor: ObservableObject {
 
         os_signpost(.end, log: navigationSignpostLog, name: "Recordings Observation", signpostID: trace.signpostID,
                     "id=%d status=error deltaMs=%d error=%{public}s", trace.id, deltaMs, message)
-        perfLogger.info("event=recordings_observation_error id=\(trace.id, privacy: .public) deltaMs=\(deltaMs, privacy: .public) error=\(message, privacy: .public)")
+        perfLogger.info("event=recordings_observation_error id=\(trace.id) deltaMs=\(deltaMs) error=\(message)")
 
         activeRecordingsObservation = nil
     }
@@ -288,7 +308,7 @@ final class FrameRateMonitor: ObservableObject {
                         "id=%d status=%{public}s deltaMs=%d", trace.id, reason, deltaMs)
         }
 
-        perfLogger.info("event=nav_end id=\(trace.id, privacy: .public) status=\(reason, privacy: .public) deltaMs=\(deltaMs, privacy: .public)")
+        perfLogger.info("event=nav_end id=\(trace.id) status=\(reason) deltaMs=\(deltaMs)")
         activeNavigationTrace = nil
     }
 
@@ -298,7 +318,7 @@ final class FrameRateMonitor: ObservableObject {
 
         os_signpost(.end, log: navigationSignpostLog, name: "Recordings Observation", signpostID: trace.signpostID,
                     "id=%d status=%{public}s deltaMs=%d", trace.id, reason, deltaMs)
-        perfLogger.info("event=recordings_observation_end id=\(trace.id, privacy: .public) status=\(reason, privacy: .public) deltaMs=\(deltaMs, privacy: .public)")
+        perfLogger.info("event=recordings_observation_end id=\(trace.id) status=\(reason) deltaMs=\(deltaMs)")
 
         activeRecordingsObservation = nil
     }
@@ -352,9 +372,7 @@ final class FrameRateMonitor: ObservableObject {
     /// (AppNavigation, ScopeDraftsScreen) can call this hundreds of
     /// times per second. No Task allocation, no actor hop.
     nonisolated func recordBodyAccess(_ name: String) {
-        bodyAccumulator.withLock { dict in
-            dict[name, default: 0] += 1
-        }
+        bodyAccumulator.increment(name)
     }
 
     private func processTick() {
@@ -382,11 +400,7 @@ final class FrameRateMonitor: ObservableObject {
         // Drains the lock-protected accumulator in one short critical
         // section — keeping the lock contention with `recordBodyAccess`
         // (called from any thread) negligible.
-        let raw = bodyAccumulator.withLock { dict -> [String: Int] in
-            let copy = dict
-            dict.removeAll(keepingCapacity: true)
-            return copy
-        }
+        let raw = bodyAccumulator.drain()
         var snapshot: [String: Int] = [:]
         for (name, count) in raw {
             snapshot[name] = Int(Double(count) / elapsed)
@@ -410,7 +424,7 @@ final class FrameRateMonitor: ObservableObject {
         // `privacy: .public` so the values aren't redacted by the
         // unified log (default for string interpolations is .private,
         // which renders as `<private>` in `log show` output).
-        perfLogger.info("fps=\(fpsStr, privacy: .public) minMs=\(minMsStr, privacy: .public) maxMs=\(maxMsStr, privacy: .public) frames=\(self.frameCount, privacy: .public) section=\(self.currentSection, privacy: .public) sidebar=\(self.sidebarMode, privacy: .public)\(interactionField, privacy: .public)\(hottestField, privacy: .public)")
+        perfLogger.info("fps=\(fpsStr) minMs=\(minMsStr) maxMs=\(maxMsStr) frames=\(self.frameCount) section=\(self.currentSection) sidebar=\(self.sidebarMode)\(interactionField)\(hottestField)")
 
         frameCount = 0
         windowStartTime = now

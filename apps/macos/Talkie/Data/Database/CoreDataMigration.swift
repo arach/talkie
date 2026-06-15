@@ -31,7 +31,7 @@ final class CoreDataMigration {
         var failedCount = 0
         var errors: [Error] = []
 
-        print("🚀 Starting Core Data → GRDB migration...")
+        TalkieConsole.info("🚀 Starting Core Data → GRDB migration...")
 
         do {
             // Fetch all Core Data memos
@@ -39,7 +39,7 @@ final class CoreDataMigration {
             fetchRequest.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: true)]
 
             let coreDataMemos = try coreDataContext.fetch(fetchRequest)
-            print("📦 Found \(coreDataMemos.count) memos in Core Data")
+            TalkieConsole.info("📦 Found \(coreDataMemos.count) memos in Core Data")
 
             // Migrate each memo
             for (index, cdMemo) in coreDataMemos.enumerated() {
@@ -51,19 +51,19 @@ final class CoreDataMigration {
                     successCount += 1
 
                     if (index + 1) % 10 == 0 {
-                        print("✅ Migrated \(index + 1)/\(coreDataMemos.count) memos...")
+                        TalkieConsole.info("✅ Migrated \(index + 1)/\(coreDataMemos.count) memos...")
                     }
                 } catch {
                     failedCount += 1
                     errors.append(error)
-                    print("❌ Failed to migrate memo [\(memoId?.uuidString ?? "NO-ID")] '\(memoTitle)': \(error)")
+                    TalkieConsole.info("❌ Failed to migrate memo [\(memoId?.uuidString ?? "NO-ID")] '\(memoTitle)': \(error)")
                 }
             }
 
-            print("✨ Migration complete! Success: \(successCount), Failed: \(failedCount)")
+            TalkieConsole.info("✨ Migration complete! Success: \(successCount), Failed: \(failedCount)")
 
         } catch {
-            print("💥 Migration failed: \(error)")
+            TalkieConsole.info("💥 Migration failed: \(error)")
             errors.append(error)
         }
 

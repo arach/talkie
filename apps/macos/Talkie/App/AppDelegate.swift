@@ -7,11 +7,11 @@
 
 import AppKit
 import UserNotifications
-import os
+import OSLog
 import DebugKit
 import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "AppDelegate")
+private let logger = Log(.system)
 private let signposter = OSSignposter(subsystem: "to.talkie.app.performance", category: "Startup")
 
 // Free function to capture settings screenshots using subprocess
@@ -33,7 +33,7 @@ private func captureSettingsScreenshots(to directory: URL) async -> Int {
         let files = try? FileManager.default.contentsOfDirectory(atPath: directory.path)
         return files?.filter { $0.hasSuffix(".png") }.count ?? 0
     } catch {
-        print("   ⚠️ Failed to capture screenshots: \(error)")
+        TalkieConsole.info("   ⚠️ Failed to capture screenshots: \(error)")
         return 0
     }
 }
@@ -165,7 +165,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                     // Set UserDefaults directly - SettingsManager will read this on init
                     UserDefaults.standard.set(theme.rawValue, forKey: "currentTheme")
                     UserDefaults.standard.synchronize()
-                    NSLog("[AppDelegate] Early theme set: %@", theme.rawValue)
+                    TalkieConsole.critical("[AppDelegate] Early theme set: %@", theme.rawValue)
                 }
                 break
             }
@@ -200,21 +200,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             // Register debug commands only for debug CLI runs.
             signposter.emitEvent("Debug Commands")
             registerDebugCommands()
-            NSLog("[AppDelegate] ⚙️ Debug CLI mode")
+            TalkieConsole.critical("[AppDelegate] ⚙️ Debug CLI mode")
             // Schedule CLI handler to run after app finishes initializing
             Task { @MainActor in
                 // Wait for app to finish initializing and GPU to be ready
                 try? await Task.sleep(for: .milliseconds(2000))
-                NSLog("[AppDelegate] 🎯 Running CLI handler...")
+                TalkieConsole.critical("[AppDelegate] 🎯 Running CLI handler...")
                 let handled = await self.cliHandler.handleCommandLineArguments()
                 if !handled {
-                    NSLog("[AppDelegate] ❌ No CLI command executed")
+                    TalkieConsole.critical("[AppDelegate] ❌ No CLI command executed")
                     exit(1)
                 }
             }
             // Continue with normal initialization so MainActor works properly
         } else {
-            NSLog("[AppDelegate] ✓ Normal mode")
+            TalkieConsole.critical("[AppDelegate] ✓ Normal mode")
         }
 
         // App initialization (runs in both normal and debug mode)
@@ -422,9 +422,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                     .appendingPathComponent("settings-screenshots-\(timestamp)")
             }
 
-            print("📸 Capturing settings pages to: \(outputDir.path)")
+            TalkieConsole.info("📸 Capturing settings pages to: \(outputDir.path)")
             let results = await SettingsStoryboardGenerator.shared.captureAllPages(to: outputDir)
-            print("✅ Captured \(results.count) pages")
+            TalkieConsole.info("✅ Captured \(results.count) pages")
             exit(0)
         }
 
@@ -435,11 +435,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             let lines = await MainActor.run {
                 NotchComposer.shared.debugStatusLines()
             }
-            print("")
-            print("Notch Diagnostics")
-            print("═════════════════")
+            TalkieConsole.info("")
+            TalkieConsole.info("Notch Diagnostics")
+            TalkieConsole.info("═════════════════")
             for line in lines {
-                print(line)
+                TalkieConsole.info(line)
             }
             exit(0)
         }
@@ -458,12 +458,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                     .appendingPathComponent("console-loader-\(timestamp).png")
             }
 
-            print("📸 Capturing console loader to: \(outputURL.path)")
+            TalkieConsole.info("📸 Capturing console loader to: \(outputURL.path)")
             if let savedURL = await ConsoleScreenshotGenerator.shared.captureLoaderFrame(to: outputURL) {
-                print("✅ Saved console loader screenshot: \(savedURL.path)")
+                TalkieConsole.info("✅ Saved console loader screenshot: \(savedURL.path)")
                 exit(0)
             } else {
-                print("❌ Failed to capture console loader screenshot")
+                TalkieConsole.info("❌ Failed to capture console loader screenshot")
                 exit(1)
             }
         }
@@ -484,7 +484,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                     .appendingPathComponent("settings-grid\(suffix)-\(timestamp).png")
             }
 
-            print("📸 Generating settings grid\(withOverlay ? " with overlay" : "")...")
+            TalkieConsole.info("📸 Generating settings grid\(withOverlay ? " with overlay" : "")...")
             await SettingsStoryboardGenerator.shared.captureGrid(columns: 4, withOverlay: withOverlay, to: outputPath)
             exit(0)
         }
@@ -503,7 +503,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                     .appendingPathComponent("settings-analysis-\(timestamp).md")
             }
 
-            print("🔍 Analyzing settings page styling...")
+            TalkieConsole.info("🔍 Analyzing settings page styling...")
             await SettingsStoryboardGenerator.shared.generateAnalysisReport(to: outputPath)
             exit(0)
         }
@@ -524,10 +524,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
 
             try? FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
 
-            print("📦 Generating full settings audit package...")
+            TalkieConsole.info("📦 Generating full settings audit package...")
 
             // 1. Grid (clean)
-            print("\n1️⃣ Grid view...")
+            TalkieConsole.info("\n1️⃣ Grid view...")
             await SettingsStoryboardGenerator.shared.captureGrid(
                 columns: 4,
                 withOverlay: false,
@@ -535,7 +535,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             )
 
             // 2. Grid with overlay
-            print("\n2️⃣ Grid with layout overlay...")
+            TalkieConsole.info("\n2️⃣ Grid with layout overlay...")
             await SettingsStoryboardGenerator.shared.captureGrid(
                 columns: 4,
                 withOverlay: true,
@@ -543,18 +543,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             )
 
             // 3. Individual screenshots
-            print("\n3️⃣ Individual screenshots...")
+            TalkieConsole.info("\n3️⃣ Individual screenshots...")
             _ = await SettingsStoryboardGenerator.shared.captureAllPages(
                 to: outputDir.appendingPathComponent("pages")
             )
 
             // 4. Analysis report
-            print("\n4️⃣ Styling analysis...")
+            TalkieConsole.info("\n4️⃣ Styling analysis...")
             await SettingsStoryboardGenerator.shared.generateAnalysisReport(
                 to: outputDir.appendingPathComponent("analysis.md")
             )
 
-            print("\n✅ Full audit package saved to: \(outputDir.path)")
+            TalkieConsole.info("\n✅ Full audit package saved to: \(outputDir.path)")
             exit(0)
         }
 
@@ -577,31 +577,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             let runDir = baseDir.appendingPathComponent(String(format: "run-%03d", nextNum))
             try? FileManager.default.createDirectory(at: runDir, withIntermediateDirectories: true)
 
-            print("🔍 Running full design audit (run-\(String(format: "%03d", nextNum)))...")
+            TalkieConsole.info("🔍 Running full design audit (run-\(String(format: "%03d", nextNum)))...")
             let report = await DesignAuditor.shared.auditAll()
 
-            print("\n📊 Results:")
-            print("   Grade: \(report.grade) (\(report.overallScore)%)")
-            print("   Screens: \(report.screens.count)")
-            print("   Issues: \(report.totalIssues)")
+            TalkieConsole.info("\n📊 Results:")
+            TalkieConsole.info("   Grade: \(report.grade) (\(report.overallScore)%)")
+            TalkieConsole.info("   Screens: \(report.screens.count)")
+            TalkieConsole.info("   Issues: \(report.totalIssues)")
 
             // Generate reports for this run
-            print("\n📝 Generating reports...")
+            TalkieConsole.info("\n📝 Generating reports...")
             await DesignAuditor.shared.generateHTMLReport(from: report, to: runDir.appendingPathComponent("report.html"))
             await DesignAuditor.shared.generateMarkdownReport(from: report, to: runDir.appendingPathComponent("report.md"))
 
             // Capture settings page screenshots by calling separate generator
             let screenshotDir = runDir.appendingPathComponent("screenshots")
-            print("\n📸 Capturing settings screenshots...")
+            TalkieConsole.info("\n📸 Capturing settings screenshots...")
             let screenshotResults = await captureSettingsScreenshots(to: screenshotDir)
-            print("   ✅ Captured \(screenshotResults) screenshots")
+            TalkieConsole.info("   ✅ Captured \(screenshotResults) screenshots")
 
             // Update master index.html with all runs
             await Self.generateAuditIndex(at: baseDir)
 
-            print("\n✅ Audit complete!")
-            print("   📂 ~/Desktop/talkie-audit/")
-            print("   🌐 index.html - lists all audits")
+            TalkieConsole.info("\n✅ Audit complete!")
+            TalkieConsole.info("   📂 ~/Desktop/talkie-audit/")
+            TalkieConsole.info("   🌐 index.html - lists all audits")
 
             // Open report
             NSWorkspace.shared.open(runDir.appendingPathComponent("report.html"))
@@ -618,21 +618,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         ) { args in
             guard let sectionName = args.first,
                   let section = ScreenSection(rawValue: sectionName.capitalized) else {
-                print("❌ Usage: --debug=audit-section <section>")
-                print("   Sections: settings, live, memos, onboarding, navigation")
+                TalkieConsole.info("❌ Usage: --debug=audit-section <section>")
+                TalkieConsole.info("   Sections: settings, live, memos, onboarding, navigation")
                 exit(1)
             }
 
-            print("🔍 Auditing \(section.rawValue) section...")
+            TalkieConsole.info("🔍 Auditing \(section.rawValue) section...")
             let report = await DesignAuditor.shared.audit(section: section)
 
-            print("\n📊 Results:")
-            print("   Grade: \(report.grade) (\(report.overallScore)%)")
-            print("   Screens: \(report.screens.count)")
-            print("   Issues: \(report.totalIssues)")
+            TalkieConsole.info("\n📊 Results:")
+            TalkieConsole.info("   Grade: \(report.grade) (\(report.overallScore)%)")
+            TalkieConsole.info("   Screens: \(report.screens.count)")
+            TalkieConsole.info("   Issues: \(report.totalIssues)")
 
             for screen in report.screens {
-                print("   - \(screen.screen.title): \(screen.grade) (\(screen.overallScore)%)")
+                TalkieConsole.info("   - \(screen.screen.title): \(screen.grade) (\(screen.overallScore)%)")
             }
 
             exit(0)
@@ -642,7 +642,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             "audit-screen",
             description: "Audit a specific screen with screenshot capture. Usage: --debug=audit-screen <screen-id> [--theme=<theme>]"
         ) { args in
-            NSLog("[audit-screen] Handler started")
+            TalkieConsole.critical("[audit-screen] Handler started")
 
             // Parse arguments
             var screenId: String?
@@ -657,22 +657,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             }
 
             guard let screenId = screenId else {
-                print("❌ No screen ID provided")
-                print("Usage: --debug=audit-screen <screen-id> [--theme=<theme>]")
-                print("Themes: talkiePro, linear, terminal, minimal, classic, warm")
+                TalkieConsole.info("❌ No screen ID provided")
+                TalkieConsole.info("Usage: --debug=audit-screen <screen-id> [--theme=<theme>]")
+                TalkieConsole.info("Themes: talkiePro, linear, terminal, minimal, classic, warm")
                 exit(1)
             }
-            NSLog("[audit-screen] screenId: %@", screenId)
+            TalkieConsole.critical("[audit-screen] screenId: %@", screenId)
 
             guard let screen = AppScreen(rawValue: screenId) else {
-                print("❌ Invalid screen ID: \(screenId)")
-                print("   Available screens:")
+                TalkieConsole.info("❌ Invalid screen ID: \(screenId)")
+                TalkieConsole.info("   Available screens:")
                 for screen in AppScreen.allCases {
-                    print("     - \(screen.rawValue)")
+                    TalkieConsole.info("     - \(screen.rawValue)")
                 }
                 exit(1)
             }
-            NSLog("[audit-screen] screen: %@", screen.rawValue)
+            TalkieConsole.critical("[audit-screen] screen: %@", screen.rawValue)
 
             // Set theme if specified
             var originalTheme: ThemePreset?
@@ -685,7 +685,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                         // Force theme cache to update
                         Theme.refresh()
 
-                        print("🎨 Theme set to: \(theme.displayName)")
+                        TalkieConsole.info("🎨 Theme set to: \(theme.displayName)")
 
                         // Force all windows to redisplay
                         for window in NSApp.windows {
@@ -707,8 +707,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                     // Wait for views to update
                     try? await Task.sleep(for: .milliseconds(500))
                 } else {
-                    print("⚠️ Unknown theme: \(themeName)")
-                    print("   Available themes: talkiePro, linear, terminal, minimal, classic, warm")
+                    TalkieConsole.info("⚠️ Unknown theme: \(themeName)")
+                    TalkieConsole.info("   Available themes: talkiePro, linear, terminal, minimal, classic, warm")
                 }
             }
 
@@ -716,7 +716,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                 .appendingPathComponent("Desktop")
                 .appendingPathComponent("talkie-audit")
             try? FileManager.default.createDirectory(at: baseDir, withIntermediateDirectories: true)
-            NSLog("[audit-screen] baseDir: %@", baseDir.path)
+            TalkieConsole.critical("[audit-screen] baseDir: %@", baseDir.path)
 
             let existing = (try? FileManager.default.contentsOfDirectory(atPath: baseDir.path)) ?? []
             let auditFolders = existing.filter { $0.hasPrefix("run-") }
@@ -724,31 +724,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             let runDir = baseDir.appendingPathComponent(String(format: "run-%03d", nextNum))
             let screenshotDir = runDir.appendingPathComponent("screenshots")
             try? FileManager.default.createDirectory(at: screenshotDir, withIntermediateDirectories: true)
-            NSLog("[audit-screen] runDir: %@", runDir.path)
+            TalkieConsole.critical("[audit-screen] runDir: %@", runDir.path)
 
-            print("🔍 Auditing \(screen.title) (run-\(String(format: "%03d", nextNum)))...")
-            print("📸 Capturing screenshots (small/medium/large)...")
+            TalkieConsole.info("🔍 Auditing \(screen.title) (run-\(String(format: "%03d", nextNum)))...")
+            TalkieConsole.info("📸 Capturing screenshots (small/medium/large)...")
 
             // Capture screenshots at all three sizes
             var screenshotPaths: [String] = []
             if screen.section == .settings, let settingsPage = screen.settingsPage {
-                NSLog("[audit-screen] Capturing settings page: %@", settingsPage.title)
+                TalkieConsole.critical("[audit-screen] Capturing settings page: %@", settingsPage.title)
                 // Capture each size separately to avoid window reuse issues
                 // Only capture medium size for now to avoid multi-capture crash
                 let size = WindowSize.medium
-                NSLog("[audit-screen] Capturing size: %@", size.rawValue)
-                NSLog("[audit-screen] About to call captureSinglePage...")
+                TalkieConsole.critical("[audit-screen] Capturing size: %@", size.rawValue)
+                TalkieConsole.critical("[audit-screen] About to call captureSinglePage...")
 
                 if let url = await SettingsStoryboardGenerator.shared.captureSinglePage(settingsPage, size: size, to: screenshotDir) {
                     screenshotPaths.append("\(size.rawValue): \(url.lastPathComponent)")
-                    NSLog("[audit-screen] Captured: %@", url.lastPathComponent)
+                    TalkieConsole.critical("[audit-screen] Captured: %@", url.lastPathComponent)
                 } else {
-                    NSLog("[audit-screen] Capture returned nil for size: %@", size.rawValue)
+                    TalkieConsole.critical("[audit-screen] Capture returned nil for size: %@", size.rawValue)
                 }
-                NSLog("[audit-screen] Done capturing screenshots")
+                TalkieConsole.critical("[audit-screen] Done capturing screenshots")
             } else if screen.section == .home {
                 // Capture home dashboard from main window
-                NSLog("[audit-screen] Capturing home screen: %@", screen.rawValue)
+                TalkieConsole.critical("[audit-screen] Capturing home screen: %@", screen.rawValue)
 
                 await MainActor.run {
                     // Navigate to home
@@ -777,33 +777,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                             let fileURL = screenshotDir.appendingPathComponent(filename)
                             try? pngData.write(to: fileURL)
                             screenshotPaths.append(filename)
-                            print("  ✅ Captured: \(filename)")
+                            TalkieConsole.info("  ✅ Captured: \(filename)")
                         }
                     }
                 } else {
-                    print("  ⚠️ No main window found")
+                    TalkieConsole.info("  ⚠️ No main window found")
                 }
             } else {
-                print("⚠️ Screenshot capture not yet implemented for \(screen.section.rawValue) screens")
+                TalkieConsole.info("⚠️ Screenshot capture not yet implemented for \(screen.section.rawValue) screens")
             }
 
             // TEMPORARILY SKIP AUDIT - crashes on async context switch
-            // NSLog("[audit-screen] About to analyze code...")
-            // print("📊 Analyzing code...")
-            // NSLog("[audit-screen] Calling DesignAuditor.shared.audit...")
+            // TalkieConsole.critical("[audit-screen] About to analyze code...")
+            // TalkieConsole.info("📊 Analyzing code...")
+            // TalkieConsole.critical("[audit-screen] Calling DesignAuditor.shared.audit...")
             // let result = await DesignAuditor.shared.audit(screen: screen, withScreenshot: false)
-            // NSLog("[audit-screen] Audit complete!")
+            // TalkieConsole.critical("[audit-screen] Audit complete!")
 
-            print("\n✅ Screenshot capture complete!")
+            TalkieConsole.info("\n✅ Screenshot capture complete!")
             if !screenshotPaths.isEmpty {
-                print("   Screenshots:")
+                TalkieConsole.info("   Screenshots:")
                 for path in screenshotPaths {
-                    print("     - \(path)")
+                    TalkieConsole.info("     - \(path)")
                 }
             }
-            print("   Output: \(runDir.path)")
+            TalkieConsole.info("   Output: \(runDir.path)")
 
-            NSLog("[audit-screen] Exiting with code 0")
+            TalkieConsole.critical("[audit-screen] Exiting with code 0")
             exit(0)
         }
 
@@ -815,7 +815,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                 PendingActionsManager.shared.cancelAll()
                 PendingActionsManager.shared.clearAllRecentActions()
             }
-            print("✅ Cleared all pending and recent actions")
+            TalkieConsole.info("✅ Cleared all pending and recent actions")
             exit(0)
         }
 
@@ -823,7 +823,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             "environment-crash",
             description: "Trigger a crash by rendering a view without required @Environment value (reproduces crash report)"
         ) { _ in
-            print("""
+            TalkieConsole.info("""
             🔴 Environment Crash Test
             =========================
 
@@ -851,8 +851,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             description: "Trigger bridge sync from TalkieSync and check if memo exists. Usage: --debug=pull-memo <uuid>"
         ) { args in
             guard let uuidString = args.first else {
-                print("❌ Usage: --debug=pull-memo <uuid>")
-                print("   Example: --debug=pull-memo 25E8709E-CAF7-4612-92F5-730B419A5902")
+                TalkieConsole.info("❌ Usage: --debug=pull-memo <uuid>")
+                TalkieConsole.info("   Example: --debug=pull-memo 25E8709E-CAF7-4612-92F5-730B419A5902")
                 exit(1)
                 return
             }
@@ -865,7 +865,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                 // Convert compact to hyphenated
                 let s = uuidString.uppercased()
                 guard s.count == 32 else {
-                    print("❌ Invalid UUID format: \(uuidString)")
+                    TalkieConsole.info("❌ Invalid UUID format: \(uuidString)")
                     exit(1)
                     return
                 }
@@ -874,12 +874,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             }
 
             guard let uuid = UUID(uuidString: normalizedUUID) else {
-                print("❌ Invalid UUID: \(uuidString)")
+                TalkieConsole.info("❌ Invalid UUID: \(uuidString)")
                 exit(1)
                 return
             }
 
-            print("📥 Looking for memo: \(uuid)")
+            TalkieConsole.info("📥 Looking for memo: \(uuid)")
 
             // Ensure SyncClient is connected
             await MainActor.run {
@@ -890,20 +890,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             try? await Task.sleep(for: .seconds(2))
 
             // Trigger bridge sync via TalkieSync
-            print("🔄 Triggering bridge sync via TalkieSync...")
+            TalkieConsole.info("🔄 Triggering bridge sync via TalkieSync...")
             do {
                 let count = try await SyncClient.shared.runSyncPass()
-                print("✅ Bridge sync complete: \(count) memos synced")
+                TalkieConsole.info("✅ Bridge sync complete: \(count) memos synced")
             } catch {
-                print("⚠️ Bridge sync failed: \(error.localizedDescription)")
+                TalkieConsole.info("⚠️ Bridge sync failed: \(error.localizedDescription)")
             }
 
             // Verify memo exists in GRDB
             let repo = LocalRepository()
             if let memo = try? await repo.fetchMemo(id: uuid) {
-                print("✅ Found: '\(memo.memo.title ?? "Untitled")' (\(Int(memo.memo.duration))s)")
+                TalkieConsole.info("✅ Found: '\(memo.memo.title ?? "Untitled")' (\(Int(memo.memo.duration))s)")
             } else {
-                print("⚠️ Memo not found in GRDB after sync")
+                TalkieConsole.info("⚠️ Memo not found in GRDB after sync")
             }
             exit(0)
         }
@@ -931,23 +931,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             }
 
             guard !missingBefore.isEmpty else {
-                print("✅ No missing audio memos found")
+                TalkieConsole.info("✅ No missing audio memos found")
                 exit(0)
                 return
             }
 
             let targets = Array(missingBefore.prefix(sampleCount))
-            print("🎧 Audio catch-up quick test")
-            print("   Sample size: \(targets.count) memo(s)")
-            print("   Missing audio before sync: \(missingBefore.count)")
+            TalkieConsole.info("🎧 Audio catch-up quick test")
+            TalkieConsole.info("   Sample size: \(targets.count) memo(s)")
+            TalkieConsole.info("   Missing audio before sync: \(missingBefore.count)")
             for memo in targets {
-                print("   - \(memo.id.uuidString) \(memo.title)")
+                TalkieConsole.info("   - \(memo.id.uuidString) \(memo.title)")
             }
 
             do {
                 try await SyncClient.shared.runSyncOnce(keepRunning: false)
             } catch {
-                print("❌ Sync failed: \(error.localizedDescription)")
+                TalkieConsole.info("❌ Sync failed: \(error.localizedDescription)")
                 exit(1)
                 return
             }
@@ -959,18 +959,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             let missingIDsAfter = Set(missingAfter.map(\.id))
             let recovered = targets.filter { !missingIDsAfter.contains($0.id) }
 
-            print("   Missing audio after sync: \(missingAfter.count)")
-            print("   Recovered in sample: \(recovered.count)/\(targets.count)")
+            TalkieConsole.info("   Missing audio after sync: \(missingAfter.count)")
+            TalkieConsole.info("   Recovered in sample: \(recovered.count)/\(targets.count)")
             for memo in targets {
                 let recoveredLabel = missingIDsAfter.contains(memo.id) ? "still missing" : "recovered"
-                print("   - \(memo.id.uuidString) \(recoveredLabel)")
+                TalkieConsole.info("   - \(memo.id.uuidString) \(recoveredLabel)")
             }
 
             if recovered.count == targets.count {
-                print("✅ Audio catch-up sample completed")
+                TalkieConsole.info("✅ Audio catch-up sample completed")
                 exit(0)
             } else {
-                print("⚠️ Audio catch-up sample incomplete")
+                TalkieConsole.info("⚠️ Audio catch-up sample incomplete")
                 exit(2)
             }
         }
@@ -980,7 +980,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             description: "Describe a screenshot for capture markup. Usage: --debug=capture-markup-describe <image-path>"
         ) { args in
             guard let path = args.first else {
-                print("❌ Usage: --debug=capture-markup-describe <image-path>")
+                TalkieConsole.info("❌ Usage: --debug=capture-markup-describe <image-path>")
                 exit(1)
                 return
             }
@@ -988,10 +988,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
             do {
                 let description = try await CaptureMarkupAgentService.shared.describe(imageURL: url)
-                print(description)
+                TalkieConsole.info(description)
                 exit(0)
             } catch {
-                print("❌ \(error.localizedDescription)")
+                TalkieConsole.info("❌ \(error.localizedDescription)")
                 exit(1)
             }
         }
@@ -1001,7 +1001,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             description: "Plan capture markup layers. Usage: --debug=capture-markup-plan <image-path> <instruction>"
         ) { args in
             guard args.count >= 2 else {
-                print("❌ Usage: --debug=capture-markup-plan <image-path> <instruction>")
+                TalkieConsole.info("❌ Usage: --debug=capture-markup-plan <image-path> <instruction>")
                 exit(1)
                 return
             }
@@ -1014,10 +1014,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                     instruction: instruction
                 )
                 let data = try JSONEncoder().encode(plan)
-                print(String(data: data, encoding: .utf8) ?? "{}")
+                TalkieConsole.info(String(data: data, encoding: .utf8) ?? "{}")
                 exit(0)
             } catch {
-                print("❌ \(error.localizedDescription)")
+                TalkieConsole.info("❌ \(error.localizedDescription)")
                 exit(1)
             }
         }
@@ -1027,7 +1027,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             description: "Apply a capture markup plan sidecar. Usage: --debug=capture-markup-apply <image-path> <plan-json-path>"
         ) { args in
             guard args.count >= 2 else {
-                print("❌ Usage: --debug=capture-markup-apply <image-path> <plan-json-path>")
+                TalkieConsole.info("❌ Usage: --debug=capture-markup-apply <image-path> <plan-json-path>")
                 exit(1)
                 return
             }
@@ -1042,10 +1042,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                     plan: plan
                 )
                 let encoded = try JSONEncoder().encode(document)
-                print(String(data: encoded, encoding: .utf8) ?? "{}")
+                TalkieConsole.info(String(data: encoded, encoding: .utf8) ?? "{}")
                 exit(0)
             } catch {
-                print("❌ \(error.localizedDescription)")
+                TalkieConsole.info("❌ \(error.localizedDescription)")
                 exit(1)
             }
         }
@@ -1055,7 +1055,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             description: "Render capture markup to PNG. Usage: --debug=capture-markup-render <image-path> [output-path]"
         ) { args in
             guard let path = args.first else {
-                print("❌ Usage: --debug=capture-markup-render <image-path> [output-path]")
+                TalkieConsole.info("❌ Usage: --debug=capture-markup-render <image-path> [output-path]")
                 exit(1)
                 return
             }
@@ -1068,13 +1068,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                 let png = try CaptureMarkupAgentService.shared.renderPNG(imageURL: url)
                 if let output {
                     try png.write(to: output)
-                    print(output.path)
+                    TalkieConsole.info(output.path)
                 } else {
                     FileHandle.standardOutput.write(png)
                 }
                 exit(0)
             } catch {
-                print("❌ \(error.localizedDescription)")
+                TalkieConsole.info("❌ \(error.localizedDescription)")
                 exit(1)
             }
         }
@@ -1083,7 +1083,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             "test-workflow-import",
             description: "Run ImportPayloadConverter tests to verify URL workflow import converts to core WorkflowDefinition correctly"
         ) { _ in
-            print("")
+            TalkieConsole.info("")
             ImportPayloadConverterTests.runAll()
             exit(0)
         }
@@ -1092,7 +1092,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             "test-skill-file-format",
             description: "Run parser/serializer tests for bundled .skill.md files"
         ) { _ in
-            print("")
+            TalkieConsole.info("")
             SkillFileFormatTests.runAll()
             exit(0)
         }
@@ -1104,7 +1104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     @objc func handleGetURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent replyEvent: NSAppleEventDescriptor) {
         guard let urlString = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
               let url = URL(string: urlString) else {
-            NSLog("[AppDelegate] Invalid URL event received")
+            TalkieConsole.critical("[AppDelegate] Invalid URL event received")
             logger.warning("Invalid URL event received")
             return
         }
@@ -1115,7 +1115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
 
         // Accept environment-specific URL schemes (talkie, talkie-dev)
         guard url.scheme == TalkieEnvironment.current.talkieURLScheme else {
-            NSLog("[AppDelegate] URL not handled: invalid scheme (expected \(TalkieEnvironment.current.talkieURLScheme), got \(url.scheme ?? "nil"))")
+            TalkieConsole.critical("[AppDelegate] URL not handled: invalid scheme (expected \(TalkieEnvironment.current.talkieURLScheme), got \(url.scheme ?? "nil"))")
             return
         }
 
@@ -1134,11 +1134,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                 // DEPRECATION WARNING: talkie://live is deprecated, use talkie://agent
                 if host == "live" {
                     logger.warning("⚠️ DEPRECATED: talkie://live URL scheme used - migrate to talkie://agent")
-                    NSLog("⚠️ [AppDelegate] DEPRECATED: talkie://live URL scheme is deprecated. Use talkie://agent instead.")
+                    TalkieConsole.critical("⚠️ [AppDelegate] DEPRECATED: talkie://live URL scheme is deprecated. Use talkie://agent instead.")
                 }
 
                 let path = url.pathComponents.dropFirst().first ?? ""
-                NSLog("[AppDelegate] Navigating to Agent section: \(path.isEmpty ? "default" : path)")
+                TalkieConsole.critical("[AppDelegate] Navigating to Agent section: \(path.isEmpty ? "default" : path)")
                 logger.info("Navigating to Agent section: \(path.isEmpty ? "default" : path)")
 
                 // Ensure main window is visible
@@ -1168,14 +1168,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             // Handle talkie://settings/agent and legacy talkie://settings/live
             else if url.host == "settings" {
                 let path = url.pathComponents.dropFirst().first ?? ""
-                NSLog("[AppDelegate] Navigating to Settings section: \(path)")
+                TalkieConsole.critical("[AppDelegate] Navigating to Settings section: \(path)")
                 logger.info("Navigating to Settings section: \(path)")
 
                 if ["agent", "live"].contains(path) {
                     // DEPRECATION WARNING: talkie://settings/live is deprecated
                     if path == "live" {
                         logger.warning("⚠️ DEPRECATED: talkie://settings/live URL scheme used - migrate to talkie://settings/agent")
-                        NSLog("⚠️ [AppDelegate] DEPRECATED: talkie://settings/live is deprecated. Use talkie://settings/agent instead.")
+                        TalkieConsole.critical("⚠️ [AppDelegate] DEPRECATED: talkie://settings/live is deprecated. Use talkie://settings/agent instead.")
                     }
                     // Navigate directly to full Agent settings (bypasses main Settings)
                     NavigationState.shared.navigateToSettings(.dictationCapture)
@@ -1188,7 +1188,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
 
             // Handle talkie://compose?text=... - opens Notes with pre-filled text
             else if url.host == "compose" {
-                NSLog("[AppDelegate] Opening Notes")
+                TalkieConsole.critical("[AppDelegate] Opening Notes")
                 logger.info("Opening Notes from URL")
 
                 // Ensure main window is visible
@@ -1246,7 +1246,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                 // Handled by debug URL handler
             }
             else {
-                NSLog("[AppDelegate] URL not handled: scheme=\(url.scheme ?? "nil"), host=\(url.host ?? "nil")")
+                TalkieConsole.critical("[AppDelegate] URL not handled: scheme=\(url.scheme ?? "nil"), host=\(url.host ?? "nil")")
             }
         }
     }
@@ -1310,14 +1310,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         guard url.host == "d" else { return false }
 
         let path = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        NSLog("[AppDelegate] Debug navigation: /d/\(path)")
+        TalkieConsole.critical("[AppDelegate] Debug navigation: /d/\(path)")
 
         let components = path.split(separator: "/")
 
         // Handle capture commands: /d/capture/settings
         if components.first == "capture" {
             if components.count >= 2 && components[1] == "settings" {
-                NSLog("[AppDelegate] 📸 Triggering settings capture sequence...")
+                TalkieConsole.critical("[AppDelegate] 📸 Triggering settings capture sequence...")
                 Task { @MainActor in
                     // Open Settings first
                     NavigationState.shared.navigate(to: .settings)
@@ -1331,7 +1331,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                     try? FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
 
                     let results = await SettingsStoryboardGenerator.shared.captureAllPages(to: outputDir)
-                    NSLog("[AppDelegate] ✅ Captured \(results.count) settings pages to \(outputDir.path)")
+                    TalkieConsole.critical("[AppDelegate] ✅ Captured \(results.count) settings pages to \(outputDir.path)")
                     NSWorkspace.shared.open(outputDir)
                 }
                 return true
@@ -1339,7 +1339,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             // Handle /d/capture/audit - run code audit only (no window navigation)
             // Use /d/capture/full for screenshots + audit
             if components.count >= 2 && components[1] == "audit" {
-                NSLog("[AppDelegate] 🔍 Triggering code audit (no screenshots)...")
+                TalkieConsole.critical("[AppDelegate] 🔍 Triggering code audit (no screenshots)...")
 
                 // Run entirely on background queue
                 Task.detached {
@@ -1355,11 +1355,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                     let runDir = baseDir.appendingPathComponent(String(format: "run-%03d", nextNum))
                     try? FileManager.default.createDirectory(at: runDir, withIntermediateDirectories: true)
 
-                    NSLog("[AppDelegate] 🔍 Running code audit...")
+                    TalkieConsole.critical("[AppDelegate] 🔍 Running code audit...")
                     let report = await DesignAuditor.shared.auditAll()
-                    NSLog("[AppDelegate] ✅ Audit complete: \(report.grade) (\(report.overallScore)%)")
+                    TalkieConsole.critical("[AppDelegate] ✅ Audit complete: \(report.grade) (\(report.overallScore)%)")
 
-                    NSLog("[AppDelegate] 📝 Generating reports...")
+                    TalkieConsole.critical("[AppDelegate] 📝 Generating reports...")
                     await MainActor.run {
                         DesignAuditor.shared.generateHTMLReport(from: report, to: runDir.appendingPathComponent("report.html"))
                         DesignAuditor.shared.generateMarkdownReport(from: report, to: runDir.appendingPathComponent("report.md"))
@@ -1368,7 +1368,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                     // Back to main for UI operations
                     await Self.generateAuditIndex(at: baseDir)
                     await MainActor.run {
-                        NSLog("[AppDelegate] ✅ All done!")
+                        TalkieConsole.critical("[AppDelegate] ✅ All done!")
                         NSWorkspace.shared.open(runDir.appendingPathComponent("report.html"))
                     }
                 }
@@ -1377,7 +1377,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
 
             // Handle /d/capture/full - screenshots + audit combined
             if components.count >= 2 && components[1] == "full" {
-                NSLog("[AppDelegate] 🔍 Triggering full audit with screenshots...")
+                TalkieConsole.critical("[AppDelegate] 🔍 Triggering full audit with screenshots...")
 
                 // Setup directories synchronously first
                 let baseDir = FileManager.default.homeDirectoryForCurrentUser
@@ -1399,20 +1399,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                     try? await Task.sleep(for: .milliseconds(500))
 
                     // Capture screenshots
-                    NSLog("[AppDelegate] 📸 Capturing settings screenshots...")
+                    TalkieConsole.critical("[AppDelegate] 📸 Capturing settings screenshots...")
                     let screenshots = await SettingsStoryboardGenerator.shared.captureAllPages(to: screenshotsDir)
-                    NSLog("[AppDelegate] ✅ Captured \(screenshots.count) screenshots")
+                    TalkieConsole.critical("[AppDelegate] ✅ Captured \(screenshots.count) screenshots")
 
                     // Let UI settle before audit
                     try? await Task.sleep(for: .milliseconds(500))
 
                     // Run audit on background queue
                     Task.detached {
-                        NSLog("[AppDelegate] 🔍 Running code audit...")
+                        TalkieConsole.critical("[AppDelegate] 🔍 Running code audit...")
                         let report = await DesignAuditor.shared.auditAll()
-                        NSLog("[AppDelegate] ✅ Audit complete: \(report.grade) (\(report.overallScore)%)")
+                        TalkieConsole.critical("[AppDelegate] ✅ Audit complete: \(report.grade) (\(report.overallScore)%)")
 
-                        NSLog("[AppDelegate] 📝 Generating reports...")
+                        TalkieConsole.critical("[AppDelegate] 📝 Generating reports...")
                         await MainActor.run {
                             DesignAuditor.shared.generateHTMLReport(from: report, to: runDir.appendingPathComponent("report.html"))
                             DesignAuditor.shared.generateMarkdownReport(from: report, to: runDir.appendingPathComponent("report.md"))
@@ -1420,7 +1420,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
 
                         await Self.generateAuditIndex(at: baseDir)
                         await MainActor.run {
-                            NSLog("[AppDelegate] ✅ All done!")
+                            TalkieConsole.critical("[AppDelegate] ✅ All done!")
                             NSWorkspace.shared.open(runDir.appendingPathComponent("report.html"))
                         }
                     }
@@ -1729,7 +1729,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                    let pngData = bitmapImage.representation(using: .png, properties: [:]) {
                     try? pngData.write(to: fileURL)
                     count += 1
-                    print("   📷 Captured: \(windowName)")
+                    TalkieConsole.info("   📷 Captured: \(windowName)")
                 }
             }
         }
@@ -2847,7 +2847,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     private func showToast(message: String) {
         DispatchQueue.main.async {
             // For now, use console + optional visual feedback later
-            print(message)
+            TalkieConsole.info(message)
 
             // Future: Could use NSUserNotification or custom window overlay
             // For V0, console print is sufficient

@@ -12,11 +12,24 @@
 import Foundation
 import AppKit
 import Combine
-import os
 import TalkieKit
 import Observation
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "EngineClient")
+private let logger = Log(.xpc)
+
+private final class ContinuationResumptionGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var didResume = false
+
+    func tryResume() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard !didResume else { return false }
+        didResume = true
+        return true
+    }
+}
 
 // MARK: - Backwards Compatibility
 
@@ -302,12 +315,12 @@ public final class EngineClient {
         }) else { return }
 
         // Use a flag to ensure we only resume once
-        let resumed = OSAllocatedUnfairLock(initialState: false)
+        let resumed = ContinuationResumptionGate()
 
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             // Set a timeout to prevent hanging forever
             DispatchQueue.global().asyncAfter(deadline: .now() + 2.0) {
-                if resumed.withLock({ old in let was = old; old = true; return !was }) {
+                if resumed.tryResume() {
                     logger.debug("[EngineClient] Verify connection timed out")
                     continuation.resume()
                 }
@@ -315,7 +328,7 @@ public final class EngineClient {
 
             proxy.ping { [weak self] pong in
                 // Only resume if we haven't already (timeout might have fired)
-                guard resumed.withLock({ old in let was = old; old = true; return !was }) else { return }
+                guard resumed.tryResume() else { return }
 
                 Task { @MainActor in
                     if pong {

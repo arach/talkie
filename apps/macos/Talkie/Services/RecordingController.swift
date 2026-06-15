@@ -165,7 +165,7 @@ final class RecordingController {
             audioRecorder = try AVAudioRecorder(url: url, settings: settings)
             audioRecorder?.prepareToRecord()
         } catch {
-            print("Failed to create audio recorder: \(error)")
+            TalkieConsole.info("Failed to create audio recorder: \(error)")
         }
     }
 
@@ -205,7 +205,7 @@ final class RecordingController {
             self.audioURL = nil
 
         } catch {
-            print("Transcription failed: \(error)")
+            TalkieConsole.info("Transcription failed: \(error)")
             await MainActor.run {
                 updateState(.idle)
                 self.transcript = ""

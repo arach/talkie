@@ -8,10 +8,24 @@
 
 import Foundation
 import Observation
-import os
 import TalkieKit
 
 private let log = Log(.sync)
+
+private final class SyncContinuationGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var didResume = false
+
+    func tryResume() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard !didResume else { return false }
+        didResume = true
+        return true
+    }
+}
+
 private enum SyncClientDefaults {
     static let maxActivityLogEntries = 80
     static let automaticSyncMinimumInterval: TimeInterval = 86400
@@ -247,7 +261,7 @@ public final class SyncClient: TalkieSyncObserverProtocol {
     /// Returns nil if no connection. The `onError` closure fires at most once
     /// (guarded by `resumed`) when XPC can't deliver the message.
     private func makeProxy(
-        resumed: OSAllocatedUnfairLock<Bool>,
+        resumed: SyncContinuationGate,
         onError: @escaping @Sendable () -> Void
     ) -> TalkieSyncXPCProtocol? {
         guard let conn = connection else { return nil }
@@ -258,7 +272,7 @@ public final class SyncClient: TalkieSyncObserverProtocol {
             } else {
                 log.warning("XPC unavailable in on-demand mode: \(description)")
             }
-            if resumed.withLock({ old in let was = old; old = true; return !was }) {
+            if resumed.tryResume() {
                 onError()
             }
         } as? TalkieSyncXPCProtocol
@@ -564,12 +578,12 @@ public final class SyncClient: TalkieSyncObserverProtocol {
 
     private func performSyncNowRPC() async throws {
         guard connection != nil else { throw SyncClientError.notConnected }
-        let resumed = OSAllocatedUnfairLock(initialState: false)
+        let resumed = SyncContinuationGate()
 
         return try await withCheckedThrowingContinuation { continuation in
             // Sync can take a while — 120s timeout as a safety net
             DispatchQueue.global().asyncAfter(deadline: .now() + 120.0) {
-                if resumed.withLock({ old in let was = old; old = true; return !was }) {
+                if resumed.tryResume() {
                     log.warning("syncNow timed out after 120s")
                     continuation.resume(throwing: SyncClientError.syncFailed("Sync timed out"))
                 }
@@ -577,13 +591,13 @@ public final class SyncClient: TalkieSyncObserverProtocol {
             guard let proxy = makeProxy(resumed: resumed, onError: {
                 continuation.resume(throwing: SyncClientError.syncFailed("XPC connection failed"))
             }) else {
-                if resumed.withLock({ old in let was = old; old = true; return !was }) {
+                if resumed.tryResume() {
                     continuation.resume(throwing: SyncClientError.notConnected)
                 }
                 return
             }
             proxy.syncNow { success, error in
-                guard resumed.withLock({ old in let was = old; old = true; return !was }) else { return }
+                guard resumed.tryResume() else { return }
                 if let error {
                     continuation.resume(throwing: SyncClientError.syncFailed(error))
                 } else if success {
@@ -598,12 +612,12 @@ public final class SyncClient: TalkieSyncObserverProtocol {
     /// Cancel any in-progress sync
     public func cancelSync() async {
         guard connection != nil else { return }
-        let resumed = OSAllocatedUnfairLock(initialState: false)
+        let resumed = SyncContinuationGate()
 
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             // Timeout — don't hang forever if XPC is dead
             DispatchQueue.global().asyncAfter(deadline: .now() + 5.0) {
-                if resumed.withLock({ old in let was = old; old = true; return !was }) {
+                if resumed.tryResume() {
                     log.debug("cancelSync timed out")
                     continuation.resume()
                 }
@@ -611,13 +625,13 @@ public final class SyncClient: TalkieSyncObserverProtocol {
             guard let proxy = makeProxy(resumed: resumed, onError: {
                 continuation.resume()
             }) else {
-                if resumed.withLock({ old in let was = old; old = true; return !was }) {
+                if resumed.tryResume() {
                     continuation.resume()
                 }
                 return
             }
             proxy.cancelSync {
-                if resumed.withLock({ old in let was = old; old = true; return !was }) {
+                if resumed.tryResume() {
                     continuation.resume()
                 }
             }
@@ -642,24 +656,24 @@ public final class SyncClient: TalkieSyncObserverProtocol {
             }
         }
 
-        let resumed = OSAllocatedUnfairLock(initialState: false)
+        let resumed = SyncContinuationGate()
 
         return try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global().asyncAfter(deadline: .now() + 30.0) {
-                if resumed.withLock({ old in let was = old; old = true; return !was }) {
+                if resumed.tryResume() {
                     continuation.resume(throwing: SyncClientError.syncFailed("Fetch audio timed out"))
                 }
             }
             guard let proxy = makeProxy(resumed: resumed, onError: {
                 continuation.resume(throwing: SyncClientError.syncFailed("XPC connection failed"))
             }) else {
-                if resumed.withLock({ old in let was = old; old = true; return !was }) {
+                if resumed.tryResume() {
                     continuation.resume(throwing: SyncClientError.notConnected)
                 }
                 return
             }
             proxy.fetchAudioForMemo(memoID.uuidString) { success, error in
-                guard resumed.withLock({ old in let was = old; old = true; return !was }) else { return }
+                guard resumed.tryResume() else { return }
                 if let error {
                     continuation.resume(throwing: SyncClientError.syncFailed(error))
                 } else {
@@ -703,11 +717,11 @@ public final class SyncClient: TalkieSyncObserverProtocol {
     /// Force an immediate sync pass.
     public func runSyncPass() async throws -> Int {
         guard connection != nil else { throw SyncClientError.notConnected }
-        let resumed = OSAllocatedUnfairLock(initialState: false)
+        let resumed = SyncContinuationGate()
 
         return try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global().asyncAfter(deadline: .now() + 120.0) {
-                if resumed.withLock({ old in let was = old; old = true; return !was }) {
+                if resumed.tryResume() {
                     log.warning("runSyncPass timed out after 120s")
                     continuation.resume(throwing: SyncClientError.syncFailed("Sync pass timed out"))
                 }
@@ -715,13 +729,13 @@ public final class SyncClient: TalkieSyncObserverProtocol {
             guard let proxy = makeProxy(resumed: resumed, onError: {
                 continuation.resume(throwing: SyncClientError.syncFailed("XPC connection failed"))
             }) else {
-                if resumed.withLock({ old in let was = old; old = true; return !was }) {
+                if resumed.tryResume() {
                     continuation.resume(throwing: SyncClientError.notConnected)
                 }
                 return
             }
             proxy.runSyncPass { count, error in
-                guard resumed.withLock({ old in let was = old; old = true; return !was }) else { return }
+                guard resumed.tryResume() else { return }
                 if let error {
                     continuation.resume(throwing: SyncClientError.syncFailed(error))
                 } else {
@@ -736,11 +750,11 @@ public final class SyncClient: TalkieSyncObserverProtocol {
     /// Refresh sync status from service
     public func refreshStatus() async {
         guard connection != nil else { return }
-        let resumed = OSAllocatedUnfairLock(initialState: false)
+        let resumed = SyncContinuationGate()
 
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             DispatchQueue.global().asyncAfter(deadline: .now() + 5.0) {
-                if resumed.withLock({ old in let was = old; old = true; return !was }) {
+                if resumed.tryResume() {
                     log.debug("refreshStatus timed out")
                     continuation.resume()
                 }
@@ -748,7 +762,7 @@ public final class SyncClient: TalkieSyncObserverProtocol {
             guard let proxy = makeProxy(resumed: resumed, onError: {
                 continuation.resume()
             }) else {
-                if resumed.withLock({ old in let was = old; old = true; return !was }) {
+                if resumed.tryResume() {
                     continuation.resume()
                 }
                 return
@@ -763,7 +777,7 @@ public final class SyncClient: TalkieSyncObserverProtocol {
                         self?.iCloudAvailable = status.iCloudAvailable
                     }
                 }
-                if resumed.withLock({ old in let was = old; old = true; return !was }) {
+                if resumed.tryResume() {
                     continuation.resume()
                 }
             }
@@ -773,24 +787,24 @@ public final class SyncClient: TalkieSyncObserverProtocol {
     /// Check iCloud availability
     public func checkiCloudAvailability() async -> (available: Bool, error: String?) {
         guard connection != nil else { return (false, "Not connected to sync service") }
-        let resumed = OSAllocatedUnfairLock(initialState: false)
+        let resumed = SyncContinuationGate()
 
         return await withCheckedContinuation { continuation in
             DispatchQueue.global().asyncAfter(deadline: .now() + 5.0) {
-                if resumed.withLock({ old in let was = old; old = true; return !was }) {
+                if resumed.tryResume() {
                     continuation.resume(returning: (false, "Timed out"))
                 }
             }
             guard let proxy = makeProxy(resumed: resumed, onError: {
                 continuation.resume(returning: (false, "XPC connection failed"))
             }) else {
-                if resumed.withLock({ old in let was = old; old = true; return !was }) {
+                if resumed.tryResume() {
                     continuation.resume(returning: (false, "Not connected"))
                 }
                 return
             }
             proxy.checkiCloudAvailability { available, error in
-                if resumed.withLock({ old in let was = old; old = true; return !was }) {
+                if resumed.tryResume() {
                     continuation.resume(returning: (available, error))
                 }
             }
@@ -802,11 +816,11 @@ public final class SyncClient: TalkieSyncObserverProtocol {
     public func getRemoteMemoCount() async -> Int {
         guard remoteMemoDiagnosticsAvailable else { return -1 }
         guard connection != nil else { return -1 }
-        let resumed = OSAllocatedUnfairLock(initialState: false)
+        let resumed = SyncContinuationGate()
 
         return await withCheckedContinuation { continuation in
             DispatchQueue.global().asyncAfter(deadline: .now() + 5.0) {
-                if resumed.withLock({ old in let was = old; old = true; return !was }) {
+                if resumed.tryResume() {
                     continuation.resume(returning: -1)
                 }
             }
@@ -816,13 +830,13 @@ public final class SyncClient: TalkieSyncObserverProtocol {
                 }
                 continuation.resume(returning: -1)
             }) else {
-                if resumed.withLock({ old in let was = old; old = true; return !was }) {
+                if resumed.tryResume() {
                     continuation.resume(returning: -1)
                 }
                 return
             }
             proxy.getRemoteMemoCount { count in
-                if resumed.withLock({ old in let was = old; old = true; return !was }) {
+                if resumed.tryResume() {
                     continuation.resume(returning: count)
                 }
             }
@@ -834,11 +848,11 @@ public final class SyncClient: TalkieSyncObserverProtocol {
     public func getLatestRemoteMemoTrace() async -> String? {
         guard remoteMemoDiagnosticsAvailable else { return nil }
         guard connection != nil else { return nil }
-        let resumed = OSAllocatedUnfairLock(initialState: false)
+        let resumed = SyncContinuationGate()
 
         return await withCheckedContinuation { continuation in
             DispatchQueue.global().asyncAfter(deadline: .now() + 5.0) {
-                if resumed.withLock({ old in let was = old; old = true; return !was }) {
+                if resumed.tryResume() {
                     continuation.resume(returning: nil)
                 }
             }
@@ -848,13 +862,13 @@ public final class SyncClient: TalkieSyncObserverProtocol {
                 }
                 continuation.resume(returning: nil)
             }) else {
-                if resumed.withLock({ old in let was = old; old = true; return !was }) {
+                if resumed.tryResume() {
                     continuation.resume(returning: nil)
                 }
                 return
             }
             proxy.getLatestRemoteMemoTrace { trace in
-                if resumed.withLock({ old in let was = old; old = true; return !was }) {
+                if resumed.tryResume() {
                     continuation.resume(returning: trace)
                 }
             }
@@ -876,24 +890,24 @@ public final class SyncClient: TalkieSyncObserverProtocol {
     /// Ping the service
     public func ping() async -> Bool {
         guard connection != nil else { return false }
-        let resumed = OSAllocatedUnfairLock(initialState: false)
+        let resumed = SyncContinuationGate()
 
         return await withCheckedContinuation { continuation in
             DispatchQueue.global().asyncAfter(deadline: .now() + 5.0) {
-                if resumed.withLock({ old in let was = old; old = true; return !was }) {
+                if resumed.tryResume() {
                     continuation.resume(returning: false)
                 }
             }
             guard let proxy = makeProxy(resumed: resumed, onError: {
                 continuation.resume(returning: false)
             }) else {
-                if resumed.withLock({ old in let was = old; old = true; return !was }) {
+                if resumed.tryResume() {
                     continuation.resume(returning: false)
                 }
                 return
             }
             proxy.ping { pong in
-                if resumed.withLock({ old in let was = old; old = true; return !was }) {
+                if resumed.tryResume() {
                     continuation.resume(returning: pong)
                 }
             }

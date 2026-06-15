@@ -7,9 +7,9 @@
 //
 
 import Foundation
-import os
+import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "LocalSwiftBackend")
+private let logger = Log(.workflow)
 
 // MARK: - Local Swift Backend
 

@@ -80,11 +80,11 @@ extension RouteGroup {
     /// Print all routes in this group (for debugging)
     func printRoutes() {
         let scope = Self.scope
-        print("\(scope.icon) [\(Self.groupName)] Routes (\(scope.displayName)):")
+        TalkieConsole.info("\(scope.icon) [\(Self.groupName)] Routes (\(scope.displayName)):")
         for route in routes {
             let visibility = route.isInternal ? "internal" : "public"
-            print("  • \(route.path) [\(visibility)]")
-            print("    └─ \(route.description)")
+            TalkieConsole.info("  • \(route.path) [\(visibility)]")
+            TalkieConsole.info("    └─ \(route.description)")
         }
     }
 }
@@ -259,19 +259,19 @@ final class Router {
 
     /// Print all registered routes (for debugging)
     func printAllRoutes() {
-        print("")
-        print("╔══════════════════════════════════════╗")
-        print("║       REGISTERED ROUTES              ║")
-        print("╚══════════════════════════════════════╝")
-        print("")
+        TalkieConsole.info("")
+        TalkieConsole.info("╔══════════════════════════════════════╗")
+        TalkieConsole.info("║       REGISTERED ROUTES              ║")
+        TalkieConsole.info("╚══════════════════════════════════════╝")
+        TalkieConsole.info("")
 
         for group in groups {
             group.printRoutes()
-            print("")
+            TalkieConsole.info("")
         }
 
-        print("Total: \(routeMap.count) routes")
-        print("")
+        TalkieConsole.info("Total: \(routeMap.count) routes")
+        TalkieConsole.info("")
     }
 
     /// Get all routes for a specific scope
@@ -292,20 +292,20 @@ final class Router {
     // MARK: - Metrics
 
     func printMetrics() {
-        print("")
-        print("╔══════════════════════════════════════╗")
-        print("║       ROUTER METRICS                 ║")
-        print("╚══════════════════════════════════════╝")
-        print("")
-        print("Total routed: \(metrics.totalRouted)")
-        print("Total unknown: \(metrics.totalUnknown)")
-        print("Avg handle time: \(String(format: "%.2f", metrics.averageHandleTimeMs))ms")
-        print("")
-        print("Route counts:")
+        TalkieConsole.info("")
+        TalkieConsole.info("╔══════════════════════════════════════╗")
+        TalkieConsole.info("║       ROUTER METRICS                 ║")
+        TalkieConsole.info("╚══════════════════════════════════════╝")
+        TalkieConsole.info("")
+        TalkieConsole.info("Total routed: \(metrics.totalRouted)")
+        TalkieConsole.info("Total unknown: \(metrics.totalUnknown)")
+        TalkieConsole.info("Avg handle time: \(String(format: "%.2f", metrics.averageHandleTimeMs))ms")
+        TalkieConsole.info("")
+        TalkieConsole.info("Route counts:")
         for (path, count) in metrics.routeCounts.sorted(by: { $0.value > $1.value }) {
-            print("  \(path): \(count)")
+            TalkieConsole.info("  \(path): \(count)")
         }
-        print("")
+        TalkieConsole.info("")
     }
 
     func resetMetrics() {
@@ -336,7 +336,7 @@ final class Router {
 
     private func log(_ level: RouterLogLevel, _ message: String) {
         guard isLoggingEnabled else { return }
-        NSLog("[Router:\(level.rawValue)] \(message)")
+        TalkieConsole.critical("[Router:\(level.rawValue)] \(message)")
     }
 
     // MARK: - Signpost Helpers

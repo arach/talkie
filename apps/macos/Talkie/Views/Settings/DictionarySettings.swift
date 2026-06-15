@@ -216,7 +216,7 @@ struct DictionarySettingsContent: View {
                 await manager.load()  // Reload dictionaries
                 await loadPresets()   // Refresh preset status
             } catch {
-                print("Failed to install preset: \(error)")
+                TalkieConsole.info("Failed to install preset: \(error)")
             }
         }
     }
@@ -228,7 +228,7 @@ struct DictionarySettingsContent: View {
                 await manager.load()  // Reload dictionaries
                 await loadPresets()   // Refresh preset status
             } catch {
-                print("Failed to uninstall preset: \(error)")
+                TalkieConsole.info("Failed to uninstall preset: \(error)")
             }
         }
     }
@@ -710,7 +710,7 @@ struct DictionarySettingsContent: View {
                             do {
                                 _ = try await manager.importDictionary(from: url)
                             } catch {
-                                print("Failed to import: \(error)")
+                                TalkieConsole.info("Failed to import: \(error)")
                             }
                         }
                     } else if let data = item as? Data {
@@ -718,7 +718,7 @@ struct DictionarySettingsContent: View {
                             do {
                                 _ = try await manager.importDictionary(from: data)
                             } catch {
-                                print("Failed to import: \(error)")
+                                TalkieConsole.info("Failed to import: \(error)")
                             }
                         }
                     }
@@ -736,7 +736,7 @@ struct DictionarySettingsContent: View {
                             do {
                                 _ = try await manager.importDictionary(from: url)
                             } catch {
-                                print("Failed to import: \(error)")
+                                TalkieConsole.info("Failed to import: \(error)")
                             }
                         }
                     }

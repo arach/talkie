@@ -117,9 +117,9 @@ final class DesignModeManager {
     var isEnabled: Bool = false {
         didSet {
             if isEnabled {
-                print("🎨 Design God Mode: ENABLED")
+                TalkieConsole.info("🎨 Design God Mode: ENABLED")
             } else {
-                print("🎨 Design God Mode: DISABLED")
+                TalkieConsole.info("🎨 Design God Mode: DISABLED")
                 // Reset tool when disabled
                 activeTool = nil
                 // Optionally reset decorator states when disabled
@@ -136,7 +136,7 @@ final class DesignModeManager {
     var activeTool: DesignTool? = nil {
         didSet {
             if let tool = activeTool {
-                print("🔧 Design Tool: \(tool.rawValue)")
+                TalkieConsole.info("🔧 Design Tool: \(tool.rawValue)")
             }
         }
     }
@@ -443,7 +443,7 @@ final class DesignModeManager {
     @discardableResult
     func captureScreenshot() async -> String? {
         guard let window = NSApplication.shared.mainWindow else {
-            print("🎨 Screenshot: No main window")
+            TalkieConsole.info("🎨 Screenshot: No main window")
             return nil
         }
 
@@ -455,7 +455,7 @@ final class DesignModeManager {
         CATransaction.flush()
 
         guard let cgImage = await ScreenshotCaptureService.shared.captureWindowImage(windowID: CGWindowID(window.windowNumber)) else {
-            print("🎨 Screenshot: Failed to capture")
+            TalkieConsole.info("🎨 Screenshot: Failed to capture")
             isEnabled = wasEnabled
             return nil
         }
@@ -478,13 +478,13 @@ final class DesignModeManager {
         // Write PNG
         let bitmap = NSBitmapImageRep(cgImage: cgImage)
         guard let pngData = bitmap.representation(using: .png, properties: [:]) else {
-            print("🎨 Screenshot: Failed to encode PNG")
+            TalkieConsole.info("🎨 Screenshot: Failed to encode PNG")
             return nil
         }
 
         do {
             try pngData.write(to: filepath)
-            print("🎨 Screenshot saved: \(filepath.path)")
+            TalkieConsole.info("🎨 Screenshot saved: \(filepath.path)")
 
             // Copy path to clipboard
             NSPasteboard.general.clearContents()
@@ -492,7 +492,7 @@ final class DesignModeManager {
 
             return filepath.path
         } catch {
-            print("🎨 Screenshot: Failed to save - \(error)")
+            TalkieConsole.info("🎨 Screenshot: Failed to save - \(error)")
             return nil
         }
     }

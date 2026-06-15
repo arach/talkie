@@ -1154,7 +1154,7 @@ final class LiveSettings: ObservableObject {
         let suiteName = TalkieEnvironment.current.sharedSettingsSuite
         log.debug("LiveSettings.save() to suite: \(suiteName)")
         #if DEBUG
-        print("💾 LiveSettings.save() - mic mode: \(selectedMicrophoneMode.rawValue), uid: \(selectedMicrophoneUID ?? "nil")")
+        AgentConsole.info("💾 LiveSettings.save() - mic mode: \(selectedMicrophoneMode.rawValue), uid: \(selectedMicrophoneUID ?? "nil")")
         #endif
 
         if let data = try? JSONEncoder().encode(hotkey) {

@@ -8,9 +8,8 @@
 import Foundation
 import AVFoundation
 import Combine
-import os.log
 
-private let logger = Logger(subsystem: "to.talkie.app.kit", category: "AudioPlayback")
+private let logger = Log(.audio)
 
 // MARK: - Audio Playback Manager
 

@@ -262,7 +262,7 @@ final class NotchOverlayController: ObservableObject {
             callback: notchKeyEventCallback,
             userInfo: refcon
         ) else {
-            print("[NotchOverlay] Failed to create event tap - check accessibility permissions")
+            AgentConsole.info("[NotchOverlay] Failed to create event tap - check accessibility permissions")
             return
         }
 

@@ -7,9 +7,9 @@
 
 import Foundation
 import Security
-import os
+import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "Keychain")
+private let logger = Log(.system)
 /// Manages secure storage of API keys in the macOS Keychain
 final class KeychainManager {
     static let shared = KeychainManager()

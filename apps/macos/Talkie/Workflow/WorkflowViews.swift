@@ -1378,7 +1378,7 @@ struct WorkflowInlineEditor: View {
                         // Reference stepUpdateTrigger to ensure re-render when steps change
                         let _ = stepUpdateTrigger
                         let steps = displaySteps
-                        let _ = print("[WorkflowEditor] Rendering steps section. Count: \(steps.count), IDs: \(steps.map { $0.id.uuidString.prefix(8) })")
+                        let _ = TalkieConsole.info("[WorkflowEditor] Rendering steps section. Count: \(steps.count), IDs: \(steps.map { $0.id.uuidString.prefix(8) })")
                         if steps.isEmpty {
                             // Empty state with glass styling
                             GlassCard(.subtle, cornerRadius: CornerRadius.md) {

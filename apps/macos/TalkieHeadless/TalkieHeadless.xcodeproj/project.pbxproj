@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		HDLS00016000000000000001 /* TalkieKit in Frameworks */ = {isa = PBXBuildFile; productRef = HDLS00018000000000000001 /* TalkieKit */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		HDLS00001000000000000001 /* TalkieHeadless.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TalkieHeadless.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				HDLS00016000000000000001 /* TalkieKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +70,7 @@
 			);
 			name = TalkieHeadless;
 			packageProductDependencies = (
+				HDLS00018000000000000001 /* TalkieKit */,
 			);
 			productName = TalkieHeadless;
 			productReference = HDLS00001000000000000001 /* TalkieHeadless.app */;
@@ -94,6 +100,9 @@
 			);
 			mainGroup = HDLS00004000000000000001;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				HDLS00017000000000000001 /* XCLocalSwiftPackageReference "../TalkieKit" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = HDLS00005000000000000001 /* Products */;
 			projectDirPath = "";
@@ -319,6 +328,21 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		HDLS00017000000000000001 /* XCLocalSwiftPackageReference "../TalkieKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../TalkieKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		HDLS00018000000000000001 /* TalkieKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = HDLS00017000000000000001 /* XCLocalSwiftPackageReference "../TalkieKit" */;
+			productName = TalkieKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = HDLS00010000000000000001 /* Project object */;
 }

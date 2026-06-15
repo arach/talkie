@@ -7,9 +7,9 @@
 //
 
 import SwiftUI
-import os
+import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "AgentSettings")
+private let logger = Log(.ui)
 
 // MARK: - Sound Event Type
 

@@ -8,9 +8,9 @@
 
 import Foundation
 import CoreData
-import os
+import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "Migration")
+private let logger = Log(.database)
 
 // MARK: - Migration Type
 

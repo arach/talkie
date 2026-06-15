@@ -8,10 +8,10 @@
 //
 
 import Foundation
-import os
 import Observation
+import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "PendingActionsManager")
+private let logger = Log(.system)
 
 // MARK: - Pending Action Model
 

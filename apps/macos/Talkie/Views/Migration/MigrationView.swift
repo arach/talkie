@@ -228,7 +228,7 @@ struct MigrationView: View {
         // Mark migration as complete in UserDefaults
         UserDefaults.standard.set(true, forKey: "grdb_migration_complete")
 
-        print("✅ [Migration] Marked complete, reloading app...")
+        TalkieConsole.info("✅ [Migration] Marked complete, reloading app...")
 
         // Post notification to reload app
         NotificationCenter.default.post(name: NSNotification.Name("MigrationCompleted"), object: nil)

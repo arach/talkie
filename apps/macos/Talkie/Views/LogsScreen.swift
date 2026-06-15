@@ -8,9 +8,9 @@
 
 import SwiftUI
 import Combine
-import os
+import TalkieKit
 
-private let fileLogger = Logger(subsystem: "to.talkie.app.mac", category: "LogFile")
+private let fileLogger = Log(.ui)
 
 // Cached ISO8601 formatter for performance
 private let iso8601Formatter: ISO8601DateFormatter = {

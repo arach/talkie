@@ -64,7 +64,7 @@ struct DemoKitTestView: View {
 
                 Button("Export JSON") {
                     let json = DemoAnchorRegistry.shared.exportJSON()
-                    print(json)
+                    TalkieConsole.info(json)
                     log("JSON exported to console")
                 }
             }
@@ -104,7 +104,7 @@ struct DemoKitTestView: View {
 
         // Hybrid mode: emit positions for debugging
         runner.onPositionEmit = { point in
-            print("📍 Position emitted: \(point)")
+            TalkieConsole.info("📍 Position emitted: \(point)")
         }
 
         await runner.run([

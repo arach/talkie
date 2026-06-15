@@ -1,6 +1,6 @@
 import Foundation
 import Observation
-import os
+import os.signpost
 
 private let transcriptionSignpostLog = OSLog(subsystem: "to.talkie.app.engine", category: .pointsOfInterest)
 

@@ -7,9 +7,9 @@
 
 import SwiftUI
 import AppKit
-import os
+import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "QuickOpenBar")
+private let logger = Log(.ui)
 
 // MARK: - Quick Open Bar
 

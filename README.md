@@ -19,7 +19,7 @@ This repository is being prepared for public source-available development. The m
 - **iOS app**: SwiftUI mobile app, extensions, and watch targets in `apps/ios/`
 - **CLI**: `@talkie/cli` in `packages/npm/cli/`
 - **TypeScript SDK**: `@talkie/client` in `packages/npm/sdk/`
-- **Swift packages**: shared libraries in `packages/swift/`, `apps/macos/TalkieKit/`, `apps/macos/TalkieSpeech/`, and related package directories
+- **Swift packages**: shared libraries in `packages/swift/`, `apps/macos/TalkieKit/`, and related package directories
 - **Docs**: architecture notes, specs, audits, and plans in `docs/`
 
 ## Platform Notes
@@ -128,7 +128,6 @@ Some schemes, signing identities, CloudKit containers, installer scripts, Fastla
 | `apps/macos/TalkieAgent/` | Companion agent for overlay/capture/system behavior |
 | `apps/macos/TalkieServer/` | Bun/Elysia bridge, gateway, extensions, workflows, and pairing server |
 | `apps/macos/TalkieKit/` | Shared macOS Swift package |
-| `apps/macos/TalkieSpeech/` | Speech-related Swift package |
 | `packages/swift/` | Shared Swift packages such as WFKit, DebugKit, and DemoKit |
 | `packages/npm/cli/` | `talkie` command-line tool |
 | `packages/npm/sdk/` | TypeScript client SDK |

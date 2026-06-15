@@ -12,7 +12,7 @@
 //
 
 import Foundation
-import os
+import TalkieKit
 
 struct BundledStarter {
     let fileName: String          // e.g. "daily-standup"
@@ -21,7 +21,7 @@ struct BundledStarter {
 }
 
 enum SkillStarterLoader {
-    private static let logger = Logger(subsystem: "com.jdi.talkie", category: "SkillStarterLoader")
+    private static let logger = Log(.workflow)
 
     static func loadBundledStarters() -> [String: BundledStarter] {
         guard let dir = startersDirectory() else { return [:] }

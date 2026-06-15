@@ -8,7 +8,6 @@
 //
 
 import SwiftUI
-import os.log
 import DebugKit
 import TalkieKit
 
@@ -207,7 +206,7 @@ final class WaveformTuning: ObservableObject {
 
     private func log(_ param: String, _ value: Double) {
         #if DEBUG
-        print("🔧 Waveform: \(param) = \(String(format: "%.3f", value))")
+        AgentConsole.info("🔧 Waveform: \(param) = \(String(format: "%.3f", value))")
         #endif
     }
 }
@@ -282,7 +281,7 @@ final class OverlayTuning: ObservableObject {
 
     private func log(_ param: String, _ value: Double) {
         #if DEBUG
-        print("🔧 Overlay: \(param) = \(String(format: "%.1f", value))")
+        AgentConsole.info("🔧 Overlay: \(param) = \(String(format: "%.1f", value))")
         #endif
     }
 }
@@ -476,7 +475,7 @@ final class ParticleTuning: ObservableObject {
         }
         #if DEBUG
         if !isInitializing {
-            print("🔧 Particle: \(param) = \(String(format: "%.3f", value))")
+            AgentConsole.info("🔧 Particle: \(param) = \(String(format: "%.3f", value))")
         }
         #endif
     }
@@ -616,13 +615,13 @@ final class NotchTuning: ObservableObject {
 
     private func log(_ param: String, _ value: String) {
         #if DEBUG
-        print("🔧 Notch: \(param) = \(value)")
+        AgentConsole.info("🔧 Notch: \(param) = \(value)")
         #endif
     }
 
     private func log(_ param: String, _ value: Double) {
         #if DEBUG
-        print("🔧 Notch: \(param) = \(String(format: "%.2f", value))")
+        AgentConsole.info("🔧 Notch: \(param) = \(String(format: "%.2f", value))")
         #endif
     }
 }
@@ -646,12 +645,11 @@ final class SystemEventManager: ObservableObject {
             events = Array(events.prefix(maxEvents))
         }
 
-        // Also log to os_log
-        let logger = Logger(subsystem: "to.talkie.app.agent", category: type.rawValue)
-        if let detail = detail {
-            logger.info("\(message): \(detail)")
+        let logCategory = AgentConsole.category(named: type.rawValue)
+        if let detail {
+            TalkieLogger.info(logCategory, message, detail: detail)
         } else {
-            logger.info("\(message)")
+            TalkieLogger.info(logCategory, message)
         }
     }
 
@@ -3293,7 +3291,7 @@ struct DebugToolbarOverlay<Content: View>: View {
                                 let json = TerminalScanner.shared.dumpAsJSON()
                                 NSPasteboard.general.clearContents()
                                 NSPasteboard.general.setString(json, forType: .string)
-                                print("Terminal scan (\(result.terminals.count) windows) copied to clipboard")
+                                AgentConsole.info("Terminal scan (\(result.terminals.count) windows) copied to clipboard")
                             }
                         }
 
@@ -3301,7 +3299,7 @@ struct DebugToolbarOverlay<Content: View>: View {
                             let json = BridgeContextMapper.shared.dumpAsJSON()
                             NSPasteboard.general.clearContents()
                             NSPasteboard.general.setString(json, forType: .string)
-                            print("Session context map copied to clipboard")
+                            AgentConsole.info("Session context map copied to clipboard")
                         }
 
                         DebugActionButton(icon: "arrow.clockwise", label: "Refresh from Scan") {
@@ -3404,9 +3402,9 @@ struct DebugToolbarOverlay<Content: View>: View {
 
     /// Test interstitial flow: creates a test dictation and opens Talkie Core's interstitial editor
     private func testInterstitialFlow() {
-        NSLog("[DEBUG] Testing interstitial flow")
-        NSLog("[DEBUG] Database path: \(UnifiedDatabase.databaseURL.path)")
-        NSLog("[DEBUG] Database count: \(UnifiedDatabase.countDictations())")
+        AgentConsole.critical("[DEBUG] Testing interstitial flow")
+        AgentConsole.critical("[DEBUG] Database path: \(UnifiedDatabase.databaseURL.path)")
+        AgentConsole.critical("[DEBUG] Database count: \(UnifiedDatabase.countDictations())")
         AppLogger.shared.log(.system, "Testing interstitial", detail: "Creating test dictation")
 
         // Create a test dictation in the database
@@ -3442,22 +3440,22 @@ struct DebugToolbarOverlay<Content: View>: View {
         // Convert to LiveRecording and store
         let recording = LiveRecording(from: utterance)
         guard let recordingId = UnifiedDatabase.store(recording) else {
-            NSLog("[DEBUG] Failed to create test dictation")
+            AgentConsole.critical("[DEBUG] Failed to create test dictation")
             AppLogger.shared.log(.error, "Interstitial test failed", detail: "Could not create dictation")
             return
         }
 
-        NSLog("[DEBUG] Created test dictation ID: \(recordingId)")
+        AgentConsole.critical("[DEBUG] Created test dictation ID: \(recordingId)")
         AppLogger.shared.log(.system, "Test dictation created", detail: "ID: \(recordingId)")
 
         // Open the interstitial URL
         let urlString = "\(TalkieEnvironment.current.talkieURLScheme)://interstitial/\(recordingId)"
         guard let url = URL(string: urlString) else {
-            NSLog("[DEBUG] Invalid URL: \(urlString)")
+            AgentConsole.critical("[DEBUG] Invalid URL: \(urlString)")
             return
         }
 
-        NSLog("[DEBUG] Opening URL: \(urlString)")
+        AgentConsole.critical("[DEBUG] Opening URL: \(urlString)")
         AppLogger.shared.log(.system, "Opening interstitial", detail: urlString)
 
         TalkieAppOpener.open(url)

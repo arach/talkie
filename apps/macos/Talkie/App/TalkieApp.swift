@@ -8,10 +8,10 @@
 import SwiftUI
 import AppKit
 import CoreData
-import os
+import OSLog
 import TalkieKit
 
-private let startupLogger = Logger(subsystem: "to.talkie.app.performance", category: "Startup")
+private let startupLogger = Log(.system)
 private let startupSignposter = OSSignposter(subsystem: "to.talkie.app.performance", category: "Startup")
 
 /// Static initializer that runs BEFORE TalkieApp is created
@@ -27,7 +27,7 @@ private enum EarlyThemeInit {
                     UserDefaults.standard.set(themeName, forKey: "currentTheme")
                     UserDefaults.standard.synchronize()
                     // SettingsManager will pick this up when it initializes in TalkieApp.init().
-                    NSLog("[EarlyThemeInit] Theme set to: %@", themeName)
+                    TalkieConsole.critical("[EarlyThemeInit] Theme set to: %@", themeName)
                 }
                 break
             }

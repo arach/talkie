@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import os.log
 
 // MARK: - WFLogger
@@ -52,7 +53,7 @@ public enum WFLogger {
     /// Whether logging is enabled
     nonisolated(unsafe) public static var isEnabled: Bool = true
 
-    /// Whether to also print to console (in addition to os_log)
+    /// Whether to also mirror to stderr (in addition to os_log)
     nonisolated(unsafe) public static var printToConsole: Bool = true
 
     /// OSLog subsystem
@@ -92,7 +93,7 @@ public enum WFLogger {
 
         // Also print to console for terminal visibility
         if printToConsole {
-            print(formattedMessage)
+            fputs("\(formattedMessage)\n", stderr)
         }
     }
 

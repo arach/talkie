@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import os
 
 // MARK: - Process Start Time (set at load time, before any Swift code)
 
@@ -46,11 +45,11 @@ final class StartupProfiler {
         _milestones.append((name: name, time: now, elapsed: elapsed))
         lock.unlock()
 
-        // Use NSLog for immediate unbuffered output (print() is buffered in GUI apps)
-        NSLog("⏱️ [%6.1fms] %@", elapsed, name)
+        // Use NSLog for immediate unbuffered output (TalkieConsole.info() is buffered in GUI apps)
+        TalkieConsole.critical("⏱️ [%6.1fms] %@", elapsed, name)
     }
 
-    /// Mark with inline print (same as mark, kept for compatibility)
+    /// Mark with inline TalkieConsole.info(same as mark, kept for compatibility)
     func markEarly(_ name: String) {
         mark(name)
     }
@@ -66,24 +65,24 @@ final class StartupProfiler {
         let snapshotMilestones = _milestones
         lock.unlock()
 
-        NSLog("\n" + String(repeating: "=", count: 60))
-        NSLog("STARTUP TIMELINE")
-        NSLog(String(repeating: "=", count: 60))
+        TalkieConsole.critical("\n" + String(repeating: "=", count: 60))
+        TalkieConsole.critical("STARTUP TIMELINE")
+        TalkieConsole.critical(String(repeating: "=", count: 60))
 
         var lastTime = processStart
         for (name, time, elapsed) in snapshotMilestones {
             let delta = (time - lastTime) * 1000
             let deltaStr = delta > 0.5 ? String(format: "+%.1fms", delta) : ""
             let paddedName = name.padding(toLength: 40, withPad: " ", startingAt: 0)
-            NSLog(String(format: "%7.1fms  %@  %@", elapsed, paddedName, deltaStr))
+            TalkieConsole.critical(String(format: "%7.1fms  %@  %@", elapsed, paddedName, deltaStr))
             lastTime = time
         }
 
         if let last = snapshotMilestones.last {
-            NSLog(String(repeating: "-", count: 60))
-            NSLog(String(format: "%7.1fms  TOTAL TIME TO READY", last.elapsed))
+            TalkieConsole.critical(String(repeating: "-", count: 60))
+            TalkieConsole.critical(String(format: "%7.1fms  TOTAL TIME TO READY", last.elapsed))
         }
-        NSLog(String(repeating: "=", count: 60) + "\n")
+        TalkieConsole.critical(String(repeating: "=", count: 60) + "\n")
     }
 
     /// Reset for fresh measurement (thread-safe)

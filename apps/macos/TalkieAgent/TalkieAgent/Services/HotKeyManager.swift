@@ -174,7 +174,7 @@ private func globalHotKeyEventHandler(
     let eventType: HotKeyEventType = eventKind == UInt32(kEventHotKeyReleased) ? .released : .pressed
 
     // NSLog always appears in Console.app — use for critical hotkey diagnostics
-    NSLog("[HotKey] Carbon callback: %@ (kind=%d)", eventType == .pressed ? "PRESS" : "RELEASE", eventKind)
+    AgentConsole.critical("[HotKey] Carbon callback: %@ (kind=%d)", eventType == .pressed ? "PRESS" : "RELEASE", eventKind)
 
     var hotKeyID = EventHotKeyID()
     let status = GetEventParameter(

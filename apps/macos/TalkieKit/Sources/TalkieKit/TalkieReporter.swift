@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import os
 
 #if canImport(AppKit)
 import AppKit

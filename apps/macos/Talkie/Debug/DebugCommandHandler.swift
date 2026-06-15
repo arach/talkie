@@ -19,25 +19,25 @@ class DebugCommandHandler {
     /// Check command line arguments and execute debug command if present
     /// Returns true if a debug command was executed (app should exit)
     func handleCommandLineArguments() async -> Bool {
-        print("🔍 handleCommandLineArguments START")
+        TalkieConsole.info("🔍 handleCommandLineArguments START")
         let args = CommandLine.arguments
-        print("🔍 Got args: \(args.count) items")
+        TalkieConsole.info("🔍 Got args: \(args.count) items")
 
         // Look for --debug=<command>
         guard let debugArg = args.first(where: { $0.hasPrefix("--debug=") }) else {
-            print("🔍 No debug arg found")
+            TalkieConsole.info("🔍 No debug arg found")
             return false
         }
-        print("🔍 Found debug arg: \(debugArg)")
+        TalkieConsole.info("🔍 Found debug arg: \(debugArg)")
 
         let command = String(debugArg.dropFirst("--debug=".count))
-        print("🔍 Parsing command: \(command)")
+        TalkieConsole.info("🔍 Parsing command: \(command)")
 
         // Get additional arguments (everything after the --debug flag)
         let additionalArgs = args.dropFirst(args.firstIndex(of: debugArg)! + 1)
-        print("🔍 Additional args: \(Array(additionalArgs))")
+        TalkieConsole.info("🔍 Additional args: \(Array(additionalArgs))")
 
-        print("🐛 Debug command: \(command)")
+        TalkieConsole.info("🐛 Debug command: \(command)")
 
         await executeCommand(command, args: Array(additionalArgs))
         return true
@@ -92,8 +92,8 @@ class DebugCommandHandler {
             exit(0)
 
         default:
-            print("❌ Unknown debug command: \(command)")
-            print("")
+            TalkieConsole.info("❌ Unknown debug command: \(command)")
+            TalkieConsole.info("")
             printHelp()
             exit(1)
         }
@@ -122,14 +122,14 @@ class DebugCommandHandler {
                 .appendingPathComponent("settings-screenshots-\(timestamp)")
         }
 
-        print("📸 Capturing settings pages to: \(outputDir.path)")
+        TalkieConsole.info("📸 Capturing settings pages to: \(outputDir.path)")
         let results = await SettingsStoryboardGenerator.shared.captureAllPages(to: outputDir)
-        print("✅ Captured \(results.count) pages")
+        TalkieConsole.info("✅ Captured \(results.count) pages")
         exit(0)
     }
 
     private func runDesignAudit() async {
-        print("🔍 Running design audit...")
+        TalkieConsole.info("🔍 Running design audit...")
 
         // Fixed location: ~/Desktop/talkie-audit/
         let baseDir = FileManager.default.homeDirectoryForCurrentUser
@@ -144,26 +144,26 @@ class DebugCommandHandler {
         let runDir = baseDir.appendingPathComponent(String(format: "run-%03d", nextNum))
         try? FileManager.default.createDirectory(at: runDir, withIntermediateDirectories: true)
 
-        print("📁 Output: \(runDir.path)")
+        TalkieConsole.info("📁 Output: \(runDir.path)")
 
         let report = await DesignAuditor.shared.auditAll()
 
-        print("📊 Grade: \(report.grade) (\(report.overallScore)%)")
-        print("   Issues: \(report.totalIssues) total across \(report.screens.count) screens")
+        TalkieConsole.info("📊 Grade: \(report.grade) (\(report.overallScore)%)")
+        TalkieConsole.info("   Issues: \(report.totalIssues) total across \(report.screens.count) screens")
 
         // Generate reports
         DesignAuditor.shared.generateHTMLReport(from: report, to: runDir.appendingPathComponent("report.html"))
         DesignAuditor.shared.generateMarkdownReport(from: report, to: runDir.appendingPathComponent("report.md"))
 
-        print("✅ Reports generated:")
-        print("   - report.html")
-        print("   - report.md")
+        TalkieConsole.info("✅ Reports generated:")
+        TalkieConsole.info("   - report.html")
+        TalkieConsole.info("   - report.md")
 
         // Capture settings screenshots
         let screenshotsDir = runDir.appendingPathComponent("screenshots")
-        print("📸 Capturing settings screenshots...")
+        TalkieConsole.info("📸 Capturing settings screenshots...")
         let screenshots = await SettingsStoryboardGenerator.shared.captureAllPages(to: screenshotsDir)
-        print("✅ Captured \(screenshots.count) screenshots")
+        TalkieConsole.info("✅ Captured \(screenshots.count) screenshots")
 
         // Open result
         NSWorkspace.shared.open(runDir.appendingPathComponent("report.html"))
@@ -172,17 +172,17 @@ class DebugCommandHandler {
 
     private func pullMemo(args: [String]) async {
         guard let uuidString = args.first else {
-            print("❌ Usage: --debug=pull-memo <uuid>")
-            print("   Example: --debug=pull-memo 25E8709E-CAF7-4612-92F5-730B419A5902")
+            TalkieConsole.info("❌ Usage: --debug=pull-memo <uuid>")
+            TalkieConsole.info("   Example: --debug=pull-memo 25E8709E-CAF7-4612-92F5-730B419A5902")
             exit(1)
         }
 
         guard let uuid = parseUUIDArgument(uuidString) else {
-            print("❌ Invalid UUID: \(uuidString)")
+            TalkieConsole.info("❌ Invalid UUID: \(uuidString)")
             exit(1)
         }
 
-        print("📥 Looking for memo: \(uuid)")
+        TalkieConsole.info("📥 Looking for memo: \(uuid)")
 
         // Connect to TalkieSync
         await MainActor.run {
@@ -193,20 +193,20 @@ class DebugCommandHandler {
         try? await Task.sleep(for: .seconds(2))
 
         // Trigger bridge sync via TalkieSync
-        print("🔄 Triggering bridge sync via TalkieSync...")
+        TalkieConsole.info("🔄 Triggering bridge sync via TalkieSync...")
         do {
             let count = try await SyncClient.shared.runSyncPass()
-            print("✅ Bridge sync complete: \(count) memos synced")
+            TalkieConsole.info("✅ Bridge sync complete: \(count) memos synced")
         } catch {
-            print("⚠️ Bridge sync failed: \(error.localizedDescription)")
+            TalkieConsole.info("⚠️ Bridge sync failed: \(error.localizedDescription)")
         }
 
         // Check if memo exists in GRDB
         let repo = LocalRepository()
         if let memo = try? await repo.fetchMemo(id: uuid) {
-            print("✅ Found: '\(memo.memo.title ?? "Untitled")' (\(Int(memo.memo.duration))s)")
+            TalkieConsole.info("✅ Found: '\(memo.memo.title ?? "Untitled")' (\(Int(memo.memo.duration))s)")
         } else {
-            print("⚠️ Memo not found in GRDB after sync")
+            TalkieConsole.info("⚠️ Memo not found in GRDB after sync")
         }
 
         exit(0)
@@ -214,32 +214,32 @@ class DebugCommandHandler {
 
     private func retranscribeMemo(args: [String]) async {
         guard let uuidString = args.first else {
-            print("❌ Usage: --debug=retranscribe-memo <uuid> [model-id]")
-            print("   Example: --debug=retranscribe-memo 25E8709E-CAF7-4612-92F5-730B419A5902 parakeet:v3")
+            TalkieConsole.info("❌ Usage: --debug=retranscribe-memo <uuid> [model-id]")
+            TalkieConsole.info("   Example: --debug=retranscribe-memo 25E8709E-CAF7-4612-92F5-730B419A5902 parakeet:v3")
             exit(1)
         }
 
         guard let uuid = parseUUIDArgument(uuidString) else {
-            print("❌ Invalid UUID: \(uuidString)")
+            TalkieConsole.info("❌ Invalid UUID: \(uuidString)")
             exit(1)
         }
 
         let modelId = args.dropFirst().first ?? "parakeet:v3"
 
-        print("🎙️ Retranscribing memo: \(uuid)")
-        print("   Model: \(modelId)")
+        TalkieConsole.info("🎙️ Retranscribing memo: \(uuid)")
+        TalkieConsole.info("   Model: \(modelId)")
 
         do {
             let transcript = try await RecordingRetranscriptionService.shared.retranscribeMemo(
                 id: uuid,
                 modelId: modelId
             )
-            print("✅ Retranscribed successfully (\(transcript.count) chars)")
-            print("")
-            print(transcript)
+            TalkieConsole.info("✅ Retranscribed successfully (\(transcript.count) chars)")
+            TalkieConsole.info("")
+            TalkieConsole.info(transcript)
             exit(0)
         } catch {
-            print("❌ Retranscription failed: \(error.localizedDescription)")
+            TalkieConsole.info("❌ Retranscription failed: \(error.localizedDescription)")
             exit(1)
         }
     }
@@ -261,23 +261,23 @@ class DebugCommandHandler {
         let missingBefore = StorageInventoryService.shared.audioMissingMemos
             .sorted { $0.createdAt > $1.createdAt }
         guard !missingBefore.isEmpty else {
-            print("✅ No missing audio files detected")
+            TalkieConsole.info("✅ No missing audio files detected")
             exit(0)
             return
         }
 
         let targets = Array(missingBefore.prefix(sampleCount))
-        print("🎧 Audio catch-up quick test")
-        print("   Sample size: \(targets.count) memo(s)")
-        print("   Missing audio before sync: \(missingBefore.count)")
+        TalkieConsole.info("🎧 Audio catch-up quick test")
+        TalkieConsole.info("   Sample size: \(targets.count) memo(s)")
+        TalkieConsole.info("   Missing audio before sync: \(missingBefore.count)")
         for memo in targets {
-            print("   - \(memo.id.uuidString) \(memo.title)")
+            TalkieConsole.info("   - \(memo.id.uuidString) \(memo.title)")
         }
 
         do {
             try await SyncClient.shared.runSyncOnce(keepRunning: false)
         } catch {
-            print("❌ Sync failed: \(error.localizedDescription)")
+            TalkieConsole.info("❌ Sync failed: \(error.localizedDescription)")
             exit(1)
             return
         }
@@ -287,41 +287,41 @@ class DebugCommandHandler {
         let missingIDsAfter = Set(missingAfter.map(\.id))
         let recovered = targets.filter { !missingIDsAfter.contains($0.id) }
 
-        print("   Missing audio after sync: \(missingAfter.count)")
-        print("   Recovered in sample: \(recovered.count)/\(targets.count)")
+        TalkieConsole.info("   Missing audio after sync: \(missingAfter.count)")
+        TalkieConsole.info("   Recovered in sample: \(recovered.count)/\(targets.count)")
         for memo in targets {
             let recoveredLabel = missingIDsAfter.contains(memo.id) ? "still missing" : "recovered"
-            print("   - \(memo.id.uuidString) \(recoveredLabel)")
+            TalkieConsole.info("   - \(memo.id.uuidString) \(recoveredLabel)")
         }
 
         if recovered.count == targets.count {
-            print("✅ Audio catch-up sample completed")
+            TalkieConsole.info("✅ Audio catch-up sample completed")
             exit(0)
         } else {
-            print("⚠️ Audio catch-up sample incomplete")
+            TalkieConsole.info("⚠️ Audio catch-up sample incomplete")
             exit(2)
         }
     }
 
     private func captureMarkupDescribe(args: [String]) async {
         guard let path = args.first else {
-            print("❌ Usage: --debug=capture-markup-describe <image-path>")
+            TalkieConsole.info("❌ Usage: --debug=capture-markup-describe <image-path>")
             exit(1)
         }
         let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
         do {
             let description = try await CaptureMarkupAgentService.shared.describe(imageURL: url)
-            print(description)
+            TalkieConsole.info(description)
             exit(0)
         } catch {
-            print("❌ \(error.localizedDescription)")
+            TalkieConsole.info("❌ \(error.localizedDescription)")
             exit(1)
         }
     }
 
     private func captureMarkupPlan(args: [String]) async {
         guard args.count >= 2 else {
-            print("❌ Usage: --debug=capture-markup-plan <image-path> <instruction>")
+            TalkieConsole.info("❌ Usage: --debug=capture-markup-plan <image-path> <instruction>")
             exit(1)
         }
         let url = URL(fileURLWithPath: (args[0] as NSString).expandingTildeInPath)
@@ -332,17 +332,17 @@ class DebugCommandHandler {
                 instruction: instruction
             )
             let data = try JSONEncoder().encode(plan)
-            print(String(data: data, encoding: .utf8) ?? "{}")
+            TalkieConsole.info(String(data: data, encoding: .utf8) ?? "{}")
             exit(0)
         } catch {
-            print("❌ \(error.localizedDescription)")
+            TalkieConsole.info("❌ \(error.localizedDescription)")
             exit(1)
         }
     }
 
     private func captureMarkupApply(args: [String]) async {
         guard args.count >= 2 else {
-            print("❌ Usage: --debug=capture-markup-apply <image-path> <plan-json-path>")
+            TalkieConsole.info("❌ Usage: --debug=capture-markup-apply <image-path> <plan-json-path>")
             exit(1)
         }
         let url = URL(fileURLWithPath: (args[0] as NSString).expandingTildeInPath)
@@ -355,17 +355,17 @@ class DebugCommandHandler {
                 plan: plan
             )
             let encoded = try JSONEncoder().encode(document)
-            print(String(data: encoded, encoding: .utf8) ?? "{}")
+            TalkieConsole.info(String(data: encoded, encoding: .utf8) ?? "{}")
             exit(0)
         } catch {
-            print("❌ \(error.localizedDescription)")
+            TalkieConsole.info("❌ \(error.localizedDescription)")
             exit(1)
         }
     }
 
     private func captureMarkupRender(args: [String]) async {
         guard let path = args.first else {
-            print("❌ Usage: --debug=capture-markup-render <image-path> [output-path]")
+            TalkieConsole.info("❌ Usage: --debug=capture-markup-render <image-path> [output-path]")
             exit(1)
         }
         let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
@@ -376,13 +376,13 @@ class DebugCommandHandler {
             let png = try CaptureMarkupAgentService.shared.renderPNG(imageURL: url)
             if let output {
                 try png.write(to: output)
-                print(output.path)
+                TalkieConsole.info(output.path)
             } else {
                 FileHandle.standardOutput.write(png)
             }
             exit(0)
         } catch {
-            print("❌ \(error.localizedDescription)")
+            TalkieConsole.info("❌ \(error.localizedDescription)")
             exit(1)
         }
     }
@@ -404,7 +404,7 @@ class DebugCommandHandler {
     }
 
     private func triggerEnvironmentCrash() async {
-        print("""
+        TalkieConsole.info("""
         🔴 Environment Crash Test
         =========================
 
@@ -433,19 +433,19 @@ class DebugCommandHandler {
     // MARK: - Help
 
     private func testWorkflowImport() {
-        print("")
+        TalkieConsole.info("")
         ImportPayloadConverterTests.runAll()
         exit(0)
     }
 
     private func testSkillFileFormat() {
-        print("")
+        TalkieConsole.info("")
         SkillFileFormatTests.runAll()
         exit(0)
     }
 
     private func printHelp() {
-        print("""
+        TalkieConsole.info("""
         Talkie Debug Commands
         =====================
 

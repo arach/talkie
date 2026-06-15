@@ -6,7 +6,7 @@
 //
 
 import SwiftUI
-import os.log
+import TalkieKit
 
 // MARK: - Stubs for HistoryView
 
@@ -25,7 +25,7 @@ struct LogViewerConsole: View {
 final class AppLogger {
     static let shared = AppLogger()
 
-    private let logger = Logger(subsystem: "to.talkie.app", category: "AppLogger")
+    private let logger = Log(.ui)
 
     enum Category {
         case system, file, transcription, error, debug, ui, database

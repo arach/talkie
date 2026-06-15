@@ -1,7 +1,4 @@
 import SwiftUI
-import os
-
-private let portLogger = Logger(subsystem: "dev.arach.WFKit", category: "Ports")
 
 // MARK: - Node View
 
@@ -750,7 +747,7 @@ struct PortView: View {
         .onHover { hovering in
             isHovered = hovering
             if hovering {
-                portLogger.debug("hover: \(port.label, privacy: .public) isInput=\(port.isInput) isValidTarget=\(isValidDropTarget)")
+                WFLogger.debug("hover: \(port.label) isInput=\(port.isInput) isValidTarget=\(isValidDropTarget)", category: .node)
             }
             onHover?(hovering ? port.id : nil)
         }
@@ -764,24 +761,26 @@ struct PortView: View {
             // Don't allow connection creation in read-only mode
             guard !isReadOnly else { return }
 
-            portLogger.info("tap: \(port.label, privacy: .public) isInput=\(port.isInput) connectionActive=\(isConnectionDragActive) isValidTarget=\(isValidDropTarget)")
+            WFLogger.info("tap: \(port.label) isInput=\(port.isInput) connectionActive=\(isConnectionDragActive) isValidTarget=\(isValidDropTarget)", category: .node)
 
             if isConnectionDragActive {
                 // Complete connection if this is a valid target
                 if isValidDropTarget {
-                    portLogger.notice("complete: \(port.label, privacy: .public)")
+                    WFLogger.info("complete: \(port.label)", category: .connection)
                     canvasState.completeConnection(
                         to: nodeId,
                         targetPortId: port.id,
                         isInput: port.isInput
                     )
                 } else {
-                    portLogger.debug("rejected: not a valid target")
+                    WFLogger.debug("rejected: not a valid target", category: .connection)
                 }
             } else {
                 // Start a new connection from this port
                 if let portPos = canvasState.portPosition(nodeId: nodeId, portId: port.id) {
-                    portLogger.info("start: \(port.label, privacy: .public) at (\(portPos.x, format: .fixed(precision: 0)), \(portPos.y, format: .fixed(precision: 0)))")
+                    let x = Int(portPos.x.rounded())
+                    let y = Int(portPos.y.rounded())
+                    WFLogger.info("start: \(port.label) at (\(x), \(y))", category: .connection)
                     let anchor = ConnectionAnchor(
                         nodeId: nodeId,
                         portId: port.id,
@@ -790,7 +789,7 @@ struct PortView: View {
                     )
                     onDragStart?(anchor)
                 } else {
-                    portLogger.warning("no position for \(port.label, privacy: .public)")
+                    WFLogger.warning("no position for \(port.label)", category: .connection)
                 }
             }
         }

@@ -7,9 +7,9 @@
 //
 
 import Foundation
-import os.log
+import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.agent", category: "AudioInputLogger")
+private let logger = Log(.audio)
 
 /// JSON Lines logger for audio input diagnostics
 /// Each line is a valid JSON object for easy parsing with tools like jq

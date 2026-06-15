@@ -11,11 +11,10 @@
 
 import Foundation
 import AppKit
-import os
 import CryptoKit
 import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "LocalFiles")
+private let logger = Log(.database)
 
 @MainActor
 final class TranscriptFileManager: NSObject {

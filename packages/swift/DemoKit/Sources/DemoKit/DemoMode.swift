@@ -26,7 +26,7 @@ public enum DemoMode {
     /// Manually enable demo mode (call early in app startup)
     public static func enable() {
         isEnabled = true
-        print("🎬 DemoKit: Demo mode enabled")
+        DemoKitConsole.info("🎬 DemoKit: Demo mode enabled")
     }
 
     /// Manually disable demo mode

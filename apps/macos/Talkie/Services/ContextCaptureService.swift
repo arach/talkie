@@ -9,10 +9,9 @@
 import Foundation
 import AppKit
 import ApplicationServices
-import os.log
 import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.agent", category: "ContextCapture")
+private let logger = Log(.system)
 
 // MARK: - Configuration
 

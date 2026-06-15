@@ -18,7 +18,7 @@ export interface TTSRequestBody {
   /** Text to synthesize */
   text: string;
 
-  /** TTS voice (OpenAI: alloy, echo, fable, onyx, nova, shimmer; Kokoro: af_heart, etc.) */
+  /** TTS voice (OpenAI: alloy, echo, fable, onyx, nova, shimmer) */
   voice?: string;
 
   /** TTS provider */
@@ -49,64 +49,13 @@ export async function ttsRoute(
   log.info(`TTS route: provider=${provider}, voice=${body.voice || "(default)"}`);
 
   if (provider === "local") {
-    return localTtsRoute(body);
+    return {
+      ok: false,
+      error: "Local TTS has been removed. Use provider=openai.",
+    };
   }
 
   return openaiTtsRoute(body);
-}
-
-// MARK: - Local Kokoro TTS (via TalkieSpeech on :8780)
-
-const SPEECH_PORT = 8780;
-const SPEECH_HOST = process.env.TALKIE_SPEECH_HOST || "127.0.0.1";
-
-async function localTtsRoute(
-  body: TTSRequestBody
-): Promise<TTSResponseEnvelope> {
-  const text = body.text.slice(0, 10000);
-  const voice = body.voice || "af_heart";
-
-  try {
-    log.info(`Local TTS request: ${text.length} chars, voice=${voice}`);
-
-    const speechToken = process.env.TALKIE_SPEECH_TOKEN || "";
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-    if (speechToken) {
-      headers["Authorization"] = `Bearer ${speechToken}`;
-    }
-
-    const response = await fetch(
-      `http://${SPEECH_HOST}:${SPEECH_PORT}/synthesize`,
-      {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ text, voice }),
-        signal: AbortSignal.timeout(120_000),
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      log.error(`TalkieSpeech failed (${response.status}): ${errorText}`);
-      return {
-        ok: false,
-        error: `Local TTS failed (${response.status}): ${errorText.slice(0, 200)}`,
-      };
-    }
-
-    const audioBuffer = await response.arrayBuffer();
-    const audioBase64 = Buffer.from(audioBuffer).toString("base64");
-
-    log.info(`Local TTS complete: ${audioBuffer.byteLength} bytes, voice=${voice}`);
-
-    return { ok: true, audioBase64, voice };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    log.error(`Local TTS error: ${message}`);
-    return { ok: false, error: `Local TTS failed: ${message}` };
-  }
 }
 
 // MARK: - OpenAI Cloud TTS

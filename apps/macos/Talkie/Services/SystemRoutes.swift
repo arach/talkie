@@ -28,7 +28,7 @@ final class SystemRoutes: RouteGroup {
         ) { url, params in
             let pathTab = url.pathComponents.dropFirst().first
             let tab = params["tab"] ?? pathTab
-            NSLog("[SystemRoutes] Open settings, tab: \(tab ?? "default")")
+            TalkieConsole.critical("[SystemRoutes] Open settings, tab: \(tab ?? "default")")
             if let tab,
                let section = SettingsSection(rawValue: tab) ?? SettingsSection.from(path: tab) {
                 NavigationState.shared.navigateToSettings(section)
@@ -42,7 +42,7 @@ final class SystemRoutes: RouteGroup {
             description: "Navigate to home view",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Navigate home")
+            TalkieConsole.critical("[SystemRoutes] Navigate home")
             NavigationState.shared.navigateToHome()
         },
 
@@ -51,7 +51,7 @@ final class SystemRoutes: RouteGroup {
             description: "Navigate to agent view (legacy live alias)",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Navigate to live")
+            TalkieConsole.critical("[SystemRoutes] Navigate to live")
             NavigationState.shared.navigateToAgent()
         },
 
@@ -60,7 +60,7 @@ final class SystemRoutes: RouteGroup {
             description: "Navigate to agent dashboard",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Navigate to agent")
+            TalkieConsole.critical("[SystemRoutes] Navigate to agent")
             NavigationState.shared.navigateToAgent()
         },
 
@@ -69,7 +69,7 @@ final class SystemRoutes: RouteGroup {
             description: "Navigate to agent dashboard (short alias)",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Navigate to agent (short alias)")
+            TalkieConsole.critical("[SystemRoutes] Navigate to agent (short alias)")
             NavigationState.shared.navigateToAgent()
         },
 
@@ -78,7 +78,7 @@ final class SystemRoutes: RouteGroup {
             description: "Navigate to memos view",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Navigate to memos")
+            TalkieConsole.critical("[SystemRoutes] Navigate to memos")
             NavigationState.shared.navigateToAllMemos()
         },
 
@@ -87,7 +87,7 @@ final class SystemRoutes: RouteGroup {
             description: "Navigate to unified library",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Navigate to recordings")
+            TalkieConsole.critical("[SystemRoutes] Navigate to recordings")
             NavigationState.shared.navigate(to: .recordings)
         },
 
@@ -96,7 +96,7 @@ final class SystemRoutes: RouteGroup {
             description: "Navigate to unified library",
             isInternal: false
         ) { url, params in
-            NSLog("[SystemRoutes] Navigate to library")
+            TalkieConsole.critical("[SystemRoutes] Navigate to library")
             let path = url.pathComponents.dropFirst().first
             let idString = params["id"] ?? params["recordingId"]
             let id = idString.flatMap(UUID.init(uuidString:))
@@ -119,7 +119,7 @@ final class SystemRoutes: RouteGroup {
             description: "Navigate to dictations view",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Navigate to dictations")
+            TalkieConsole.critical("[SystemRoutes] Navigate to dictations")
             NavigationState.shared.navigateToDictations()
         },
 
@@ -128,7 +128,7 @@ final class SystemRoutes: RouteGroup {
             description: "Navigate to recent agent dictations (legacy live alias)",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Navigate to live/recent")
+            TalkieConsole.critical("[SystemRoutes] Navigate to live/recent")
             NavigationState.shared.navigateToDictations()
         },
 
@@ -137,7 +137,7 @@ final class SystemRoutes: RouteGroup {
             description: "Navigate to recent agent dictations",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Navigate to agent/recent")
+            TalkieConsole.critical("[SystemRoutes] Navigate to agent/recent")
             NavigationState.shared.navigateToDictations()
         },
 
@@ -146,7 +146,7 @@ final class SystemRoutes: RouteGroup {
             description: "Navigate to recent agent dictations (short alias)",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Navigate to a/recent")
+            TalkieConsole.critical("[SystemRoutes] Navigate to a/recent")
             NavigationState.shared.navigateToDictations()
         },
 
@@ -155,7 +155,7 @@ final class SystemRoutes: RouteGroup {
             description: "Navigate to agent history (legacy live alias)",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Navigate to live/history")
+            TalkieConsole.critical("[SystemRoutes] Navigate to live/history")
             NavigationState.shared.navigateToDictations()
         },
 
@@ -164,7 +164,7 @@ final class SystemRoutes: RouteGroup {
             description: "Navigate to agent history",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Navigate to agent/history")
+            TalkieConsole.critical("[SystemRoutes] Navigate to agent/history")
             NavigationState.shared.navigateToDictations()
         },
 
@@ -173,7 +173,7 @@ final class SystemRoutes: RouteGroup {
             description: "Navigate to agent history (short alias)",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Navigate to a/history")
+            TalkieConsole.critical("[SystemRoutes] Navigate to a/history")
             NavigationState.shared.navigateToDictations()
         },
 
@@ -182,7 +182,7 @@ final class SystemRoutes: RouteGroup {
             description: "Open agent settings tab (legacy live alias)",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Open settings/live")
+            TalkieConsole.critical("[SystemRoutes] Open settings/live")
             NavigationState.shared.navigateToSettings(.dictationCapture)
         },
 
@@ -191,7 +191,7 @@ final class SystemRoutes: RouteGroup {
             description: "Open agent settings tab",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Open settings/agent")
+            TalkieConsole.critical("[SystemRoutes] Open settings/agent")
             NavigationState.shared.navigateToSettings(.dictationCapture)
         },
 
@@ -200,7 +200,7 @@ final class SystemRoutes: RouteGroup {
             description: "Open agent settings tab (short alias)",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Open settings/a")
+            TalkieConsole.critical("[SystemRoutes] Open settings/a")
             NavigationState.shared.navigateToSettings(.dictationCapture)
         },
 
@@ -209,7 +209,7 @@ final class SystemRoutes: RouteGroup {
             description: "Navigate to workflows view",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Navigate to workflows")
+            TalkieConsole.critical("[SystemRoutes] Navigate to workflows")
             NavigationState.shared.navigateToWorkflows()
         },
 
@@ -218,7 +218,7 @@ final class SystemRoutes: RouteGroup {
             description: "Navigate to compose view",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Navigate to compose")
+            TalkieConsole.critical("[SystemRoutes] Navigate to compose")
             NavigationState.shared.navigateToCompose()
         },
 
@@ -227,7 +227,7 @@ final class SystemRoutes: RouteGroup {
             description: "Navigate to notes view",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Navigate to notes")
+            TalkieConsole.critical("[SystemRoutes] Navigate to notes")
             NavigationState.shared.navigate(to: .notes)
         },
 
@@ -236,7 +236,7 @@ final class SystemRoutes: RouteGroup {
             description: "Navigate to screenshots view",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Navigate to screenshots")
+            TalkieConsole.critical("[SystemRoutes] Navigate to screenshots")
             NavigationState.shared.navigate(to: .screenshots)
         },
 
@@ -246,7 +246,7 @@ final class SystemRoutes: RouteGroup {
             isInternal: false
         ) { _, params in
             guard let path = params["path"], !path.isEmpty else {
-                NSLog("[SystemRoutes] capture/markup missing path param")
+                TalkieConsole.critical("[SystemRoutes] capture/markup missing path param")
                 return
             }
             let expanded = (path as NSString).expandingTildeInPath
@@ -263,7 +263,7 @@ final class SystemRoutes: RouteGroup {
             description: "Navigate to models view",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Navigate to models")
+            TalkieConsole.critical("[SystemRoutes] Navigate to models")
             NavigationState.shared.navigate(to: .models)
         },
 
@@ -272,7 +272,7 @@ final class SystemRoutes: RouteGroup {
             description: "Navigate to system console",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Navigate to console")
+            TalkieConsole.critical("[SystemRoutes] Navigate to console")
             NavigationState.shared.navigateToConsole()
         },
 
@@ -281,7 +281,7 @@ final class SystemRoutes: RouteGroup {
             description: "Navigate to stats view",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Navigate to stats")
+            TalkieConsole.critical("[SystemRoutes] Navigate to stats")
             NavigationState.shared.navigate(to: .liveDashboard)
         },
 
@@ -290,7 +290,7 @@ final class SystemRoutes: RouteGroup {
             description: "Navigate to pending actions",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Navigate to pending actions")
+            TalkieConsole.critical("[SystemRoutes] Navigate to pending actions")
             NavigationState.shared.navigate(to: .pendingActions)
         },
 
@@ -299,7 +299,7 @@ final class SystemRoutes: RouteGroup {
             description: "Navigate to AI results",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Navigate to AI results")
+            TalkieConsole.critical("[SystemRoutes] Navigate to AI results")
             NavigationState.shared.navigate(to: .aiResults)
         },
 
@@ -308,7 +308,7 @@ final class SystemRoutes: RouteGroup {
             description: "Navigate to context rules view",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Navigate to context")
+            TalkieConsole.critical("[SystemRoutes] Navigate to context")
             NavigationState.shared.navigate(to: .contextRules)
         },
 
@@ -317,7 +317,7 @@ final class SystemRoutes: RouteGroup {
             description: "Open feedback form for quick report submission",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Navigate to feedback")
+            TalkieConsole.critical("[SystemRoutes] Navigate to feedback")
             NSApp.activate(ignoringOtherApps: true)
             NSApp.windows.first(where: { $0.canBecomeMain })?.makeKeyAndOrderFront(nil)
             NavigationState.shared.navigateToSettings(.feedback)
@@ -328,7 +328,7 @@ final class SystemRoutes: RouteGroup {
             description: "Open feedback form (alias for feedback)",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Navigate to report (feedback alias)")
+            TalkieConsole.critical("[SystemRoutes] Navigate to report (feedback alias)")
             NSApp.activate(ignoringOtherApps: true)
             NSApp.windows.first(where: { $0.canBecomeMain })?.makeKeyAndOrderFront(nil)
             NavigationState.shared.navigateToSettings(.feedback)
@@ -341,7 +341,7 @@ final class SystemRoutes: RouteGroup {
             description: "Launch Pro Tools onboarding",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Launch Pro Tools onboarding")
+            TalkieConsole.critical("[SystemRoutes] Launch Pro Tools onboarding")
             NSApp.activate(ignoringOtherApps: true)
             NSApp.windows.first(where: { $0.canBecomeMain })?.makeKeyAndOrderFront(nil)
             ProOnboardingManager.shared.shouldShowProOnboarding = true
@@ -392,7 +392,7 @@ final class SystemRoutes: RouteGroup {
                 description: "Navigate to design mode home",
                 isInternal: false
             ) { _, _ in
-                NSLog("[SystemRoutes] Navigate to design home")
+                TalkieConsole.critical("[SystemRoutes] Navigate to design home")
                 DesignModeManager.shared.isEnabled = true
                 NavigationState.shared.navigate(to: .designHome)
             },
@@ -402,7 +402,7 @@ final class SystemRoutes: RouteGroup {
                 description: "Navigate to design audit",
                 isInternal: false
             ) { _, _ in
-                NSLog("[SystemRoutes] Navigate to design audit")
+                TalkieConsole.critical("[SystemRoutes] Navigate to design audit")
                 DesignModeManager.shared.isEnabled = true
                 NavigationState.shared.navigate(to: .designAudit)
             },
@@ -412,7 +412,7 @@ final class SystemRoutes: RouteGroup {
                 description: "Navigate to design components",
                 isInternal: false
             ) { _, _ in
-                NSLog("[SystemRoutes] Navigate to design components")
+                TalkieConsole.critical("[SystemRoutes] Navigate to design components")
                 DesignModeManager.shared.isEnabled = true
                 NavigationState.shared.navigate(to: .designComponents)
             },

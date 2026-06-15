@@ -7,10 +7,9 @@
 
 import SwiftUI
 import AppKit
-import os
 import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "Views")
+private let logger = Log(.ui)
 
 // MARK: - Workflow Column Views
 

@@ -10,12 +10,11 @@ import CoreData
 import AppKit
 import ImageIO
 import UserNotifications
-import os
 import Observation
 import CryptoKit
 import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "WorkflowExecutor")
+private let logger = Log(.workflow)
 private let workflowUILog = Log(.ui)
 // MARK: - Workflow Execution Context
 

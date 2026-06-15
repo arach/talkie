@@ -9,11 +9,10 @@
 
 import Foundation
 import Speech
-import os
 import Observation
 import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "AppleSpeechService")
+private let logger = Log(.transcription)
 
 // MARK: - Apple Speech Service
 

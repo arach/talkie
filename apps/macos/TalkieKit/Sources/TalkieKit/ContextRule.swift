@@ -395,7 +395,7 @@ public final class ContextRuleStore: @unchecked Sendable {
             mirrorToSharedSettings(configuration: configuration)
         } catch {
             #if DEBUG
-            print("Failed to save context rules config: \(error)")
+            TalkieLogger.info(.system, "Failed to save context rules config: \(error)")
             #endif
         }
     }

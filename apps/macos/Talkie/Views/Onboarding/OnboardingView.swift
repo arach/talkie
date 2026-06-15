@@ -50,7 +50,7 @@ struct OnboardingView: View {
                     )
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        print("Debug button tapped!") // Debug log
+                        TalkieConsole.info("Debug button tapped!") // Debug log
                         withAnimation(.easeInOut(duration: 0.3)) {
                             showDebugToolbar.toggle()
                         }
@@ -159,7 +159,7 @@ struct OnboardingView: View {
             // Set up keyboard shortcut listener
             keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                 if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "d" {
-                    print("Cmd+D pressed!") // Debug log
+                    TalkieConsole.info("Cmd+D pressed!") // Debug log
                     withAnimation(.easeInOut(duration: 0.3)) {
                         showDebugToolbar.toggle()
                     }
@@ -447,7 +447,7 @@ private struct DebugShelf: View {
            let bitmapImage = NSBitmapImageRep(data: tiffData),
            let pngData = bitmapImage.representation(using: .png, properties: [:]) {
             try? pngData.write(to: fileURL)
-            print("Storyboard saved to: \(fileURL.path)")
+            TalkieConsole.info("Storyboard saved to: \(fileURL.path)")
 
             // Show in Finder
             NSWorkspace.shared.activateFileViewerSelecting([fileURL])

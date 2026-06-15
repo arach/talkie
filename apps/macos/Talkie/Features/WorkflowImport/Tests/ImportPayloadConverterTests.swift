@@ -13,22 +13,22 @@ enum ImportPayloadConverterTests {
 
     /// Run all tests and print results
     static func runAll() {
-        print("🧪 Running ImportPayloadConverter Tests...")
-        print("")
+        TalkieConsole.info("🧪 Running ImportPayloadConverter Tests...")
+        TalkieConsole.info("")
 
         testTelegramOnlyWorkflow()
         testR2StorageWithDiscordNotify()
         testConvexDatabaseWithTelegram()
         testFingerprintDeduplication()
 
-        print("")
-        print("✅ All tests completed")
+        TalkieConsole.info("")
+        TalkieConsole.info("✅ All tests completed")
     }
 
     // MARK: - Test: Telegram-only workflow
 
     static func testTelegramOnlyWorkflow() {
-        print("📋 Test: Telegram-only workflow")
+        TalkieConsole.info("📋 Test: Telegram-only workflow")
 
         let payload = ImportedWorkflowPayload(
             version: 1,
@@ -56,40 +56,40 @@ enum ImportPayloadConverterTests {
                 sourceUrl: URL(string: "https://tawkie.dev/claim/test123")!
             )
 
-            print("   ✓ Created workflow: \(result.workflow.name)")
-            print("   ✓ Steps: \(result.workflow.steps.count)")
-            print("   ✓ Credentials: \(result.credentials.count)")
+            TalkieConsole.info("   ✓ Created workflow: \(result.workflow.name)")
+            TalkieConsole.info("   ✓ Steps: \(result.workflow.steps.count)")
+            TalkieConsole.info("   ✓ Credentials: \(result.credentials.count)")
 
             // Verify webhook step
             if let step = result.workflow.steps.first {
                 if case .webhook(let config) = step.config {
-                    print("   ✓ Webhook URL contains credential placeholder: \(config.url.contains("CREDENTIAL:"))")
-                    print("   ✓ Chat ID in body: \(config.bodyTemplate?.contains("-1001234567890") ?? false)")
+                    TalkieConsole.info("   ✓ Webhook URL contains credential placeholder: \(config.url.contains("CREDENTIAL:"))")
+                    TalkieConsole.info("   ✓ Chat ID in body: \(config.bodyTemplate?.contains("-1001234567890") ?? false)")
                 }
             }
 
             // Verify credential scope
             if let cred = result.credentials.first {
-                print("   ✓ Credential scope allows telegram: \(cred.scope.allowedHosts.contains("api.telegram.org"))")
+                TalkieConsole.info("   ✓ Credential scope allows telegram: \(cred.scope.allowedHosts.contains("api.telegram.org"))")
             }
 
             // Verify source metadata
             if case .imported(let metadata) = result.workflow.source {
-                print("   ✓ Source URL: \(metadata.sourceUrl)")
-                print("   ✓ Fingerprint: \(metadata.fingerprint.prefix(16))...")
+                TalkieConsole.info("   ✓ Source URL: \(metadata.sourceUrl)")
+                TalkieConsole.info("   ✓ Fingerprint: \(metadata.fingerprint.prefix(16))...")
             }
 
-            print("   ✅ PASSED")
+            TalkieConsole.info("   ✅ PASSED")
         } catch {
-            print("   ❌ FAILED: \(error)")
+            TalkieConsole.info("   ❌ FAILED: \(error)")
         }
-        print("")
+        TalkieConsole.info("")
     }
 
     // MARK: - Test: R2 Storage + Discord
 
     static func testR2StorageWithDiscordNotify() {
-        print("📋 Test: R2 Storage + Discord notification")
+        TalkieConsole.info("📋 Test: R2 Storage + Discord notification")
 
         let payload = ImportedWorkflowPayload(
             version: 1,
@@ -122,40 +122,40 @@ enum ImportPayloadConverterTests {
                 sourceUrl: URL(string: "https://tawkie.dev/claim/r2discord")!
             )
 
-            print("   ✓ Created workflow: \(result.workflow.name)")
-            print("   ✓ Steps: \(result.workflow.steps.count) (expected: 2 - upload + notify)")
-            print("   ✓ Credentials: \(result.credentials.count) (expected: 2)")
+            TalkieConsole.info("   ✓ Created workflow: \(result.workflow.name)")
+            TalkieConsole.info("   ✓ Steps: \(result.workflow.steps.count) (expected: 2 - upload + notify)")
+            TalkieConsole.info("   ✓ Credentials: \(result.credentials.count) (expected: 2)")
 
             // Verify cloud upload step
             if let uploadStep = result.workflow.steps.first(where: { $0.type == .cloudUpload }) {
                 if case .cloudUpload(let config) = uploadStep.config {
-                    print("   ✓ Upload provider: \(config.provider.displayName)")
-                    print("   ✓ Upload bucket: \(config.bucket)")
-                    print("   ✓ Has credential ID: \(config.credentialId != nil)")
+                    TalkieConsole.info("   ✓ Upload provider: \(config.provider.displayName)")
+                    TalkieConsole.info("   ✓ Upload bucket: \(config.bucket)")
+                    TalkieConsole.info("   ✓ Has credential ID: \(config.credentialId != nil)")
                 }
             }
 
             // Verify Discord webhook step
             if let notifyStep = result.workflow.steps.first(where: { $0.type == .webhook }) {
                 if case .webhook(let config) = notifyStep.config {
-                    print("   ✓ Discord webhook URL: \(config.url.hasPrefix("https://discord.com"))")
+                    TalkieConsole.info("   ✓ Discord webhook URL: \(config.url.hasPrefix("https://discord.com"))")
                 }
             }
 
             // Verify secrets are captured
-            print("   ✓ Secrets captured: \(result.secrets.count)")
+            TalkieConsole.info("   ✓ Secrets captured: \(result.secrets.count)")
 
-            print("   ✅ PASSED")
+            TalkieConsole.info("   ✅ PASSED")
         } catch {
-            print("   ❌ FAILED: \(error)")
+            TalkieConsole.info("   ❌ FAILED: \(error)")
         }
-        print("")
+        TalkieConsole.info("")
     }
 
     // MARK: - Test: Convex Database + Telegram
 
     static func testConvexDatabaseWithTelegram() {
-        print("📋 Test: Convex Database + Telegram (full pipeline)")
+        TalkieConsole.info("📋 Test: Convex Database + Telegram (full pipeline)")
 
         let payload = ImportedWorkflowPayload(
             version: 1,
@@ -192,33 +192,33 @@ enum ImportPayloadConverterTests {
                 sourceUrl: URL(string: "https://tawkie.dev/claim/fullpipe")!
             )
 
-            print("   ✓ Steps: \(result.workflow.steps.count) (expected: 3 - upload + database + notify)")
+            TalkieConsole.info("   ✓ Steps: \(result.workflow.steps.count) (expected: 3 - upload + database + notify)")
 
             // Check step order
             let stepTypes = result.workflow.steps.map { $0.type }
-            print("   ✓ Step order: \(stepTypes.map { $0.rawValue }.joined(separator: " → "))")
+            TalkieConsole.info("   ✓ Step order: \(stepTypes.map { $0.rawValue }.joined(separator: " → "))")
 
             // Verify all credentials have unique IDs
             let credentialIds = Set(result.credentials.map { $0.id })
-            print("   ✓ All credential IDs unique: \(credentialIds.count == result.credentials.count)")
+            TalkieConsole.info("   ✓ All credential IDs unique: \(credentialIds.count == result.credentials.count)")
 
             // Verify all secrets are captured
             for cred in result.credentials {
                 let hasSecret = result.secrets[cred.id] != nil
-                print("   ✓ Credential '\(cred.name)' has secret: \(hasSecret)")
+                TalkieConsole.info("   ✓ Credential '\(cred.name)' has secret: \(hasSecret)")
             }
 
-            print("   ✅ PASSED")
+            TalkieConsole.info("   ✅ PASSED")
         } catch {
-            print("   ❌ FAILED: \(error)")
+            TalkieConsole.info("   ❌ FAILED: \(error)")
         }
-        print("")
+        TalkieConsole.info("")
     }
 
     // MARK: - Test: Fingerprint Deduplication
 
     static func testFingerprintDeduplication() {
-        print("📋 Test: Fingerprint deduplication")
+        TalkieConsole.info("📋 Test: Fingerprint deduplication")
 
         // Same logical workflow, different credentials
         let payload1 = ImportedWorkflowPayload(
@@ -257,18 +257,18 @@ enum ImportPayloadConverterTests {
                case .imported(let meta2) = result2.workflow.source {
                 // Fingerprints should match (same structure, ignoring secrets and timestamps)
                 let fingerprintsMatch = meta1.fingerprint == meta2.fingerprint
-                print("   ✓ Same structure → same fingerprint: \(fingerprintsMatch)")
+                TalkieConsole.info("   ✓ Same structure → same fingerprint: \(fingerprintsMatch)")
 
                 if !fingerprintsMatch {
-                    print("     Fingerprint 1: \(meta1.fingerprint.prefix(32))...")
-                    print("     Fingerprint 2: \(meta2.fingerprint.prefix(32))...")
+                    TalkieConsole.info("     Fingerprint 1: \(meta1.fingerprint.prefix(32))...")
+                    TalkieConsole.info("     Fingerprint 2: \(meta2.fingerprint.prefix(32))...")
                 }
             }
 
-            print("   ✅ PASSED")
+            TalkieConsole.info("   ✅ PASSED")
         } catch {
-            print("   ❌ FAILED: \(error)")
+            TalkieConsole.info("   ❌ FAILED: \(error)")
         }
-        print("")
+        TalkieConsole.info("")
     }
 }

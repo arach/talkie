@@ -31,7 +31,7 @@ final class AudioRecorder: NSObject, ObservableObject {
             try session.setCategory(.playAndRecord, mode: .default)
             try session.setActive(true)
         } catch {
-            print("[Watch] Audio session setup failed: \(error)")
+            WatchConsole.info("[Watch] Audio session setup failed: \(error)")
         }
     }
 
@@ -76,9 +76,9 @@ final class AudioRecorder: NSObject, ObservableObject {
                 }
             }
 
-            print("[Watch] Recording started: \(url.lastPathComponent)")
+            WatchConsole.info("[Watch] Recording started: \(url.lastPathComponent)")
         } catch {
-            print("[Watch] Recording failed to start: \(error)")
+            WatchConsole.info("[Watch] Recording failed to start: \(error)")
         }
     }
 
@@ -94,7 +94,7 @@ final class AudioRecorder: NSObject, ObservableObject {
         audioRecorder = nil
 
         if let url = url {
-            print("[Watch] Recording stopped: \(url.lastPathComponent)")
+            WatchConsole.info("[Watch] Recording stopped: \(url.lastPathComponent)")
         }
 
         return url

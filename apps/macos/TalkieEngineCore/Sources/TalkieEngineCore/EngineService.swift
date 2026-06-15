@@ -32,7 +32,6 @@ enum EventType: String {
 /// Uses TalkieKit's TalkieLogFileWriter for unified log format
 final class AppLogger {
     static let shared = AppLogger()
-    private let subsystem = "to.talkie.app.engine"
 
     /// File writer for cross-app log viewing in Talkie
     private let fileWriter = TalkieLogFileWriter(source: .talkieEngine)
@@ -42,24 +41,21 @@ final class AppLogger {
     /// Log a message - prints to console and writes to file for Talkie viewing
     /// Warnings and errors use critical mode (immediate flush), everything else is buffered
     func log(_ category: EventType, _ message: String, detail: String? = nil, level: OSLogEntryLog.Level = .info, file: String = #file, line: Int = #line) {
-        let fullMessage = detail != nil ? "\(message): \(detail!)" : message
-
-        // Format log line with file/line info for console
-        let timestamp = Date().formatted(.dateTime.hour().minute().second().secondFraction(.fractional(2)))
         let filename = URL(fileURLWithPath: file).deletingPathExtension().lastPathComponent
-        let levelStr = switch level {
-        case .debug: "[DEBUG]"
-        case .info: "[INFO]"
-        case .notice: "[NOTICE]"
-        case .error: "[ERROR]"
-        case .fault: "[FAULT]"
-        default: "[LOG]"
-        }
-        let logLine = "[\(timestamp)] \(levelStr) [\(category.rawValue)] \(fullMessage) ← \(filename):\(line)"
+        let logCategory = mapLogCategory(category)
+        let logDetail = detail.map { "\($0) [\(filename):\(line)]" } ?? "[\(filename):\(line)]"
 
-        // Log to console (visible in Xcode debugger and Console.app)
-        autoreleasepool {
-            NSLog("%@", logLine)
+        switch level {
+        case .debug:
+            TalkieLogger.debug(logCategory, message, detail: logDetail)
+        case .error:
+            TalkieLogger.error(logCategory, message, detail: logDetail)
+        case .fault:
+            TalkieLogger.fault(logCategory, message, detail: logDetail, critical: true)
+        case .notice:
+            TalkieLogger.warning(logCategory, message, detail: logDetail)
+        default:
+            TalkieLogger.info(logCategory, message, detail: logDetail)
         }
 
         // Write to file for cross-app viewing in Talkie
@@ -78,6 +74,17 @@ final class AppLogger {
         }
 
         fileWriter.log(logType, message, detail: fileDetail, mode: writeMode)
+    }
+
+    /// Map local EventType to TalkieLogger's LogCategory
+    private func mapLogCategory(_ type: EventType) -> LogCategory {
+        switch type {
+        case .audio: return .audio
+        case .transcription, .model: return .transcription
+        case .database: return .database
+        case .xpc: return .xpc
+        default: return .system
+        }
     }
 
     /// Map local EventType to TalkieKit's LogEventType
@@ -113,10 +120,9 @@ final class AppLogger {
     }
 }
 
-// Simple log helper - prints to console (readable) + system log
+// Simple log helper for engine events
 private func log(_ message: String) {
-    print("[Engine] \(message)")
-    AppLogger.shared.info(.transcription, "\(message)")
+    AppLogger.shared.info(.transcription, "[Engine] \(message)")
 }
 
 /// XPC service implementation

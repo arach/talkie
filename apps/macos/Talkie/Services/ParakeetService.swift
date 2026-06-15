@@ -8,11 +8,10 @@
 import Foundation
 import FluidAudio
 import AVFoundation
-import os
 import Observation
 import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "ParakeetService")
+private let logger = Log(.transcription)
 
 // MARK: - Parakeet Model Options
 

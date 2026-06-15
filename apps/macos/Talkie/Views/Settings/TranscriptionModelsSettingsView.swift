@@ -6,10 +6,9 @@
 //
 
 import SwiftUI
-import os
 import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "TranscriptionModelsSettings")
+private let logger = Log(.ui)
 
 struct TranscriptionModelsSettingsView: View {
     @Environment(SettingsManager.self) private var settingsManager

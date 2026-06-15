@@ -108,7 +108,7 @@ struct ModelLoadingIndicator: View {
             Text("Full Progress").font(.headline)
 
             DownloadProgressView(progress: 0.45, accentColor: .orange) {
-                print("Cancel tapped")
+                TalkieConsole.info("Cancel tapped")
             }
             .frame(width: 200)
         }

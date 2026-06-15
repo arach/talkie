@@ -49,6 +49,7 @@
 //  └─────────────────────────────────────────────────────────────────────────────┘
 //
 
+import Darwin
 import Foundation
 import os
 
@@ -147,7 +148,7 @@ public final class TalkieLogger: @unchecked Sendable {
     }()
 
     /// Whether DEBUG builds should also mirror log lines to os.Logger.
-    /// Default is false to avoid duplicate console lines (print + os.Logger).
+    /// Default is false to avoid duplicate console lines (stderr + os.Logger).
     private var mirrorToOSLogInDebug = false
 
     private let queue = DispatchQueue(label: "to.talkie.app.logger", qos: .utility)
@@ -270,7 +271,7 @@ public final class TalkieLogger: @unchecked Sendable {
             // DEBUG: Always print to Xcode console (skip if section/critical already used NSLog)
             if section == nil && !critical {
                 let debugMsg = "\(level.emoji) [\(category.rawValue)] \(message)\(fullDetail.isEmpty ? "" : " - \(fullDetail)")"
-                print(debugMsg)
+                fputs("\(debugMsg)\n", stderr)
             }
             #endif
 

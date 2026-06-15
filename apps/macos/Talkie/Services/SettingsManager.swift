@@ -10,14 +10,13 @@ import Foundation
 import SwiftUI
 import AppKit
 import CoreData
-import os
 import Observation
 import TalkieKit
 #if canImport(TermBridgeKit)
 import TermBridgeKit
 #endif
 
-private let logger = Logger(subsystem: "to.talkie.app.mac", category: "Settings")
+private let logger = Log(.system)
 
 // MARK: - Cached Theme Tokens
 

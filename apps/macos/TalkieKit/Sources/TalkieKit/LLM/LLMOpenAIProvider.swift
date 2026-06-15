@@ -6,9 +6,8 @@
 //
 
 import Foundation
-import os
 
-private let logger = Logger(subsystem: "to.talkie.app.kit", category: "OpenAI")
+private let logger = Log(.workflow)
 
 public final class LLMOpenAIProvider: LLMProvider, LLMVisionProvider, @unchecked Sendable {
     public let id = "openai"

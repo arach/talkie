@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		ABD80B7FEA00488FB8A560E6 /* TalkieConsole.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FDF7CDBA0164162A995F8AB /* TalkieConsole.swift */; };
 		C2ECBCFB068D4E75B3D437DB /* CaptureMarkupPanelChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6BAE607F7D849AF8CB5A280 /* CaptureMarkupPanelChrome.swift */; };
 		1D411EE6638E44138DAF20C4 /* CaptureMarkupWebSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CF0553165FE409A88608ADF /* CaptureMarkupWebSession.swift */; };
 		4DBA85B62CD8458B863BE961 /* CaptureMarkupCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17C3EFE303574D3A8A500EB3 /* CaptureMarkupCoordinator.swift */; };
@@ -543,6 +544,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		9FDF7CDBA0164162A995F8AB /* TalkieConsole.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieConsole.swift; sourceTree = "<group>"; };
 		E6BAE607F7D849AF8CB5A280 /* CaptureMarkupPanelChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureMarkupPanelChrome.swift; sourceTree = "<group>"; };
 		4CF0553165FE409A88608ADF /* CaptureMarkupWebSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureMarkupWebSession.swift; sourceTree = "<group>"; };
 		17C3EFE303574D3A8A500EB3 /* CaptureMarkupCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureMarkupCoordinator.swift; sourceTree = "<group>"; };
@@ -1381,6 +1383,7 @@
 		53A7622465701BF0425306D5 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				9FDF7CDBA0164162A995F8AB /* TalkieConsole.swift */,
 				C6BEF4F1CF83704DC4DED4C4 /* AppDelegate.swift */,
 				F151D1111FD7E7755C2C271D /* AppMode.swift */,
 				76D097437D3CBB76ADE1BD3B /* BuildInfo.swift */,
@@ -2361,6 +2364,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				ABD80B7FEA00488FB8A560E6 /* TalkieConsole.swift in Sources */,
 				C2ECBCFB068D4E75B3D437DB /* CaptureMarkupPanelChrome.swift in Sources */,
 				1D411EE6638E44138DAF20C4 /* CaptureMarkupWebSession.swift in Sources */,
 				4DBA85B62CD8458B863BE961 /* CaptureMarkupCoordinator.swift in Sources */,

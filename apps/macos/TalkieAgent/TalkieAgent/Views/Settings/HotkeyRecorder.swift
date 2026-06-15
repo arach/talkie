@@ -116,12 +116,12 @@ struct HotkeyRecorderNSView: NSViewRepresentable {
         view.onKeyCapture = { keyCode, modifiers in
             DispatchQueue.main.async {
                 let newHotkey = HotkeyConfig(keyCode: keyCode, modifiers: modifiers)
-                print("[HotkeyRecorder] 🔑 Captured hotkey: \(newHotkey.displayString) (keyCode=\(keyCode), modifiers=\(modifiers))")
+                AgentConsole.info("[HotkeyRecorder] 🔑 Captured hotkey: \(newHotkey.displayString) (keyCode=\(keyCode), modifiers=\(modifiers))")
                 hotkey = newHotkey
                 isRecording = false
 
                 // Notify AppDelegate to re-register hotkey
-                print("[HotkeyRecorder] 📢 Posting .hotkeyDidChange notification")
+                AgentConsole.info("[HotkeyRecorder] 📢 Posting .hotkeyDidChange notification")
                 NotificationCenter.default.post(name: .hotkeyDidChange, object: nil)
             }
         }
@@ -157,7 +157,7 @@ class KeyCaptureView: NSView {
         }
 
         let keyCode = UInt32(event.keyCode)
-        print("[KeyCaptureView] 🎹 keyDown: keyCode=\(keyCode)")
+        AgentConsole.info("[KeyCaptureView] 🎹 keyDown: keyCode=\(keyCode)")
 
         // Escape key (53) cancels recording
         if keyCode == 53 {

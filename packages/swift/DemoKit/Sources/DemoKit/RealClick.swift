@@ -22,7 +22,7 @@ public enum RealClick {
         let targetWindow = window ?? NSApp.keyWindow ?? NSApp.mainWindow ?? NSApp.windows.first
 
         guard let windowFrame = targetWindow?.frame else {
-            NSLog("RealClick: No window available for coordinate conversion (windows: \(NSApp.windows.count))")
+            DemoKitConsole.formatted("RealClick: No window available for coordinate conversion (windows: \(NSApp.windows.count))")
             return
         }
 
@@ -31,7 +31,7 @@ public enum RealClick {
 
         // Get screen height for coordinate flip (macOS uses bottom-left origin)
         guard let screen = targetWindow?.screen ?? NSScreen.main else {
-            NSLog("RealClick: No screen available")
+            DemoKitConsole.formatted("RealClick: No screen available")
             return
         }
         let screenHeight = screen.frame.height
@@ -50,7 +50,7 @@ public enum RealClick {
         // CGEvent uses a coordinate system where (0,0) is top-left of main display
         let cgEventY = screenHeight - screenY
 
-        NSLog("RealClick: local=(\(Int(localPoint.x)), \(Int(localPoint.y))) → screen=(\(Int(screenX)), \(Int(cgEventY))) [window at \(Int(windowFrame.origin.x)),\(Int(windowFrame.origin.y)) size \(Int(windowFrame.width))x\(Int(windowFrame.height))]")
+        DemoKitConsole.formatted("RealClick: local=(\(Int(localPoint.x)), \(Int(localPoint.y))) → screen=(\(Int(screenX)), \(Int(cgEventY))) [window at \(Int(windowFrame.origin.x)),\(Int(windowFrame.origin.y)) size \(Int(windowFrame.width))x\(Int(windowFrame.height))]")
 
         performClick(x: screenX, y: cgEventY)
     }
@@ -73,7 +73,7 @@ public enum RealClick {
             mouseUp.post(tap: .cghidEventTap)
         }
 
-        NSLog("RealClick: Posted CGEvent at (\(Int(x)), \(Int(y)))")
+        DemoKitConsole.formatted("RealClick: Posted CGEvent at (\(Int(x)), \(Int(y)))")
     }
 
     /// Perform a click using AppleScript (fallback if CGEvent doesn't work)
@@ -86,7 +86,7 @@ public enum RealClick {
         if let appleScript = NSAppleScript(source: script) {
             appleScript.executeAndReturnError(&error)
             if let error = error {
-                NSLog("RealClick AppleScript error: \(error)")
+                DemoKitConsole.formatted("RealClick AppleScript error: \(error)")
             }
         }
     }

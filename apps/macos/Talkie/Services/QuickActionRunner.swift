@@ -9,10 +9,9 @@
 import Foundation
 import AppKit
 import CoreData
-import os.log
 import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.agent", category: "QuickAction")
+private let logger = Log(.workflow)
 
 // MARK: - Quick Action Runner
 

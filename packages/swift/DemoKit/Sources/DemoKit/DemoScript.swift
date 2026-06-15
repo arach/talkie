@@ -54,7 +54,7 @@ public class DemoScriptRunner {
             if let point = anchors.centerOf(anchor) {
                 await cursor.move(to: point, duration: duration)
             } else {
-                print("⚠️ DemoKit: Anchor '\(anchor)' not found")
+                DemoKitConsole.info("⚠️ DemoKit: Anchor '\(anchor)' not found")
             }
 
         case .moveToPoint(let x, let y, let duration):

@@ -82,7 +82,7 @@ actor AuditStore {
             decoder.dateDecodingStrategy = .iso8601
             return try decoder.decode(FullAuditReport.self, from: data)
         } catch {
-            print("❌ AuditStore: Failed to load report: \(error)")
+            TalkieConsole.info("❌ AuditStore: Failed to load report: \(error)")
             return nil
         }
     }
@@ -138,7 +138,7 @@ actor AuditStore {
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles]
         ) else {
-            print("⚠️ AuditStore: No audit directory found at \(auditDir.path)")
+            TalkieConsole.info("⚠️ AuditStore: No audit directory found at \(auditDir.path)")
             saveIndex()
             return
         }
@@ -179,11 +179,11 @@ actor AuditStore {
 
                 cachedIndex.append(entry)
             } catch {
-                print("⚠️ AuditStore: Failed to parse \(auditJsonPath.path): \(error)")
+                TalkieConsole.info("⚠️ AuditStore: Failed to parse \(auditJsonPath.path): \(error)")
             }
         }
 
-        print("✅ AuditStore: Rebuilt index with \(cachedIndex.count) runs")
+        TalkieConsole.info("✅ AuditStore: Rebuilt index with \(cachedIndex.count) runs")
         saveIndex()
     }
 
@@ -199,10 +199,10 @@ actor AuditStore {
                 decoder.dateDecodingStrategy = .iso8601
                 cachedIndex = try decoder.decode([AuditRunEntry].self, from: data)
                 indexLoaded = true
-                print("✅ AuditStore: Loaded index with \(cachedIndex.count) runs")
+                TalkieConsole.info("✅ AuditStore: Loaded index with \(cachedIndex.count) runs")
                 return
             } catch {
-                print("⚠️ AuditStore: Failed to load index, rebuilding: \(error)")
+                TalkieConsole.info("⚠️ AuditStore: Failed to load index, rebuilding: \(error)")
             }
         }
 
@@ -219,7 +219,7 @@ actor AuditStore {
             let data = try encoder.encode(cachedIndex)
             try data.write(to: indexFile)
         } catch {
-            print("❌ AuditStore: Failed to save index: \(error)")
+            TalkieConsole.info("❌ AuditStore: Failed to save index: \(error)")
         }
     }
 }

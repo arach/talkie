@@ -8,10 +8,9 @@
 import Foundation
 import CoreAudio
 import AVFoundation
-import os.log
 import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.agent", category: "AudioDeviceManager")
+private let logger = Log(.audio)
 private let deviceLog = Log(.audio)
 
 extension Notification.Name {
@@ -156,7 +155,7 @@ final class AudioDeviceManager: ObservableObject {
 
     /// Select a specific device by its ID (sets mode to fixedUID)
     func selectDevice(_ device: AudioInputDevice) {
-        print("🎤 AudioDeviceManager.selectDevice: \(device.name) (uid: \(device.uid))")
+        AgentConsole.info("🎤 AudioDeviceManager.selectDevice: \(device.name) (uid: \(device.uid))")
 
         // Save UID-based selection
         LiveSettings.shared.selectedMicrophoneMode = .fixedUID
@@ -171,7 +170,7 @@ final class AudioDeviceManager: ObservableObject {
 
     /// Select system default (sets mode to systemDefault)
     func selectSystemDefault() {
-        print("🎤 AudioDeviceManager.selectSystemDefault()")
+        AgentConsole.info("🎤 AudioDeviceManager.selectSystemDefault()")
 
         LiveSettings.shared.selectedMicrophoneMode = .systemDefault
         LiveSettings.shared.selectedMicrophoneUID = nil

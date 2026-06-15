@@ -83,7 +83,7 @@ public final class NotchHotStateWriter {
 
         fd = open(path, O_RDWR | O_CREAT, 0o666)
         guard fd >= 0 else {
-            NSLog("[NotchHotState] Writer: failed to open \(path)")
+            TalkieLogger.info(.system, "[NotchHotState] Writer: failed to open \(path)")
             return
         }
 
@@ -92,7 +92,7 @@ public final class NotchHotStateWriter {
 
         let raw = mmap(nil, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0)
         guard raw != MAP_FAILED else {
-            NSLog("[NotchHotState] Writer: mmap failed")
+            TalkieLogger.info(.system, "[NotchHotState] Writer: mmap failed")
             close(fd); fd = -1
             return
         }
@@ -100,7 +100,7 @@ public final class NotchHotStateWriter {
         ptr = raw!.assumingMemoryBound(to: NotchHotState.self)
         // Zero out on creation
         ptr?.pointee = .zero
-        NSLog("[NotchHotState] Writer: active at \(path) (\(size) bytes)")
+        TalkieLogger.info(.system, "[NotchHotState] Writer: active at \(path) (\(size) bytes)")
     }
 
     deinit {
@@ -186,7 +186,7 @@ public final class NotchHotStateReader {
 
         ptr = UnsafePointer(raw!.assumingMemoryBound(to: NotchHotState.self))
         isActive = true
-        NSLog("[NotchHotState] Reader: active")
+        TalkieLogger.info(.system, "[NotchHotState] Reader: active")
         return true
     }
 

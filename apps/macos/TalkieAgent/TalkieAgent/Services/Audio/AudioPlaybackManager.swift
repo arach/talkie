@@ -8,9 +8,9 @@
 import Foundation
 import AVFoundation
 import Combine
-import os.log
+import TalkieKit
 
-private let logger = Logger(subsystem: "to.talkie.app.agent", category: "AudioPlayback")
+private let logger = Log(.audio)
 
 @MainActor
 final class AudioPlaybackManager: NSObject, ObservableObject {
