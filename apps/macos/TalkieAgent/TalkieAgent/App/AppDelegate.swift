@@ -855,6 +855,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                     self.showAgentHome()
                 }
             },
+            openTalkie: { [weak self] in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.dismissAgentMenuPopover()
+                    TalkieAppOpener.openApp()
+                }
+            },
             openSettings: { [weak self] in
                 Task { @MainActor in
                     guard let self else { return }
@@ -1815,10 +1822,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             keyCode: selectionQuickHotkey.keyCode
         ) { [weak self] _ in
             Task { @MainActor in
+                log.info(
+                    "Quick selection hotkey pressed",
+                    detail: "shortcut=\(selectionQuickHotkey.displayString) enabled=\(Self.isSelectionQuickEnabled())"
+                )
                 self?.speakSelectedText()
             }
         }
-        log.info("Quick selection hotkey registered: \(selectionQuickHotkey.displayString)")
+
+        let registrationDetail = [
+            "shortcut=\(selectionQuickHotkey.displayString)",
+            "keyCode=\(selectionQuickHotkey.keyCode)",
+            "modifiers=\(selectionQuickHotkey.modifiers)"
+        ].joined(separator: " ")
+        if speakSelectionHotKeyManager.isRegistered {
+            log.info("Quick selection hotkey registered", detail: registrationDetail)
+        } else {
+            log.error("Quick selection hotkey registration failed", detail: registrationDetail)
+        }
     }
 
     private func refreshHotkeyManagerDiagnostics(pttEnabled: Bool, ambientEnabled: Bool) {
@@ -2119,6 +2140,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     /// Capture selected text from the frontmost app and ask Talkie to speak it.
     private func speakSelectedText() {
+        guard Self.isSelectionQuickEnabled() else {
+            log.info("Quick selection ignored: feature disabled")
+            selectionFeedbackController.show(
+                SelectionFeedbackMessage(
+                    title: "Quick Selection is off",
+                    detail: "Turn it on in Talkie Settings > Selection.",
+                    tone: .warning,
+                    actionTitle: nil,
+                    action: nil
+                ),
+                duration: 1.8
+            )
+            return
+        }
+
         log.info("Attempting to capture selected text for speech")
 
         let sourceApp = selectionSourceApp()
@@ -2168,6 +2204,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             }
             runSpeakSelectionPipeline(text: ocrText, sourceApp: sourceApp, source: .ocr)
         }
+    }
+
+    private static func isSelectionQuickEnabled() -> Bool {
+        TalkieSharedSettings.object(forKey: AgentSettingsKey.selectionEnabled) as? Bool ?? true
     }
 
     /// Origin of the selection text flowing into the speak pipeline.

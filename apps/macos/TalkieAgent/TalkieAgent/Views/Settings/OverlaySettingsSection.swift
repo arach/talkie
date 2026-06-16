@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AppKit
 import TalkieKit
 
 struct OverlaySettingsSection: View {
@@ -13,6 +14,7 @@ struct OverlaySettingsSection: View {
     @AppStorage(CaptureIslandDefaults.enabled) private var capturePreviewEnabled = true
     @AppStorage(CaptureIslandDefaults.dismissSeconds) private var capturePreviewDismissSeconds = 6.0
     @State private var lastTopOverlayStyle: OverlayStyle = .particles
+    @State private var notchInfo = NotchInfo.detect()
 
     var body: some View {
         SettingsPageContainer {
@@ -22,6 +24,14 @@ struct OverlaySettingsSection: View {
                 subtitle: "Live visual feedback and capture surfaces."
             )
         } content: {
+            SettingsCard(title: "SURFACE READOUT") {
+                SurfaceReadout(
+                    liveSurface: liveSurfaceReadout,
+                    capturePreview: capturePreviewReadout,
+                    macBookNotch: macBookNotchReadout
+                )
+            }
+
             SettingsCard(title: "LIVE PREVIEW") {
                 LivePreviewScreen(
                     overlayStyle: $settings.overlayStyle,
@@ -100,8 +110,23 @@ struct OverlaySettingsSection: View {
                     .disabled(!capturePreviewEnabled)
                 }
             }
+
+            SettingsCard(title: "MACBOOK NOTCH") {
+                VStack(alignment: .leading, spacing: OpsSpacing.lg) {
+                    SettingsToggleRow(
+                        icon: "macbook",
+                        title: "Use MacBook notch format",
+                        description: notchToggleDescription,
+                        isOn: $settings.notchOverlayEnabled
+                    )
+                    .help("Use the built-in MacBook notch surface when one is available")
+                    .disabled(!notchInfo.hasNotch)
+                    .opacity(notchInfo.hasNotch ? 1.0 : 0.45)
+                }
+            }
         }
         .onAppear {
+            notchInfo = NotchInfo.detect()
             OverlaySettingsPreviewController.shared.activate()
             rememberCurrentTopOverlayStyle()
             if settings.pillPosition == .topCenter {
@@ -113,6 +138,9 @@ struct OverlaySettingsSection: View {
         }
         .onChange(of: settings.overlayStyle) { _, _ in
             rememberCurrentTopOverlayStyle()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in
+            notchInfo = NotchInfo.detect()
         }
     }
 
@@ -134,6 +162,146 @@ struct OverlaySettingsSection: View {
         if settings.overlayStyle.showsTopOverlay {
             lastTopOverlayStyle = settings.overlayStyle
         }
+    }
+
+    private var liveSurfaceReadout: SurfaceReadout.Item {
+        if settings.effectiveOverlayStyle == .island {
+            return SurfaceReadout.Item(
+                title: "Live surface",
+                value: "Island",
+                detail: "\(Int(settings.islandOverlayWidth)) x \(Int(settings.islandOverlayHeight)) pt",
+                icon: "capsule",
+                tint: OpsTint.amber.color
+            )
+        }
+
+        guard settings.effectiveOverlayStyle.showsTopOverlay else {
+            return SurfaceReadout.Item(
+                title: "Live surface",
+                value: "Off",
+                detail: "Recording pill only",
+                icon: "rectangle.inset.topright.filled",
+                tint: OpsInk.dim
+            )
+        }
+
+        return SurfaceReadout.Item(
+            title: "Live surface",
+            value: settings.effectiveOverlayStyle.displayName,
+            detail: settings.overlayPlacement.nearestIndicatorPosition.displayName,
+            icon: "rectangle.inset.topright.filled",
+            tint: OpsInk.statusInfo
+        )
+    }
+
+    private var capturePreviewReadout: SurfaceReadout.Item {
+        SurfaceReadout.Item(
+            title: "Capture preview",
+            value: capturePreviewEnabled ? "On" : "Off",
+            detail: capturePreviewEnabled ? "\(Int(capturePreviewDismissSeconds))s auto-dismiss" : "Hidden after capture",
+            icon: "rectangle.topthird.inset.filled",
+            tint: capturePreviewEnabled ? OpsInk.statusOk : OpsInk.dim
+        )
+    }
+
+    private var macBookNotchReadout: SurfaceReadout.Item {
+        guard notchInfo.hasNotch else {
+            return SurfaceReadout.Item(
+                title: "MacBook notch",
+                value: "Not detected",
+                detail: "Island remains available",
+                icon: "macbook",
+                tint: OpsInk.dim
+            )
+        }
+
+        return SurfaceReadout.Item(
+            title: "MacBook notch",
+            value: settings.notchOverlayEnabled ? "Available" : "Disabled",
+            detail: settings.notchOverlayEnabled ? "Uses hardware notch format" : "Falls back to top overlay",
+            icon: "macbook",
+            tint: settings.notchOverlayEnabled ? OpsInk.statusOk : OpsInk.statusWarn
+        )
+    }
+
+    private var notchToggleDescription: String {
+        if notchInfo.hasNotch {
+            return "Keep the physical MacBook notch surface available for live recording."
+        }
+        return "No built-in notch was detected on the current display set."
+    }
+}
+
+private struct SurfaceReadout: View {
+    struct Item: Identifiable {
+        let id = UUID()
+        let title: String
+        let value: String
+        let detail: String
+        let icon: String
+        let tint: Color
+    }
+
+    let liveSurface: Item
+    let capturePreview: Item
+    let macBookNotch: Item
+
+    var body: some View {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: OpsSpacing.md) {
+            SurfaceReadoutCell(item: liveSurface)
+            SurfaceReadoutCell(item: capturePreview)
+            SurfaceReadoutCell(item: macBookNotch)
+        }
+    }
+
+    private var columns: [GridItem] {
+        [GridItem(.adaptive(minimum: 176), spacing: OpsSpacing.md)]
+    }
+}
+
+private struct SurfaceReadoutCell: View {
+    let item: SurfaceReadout.Item
+
+    var body: some View {
+        HStack(alignment: .top, spacing: OpsSpacing.md) {
+            Image(systemName: item.icon)
+                .font(OpsType.ui(OpsSize.sm, weight: .semibold))
+                .foregroundStyle(item.tint)
+                .frame(width: 22, height: 22)
+                .background(
+                    RoundedRectangle(cornerRadius: OpsRadius.tight)
+                        .fill(OpsSurface.tintFill(item.tint))
+                )
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.title.uppercased())
+                    .font(OpsType.mono(OpsSize.micro, weight: .bold))
+                    .tracking(0.9)
+                    .foregroundStyle(OpsInk.dim)
+
+                Text(item.value)
+                    .font(OpsType.ui(OpsSize.sm, weight: .semibold))
+                    .foregroundStyle(OpsInk.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+
+                Text(item.detail)
+                    .font(OpsType.ui(OpsSize.micro))
+                    .foregroundStyle(OpsInk.muted)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(OpsSpacing.md)
+        .frame(maxWidth: .infinity, minHeight: 82, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: OpsRadius.standard)
+                .fill(OpsSurface.control)
+                .overlay(
+                    RoundedRectangle(cornerRadius: OpsRadius.standard)
+                        .stroke(OpsHairline.standard, lineWidth: OpsStroke.thin)
+                )
+        )
     }
 }
 

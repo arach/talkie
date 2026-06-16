@@ -110,6 +110,15 @@ struct SelectionTriggerContent: View {
     @Environment(AgentSettings.self) private var settings: AgentSettings
     @State private var isRecordingHotkey = false
 
+    private var selectionQuickHotkeyBinding: Binding<HotkeyConfig> {
+        Binding(
+            get: { settings.selectionQuickHotkey },
+            set: { newValue in
+                HotkeyRegistry.shared.setConfig(.selectionQuickAction, newValue)
+            }
+        )
+    }
+
     var body: some View {
         @Bindable var s = settings
 
@@ -143,8 +152,10 @@ struct SelectionTriggerContent: View {
                         .foregroundColor(Theme.current.foregroundMuted)
 
                     HotkeyRecorderButton(
-                        hotkey: $s.selectionQuickHotkey,
-                        isRecording: $isRecordingHotkey
+                        hotkey: selectionQuickHotkeyBinding,
+                        isRecording: $isRecordingHotkey,
+                        showReset: s.selectionQuickHotkey != .defaultSelectionQuick,
+                        resetValue: .defaultSelectionQuick
                     )
                     .opacity(s.selectionEnabled ? 1.0 : 0.5)
                 }

@@ -39,6 +39,7 @@ struct AgentMenuRecentItem: Identifiable, Sendable {
 struct AgentMenuActions {
     var toggleRecording: () -> Void
     var openHome: () -> Void
+    var openTalkie: () -> Void
     var openSettings: () -> Void
     var openHistory: () -> Void
     var openAudioSettings: () -> Void
@@ -407,14 +408,34 @@ struct AgentMenuPopoverView: View {
 
     private var toolsSection: some View {
         AgentMenuBareSection(title: "Tools") {
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: 6),
-                    GridItem(.flexible(), spacing: 6),
-                    GridItem(.flexible(), spacing: 6)
-                ],
-                spacing: 6
-            ) {
+            VStack(spacing: 6) {
+                // Quick link to bring the main Talkie app forward — kept full-width
+                // and at the top so it reads as the headline "leave to the app"
+                // action rather than competing with the utility tile grid below.
+                AgentMenuCommandRow(
+                    title: "Open Talkie",
+                    subtitle: "Bring the main Talkie app forward",
+                    systemImage: "arrow.up.forward.app.fill",
+                    tint: skin.inkDim,
+                    action: actions.openTalkie
+                )
+                .background {
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(skin.cardFill)
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 7)
+                        .stroke(skin.cardStroke, lineWidth: 0.5)
+                }
+
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), spacing: 6),
+                        GridItem(.flexible(), spacing: 6),
+                        GridItem(.flexible(), spacing: 6)
+                    ],
+                    spacing: 6
+                ) {
                 AgentMenuToolTile(title: "Home", systemImage: "rectangle.grid.2x2.fill", tint: skin.inkDim, action: actions.openHome)
                 AgentMenuToolTile(title: "Settings", systemImage: "gearshape.fill", tint: skin.inkDim, action: actions.openSettings)
                 AgentMenuToolTile(
@@ -435,6 +456,7 @@ struct AgentMenuPopoverView: View {
                 )
                 AgentMenuToolTile(title: "Restart", systemImage: "arrow.clockwise", tint: skin.inkMuted, action: actions.restart)
                 AgentMenuToolTile(title: "Quit", systemImage: "power", tint: skin.inkSubtle, action: actions.quit)
+                }
             }
         }
     }
@@ -1114,6 +1136,7 @@ private struct AgentMenuEmptyRow: View {
         actions: AgentMenuActions(
             toggleRecording: {},
             openHome: {},
+            openTalkie: {},
             openSettings: {},
             openHistory: {},
             openAudioSettings: {},
