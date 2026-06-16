@@ -607,7 +607,7 @@ struct AppNavigation: View {
         switch selectedSection {
         case .home, .drafts, .notes, .models, .allowedCommands, .aiResults, .allMemos,
              .recordings, .liveDashboard, .dictations, .systemConsole, .pendingActions,
-             .recentlyDeleted, .contextRules, .screenshots:
+             .recentlyDeleted, .activityLog, .contextRules, .screenshots:
             return true
         #if DEBUG
         case .designHome, .designAudit, .designComponents:
@@ -923,8 +923,14 @@ struct AppNavigation: View {
             entries.append(.item(SidebarItem(id: .contextRules, title: "Context", icon: "square.stack.3d.forward.dottedline", selectedIcon: "square.stack.3d.forward.dottedline.fill")))
         }
 
+        entries.append(.section(id: "activity", title: "Activity"))
+        entries.append(.item(SidebarItem(
+            id: .activityLog,
+            title: "Logs",
+            icon: "list.bullet.rectangle",
+            selectedIcon: "list.bullet.rectangle"
+        )))
         if pendingActionsManager.hasActiveActions {
-            entries.append(.section(id: "activity", title: "Activity"))
             entries.append(.item(SidebarItem(id: .pendingActions, title: "Pending", icon: "clock.arrow.circlepath", selectedIcon: "clock.fill")))
         }
 
@@ -1102,6 +1108,8 @@ struct AppNavigation: View {
                 case .aiResults:
                     ActionWorkbenchView()
                         .wrapInTalkieSection("Actions", showHeader: false)
+                case .activityLog:
+                    LogsScreen()
                 case .allMemos:
                     if SettingsManager.shared.isScopeTheme {
                         ScopeLibraryView(initialTypeFilter: .memos)

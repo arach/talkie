@@ -773,7 +773,15 @@ private struct AgentHomeOverviewPage: View {
                     AgentHomeRouteButton(section: .logs, onSelect: onSelect)
                 }
 
-                OpsButton("Open shared settings", icon: "gearshape", style: .secondary, action: onOpenSettings)
+                HStack(spacing: OpsSpacing.md) {
+                    // Launch the sibling Talkie app — amber ties it to the brand
+                    // mark so it reads as "leave to the main app", distinct from
+                    // the in-app shared-settings route beside it.
+                    OpsButton("Open Talkie", icon: "arrow.up.forward.app", style: .primary(.amber)) {
+                        TalkieAppOpener.openApp()
+                    }
+                    OpsButton("Open shared settings", icon: "gearshape", style: .secondary, action: onOpenSettings)
+                }
             }
         }
     }
@@ -1055,7 +1063,6 @@ private struct AgentHomeOverlaysPage: View {
                     AgentHomeMetricCard(title: "Top overlay", value: settings.effectiveOverlayStyle.displayName, detail: settings.overlayPosition.displayName, icon: "rectangle.inset.topright.filled", tint: OpsTint.amber.color)
                     AgentHomeMetricCard(title: "Pill", value: settings.pillEnabled ? "Enabled" : "Disabled", detail: settings.pillPosition.displayName, icon: "capsule.portrait", tint: settings.pillEnabled ? OpsInk.statusOk : OpsInk.dim)
                     AgentHomeMetricCard(title: "All screens", value: settings.pillShowOnAllScreens ? "Yes" : "No", detail: "Floating pill", icon: "display.2", tint: OpsInk.statusInfo)
-                    AgentHomeMetricCard(title: "Notch", value: notchValue, detail: notchDetail, icon: "macbook", tint: notchTint)
                 }
 
                 OpsCard {
@@ -1070,6 +1077,7 @@ private struct AgentHomeOverlaysPage: View {
                             OpsKVRow("Overlay style", value: settings.overlayStyle.displayName)
                             OpsKVRow("Effective style", value: settings.effectiveOverlayStyle.displayName)
                             OpsKVRow("Pill expands", value: settings.pillExpandsDuringRecording ? "During recording" : "Manual")
+                            OpsKVRow("MacBook notch", value: "\(notchValue) - \(notchDetail)", valueColor: notchTint)
                             OpsKVRow("Theme", value: settings.visualTheme.displayName)
                         }
 

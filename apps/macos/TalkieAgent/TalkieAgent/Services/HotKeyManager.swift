@@ -258,6 +258,9 @@ final class HotKeyManager {
             log.info("RegisterEventHotKey succeeded: keyCode=\(keyCode) modifiers=\(modifiers)")
         } else {
             log.error("RegisterEventHotKey failed: status=\(registerStatus) keyCode=\(keyCode) modifiers=\(modifiers)")
+            HotKeyRegistry.shared.unregister(signature: sig, id: self.hotkeyID)
+            registeredKeyCode = nil
+            registeredModifiers = nil
         }
     }
 
