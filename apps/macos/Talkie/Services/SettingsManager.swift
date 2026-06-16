@@ -2721,6 +2721,8 @@ final class SettingsManager {
 
     private let syncIntervalMinutesKey = "syncIntervalMinutes"
     private let jsonExportScheduleKey = "jsonExportSchedule"
+    private let memoOriginalRetentionDaysKey = "memoOriginalRetentionDays"
+    private let keepProblemMemoOriginalsUntilReviewedKey = "keepProblemMemoOriginalsUntilReviewed"
 
     /// CloudKit sync interval in minutes (default: 10 minutes)
     /// Manual sync button is always available regardless of this setting
@@ -2766,6 +2768,32 @@ final class SettingsManager {
             persistDeclarativeSettings { $0.audio.jsonExportSchedule = schedule }
             // Notify JSONExportService to update its timer
             NotificationCenter.default.post(name: .jsonExportScheduleDidChange, object: nil)
+        }
+    }
+
+    /// How long successful memo originals are retained after canonical audio is validated.
+    var memoOriginalRetentionDays: Int {
+        didSet {
+            let days = max(1, memoOriginalRetentionDays)
+            if memoOriginalRetentionDays != days {
+                memoOriginalRetentionDays = days
+                return
+            }
+            DispatchQueue.main.async {
+                UserDefaults.standard.set(days, forKey: self.memoOriginalRetentionDaysKey)
+            }
+            persistDeclarativeSettings { $0.audio.memoOriginalRetentionDays = days }
+        }
+    }
+
+    /// Problem originals are retained until explicit review unless the user disables this safety override.
+    var keepProblemMemoOriginalsUntilReviewed: Bool {
+        didSet {
+            let keep = keepProblemMemoOriginalsUntilReviewed
+            DispatchQueue.main.async {
+                UserDefaults.standard.set(keep, forKey: self.keepProblemMemoOriginalsUntilReviewedKey)
+            }
+            persistDeclarativeSettings { $0.audio.keepProblemMemoOriginalsUntilReviewed = keep }
         }
     }
 
@@ -3006,6 +3034,8 @@ final class SettingsManager {
         self.llmCostTier = declarativeSettings.models.llmCostTier
         self.syncIntervalMinutes = declarativeSettings.sync.syncIntervalMinutes
         self.jsonExportSchedule = declarativeSettings.audio.jsonExportSchedule
+        self.memoOriginalRetentionDays = max(1, declarativeSettings.audio.memoOriginalRetentionDays)
+        self.keepProblemMemoOriginalsUntilReviewed = declarativeSettings.audio.keepProblemMemoOriginalsUntilReviewed
         self.playbackVolume = declarativeSettings.audio.playbackVolume
         self._selectedTTSVoiceId = Self.normalizeSelectedTTSVoiceId(
             declarativeSettings.audio.selectedTTSVoiceId,
@@ -3125,7 +3155,9 @@ final class SettingsManager {
             "saveTranscriptsLocally": saveTranscriptsLocally,
             "transcriptsFolderPath": transcriptsFolderPath,
             "saveAudioLocally": saveAudioLocally,
-            "audioFolderPath": audioFolderPath
+            "audioFolderPath": audioFolderPath,
+            "memoOriginalRetentionDays": memoOriginalRetentionDays,
+            "keepProblemMemoOriginalsUntilReviewed": keepProblemMemoOriginalsUntilReviewed
         ]
 
         // Automations

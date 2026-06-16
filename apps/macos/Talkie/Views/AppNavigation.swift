@@ -1674,6 +1674,7 @@ private struct GlobalActionBar: View {
     private var isPreparing: Bool { controller.state.isPreparing }
     private var isRecording: Bool { controller.state.isRecording }
     private var isProcessing: Bool { controller.state.isProcessing }
+    private var captureStatusMessage: String? { controller.captureStatusMessage }
     private var isScreenRecording: Bool { screenRecorder.state == .recording }
     private var isScreenSelecting: Bool { screenRecorder.state == .selecting }
     private var isActive: Bool { isPreparing || isRecording || isScreenRecording || isScreenSelecting }
@@ -1728,9 +1729,9 @@ private struct GlobalActionBar: View {
             HStack(spacing: 5) {
                 if isPreparing {
                     HStack(spacing: 4) {
-                        ProgressView()
-                            .controlSize(.mini)
-                            .tint(.red.opacity(0.8))
+                        Image(systemName: "mic.fill")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(.red.opacity(0.8))
                         Text("Preparing…")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundColor(.white.opacity(0.6))
@@ -1754,9 +1755,9 @@ private struct GlobalActionBar: View {
                     ))
                 } else if isScreenSelecting {
                     HStack(spacing: 4) {
-                        ProgressView()
-                            .controlSize(.mini)
-                            .tint(.red.opacity(0.8))
+                        Image(systemName: "viewfinder")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(.red.opacity(0.8))
                         Text("Selecting")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundColor(.white.opacity(0.6))
@@ -1766,22 +1767,33 @@ private struct GlobalActionBar: View {
                         removal: .opacity
                     ))
                 } else if isRecording {
-                    Text(formatElapsed(controller.elapsedTime))
-                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.9))
-                        .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .move(edge: .leading)),
-                            removal: .opacity.combined(with: .move(edge: .leading))
-                        ))
+                    HStack(spacing: 4) {
+                        Text(formatElapsed(controller.elapsedTime))
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.9))
+
+                        if captureStatusMessage != nil {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(.orange.opacity(0.9))
+                            Text("Mic reconnecting")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.orange.opacity(0.85))
+                        }
+                    }
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .move(edge: .leading)),
+                        removal: .opacity.combined(with: .move(edge: .leading))
+                    ))
                 }
 
                 RecordButtonContent(isRecording: isActive, isHovered: recordHovered)
 
                 if isProcessing && !isRecording && !isPreparing {
                     HStack(spacing: 4) {
-                        ProgressView()
-                            .controlSize(.mini)
-                            .tint(.white.opacity(0.6))
+                        Image(systemName: "gearshape.2")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.6))
                         Text("Processing")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundColor(.white.opacity(0.5))

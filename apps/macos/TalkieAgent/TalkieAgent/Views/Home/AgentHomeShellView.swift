@@ -1212,13 +1212,6 @@ private struct AgentHomeLibraryPage: View {
             maxContentWidth: 1_260
         ) {
             VStack(alignment: .leading, spacing: OpsSpacing.xxxl) {
-                LazyVGrid(columns: AgentHomeGrid.columns, alignment: .leading, spacing: OpsSpacing.xl) {
-                    AgentHomeMetricCard(title: "All items", value: "\(store.summary.total)", detail: visibleDetail, icon: "clock.arrow.circlepath", tint: OpsInk.muted)
-                    AgentHomeMetricCard(title: "Memos", value: "\(store.summary.memos)", detail: "Cloud-synced voice memos", icon: TalkieObjectType.memo.icon, tint: OpsTint.amber.color)
-                    AgentHomeMetricCard(title: "Dictations", value: "\(store.summary.dictations)", detail: "Live local transcript history", icon: TalkieObjectType.dictation.icon, tint: OpsTint.cyan.color)
-                    AgentHomeMetricCard(title: "Media", value: "\(store.summary.captures + store.summary.selections)", detail: "\(store.summary.captures) captures / \(store.summary.selections) selections", icon: TalkieObjectType.capture.icon, tint: OpsTint.green.color)
-                }
-
                 OpsCard(padding: 0) {
                     VStack(alignment: .leading, spacing: 0) {
                         HStack(alignment: .top, spacing: OpsSpacing.xl) {
@@ -1334,13 +1327,6 @@ private struct AgentHomeLibraryPage: View {
     private var selectedItem: TalkieObject? {
         guard let selectedID else { return nil }
         return store.items.first { $0.id == selectedID }
-    }
-
-    private var visibleDetail: String {
-        if store.summary.total > store.items.count {
-            return "\(store.items.count) recent shown"
-        }
-        return "All visible"
     }
 
     private func reconcileSelection() {

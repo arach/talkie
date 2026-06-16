@@ -157,12 +157,16 @@ struct MacRecordingView: View {
                 .font(.system(size: 48, weight: .light))
                 .foregroundColor(.red)
         } else {
-            // Idle/Recording: live waveform bars - full width
-            // Use recording red when recording, muted when idle
+            // Idle / Preparing / Recording: live waveform bars - full width.
+            // Recording is red; preparing borrows the accent for an
+            // anticipatory "warming up" read; idle stays muted.
             LiveWaveformBars(
                 audioLevel: controller.audioLevel,
-                isRecording: controller.state.isRecording,
-                color: controller.state.isRecording ? recordingRed : Theme.current.foregroundSecondary
+                activity: controller.state.isRecording ? .recording
+                    : controller.state.isPreparing ? .preparing : .idle,
+                color: controller.state.isRecording ? recordingRed
+                    : controller.state.isPreparing ? Theme.current.accent
+                    : Theme.current.foregroundSecondary
             )
         }
     }
@@ -205,7 +209,8 @@ struct MacRecordingView: View {
             Circle()
                 .strokeBorder(Theme.current.foregroundMuted.opacity(0.3), lineWidth: 1.5)
         case .inProgress:
-            BrailleSpinner(size: 10)
+            Image(systemName: "ellipsis.circle.fill")
+                .font(.system(size: 14))
                 .foregroundColor(.orange)
         case .completed:
             Image(systemName: "checkmark.circle.fill")
@@ -230,10 +235,18 @@ struct MacRecordingView: View {
     // MARK: - Timer View
 
     private var timerView: some View {
-        Text(formatTime(controller.elapsedTime))
-            .font(.system(size: 48, weight: .ultraLight, design: .monospaced))
-            .foregroundColor(Theme.current.foreground)
-            .monospacedDigit()
+        VStack(spacing: Spacing.xs) {
+            Text(formatTime(controller.elapsedTime))
+                .font(.system(size: 48, weight: .ultraLight, design: .monospaced))
+                .foregroundColor(Theme.current.foreground)
+                .monospacedDigit()
+
+            if let message = controller.captureStatusMessage {
+                Label(message, systemImage: "exclamationmark.triangle.fill")
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(.orange)
+            }
+        }
     }
 
     // MARK: - Main Action Button
@@ -280,8 +293,9 @@ struct MacRecordingView: View {
 
         case .preparing:
             VStack(spacing: Spacing.sm) {
-                ProgressView()
-                    .controlSize(.regular)
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(recordingRed)
                 Text("Preparing…")
                     .font(Theme.current.fontSM)
                     .foregroundColor(Theme.current.foregroundSecondary)
@@ -480,20 +494,53 @@ extension View {
 
 // MARK: - Live Waveform Bars
 
-/// Real-time audio level visualization - fills available width
+/// Real-time audio level visualization - fills available width.
+///
+/// Three activities drive the look:
+///   - `.idle`      — dormant: a calm low drift so the strip looks alive at rest.
+///   - `.preparing` — spinning up: an anticipatory pulse sweeps across while the
+///                    recorder warms up. Honest "getting ready" motion with no
+///                    claim of real audio — never reads as active recording.
+///   - `.recording` — live: audio history scrolls in from the right; a faint
+///                    ambient ripple keeps quiet moments from flatlining.
+///
+/// Motion is deterministic and timer-free: the traveling ripple is derived
+/// from the TimelineView clock, and the whole strip renders in a single
+/// `Canvas`, so there is no per-bar view churn.
 struct LiveWaveformBars: View {
+    enum Activity: Equatable {
+        case idle
+        case preparing
+        case recording
+
+        var isRecording: Bool { self == .recording }
+    }
+
     let audioLevel: Float
-    let isRecording: Bool
+    let activity: Activity
     let color: Color
+
+    /// Convenience for the common two-state callers.
+    init(audioLevel: Float, isRecording: Bool, color: Color) {
+        self.audioLevel = audioLevel
+        self.activity = isRecording ? .recording : .idle
+        self.color = color
+    }
+
+    init(audioLevel: Float, activity: Activity, color: Color) {
+        self.audioLevel = audioLevel
+        self.activity = activity
+        self.color = color
+    }
 
     // Dynamic bar count based on available width
     private let barWidth: CGFloat = 3
     private let gap: CGFloat = 4
-    @State private var barLevels: [CGFloat] = Array(repeating: 0.15, count: 80)
+    @State private var barLevels: [CGFloat] = Array(repeating: 0.12, count: 80)
     /// Smoothed level used to drive a gentle scale pulse on the whole
     /// waveform — gives the strip an "alive" / breathing quality
     /// without per-bar randomness that reads as noise.
-    @State private var envelope: CGFloat = 0.15
+    @State private var envelope: CGFloat = 0.12
 
     var body: some View {
         GeometryReader { geometry in
@@ -501,6 +548,11 @@ struct LiveWaveformBars: View {
             let barCount = max(20, Int(availableWidth / (barWidth + gap)))
 
             TimelineView(.animation(minimumInterval: 0.033)) { timeline in
+                // Phase comes straight from the animation clock so the
+                // traveling ripple is deterministic — no stored timer, no
+                // randomness — and resolves identically on every frame.
+                let phase = timeline.date.timeIntervalSinceReferenceDate
+
                 Canvas { context, size in
                     let totalWidth = CGFloat(barCount) * (barWidth + gap) - gap
                     let startX = (size.width - totalWidth) / 2
@@ -508,21 +560,53 @@ struct LiveWaveformBars: View {
                     // dead space top + bottom even on loud signals.
                     let maxHeight = size.height * 0.96
                     let centerY = size.height / 2
+                    let lastIndex = Double(max(1, barCount - 1))
 
                     for i in 0..<barCount {
                         let x = startX + CGFloat(i) * (barWidth + gap)
 
-                        // Each bar has slightly different response for
-                        // natural look — wider variation than before so
-                        // the wave reads as organic instead of uniform.
-                        let seed = Double(i) * 1.618
-                        let variation: CGFloat = 0.55 + CGFloat(sin(seed * 3)) * 0.45
-                        let levelIndex = i % barLevels.count
-                        let barLevel = barLevels[levelIndex] * variation
+                        // Center-weighted spatial envelope: the strip reads as
+                        // a single intentional shape — fuller in the middle,
+                        // tapering toward the ends — instead of a flat block.
+                        let position = Double(i) / lastIndex
+                        let shape = CGFloat(0.40 + 0.60 * sin(position * .pi))
+
+                        // Deterministic traveling ripple. Two sines at
+                        // different speeds + wavelengths beat against each
+                        // other so the shimmer reads organic, never a single
+                        // obvious pulse. Travels leftward, matching the audio
+                        // history scroll direction.
+                        let wave = sin(phase * 2.3 + Double(i) * 0.55) * 0.6
+                                 + sin(phase * 0.9 + Double(i) * 0.23) * 0.4
+                        let ripple = CGFloat(wave * 0.5 + 0.5)   // 0...1
+
+                        // Audio history — newest level scrolls in from the right.
+                        let audioBar = barLevels[i % barLevels.count]
+
+                        let level: CGFloat
+                        let opacity: Double
+                        switch activity {
+                        case .recording:
+                            // Real audio leads; a faint ambient ripple fills the
+                            // quiet so the strip never collapses to a dead line.
+                            let ambient = (0.045 + envelope * 0.05) * ripple
+                            level = max(audioBar, ambient) * shape
+                            opacity = 0.45 + Double(min(1, level)) * 0.55
+                        case .preparing:
+                            // Anticipatory sweep — squaring the ripple sharpens
+                            // it into a soft crest that travels across the strip.
+                            let sweep = ripple * ripple
+                            level = (0.16 + 0.34 * sweep) * shape
+                            opacity = 0.32 + 0.46 * Double(sweep)
+                        case .idle:
+                            // Dormant: a low calm drift — alive but at rest.
+                            level = (0.10 + 0.07 * ripple) * shape
+                            opacity = 0.20 + 0.10 * Double(ripple)
+                        }
 
                         // Bar height
-                        let minHeight: CGFloat = 4
-                        let barHeight = max(minHeight, barLevel * maxHeight)
+                        let minHeight: CGFloat = 3
+                        let barHeight = max(minHeight, level * maxHeight)
 
                         // Draw bar centered vertically
                         let barRect = CGRect(
@@ -532,14 +616,8 @@ struct LiveWaveformBars: View {
                             height: barHeight
                         )
 
-                        // Opacity tracks level + envelope so quiet
-                        // bars fade rather than going opaque-flat.
-                        let opacity = isRecording
-                            ? (0.45 + Double(barLevel) * 0.55)
-                            : 0.22
-
                         context.fill(
-                            RoundedRectangle(cornerRadius: 1.5).path(in: barRect),
+                            RoundedRectangle(cornerRadius: barWidth / 2).path(in: barRect),
                             with: .color(color.opacity(opacity))
                         )
                     }
@@ -556,19 +634,21 @@ struct LiveWaveformBars: View {
         .animation(.easeOut(duration: 0.12), value: envelope)
         .onAppear {
             // Initialize with idle state
-            barLevels = Array(repeating: 0.15, count: 80)
-            envelope = 0.15
+            barLevels = Array(repeating: 0.12, count: 80)
+            envelope = 0.12
         }
     }
 
     private func updateBars(count: Int) {
-        // Lighter compression than before (was pow(x, 0.5)) so the
-        // bars actually swing with voice volume instead of squashing
-        // toward a single mid-level.
+        // Only real recording feeds the history buffer; idle/preparing hold a
+        // quiet baseline so the buffer is clean when capture actually begins.
+        // Lighter compression than before (was pow(x, 0.5)) so the bars swing
+        // with voice volume instead of squashing toward a single mid-level.
         let rawLevel = CGFloat(audioLevel)
-        let targetLevel: CGFloat = isRecording
-            ? max(0.12, pow(rawLevel, 0.7))
-            : 0.15
+        let baseline: CGFloat = 0.10
+        let targetLevel: CGFloat = activity.isRecording
+            ? max(0.10, pow(rawLevel, 0.7))
+            : baseline
 
         // Shift bars and add new value
         var newLevels = barLevels
@@ -585,7 +665,7 @@ struct LiveWaveformBars: View {
         // Envelope follower for the whole-wave pulse. Asymmetric
         // attack / release: rises fast on louder input, decays slow
         // so the strip "breathes" rather than chattering.
-        let target = isRecording ? targetLevel : 0.15
+        let target = activity.isRecording ? targetLevel : baseline
         if target > envelope {
             envelope += (target - envelope) * 0.35
         } else {

@@ -18,11 +18,13 @@
 //  same paper.
 //
 
+import AppKit
 import SwiftUI
 import TalkieKit
 
 struct TOMarginRail: View {
     let recording: TalkieObject
+    @State private var showFiles = false
 
     /// Standard rail width. 220pt mirrors the existing `metadataAside`
     /// fixed-width column.
@@ -36,9 +38,16 @@ struct TOMarginRail: View {
     static let collapseBelow: CGFloat = 720
 
     var body: some View {
+        let metadataGroups = groups
+        let files = fileReferences
+
         VStack(alignment: .leading, spacing: 18) {
-            ForEach(Array(groups.enumerated()), id: \.offset) { gi, group in
-                groupView(group: group, isLast: gi == groups.count - 1)
+            ForEach(Array(metadataGroups.enumerated()), id: \.offset) { gi, group in
+                groupView(group: group, isLast: gi == metadataGroups.count - 1 && files.isEmpty)
+            }
+
+            if !files.isEmpty {
+                filesGroupView(files: files)
             }
         }
         .padding(.top, Self.eyebrowAlignmentInset)
@@ -58,7 +67,8 @@ struct TOMarginRail: View {
     /// would otherwise render empty — single-paragraph memos with no
     /// technical metadata don't need the side gutter.
     static func hasContent(for recording: TalkieObject) -> Bool {
-        !TOMarginRail(recording: recording).groups.isEmpty
+        let rail = TOMarginRail(recording: recording)
+        return !rail.groups.isEmpty || !rail.fileReferences.isEmpty
     }
 
     // MARK: - Groups
@@ -152,6 +162,10 @@ struct TOMarginRail: View {
         // anchored to the text, not as technical metadata.
 
         return out
+    }
+
+    private var fileReferences: [TOFileReference] {
+        TOFileReferenceCatalog.references(for: recording)
     }
 
     // MARK: - Technical formatters
@@ -280,6 +294,154 @@ struct TOMarginRail: View {
     private func shouldStack(row: DocumentMetadataRow) -> Bool {
         if row.label.lowercased() == "cwd" { return true }
         return row.value.count > 16
+    }
+
+    // MARK: - File rendering
+
+    private func filesGroupView(files: [TOFileReference]) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("· FILES")
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .tracking(2.4)
+                    .foregroundColor(Theme.current.foregroundSecondary.opacity(0.65))
+
+                Spacer(minLength: 8)
+
+                Text(fileSummary(files))
+                    .font(.system(size: 9, weight: .regular, design: .monospaced))
+                    .tracking(1.2)
+                    .foregroundColor(Theme.current.foregroundSecondary.opacity(0.55))
+            }
+
+            Button {
+                withAnimation(.easeOut(duration: 0.16)) {
+                    showFiles.toggle()
+                }
+            } label: {
+                HStack(spacing: 7) {
+                    Image(systemName: "folder")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text(showFiles ? "Hide files" : "Show files")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .tracking(1.3)
+                    Spacer(minLength: 8)
+                    Image(systemName: showFiles ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                }
+                .foregroundColor(ThemedScopeAccent.brass)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(ThemedScopeAccent.brass.opacity(0.08))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(ThemedScopeAccent.brass.opacity(0.18), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .help(showFiles ? "Hide memo files" : "Show memo files")
+
+            if showFiles {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(files) { file in
+                        fileRow(file)
+                    }
+                }
+                .padding(.top, 2)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    private func fileRow(_ file: TOFileReference) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 6) {
+                Text(file.label.lowercased())
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .tracking(1.4)
+                    .foregroundColor(Theme.current.foregroundSecondary.opacity(0.55))
+                    .lineLimit(1)
+
+                if !file.exists {
+                    Text("missing")
+                        .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                        .tracking(1.0)
+                        .foregroundColor(.red.opacity(0.78))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(
+                            Capsule()
+                                .fill(Color.red.opacity(0.08))
+                        )
+                }
+
+                Spacer(minLength: 6)
+
+                fileActionButton(
+                    systemName: "doc.on.doc",
+                    help: "Copy path"
+                ) {
+                    copyPath(file)
+                }
+
+                fileActionButton(
+                    systemName: "arrow.up.forward.square",
+                    help: file.exists ? "Reveal in Finder" : "File not found",
+                    disabled: !file.exists
+                ) {
+                    reveal(file)
+                }
+            }
+
+            Text(shortPath(file.path))
+                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .foregroundColor(Theme.current.foreground.opacity(file.exists ? 0.80 : 0.44))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .help(file.path)
+        }
+    }
+
+    private func fileActionButton(
+        systemName: String,
+        help: String,
+        disabled: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 10, weight: .semibold))
+                .frame(width: 18, height: 18)
+                .foregroundColor(
+                    disabled
+                        ? Theme.current.foregroundSecondary.opacity(0.28)
+                        : Theme.current.foregroundSecondary.opacity(0.70)
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .help(help)
+    }
+
+    private func fileSummary(_ files: [TOFileReference]) -> String {
+        let missing = files.filter { !$0.exists }.count
+        if missing == 0 {
+            return "\(files.count)"
+        }
+        return "\(files.count) · \(missing) missing"
+    }
+
+    private func copyPath(_ file: TOFileReference) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(file.path, forType: .string)
+    }
+
+    private func reveal(_ file: TOFileReference) {
+        guard file.exists else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([file.url])
     }
 
     // MARK: - Formatters

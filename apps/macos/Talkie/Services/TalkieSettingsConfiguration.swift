@@ -505,15 +505,40 @@ struct TalkieSettingsConfiguration: Codable {
         var playbackVolume: Float
         var selectedTTSVoiceId: String
         var jsonExportSchedule: JSONExportSchedule
+        var memoOriginalRetentionDays: Int
+        var keepProblemMemoOriginalsUntilReviewed: Bool
+
+        enum CodingKeys: String, CodingKey {
+            case playbackVolume
+            case selectedTTSVoiceId
+            case jsonExportSchedule
+            case memoOriginalRetentionDays
+            case keepProblemMemoOriginalsUntilReviewed
+        }
 
         init(
             playbackVolume: Float = 1.0,
             selectedTTSVoiceId: String = TalkieSettingsConfiguration.defaultTTSVoiceId(),
-            jsonExportSchedule: JSONExportSchedule = .dailyShallowWeeklyDeep
+            jsonExportSchedule: JSONExportSchedule = .dailyShallowWeeklyDeep,
+            memoOriginalRetentionDays: Int = 7,
+            keepProblemMemoOriginalsUntilReviewed: Bool = true
         ) {
             self.playbackVolume = playbackVolume
             self.selectedTTSVoiceId = selectedTTSVoiceId
             self.jsonExportSchedule = jsonExportSchedule
+            self.memoOriginalRetentionDays = memoOriginalRetentionDays
+            self.keepProblemMemoOriginalsUntilReviewed = keepProblemMemoOriginalsUntilReviewed
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            playbackVolume = try container.decodeIfPresent(Float.self, forKey: .playbackVolume) ?? 1.0
+            selectedTTSVoiceId = try container.decodeIfPresent(String.self, forKey: .selectedTTSVoiceId)
+                ?? TalkieSettingsConfiguration.defaultTTSVoiceId()
+            jsonExportSchedule = try container.decodeIfPresent(JSONExportSchedule.self, forKey: .jsonExportSchedule)
+                ?? .dailyShallowWeeklyDeep
+            memoOriginalRetentionDays = try container.decodeIfPresent(Int.self, forKey: .memoOriginalRetentionDays) ?? 7
+            keepProblemMemoOriginalsUntilReviewed = try container.decodeIfPresent(Bool.self, forKey: .keepProblemMemoOriginalsUntilReviewed) ?? true
         }
     }
 

@@ -136,10 +136,18 @@ struct RecordingOverlay: View {
             waveformView
 
             // Timer
-            Text(formatTime(controller.elapsedTime))
-                .font(.system(size: 48, weight: .ultraLight, design: .monospaced))
-                .foregroundColor(Theme.current.foreground)
-                .monospacedDigit()
+            VStack(spacing: Spacing.xs) {
+                Text(formatTime(controller.elapsedTime))
+                    .font(.system(size: 48, weight: .ultraLight, design: .monospaced))
+                    .foregroundColor(Theme.current.foreground)
+                    .monospacedDigit()
+
+                if let message = controller.captureStatusMessage {
+                    Label(message, systemImage: "exclamationmark.triangle.fill")
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(.orange)
+                }
+            }
 
             // Action buttons
             recordingButtons
@@ -150,8 +158,11 @@ struct RecordingOverlay: View {
         ZStack {
             LiveWaveformBars(
                 audioLevel: controller.audioLevel,
-                isRecording: controller.state.isRecording,
-                color: controller.state.isRecording ? recordingRed : Theme.current.foregroundSecondary
+                activity: controller.state.isRecording ? .recording
+                    : controller.state.isPreparing ? .preparing : .idle,
+                color: controller.state.isRecording ? recordingRed
+                    : controller.state.isPreparing ? Theme.current.accent
+                    : Theme.current.foregroundSecondary
             )
         }
         .frame(height: 80)
@@ -411,7 +422,8 @@ struct RecordingOverlay: View {
             Circle()
                 .strokeBorder(Theme.current.foregroundMuted.opacity(0.3), lineWidth: 1.5)
         case .inProgress:
-            BrailleSpinner(size: 10)
+            Image(systemName: "ellipsis.circle.fill")
+                .font(.system(size: 14))
                 .foregroundColor(.orange)
         case .completed:
             Image(systemName: "checkmark.circle.fill")

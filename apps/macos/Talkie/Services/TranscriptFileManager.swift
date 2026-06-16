@@ -288,6 +288,18 @@ final class TranscriptFileManager: NSObject {
 
     // MARK: - File Naming
 
+    /// Public location helper for UI/debug surfaces. Keeps "show files"
+    /// metadata aligned with the writer's actual filename rules.
+    func transcriptFileLocation(for memo: MemoModel) -> URL {
+        transcriptFileURL(for: memo)
+    }
+
+    /// Public location helper for UI/debug surfaces. Keeps "show files"
+    /// metadata aligned with the writer's actual filename rules.
+    func audioFileLocation(for memo: MemoModel) -> URL {
+        audioFileURL(for: memo)
+    }
+
     /// Generate transcript filename: YYYY-MM-DD_HHmm_Title.md
     private func transcriptFileURL(for memo: MemoModel) -> URL {
         let filename = baseFilename(for: memo) + ".md"

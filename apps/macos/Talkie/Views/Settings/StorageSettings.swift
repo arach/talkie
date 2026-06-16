@@ -9,6 +9,22 @@ import SwiftUI
 import TalkieKit
 
 private let logger = Log(.ui)
+private let memoOriginalRetentionPresets = [7, 30, 90, 365]
+
+private func formatMemoOriginalRetention(days: Int) -> String {
+    switch days {
+    case 7:
+        return "7 days"
+    case 30:
+        return "30 days"
+    case 90:
+        return "90 days"
+    case 365:
+        return "1 year"
+    default:
+        return "\(days) days"
+    }
+}
 
 // MARK: - Storage Settings (Consolidated)
 
@@ -552,6 +568,7 @@ struct DatabaseSettingsContent: View {
 
     var body: some View {
         @Bindable var live = liveSettings
+        @Bindable var settings = settingsManager
 
         VStack(alignment: .leading, spacing: Spacing.lg) {
             // MARK: - Database Location
@@ -751,18 +768,53 @@ struct DatabaseSettingsContent: View {
                     .foregroundColor(.green.opacity(Opacity.prominent))
                 }
 
-                HStack(spacing: Spacing.sm) {
-                    Image(systemName: "checkmark.shield.fill")
-                        .font(Theme.current.fontHeadline)
-                        .foregroundColor(.green.opacity(Opacity.prominent))
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    HStack(spacing: Spacing.sm) {
+                        Image(systemName: "checkmark.shield.fill")
+                            .font(Theme.current.fontHeadline)
+                            .foregroundColor(.green.opacity(Opacity.prominent))
 
-                    VStack(alignment: .leading, spacing: Spacing.xxs) {
-                        Text("Memos are kept indefinitely")
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
+                            Text("Memos are kept indefinitely")
+                                .font(Theme.current.fontSM)
+                                .foregroundColor(Theme.current.foreground)
+                            Text("Original capture files use the retention policy below; problem recordings stay protected.")
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        HStack {
+                            Text("Keep successful originals")
+                                .font(Theme.current.fontSM)
+                                .foregroundColor(Theme.current.foregroundSecondary)
+
+                            Spacer()
+
+                            Text(formatMemoOriginalRetention(days: settings.memoOriginalRetentionDays))
+                                .font(Theme.current.fontSMMedium)
+                                .foregroundColor(Theme.current.foreground)
+                        }
+
+                        HStack(spacing: Spacing.sm) {
+                            ForEach(memoOriginalRetentionPresets, id: \.self) { days in
+                                Button(action: { settings.memoOriginalRetentionDays = days }) {
+                                    Text(formatMemoOriginalRetention(days: days))
+                                        .font(.labelSmall)
+                                        .foregroundColor(settings.memoOriginalRetentionDays == days ? .white : Theme.current.foregroundSecondary)
+                                        .padding(.horizontal, Spacing.sm)
+                                        .padding(.vertical, 4)
+                                        .background(settings.memoOriginalRetentionDays == days ? Color.cyan : Theme.current.surface2)
+                                        .cornerRadius(CornerRadius.xs)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+
+                        Toggle("Keep problem recording originals until reviewed", isOn: $settings.keepProblemMemoOriginalsUntilReviewed)
                             .font(Theme.current.fontSM)
-                            .foregroundColor(Theme.current.foreground)
-                        Text("Manually delete memos you no longer need from the Memos list.")
-                            .font(Theme.current.fontXS)
-                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                            .toggleStyle(.switch)
                     }
                 }
                 .padding(Spacing.sm)
@@ -984,12 +1036,14 @@ struct DatabaseSettingsContent: View {
 /// Database storage settings: retention, cleanup for memos and dictations
 struct DatabaseSettingsView: View {
     @Environment(AgentSettings.self) private var liveSettings: AgentSettings
+    @Environment(SettingsManager.self) private var settingsManager: SettingsManager
     @State private var isPruning = false
     @State private var isCleaningOrphans = false
     @State private var statusMessage: String?
 
     var body: some View {
         @Bindable var live = liveSettings
+        @Bindable var settings = settingsManager
 
         SettingsPageView(
             icon: "cylinder",
@@ -1091,18 +1145,53 @@ struct DatabaseSettingsView: View {
                     .foregroundColor(.green.opacity(Opacity.prominent))
                 }
 
-                HStack(spacing: Spacing.sm) {
-                    Image(systemName: "checkmark.shield.fill")
-                        .font(Theme.current.fontHeadline)
-                        .foregroundColor(.green.opacity(Opacity.prominent))
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    HStack(spacing: Spacing.sm) {
+                        Image(systemName: "checkmark.shield.fill")
+                            .font(Theme.current.fontHeadline)
+                            .foregroundColor(.green.opacity(Opacity.prominent))
 
-                    VStack(alignment: .leading, spacing: Spacing.xxs) {
-                        Text("Memos are kept indefinitely")
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
+                            Text("Memos are kept indefinitely")
+                                .font(Theme.current.fontSM)
+                                .foregroundColor(Theme.current.foreground)
+                            Text("Original capture files use the retention policy below; problem recordings stay protected.")
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        HStack {
+                            Text("Keep successful originals")
+                                .font(Theme.current.fontSM)
+                                .foregroundColor(Theme.current.foregroundSecondary)
+
+                            Spacer()
+
+                            Text(formatMemoOriginalRetention(days: settings.memoOriginalRetentionDays))
+                                .font(Theme.current.fontSMMedium)
+                                .foregroundColor(Theme.current.foreground)
+                        }
+
+                        HStack(spacing: Spacing.sm) {
+                            ForEach(memoOriginalRetentionPresets, id: \.self) { days in
+                                Button(action: { settings.memoOriginalRetentionDays = days }) {
+                                    Text(formatMemoOriginalRetention(days: days))
+                                        .font(.labelSmall)
+                                        .foregroundColor(settings.memoOriginalRetentionDays == days ? .white : Theme.current.foregroundSecondary)
+                                        .padding(.horizontal, Spacing.sm)
+                                        .padding(.vertical, 4)
+                                        .background(settings.memoOriginalRetentionDays == days ? Color.cyan : Theme.current.surface2)
+                                        .cornerRadius(CornerRadius.xs)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+
+                        Toggle("Keep problem recording originals until reviewed", isOn: $settings.keepProblemMemoOriginalsUntilReviewed)
                             .font(Theme.current.fontSM)
-                            .foregroundColor(Theme.current.foreground)
-                        Text("Manually delete memos you no longer need from the Memos list.")
-                            .font(Theme.current.fontXS)
-                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                            .toggleStyle(.switch)
                     }
                 }
                 .padding(Spacing.sm)

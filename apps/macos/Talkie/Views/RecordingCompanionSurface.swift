@@ -414,6 +414,10 @@ private struct WaveOnlyContent: View {
     }
 
     private var captionText: String {
+        if phase == .recording, let message = controller.captureStatusMessage {
+            return "\(timeString) · \(message.uppercased())"
+        }
+
         switch phase {
         case .recording: return "\(timeString) · RECORDING MEMO"
         case .stopping: return "\(timeString) · STOPPING"

@@ -921,7 +921,7 @@ struct RecordingOverlayView: View {
                 title: processingTitle,
                 tint: processingTint,
                 systemImage: processingSystemImage,
-                showsSpinner: controller.state == .transcribing || controller.state == .refining
+                showsSpinner: false
             )
             .frame(width: processingWidth, height: processingHeight)
             .recordingIndicatorSurface(

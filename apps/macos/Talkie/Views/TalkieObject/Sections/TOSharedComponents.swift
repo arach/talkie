@@ -1319,6 +1319,12 @@ struct RecordingTranscriptCard: View {
             entries.append(("audioFilePath", "\"\(escapeJSON(audioURL.path))\""))
         }
         entries.append(("hasAudio", recording.hasAudio ? "true" : "false"))
+        if let storageJSON = TOFileReferenceCatalog.storageJSON(for: recording, escape: escapeJSON) {
+            entries.append(("storage", storageJSON))
+        }
+        if let filesJSON = TOFileReferenceCatalog.jsonArray(for: recording, escape: escapeJSON) {
+            entries.append(("files", filesJSON))
+        }
 
         entries.append(("transcriptionStatus", "\"\(recording.transcriptionStatus.rawValue)\""))
 
@@ -1409,6 +1415,330 @@ struct RecordingTranscriptCard: View {
             .replacingOccurrences(of: "\n", with: "\\n")
             .replacingOccurrences(of: "\r", with: "\\r")
             .replacingOccurrences(of: "\t", with: "\\t")
+    }
+}
+
+// MARK: - File References
+
+struct TOFileReference: Identifiable, Hashable {
+    let id: String
+    let label: String
+    let kind: String
+    let url: URL
+    let exists: Bool
+    let note: String?
+
+    var path: String { url.path }
+}
+
+@MainActor
+enum TOFileReferenceCatalog {
+    static func references(for recording: TalkieObject) -> [TOFileReference] {
+        var refs: [TOFileReference] = []
+        var seenPaths: Set<String> = []
+
+        func add(
+            label: String,
+            kind: String,
+            url: URL,
+            includeMissing: Bool = true,
+            note: String? = nil
+        ) {
+            let standardizedURL = url.standardizedFileURL
+            let exists = fileExists(at: standardizedURL)
+            guard exists || includeMissing else { return }
+
+            let path = standardizedURL.path
+            guard seenPaths.insert(path).inserted else { return }
+
+            refs.append(TOFileReference(
+                id: "\(kind):\(path)",
+                label: label,
+                kind: kind,
+                url: standardizedURL,
+                exists: exists,
+                note: exists ? note : (note ?? "missing")
+            ))
+        }
+
+        if let audioURL = recording.audioURL {
+            add(
+                label: "audio",
+                kind: "canonicalAudio",
+                url: audioURL,
+                note: recording.audioFilename
+            )
+        }
+
+        let memo = recording.toMemoModel()
+        let transcriptText = memo.transcription?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if SettingsManager.shared.saveTranscriptsLocally, !transcriptText.isEmpty {
+            add(
+                label: "transcript",
+                kind: "localTranscript",
+                url: TranscriptFileManager.shared.transcriptFileLocation(for: memo),
+                note: "local file"
+            )
+        }
+
+        if SettingsManager.shared.saveAudioLocally, memo.audioFilePath != nil {
+            add(
+                label: "audio export",
+                kind: "localAudio",
+                url: TranscriptFileManager.shared.audioFileLocation(for: memo),
+                note: "local file"
+            )
+        }
+
+        for original in memoOriginalAudioFiles(for: recording.id) {
+            add(
+                label: original.isProblem ? "problem original" : "original",
+                kind: original.isProblem ? "memoProblemOriginalAudio" : "memoOriginalAudio",
+                url: original.url,
+                includeMissing: original.includeMissing,
+                note: "raw source"
+            )
+        }
+
+        for (index, screenshot) in recording.screenshots.enumerated() {
+            let url = CaptureMediaFileResolver.screenshotURL(filename: screenshot.filename)
+                ?? ScreenshotStorage.screenshotsDirectory.appending(path: screenshot.filename, directoryHint: .notDirectory)
+            add(
+                label: label("screenshot", index: index, count: recording.screenshots.count),
+                kind: "screenshot",
+                url: url,
+                note: screenshot.captureMode
+            )
+        }
+
+        for (index, clip) in recording.clips.enumerated() {
+            let url = CaptureMediaFileResolver.clipURL(filename: clip.filename)
+                ?? VideoClipStorage.videosDirectory.appending(path: clip.filename, directoryHint: .notDirectory)
+            add(
+                label: label("clip", index: index, count: recording.clips.count),
+                kind: "clip",
+                url: url,
+                note: clip.captureMode
+            )
+        }
+
+        for (index, attachment) in recording.attachments.enumerated() {
+            let url = CaptureMediaFileResolver.attachmentURL(filename: attachment.filename)
+                ?? AttachmentStorage.url(for: attachment.filename)
+            add(
+                label: label("attachment", index: index, count: recording.attachments.count),
+                kind: "attachment",
+                url: url,
+                note: attachment.originalName
+            )
+        }
+
+        for (index, context) in recording.visualContexts.enumerated() {
+            let contextLabel = label("visual", index: index, count: recording.visualContexts.count)
+            let sourceURL = CaptureMediaFileResolver.visualContextSourceURL(for: context)
+                ?? VisualContextStorage.fileURL(for: context, filename: context.sourceClipFilename)
+            add(
+                label: "\(contextLabel) source",
+                kind: "visualContextSource",
+                url: sourceURL,
+                note: context.captureMode
+            )
+
+            if let contactSheetFilename = context.contactSheetFilename {
+                let contactSheetURL = CaptureMediaFileResolver.visualContextContactSheetURL(for: context)
+                    ?? VisualContextStorage.fileURL(for: context, filename: contactSheetFilename)
+                add(
+                    label: "\(contextLabel) sheet",
+                    kind: "visualContextContactSheet",
+                    url: contactSheetURL,
+                    note: context.status.rawValue
+                )
+            }
+
+            let manifestFilename = context.manifestFilename ?? VisualContextStorage.manifestFilename
+            add(
+                label: "\(contextLabel) manifest",
+                kind: "visualContextManifest",
+                url: VisualContextStorage.fileURL(for: context, filename: manifestFilename),
+                note: context.status.rawValue
+            )
+
+            let summaryFilename = context.summaryFilename ?? VisualContextStorage.summaryFilename
+            add(
+                label: "\(contextLabel) summary",
+                kind: "visualContextSummary",
+                url: VisualContextStorage.fileURL(for: context, filename: summaryFilename),
+                includeMissing: false,
+                note: context.status.rawValue
+            )
+        }
+
+        return refs.sorted { lhs, rhs in
+            let lhsRank = rank(lhs.kind)
+            let rhsRank = rank(rhs.kind)
+            if lhsRank != rhsRank { return lhsRank < rhsRank }
+            return lhs.label.localizedStandardCompare(rhs.label) == .orderedAscending
+        }
+    }
+
+    static func jsonArray(for recording: TalkieObject, escape: (String) -> String) -> String? {
+        let refs = references(for: recording)
+        guard !refs.isEmpty else { return nil }
+
+        let items = refs.map { ref in
+            jsonObject(for: ref, escape: escape)
+        }
+        return "[\(items.joined(separator: ", "))]"
+    }
+
+    static func storageJSON(for recording: TalkieObject, escape: (String) -> String) -> String? {
+        let refs = references(for: recording)
+        guard !refs.isEmpty else { return nil }
+
+        var fields: [String] = []
+        if let canonicalAudio = refs.first(where: { $0.kind == "canonicalAudio" }) {
+            let filename = recording.audioFilename ?? canonicalAudio.url.lastPathComponent
+            let canonicalAudioJSON = jsonObject(for: canonicalAudio, escape: escape, extraFields: [
+                "\"filename\": \"\(escape(filename))\"",
+                "\"durationSeconds\": \(recording.duration)",
+            ])
+            fields.append("\"canonicalAudio\": \(canonicalAudioJSON)")
+        }
+
+        let originals = refs.filter { $0.kind == "memoOriginalAudio" || $0.kind == "memoProblemOriginalAudio" }
+        if !originals.isEmpty {
+            let originalItems = originals.map { ref in
+                let status: String
+                if ref.kind == "memoProblemOriginalAudio" {
+                    status = "requiresReview"
+                } else {
+                    status = ref.exists ? "available" : "missing"
+                }
+                return jsonObject(for: ref, escape: escape, extraFields: [
+                    "\"status\": \"\(escape(status))\"",
+                ])
+            }
+            fields.append("\"originalAudio\": [\(originalItems.joined(separator: ", "))]")
+        }
+
+        if let transcript = refs.first(where: { $0.kind == "localTranscript" }) {
+            fields.append("\"localTranscript\": \(jsonObject(for: transcript, escape: escape))")
+        }
+
+        if let audioExport = refs.first(where: { $0.kind == "localAudio" }) {
+            fields.append("\"localAudioExport\": \(jsonObject(for: audioExport, escape: escape))")
+        }
+
+        let retentionDays = max(1, SettingsManager.shared.memoOriginalRetentionDays)
+        let keepProblemOriginals = SettingsManager.shared.keepProblemMemoOriginalsUntilReviewed ? "true" : "false"
+        fields.append("\"originalRetention\": { \"days\": \(retentionDays), \"keepProblemOriginalsUntilReviewed\": \(keepProblemOriginals) }")
+
+        return "{ \(fields.joined(separator: ", ")) }"
+    }
+
+    private static func jsonObject(
+        for ref: TOFileReference,
+        escape: (String) -> String,
+        extraFields: [String] = []
+    ) -> String {
+        var fields = [
+            "\"label\": \"\(escape(ref.label))\"",
+            "\"kind\": \"\(escape(ref.kind))\"",
+            "\"path\": \"\(escape(ref.path))\"",
+            "\"exists\": \(ref.exists ? "true" : "false")",
+        ]
+        if let note = ref.note, !note.isEmpty {
+            fields.append("\"note\": \"\(escape(note))\"")
+        }
+        fields.append(contentsOf: extraFields)
+        return "{ \(fields.joined(separator: ", ")) }"
+    }
+
+    private struct MemoOriginalAudioFile {
+        let url: URL
+        let isProblem: Bool
+        let includeMissing: Bool
+    }
+
+    private static func memoOriginalAudioFiles(for recordingID: UUID) -> [MemoOriginalAudioFile] {
+        let root = AudioStorage.audioDirectory
+            .deletingLastPathComponent()
+            .appending(path: "MemoRecordings", directoryHint: .isDirectory)
+
+        let originalSuffix = ".original.m4a"
+        let problemSuffix = ".problem.m4a"
+        let directOriginal = root.appending(path: recordingID.uuidString + originalSuffix, directoryHint: .notDirectory)
+        let directProblem = root.appending(path: recordingID.uuidString + problemSuffix, directoryHint: .notDirectory)
+        var files: [MemoOriginalAudioFile] = []
+        var seenPaths: Set<String> = []
+
+        func add(_ url: URL, isProblem: Bool, includeMissing: Bool = false) {
+            let standardizedURL = url.standardizedFileURL
+            guard seenPaths.insert(standardizedURL.path).inserted else { return }
+            files.append(.init(url: standardizedURL, isProblem: isProblem, includeMissing: includeMissing))
+        }
+
+        if fileExists(at: directOriginal) {
+            add(directOriginal, isProblem: false)
+        }
+        if fileExists(at: directProblem) {
+            add(directProblem, isProblem: true)
+        }
+
+        let timestampedPrefix = "\(recordingID.uuidString)-"
+        if let childURLs = try? FileManager.default.contentsOfDirectory(
+            at: root,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) {
+            for url in childURLs {
+                let name = url.lastPathComponent
+                guard name.hasPrefix(timestampedPrefix) else { continue }
+
+                if name.hasSuffix(originalSuffix), fileExists(at: url) {
+                    add(url, isProblem: false)
+                } else if name.hasSuffix(problemSuffix), fileExists(at: url) {
+                    add(url, isProblem: true)
+                }
+            }
+        }
+
+        if files.isEmpty {
+            add(directOriginal, isProblem: false, includeMissing: true)
+        }
+
+        return files.sorted { lhs, rhs in
+            if lhs.isProblem != rhs.isProblem { return !lhs.isProblem }
+            return lhs.url.lastPathComponent.localizedStandardCompare(rhs.url.lastPathComponent) == .orderedAscending
+        }
+    }
+
+    private static func label(_ base: String, index: Int, count: Int) -> String {
+        count > 1 ? "\(base) \(index + 1)" : base
+    }
+
+    private static func fileExists(at url: URL) -> Bool {
+        var isDirectory: ObjCBool = false
+        return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
+            && !isDirectory.boolValue
+    }
+
+    private static func rank(_ kind: String) -> Int {
+        switch kind {
+        case "canonicalAudio": return 0
+        case "memoOriginalAudio": return 1
+        case "memoProblemOriginalAudio": return 2
+        case "localTranscript": return 3
+        case "localAudio": return 4
+        case "screenshot": return 5
+        case "clip": return 6
+        case "visualContextSource": return 7
+        case "visualContextContactSheet": return 8
+        case "visualContextManifest": return 9
+        case "visualContextSummary": return 10
+        case "attachment": return 11
+        default: return 100
+        }
     }
 }
 

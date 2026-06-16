@@ -124,6 +124,7 @@ final class AgentController: ObservableObject {
     // Audio input route changes can leave CoreAudio briefly unsettled. Track the
     // recovery window so the next hotkey shows intent instead of burning retries.
     private var audioInputChangeObserver: NSObjectProtocol?
+    private var audioCaptureRecoveryNoticeObserver: NSObjectProtocol?
     private var audioInputRecoveryTask: Task<Void, Never>?
     private var audioInputSettlingUntil: Date?
     private let audioInputSettleDuration: TimeInterval = 1.5
@@ -137,6 +138,9 @@ final class AgentController: ObservableObject {
         idleSweepTimer?.invalidate()
         if let audioInputChangeObserver {
             NotificationCenter.default.removeObserver(audioInputChangeObserver)
+        }
+        if let audioCaptureRecoveryNoticeObserver {
+            NotificationCenter.default.removeObserver(audioCaptureRecoveryNoticeObserver)
         }
     }
 
@@ -248,6 +252,7 @@ final class AgentController: ObservableObject {
         }
 
         observeAudioInputChanges()
+        observeAudioCaptureRecoveryNotices()
 
         log.info("AgentController initialized")
     }
@@ -615,7 +620,8 @@ final class AgentController: ObservableObject {
 
         let isRecoverableNoAudio = isShortRecording || isCancelledSetup || isNoAudioCaptured
         let isGracefulCancel = isRecoverableNoAudio
-        let shouldOfferRetry = isGracefulCancel && !isCancelled
+        let shouldOfferRetry = isGracefulCancel && !isCancelled && !isNoAudioCaptured
+        let shouldPlayCancelSound = isGracefulCancel && !isNoAudioCaptured
 
         if isGracefulCancel {
             let reason = if isShortRecording {
@@ -627,8 +633,10 @@ final class AgentController: ObservableObject {
             }
             log.info("Recording discarded: \(reason)")
             AppLogger.shared.log(.audio, "Recording discarded", detail: reason)
-            // Subtle feedback (dev builds only, configurable)
-            SoundManager.shared.playCancelled()
+            if shouldPlayCancelSound {
+                // Subtle feedback (dev builds only, configurable)
+                SoundManager.shared.playCancelled()
+            }
         } else {
             log.error("Audio capture failed: \(errorMsg)")
             AppLogger.shared.log(.error, "Mic capture failed", detail: errorMsg)
@@ -735,6 +743,26 @@ final class AgentController: ObservableObject {
                 self?.handleAudioInputDeviceChanged(notification)
             }
         }
+    }
+
+    private func observeAudioCaptureRecoveryNotices() {
+        audioCaptureRecoveryNoticeObserver = NotificationCenter.default.addObserver(
+            forName: .audioCaptureRecoveryNotice,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            Task { @MainActor [weak self] in
+                self?.handleAudioCaptureRecoveryNotice(notification)
+            }
+        }
+    }
+
+    private func handleAudioCaptureRecoveryNotice(_ notification: Notification) {
+        guard let message = notification.userInfo?["message"] as? String,
+              !message.isEmpty else { return }
+
+        FloatingPillController.shared.showNotice(message, duration: 3.5)
+        AppLogger.shared.log(.audio, "Audio recovery", detail: message)
     }
 
     private func handleAudioInputDeviceChanged(_ notification: Notification) {

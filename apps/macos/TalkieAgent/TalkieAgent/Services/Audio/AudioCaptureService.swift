@@ -21,6 +21,10 @@ import Accelerate
 
 private let log = Log(.audio)
 
+extension Notification.Name {
+    static let audioCaptureRecoveryNotice = Notification.Name("to.talkie.app.audioCaptureRecoveryNotice")
+}
+
 /// State of the audio capture service
 enum AudioCaptureState: String {
     case cold           // Not initialized
@@ -157,6 +161,12 @@ final class AudioCaptureService: AgentAudioCapture {
     private var bufferCount = 0
     private var fileCreated = false
     private var fallbackCaptureSession: FallbackCaptureSession?
+
+    /// A fixed microphone can pass lightweight HAL checks and still fail inside
+    /// AVAudioEngine.start(). Suppress it briefly after that failure so the next
+    /// recording goes straight to fallback instead of repeating the slow failure.
+    private var suppressedInputDevices: [String: SuppressedInputDevice] = [:]
+    private let inputDeviceSuppressionDuration: TimeInterval = 300
 
     /// Performance trace for the current capture session
     /// Set by AgentController to enable "time to first audio" tracking
@@ -722,7 +732,11 @@ final class AudioCaptureService: AgentAudioCapture {
         } else {
             switch resolveDevice() {
             case .selection(let selection):
-                deviceSelection = selection
+                if let fallback = fallbackForSuppressedInputDevice(selection) {
+                    deviceSelection = fallback
+                } else {
+                    deviceSelection = selection
+                }
             case .missingFixed(let uid, let name):
                 let deviceLabel = name ?? uid ?? "Unknown device"
                 if let fallback = selectFallbackInputDevice(excludingUID: uid, excludingDeviceID: nil) {
@@ -1031,6 +1045,7 @@ final class AudioCaptureService: AgentAudioCapture {
 
                     // Track startup time for HAL health monitoring
                     self.recordStartupTime(totalMs)
+                    self.clearSuppressedInputDevice(uid: deviceSelection.uid)
 
                     if totalMs >= self.slowStartupRecoveryThresholdMs {
                         self.schedulePostRecordingReboot(
@@ -1184,37 +1199,30 @@ final class AudioCaptureService: AgentAudioCapture {
 
         // Progressive retry strategy:
         // Retry 1+: Try the same device again (transient HAL issue)
-        // Max retries: Give up - but return to warm state so user can try again
+        // Max retries: keep the recording session open and surface silent-mic
+        // feedback. A bad input route should not kick the user out of the tape.
         let maxRetries = 3
 
         if retryCount >= maxRetries {
             consecutiveSessionFailures += 1
-            log.error("════════════════════════════════════════════════════════════")
-            log.error("🔴 AUDIO SYSTEM FAILED - Session \(consecutiveSessionFailures) of \(maxSessionFailuresBeforeReboot)")
-            log.error("   No audio after \(retryCount) attempts (\(waitTimeSec)s)")
-            log.error("   Device: \(currentDeviceUID ?? "unknown")")
-            log.error("════════════════════════════════════════════════════════════")
+            log.warning("Audio input produced no buffers; keeping recording open",
+                        detail: "attempts=\(retryCount), waited=\(waitTimeSec)s, device=\(currentDeviceUID ?? "unknown")")
+            postRecoveryNotice("Still recording - check mic")
+            Task { @MainActor in
+                AudioLevelMonitor.shared.level = 0
+                AudioLevelMonitor.shared.isSilent = true
+            }
 
             #if DEBUG
             Self.printCaptureDiagnosticsSummary()
             #endif
 
-            cleanupEngine()
-            cleanupFailedRecording()
-            finishFallbackCaptureSession()
-
-            // Auto-reboot if we've failed multiple sessions in a row
             if consecutiveSessionFailures >= maxSessionFailuresBeforeReboot {
-                log.error("🔄 AUTO-REBOOTING AUDIO SYSTEM after \(consecutiveSessionFailures) consecutive failures")
-                Task { @MainActor [weak self] in
-                    await self?.reboot()
-                }
-                return
+                schedulePostRecordingReboot(
+                    reason: "No audio buffers after \(consecutiveSessionFailures) consecutive sessions"
+                )
             }
 
-            // Return to warm state so user can immediately try again
-            state = .warm
-            onCaptureErrorCallback?("Microphone not responding - tap to try again")
             return
         }
 
@@ -1309,6 +1317,7 @@ final class AudioCaptureService: AgentAudioCapture {
             return false
         }
 
+        suppressInputDevice(failedSelection, reason: reason)
         beginFallbackCaptureSession(
             selection: fallback,
             failedDeviceName: failedSelection.name,
@@ -1354,6 +1363,7 @@ final class AudioCaptureService: AgentAudioCapture {
             "Using fallback microphone for this recording",
             detail: "\(failedDeviceName) -> \(selection.name) (\(reason))"
         )
+        postRecoveryNotice("Mic issue - using \(selection.name)")
     }
 
     private func finishFallbackCaptureSession(schedulePostRecordingReboot: Bool = false) {
@@ -1382,6 +1392,76 @@ final class AudioCaptureService: AgentAudioCapture {
                 detail: "\(restoreName) after \(session.selection.name) (\(session.reason))"
             )
         }
+    }
+
+    private func fallbackForSuppressedInputDevice(_ selection: DeviceSelection) -> DeviceSelection? {
+        guard selection.isFixedDevice else { return nil }
+        guard let suppression = activeSuppression(for: selection.uid) else { return nil }
+
+        guard let fallback = selectFallbackInputDevice(
+            excludingUID: selection.uid,
+            excludingDeviceID: selection.deviceID
+        ) else {
+            log.warning(
+                "Suppressed microphone has no fallback; retrying selected microphone",
+                detail: "\(selection.name) (\(suppression.reason))"
+            )
+            return nil
+        }
+
+        beginFallbackCaptureSession(
+            selection: fallback,
+            failedDeviceName: selection.name,
+            reason: "recent startup failure: \(suppression.reason)",
+            rebootAfterRecording: false
+        )
+
+        let remainingSeconds = max(0, Int(suppression.expiresAt.timeIntervalSinceNow))
+        log.warning(
+            "Skipping recently failed microphone",
+            detail: "\(selection.name) -> \(fallback.name), \(remainingSeconds)s remaining"
+        )
+        return fallback
+    }
+
+    private func suppressInputDevice(_ selection: DeviceSelection, reason: String) {
+        guard selection.isFixedDevice else { return }
+
+        suppressedInputDevices[selection.uid] = SuppressedInputDevice(
+            name: selection.name,
+            reason: reason,
+            expiresAt: Date().addingTimeInterval(inputDeviceSuppressionDuration)
+        )
+
+        log.warning(
+            "Temporarily suppressing microphone after startup failure",
+            detail: "\(selection.name) for \(Int(inputDeviceSuppressionDuration))s (\(reason))"
+        )
+    }
+
+    private func clearSuppressedInputDevice(uid: String) {
+        guard let suppression = suppressedInputDevices.removeValue(forKey: uid) else { return }
+        log.info("Microphone startup recovered", detail: suppression.name)
+    }
+
+    private func activeSuppression(for uid: String) -> SuppressedInputDevice? {
+        guard let suppression = suppressedInputDevices[uid] else { return nil }
+
+        guard suppression.expiresAt > Date() else {
+            suppressedInputDevices[uid] = nil
+            log.info("Microphone suppression expired", detail: suppression.name)
+            return nil
+        }
+
+        return suppression
+    }
+
+    private func postRecoveryNotice(_ message: String) {
+        NotificationCenter.default.post(
+            name: .audioCaptureRecoveryNotice,
+            object: self,
+            userInfo: ["message": message]
+        )
     }
 
     private func archiveRecording(_ pcmURL: URL) {
@@ -1432,6 +1512,12 @@ final class AudioCaptureService: AgentAudioCapture {
         let restoreDefaultDeviceName: String?
         let reason: String
         let postRecordingRebootReason: String?
+    }
+
+    private struct SuppressedInputDevice {
+        let name: String
+        let reason: String
+        let expiresAt: Date
     }
 
     private enum DeviceResolution {

@@ -146,6 +146,7 @@ struct TalkieChromeBar: View {
 
     private var isRecording: Bool { controller.state.isRecording }
     private var isProcessing: Bool { controller.state.isProcessing }
+    private var isPreparing: Bool { controller.state.isPreparing }
 
     // Split chips 3 + 3 around the pill — naturally symmetric so the
     // pill sits at the geometric center without needing fixed cluster
@@ -174,8 +175,10 @@ struct TalkieChromeBar: View {
             TalkieChromePill(
                 isRecording: isRecording,
                 isProcessing: isProcessing,
+                isPreparing: isPreparing,
                 elapsedTime: controller.elapsedTime,
                 audioLevel: controller.audioLevel,
+                captureStatusMessage: controller.captureStatusMessage,
                 onTap: toggleMemoRecording
             )
             .padding(.horizontal, header.hovered ? 8 : 0)
@@ -233,8 +236,10 @@ struct TalkieChromeBar: View {
 private struct TalkieChromePill: View {
     let isRecording: Bool
     let isProcessing: Bool
+    let isPreparing: Bool
     let elapsedTime: TimeInterval
     let audioLevel: Float
+    let captureStatusMessage: String?
     let onTap: () -> Void
 
     @State private var hovered = false
@@ -242,7 +247,7 @@ private struct TalkieChromePill: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 8) {
-                TalkieMark(glow: hovered, isActive: isRecording || isProcessing)
+                TalkieMark(glow: hovered, isActive: isRecording || isProcessing || isPreparing)
 
                 if isRecording {
                     Text("REC")
@@ -256,10 +261,38 @@ private struct TalkieChromePill: View {
                         .foregroundStyle(ChromeTone.pillForeground)
                         .monospacedDigit()
 
+                    if captureStatusMessage != nil {
+                        HStack(spacing: 4) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 9, weight: .semibold))
+                            Text("MIC RECONNECTING")
+                                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                                .tracking(0.8)
+                        }
+                        .foregroundStyle(Color.orange.opacity(0.95))
+                    } else {
+                        LiveWaveformBars(
+                            audioLevel: audioLevel,
+                            activity: .recording,
+                            color: ChromeTone.pillForeground
+                        )
+                        .frame(width: 70, height: 16)
+                    }
+                } else if isPreparing {
+                    // Transient "spinning up" state — the button must feel
+                    // alive the instant the user clicks, before capture is
+                    // truly live. Amber "STARTING" + an anticipatory waveform
+                    // sweep, deliberately *not* the red REC cue: honest motion
+                    // that does not claim the recorder is capturing yet.
+                    Text("STARTING")
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .tracking(1.6)
+                        .foregroundStyle(ChromeTone.accent)
+
                     LiveWaveformBars(
                         audioLevel: audioLevel,
-                        isRecording: true,
-                        color: ChromeTone.pillForeground
+                        activity: .preparing,
+                        color: ChromeTone.accent
                     )
                     .frame(width: 70, height: 16)
                 } else {
@@ -295,7 +328,9 @@ private struct TalkieChromePill: View {
         .focusEffectDisabled()
         .onHover { hovered = $0 }
         .help(helpText)
+        .accessibilityLabel(helpText)
         .animation(.spring(response: 0.32, dampingFraction: 0.78), value: isRecording)
+        .animation(.spring(response: 0.32, dampingFraction: 0.78), value: isPreparing)
         .animation(.spring(response: 0.22, dampingFraction: 0.78), value: hovered)
     }
 
@@ -306,6 +341,7 @@ private struct TalkieChromePill: View {
 
     private var helpText: String {
         if isRecording { return "Stop recording memo" }
+        if isPreparing { return "Preparing to record…" }
         return "Record memo — click to start"
     }
 
