@@ -8,6 +8,7 @@
 //
 
 import AppKit
+import SwiftUI
 import TalkieKit
 
 // MARK: - Drag Source
@@ -28,6 +29,104 @@ final class FileDragSourceDelegate: NSObject, NSDraggingSource {
         operation: NSDragOperation
     ) {
         onEnd?()
+    }
+}
+
+// MARK: - Inline Drag Source
+
+/// Transparent SwiftUI overlay that starts an AppKit file drag from the
+/// view it covers. Use this for small grab handles in SwiftUI surfaces.
+struct FileDragSourceOverlay: NSViewRepresentable {
+    let fileURL: URL
+    var dragImage: NSImage?
+    var dragImageSize: CGFloat = 48
+
+    func makeNSView(context: Context) -> FileDragSourceOverlayView {
+        let view = FileDragSourceOverlayView()
+        view.fileURL = fileURL
+        view.dragImage = dragImage
+        view.dragImageSize = dragImageSize
+        return view
+    }
+
+    func updateNSView(_ nsView: FileDragSourceOverlayView, context: Context) {
+        nsView.fileURL = fileURL
+        nsView.dragImage = dragImage
+        nsView.dragImageSize = dragImageSize
+    }
+}
+
+@MainActor
+final class FileDragSourceOverlayView: NSView, NSDraggingSource {
+    var fileURL: URL?
+    var dragImage: NSImage?
+    var dragImageSize: CGFloat = 48
+
+    private let dragThreshold: CGFloat = 2
+    private var dragStartLocation: NSPoint?
+    private var isDragging = false
+
+    override var isFlipped: Bool { true }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        dragStartLocation = convert(event.locationInWindow, from: nil)
+        isDragging = false
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let startLocation = dragStartLocation else { return }
+        let currentLocation = convert(event.locationInWindow, from: nil)
+        guard hypot(currentLocation.x - startLocation.x, currentLocation.y - startLocation.y) >= dragThreshold else {
+            return
+        }
+
+        dragStartLocation = nil
+        isDragging = true
+        startDrag(with: event)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        dragStartLocation = nil
+        isDragging = false
+    }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .openHand)
+    }
+
+    nonisolated func draggingSession(
+        _ session: NSDraggingSession,
+        sourceOperationMaskFor context: NSDraggingContext
+    ) -> NSDragOperation {
+        .copy
+    }
+
+    nonisolated func draggingSession(
+        _ session: NSDraggingSession,
+        endedAt screenPoint: NSPoint,
+        operation: NSDragOperation
+    ) {
+        Task { @MainActor in
+            self.isDragging = false
+        }
+    }
+
+    private func startDrag(with event: NSEvent) {
+        guard let fileURL,
+              FileManager.default.fileExists(atPath: fileURL.path) else { return }
+
+        let size = max(dragImageSize, 24)
+        let dragSize = NSSize(width: size, height: size)
+        let frame = NSRect(
+            x: bounds.midX - dragSize.width / 2,
+            y: bounds.midY - dragSize.height / 2,
+            width: dragSize.width,
+            height: dragSize.height
+        )
+        let draggingItem = NSDraggingItem(pasteboardWriter: TalkieInternalDrag.pasteboardItem(for: fileURL))
+        draggingItem.setDraggingFrame(frame, contents: dragImage ?? NSWorkspace.shared.icon(forFile: fileURL.path))
+        beginDraggingSession(with: [draggingItem], event: event, source: self)
     }
 }
 

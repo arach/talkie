@@ -424,6 +424,12 @@ struct ScopeCaptureDetailView: View {
             selectionTextNote
         }
         .frame(maxWidth: .infinity)
+        .overlay(alignment: .topTrailing) {
+            if let url = primaryMediaURL {
+                ScopeCaptureFileDragHandle(fileURL: url, variant: .floating)
+                    .padding(10)
+            }
+        }
     }
 
     @ViewBuilder
@@ -621,6 +627,10 @@ struct ScopeCaptureDetailView: View {
                 .tracking(2.8)
                 .foregroundStyle(ThemedScopeInk.faint)
                 .padding(.bottom, 4)
+            if let url = primaryMediaURL {
+                ScopeCaptureFileDragHandle(fileURL: url, variant: .rail)
+                    .padding(.bottom, 4)
+            }
             CapRailAction(label: "Copy",  icon: "doc.on.doc",            isPrimary: true, action: copyCapture)
             CapRailAction(label: "Annotate", icon: "sparkles.rectangle.stack", action: openMarkup)
             CapRailAction(label: "Open",  icon: "arrow.up.right.square", action: openInDefault)
@@ -897,6 +907,59 @@ private struct CaptureVideoHero: View {
             radius: 12,
             y: 6
         )
+    }
+}
+
+private struct ScopeCaptureFileDragHandle: View {
+    enum Variant: Equatable {
+        case floating
+        case rail
+    }
+
+    let fileURL: URL
+    let variant: Variant
+
+    var body: some View {
+        ZStack {
+            HStack(spacing: 8) {
+                HStack(spacing: 2) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        Capsule()
+                            .fill(ThemedScopeAccent.brass.opacity(0.78))
+                            .frame(width: 2, height: 12)
+                    }
+                }
+                Text("Drag file")
+                    .font(ScopeType.mono(size: 10, weight: .semibold))
+                    .tracking(1.3)
+                    .textCase(.uppercase)
+                    .foregroundStyle(ThemedScopeAccent.brass)
+                if variant == .rail {
+                    Spacer(minLength: 0)
+                }
+            }
+            .padding(.horizontal, 10)
+
+            FileDragSourceOverlay(fileURL: fileURL, dragImageSize: 56)
+        }
+        .frame(maxWidth: variant == .rail ? .infinity : nil)
+        .frame(height: variant == .rail ? 34 : 30)
+        .fixedSize(horizontal: variant == .floating, vertical: false)
+        .background(
+            RoundedRectangle(cornerRadius: variant == .rail ? 3 : 5, style: .continuous)
+                .fill(ThemedScopeAccent.amber.opacity(variant == .rail ? 0.08 : 0.12))
+                .shadow(
+                    color: variant == .floating ? Color.black.opacity(0.14) : Color.clear,
+                    radius: variant == .floating ? 8 : 0,
+                    y: variant == .floating ? 3 : 0
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: variant == .rail ? 3 : 5, style: .continuous)
+                .stroke(ThemedScopeAccent.amber.opacity(0.36), lineWidth: 0.6)
+        )
+        .help("Drag file to Terminal or another app")
+        .accessibilityLabel("Drag file")
     }
 }
 

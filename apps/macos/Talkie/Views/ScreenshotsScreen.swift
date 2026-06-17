@@ -893,6 +893,11 @@ struct ScreenshotsScreen: View {
                 handleItemClick(item, allItems: allItems, modifiers: event.modifierFlags)
             }
         )
+        .overlay(alignment: .topTrailing) {
+            CaptureFileGrabBadge()
+                .padding(6)
+                .allowsHitTesting(false)
+        }
         .contextMenu { trayContextMenu(item, trayItem: trayItem) }
     }
 
@@ -953,6 +958,11 @@ struct ScreenshotsScreen: View {
                 handleItemClick(item, allItems: allItems, modifiers: event.modifierFlags)
             }
         )
+        .overlay(alignment: .topTrailing) {
+            CaptureFileGrabBadge()
+                .padding(6)
+                .allowsHitTesting(false)
+        }
         .contextMenu { libraryContextMenu(item) }
     }
 
@@ -2046,6 +2056,7 @@ private enum ScreenshotListLayout {
     static let source: CGFloat = 96
     static let dimensions: CGFloat = 84
     static let age: CGFloat = 60
+    static let dragHandle: CGFloat = 28
     static let columnSpacing: CGFloat = 12
 }
 
@@ -2060,6 +2071,7 @@ private struct ScreenshotListHeader: View {
             headerCell("SOURCE", width: ScreenshotListLayout.source, alignment: .leading)
             headerCell("DIMENSIONS", width: ScreenshotListLayout.dimensions, alignment: .trailing)
             headerCell("AGE", width: ScreenshotListLayout.age, alignment: .trailing)
+            Color.clear.frame(width: ScreenshotListLayout.dragHandle, height: 1)
         }
         .padding(.horizontal, PageLayout.horizontalPadding)
         .padding(.vertical, 6)
@@ -2109,6 +2121,30 @@ private struct MediaKindPill: View {
                 .strokeBorder(tint.opacity(0.26), lineWidth: 0.5)
         )
         .fixedSize(horizontal: true, vertical: false)
+    }
+}
+
+private struct CaptureFileGrabBadge: View {
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(0..<3, id: \.self) { _ in
+                Capsule()
+                    .fill(ScopePalette.amberDeep.opacity(0.72))
+                    .frame(width: 2, height: 11)
+            }
+        }
+        .frame(width: 22, height: 22)
+        .background(
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(Color.white.opacity(0.92))
+                .shadow(color: .black.opacity(0.16), radius: 4, x: 0, y: 2)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .strokeBorder(ScopePalette.amberSoft, lineWidth: 0.6)
+        )
+        .help("Drag file")
+        .accessibilityHidden(true)
     }
 }
 
@@ -2170,6 +2206,10 @@ private struct ScreenshotRowView: View {
                 .tracking(ScopeType.Tracking.wide)
                 .foregroundStyle(ScopeInk.faint)
                 .frame(width: ScreenshotListLayout.age, alignment: .trailing)
+
+            CaptureFileGrabBadge()
+                .frame(width: ScreenshotListLayout.dragHandle, alignment: .trailing)
+                .allowsHitTesting(false)
         }
         .padding(.horizontal, PageLayout.horizontalPadding)
         .padding(.vertical, 9)
@@ -2332,6 +2372,7 @@ private struct ScreenshotInspector: View {
     @State private var disk: InspectorDiskMetadata?
     @State private var showDetectedText = false
     @State private var ocrCopied = false
+    @State private var pathCopied = false
 
     private var appLabel: String { appName ?? item.mediaLabel }
     private var mediaGroupTitle: String { item.isVideo ? "video" : "image" }
@@ -2377,6 +2418,12 @@ private struct ScreenshotInspector: View {
                             .foregroundStyle(ScopePalette.inkFaint)
                             .lineLimit(1)
                     }
+
+                    CaptureFileDragStrip(
+                        fileURL: item.fileURL,
+                        copied: pathCopied,
+                        onCopy: copyShellPath
+                    )
 
                     // ── Source group ─────────────────────────────────
                     MetaGroup(title: "source") {
@@ -2498,6 +2545,7 @@ private struct ScreenshotInspector: View {
                 disk = nil
                 showDetectedText = false
                 ocrCopied = false
+                pathCopied = false
                 let url = item.fileURL
                 let trayText = trayOCRText
                 disk = await Task.detached {
@@ -2516,6 +2564,16 @@ private struct ScreenshotInspector: View {
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(1))
             ocrCopied = false
+        }
+    }
+
+    private func copyShellPath() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(TalkieInternalDrag.shellEscapedPath(for: item.fileURL), forType: .string)
+        pathCopied = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1))
+            pathCopied = false
         }
     }
 
@@ -2650,6 +2708,62 @@ private struct InspectorSecondary: View {
             )
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct CaptureFileDragStrip: View {
+    let fileURL: URL
+    let copied: Bool
+    let onCopy: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ZStack {
+                HStack(spacing: 8) {
+                    CaptureFileGrabBadge()
+                    Text("Drag file")
+                        .font(ScopeType.mono(size: 10, weight: .semibold))
+                        .tracking(ScopeType.Tracking.normal)
+                        .textCase(.uppercase)
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(ScopePalette.amberDeep)
+                .padding(.leading, 8)
+                .padding(.trailing, 10)
+
+                FileDragSourceOverlay(fileURL: fileURL, dragImageSize: 56)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 34)
+            .background(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(ScopePalette.amberFaint.opacity(0.8))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .strokeBorder(ScopePalette.amberSoft, lineWidth: 0.5)
+            )
+            .help("Drag file to Terminal or another app")
+            .accessibilityLabel("Drag file")
+
+            Button(action: onCopy) {
+                Image(systemName: copied ? "checkmark" : "doc.on.clipboard")
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 34, height: 34)
+                    .foregroundStyle(copied ? ScopePalette.amberDeep : ScopePalette.inkFaint)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(copied ? ScopePalette.amberFaint : ScopePalette.bgRaised)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .strokeBorder(copied ? ScopePalette.amberSoft : ScopePalette.rule, lineWidth: 0.5)
+                    )
+            }
+            .buttonStyle(.plain)
+            .help(copied ? "Copied" : "Copy shell path")
+            .accessibilityLabel(copied ? "Copied shell path" : "Copy shell path")
+        }
     }
 }
 

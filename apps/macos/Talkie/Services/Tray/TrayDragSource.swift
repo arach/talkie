@@ -43,8 +43,15 @@ enum TalkieInternalDrag {
         let item = NSPasteboardItem()
         item.setString(url.absoluteString, forType: NSPasteboard.PasteboardType(UTType.fileURL.identifier))
         item.setString(url.absoluteString, forType: NSPasteboard.PasteboardType(UTType.url.identifier))
+        item.setString(shellEscapedPath(for: url), forType: .string)
         item.setString("1", forType: pasteboardType)
         return item
+    }
+
+    static func shellEscapedPath(for url: URL) -> String {
+        let path = url.path
+        guard !path.isEmpty else { return path }
+        return "'\(path.replacing("'", with: "'\\''"))'"
     }
 }
 
