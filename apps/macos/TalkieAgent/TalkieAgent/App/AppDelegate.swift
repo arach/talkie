@@ -1482,6 +1482,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             previousApp.activate()
         }
 
+        // Freeze-first: grab a full-display still NOW — before the HUD bar or the
+        // region overlay appears and steals key focus. Any open menu/popover is
+        // still on screen at this instant, so it survives in the still; region
+        // selection then crops from it. Primed only for screenshots; released on
+        // teardown so a stale frame never leaks into the next chord.
+        if initialMode == .screenshot {
+            CaptureFreezeStore.shared.prime()
+        }
+        defer { CaptureFreezeStore.shared.clear() }
+
         var hudInitialMode = initialMode
         if initialMode == .video {
             switch await ScreenRecordingController.shared.startReusableRecordingWithCountdown() {

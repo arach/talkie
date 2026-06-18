@@ -249,7 +249,7 @@ final class CaptureHUDController: CaptureChordController {
         armedRegionOverlay = overlay
         armedRegionTask = Task { @MainActor [weak self] in
             guard !Task.isCancelled else { return }
-            let rect = await overlay.selectRegion(freezesDesktop: false)
+            let rect = await overlay.selectRegion(freeze: true)
             guard !Task.isCancelled else { return }
             if self?.armedRegionOverlay === overlay {
                 self?.armedRegionOverlay = nil

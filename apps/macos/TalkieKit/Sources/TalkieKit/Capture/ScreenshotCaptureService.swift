@@ -133,15 +133,27 @@ public final class ScreenshotCaptureService {
     // MARK: - Region Capture
 
     private func captureRegion(preselectedRect: CGRect? = nil) async -> CGImage? {
+        // The freeze still (if any) is consumed by this region capture; release
+        // it on exit so a stale frame can't leak into the next capture.
+        defer { CaptureFreezeStore.shared.clear() }
+
         let selectedRect: CGRect
         if let preselectedRect {
             selectedRect = preselectedRect
         } else {
             let overlay = ScreenCaptureOverlay()
-            guard let rect = await overlay.selectRegion() else {
+            guard let rect = await overlay.selectRegion(freeze: true) else {
                 return nil
             }
             selectedRect = rect
+        }
+
+        // Freeze-first: crop from the still captured before the overlay stole
+        // focus, so a menu/popover that closed when the crosshair appeared is
+        // still in the shot. Falls back to a live read when there's no still
+        // (capture failed or the mouse crossed displays).
+        if let frozen = await CaptureFreezeStore.shared.crop(screenRect: selectedRect) {
+            return frozen
         }
 
         let image = await captureScreenRegion(screenRect: selectedRect)
