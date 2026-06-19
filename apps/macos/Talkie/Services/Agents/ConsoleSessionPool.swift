@@ -33,6 +33,27 @@ final class ConsoleSessionPool {
 
     private init() {}
 
+    /// Durable home the interactive Claude agent boots into
+    /// (`Application Support/Talkie/Agent`). Shared across all Claude tabs.
+    var agentHomeURL: URL {
+        workspaceStore.agentHomeURL()
+    }
+
+    /// Restore the durable agent home's `CLAUDE.md` / `SYSTEM_PROMPT.md` to the
+    /// bundled factory defaults, discarding local edits. Takes effect the next
+    /// time the Claude tab is (re)launched.
+    func resetAgentHomePrompts() {
+        do {
+            try workspaceStore.resetAgentHomePrompts(
+                harness: .claude,
+                systemPrompt: TabPresets.claude.systemPrompt
+            )
+            log.info("Reset agent home prompts to defaults")
+        } catch {
+            log.error("Failed to reset agent home prompts", error: error)
+        }
+    }
+
     func state(for tabId: String) -> TabSessionState {
         sessions[tabId] ?? TabSessionState()
     }
@@ -76,15 +97,28 @@ final class ConsoleSessionPool {
         }
 
         do {
-            let workspace = try workspaceStore.prepareConsoleWorkspace(
-                profileID: tab.id,
-                harness: profile.harness,
-                prompt: tab.harness == .shell ? "" : profile.prompt,
-                notes: "",
-                systemPrompt: tab.harness == .shell ? "" : tab.systemPrompt,
-                examples: "",
-                preferredModel: tab.model
-            )
+            let workspace: ManagedAgentWorkspace
+            if tab.harness == .claudeCode {
+                // Interactive Claude console boots into one durable, user-owned
+                // agent home (Application Support/Talkie/Agent) instead of a
+                // per-session workspace, so the CLAUDE.md / SYSTEM_PROMPT.md it
+                // instantiates with persist across launches and can be hand-tuned.
+                workspace = try workspaceStore.prepareAgentHome(
+                    harness: profile.harness,
+                    systemPrompt: tab.systemPrompt,
+                    preferredModel: tab.model
+                )
+            } else {
+                workspace = try workspaceStore.prepareConsoleWorkspace(
+                    profileID: tab.id,
+                    harness: profile.harness,
+                    prompt: tab.harness == .shell ? "" : profile.prompt,
+                    notes: "",
+                    systemPrompt: tab.harness == .shell ? "" : tab.systemPrompt,
+                    examples: "",
+                    preferredModel: tab.model
+                )
+            }
 
             let useTmux = tab.useTmux && AgentHarnessProfile.consoleTmuxAvailable
 

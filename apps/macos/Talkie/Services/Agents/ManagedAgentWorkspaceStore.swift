@@ -96,6 +96,48 @@ struct ManagedAgentWorkspaceStore: Sendable {
         rootDirectoryURL.appending(path: profileID, directoryHint: .isDirectory)
     }
 
+    /// Stable, shared home for the interactive Talkie agent console
+    /// (`Application Support/Talkie/Agent`). Unlike the per-session console
+    /// workspaces, this directory persists across launches, so the user-owned
+    /// `CLAUDE.md` / `SYSTEM_PROMPT.md` the agent boots with survive hand edits.
+    func agentHomeURL() -> URL {
+        rootDirectoryURL
+            .deletingLastPathComponent()
+            .appending(path: "Agent", directoryHint: .isDirectory)
+    }
+
+    /// Prepare (or refresh) the durable agent home. The prompt files are seeded
+    /// once and then left alone; the operational scaffolding (guides, `Tools/`,
+    /// `Live Config/`, rule packs) is rewritten each call so it tracks the app.
+    @discardableResult
+    func prepareAgentHome(
+        harness: AgentHarnessProfile,
+        systemPrompt: String,
+        preferredModel: String?
+    ) throws -> ManagedAgentWorkspace {
+        try prepareWorkspace(
+            id: "agent-home",
+            workspaceURL: agentHomeURL(),
+            createdAt: Date(),
+            profile: harness,
+            prompt: "",
+            notes: "",
+            systemPrompt: systemPrompt,
+            examples: "",
+            preferredModel: preferredModel,
+            seedPromptsOnly: true
+        )
+    }
+
+    /// Restore the user-owned prompt files in the durable agent home to their
+    /// bundled defaults, overwriting any local edits.
+    func resetAgentHomePrompts(harness: AgentHarnessProfile, systemPrompt: String) throws {
+        let homeURL = agentHomeURL()
+        try FileManager.default.createDirectory(at: homeURL, withIntermediateDirectories: true)
+        try writeText(claudeMemoryMarkdown(profile: harness), to: homeURL.appending(path: "CLAUDE.md"))
+        try writeText(systemPromptMarkdown(systemPrompt), to: homeURL.appending(path: "SYSTEM_PROMPT.md"))
+    }
+
     private func prepareWorkspace(
         id: String,
         workspaceURL: URL,
@@ -105,7 +147,8 @@ struct ManagedAgentWorkspaceStore: Sendable {
         notes: String,
         systemPrompt: String,
         examples: String,
-        preferredModel: String?
+        preferredModel: String?,
+        seedPromptsOnly: Bool = false
     ) throws -> ManagedAgentWorkspace {
         let fileManager = FileManager.default
 
@@ -123,6 +166,7 @@ struct ManagedAgentWorkspaceStore: Sendable {
 
         let contextFileURL = workspaceURL.appending(path: "CONTEXT.md")
         let agentsFileURL = workspaceURL.appending(path: "AGENTS.md")
+        let claudeMemoryFileURL = workspaceURL.appending(path: "CLAUDE.md")
         let systemPromptFileURL = workspaceURL.appending(path: "SYSTEM_PROMPT.md")
         let promptFileURL = workspaceURL.appending(path: "PROMPT.md")
         let examplesFileURL = workspaceURL.appending(path: "EXAMPLES.md")
@@ -140,7 +184,16 @@ struct ManagedAgentWorkspaceStore: Sendable {
 
         try writeText(contextMarkdown(notes: notes), to: contextFileURL)
         try writeText(agentsMarkdown(profile: profile), to: agentsFileURL)
-        try writeText(systemPromptMarkdown(systemPrompt), to: systemPromptFileURL)
+        // CLAUDE.md and SYSTEM_PROMPT.md are the user-owned prompt surface. In a
+        // durable agent home (`seedPromptsOnly`) we write them only when absent so
+        // hand edits survive; everything else here is refreshed each launch.
+        if seedPromptsOnly {
+            try writeTextIfAbsent(claudeMemoryMarkdown(profile: profile), to: claudeMemoryFileURL)
+            try writeTextIfAbsent(systemPromptMarkdown(systemPrompt), to: systemPromptFileURL)
+        } else {
+            try writeText(claudeMemoryMarkdown(profile: profile), to: claudeMemoryFileURL)
+            try writeText(systemPromptMarkdown(systemPrompt), to: systemPromptFileURL)
+        }
         try writeText(prompt.trimmingCharacters(in: .whitespacesAndNewlines) + "\n", to: promptFileURL)
         try writeText(examplesMarkdown(examples), to: examplesFileURL)
         try writeText(configurationGuideMarkdown(), to: configurationGuideFileURL)
@@ -292,6 +345,11 @@ struct ManagedAgentWorkspaceStore: Sendable {
         try text.write(to: url, atomically: true, encoding: .utf8)
     }
 
+    private func writeTextIfAbsent(_ text: String, to url: URL) throws {
+        guard !FileManager.default.fileExists(atPath: url.path) else { return }
+        try writeText(text, to: url)
+    }
+
     private func writeExecutableText(_ text: String, to url: URL) throws {
         try writeText(text, to: url)
         try FileManager.default.setAttributes(
@@ -346,6 +404,41 @@ struct ManagedAgentWorkspaceStore: Sendable {
         - `Workflow Templates/`: working starter examples to copy or adapt
         - `Tools/`: memo/workflow inspection helpers plus a single sanctioned memo recovery helper
         - `Rule Packs/`: copied user-authored rule packs
+        """
+    }
+
+    /// Native Claude Code context file (`CLAUDE.md`) for the workspace. Claude
+    /// auto-loads this from the working directory, so it doubles as the agent's
+    /// orientation map — it points at the curated files Talkie mounts here and
+    /// is portable to any user, since everything lives under Application Support
+    /// rather than a source checkout.
+    private func claudeMemoryMarkdown(profile: AgentHarnessProfile) -> String {
+        return """
+        # Talkie Agent — Session Workspace
+
+        You are the **Talkie agent**, running inside the Talkie macOS app's console
+        on a prepared session workspace (this directory, under Application Support).
+        Everything you need for this run is mounted here — work from these files
+        first, not from a source checkout.
+
+        ## Read first
+        1. `SYSTEM_PROMPT.md` — the governing instruction for this run. It wins on conflicts.
+        2. `AGENTS.md` — your job description and a map of every file in this workspace.
+        3. `PROMPT.md` and `CONTEXT.md` — the current request and any extra notes from Talkie.
+
+        ## Then, by task
+        - Settings, quick actions, workflow pinning, SSH, or iPhone prefs → `CONFIGURATION_GUIDE.md`
+        - Memos, recordings, transcripts, or workflow runs → `MEMO_GUIDE.md`, `WORKFLOW_GUIDE.md`, `Tools/`
+        - Creating or editing a workflow → `WORKFLOW_AUTHORING.md`, `Workflow Templates/`,
+          `WORKFLOW_CAPABILITIES.md`; write the result into `Live Config/workflow-user/`
+
+        ## Ground rules
+        - `Live Config/` is the canonical, file-backed source of truth — edit it, not the mirrors.
+        - Prefer the read-only `Tools/*.sh` helpers for inspecting real app data.
+        - Never edit `talkie.sqlite` directly unless the task is explicitly a repair or migration.
+        - Keep edits minimal and testable; explain what matched, what failed, and the smallest fix.
+
+        Harness: \(profile.displayName)
         """
     }
 
