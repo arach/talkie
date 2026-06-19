@@ -106,6 +106,13 @@ struct MacRecordingView: View {
         controller.state.isRecording || controller.state.isProcessing || controller.allStepsComplete
     }
 
+    /// True while the post-recording pipeline is actively working — after the
+    /// user stops, before every step has completed. Drives the transcribing
+    /// sweep so the gap reads as "working" instead of a flatline/pause.
+    private var showTranscribingSweep: Bool {
+        controller.state.isProcessing && !controller.allStepsComplete
+    }
+
     // Even more height for processing pipeline
     private var waveformHeight: CGFloat {
         if controller.state.isProcessing || controller.allStepsComplete {
@@ -117,6 +124,15 @@ struct MacRecordingView: View {
     private var waveformView: some View {
         // Glass pane container for the waveform - like a music device display
         ZStack {
+            // Calm luminous sweep behind the pipeline while save/transcription
+            // work is in flight. Keeps the post-stop gap from reading as a
+            // stall — like a read head gliding across the captured audio.
+            if showTranscribingSweep {
+                TranscribingSweep(color: Theme.current.accent)
+                    .clipShape(RoundedRectangle(cornerRadius: CornerRadius.md))
+                    .transition(.opacity)
+            }
+
             // Waveform content
             waveformContent
         }
@@ -144,6 +160,7 @@ struct MacRecordingView: View {
         )
         .padding(.horizontal, Spacing.lg)
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isExpanded)
+        .animation(.easeInOut(duration: 0.3), value: showTranscribingSweep)
     }
 
     @ViewBuilder
@@ -671,6 +688,66 @@ struct LiveWaveformBars: View {
         } else {
             envelope += (target - envelope) * 0.12
         }
+    }
+}
+
+// MARK: - Transcribing Sweep
+
+/// A calm luminous band that glides across the recording pane while the
+/// post-recording pipeline is working (saving + transcribing). It gives the
+/// otherwise-static step list a sense of live progress — like a read head
+/// moving across the captured audio — without claiming any specific percentage.
+///
+/// Motion is deterministic and timer-free: the position is derived from the
+/// `TimelineView` animation clock, the same approach as `LiveWaveformBars`, so
+/// there is a single GPU-composited layer translating — no stored timer, no
+/// per-frame view churn. The view is only mounted during the gap, so it costs
+/// nothing while idle or recording.
+///
+/// Respects Reduce Motion: instead of a traveling band it cross-fades a
+/// centered glow in place (no translation), which still reads as "working".
+private struct TranscribingSweep: View {
+    let color: Color
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// One full traversal (or breathe cycle) per period.
+    private let period: Double = 1.8
+
+    var body: some View {
+        GeometryReader { geo in
+            TimelineView(.animation(minimumInterval: 0.033)) { timeline in
+                let t = timeline.date.timeIntervalSinceReferenceDate
+
+                if reduceMotion {
+                    // No translation — a slow in-place breathe instead.
+                    let breathe = 0.5 - 0.5 * cos(t / period * .pi)   // 0...1 eased
+                    band
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .opacity(0.05 + 0.10 * breathe)
+                } else {
+                    let phase = (t.truncatingRemainder(dividingBy: period)) / period  // 0...1
+                    let bandWidth = geo.size.width * 0.32
+                    // Glide fully in from the left and out the right so the band
+                    // never pops at the edges.
+                    let travel = geo.size.width + bandWidth
+                    let leadingX = -bandWidth + travel * CGFloat(phase)
+                    band
+                        .frame(width: bandWidth, height: geo.size.height)
+                        .position(x: leadingX + bandWidth / 2, y: geo.size.height / 2)
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    /// Soft-edged band: transparent → color → transparent, so it reads as a
+    /// gentle pool of light rather than a hard line.
+    private var band: some View {
+        LinearGradient(
+            colors: [color.opacity(0), color.opacity(0.18), color.opacity(0)],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
     }
 }
 

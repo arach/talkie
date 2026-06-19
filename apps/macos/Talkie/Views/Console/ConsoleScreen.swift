@@ -2343,6 +2343,13 @@ private struct ConsoleTerminalSurface: View {
                     )
                     .padding(.top, 10)
                     .padding(.trailing, 10)
+
+                    ConsoleTerminalDictationDock(
+                        controller: captureController,
+                        session: session
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, 16)
                 }
             }
         }
@@ -3426,7 +3433,9 @@ private struct ConsoleTerminalFooter: View {
                     .lineLimit(1)
             }
         }
-        .padding(.horizontal, 14)
+        // Match the title bar's horizontal inset (16) so the top and bottom
+        // rails align — they were off by 2px (footer was 14).
+        .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .background(Theme.current.surface1)
     }

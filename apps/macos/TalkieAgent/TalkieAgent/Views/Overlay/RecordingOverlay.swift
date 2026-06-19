@@ -15,7 +15,13 @@ private let recordingOverlayProcessingBoxHeight: CGFloat = 24
 private let recordingOverlayProcessingIslandWidth: CGFloat = 176
 private let recordingOverlayProcessingIslandHeight: CGFloat = 32
 private let recordingOverlayStopTransitionDuration: Duration = .milliseconds(260)
-private let recordingOverlayParticleFrameInterval: TimeInterval = 1.0 / 30.0
+/// Same window as `recordingOverlayStopTransitionDuration`, in seconds, for the
+/// time-driven particle deceleration in the Canvas (TimelineView math wants a Double).
+private let recordingOverlayStopTransitionSeconds: TimeInterval = 0.26
+private let recordingOverlayFrameInterval: TimeInterval = 1.0 / 30.0
+private let recordingOverlayParticleFrameInterval: TimeInterval = 1.0 / 60.0
+private let recordingOverlayParticleLevelAttackDuration: TimeInterval = 0.08
+private let recordingOverlayParticleLevelReleaseDuration: TimeInterval = 0.28
 private let islandOverlayEdgeMargin: CGFloat = 6
 private let islandOverlayTopEdgeMargin: CGFloat = 2
 
@@ -135,6 +141,9 @@ final class RecordingOverlayController: NSObject, ObservableObject, NSWindowDele
     @Published var captureIntent: String = "Paste"  // Shows current intent during recording
     @Published var isShowingStopTransition: Bool = false
     @Published var stopTransitionAudioLevel: Float = 0.18
+    /// Reference-date timestamp marking the start of the stop transition. The
+    /// particle Canvas reads this to coast the motion to a halt over the window.
+    @Published var stopTransitionStartReference: TimeInterval? = nil
 
     private var timer: Timer?
     private var startTime: Date?
@@ -279,6 +288,7 @@ final class RecordingOverlayController: NSObject, ObservableObject, NSWindowDele
         stopTransitionTask?.cancel()
         stopTransitionTask = nil
         isShowingStopTransition = false
+        stopTransitionStartReference = nil
         startTime = nil
         elapsedTime = 0
         transcript = ""
@@ -343,6 +353,7 @@ final class RecordingOverlayController: NSObject, ObservableObject, NSWindowDele
     private func beginStopTransition() {
         stopTransitionTask?.cancel()
         stopTransitionAudioLevel = max(0.12, AudioLevelMonitor.shared.level)
+        stopTransitionStartReference = Date().timeIntervalSinceReferenceDate
         isShowingStopTransition = true
 
         stopTransitionTask = Task { @MainActor [weak self] in
@@ -351,6 +362,7 @@ final class RecordingOverlayController: NSObject, ObservableObject, NSWindowDele
             withAnimation(.easeOut(duration: 0.16)) {
                 self.isShowingStopTransition = false
             }
+            self.stopTransitionStartReference = nil
             self.updateWindowPosition(for: .transcribing)
             self.stopTransitionTask = nil
         }
@@ -360,6 +372,7 @@ final class RecordingOverlayController: NSObject, ObservableObject, NSWindowDele
         stopTransitionTask?.cancel()
         stopTransitionTask = nil
         isShowingStopTransition = false
+        stopTransitionStartReference = nil
     }
 
     /// Update window position and size based on current state
@@ -912,7 +925,8 @@ struct RecordingOverlayView: View {
                 controlVisibility: .hidden,
                 content: nil,
                 leadingControl: nil,
-                trailingControl: nil
+                trailingControl: nil,
+                settleStartReference: controller.stopTransitionStartReference
             )
             .transition(.opacity)
 
@@ -1262,7 +1276,7 @@ struct InfinityParticlesView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            TimelineView(.animation(minimumInterval: recordingOverlayParticleFrameInterval)) { timeline in
+            TimelineView(.animation(minimumInterval: recordingOverlayFrameInterval)) { timeline in
                 Canvas { context, size in
                     let time = timeline.date.timeIntervalSinceReferenceDate
 
@@ -1325,7 +1339,7 @@ struct SuccessParticlesView: View {
     private let successGreen = Color(red: 0.4, green: 1.0, blue: 0.5)
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: recordingOverlayParticleFrameInterval)) { timeline in
+        TimelineView(.animation(minimumInterval: recordingOverlayFrameInterval)) { timeline in
             Canvas { context, size in
                 let time = timeline.date.timeIntervalSinceReferenceDate
                 let centerX = size.width / 2
@@ -1394,81 +1408,215 @@ struct OverlayButton<Content: View>: View {
 
 // MARK: - Particles (iOS Talkie style - direct port)
 
+private struct WavyParticleConst {
+    let seed: Double
+    let speedSeed: Double
+    let primaryPhase: Double
+    let secondaryPhase: Double
+    let laneOffset: Double
+    let sizeVariation: CGFloat
+}
+
+private func buildWavyParticleConstants(_ count: Int) -> [WavyParticleConst] {
+    (0..<count).map { i in
+        let seed = Double(i) * 1.618033988749
+        return WavyParticleConst(
+            seed: seed,
+            speedSeed: seed.truncatingRemainder(dividingBy: 1.0),
+            primaryPhase: seed * 4,
+            secondaryPhase: seed * 6,
+            laneOffset: (Double(i % 10) / 10.0 - 0.5) * 0.3,
+            sizeVariation: CGFloat(0.5 + sin(seed * 5) * 0.5)
+        )
+    }
+}
+
 struct WavyParticlesView: View {
     let calm: Bool
     let direction: AgentOverlay.AnimationDirection
     let levelOverride: Float?
     let speedMultiplier: Double
-    @ObservedObject private var audioMonitor = AudioLevelMonitor.shared
+    let settleStartReference: TimeInterval?
     @ObservedObject private var tuning = ParticleTuning.shared
+    @State private var smoothedInputLevel: CGFloat = 0
+    @State private var particleConstants: [WavyParticleConst] = []
+    @State private var lastParticleCount: Int = 0
 
     init(
         calm: Bool,
         direction: AgentOverlay.AnimationDirection = .inbound,
         levelOverride: Float? = nil,
-        speedMultiplier: Double = 1.0
+        speedMultiplier: Double = 1.0,
+        settleStartReference: TimeInterval? = nil
     ) {
         self.calm = calm
         self.direction = direction
         self.levelOverride = levelOverride
         self.speedMultiplier = speedMultiplier
+        self.settleStartReference = settleStartReference
+    }
+
+    var body: some View {
+        WavyParticlesCanvas(
+            calm: calm,
+            direction: direction,
+            levelOverride: levelOverride,
+            speedMultiplier: speedMultiplier,
+            settleStartReference: settleStartReference,
+            inputLevel: levelOverride.map(CGFloat.init) ?? smoothedInputLevel,
+            particleCount: resolvedParticleCount,
+            particleConstants: particleConstants,
+            baseSpeed: tuning.baseSpeed,
+            speedVariation: tuning.speedVariation,
+            waveSpeed: tuning.waveSpeed,
+            baseAmplitude: tuning.baseAmplitude,
+            audioAmplitude: tuning.audioAmplitude,
+            baseSize: tuning.baseSize,
+            inputSensitivity: tuning.inputSensitivity
+        )
+        .onAppear {
+            rebuildParticleConstantsIfNeeded()
+            updateSmoothedInputLevel(from: currentInputLevel, immediate: true)
+        }
+        .onReceive(AudioLevelMonitor.shared.$level.throttle(for: .milliseconds(16), scheduler: RunLoop.main, latest: true)) { level in
+            guard levelOverride == nil else { return }
+            updateSmoothedInputLevel(from: level)
+        }
+        .onChange(of: levelOverride) { _, newValue in
+            guard let newValue else { return }
+            updateSmoothedInputLevel(from: newValue, immediate: true)
+        }
+        .onChange(of: tuning.particleCount) { _, _ in
+            rebuildParticleConstantsIfNeeded()
+        }
+        .onChange(of: calm) { _, _ in
+            rebuildParticleConstantsIfNeeded()
+        }
+    }
+
+    private var resolvedParticleCount: Int {
+        let tunedParticleCount = calm
+            ? Int(Double(tuning.particleCount) * 0.45)
+            : Int(Double(tuning.particleCount) * 0.55)
+        return max(12, min(36, tunedParticleCount))
+    }
+
+    private var currentInputLevel: Float {
+        levelOverride ?? AudioLevelMonitor.shared.level
+    }
+
+    private func rebuildParticleConstantsIfNeeded() {
+        let count = resolvedParticleCount
+        guard count != lastParticleCount else { return }
+        lastParticleCount = count
+        particleConstants = buildWavyParticleConstants(count)
+    }
+
+    private func updateSmoothedInputLevel(from inputLevel: Float, immediate: Bool = false) {
+        let targetLevel = min(1, max(0, CGFloat(inputLevel)))
+        guard !immediate else {
+            smoothedInputLevel = targetLevel
+            return
+        }
+
+        guard abs(targetLevel - smoothedInputLevel) > 0.001 else { return }
+
+        let baseDuration = targetLevel > smoothedInputLevel
+            ? recordingOverlayParticleLevelAttackDuration
+            : recordingOverlayParticleLevelReleaseDuration
+        let speedFactor = min(1.6, max(0.6, tuning.smoothingFactor / 0.55))
+        let duration = baseDuration / speedFactor
+
+        withAnimation(.easeOut(duration: duration)) {
+            smoothedInputLevel = targetLevel
+        }
+    }
+}
+
+private struct WavyParticlesCanvas: View, Animatable {
+    let calm: Bool
+    let direction: AgentOverlay.AnimationDirection
+    let levelOverride: Float?
+    let speedMultiplier: Double
+    let settleStartReference: TimeInterval?
+    var inputLevel: CGFloat
+    let particleCount: Int
+    let particleConstants: [WavyParticleConst]
+    let baseSpeed: Double
+    let speedVariation: Double
+    let waveSpeed: Double
+    let baseAmplitude: Double
+    let audioAmplitude: Double
+    let baseSize: Double
+    let inputSensitivity: Double
+
+    var animatableData: CGFloat {
+        get { inputLevel }
+        set { inputLevel = newValue }
     }
 
     var body: some View {
         TimelineView(.animation(minimumInterval: recordingOverlayParticleFrameInterval)) { timeline in
-            Canvas { context, size in
+            Canvas(opaque: false, colorMode: .nonLinear, rendersAsynchronously: true) { context, size in
                 let time = timeline.date.timeIntervalSinceReferenceDate
                 let centerY = size.height / 2
+                let constants = particleConstants.isEmpty
+                    ? buildWavyParticleConstants(particleCount)
+                    : particleConstants
 
-                // Apply input sensitivity to the raw audio level
-                let inputLevel = levelOverride ?? audioMonitor.level
-                let rawLevel = CGFloat(inputLevel) * CGFloat(tuning.inputSensitivity)
-                let targetLevel = min(1.0, rawLevel)  // Clamp to prevent crazy values
+                // Coast-to-a-halt: while a stop transition is in progress, ease the
+                // "virtual time" that drives flow + wave so the motion decelerates
+                // smoothly to zero (constant deceleration: velocity 1 → 0 ⇒
+                // distance = d·(u − u²/2)). Once the window elapses the value is
+                // frozen, so the particles are fully at rest before the dots appear.
+                // Pure per-frame math, no per-particle state.
+                let motionTime: Double = {
+                    guard let ref = settleStartReference else { return time }
+                    let elapsed = time - ref
+                    guard elapsed > 0 else { return time }
+                    let d = recordingOverlayStopTransitionSeconds
+                    let u = min(1.0, elapsed / d)
+                    return ref + d * (u - u * u / 2)
+                }()
+
+                let rawLevel = inputLevel * CGFloat(inputSensitivity)
+                let targetLevel = 1 - exp(-rawLevel)
 
                 // Use tuning values, with calm mode applying a reduction factor
                 let calmFactor = calm ? 0.42 : 1.0
                 let levelFloor: CGFloat = levelOverride == nil ? 0.08 : 0.01
                 let level = max(levelFloor, targetLevel)
 
-                // Particle count from tuning
-                let tunedParticleCount = calm
-                    ? Int(Double(tuning.particleCount) * 0.45)
-                    : Int(Double(tuning.particleCount) * 0.55)
-                let particleCount = max(12, min(36, tunedParticleCount))
+                let resolvedBaseSpeed = baseSpeed * calmFactor * speedMultiplier
+                let resolvedBaseAmp = baseAmplitude * calmFactor
+                let resolvedAudioAmp = audioAmplitude * calmFactor
+                let waveAmplitude = resolvedBaseAmp + Double(level) * resolvedAudioAmp
+                let resolvedWaveSpeed = waveSpeed * calmFactor * speedMultiplier
+                let resolvedBaseSize = CGFloat(baseSize)
+                let levelBonus = level * 6.0  // More responsive size change with voice
+                let flowRight = direction == .inbound
 
-                for i in 0..<particleCount {
-                    let seed = Double(i) * 1.618033988749
-
+                for particle in constants {
                     // X position: constant speed flow from tuning
-                    let baseSpeed = tuning.baseSpeed * calmFactor * speedMultiplier
-                    let speedVar = (seed.truncatingRemainder(dividingBy: 1.0)) * tuning.speedVariation
-                    let speed = baseSpeed + speedVar
-                    let xProgress = (time * speed + seed).truncatingRemainder(dividingBy: 1.0)
-                    let x = direction == .inbound
+                    let speedVar = particle.speedSeed * speedVariation
+                    let speed = resolvedBaseSpeed + speedVar
+                    let xProgress = (motionTime * speed + particle.seed).truncatingRemainder(dividingBy: 1.0)
+                    let x = flowRight
                         ? CGFloat(xProgress) * size.width
                         : size.width - (CGFloat(xProgress) * size.width)
 
                     // Y position: sine-wave motion with tuned parameters
-                    let baseAmp = tuning.baseAmplitude * calmFactor
-                    let audioAmp = tuning.audioAmplitude * calmFactor
-                    let waveAmplitude = baseAmp + Double(level) * audioAmp
-
-                    let waveSpd = tuning.waveSpeed * calmFactor * speedMultiplier
-                    let primaryWave = sin(time * waveSpd + seed * 4) * waveAmplitude
-                    let secondaryWave = sin(time * (waveSpd * 0.6) + seed * 6) * waveAmplitude * 0.3
+                    let primaryWave = sin(motionTime * resolvedWaveSpeed + particle.primaryPhase) * waveAmplitude
+                    let secondaryWave = sin(motionTime * (resolvedWaveSpeed * 0.6) + particle.secondaryPhase) * waveAmplitude * 0.3
 
                     // Small vertical offset per particle
-                    let laneOffset = (Double(i % 10) / 10.0 - 0.5) * 0.3
-                    let y = centerY + CGFloat((primaryWave + secondaryWave + laneOffset) * Double(centerY) * 0.7)
+                    let y = centerY + CGFloat((primaryWave + secondaryWave + particle.laneOffset) * Double(centerY) * 0.7)
 
                     // Size from tuning - particles grow with audio level
-                    let baseSize = CGFloat(tuning.baseSize)
-                    let levelBonus = level * 6.0  // More responsive size change with voice
-                    let sizeVariation = CGFloat(0.5 + sin(seed * 5) * 0.5)  // 0.0-1.0 range
-                    let edgeScale = direction == .inbound
+                    let edgeScale = flowRight
                         ? min(xProgress * 3.0, 1.0) * min((1.0 - xProgress) * 2.0, 1.0)
                         : min((1.0 - xProgress) * 3.0, 1.0) * min(xProgress * 2.0, 1.0)
-                    let particleSize = (baseSize + levelBonus * sizeVariation) * max(0.35, CGFloat(edgeScale))
+                    let particleSize = (resolvedBaseSize + levelBonus * particle.sizeVariation) * max(0.35, CGFloat(edgeScale))
 
                     let rect = CGRect(
                         x: x - particleSize / 2,
@@ -1504,7 +1652,7 @@ struct WaveformBarsView: View {
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: recordingOverlayParticleFrameInterval)) { timeline in
+        TimelineView(.animation(minimumInterval: recordingOverlayFrameInterval)) { timeline in
             Canvas { context, size in
                 let time = timeline.date.timeIntervalSinceReferenceDate
                 let barCount = max(8, min(32, tuning.barCount))
@@ -1588,7 +1736,7 @@ struct IslandPillShapesView: View {
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: recordingOverlayParticleFrameInterval)) { timeline in
+        TimelineView(.animation(minimumInterval: recordingOverlayFrameInterval)) { timeline in
             Canvas { context, size in
                 let time = timeline.date.timeIntervalSinceReferenceDate
                 let islandSettings = settings.islandVisualizationSettings

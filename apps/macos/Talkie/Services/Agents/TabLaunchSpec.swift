@@ -108,9 +108,30 @@ enum TabLaunchSpec {
             executableURL: executableURL
         )
 
+        // The Talkie agent boots into its durable agent home
+        // (Application Support/Talkie/Agent) — shared across sessions rather than
+        // regenerated per launch — so the CLAUDE.md / SYSTEM_PROMPT.md it
+        // instantiates with persist and can be hand-tuned. Talkie still refreshes
+        // the operational scaffolding there each launch (AGENTS.md, the
+        // config/memo/workflow guides, Tools/, Live Config/). Running here, not
+        // against a source checkout, keeps the experience identical for every
+        // user — developer or not.
+        let workingDirectoryURL = workspaceURL
+
         var args = tab.launchArgs
         if let model = tab.model, !model.isEmpty, !args.contains("--model") {
             args = ["--model", model] + args
+        }
+
+        // Deliver the curated system prompt to Claude Code itself. Before this it
+        // was only ever written to SYSTEM_PROMPT.md and never reached the CLI, so
+        // the agent launched with no Talkie-specific instruction at all.
+        if !tab.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           !args.contains(where: { $0.hasPrefix("--system-prompt") || $0.hasPrefix("--append-system-prompt") }) {
+            let systemPromptFileURL = workspaceURL.appending(path: "SYSTEM_PROMPT.md")
+            if FileManager.default.fileExists(atPath: systemPromptFileURL.path) {
+                args = ["--append-system-prompt-file", systemPromptFileURL.path] + args
+            }
         }
 
         if let tmuxSpec = tryTmuxWrap(
@@ -119,7 +140,8 @@ enum TabLaunchSpec {
             arguments: args,
             environment: env,
             preferTmux: preferTmux,
-            harnessLabel: "Claude"
+            harnessLabel: "Claude",
+            workingDirectoryURL: workingDirectoryURL
         ) {
             return tmuxSpec
         }
@@ -128,7 +150,7 @@ enum TabLaunchSpec {
             executableURL: executableURL,
             arguments: args,
             environment: env,
-            workingDirectoryURL: tab.resolvedCwd,
+            workingDirectoryURL: workingDirectoryURL,
             sessionMode: .ephemeral,
             shouldSendInitialPrompt: false
         )
@@ -269,12 +291,15 @@ enum TabLaunchSpec {
         arguments: [String],
         environment: [String: String],
         preferTmux: Bool,
-        harnessLabel: String
+        harnessLabel: String,
+        workingDirectoryURL: URL? = nil
     ) -> AgentHarnessProfile.LaunchSpec? {
         guard preferTmux,
               let tmuxURL = AgentHarnessProfile.tmuxExecutableURL(preferTmux: true) else {
             return nil
         }
+
+        let cwdURL = workingDirectoryURL ?? tab.resolvedCwd
 
         let sessionName = tmuxSessionName(for: tab)
         let sessionExists = AgentHarnessProfile.tmuxSessionExists(
@@ -309,7 +334,7 @@ enum TabLaunchSpec {
         let script = """
         TMUX_BIN=\(AgentHarnessProfile.shellQuote(tmuxURL.path))
         SESSION_NAME=\(AgentHarnessProfile.shellQuote(sessionName))
-        WORKSPACE=\(AgentHarnessProfile.shellQuote(tab.resolvedCwd.path))
+        WORKSPACE=\(AgentHarnessProfile.shellQuote(cwdURL.path))
         if ! "$TMUX_BIN" has-session -t "$SESSION_NAME" 2>/dev/null; then
           "$TMUX_BIN" new-session -d -s "$SESSION_NAME" -c "$WORKSPACE" "exec \(paneCommand)"
         fi
@@ -323,7 +348,7 @@ enum TabLaunchSpec {
             executableURL: URL(fileURLWithPath: "/bin/zsh"),
             arguments: ["-lc", script],
             environment: environment,
-            workingDirectoryURL: tab.resolvedCwd,
+            workingDirectoryURL: cwdURL,
             sessionMode: .tmux(
                 sessionName: sessionName,
                 executableURL: tmuxURL

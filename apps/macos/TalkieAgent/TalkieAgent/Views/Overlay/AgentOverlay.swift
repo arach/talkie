@@ -39,6 +39,9 @@ struct AgentOverlay: View {
     let content: AnyView?
     let leadingControl: AnyView?
     let trailingControl: AnyView?
+    /// When non-nil, the particle stream coasts to a halt starting at this
+    /// reference-date timestamp (used for the recording-stop transition).
+    var settleStartReference: TimeInterval? = nil
 
     @State private var isHovered = false
 
@@ -91,7 +94,8 @@ struct AgentOverlay: View {
                 calm: calm,
                 direction: animationDirection,
                 levelOverride: audioLevel,
-                speedMultiplier: speedMultiplier
+                speedMultiplier: speedMultiplier,
+                settleStartReference: settleStartReference
             )
         case .waveform(let sensitive):
             WaveformBarsView(sensitive: sensitive, direction: animationDirection, levelOverride: audioLevel)

@@ -13,6 +13,8 @@ import TalkieKit
 
 // MARK: - Particle Preset
 
+private let defaultParticleInputSensitivity = 2.0
+
 struct ParticlePreset: Codable, Identifiable, Equatable {
     var id: String
     var name: String
@@ -328,7 +330,7 @@ final class ParticleTuning: ObservableObject {
     }
 
     // Input sensitivity (how much audio level affects the animation)
-    @Published var inputSensitivity: Double = 4.5 {
+    @Published var inputSensitivity: Double = defaultParticleInputSensitivity {
         didSet { saveCurrentSettings(); log("inputSensitivity", inputSensitivity) }
     }
 
@@ -369,7 +371,7 @@ final class ParticleTuning: ObservableObject {
         baseSize = preset.baseSize
         baseOpacity = preset.baseOpacity
         smoothingFactor = preset.smoothingFactor
-        inputSensitivity = 1.0  // Reset to default when applying preset
+        inputSensitivity = defaultParticleInputSensitivity
         activePresetId = preset.id
 
         AppLogger.shared.log(.ui, "Applied preset", detail: preset.name)

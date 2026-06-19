@@ -151,6 +151,13 @@ private struct ConsolePopoutContent: View {
                 )
                 .padding(.top, 10)
                 .padding(.trailing, 10)
+
+                ConsoleTerminalDictationDock(
+                    controller: captureController,
+                    session: activeSession
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .padding(.bottom, 16)
             }
         }
         .frame(minWidth: 480, minHeight: 320)
@@ -212,6 +219,12 @@ final class ConsoleTerminalCaptureController {
     var isCapturingScreenshot = false
     var screenshotError: String?
 
+    /// True after a dictation transcript has been typed into the session's
+    /// input line (but not yet submitted). Drives the contextual Submit
+    /// button in the bottom-center mic dock — cleared on submit or when a
+    /// new dictation begins.
+    var hasPendingDictation = false
+
     @ObservationIgnored private var dictationStartedAt: Date?
     @ObservationIgnored private var dictationBaselineScreenshotIDs: Set<UUID> = []
     @ObservationIgnored private var dictationBaselineClipIDs: Set<UUID> = []
@@ -241,7 +254,10 @@ final class ConsoleTerminalCaptureController {
                     )
                     resetDictationContext()
                     guard !prompt.isEmpty else { return }
+                    // Type the transcript into the input line without submitting
+                    // it — the contextual Submit button sends the return.
                     session.send(prompt)
+                    hasPendingDictation = true
                 } catch {
                     resetDictationContext()
                     dictationError = error.localizedDescription
@@ -251,6 +267,7 @@ final class ConsoleTerminalCaptureController {
         }
 
         do {
+            hasPendingDictation = false
             dictationStartedAt = Date()
             dictationBaselineScreenshotIDs = Set(ScreenshotTray.shared.items.map(\.id))
             dictationBaselineClipIDs = Set(ClipTray.shared.items.map(\.id))
@@ -259,6 +276,13 @@ final class ConsoleTerminalCaptureController {
             resetDictationContext()
             dictationError = error.localizedDescription
         }
+    }
+
+    /// Sends a return to submit the dictated text sitting in the input line.
+    func submitPendingDictation(to session: ManagedAgentConsoleSession) {
+        guard hasPendingDictation else { return }
+        session.send("\r")
+        hasPendingDictation = false
     }
 
     func captureScreenshot(sendTo session: ManagedAgentConsoleSession) {
@@ -432,14 +456,148 @@ struct ConsoleTerminalCaptureControls: View {
                 error: controller.screenshotError,
                 action: { controller.captureScreenshot(sendTo: session) }
             )
+        }
+    }
+}
 
-            ConsolePopoutDictationButton(
-                isRecording: controller.dictation.isRecording && controller.dictation.activePurpose == .terminalDictation,
-                isTranscribing: controller.dictation.isTranscribing && controller.dictation.activePurpose == .terminalDictation,
+/// Bottom-center mic dock — mirrors the compose sheet's mic placement. The
+/// mic is always present; a Submit button appears beside it once a dictation
+/// transcript has been typed into the input line and disappears on send.
+struct ConsoleTerminalDictationDock: View {
+    let controller: ConsoleTerminalCaptureController
+    let session: ManagedAgentConsoleSession
+
+    private var isRecording: Bool {
+        controller.dictation.isRecording && controller.dictation.activePurpose == .terminalDictation
+    }
+
+    private var isTranscribing: Bool {
+        controller.dictation.isTranscribing && controller.dictation.activePurpose == .terminalDictation
+    }
+
+    private var showsSubmit: Bool {
+        controller.hasPendingDictation && !isRecording && !isTranscribing
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ConsoleTerminalMicButton(
+                isRecording: isRecording,
+                isTranscribing: isTranscribing,
                 error: controller.dictationError,
                 action: { controller.toggleDictation(sendTo: session) }
             )
+
+            if showsSubmit {
+                ConsoleTerminalSubmitButton(
+                    action: { controller.submitPendingDictation(to: session) }
+                )
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
         }
+        .animation(.spring(response: 0.32, dampingFraction: 0.82), value: showsSubmit)
+        .animation(.easeInOut(duration: 0.18), value: isRecording)
+        .animation(.easeInOut(duration: 0.18), value: isTranscribing)
+    }
+}
+
+private struct ConsoleTerminalMicButton: View {
+    let isRecording: Bool
+    let isTranscribing: Bool
+    let error: String?
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(backgroundStyle)
+                    .overlay(
+                        Circle().strokeBorder(borderStyle, lineWidth: 1)
+                    )
+                    .frame(width: 46, height: 46)
+
+                Image(systemName: iconName)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(foregroundStyle)
+                    .symbolEffect(.pulse, options: .repeating, isActive: isRecording || isTranscribing)
+            }
+            .shadow(color: shadowColor, radius: 12, y: 6)
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help(helpText)
+    }
+
+    private var iconName: String {
+        if isTranscribing { return "waveform" }
+        return isRecording ? "stop.fill" : "mic.fill"
+    }
+
+    private var helpText: String {
+        if let error { return error }
+        if isTranscribing { return "Transcribing terminal dictation" }
+        if isRecording { return "Stop and insert dictation" }
+        return "Dictate into terminal"
+    }
+
+    private var foregroundStyle: Color {
+        if error != nil { return .orange }
+        if isRecording { return .white }
+        if isTranscribing { return Theme.current.accent }
+        return isHovered ? Theme.current.foreground : Theme.current.foregroundSecondary
+    }
+
+    private var backgroundStyle: Color {
+        if error != nil { return .orange.opacity(0.18) }
+        if isRecording { return .red.opacity(0.9) }
+        if isTranscribing { return Theme.current.accent.opacity(0.16) }
+        return isHovered ? Theme.current.surfaceHover : Theme.current.surface1.opacity(0.95)
+    }
+
+    private var borderStyle: Color {
+        if error != nil { return .orange.opacity(0.35) }
+        if isRecording { return .white.opacity(0.28) }
+        if isTranscribing { return Theme.current.accent.opacity(0.35) }
+        return Theme.current.border.opacity(0.78)
+    }
+
+    private var shadowColor: Color {
+        if isRecording { return .red.opacity(0.28) }
+        return .black.opacity(0.28)
+    }
+}
+
+private struct ConsoleTerminalSubmitButton: View {
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                Text("Submit")
+                    .font(.geist(size: 13, weight: .semibold))
+
+                Image(systemName: "return")
+                    .font(.system(size: 11, weight: .bold))
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16)
+            .frame(height: 38)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Theme.current.accent.opacity(isHovered ? 1 : 0.92))
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.2), lineWidth: 1)
+                    )
+            )
+            .shadow(color: Theme.current.accent.opacity(0.32), radius: 12, y: 6)
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help("Send dictated text to the terminal")
     }
 }
 
@@ -741,90 +899,5 @@ private struct ConsolePopoutScreenshotButton: View {
         if error != nil { return .orange.opacity(0.35) }
         if isCapturing { return Theme.current.accent.opacity(0.35) }
         return Theme.current.border.opacity(0.78)
-    }
-}
-
-private struct ConsolePopoutDictationButton: View {
-    let isRecording: Bool
-    let isTranscribing: Bool
-    let error: String?
-    let action: () -> Void
-    @State private var isHovered = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 7) {
-                Image(systemName: iconName)
-                    .font(.system(size: 12, weight: .semibold))
-                    .symbolEffect(.pulse, options: .repeating, isActive: isRecording || isTranscribing)
-
-                if isRecording || isTranscribing || error != nil {
-                    Text(label)
-                        .font(.geistMono(size: 10, weight: .semibold))
-                        .lineLimit(1)
-                }
-            }
-            .foregroundStyle(foregroundStyle)
-            .padding(.horizontal, isRecording || isTranscribing || error != nil ? 10 : 0)
-            .frame(width: isRecording || isTranscribing || error != nil ? nil : 28, height: 28)
-            .frame(minHeight: 28)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(backgroundStyle)
-                    .overlay(
-                        Capsule(style: .continuous)
-                            .strokeBorder(borderStyle, lineWidth: 1)
-                    )
-            )
-            .shadow(color: shadowColor, radius: 10, y: 5)
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .help(helpText)
-    }
-
-    private var iconName: String {
-        if isTranscribing { return "waveform" }
-        return isRecording ? "stop.fill" : "mic.fill"
-    }
-
-    private var label: String {
-        if error != nil { return "MIC" }
-        if isTranscribing { return "TRANSCRIBING" }
-        if isRecording { return "STOP" }
-        return "MIC"
-    }
-
-    private var helpText: String {
-        if let error { return error }
-        if isTranscribing { return "Transcribing terminal dictation" }
-        if isRecording { return "Stop and insert dictation" }
-        return "Dictate into terminal"
-    }
-
-    private var foregroundStyle: Color {
-        if error != nil { return .orange }
-        if isRecording { return .white }
-        if isTranscribing { return Theme.current.accent }
-        return isHovered ? Theme.current.foreground : Theme.current.foregroundSecondary
-    }
-
-    private var backgroundStyle: Color {
-        if error != nil { return .orange.opacity(0.18) }
-        if isRecording { return .red.opacity(0.88) }
-        if isTranscribing { return Theme.current.accent.opacity(0.16) }
-        return isHovered ? Theme.current.surfaceHover : Theme.current.surface1.opacity(0.9)
-    }
-
-    private var borderStyle: Color {
-        if error != nil { return .orange.opacity(0.35) }
-        if isRecording { return .white.opacity(0.28) }
-        if isTranscribing { return Theme.current.accent.opacity(0.35) }
-        return Theme.current.border.opacity(0.78)
-    }
-
-    private var shadowColor: Color {
-        if isRecording { return .red.opacity(0.22) }
-        return .black.opacity(0.22)
     }
 }

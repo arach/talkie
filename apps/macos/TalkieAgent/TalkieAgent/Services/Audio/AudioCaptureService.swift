@@ -186,6 +186,13 @@ final class AudioCaptureService: AgentAudioCapture {
     private var buffersPerSecond: Double = 11.7  // Updated based on actual format
     private var silenceAlerted = false
 
+    // MARK: - Visual Level Updates
+
+    private let visualLevelPublishInterval: CFTimeInterval = 1.0 / 60.0
+    private let visualLevelMinimumDelta: Float = 0.002
+    private var lastVisualLevelPublishedAt: CFTimeInterval = 0
+    private var lastVisualLevelPublished: Float = 0
+
     // MARK: - Timing
 
     private let baseFirstBufferTimeout: TimeInterval = 1.0  // Normal timeout for healthy HAL
@@ -320,6 +327,7 @@ final class AudioCaptureService: AgentAudioCapture {
         }
 
         fallbackCaptureSession = nil
+        resetVisualLevelPublisher()
 
         if state == .cold {
             // Cold start: need async warmUp, then start capture
@@ -362,6 +370,7 @@ final class AudioCaptureService: AgentAudioCapture {
         firstBufferReceived = false
         silentBufferCount = 0
         silenceAlerted = false
+        resetVisualLevelPublisher()
         recordingStartTime = CACurrentMediaTime()
         isRecordingActive = true
         state = .recording
@@ -445,7 +454,6 @@ final class AudioCaptureService: AgentAudioCapture {
         }
 
         let stopStart = CACurrentMediaTime()
-        var completedRecording = false
 
         func logTiming(_ step: String) {
             let ms = Int((CACurrentMediaTime() - stopStart) * 1000)
@@ -468,8 +476,62 @@ final class AudioCaptureService: AgentAudioCapture {
             configObserver = nil
         }
 
-        // Finalize the file
-        if let result = fileWriter.finalize() {
+        // Capture the completion callback and clear per-recording state NOW, on the
+        // calling thread, so a fast restart can't race the async finalize below.
+        let chunkCallback = onChunk
+        currentRecordingURL = nil
+        onChunk = nil
+        bufferCount = 0
+        fileCreated = false
+        resetVisualLevelPublisher()
+        silentBufferCount = 0
+        silenceAlerted = false
+        firstBufferReceived = false
+        voiceForegroundingEnabledForSession = false
+        voiceForegroundProcessor.reset()
+
+        // Reset UI level immediately
+        Task { @MainActor in
+            AudioLevelMonitor.shared.level = 0
+            AudioLevelMonitor.shared.resetSilenceTracking()
+        }
+
+        // Finalize OFF the main thread. fileWriter.finalize() reads each segment
+        // fully into memory, resamples it (compressSegment), and F_FULLFSYNCs the
+        // result — hundreds of ms for a multi-minute clip. Running it on the main
+        // thread froze the run loop (and the recording-stop animation with it).
+        // The setup queue is serial, so this stays ordered ahead of the next
+        // startCapture(); the tap was already removed by retireEngine() above, so
+        // fileWriter has no other writer touching it.
+        audioSetupQueue.async { [weak self] in
+            guard let self else { return }
+            let result = self.fileWriter.finalize()
+            Task { @MainActor [weak self] in
+                self?.finishStopCapture(
+                    result: result,
+                    chunkCallback: chunkCallback,
+                    stopStart: stopStart
+                )
+            }
+        }
+    }
+
+    /// Main-thread tail of `stopCapture`, run after the heavy file finalize has
+    /// completed on the audio setup queue. Validates the finalized recording,
+    /// hands it off for transcription, and finishes the (cheap) teardown.
+    private func finishStopCapture(
+        result: AudioWriterResult?,
+        chunkCallback: (([String]) -> Void)?,
+        stopStart: CFTimeInterval
+    ) {
+        func logTiming(_ step: String) {
+            let ms = Int((CACurrentMediaTime() - stopStart) * 1000)
+            log.debug("Stop: \(step)", detail: "+\(ms)ms")
+        }
+
+        var completedRecording = false
+
+        if let result {
             logTiming("file finalized")
             state = .warm
 
@@ -487,9 +549,9 @@ final class AudioCaptureService: AgentAudioCapture {
 
                 completedRecording = true
                 if segmentPaths.isEmpty {
-                    onChunk?([result.url.path])
+                    chunkCallback?([result.url.path])
                 } else {
-                    onChunk?(segmentPaths)
+                    chunkCallback?(segmentPaths)
                 }
 
                 // Archive: process() copies segments to AudioStorage first,
@@ -511,23 +573,8 @@ final class AudioCaptureService: AgentAudioCapture {
             state = .warm
         }
 
-        // Reset UI
-        Task { @MainActor in
-            AudioLevelMonitor.shared.level = 0
-            AudioLevelMonitor.shared.resetSilenceTracking()
-        }
-
         // Clean up state
-        currentRecordingURL = nil
-        onChunk = nil
         captureToken = UUID()
-        bufferCount = 0
-        fileCreated = false
-        silentBufferCount = 0
-        silenceAlerted = false
-        firstBufferReceived = false
-        voiceForegroundingEnabledForSession = false
-        voiceForegroundProcessor.reset()
         logTiming("cleanup done")
 
         finishFallbackCaptureSession(schedulePostRecordingReboot: completedRecording)
@@ -1157,10 +1204,27 @@ final class AudioCaptureService: AgentAudioCapture {
             }
         }
 
-        // Update UI level
+        publishVisualLevel(level)
+    }
+
+    private func publishVisualLevel(_ level: Float) {
+        let clampedLevel = min(1, max(0, level))
+        let now = CACurrentMediaTime()
+
+        guard clampedLevel == 0 || now - lastVisualLevelPublishedAt >= visualLevelPublishInterval else { return }
+        guard clampedLevel == 0 || abs(clampedLevel - lastVisualLevelPublished) >= visualLevelMinimumDelta else { return }
+
+        lastVisualLevelPublishedAt = now
+        lastVisualLevelPublished = clampedLevel
+
         Task { @MainActor in
-            AudioLevelMonitor.shared.updateLevel(level, isRecording: true)
+            AudioLevelMonitor.shared.updateLevel(clampedLevel, isRecording: true)
         }
+    }
+
+    private func resetVisualLevelPublisher() {
+        lastVisualLevelPublishedAt = 0
+        lastVisualLevelPublished = 0
     }
 
     /// Calculate RMS level from buffer using vDSP for realtime performance

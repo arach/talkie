@@ -184,7 +184,11 @@ struct ConsoleTabEditor: View {
                 modelProviderSection
             }
 
-            editorField("Working Directory", text: $cwd, placeholder: "~/dev/talkie")
+            if harness == .claudeCode {
+                agentHomeSection
+            } else {
+                editorField("Working Directory", text: $cwd, placeholder: "~/dev/talkie")
+            }
 
             editorField("Launch Args", text: $launchArgs, placeholder: "space-separated args")
 
@@ -318,11 +322,57 @@ struct ConsoleTabEditor: View {
 
     // MARK: - Prompt
 
+    private var agentHomeSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Agent Home")
+                .font(.geist(size: 11, weight: .medium))
+                .foregroundStyle(Theme.current.foregroundSecondary)
+
+            Text("The Talkie agent boots in its durable home and instantiates with the CLAUDE.md / SYSTEM_PROMPT.md there. Those files are yours to edit — your changes persist across launches.")
+                .font(.geist(size: 10, weight: .regular))
+                .foregroundStyle(Theme.current.foregroundMuted)
+
+            Text(ConsoleSessionPool.shared.agentHomeURL.path(percentEncoded: false))
+                .font(.geistMono(size: 11))
+                .foregroundStyle(Theme.current.foreground)
+                .textSelection(.enabled)
+
+            HStack(spacing: 8) {
+                Button("Reveal in Finder", systemImage: "folder") {
+                    revealAgentHome()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
+                Button("Reset prompts to defaults", systemImage: "arrow.counterclockwise") {
+                    ConsoleSessionPool.shared.resetAgentHomePrompts()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+    }
+
+    private func revealAgentHome() {
+        let url = ConsoleSessionPool.shared.agentHomeURL
+        if FileManager.default.fileExists(atPath: url.path) {
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        } else {
+            NSWorkspace.shared.activateFileViewerSelecting([url.deletingLastPathComponent()])
+        }
+    }
+
     private var promptSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("SYSTEM PROMPT")
                 .font(.techLabelSmall)
                 .foregroundStyle(Theme.current.foregroundSecondary)
+
+            if harness == .claudeCode {
+                Text("Seeds the durable agent home's SYSTEM_PROMPT.md on first launch (or after Reset). After that, edit the file directly — your edits win.")
+                    .font(.geist(size: 10, weight: .regular))
+                    .foregroundStyle(Theme.current.foregroundMuted)
+            }
 
             TextEditor(text: $systemPrompt)
                 .font(.geistMono(size: 12, weight: .regular))
