@@ -72,9 +72,11 @@ final class UnifiedAudioCapture: AgentAudioCapture {
         // Stub - no actual capture
     }
 
-    func stopCapture() {
+    @discardableResult
+    func stopCapture() -> Bool {
         // Stub - no actual capture
         onChunk = nil
+        return true
     }
 
     func requestCheckpoint() {

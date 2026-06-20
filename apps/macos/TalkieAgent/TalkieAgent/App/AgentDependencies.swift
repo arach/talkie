@@ -16,7 +16,14 @@ enum AudioRebootResult {
 
 protocol AgentAudioCapture {
     func startCapture(onChunk: @escaping ([String]) -> Void)  // Receives segment file paths
-    func stopCapture()
+    /// Stop capturing and finalize. Returns `true` once an outcome has been
+    /// delivered (onChunk fired, or an error callback fired). Returns `false`
+    /// only when nothing was stopped / no outcome will arrive, so callers can
+    /// keep a "no audio" safety net armed. stopCapture runs finalize +
+    /// compression synchronously, so by the time it returns the outcome is
+    /// already in flight.
+    @discardableResult
+    func stopCapture() -> Bool
     func requestCheckpoint()
     var currentSegmentIndex: Int { get }
     var onSegmentCompleted: ((AudioWriterSegment) -> Void)? { get set }
@@ -47,10 +54,12 @@ final class StubAudioCapture: AgentAudioCapture {
         }
     }
 
-    func stopCapture() {
+    @discardableResult
+    func stopCapture() -> Bool {
         logger.info("Audio capture stopped")
         timer?.invalidate()
         timer = nil
+        return true
     }
 
     func requestCheckpoint() {

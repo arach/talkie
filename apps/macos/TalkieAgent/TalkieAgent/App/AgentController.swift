@@ -1639,18 +1639,35 @@ final class AgentController: ObservableObject {
         stateMachine.transition(.stopRecording)
 
         recordingEndTime = Date()
+
+        // Safety net for a wedged mic: if capture never delivers audio we must
+        // not hang in .transcribing forever. It is DISARMED the instant
+        // stopCapture() returns reporting a delivered outcome (below). Long
+        // recordings finalize + compress synchronously for several seconds, so
+        // a blind timeout would otherwise fire a false "No audio captured"
+        // while the dictation is still being saved/transcribed.
+        let safetyTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard let self, !Task.isCancelled else { return }
+            guard self.state == .transcribing, self.pendingAudioFilename == nil, !self.isCancelled else { return }
+            self.handleCaptureError("No audio captured")
+        }
+
         Task { @MainActor [weak self] in
             await Task.yield()
             try? await Task.sleep(for: .milliseconds(16))
-            self?.audio.stopCapture()
-        }
-
-        // Safety timeout: if no audio file is produced, reset to idle with error
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(2))
             guard let self else { return }
-            guard self.state == .transcribing, self.pendingAudioFilename == nil, !self.isCancelled else { return }
-            self.handleCaptureError("No audio captured")
+            // stopCapture() runs finalize + compression synchronously and, by the
+            // time it returns, has already delivered its outcome (onChunk
+            // scheduled process(), or an error callback fired). Disarm the net
+            // here — synchronously, before its timeout continuation can run — so
+            // slow compression on long recordings can't trip a false alarm. If
+            // stopCapture reports no outcome (a rare capture desync), leave the
+            // net armed so we still recover.
+            let delivered = self.audio.stopCapture()
+            if delivered {
+                safetyTask.cancel()
+            }
         }
     }
 

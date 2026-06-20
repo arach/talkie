@@ -415,8 +415,12 @@ final class AudioCaptureService: AgentAudioCapture {
 
     #endif
 
-    /// Stop capturing and finalize the recording
-    func stopCapture() {
+    /// Stop capturing and finalize the recording.
+    /// Returns `true` once an outcome has been delivered (onChunk fired, or an
+    /// error callback fired); `false` when no outcome will arrive, so the
+    /// caller keeps its "no audio" safety net armed.
+    @discardableResult
+    func stopCapture() -> Bool {
         // Cancel any pending setup by invalidating the token
         // This handles the case where stop is called during background audio setup
         let wasStarting = (state == .warm || state == .warming)
@@ -428,11 +432,17 @@ final class AudioCaptureService: AgentAudioCapture {
                 finishFallbackCaptureSession()
                 // Signal immediately so AgentController doesn't wait for timeout
                 onCaptureErrorCallback?("Recording cancelled (setup incomplete)")
+                return true
             } else {
                 log.warning("Cannot stop capture in state: \(state.rawValue)")
+                return false
             }
-            return
         }
+
+        // Tracks whether finalize delivered an outcome (onChunk on success, or
+        // an error callback for a too-short recording). Only a finalize that
+        // returns nil leaves nothing in flight.
+        var outcomeDelivered = true
 
         let stopStart = CACurrentMediaTime()
         var completedRecording = false
@@ -499,6 +509,8 @@ final class AudioCaptureService: AgentAudioCapture {
         } else {
             log.error("Failed to finalize recording")
             state = .warm
+            // No onChunk and no error callback fired — keep the caller's net armed.
+            outcomeDelivered = false
         }
 
         // Reset UI
@@ -534,6 +546,8 @@ final class AudioCaptureService: AgentAudioCapture {
                 await self.reboot()
             }
         }
+
+        return outcomeDelivered
     }
 
     func requestCheckpoint() {

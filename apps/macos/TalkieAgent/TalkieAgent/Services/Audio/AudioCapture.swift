@@ -325,12 +325,13 @@ final class MicrophoneCapture: AgentAudioCapture {
         return level
     }
 
-    func stopCapture() {
+    @discardableResult
+    func stopCapture() -> Bool {
         // Always reset isCapturing to prevent stuck state, even if we return early
         let wasCapturing = isCapturing
         isCapturing = false
 
-        guard wasCapturing, let engine = engine else { return }
+        guard wasCapturing, let engine = engine else { return false }
 
         // Stop the engine first to prevent new buffers from being written
         engine.inputNode.removeTap(onBus: 0)
@@ -403,6 +404,7 @@ final class MicrophoneCapture: AgentAudioCapture {
         // Deallocate engine to ensure fresh state for next recording
         // This is critical for handling device changes (AirPods connect/disconnect)
         self.engine = nil
+        return true
     }
 
     @discardableResult
