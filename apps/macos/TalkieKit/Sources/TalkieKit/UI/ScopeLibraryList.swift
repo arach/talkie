@@ -7,7 +7,7 @@
 //  rows through the same components so the channel-tagged editorial
 //  look stays a single source of truth:
 //
-//    ScopeLibraryRow          — channel letter, title, chrome line,
+//    ScopeLibraryRow          — leading mark, title, chrome line,
 //                               time-ago + memo sparkline
 //    ScopeLibraryDateBucket   — Today / Yesterday / This week / month
 //    ScopeLibraryBucketHeader — eyebrow section header with count
@@ -124,7 +124,7 @@ public struct ScopeLibraryBucketHeader: View {
 // MARK: - Row
 
 /// Compact channel-tagged signal row. The heart of the library: leading
-/// channel label (M / D / N / C), title in sans, chrome metadata line,
+/// thumbnail or channel label, title in sans, chrome metadata line,
 /// and a right-side detail block (sparkline for memos w/ duration, else
 /// word count / time).
 public struct ScopeLibraryRow: View {
@@ -465,14 +465,12 @@ private struct ScopeLibraryLeadingMark: View {
             case .media(let media):
                 ScopeLibraryMediaThumbnail(
                     media: media,
-                    channelLetter: channelLetter,
                     isSelected: isSelected
                 )
             case .waveform(let seed, let color):
                 ScopeLibraryWaveformThumbnail(
                     seed: seed,
                     color: color,
-                    channelLetter: channelLetter,
                     isSelected: isSelected
                 )
             case .file(let icon, let extensionLabel, let color):
@@ -480,7 +478,6 @@ private struct ScopeLibraryLeadingMark: View {
                     icon: icon,
                     extensionLabel: extensionLabel,
                     color: color,
-                    channelLetter: channelLetter,
                     isSelected: isSelected
                 )
             case .channel:
@@ -500,12 +497,10 @@ private struct ScopeLibraryWaveformThumbnail: View {
 
     let seed: Int
     let color: Color
-    let channelLetter: String
     let isSelected: Bool
 
     var body: some View {
         ScopeLibraryThumbnailShell(
-            channelLetter: channelLetter,
             isSelected: isSelected,
             topTrailing: {
                 Image(systemName: "waveform")
@@ -559,12 +554,10 @@ private struct ScopeLibraryFileThumbnail: View {
     let icon: String
     let extensionLabel: String?
     let color: Color
-    let channelLetter: String
     let isSelected: Bool
 
     var body: some View {
         ScopeLibraryThumbnailShell(
-            channelLetter: channelLetter,
             isSelected: isSelected,
             topTrailing: {
                 if let extensionLabel {
@@ -586,7 +579,6 @@ private struct ScopeLibraryFileThumbnail: View {
 }
 
 private struct ScopeLibraryThumbnailShell<Content: View, TopTrailing: View>: View {
-    let channelLetter: String
     let isSelected: Bool
     @ViewBuilder var topTrailing: () -> TopTrailing
     @ViewBuilder var content: () -> Content
@@ -620,7 +612,6 @@ private struct ScopeLibraryThumbnailShell<Content: View, TopTrailing: View>: Vie
         .frame(width: thumbnailSize.width, height: thumbnailSize.height)
         .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
         .overlay(thumbnailBorder)
-        .overlay(alignment: .bottomLeading) { channelBadge }
         .overlay(alignment: .topTrailing) { topTrailing() }
         .shadow(color: ScopeInk.primary.opacity(isSelected ? 0.14 : 0.07), radius: 2.3, y: 1.1)
     }
@@ -637,28 +628,6 @@ private struct ScopeLibraryThumbnailShell<Content: View, TopTrailing: View>: Vie
                     .strokeBorder(.white.opacity(0.42), lineWidth: 0.5)
             )
     }
-
-    private var channelBadge: some View {
-        Text(channelLetter.uppercased())
-            .font(ScopeType.channel)
-            .tracking(ScopeType.Tracking.wide)
-            .foregroundStyle(ScopePanel.ink.opacity(0.96))
-            .padding(.horizontal, 4)
-            .padding(.vertical, 1)
-            .background(
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(ScopePanel.bg.opacity(0.82))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .strokeBorder(
-                        isSelected ? ScopeAmber.solid.opacity(0.9) : .white.opacity(0.18),
-                        lineWidth: 0.5
-                    )
-            )
-            .padding(.leading, 3)
-            .padding(.bottom, 3)
-    }
 }
 
 private struct ScopeLibraryMediaThumbnail: View {
@@ -667,7 +636,6 @@ private struct ScopeLibraryMediaThumbnail: View {
     private static let thumbnailMaxPixelSize = 180
 
     let media: CaptureMediaAsset
-    let channelLetter: String
     let isSelected: Bool
 
     @State private var image: NSImage?
@@ -710,7 +678,6 @@ private struct ScopeLibraryMediaThumbnail: View {
         .frame(width: Self.thumbnailSize.width, height: Self.thumbnailSize.height)
         .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
         .overlay(thumbnailBorder)
-        .overlay(alignment: .bottomLeading) { channelBadge }
         .overlay(alignment: .topTrailing) { videoBadge }
         .shadow(color: ScopeInk.primary.opacity(isSelected ? 0.16 : 0.08), radius: 2.5, y: 1.2)
         .task(id: taskID) {
@@ -775,28 +742,6 @@ private struct ScopeLibraryMediaThumbnail: View {
             endPoint: .bottom
         )
         .allowsHitTesting(false)
-    }
-
-    private var channelBadge: some View {
-        Text(channelLetter.uppercased())
-            .font(ScopeType.channel)
-            .tracking(ScopeType.Tracking.wide)
-            .foregroundStyle(ScopePanel.ink.opacity(0.96))
-            .padding(.horizontal, 4)
-            .padding(.vertical, 1)
-            .background(
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(ScopePanel.bg.opacity(0.82))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .strokeBorder(
-                        isSelected ? ScopeAmber.solid.opacity(0.9) : .white.opacity(0.18),
-                        lineWidth: 0.5
-                    )
-            )
-            .padding(.leading, 3)
-            .padding(.bottom, 3)
     }
 
     @ViewBuilder
