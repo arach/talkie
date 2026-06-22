@@ -40,6 +40,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private let ssWindowHotKey     = HotKeyManager(signature: "\(sig)S6", hotkeyID: 12)
     private let ssShelfHotKey      = HotKeyManager(signature: "\(sig)ST", hotkeyID: 17)
     private let screenRecordHotKeyManager = HotKeyManager(signature: "\(sig)SR", hotkeyID: 13)  // Screen recording chord
+    private let desktopInkHotKey   = HotKeyManager(signature: "\(sig)DI", hotkeyID: 18)  // Toggle desktop ink layer
+    private let desktopInkPassthroughHotKey = HotKeyManager(signature: "\(sig)DP", hotkeyID: 19)  // Draw <-> arrange
+    private let desktopMagnifierHotKey = HotKeyManager(signature: "\(sig)DM", hotkeyID: 20)  // Freeze a region into a desktop magnifier
+    private var desktopInkTapMonitor: ModifierTapMonitor?  // Bare left/right Ctrl taps for ink
 
     private struct AgentMenuInputState {
         var name: String
@@ -1401,6 +1405,63 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }
         log.info("Screen recording hotkey registered: keyCode=\(screenRecordChord.keyCode) modifiers=\(screenRecordChord.modifiers)")
 
+        // Desktop ink: draw straight on the desktop, then snap and the marks
+        // bake in. Toggle the layer (Hyper+N) and flip draw <-> arrange so you
+        // can move windows under the ink (Hyper+H). Hyper+D is dictation; bare
+        // left/right Ctrl triggers are being explored as a conflict-free option.
+        let inkToggle = Self.loadHotkeyConfig(
+            key: "hotkeyCapture.desktopInk",
+            fallbackKeyCode: 45,                   // N — toggle ink layer
+            fallbackModifiers: Self.hyperModifiers
+        )
+        desktopInkHotKey.registerHotKey(modifiers: inkToggle.modifiers, keyCode: inkToggle.keyCode) { [weak self] _ in
+            Task { @MainActor in self?.toggleDesktopInk() }
+        }
+        let inkArrange = Self.loadHotkeyConfig(
+            key: "hotkeyCapture.desktopInkArrange",
+            fallbackKeyCode: 4,                    // H — hand / arrange (clicks fall through)
+            fallbackModifiers: Self.hyperModifiers
+        )
+        desktopInkPassthroughHotKey.registerHotKey(modifiers: inkArrange.modifiers, keyCode: inkArrange.keyCode) { [weak self] _ in
+            Task { @MainActor in self?.toggleDesktopInkPassthrough() }
+        }
+        log.info("Desktop ink hotkeys registered: toggle keyCode=\(inkToggle.keyCode) arrange keyCode=\(inkArrange.keyCode)")
+
+        // Bare-modifier triggers: tap LEFT Ctrl to toggle the ink layer, RIGHT
+        // Ctrl to flip draw <-> arrange. Conflict-free dedicated keys; only a
+        // clean solitary tap fires (see ModifierTapMonitor), so normal Ctrl use
+        // is untouched. Runs alongside the Hyper hotkeys above.
+        let tapMonitor = ModifierTapMonitor(watching: [.leftControl, .rightControl])
+        tapMonitor.onTap = { [weak self] side in
+            Task { @MainActor in
+                switch side {
+                case .leftControl: self?.toggleDesktopInk()
+                case .rightControl: self?.toggleDesktopInkPassthrough()
+                }
+            }
+        }
+        tapMonitor.start()
+        desktopInkTapMonitor = tapMonitor
+        log.info("Desktop ink bare-Ctrl taps armed: left=toggle right=arrange")
+
+        // The screenshot button in the ink toolbar snaps a region; strokes bake
+        // in via executeAgentScreenshotCapture's desktop-ink path.
+        DesktopInkController.shared.onCaptureRequested = { [weak self] in
+            Task { @MainActor in
+                await self?.executeAgentScreenshotCapture(mode: .region)
+            }
+        }
+
+        let magnifier = Self.loadHotkeyConfig(
+            key: "hotkeyCapture.desktopMagnifier",
+            fallbackKeyCode: 46,                  // M - freeze a source region into a movable magnifier
+            fallbackModifiers: Self.hyperModifiers
+        )
+        desktopMagnifierHotKey.registerHotKey(modifiers: magnifier.modifiers, keyCode: magnifier.keyCode) { [weak self] _ in
+            Task { @MainActor in self?.startDesktopMagnifier() }
+        }
+        log.info("Desktop magnifier hotkey registered: keyCode=\(magnifier.keyCode) modifiers=\(magnifier.modifiers)")
+
         let pasteChord = Self.loadHotkeyConfig(
             key: AgentSettingsKey.pasteChordHotkey,
             fallbackKeyCode: 9,
@@ -1465,6 +1526,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             }
         }
         log.info("Paste last screenshot hotkey registered: keyCode=\(pasteLastScreenshot.keyCode) modifiers=\(pasteLastScreenshot.modifiers)")
+    }
+
+    @MainActor
+    private func toggleDesktopInk() {
+        DesktopInkController.shared.toggle()
+    }
+
+    @MainActor
+    private func toggleDesktopInkPassthrough() {
+        DesktopInkController.shared.togglePassthrough()
+    }
+
+    @MainActor
+    private func startDesktopMagnifier() {
+        DesktopMagnifierController.shared.startSelection()
     }
 
     private func handleAgentCaptureChord(initialMode: CaptureBarMode) async {
@@ -1555,11 +1631,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         mode: CaptureMode,
         preselectedRegion: CGRect? = nil
     ) async -> Bool {
-        guard let result = await ScreenshotCaptureService.shared.captureStandalone(
+        // The ink overlay sits above the capture's own selection UI and is key,
+        // so step it aside while we capture — otherwise the crosshair is
+        // unreachable. The strokes stay alive for the bake below.
+        let inkYielded = DesktopInkController.shared.isActive
+        if inkYielded { DesktopInkController.shared.beginCaptureYield() }
+
+        guard let captured = await ScreenshotCaptureService.shared.captureStandalone(
             mode: mode,
             preselectedRegion: preselectedRegion
         ) else {
+            if inkYielded { DesktopInkController.shared.endCaptureYield() }
             return false
+        }
+
+        // Bake any desktop-ink strokes into the shot. The live ink panel is
+        // sharingType .none (invisible to ScreenCaptureKit), so the marks only
+        // reach the saved asset through this software composite.
+        let (result, bakedInk) = await bakeDesktopInkIfNeeded(into: captured)
+        if bakedInk {
+            // The strokes are now in the screenshot; drop the on-screen ink so it
+            // doesn't linger or double up on the next capture.
+            DesktopInkController.shared.hide(clear: true)
+        } else if inkYielded {
+            // Capture didn't consume the ink (cancelled, or it missed the inked
+            // screen) — bring the overlay back so drawing continues.
+            DesktopInkController.shared.endCaptureYield()
         }
 
         let recordedLive = agentController?.recordLiveScreenshot(
@@ -1612,11 +1709,114 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 "Agent screenshot captured",
                 detail: "mode=\(mode.rawValue) file=\(stored.filename) live=\(recordedLive)"
             )
+            let item = AgentLiveTrayItem(
+                id: stored.id,
+                kind: .screenshot,
+                capturedAt: stored.capturedAt,
+                filename: stored.filename,
+                width: result.width,
+                height: result.height,
+                captureMode: mode.rawValue,
+                windowTitle: result.windowTitle,
+                appName: result.appName,
+                appBundleID: result.appBundleID,
+                displayName: result.displayName,
+                fileURL: stored.fileURL
+            )
+            CaptureIslandController.shared.presentImmediate(
+                item,
+                near: screenshotPreviewAnchor(for: result)
+            )
             return true
         } catch {
             log.error("Agent screenshot tray write failed: \(error.localizedDescription)")
             return recordedLive
         }
+    }
+
+    private func screenshotPreviewAnchor(for result: TalkieKit.CaptureResult) -> NSPoint {
+        guard let rect = result.captureRect,
+              rect.width > 1,
+              rect.height > 1 else {
+            return NSEvent.mouseLocation
+        }
+        return NSPoint(x: rect.maxX, y: rect.maxY)
+    }
+
+    /// Composite the desktop-ink layer into a freshly captured screenshot so the
+    /// strokes bake into the saved asset. Returns the original result untouched
+    /// (with `baked == false`) when there's no ink, the mode carries no screen
+    /// rect (window captures), or the ink was drawn on a different display.
+    ///
+    /// The ink layers are normalized 0…1 to the full overlay (one screen). The
+    /// renderer's `viewport` rebases them onto whatever sub-rect the screenshot
+    /// covers: `imageX/Y` is the captured region's top-left offset inside the
+    /// overlay (Y flipped from AppKit's bottom-left to the layers' top-left), and
+    /// `imageScale` is points-per-pixel so region crops land in the right place.
+    private func bakeDesktopInkIfNeeded(into result: TalkieKit.CaptureResult) async -> (result: TalkieKit.CaptureResult, baked: Bool) {
+        let ink = DesktopInkController.shared
+        let overlay = ink.overlayScreenFrame
+        let layers = ink.currentLayers
+
+        guard ink.hasInk, !layers.isEmpty,
+              let region = result.captureRect,
+              overlay.width > 1, overlay.height > 1,
+              region.width > 1, region.height > 1,
+              result.width > 0, result.height > 0,
+              overlay.intersects(region) else {
+            return (result, false)
+        }
+
+        let viewport = CaptureMarkupViewport(
+            width: Double(overlay.width),
+            height: Double(overlay.height),
+            imageX: Double(region.minX - overlay.minX),
+            imageY: Double(overlay.maxY - region.maxY),
+            imageScale: Double(region.width) / Double(result.width)
+        )
+        let document = CaptureMarkupDocument(
+            imageWidth: Double(result.width),
+            imageHeight: Double(result.height),
+            viewport: viewport,
+            layers: layers
+        )
+
+        let source = result.image
+        let previewScale = min(1.0, 440.0 / Double(max(result.width, result.height)))
+
+        let baked = await Task.detached(priority: .userInitiated) { () -> (data: Data, image: CGImage, preview: CGImage)? in
+            guard let image = CaptureMarkupRenderer.render(image: source, document: document, scale: 1),
+                  let data = CaptureMarkupRenderer.encodedData(image: source, document: document, format: .png, scale: 1) else {
+                return nil
+            }
+            let preview = CaptureMarkupRenderer.render(image: source, document: document, scale: previewScale) ?? image
+            return (data: data, image: image, preview: preview)
+        }.value
+
+        guard let baked else {
+            log.error("Desktop ink bake failed; saving screenshot without ink")
+            return (result, false)
+        }
+
+        log.info(
+            "Desktop ink baked into screenshot",
+            detail: "layers=\(layers.count) size=\(baked.image.width)x\(baked.image.height)"
+        )
+
+        let merged = TalkieKit.CaptureResult(
+            data: baked.data,
+            image: baked.image,
+            previewImage: baked.preview,
+            capturedAt: result.capturedAt,
+            width: baked.image.width,
+            height: baked.image.height,
+            windowTitle: result.windowTitle,
+            appName: result.appName,
+            appBundleID: result.appBundleID,
+            displayName: result.displayName,
+            captureRect: result.captureRect
+        )
+        return (merged, true)
     }
 
     private func handleAgentPasteChord() async {
@@ -1813,6 +2013,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         ssWindowHotKey.unregisterAll()
         ssShelfHotKey.unregisterAll()
         pasteLastScreenshotHotKey.unregisterAll()
+        desktopInkHotKey.unregisterAll()
+        desktopInkPassthroughHotKey.unregisterAll()
+        desktopMagnifierHotKey.unregisterAll()
+        desktopInkTapMonitor?.stop()
+        desktopInkTapMonitor = nil
     }
 
     private func registerSelectionQuickHotkey() {
@@ -1861,6 +2066,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             managers.append(("Hyper+6 Window", ssWindowHotKey))
             managers.append(("Hyper+T Shelf", ssShelfHotKey))
             managers.append(("Hyper+P Paste Last Screenshot", pasteLastScreenshotHotKey))
+            managers.append(("Hyper+M Desktop Magnifier", desktopMagnifierHotKey))
         }
 
         if pttEnabled {

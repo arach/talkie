@@ -57,7 +57,7 @@ interface CaptureItem {
 }
 
 interface CaptureCommandOptions {
-  limit: string;
+  limit?: string;
   since?: string;
   kind?: string;
   source?: string;
@@ -65,8 +65,13 @@ interface CaptureCommandOptions {
   app?: string;
   ocr?: boolean;
   path?: boolean;
+  paths?: boolean;
   open?: boolean;
   reveal?: boolean;
+}
+
+interface ScreenshotsCommandOptions extends Omit<CaptureCommandOptions, "kind" | "recording"> {
+  allSources?: boolean;
 }
 
 interface ParsedFilename {
@@ -103,7 +108,7 @@ export function registerCapturesCommand(program: Command): void {
   program
     .command("captures [id]")
     .description("List screenshots and video captures, or get a specific capture")
-    .option("--limit <n>", "max results", "50")
+    .option("-n, --limit <n>", "max results", "50")
     .option("--since <date>", "filter by capture/file date (e.g. 2026-06-01 or 7d)")
     .option("--kind <kind>", "screenshot, clip, video, or all", "all")
     .option("--source <source>", "recording, library, tray, or all", "all")
@@ -111,28 +116,63 @@ export function registerCapturesCommand(program: Command): void {
     .option("--app <name>", "filter by app, window, display, or filename")
     .option("--ocr", "include OCR text when available")
     .option("--path", "print only capture file paths")
+    .option("--paths", "print only capture file paths")
     .option("--open", "open the matched capture file(s)")
     .option("--reveal", "reveal the matched capture file(s) in Finder")
     .action((id: string | undefined, opts: CaptureCommandOptions) => {
-      const globalOpts = program.opts();
-      const fmt = getFormatOptions(globalOpts);
-      const limit = parsePositiveInt(opts.limit, 50);
-
-      let items = collectCaptures(globalOpts.db);
-      items = filterCaptures(items, opts);
-      items.sort(compareCapturesNewestFirst);
-
-      if (id) {
-        const item = findCapture(items, id);
-        if (!item) {
-          console.error(`Capture not found: ${id}`);
-          process.exit(1);
-        }
-        return outputSelection([item], opts, fmt, true);
-      }
-
-      outputSelection(items.slice(0, limit), opts, fmt, false);
+      runCaptureSelection(program, id, opts, 50);
     });
+
+  program
+    .command("screenshots [n]")
+    .aliases(["screencaps", "screen-caps", "screen-captures"])
+    .description("List recent Talkie screenshots from the capture tray")
+    .option("-n, --limit <n>", "max screenshots", "5")
+    .option("--since <date>", "filter by capture/file date (e.g. 2026-06-01 or 7d)")
+    .option("--source <source>", "tray, recording, library, or all", "tray")
+    .option("--all-sources", "include tray, recording, and library screenshots")
+    .option("--app <name>", "filter by app, window, display, or filename")
+    .option("--ocr", "include OCR text when available")
+    .option("--path", "print only screenshot file paths")
+    .option("--paths", "print only screenshot file paths")
+    .option("--open", "open the matched screenshot file(s)")
+    .option("--reveal", "reveal the matched screenshot file(s) in Finder")
+    .action((n: string | undefined, opts: ScreenshotsCommandOptions) => {
+      const limit = n ?? opts.limit ?? "5";
+      const source = opts.allSources ? "all" : opts.source ?? "tray";
+      runCaptureSelection(program, undefined, {
+        ...opts,
+        kind: "screenshot",
+        source,
+        limit,
+      }, 5);
+    });
+}
+
+function runCaptureSelection(
+  program: Command,
+  id: string | undefined,
+  opts: CaptureCommandOptions,
+  defaultLimit: number
+): void {
+  const globalOpts = program.opts();
+  const fmt = getFormatOptions(globalOpts);
+  const limit = parsePositiveInt(opts.limit, defaultLimit);
+
+  let items = collectCaptures(globalOpts.db);
+  items = filterCaptures(items, opts);
+  items.sort(compareCapturesNewestFirst);
+
+  if (id) {
+    const item = findCapture(items, id);
+    if (!item) {
+      console.error(`Capture not found: ${id}`);
+      process.exit(1);
+    }
+    return outputSelection([item], opts, fmt, true);
+  }
+
+  outputSelection(items.slice(0, limit), opts, fmt, false);
 }
 
 function collectCaptures(dbOverride?: string): CaptureItem[] {
@@ -394,7 +434,7 @@ function outputSelection(
     }
   }
 
-  if (opts.path) {
+  if (opts.path || opts.paths) {
     for (const item of items) {
       console.log(item.path);
     }
@@ -668,9 +708,20 @@ function normalizeSource(value?: string): CaptureSource | null {
   process.exit(1);
 }
 
-function parsePositiveInt(value: string, fallback: number): number {
-  const parsed = parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+function parsePositiveInt(value: string | undefined, fallback: number): number {
+  if (value === undefined) return fallback;
+  if (!/^\d+$/.test(value)) {
+    console.error(`Invalid limit: ${value}. Use a positive integer.`);
+    process.exit(1);
+  }
+
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    console.error(`Invalid limit: ${value}. Use a positive integer.`);
+    process.exit(1);
+  }
+
+  return parsed;
 }
 
 function resolveCapturePath(filename: unknown, root: string): string {

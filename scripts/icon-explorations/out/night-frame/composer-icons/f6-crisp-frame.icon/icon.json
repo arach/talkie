@@ -1,0 +1,28 @@
+{
+  "fill": {
+    "solid": "extended-srgb:0.12941,0.10588,0.07451,1.00000"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "image-name": "f6-crisp-frame.png",
+          "name": "f6-crisp-frame",
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "supported-platforms": {
+    "circles": [
+      "watchOS"
+    ],
+    "squares": "shared"
+  }
+}

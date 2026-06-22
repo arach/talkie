@@ -117,6 +117,61 @@
   // Minimum pixel distance before a mousedown→mousemove counts as a drag
   // (anything smaller is treated as a stray click and discarded for drag tools).
   const MIN_DRAG_PX = 3;
+  const TOOL_CHORD_TIMEOUT_MS = 1600;
+  let toolChordActive = false;
+  let toolChordTimer = null;
+
+  function editableShortcutTarget(target) {
+    const el = target && target.nodeType === 1 ? target : target && target.parentElement;
+    return Boolean(
+      el
+      && (
+        el.isContentEditable
+        || el.closest("input, textarea, select, [contenteditable], [role='textbox']")
+      )
+    );
+  }
+
+  function shortcutToken(event) {
+    if (event.code && event.code.startsWith("Key")) {
+      return event.code.slice(3).toLowerCase();
+    }
+    if (event.code && event.code.startsWith("Digit")) {
+      return event.code.slice(5);
+    }
+    switch (event.code || event.key) {
+    case "Tab":
+      return "tab";
+    case "Space":
+      return "space";
+    case "Backspace":
+      return "backspace";
+    case "Delete":
+      return "delete";
+    case "Escape":
+      return "escape";
+    default:
+      return String(event.key || "").toLowerCase();
+    }
+  }
+
+  function beginToolChord() {
+    toolChordActive = true;
+    if (toolChordTimer) window.clearTimeout(toolChordTimer);
+    toolChordTimer = window.setTimeout(clearToolChord, TOOL_CHORD_TIMEOUT_MS);
+  }
+
+  function clearToolChord() {
+    toolChordActive = false;
+    if (toolChordTimer) {
+      window.clearTimeout(toolChordTimer);
+      toolChordTimer = null;
+    }
+  }
+
+  function isToolChordStart(event) {
+    return event.altKey && !event.metaKey && !event.ctrlKey && shortcutToken(event) === "t";
+  }
 
   // ---------------------------------------------------------------------------
   // Bridge
@@ -768,7 +823,11 @@
     const rect = canvas.getBoundingClientRect();
     const vw = Math.max(1, state.viewport.width || 1);
     const vh = Math.max(1, state.viewport.height || 1);
-    const zoom = Math.max(0.25, Math.min(4, Math.min(rect.width / vw, rect.height / vh, 1)));
+    // Leave a small breathing-room margin so the capture never sits edge-to-edge,
+    // then cap at 1 so small captures stay at native size (no upscaling past 100%).
+    const FIT_MARGIN = 0.94;
+    const raw = Math.min(rect.width / vw, rect.height / vh) * FIT_MARGIN;
+    const zoom = Math.max(0.25, Math.min(4, Math.min(raw, 1)));
     state.viewport.zoom = zoom;
     state.viewport.panX = (rect.width - vw * zoom) / 2;
     state.viewport.panY = (rect.height - vh * zoom) / 2;
@@ -1672,9 +1731,10 @@
     // Stroke — shapes (not labels / blur).
     if (sel.kind !== "label" && shape !== "blur") {
       const w = typeof sel.strokeWidth === "number" ? sel.strokeWidth : 2;
-      ctrls.push(ctrl("stroke", [1, 2, 3, 5].map((v) =>
-        `<button type="button" class="style-btn stroke-pick${v === w ? " active" : ""}" data-insp-style="stroke" data-insp-value="${v}" title="${v} px"><span class="stroke-pip" style="height: ${v}px"></span></button>`
-      ).join("")));
+      ctrls.push(ctrl("stroke", [0.5, 1, 2, 3, 5].map((v) => {
+        const title = v === 0.5 ? "0.5 px hairline" : `${v} px`;
+        return `<button type="button" class="style-btn stroke-pick${v === w ? " active" : ""}" data-insp-style="stroke" data-insp-value="${v}" title="${title}"><span class="stroke-pip" style="height: ${Math.max(1, v)}px"></span></button>`;
+      }).join("")));
     }
 
     // Arrow endpoints — segment layers can be plain lines, one-ended arrows,
@@ -1762,6 +1822,89 @@
     syncToolbarState();
     // Cursor hint: crosshair while a create-tool is selected, default in select mode.
     updateCursor();
+  }
+
+  function cycleLayerSelection(reverse) {
+    const layers = state.document.layers;
+    if (!layers.length) return;
+    const cur = layers.findIndex((l) => l.id === state.selectedLayerId);
+    let next;
+    if (reverse) next = cur <= 0 ? layers.length - 1 : cur - 1;
+    else next = cur === -1 || cur === layers.length - 1 ? 0 : cur + 1;
+    setActiveTool(null);
+    state.selectedLayerId = layers[next].id;
+    render();
+  }
+
+  function deleteSelectedLayer() {
+    if (!state.selectedLayerId) return;
+    const idx = state.document.layers.findIndex((l) => l.id === state.selectedLayerId);
+    if (idx < 0) return;
+    snapshotForUndo();
+    state.document.layers.splice(idx, 1);
+    state.selectedLayerId = null;
+    debouncedUpdate();
+    render();
+  }
+
+  function cancelMarkupInteraction() {
+    if (state.creating) {
+      state.creating = null;
+      render();
+    } else if (state.activeTool) {
+      setActiveTool(null);
+    } else if (state.selectedLayerId) {
+      state.selectedLayerId = null;
+      render();
+    }
+  }
+
+  function handleToolChord(event) {
+    const key = shortcutToken(event);
+    switch (key) {
+    case "v":
+    case "s":
+      setActiveTool(null);
+      break;
+    case "h":
+    case "space":
+      setActiveTool(state.activeTool === "hand" ? null : "hand");
+      break;
+    case "r":
+      setActiveTool("rect");
+      break;
+    case "a":
+      setActiveTool("arrow");
+      break;
+    case "l":
+      setActiveTool("line");
+      break;
+    case "t":
+      setActiveTool("text");
+      break;
+    case "b":
+      setActiveTool("blur");
+      break;
+    case "c":
+      setActiveTool("clone");
+      break;
+    case "m":
+      toolToolbar.classList.toggle("hidden");
+      break;
+    case "tab":
+      cycleLayerSelection(event.shiftKey);
+      break;
+    case "backspace":
+    case "delete":
+      deleteSelectedLayer();
+      break;
+    case "escape":
+      cancelMarkupInteraction();
+      break;
+    default:
+      return false;
+    }
+    return true;
   }
 
   // ---------------------------------------------------------------------------
@@ -2039,6 +2182,16 @@
     const showThread = !!state.thread && (state.thread.live || !state.selectedLayerId);
     rail.classList.toggle("thread-active", showThread);
     wt.classList.toggle("hidden", !showThread);
+
+    // Keep both side rails (Layers + Inspector) collapsed on a fresh capture so
+    // the canvas owns the full width — there's nothing to list or inspect until
+    // there's a shape. They reveal together the moment something is worth
+    // showing: the first shape created or selected, or a live run streaming
+    // into the work thread.
+    const hasShapes = state.document.layers.length > 0;
+    const railsActive = hasShapes || !!state.selectedLayerId || showThread;
+    const bay = document.querySelector(".bay-body");
+    if (bay) bay.classList.toggle("rails-collapsed", !railsActive);
   }
 
   function renderWorkThread() {
@@ -2153,6 +2306,14 @@
         resizeCanvasToHost();
         fitViewportToCanvas();
         render();
+        // Re-fit once layout settles — on first paint the WKWebView canvas can
+        // report a pre-layout size, which would leave the starting zoom wrong.
+        // A follow-up rAF measures the settled bounds so "fit" reliably applies.
+        requestAnimationFrame(() => {
+          resizeCanvasToHost();
+          fitViewportToCanvas();
+          render();
+        });
         post("markup.ready", { sessionId: state.sessionId });
       }).catch(() => {
         post("markup.ready", { sessionId: state.sessionId, error: "image_load_failed" });
@@ -2299,8 +2460,9 @@
   // A real, focused <input> floated over the canvas at the click point. The
   // committed value becomes the label layer's text. Replaces window.prompt,
   // which silently no-ops inside WKWebView. While it's focused the global
-  // keydown guard (target.tagName === "INPUT") keeps tool shortcuts from
-  // firing, so typing "rect"/"text"/etc. lands as characters, not tools.
+  // keydown guard treats real text fields as off-limits, and tool shortcuts now
+  // require the Option-T prefix chord, so typing "rect"/"text"/etc. lands as
+  // characters, not tools.
   // ---------------------------------------------------------------------------
   let activeTextEditor = null;
 
@@ -2419,6 +2581,7 @@
         snapshotForUndo();
         state.document.layers.push(layer);
         state.selectedLayerId = layer.id;
+        setActiveTool(null);
         render();
         beginTextEdit(layer, e.clientX, e.clientY, /*isNew*/ true);
         e.preventDefault();
@@ -2798,12 +2961,25 @@
   });
 
   // ---------------------------------------------------------------------------
-  // Keyboard shortcuts — V select · M toggle toolbar · Space pan · Backspace delete · Esc cancel
+  // Keyboard shortcuts — markup actions use the Option-T prefix chord.
   // ---------------------------------------------------------------------------
   document.addEventListener("keydown", (e) => {
-    // Skip when focus is inside an editable element (text labels, popovers).
-    const target = e.target;
-    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+    if (isToolChordStart(e)) {
+      beginToolChord();
+      e.preventDefault();
+      return;
+    }
+    if (toolChordActive) {
+      const handled = handleToolChord(e);
+      clearToolChord();
+      e.preventDefault();
+      if (handled) return;
+      return;
+    }
+
+    // Skip when focus is inside an editable element (text labels, annotations,
+    // message composers, popovers). Chord start above is the only exception.
+    if (editableShortcutTarget(e.target)) {
       return;
     }
 
@@ -2827,84 +3003,13 @@
 
     if (e.metaKey || e.ctrlKey || e.altKey) return;
 
-    if (e.code === "Space") {
-      state.isSpaceDown = true;
-      updateCursor();
-      e.preventDefault();
-      return;
-    }
-
-    // Tab / Shift+Tab — step selection through the layers (the list nav that
-    // used to eat Tab is suppressed in Swift while markup is active). Drops
-    // any active tool so the cycled layer reads as selected.
-    if (e.key === "Tab") {
-      const layers = state.document.layers;
-      if (layers.length) {
-        const cur = layers.findIndex((l) => l.id === state.selectedLayerId);
-        let next;
-        if (e.shiftKey) next = cur <= 0 ? layers.length - 1 : cur - 1;
-        else next = cur === -1 || cur === layers.length - 1 ? 0 : cur + 1;
-        setActiveTool(null);
-        state.selectedLayerId = layers[next].id;
-        render();
-      }
-      e.preventDefault();
-      return;
-    }
-
-    if (e.key === "v" || e.key === "V") {
-      setActiveTool(null);
-      e.preventDefault();
-    } else if (e.key === "h" || e.key === "H") {
-      setActiveTool(state.activeTool === "hand" ? null : "hand");
-      e.preventDefault();
-    } else if (e.key === "r" || e.key === "R") {
-      setActiveTool("rect");
-      e.preventDefault();
-    } else if (e.key === "a" || e.key === "A") {
-      setActiveTool("arrow");
-      e.preventDefault();
-    } else if (e.key === "l" || e.key === "L") {
-      setActiveTool("line");
-      e.preventDefault();
-    } else if (e.key === "t" || e.key === "T") {
-      setActiveTool("text");
-      e.preventDefault();
-    } else if (e.key === "b" || e.key === "B") {
-      setActiveTool("blur");
-      e.preventDefault();
-    } else if (e.key === "c" || e.key === "C") {
-      setActiveTool("clone");
-      e.preventDefault();
-    } else if (e.key === "m" || e.key === "M") {
-      toolToolbar.classList.toggle("hidden");
-      e.preventDefault();
-    } else if (e.key === "Escape") {
-      if (state.creating) {
-        state.creating = null;
-        render();
-      } else if (state.activeTool) {
-        setActiveTool(null);
-      } else if (state.selectedLayerId) {
-        state.selectedLayerId = null;
-        render();
-      }
-    } else if (e.key === "Backspace" || e.key === "Delete") {
-      if (!state.selectedLayerId) return;
-      const idx = state.document.layers.findIndex((l) => l.id === state.selectedLayerId);
-      if (idx >= 0) {
-        snapshotForUndo();
-        state.document.layers.splice(idx, 1);
-        state.selectedLayerId = null;
-        debouncedUpdate();
-        render();
-        e.preventDefault();
-      }
+    if (e.key === "Escape") {
+      cancelMarkupInteraction();
     }
   });
 
   document.addEventListener("keyup", (e) => {
-    if (e.code !== "Space") return;
+    if (e.code !== "Space" || !state.isSpaceDown) return;
     state.isSpaceDown = false;
     updateCursor();
     e.preventDefault();

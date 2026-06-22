@@ -4,26 +4,30 @@
 
   --talkie-accent: #DFA13A;
   --talkie-accent-bright: #F5C96D;
-  --talkie-accent-soft: rgba(223, 161, 58, 0.07);
-  --talkie-accent-line: rgba(223, 161, 58, 0.55);
   --talkie-ink: #0E0F12;
 
-  /* Flat opaque surfaces: no gradient, no translucency. */
+  /* Slate · flat opaque charcoal — no gradient, no translucency, no blur. */
   --surface: #16181D;
-  --surface-raised: #1B1E24;
-  --surface-inset: #101216;
+
+  /* the recessed well behind the segmented tool/mode keys */
+  --well: rgba(0, 0, 0, 0.22);
+
+  /* flat accent active: faint tint + crisp 1px square inset border.
+     No rounded bottom rule. */
+  --active-fill: rgba(223, 161, 58, 0.15);
+  --active-edge: rgba(223, 161, 58, 0.62);
 
   /* hairline structure */
-  --hairline: rgba(255, 255, 255, 0.10);
-  --hairline-strong: rgba(255, 255, 255, 0.16);
+  --hairline: rgba(255, 255, 255, 0.11);
+  --hairline-soft: rgba(255, 255, 255, 0.08);
 
-  /* tight radius scale */
-  --r-panel: 8px;
-  --r-key: 4px;
-  --r-chip: 3px;
+  /* squared radius scale */
+  --r-panel: 6px;
+  --r-well: 4px;
+  --r-key: 3px;
 
-  /* one tight lift, not a float */
-  --lift: 0 2px 10px rgba(0, 0, 0, 0.40);
+  /* one flat lift, not a float */
+  --lift: 0 4px 16px rgba(0, 0, 0, 0.42);
 }
 
 html,
@@ -38,6 +42,7 @@ body {
 body {
   cursor: crosshair;
   user-select: none;
+  -webkit-font-smoothing: antialiased;
 }
 
 body[data-tool="note"] {
@@ -61,17 +66,24 @@ body[data-tool="select"].dragging {
   z-index: 1;
 }
 
+/* Centered via flex on a full-width container — NOT translateX(-50%),
+   which lands the subtree on a half-pixel and forces a composited layer
+   (the source of the blur). */
 .markup-dock {
   position: fixed;
-  left: 50%;
+  left: 0;
+  right: 0;
   bottom: 26px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 7px;
   z-index: 2;
-  transform: translateX(-50%);
-  max-width: calc(100vw - 28px);
+  pointer-events: none;
+}
+
+.markup-dock > * {
+  pointer-events: auto;
 }
 
 .toolbar,
@@ -79,20 +91,17 @@ body[data-tool="select"].dragging {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 4px;
+  gap: 6px;
+  padding: 5px;
   border: 1px solid var(--hairline);
   border-radius: var(--r-panel);
   background: var(--surface);
   box-shadow: var(--lift);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
 }
 
 .toolbar {
   flex-wrap: nowrap;
-  max-width: min(620px, calc(100vw - 28px));
-  gap: 4px;
+  max-width: min(684px, calc(100vw - 28px));
 }
 
 .style-panel {
@@ -101,7 +110,6 @@ body[data-tool="select"].dragging {
   padding: 7px 11px;
   row-gap: 6px;
   column-gap: 12px;
-  background: var(--surface-raised);
 }
 
 .style-panel[hidden] {
@@ -123,7 +131,7 @@ body[data-tool="select"].dragging {
 button {
   border: 0;
   border-radius: var(--r-key);
-  color: rgba(255, 255, 255, 0.78);
+  color: rgba(255, 255, 255, 0.82);
   background: transparent;
   font: inherit;
   font-size: 11px;
@@ -147,27 +155,22 @@ button:focus-visible {
   outline-offset: 1px;
 }
 
+/* Recessed wells — flat, hairline edge, tight 1px gaps between keys. */
 .tool-segment,
 .mode-switch {
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: 1px;
   padding: 2px;
-  border-radius: var(--r-key);
-  background: var(--surface-inset);
-  box-shadow: inset 0 0 0 1px var(--hairline);
-}
-
-/* crisp 1px wells between segmented keys */
-.tool-segment > * + *,
-.mode-switch > * + * {
-  box-shadow: inset 1px 0 0 var(--hairline);
+  border-radius: var(--r-well);
+  background: var(--well);
+  box-shadow: inset 0 0 0 1px var(--hairline-soft);
 }
 
 .commit-cluster {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
 }
 
 .tool,
@@ -181,7 +184,33 @@ button:focus-visible {
   padding: 0 9px;
 }
 
-/* unified active state: faint flat fill + crisp amber bottom rule (tool-tab) */
+/* icon keys are square */
+.tool,
+.glyph-action {
+  width: 28px;
+  padding: 0;
+}
+
+/* coherent line-art icon set, colored by currentColor. 16px = 1:1 with
+   the 16-unit viewBox, so paths land on the pixel grid (no soft scale). */
+.icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.tool {
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.glyph-action {
+  display: grid;
+  place-items: center;
+}
+
+/* flat active: accent tint + crisp 1px square inset border. */
 .tool.active,
 .mode.active,
 .width.active,
@@ -189,52 +218,32 @@ button:focus-visible {
 .note-style.active,
 .line-style.active {
   color: var(--talkie-accent-bright);
-  background: var(--talkie-accent-soft);
-  box-shadow: inset 0 -2px 0 var(--talkie-accent);
+  background: var(--active-fill);
+  box-shadow: inset 0 0 0 1px var(--active-edge);
 }
 
-/* Done is the single saturated element: flat amber fill, no gloss. */
+/* Done is the single saturated element: flat amber, squared, no gloss. */
 .action.done {
   color: var(--talkie-ink);
   background: var(--talkie-accent);
   box-shadow: none;
   font-weight: 700;
+  padding: 0 14px;
 }
 
 .action.done:hover {
   background: var(--talkie-accent-bright);
 }
 
-.glyph-tool,
-.glyph-action {
-  width: 28px;
-  padding: 0;
-  overflow: hidden;
-  color: transparent;
+/* Desktop ink's primary action: amber camera key that bakes + snaps. */
+.action.capture {
+  color: var(--talkie-ink);
+  background: var(--talkie-accent);
+  box-shadow: none;
 }
 
-.glyph-tool.active,
-.glyph-action.active {
-  color: transparent;
-}
-
-/* normalize the text-glyph metrics so the toolset reads as one weight */
-.glyph-tool::before,
-.glyph-action::before {
-  content: attr(data-glyph);
-  color: rgba(255, 255, 255, 0.86);
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 1;
-}
-
-.tool.active::before {
-  color: var(--talkie-accent-bright);
-}
-
-.glyph-action::before {
-  font-size: 14px;
-  font-weight: 500;
+.action.capture:hover {
+  background: var(--talkie-accent-bright);
 }
 
 .action.cancel {
@@ -242,29 +251,31 @@ button:focus-visible {
   background: transparent;
 }
 
-.glyph-action.cancel {
-  color: transparent;
+.action.cancel:hover {
+  color: rgba(255, 255, 255, 0.78);
 }
 
 .style-toggle {
   display: flex;
   align-items: center;
   gap: 6px;
-  min-width: 122px;
+  min-width: 144px;
   color: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 0 0 1px var(--hairline);
 }
 
 .style-chip-swatch {
   display: block;
   width: 10px;
   height: 10px;
-  border: 1px solid var(--hairline-strong);
+  border: 1px solid var(--hairline);
   border-radius: 2px;
   background: var(--chip-color, #D03A1C);
 }
 
 .style-chip-label {
-  max-width: 96px;
+  max-width: 118px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -282,7 +293,7 @@ button:focus-visible {
 
 .style-label {
   padding: 0 5px 0 1px;
-  color: rgba(223, 161, 58, 0.68);
+  color: rgba(223, 161, 58, 0.70);
   font-size: 10px;
   font-weight: 600;
   line-height: 1;
@@ -300,8 +311,8 @@ button:focus-visible {
   width: 16px;
   height: 16px;
   padding: 0;
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--r-chip);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-key);
   background: var(--swatch);
 }
 
@@ -329,9 +340,9 @@ button:focus-visible {
 .divider {
   display: block;
   width: 1px;
-  height: 22px;
-  margin: 0;
-  background: var(--hairline-strong);
+  height: 20px;
+  margin: 0 1px;
+  background: rgba(255, 255, 255, 0.13);
 }
 
 .style-panel .divider {
@@ -344,9 +355,9 @@ button:focus-visible {
   }
 
   .toolbar {
-    gap: 4px;
+    gap: 5px;
     max-width: calc(100vw - 20px);
-    padding: 4px;
+    padding: 5px;
   }
 
   .tool,
@@ -354,22 +365,25 @@ button:focus-visible {
   .action,
   .style-toggle {
     height: 27px;
-    padding: 0 7px;
   }
 
-  .glyph-tool,
+  .tool,
   .glyph-action {
     width: 27px;
     padding: 0;
   }
 
+  .mode {
+    padding: 0 7px;
+  }
+
   .style-toggle {
-    min-width: 112px;
+    min-width: 118px;
     padding: 0 7px;
   }
 
   .style-chip-label {
-    max-width: 88px;
+    max-width: 92px;
   }
 }
 

@@ -45,6 +45,7 @@ public final class ScreenshotCaptureService {
         var appName: String?
         var appBundleID: String?
         var displayName: String?
+        var captureRect: CGRect?
 
         switch mode {
         case .fullscreen:
@@ -56,6 +57,7 @@ public final class ScreenshotCaptureService {
             }
             image = result.image
             displayName = result.displayName
+            captureRect = result.rect
         case .region:
             guard let result = await captureRegion(preselectedRect: preselectedRegion) else {
                 if captureHotPathLoggingEnabled {
@@ -63,7 +65,8 @@ public final class ScreenshotCaptureService {
                 }
                 return nil
             }
-            image = result
+            image = result.image
+            captureRect = result.rect
         case .window:
             guard let result = await captureWindow() else {
                 if captureHotPathLoggingEnabled {
@@ -105,13 +108,14 @@ public final class ScreenshotCaptureService {
             windowTitle: windowTitle,
             appName: appName,
             appBundleID: appBundleID,
-            displayName: displayName
+            displayName: displayName,
+            captureRect: captureRect
         )
     }
 
     // MARK: - Fullscreen Capture
 
-    private func captureFullscreen() async -> (image: CGImage, displayName: String?)? {
+    private func captureFullscreen() async -> (image: CGImage, displayName: String?, rect: CGRect)? {
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) })
             ?? NSScreen.main
@@ -127,21 +131,33 @@ public final class ScreenshotCaptureService {
             return nil
         }
 
-        return (image: image, displayName: screen.localizedName)
+        return (image: image, displayName: screen.localizedName, rect: screen.frame)
     }
 
     // MARK: - Region Capture
 
-    private func captureRegion(preselectedRect: CGRect? = nil) async -> CGImage? {
+    private func captureRegion(preselectedRect: CGRect? = nil) async -> (image: CGImage, rect: CGRect)? {
+        // The freeze still (if any) is consumed by this region capture; release
+        // it on exit so a stale frame can't leak into the next capture.
+        defer { CaptureFreezeStore.shared.clear() }
+
         let selectedRect: CGRect
         if let preselectedRect {
             selectedRect = preselectedRect
         } else {
             let overlay = ScreenCaptureOverlay()
-            guard let rect = await overlay.selectRegion() else {
+            guard let rect = await overlay.selectRegion(freezesDesktop: true) else {
                 return nil
             }
             selectedRect = rect
+        }
+
+        // Freeze-first: crop from the still captured before the overlay stole
+        // focus, so a menu/popover that closed when the crosshair appeared is
+        // still in the shot. Falls back to a live read when there's no still
+        // (capture failed or the mouse crossed displays).
+        if let frozen = await CaptureFreezeStore.shared.crop(screenRect: selectedRect) {
+            return (image: frozen, rect: selectedRect)
         }
 
         let image = await captureScreenRegion(screenRect: selectedRect)
@@ -150,7 +166,7 @@ public final class ScreenshotCaptureService {
             return nil
         }
 
-        return image
+        return (image: image, rect: selectedRect)
     }
 
     // MARK: - Window Capture

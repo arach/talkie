@@ -928,7 +928,13 @@ final class CaptureMarkupInputBarView: NSView {
                 $0.providerId == registry.selectedProviderId && $0.modelId == registry.selectedModelId
             }
             if selected == nil {
-                selected = choices.first
+                // No prior pick — prefer OpenAI's default model (GPT-5.5) whenever
+                // an OpenAI agent is enabled, then fall back to any OpenAI model,
+                // then to the first available choice.
+                let openAIDefaultModel = LLMConfig.shared.defaultModel(for: "openai") ?? "gpt-5.5"
+                selected = choices.first { $0.providerId == "openai" && $0.modelId == openAIDefaultModel }
+                    ?? choices.first { $0.providerId == "openai" }
+                    ?? choices.first
             }
             if let selected {
                 registry.selectedProviderId = selected.providerId

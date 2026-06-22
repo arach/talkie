@@ -28,6 +28,10 @@ public struct CaptureResult {
     public let appName: String?
     public let appBundleID: String?
     public let displayName: String?
+    /// Screen-points rect (global AppKit coords) the capture covers, for
+    /// fullscreen/region modes. `nil` for window captures, which have no
+    /// screen-relative frame. Used to rebase desktop-ink layers onto the shot.
+    public let captureRect: CGRect?
 
     public init(
         data: Data,
@@ -39,7 +43,8 @@ public struct CaptureResult {
         windowTitle: String?,
         appName: String?,
         appBundleID: String?,
-        displayName: String?
+        displayName: String?,
+        captureRect: CGRect? = nil
     ) {
         self.data = data
         self.image = image
@@ -51,6 +56,7 @@ public struct CaptureResult {
         self.appName = appName
         self.appBundleID = appBundleID
         self.displayName = displayName
+        self.captureRect = captureRect
     }
 }
 #endif

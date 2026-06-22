@@ -54,6 +54,29 @@ public enum SyncSettingsKey {
     public static let iCloudEnabled = "sync_icloud_enabled"
 }
 
+public enum CaptureIslandPlacement: String, CaseIterable, Codable, Identifiable, Sendable {
+    case contextual
+    case topCenter
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .contextual: return "Contextual"
+        case .topCenter: return "Top Center"
+        }
+    }
+
+    public var description: String {
+        switch self {
+        case .contextual:
+            return "Show the preview beside the capture when there is a capture origin."
+        case .topCenter:
+            return "Always use the familiar top-center position."
+        }
+    }
+}
+
 /// Cross-process bridge for the rich notch/island surface.
 ///
 /// TalkieAgent authors the notch-surface settings (enabled / external / shape /
@@ -85,6 +108,9 @@ public enum AgentSettingsKey {
     public static let screenRecordingIncludesSystemAudio = "screenRecordingIncludesSystemAudio"
     public static let screenRecordingIncludesMicrophone = "screenRecordingIncludesMicrophone"
     public static let screenRecordingShowsCameraBubble = "screenRecordingShowsCameraBubble"
+
+    // MARK: Capture Preview
+    public static let captureIslandPlacement = "agent.captureIsland.placement"
 
     // MARK: Model Selection
     public static let selectedModelId = "selectedModelId"

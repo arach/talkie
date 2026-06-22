@@ -41,34 +41,60 @@
 
       <div class="style-group compact">
         <span class="style-label">Stroke</span>
+        <button type="button" class="width" data-width="0.5" title="Hairline stroke">XS</button>
+        <button type="button" class="width" data-width="2" title="Fine stroke">S</button>
         <button type="button" class="width active" data-width="4" title="Medium stroke">M</button>
         <button type="button" class="width" data-width="7" title="Heavy stroke">H</button>
+        <button type="button" class="width" data-width="11" title="Extra heavy stroke">XL</button>
       </div>
     </div>
 
     <div class="toolbar" id="toolbar">
       <div class="tool-segment" role="group" aria-label="Markup tools">
-        <button type="button" class="tool glyph-tool" data-tool="select" data-glyph="↖" title="Select and move — S" aria-label="Select and move">Select</button>
-        <button type="button" class="tool glyph-tool active" data-tool="ink" data-glyph="✎" title="Pen — P" aria-label="Pen">Pen</button>
-        <button type="button" class="tool glyph-tool" data-tool="ellipse" data-glyph="○" title="Circle — C" aria-label="Circle">Circle</button>
-        <button type="button" class="tool glyph-tool" data-tool="arrow" data-glyph="↗" title="Arrow — A" aria-label="Arrow">Arrow</button>
-        <button type="button" class="tool glyph-tool" data-tool="note" data-glyph="T" title="Note — N" aria-label="Note">Note</button>
+        <button type="button" class="tool" data-tool="select" title="Select and move — Option-T, S; Option-drag copies" aria-label="Select and move">
+          <svg class="icon" viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M3.2 2.4 L3.2 12.6 L6 9.9 L8 13.8 L9.7 13 L7.7 9.2 L11.6 9.2 Z"/></svg>
+        </button>
+        <button type="button" class="tool active" data-tool="ink" title="Pen — Option-T, P" aria-label="Pen">
+          <svg class="icon" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.6 13.4 L4.2 9.6 L10.8 3 L13 5.2 L6.4 11.8 Z"/><path d="M9.6 4.2 L11.8 6.4"/></svg>
+        </button>
+        <button type="button" class="tool" data-tool="rect" title="Rectangle — Option-T, R" aria-label="Rectangle">
+          <svg class="icon" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><rect x="2.6" y="4" width="10.8" height="8" rx="0.6"/></svg>
+        </button>
+        <button type="button" class="tool" data-tool="ellipse" title="Circle — Option-T, C" aria-label="Circle">
+          <svg class="icon" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="5.3"/></svg>
+        </button>
+        <button type="button" class="tool" data-tool="line" title="Line — Option-T, L; Shift snaps angles" aria-label="Line">
+          <svg class="icon" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M3.2 12.8 L12.8 3.2"/></svg>
+        </button>
+        <button type="button" class="tool" data-tool="arrow" title="Arrow — Option-T, A" aria-label="Arrow">
+          <svg class="icon" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.4 12.6 L12.4 3.6"/><path d="M12.4 7.6 L12.4 3.6 L8.4 3.6"/></svg>
+        </button>
+        <button type="button" class="tool" data-tool="note" title="Note — Option-T, N" aria-label="Note">
+          <svg class="icon" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3.4" width="10" height="9.2" rx="1.6"/><path d="M5.6 6.8 L10.4 6.8"/><path d="M5.6 9.3 L8.8 9.3"/></svg>
+        </button>
       </div>
 
       <div class="mode-switch" role="group" aria-label="Markup mode">
-        <button type="button" class="mode active" data-mode="agent" title="Agent instruction markup — 1">Agent</button>
-        <button type="button" class="mode" data-mode="demo" title="Presentation markup — 2">Demo</button>
+        <button type="button" class="mode active" data-mode="agent" title="Agent instruction markup — Option-T, 1">Agent</button>
+        <button type="button" class="mode" data-mode="demo" title="Presentation markup — Option-T, 2">Demo</button>
       </div>
 
-      <button type="button" class="style-toggle" data-action="toggle-style" title="Show style drawer — T/L" aria-controls="style-panel" aria-expanded="false">
+      <button type="button" class="style-toggle" data-action="toggle-style" title="Show style drawer" aria-controls="style-panel" aria-expanded="false">
         <span class="style-chip-swatch" aria-hidden="true"></span>
         <span class="style-chip-label">Sticky · Solid</span>
       </button>
 
       <div class="commit-cluster" role="group" aria-label="Markup actions">
-        <button type="button" class="action glyph-action" data-action="undo" data-glyph="↶" title="Undo" aria-label="Undo">Undo</button>
+        <button type="button" class="action glyph-action" data-action="undo" title="Undo" aria-label="Undo">
+          <svg class="icon" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 6 H9.6 a3.3 3.3 0 0 1 0 6.6 H6.4"/><path d="M6.9 3.4 L4 6 L6.9 8.6"/></svg>
+        </button>
+        <button type="button" class="action glyph-action capture" data-action="capture" title="Take screenshot — strokes bake in" aria-label="Take screenshot" hidden>
+          <svg class="icon" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.4 6 a1.1 1.1 0 0 1 1.1 -1.1 H5 L5.9 3.5 h4.2 L11 4.9 h1.5 a1.1 1.1 0 0 1 1.1 1.1 v5.9 a1.1 1.1 0 0 1 -1.1 1.1 H3.5 a1.1 1.1 0 0 1 -1.1 -1.1 Z"/><circle cx="8" cy="8.9" r="2.2"/></svg>
+        </button>
         <button type="button" class="action done" data-action="done" title="Done">Done</button>
-        <button type="button" class="action glyph-action cancel" data-action="cancel" data-glyph="×" title="Cancel" aria-label="Cancel">Cancel</button>
+        <button type="button" class="action glyph-action cancel" data-action="cancel" title="Cancel" aria-label="Cancel">
+          <svg class="icon" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4.4 4.4 L11.6 11.6"/><path d="M11.6 4.4 L4.4 11.6"/></svg>
+        </button>
       </div>
     </div>
   </div>

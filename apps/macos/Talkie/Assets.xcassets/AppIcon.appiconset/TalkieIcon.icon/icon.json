@@ -1,15 +1,16 @@
 {
   "fill" : {
-    "solid" : "extended-srgb:0.00000,0.00000,0.00000,1.00000"
+    "solid" : "extended-srgb:0.16863,0.14510,0.09412,1.00000"
   },
   "groups" : [
     {
       "layers" : [
         {
+          "blend-mode" : "normal",
           "image-name" : "icon_512x512@2x 2.png",
           "name" : "icon_512x512@2x 2",
           "position" : {
-            "scale" : 1.0,
+            "scale" : 1,
             "translation-in-points" : [
               0,
               0

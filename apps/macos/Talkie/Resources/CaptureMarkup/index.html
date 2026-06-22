@@ -13,19 +13,19 @@
            next to Save — they're state changes (closer to "save") rather
            than active drawing tools. -->
       <div class="toolbar-tools viewport-tools" aria-label="Canvas modes">
-        <button type="button" class="tool-btn mode-tool" data-tool="select" title="Select (V)"><span class="glyph">↖</span><span class="label">Select</span></button>
-        <button type="button" class="tool-btn mode-tool" data-tool="hand" title="Hand · pan (H / Space)"><span class="glyph">✋</span><span class="label">Hand</span></button>
+        <button type="button" class="tool-btn mode-tool" data-tool="select" title="Select (Option-T, S)"><span class="glyph">↖</span><span class="label">Select</span></button>
+        <button type="button" class="tool-btn mode-tool" data-tool="hand" title="Hand · pan (Option-T, H)"><span class="glyph">✋</span><span class="label">Hand</span></button>
       </div>
 
       <span class="toolbar-divider" aria-hidden="true"></span>
 
       <div class="toolbar-tools drawing-tools" aria-label="Drawing tools">
-        <button type="button" class="tool-btn" data-tool="rect" title="Rect (R)"><span class="glyph">▢</span><span class="label">Rect</span></button>
-        <button type="button" class="tool-btn" data-tool="arrow" title="Arrow (A)"><span class="glyph">↗</span><span class="label">Arrow</span></button>
-        <button type="button" class="tool-btn" data-tool="line" title="Line (L)"><span class="glyph">—</span><span class="label">Line</span></button>
-        <button type="button" class="tool-btn" data-tool="text" title="Text (T)"><span class="glyph">T</span><span class="label">Text</span></button>
-        <button type="button" class="tool-btn" data-tool="blur" title="Blur (B)"><span class="glyph">▒</span><span class="label">Blur</span></button>
-        <button type="button" class="tool-btn" data-tool="clone" title="Clone a region (C)"><span class="glyph">⧉</span><span class="label">Clone</span></button>
+        <button type="button" class="tool-btn" data-tool="rect" title="Rect (Option-T, R)"><span class="glyph">▢</span><span class="label">Rect</span></button>
+        <button type="button" class="tool-btn" data-tool="arrow" title="Arrow (Option-T, A)"><span class="glyph">↗</span><span class="label">Arrow</span></button>
+        <button type="button" class="tool-btn" data-tool="line" title="Line (Option-T, L)"><span class="glyph">—</span><span class="label">Line</span></button>
+        <button type="button" class="tool-btn" data-tool="text" title="Text (Option-T, T)"><span class="glyph">T</span><span class="label">Text</span></button>
+        <button type="button" class="tool-btn" data-tool="blur" title="Blur (Option-T, B)"><span class="glyph">▒</span><span class="label">Blur</span></button>
+        <button type="button" class="tool-btn" data-tool="clone" title="Clone a region (Option-T, C)"><span class="glyph">⧉</span><span class="label">Clone</span></button>
       </div>
 
       <!-- "Editing selection" affordance. Shown only while a layer is selected
@@ -43,6 +43,7 @@
         <div class="style-group" data-group="stroke">
           <span class="style-label">width</span>
           <div class="style-row">
+            <button type="button" class="style-btn stroke-pick" data-style="stroke" data-value="0.5" title="0.5 px hairline"><span class="stroke-pip" style="height: 1px"></span></button>
             <button type="button" class="style-btn stroke-pick" data-style="stroke" data-value="1" title="1 px"><span class="stroke-pip" style="height: 1px"></span></button>
             <button type="button" class="style-btn stroke-pick active" data-style="stroke" data-value="2" title="2 px"><span class="stroke-pip" style="height: 2px"></span></button>
             <button type="button" class="style-btn stroke-pick" data-style="stroke" data-value="3" title="3 px"><span class="stroke-pip" style="height: 3px"></span></button>
@@ -171,7 +172,7 @@
           <span class="zoom-badge" id="zoom-display">100%</span>
           <button type="button" class="zoom-btn" data-action="zoom-in" title="Zoom in">+</button>
           <span class="zoom-divider" aria-hidden="true"></span>
-          <button type="button" class="zoom-btn zoom-btn-label" data-action="zoom-fit" title="Fit (F)">FIT</button>
+          <button type="button" class="zoom-btn zoom-btn-label" data-action="zoom-fit" title="Fit">FIT</button>
         </div>
       </section>
       <div class="rail-resizer" data-resize="inspector" title="Drag to resize"></div>

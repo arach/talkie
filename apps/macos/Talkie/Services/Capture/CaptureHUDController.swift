@@ -15,7 +15,6 @@ final class CaptureHUDController: CaptureChordController {
     private let panel = CaptureHUDPanel()
     private var globalMonitor: Any?
     private var localMonitor: Any?
-    private var paletteTask: Task<Void, Never>?
     private var armedRegionOverlay: ScreenCaptureOverlay?
     private var armedRegionTask: Task<Void, Never>?
     private let timeoutSeconds: TimeInterval = 30
@@ -27,6 +26,12 @@ final class CaptureHUDController: CaptureChordController {
         let hasSelectionItems = options.showSelectionOption && SelectionTray.shared.isNotEmpty
         let trayCount = allItems.count
 
+        let expectedFrame = CaptureHUDPanel.expectedFrame(
+            for: NSEvent.mouseLocation,
+            position: SettingsManager.shared.captureHUDPosition
+        )
+        let initialPalette = await WallpaperLuminanceSampler.samplePalette(for: expectedFrame)
+
         return await withCheckedContinuation { continuation in
             var resumed = false
 
@@ -37,25 +42,17 @@ final class CaptureHUDController: CaptureChordController {
                 continuation.resume(returning: result)
             }
 
-            // Draw immediately with the appearance fallback. Wallpaper sampling
-            // uses ScreenCaptureKit, so it must never hold up showing the HUD.
-            let expectedFrame = CaptureHUDPanel.expectedFrame(
-                for: NSEvent.mouseLocation,
-                position: SettingsManager.shared.captureHUDPosition
-            )
+            // Resolve the wallpaper palette before ordering the HUD so the
+            // first visible frame does not repaint from fallback chrome into
+            // the sampled scheme.
             panel.show(
                 mode: initialMode,
                 showCameraOption: showCameraOption,
                 showTrayOption: hasTrayItems,
                 showSelectionOption: hasSelectionItems,
                 trayCount: trayCount,
-                palette: WallpaperLuminanceSampler.fallbackPalette()
+                palette: initialPalette
             )
-            paletteTask = Task { @MainActor [weak self] in
-                let palette = await WallpaperLuminanceSampler.samplePalette(for: expectedFrame)
-                guard !Task.isCancelled else { return }
-                self?.panel.updatePalette(palette)
-            }
 
             var timeout = Task { @MainActor in
                 try? await Task.sleep(for: .seconds(self.timeoutSeconds))
@@ -219,8 +216,6 @@ final class CaptureHUDController: CaptureChordController {
     // MARK: - Private
 
     private func tearDown() {
-        paletteTask?.cancel()
-        paletteTask = nil
         cancelArmedRegionOverlay()
         panel.dismiss()
         if let monitor = globalMonitor {

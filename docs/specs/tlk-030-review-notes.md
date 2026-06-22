@@ -254,6 +254,47 @@ most load-bearing claims against the code**:
   `.xcactivitylog`, and a hard revert-gate per phase. Agreed with §4's runtime signposts — overlay-
   show latency is the metric that actually answers "did we make the app worse."
 
+---
+
+## 7. Follow-up on the revised spec (Claude Opus 4.8, high effort — 2026-06-16)
+
+The spec was **revised (dated 2026-06-13 header, file mtime 2026-06-16) and now adopts this
+review's core recommendations** — a materially better plan:
+- **First slice fixed.** "First Extraction Candidate: Capture" → "First Extraction Candidates"
+  now leads with **TalkieCore + pure utilities (`TalkieDate`)** and explicitly says "rather than
+  the capture overlay" (`spec:129-143`). Implementation already started (`spec:34-38`:
+  `TalkieDate`/`CaptureFilenameFormatter` moved, TalkieKit re-exports TalkieCore as a facade).
+- **Order inverted.** Workflow split **by role** (`TalkieWorkflowModels` → `TalkieWorkflowRuntime`
+  → app-side `WorkflowExecutor.shared`/credentials/persistence, `spec:145-153`); Phase 3 extracts
+  workflow *models* before the executor; capture model/rendering demoted to Phase 4, overlay UI to
+  Phase 5 (`spec:200-225`). Capture controllers that touch app services stay app-side until "their
+  dependencies are deliberately inverted" (`spec:155-158`). This is exactly §3/§5 above. Good.
+
+**Residual actionable items (still not in the spec text):**
+1. **HIGH (latent, fires at Phase 4-5): duplicate classes still unreconciled and unmentioned.**
+   Re-verified today: `ScreenshotCaptureService` in `Talkie/Services/ScreenshotCaptureService.swift:80`
+   **and** `TalkieKit/.../Capture/ScreenshotCaptureService.swift:15`; `LLMProviderRegistry` in
+   `Talkie/Services/LLM/LLMProvider.swift:238` **and** `TalkieKit/.../LLM/LLMProvider.swift:172`.
+   The revised first slice (pure utilities) safely sidesteps this for now, but the silent class-swap
+   (F2) will bite the moment capture/LLM/screenshot files descend. Add a **"reconcile duplicate
+   types to one canonical home" prerequisite** to Phase 4/5 in the spec.
+2. **MEDIUM: name the `Bundle.main`→`Bundle.module` hazard in Risks before Phase 4.** Still present
+   at `CaptureMarkupWebSession.swift:286-287`. The generic "resource and localization assumptions"
+   risk bullet (`spec:239`) should call out this concrete silent-failure path.
+3. **MEDIUM: the compatibility facade (now adopted + implemented) can undercut the build-isolation
+   goal.** `TalkieKit` re-exporting `TalkieCore` (`spec:36-38, 135, 196-198`) means consumers that
+   `import TalkieKit` may still recompile when TalkieCore's *public interface* changes, and editing
+   anything TalkieKit re-exports can ripple. Treat it strictly as a migration scaffold: **measure
+   whether touching `TalkieCore` forces TalkieKit consumers to recompile** (touch `TalkieDate` →
+   count recompiled files in the app); migrate hot consumers to direct leaf imports; **time-box the
+   facade with a deletion date.** Otherwise you do the split work without the rebuild payoff.
+4. **LOW/positive (re-verified today): static linkage intact** — 0 Embed-Frameworks phases, no
+   `.dynamic` in any local `Package.swift`. Keep "static" a hard invariant (not Rule 5's "consider").
+
+**Verdict on the revision:** the plan is no longer overkill and the first slice is now *correct*
+(it was wrong before). Ship it, folding items 1-3 into Build Rules / Phased Plan. The duplicate-type
+reconciliation (item 1) is the one prerequisite that must land before any capture/LLM file moves.
+
 Net: ship TLK-030, but reorder to *reconcile duplicates → extract package-resident markup
 models → measure → only then overlay UI*, hold static as an invariant, and move WKWebView assets
 with their code. **Next owner:** the engineer implementing TLK-030 — fold F2/F3/static-invariant

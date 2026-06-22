@@ -398,6 +398,18 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
   min-height: 0;
 }
 
+/* Side rails (Layers · Inspector) stay hidden until there's something to show
+   (first shape created / selected, or a live run). Drop both rail columns +
+   their resizers so the canvas reclaims the full width on a fresh capture. */
+.bay-body.rails-collapsed {
+  grid-template-columns: 1fr;
+}
+.bay-body.rails-collapsed > .rail-resizer,
+.bay-body.rails-collapsed > .layer-rail,
+.bay-body.rails-collapsed > .inspector-rail {
+  display: none;
+}
+
 /* Rail resizer — thin draggable column. The divider line lives in ::after so
    the hit target (the full 6px cell) is comfortably wider than the 1px rule. */
 .rail-resizer {

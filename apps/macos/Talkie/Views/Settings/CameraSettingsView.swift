@@ -92,9 +92,15 @@ struct CameraSettingsView: View {
     @State private var availableDevices: [AVCaptureDevice] = []
     @State private var recordingAction: HotkeyAction? = nil
     @State private var selectedTab: CaptureSection = .screenshots
+    @AppStorage(AgentSettingsKey.captureIslandPlacement, store: TalkieSharedSettings)
+    private var capturePreviewPlacementRaw = CaptureIslandPlacement.contextual.rawValue
 
     private let flags = FeatureFlags.shared
     private let screenCapturePermissions = ScreenCapturePermissionManager.shared
+
+    private var capturePreviewPlacement: CaptureIslandPlacement {
+        CaptureIslandPlacement(rawValue: capturePreviewPlacementRaw) ?? .contextual
+    }
 
     var body: some View {
         SettingsPageContainer {
@@ -140,6 +146,7 @@ struct CameraSettingsView: View {
         }
         .onAppear {
             loadDevices()
+            normalizeCapturePreviewPlacement()
             Task { await screenCapturePermissions.refresh() }
         }
     }
@@ -931,6 +938,34 @@ struct CameraSettingsView: View {
                     hudPositionOption(position)
                 }
             }
+
+            Rectangle()
+                .fill(Theme.current.divider)
+                .frame(height: 0.5)
+
+            HStack(alignment: .center, spacing: Spacing.md) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Preview Placement")
+                        .font(Theme.current.fontSMBold)
+                        .foregroundColor(Theme.current.foreground)
+
+                    Text(capturePreviewPlacement.description)
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer()
+
+                Picker("", selection: $capturePreviewPlacementRaw) {
+                    ForEach(CaptureIslandPlacement.allCases) { placement in
+                        Text(placement.displayName).tag(placement.rawValue)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .frame(width: 220)
+            }
         }
         .settingsSectionCard(padding: Spacing.md)
     }
@@ -978,5 +1013,10 @@ struct CameraSettingsView: View {
         if captureService.selectedDeviceID.isEmpty, let first = availableDevices.first {
             captureService.selectedDeviceID = first.uniqueID
         }
+    }
+
+    private func normalizeCapturePreviewPlacement() {
+        guard CaptureIslandPlacement(rawValue: capturePreviewPlacementRaw) == nil else { return }
+        capturePreviewPlacementRaw = CaptureIslandPlacement.contextual.rawValue
     }
 }

@@ -1,97 +1,138 @@
 #!/bin/bash
 # Apple Watch Icon Generator for Talkie
-# Creates watch-optimized icons from a source image
-# Watch icons are displayed in circles - need high contrast and simple design
+# Renders a Night 1024px watch master, then resizes every watch icon slot.
+# Square app icons use the same flat field and mark without a ring; watchOS
+# gets a lighter circular boundary with subtle directional lighting so it stays
+# readable on the black home screen without becoming a heavy band.
 
-set -e
+set -euo pipefail
 
-SOURCE="${1:-input.png}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
-DEST="${2:-$REPO_ROOT/apps/ios/TalkieWatch Watch App/Assets.xcassets/AppIcon.appiconset}"
+DEFAULT_FONT="$REPO_ROOT/apps/macos/TalkieKit/Sources/TalkieKit/Resources/Fonts/JetBrainsMono-Bold.ttf"
 
-if [ ! -f "$SOURCE" ]; then
-  echo "Usage: $0 <source_image.png> [output_dir]"
-  echo "  source_image.png: Source image (ideally square, transparent background)"
+FONT="${TALKIE_ICON_FONT:-$DEFAULT_FONT}"
+DEST="${1:-$REPO_ROOT/apps/ios/TalkieWatch Watch App/Assets.xcassets/AppIcon.appiconset}"
+MASTER_OUT="${2:-$REPO_ROOT/assets/icon-assets/composed/watch-flat-night-1024.png}"
+
+if [ ! -f "$FONT" ]; then
+  echo "Usage: TALKIE_ICON_FONT=/path/to/font.ttf $0 [output_dir] [master_output.png]"
+  echo "  Font defaults to: $DEFAULT_FONT"
   exit 1
 fi
 
-echo "Creating Apple Watch icons from: $SOURCE"
+mkdir -p "$DEST" "$(dirname "$MASTER_OUT")"
+
+echo "Creating Apple Watch icons with font: $FONT"
 echo "Output directory: $DEST"
+echo "Master output: $MASTER_OUT"
 echo ""
 
-# Step 1: Prepare source - remove background, trim, and center
-echo "Step 1: Preparing source image..."
+python3 - "$FONT" "$DEST" "$MASTER_OUT" <<'PY'
+import sys
+from pathlib import Path
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-# Trim whitespace and center on square canvas
-magick "$SOURCE" \
-  -fuzz 15% -trim +repage \
-  -gravity center \
-  -background none \
-  -extent 1024x1024 \
-  /tmp/watch_trimmed.png
+font_path = Path(sys.argv[1])
+dest = Path(sys.argv[2])
+master_out = Path(sys.argv[3])
 
-# Step 2: Create a clean circular mask for watch display
-# Watch icons look best with the subject filling most of the circle
-echo "Step 2: Creating base icon with subtle background..."
-
-# Dark gradient background that looks good on watch
-magick -size 1024x1024 \
-  radial-gradient:'#2a2a2e'-'#1a1a1c' \
-  /tmp/watch_bg.png
-
-# Scale and center the device to fit nicely (85% of canvas)
-magick /tmp/watch_trimmed.png \
-  -resize 870x870 \
-  -gravity center \
-  -background none \
-  -extent 1024x1024 \
-  /tmp/watch_device.png
-
-# Composite device on background
-magick /tmp/watch_bg.png /tmp/watch_device.png \
-  -gravity center \
-  -compose over -composite \
-  /tmp/watch_icon_base.png
-
-# Add subtle vignette for depth (circular darkening at edges)
-echo "Step 3: Adding circular vignette..."
-magick /tmp/watch_icon_base.png \
-  \( -size 1024x1024 radial-gradient:none-'rgba(0,0,0,0.3)' \) \
-  -compose multiply -composite \
-  /tmp/watch_icon_final.png
-
-# Generate all watch icon sizes
-echo "Step 4: Generating watch icon sizes..."
-
-generate_icon() {
-  local size=$1
-  local name=$2
-  magick /tmp/watch_icon_final.png -resize ${size}x${size} "$DEST/$name"
-  echo "  Created $name (${size}px)"
+SIZE = 1024
+SCALE = 4
+CANVAS = SIZE * SCALE
+BRAND = {
+    "field": (43, 37, 24),
+    "glyph": (227, 165, 63),
+    "watch_highlight": (232, 211, 174),
+    "watch_shadow": (111, 90, 55),
 }
 
-# All required watch sizes from Contents.json
-generate_icon 48 "icon-48.png"      # 24@2x - 38mm notification
-generate_icon 55 "icon-55.png"      # 27.5@2x - 42mm notification
-generate_icon 58 "icon-58.png"      # 29@2x - companion settings
-generate_icon 66 "icon-66.png"      # 33@2x - 45mm notification
-generate_icon 80 "icon-80.png"      # 40@2x - 38mm home screen
-generate_icon 87 "icon-87.png"      # 29@3x - companion settings
-generate_icon 88 "icon-88.png"      # 44@2x - 40mm home screen
-generate_icon 92 "icon-92.png"      # 46@2x - 41mm home screen
-generate_icon 100 "icon-100.png"    # 50@2x - 44mm home screen
-generate_icon 102 "icon-102.png"    # 51@2x - 45mm home screen
-generate_icon 108 "icon-108.png"    # 54@2x - 49mm home screen
-generate_icon 172 "icon-172.png"    # 86@2x - 38mm short look
-generate_icon 196 "icon-196.png"    # 98@2x - 42mm short look
-generate_icon 216 "icon-216.png"    # 108@2x - 44mm short look
-generate_icon 234 "icon-234.png"    # 117@2x - 45mm short look
-generate_icon 258 "icon-258.png"    # 129@2x - 49mm short look
-generate_icon 1024 "icon-1024.png"  # App Store
+WATCH_SIZES = [
+    (48, "icon-48.png"),
+    (55, "icon-55.png"),
+    (58, "icon-58.png"),
+    (66, "icon-66.png"),
+    (80, "icon-80.png"),
+    (87, "icon-87.png"),
+    (88, "icon-88.png"),
+    (92, "icon-92.png"),
+    (100, "icon-100.png"),
+    (102, "icon-102.png"),
+    (108, "icon-108.png"),
+    (172, "icon-172.png"),
+    (196, "icon-196.png"),
+    (216, "icon-216.png"),
+    (234, "icon-234.png"),
+    (258, "icon-258.png"),
+    (1024, "icon-1024.png"),
+]
 
-# Cleanup
-rm -f /tmp/watch_trimmed.png /tmp/watch_bg.png /tmp/watch_device.png /tmp/watch_icon_base.png /tmp/watch_icon_final.png
+
+def font_for_target_height(target_height):
+    low = 1
+    high = CANVAS
+    while low < high:
+        mid = (low + high + 1) // 2
+        font = ImageFont.truetype(str(font_path), mid)
+        bbox = ImageDraw.Draw(Image.new("L", (1, 1))).textbbox((0, 0), "t", font=font)
+        height = bbox[3] - bbox[1]
+        if height <= target_height:
+            low = mid
+        else:
+            high = mid - 1
+    return ImageFont.truetype(str(font_path), low)
+
+
+def draw_mark(base):
+    draw = ImageDraw.Draw(base)
+    font = font_for_target_height(round(650 * SCALE))
+    bbox = draw.textbbox((0, 0), "t", font=font)
+    width = bbox[2] - bbox[0]
+    height = bbox[3] - bbox[1]
+    x = (CANVAS - width) / 2 - bbox[0]
+    y = (CANVAS - height) / 2 - bbox[1] - 8 * SCALE
+    draw.text((x, y), "t", font=font, fill=BRAND["glyph"] + (255,))
+
+
+def draw_watch_ring(base):
+    width = round(18 * SCALE)
+    inset = width // 2
+    bbox = [inset, inset, CANVAS - inset - 1, CANVAS - inset - 1]
+
+    glow = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
+    glow_draw = ImageDraw.Draw(glow)
+    glow_draw.ellipse(
+        [inset + 2 * SCALE, inset + 3 * SCALE, CANVAS - inset - 1 + 2 * SCALE, CANVAS - inset - 1 + 3 * SCALE],
+        outline=(0, 0, 0, 86),
+        width=width,
+    )
+    base.alpha_composite(glow.filter(ImageFilter.GaussianBlur(radius=2 * SCALE)))
+
+    mask = Image.new("L", (CANVAS, CANVAS), 0)
+    ImageDraw.Draw(mask).ellipse(bbox, outline=235, width=width)
+    gradient = Image.linear_gradient("L").resize((CANVAS, CANVAS), Image.Resampling.BICUBIC)
+    highlight = Image.new("RGBA", (CANVAS, CANVAS), BRAND["watch_highlight"] + (0,))
+    shadow = Image.new("RGBA", (CANVAS, CANVAS), BRAND["watch_shadow"] + (0,))
+    ring = Image.composite(shadow, highlight, gradient)
+    ring.putalpha(mask)
+    base.alpha_composite(ring)
+
+
+def render_master():
+    base = Image.new("RGBA", (CANVAS, CANVAS), BRAND["field"] + (255,))
+    draw_watch_ring(base)
+    draw_mark(base)
+    return base.resize((SIZE, SIZE), Image.Resampling.LANCZOS).convert("RGB")
+
+
+master = render_master()
+master.save(master_out)
+
+for size, filename in WATCH_SIZES:
+    resized = master.resize((size, size), Image.Resampling.LANCZOS)
+    resized.save(dest / filename)
+    print(f"  Created {filename} ({size}px)")
+PY
 
 echo ""
 echo "Done! Apple Watch icon set generated."

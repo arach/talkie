@@ -853,6 +853,7 @@ struct ScopeLibraryView: View {
             } else {
                 ScopeLibraryEmptyState(
                     recordings: viewModel.recordings,
+                    filter: typeFilter,
                     onSelectRecording: { id in selectRecording(id) }
                 )
             }

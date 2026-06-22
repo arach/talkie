@@ -622,6 +622,9 @@ struct ScopeCaptureDetailView: View {
                 .foregroundStyle(ThemedScopeInk.faint)
                 .padding(.bottom, 4)
             CapRailAction(label: "Copy",  icon: "doc.on.doc",            isPrimary: true, action: copyCapture)
+            if case .image = primaryPreviewMedia {
+                CapRailAction(label: "Export", icon: "arrow.down.doc", action: exportCapture)
+            }
             CapRailAction(label: "Annotate", icon: "sparkles.rectangle.stack", action: openMarkup)
             CapRailAction(label: "Open",  icon: "arrow.up.right.square", action: openInDefault)
             CapRailAction(
@@ -726,6 +729,19 @@ struct ScopeCaptureDetailView: View {
     private func openMarkup() {
         guard case .image(let url) = primaryPreviewMedia else { return }
         markupURL = url
+    }
+
+    private func exportCapture() {
+        guard case .image(let url) = primaryPreviewMedia else {
+            ToastService.shared.showInfo("Export is available for screenshots first.")
+            return
+        }
+        ShareExportPanelController.shared.open(
+            imageURL: url,
+            title: imageHeadline,
+            sourceLabel: sourceLabel,
+            detail: fileSize
+        )
     }
 
     private func copyCapture() {

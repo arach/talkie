@@ -13,6 +13,7 @@
     noteStyle: "sticky",
     lineStyle: "solid",
     styleOpen: false,
+    context: "recording",
     layers: [],
     creating: null,
     noteEditor: null,
@@ -138,6 +139,50 @@
     glow: "Glow",
   };
 
+  const toolChordTimeoutMs = 1600;
+  let toolChordActive = false;
+  let toolChordTimer = null;
+
+  const angleSnapStep = Math.PI / 4;
+  const angleSnapMagnet = Math.PI / 12;
+
+  function shortcutToken(event) {
+    if (event.code && event.code.startsWith("Key")) {
+      return event.code.slice(3).toLowerCase();
+    }
+    if (event.code && event.code.startsWith("Digit")) {
+      return event.code.slice(5);
+    }
+    switch (event.code || event.key) {
+    case "Tab":
+      return "tab";
+    case "Space":
+      return "space";
+    case "Escape":
+      return "escape";
+    default:
+      return String(event.key || "").toLowerCase();
+    }
+  }
+
+  function beginToolChord() {
+    toolChordActive = true;
+    if (toolChordTimer) window.clearTimeout(toolChordTimer);
+    toolChordTimer = window.setTimeout(clearToolChord, toolChordTimeoutMs);
+  }
+
+  function clearToolChord() {
+    toolChordActive = false;
+    if (toolChordTimer) {
+      window.clearTimeout(toolChordTimer);
+      toolChordTimer = null;
+    }
+  }
+
+  function isToolChordStart(event) {
+    return event.altKey && !event.metaKey && !event.ctrlKey && shortcutToken(event) === "t";
+  }
+
   function post(name, payload = {}) {
     const handler = window.webkit
       && window.webkit.messageHandlers
@@ -230,6 +275,48 @@
 
   function clamp(value, min, max) {
     return Math.min(max, Math.max(min, value));
+  }
+
+  function angleDistance(a, b) {
+    return Math.atan2(Math.sin(a - b), Math.cos(a - b));
+  }
+
+  function snappedSegmentPoint(start, point, forceSnap = false) {
+    const dx = (point.x - start.x) * window.innerWidth;
+    const dy = (point.y - start.y) * window.innerHeight;
+    const distance = Math.hypot(dx, dy);
+    if (distance < 0.0001) return point;
+
+    const angle = Math.atan2(dy, dx);
+    const snappedAngle = Math.round(angle / angleSnapStep) * angleSnapStep;
+    if (!forceSnap && Math.abs(angleDistance(angle, snappedAngle)) > angleSnapMagnet) {
+      return point;
+    }
+
+    return {
+      x: clamp(start.x + Math.cos(snappedAngle) * distance / Math.max(1, window.innerWidth), 0, 1),
+      y: clamp(start.y + Math.sin(snappedAngle) * distance / Math.max(1, window.innerHeight), 0, 1),
+    };
+  }
+
+  function adjustedSegmentPoint(creating, point, event) {
+    if (!creating || !["line", "arrow"].includes(creating.tool)) return point;
+    return snappedSegmentPoint(creating.start, point, Boolean(event && event.shiftKey));
+  }
+
+  function isLineLayer(layer) {
+    return Boolean(
+      layer
+      && layer.kind === "arrow"
+      && (
+        layer.label === "line"
+        || (layer.pointerStart === "none" && layer.pointerEnd === "none")
+      )
+    );
+  }
+
+  function isStrokeEditableLayer(layer) {
+    return Boolean(layer && ["ink", "rect", "ellipse", "arrow"].includes(layer.kind));
   }
 
   function frameFromPoints(a, b) {
@@ -330,6 +417,7 @@
   }
 
   function drawArrowHead(from, to, width, style = "open") {
+    if (!style || style === "none") return;
     const angle = Math.atan2(to.y - from.y, to.x - from.x);
     const length = Math.max(12, width * 3.2);
     if (style === "filled") {
@@ -348,6 +436,24 @@
       ctx.fill();
       return;
     }
+    if (style === "dot") {
+      const radius = Math.max(3.5, length * 0.32);
+      ctx.beginPath();
+      ctx.arc(to.x, to.y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = ctx.strokeStyle;
+      ctx.fill();
+      return;
+    }
+    if (style === "bar") {
+      const barLength = length * 0.74;
+      const px = Math.cos(angle + Math.PI / 2) * barLength;
+      const py = Math.sin(angle + Math.PI / 2) * barLength;
+      ctx.beginPath();
+      ctx.moveTo(to.x - px, to.y - py);
+      ctx.lineTo(to.x + px, to.y + py);
+      ctx.stroke();
+      return;
+    }
     ctx.beginPath();
     ctx.moveTo(to.x, to.y);
     ctx.lineTo(
@@ -360,6 +466,17 @@
       to.y - length * Math.sin(angle + Math.PI / 6)
     );
     ctx.stroke();
+  }
+
+  function normalizedPointerStyle(value) {
+    return ["none", "open", "filled", "dot", "bar"].includes(value) ? value : "open";
+  }
+
+  function pointerStyleForLayer(layer, endpoint) {
+    const raw = endpoint === "start" ? layer.pointerStart : layer.pointerEnd;
+    if (raw) return normalizedPointerStyle(raw);
+    if (layer.pointerStart || layer.pointerEnd || isLineLayer(layer)) return "none";
+    return endpoint === "end" ? normalizedPointerStyle(layer.pointerStyle || "open") : "none";
   }
 
   function applyLayerShadow(layer) {
@@ -487,6 +604,18 @@
       );
       applyLayerShadow(layer);
       ctx.stroke();
+    } else if (layer.kind === "rect" && layer.frame) {
+      const frame = layer.frame;
+      const origin = pointToCanvas({ x: frame.x, y: frame.y });
+      ctx.beginPath();
+      ctx.rect(
+        origin.x,
+        origin.y,
+        Math.max(1, frame.width * window.innerWidth),
+        Math.max(1, frame.height * window.innerHeight)
+      );
+      applyLayerShadow(layer);
+      ctx.stroke();
     } else if (layer.kind === "arrow" && layer.from && layer.to) {
       const from = pointToCanvas(layer.from);
       const to = pointToCanvas(layer.to);
@@ -496,7 +625,8 @@
       applyLayerShadow(layer);
       ctx.stroke();
       ctx.setLineDash([]);
-      drawArrowHead(from, to, width, layer.pointerStyle || layer.pointerEnd || "open");
+      drawArrowHead(to, from, width, pointerStyleForLayer(layer, "start"));
+      drawArrowHead(from, to, width, pointerStyleForLayer(layer, "end"));
     } else if (layer.kind === "label" && layer.frame) {
       const frame = layer.frame;
       const rect = {
@@ -578,10 +708,10 @@
         stylePreset: creating.stylePreset,
       };
     }
-    if (creating.tool === "ellipse") {
+    if (creating.tool === "ellipse" || creating.tool === "rect") {
       return {
         id: "preview",
-        kind: "ellipse",
+        kind: creating.tool,
         frame: frameFromPoints(creating.start, creating.current),
         color: creating.color,
         strokeWidth: creating.strokeWidth,
@@ -595,15 +725,17 @@
         stylePreset: creating.stylePreset,
       };
     }
-    return {
+    const isLine = creating.tool === "line";
+    const layer = {
       id: "preview",
       kind: "arrow",
       from: creating.start,
       to: creating.current,
       color: creating.color,
       strokeWidth: creating.strokeWidth,
-      pointerEnd: creating.pointerEnd || "open",
-      pointerStyle: creating.pointerStyle || "open",
+      pointerStart: isLine ? "none" : (creating.pointerStart || "none"),
+      pointerEnd: isLine ? "none" : (creating.pointerEnd || "open"),
+      pointerStyle: isLine ? "none" : (creating.pointerStyle || "open"),
       lineStyle: creating.lineStyle,
       lineDash: creating.lineDash,
       shadow: creating.shadow,
@@ -613,6 +745,8 @@
       intent: creating.mode,
       stylePreset: creating.stylePreset,
     };
+    if (isLine) layer.label = "line";
+    return layer;
   }
 
   function sendUpdate() {
@@ -646,6 +780,8 @@
         layerId: layer.id,
         start: point,
         original: cloneLayer(layer),
+        copyRequested: Boolean(event.altKey),
+        copied: false,
       } : null;
       if (state.dragging) {
         document.body.classList.add("dragging");
@@ -672,6 +808,7 @@
       mode: state.mode,
       lineStyle: state.lineStyle,
       lineDash: linePreset.lineDash,
+      pointerStart: "none",
       pointerEnd: linePreset.pointerEnd,
       pointerStyle: linePreset.pointerStyle,
       shadow: linePreset.shadow,
@@ -681,6 +818,11 @@
       stylePreset: linePreset.id,
       startTime: nowSeconds(),
     };
+    if (state.tool === "line") {
+      base.pointerEnd = "none";
+      base.pointerStyle = "none";
+      base.label = "line";
+    }
     state.creating = base;
     canvas.setPointerCapture(event.pointerId);
     event.preventDefault();
@@ -692,6 +834,18 @@
       const point = state.lastPointer;
       const dx = point.x - state.dragging.start.x;
       const dy = point.y - state.dragging.start.y;
+      if (state.dragging.copyRequested && !state.dragging.copied) {
+        const distance = Math.hypot(dx * window.innerWidth, dy * window.innerHeight);
+        if (distance < 2) return;
+        const source = state.layers.find((layer) => layer.id === state.dragging.layerId);
+        if (!source) return;
+        const copy = duplicateLayer(source);
+        state.layers.push(copy);
+        state.dragging.layerId = copy.id;
+        state.dragging.original = cloneLayer(copy);
+        state.dragging.copied = true;
+        state.selectedLayerId = copy.id;
+      }
       moveLayer(state.dragging.layerId, state.dragging.original, dx, dy);
       render();
       return;
@@ -706,7 +860,7 @@
     const creating = state.creating;
     if (!creating) return;
     const point = state.lastPointer;
-    creating.current = point;
+    creating.current = adjustedSegmentPoint(creating, point, event);
     if (creating.tool === "ink") {
       const last = creating.points[creating.points.length - 1];
       const dx = point.x - last.x;
@@ -734,6 +888,9 @@
 
     const creating = state.creating;
     if (!creating) return;
+    if (event) {
+      creating.current = adjustedSegmentPoint(creating, eventPoint(event), event);
+    }
     state.creating = null;
     if (event && canvas.hasPointerCapture(event.pointerId)) {
       canvas.releasePointerCapture(event.pointerId);
@@ -760,6 +917,8 @@
       }
     }
     state.layers.push(layer);
+    state.selectedLayerId = layer.id;
+    setTool("select");
     render();
     sendUpdate();
   }
@@ -816,6 +975,14 @@
     return state.layers.find((layer) => layer.id === state.selectedLayerId) || null;
   }
 
+  function duplicateLayer(layer) {
+    const copy = cloneLayer(layer);
+    copy.id = uuid();
+    copy.author = "user";
+    copy.visible = true;
+    return copy;
+  }
+
   function applyNotePresetToLayer(layer, preset) {
     if (!layer || layer.kind !== "label" || !preset) return false;
     layer.noteStyle = preset.id;
@@ -844,7 +1011,8 @@
   }
 
   function applyLinePresetToLayer(layer, preset) {
-    if (!layer || !["ink", "ellipse", "arrow"].includes(layer.kind) || !preset) return false;
+    if (!layer || !["ink", "rect", "ellipse", "arrow"].includes(layer.kind) || !preset) return false;
+    const lineLayer = isLineLayer(layer);
     layer.lineStyle = preset.id;
     layer.lineDash = preset.lineDash;
     layer.stylePreset = preset.id;
@@ -853,8 +1021,10 @@
     layer.shadowBlur = preset.shadowBlur;
     layer.shadowOffsetY = preset.shadowOffsetY;
     if (layer.kind === "arrow") {
-      layer.pointerEnd = preset.pointerEnd;
-      layer.pointerStyle = preset.pointerStyle;
+      layer.pointerStart = "none";
+      layer.pointerEnd = lineLayer ? "none" : preset.pointerEnd;
+      layer.pointerStyle = lineLayer ? "none" : preset.pointerStyle;
+      if (lineLayer) layer.label = "line";
     }
     return true;
   }
@@ -903,6 +1073,8 @@
       endTime: nowSeconds(),
     };
     state.layers.push(layer);
+    state.selectedLayerId = layer.id;
+    setTool("select");
     render();
     sendUpdate();
   }
@@ -996,6 +1168,8 @@
         setStyleOpen(!state.styleOpen);
       } else if (action === "undo") {
         undo();
+      } else if (action === "capture") {
+        capture();
       } else if (action === "done") {
         done();
       } else if (action === "cancel") {
@@ -1034,7 +1208,7 @@
       if (label) {
         const note = noteStyleLabels[state.noteStyle] || state.noteStyle;
         const line = lineStyleLabels[state.lineStyle] || state.lineStyle;
-        label.textContent = `${note} · ${line}`;
+        label.textContent = `${note} · ${line} · ${Number(state.strokeWidth)}px`;
       }
     });
   }
@@ -1050,7 +1224,7 @@
   }
 
   function setTool(tool) {
-    if (!["select", "ink", "ellipse", "arrow", "note"].includes(tool)) return;
+    if (!["select", "ink", "rect", "ellipse", "line", "arrow", "note"].includes(tool)) return;
     closeNoteEditor(true);
     state.dragging = null;
     document.body.classList.remove("dragging");
@@ -1126,6 +1300,12 @@
     const next = Number(width);
     if (Number.isFinite(next) && next > 0) {
       state.strokeWidth = next;
+      const layer = selectedLayer();
+      if (isStrokeEditableLayer(layer)) {
+        layer.strokeWidth = next;
+        render();
+        sendUpdate();
+      }
       syncToolbarState();
     }
   }
@@ -1133,6 +1313,49 @@
   function quickNoteAtPointer() {
     setTool("note");
     startNoteEditor(state.lastPointer || { x: 0.5, y: 0.5 });
+  }
+
+  function handleToolChord(event) {
+    const key = shortcutToken(event);
+    switch (key) {
+    case "s":
+      setTool("select");
+      break;
+    case "p":
+      setTool("ink");
+      break;
+    case "r":
+      setTool("rect");
+      break;
+    case "c":
+      setTool("ellipse");
+      break;
+    case "l":
+      if (event.shiftKey) cycleLineStyle();
+      else setTool("line");
+      break;
+    case "a":
+      setTool("arrow");
+      break;
+    case "n":
+      quickNoteAtPointer();
+      break;
+    case "t":
+      cycleNoteStyle();
+      break;
+    case "1":
+      setMode("agent");
+      break;
+    case "2":
+      setMode("demo");
+      break;
+    case "escape":
+      clearToolChord();
+      break;
+    default:
+      return false;
+    }
+    return true;
   }
 
   function undo() {
@@ -1153,12 +1376,46 @@
     });
   }
 
+  // Desktop ink: ask the host to start a screenshot. The host flips this overlay
+  // to passthrough, runs region selection, bakes these strokes into the shot,
+  // then tears the overlay down — so there's nothing to commit from here.
+  function capture() {
+    closeNoteEditor(true);
+    post("liveMarkup.capture", {});
+  }
+
+  // Toggle the toolbar between the recording-markup variant (default, shows
+  // "Done") and the desktop-ink variant (shows the screenshot button instead).
+  function setContext(context) {
+    state.context = context === "desktopInk" ? "desktopInk" : "recording";
+    document.body.dataset.context = state.context;
+    const isInk = state.context === "desktopInk";
+    document.querySelectorAll('[data-action="capture"]').forEach((el) => {
+      el.hidden = !isInk;
+    });
+    document.querySelectorAll('[data-action="done"]').forEach((el) => {
+      el.hidden = isInk;
+    });
+  }
+
   function cancel() {
     closeNoteEditor(false);
     post("liveMarkup.cancel", {});
   }
 
   window.addEventListener("keydown", (event) => {
+    if (isToolChordStart(event)) {
+      beginToolChord();
+      event.preventDefault();
+      return;
+    }
+    if (toolChordActive) {
+      const handled = handleToolChord(event);
+      clearToolChord();
+      event.preventDefault();
+      if (handled) return;
+      return;
+    }
     if (isTypingTarget(event.target)) return;
     const key = event.key.toLowerCase();
     if (event.key === "Escape") {
@@ -1177,24 +1434,6 @@
       sendUpdate();
     } else if (event.metaKey || event.ctrlKey || event.altKey) {
       return;
-    } else if (key === "s") {
-      setTool("select");
-    } else if (key === "p") {
-      setTool("ink");
-    } else if (key === "c") {
-      setTool("ellipse");
-    } else if (key === "a") {
-      setTool("arrow");
-    } else if (key === "n") {
-      quickNoteAtPointer();
-    } else if (key === "t") {
-      cycleNoteStyle();
-    } else if (key === "l") {
-      cycleLineStyle();
-    } else if (key === "1") {
-      setMode("agent");
-    } else if (key === "2") {
-      setMode("demo");
     }
   });
 
@@ -1207,8 +1446,10 @@
     setNoteStyle,
     setLineStyle,
     setStyleOpen,
+    setContext,
     undo,
     done,
+    capture,
     cancel,
     clear() {
       state.layers = [];
