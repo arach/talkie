@@ -146,7 +146,7 @@ public final class ScreenshotCaptureService {
             selectedRect = preselectedRect
         } else {
             let overlay = ScreenCaptureOverlay()
-            guard let rect = await overlay.selectRegion(freeze: true) else {
+            guard let rect = await overlay.selectRegion(freezesDesktop: true) else {
                 return nil
             }
             selectedRect = rect

@@ -33,13 +33,21 @@ public final class ScreenCaptureOverlay {
         let prearmedCursor = CursorLease(cursor: OverlayView.cursor(for: .region))
         prearmedCursor.activate()
 
-        // Region selection defaults to a live transparent desktop. Callers can
-        // opt into a frozen snapshot when visual stability matters more than
-        // keeping the overlay visually invisible outside the border.
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) })
             ?? NSScreen.main
             ?? NSScreen.screens[0]
+
+        // Freeze-first: grab (or await) a full-display still before the overlay
+        // becomes key. Taking key focus dismisses menus/popovers, so the still
+        // must be ready before showOverlay().
+        var frozenBackground: NSImage?
+        if freezesDesktop {
+            if !CaptureFreezeStore.shared.isPrimed {
+                CaptureFreezeStore.shared.prime(for: screen)
+            }
+            frozenBackground = await CaptureFreezeStore.shared.displayImage(forScreenFrame: screen.frame)
+        }
 
         return await withCheckedContinuation { continuation in
             let view = OverlayView(mode: .region)
@@ -53,53 +61,14 @@ public final class ScreenCaptureOverlay {
             view.onRegionSelected = { resume($0) }
             view.onCancelled = { resume(nil) }
             view.onModeSwitch = onModeSwitch
+            view.frozenSnapshot = frozenBackground
             showOverlay(with: view, on: screen)
             prearmedCursor.deactivate()
-
-            if freezesDesktop {
-                Task { @MainActor [weak view] in
-                    let snapshot = await Self.captureDesktopSnapshot(for: screen)
-                    view?.installFrozenSnapshot(snapshot)
-                }
-            }
         }
     }
 
     public func cancel() {
         overlayView?.cancel()
-    }
-
-    /// Captures a still of the given screen via SCScreenshotManager. Used
-    /// to freeze the desktop for region selection. Returns nil on
-    /// permission error or display lookup failure — caller falls back to
-    /// the live-desktop behavior in that case.
-    private static func captureDesktopSnapshot(for screen: NSScreen) async -> NSImage? {
-        guard let directDisplayIDValue = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
-            return nil
-        }
-        let directDisplayID = CGDirectDisplayID(directDisplayIDValue.uint32Value)
-        do {
-            let content = try await SCShareableContent.current
-            guard let display = content.displays.first(where: { $0.displayID == directDisplayID })
-                  ?? content.displays.first else {
-                return nil
-            }
-            let filter = SCContentFilter(display: display, excludingWindows: [])
-            let config = SCStreamConfiguration()
-            let scale = screen.backingScaleFactor
-            config.width = max(1, Int((screen.frame.width * scale).rounded(.toNearestOrAwayFromZero)))
-            config.height = max(1, Int((screen.frame.height * scale).rounded(.toNearestOrAwayFromZero)))
-            config.scalesToFit = false
-            config.showsCursor = false
-            config.capturesAudio = false
-            let cg = try await SCScreenshotManager.captureImage(
-                contentFilter: filter,
-                configuration: config
-            )
-            return NSImage(cgImage: cg, size: screen.frame.size)
-        } catch {
-            return nil
-        }
     }
 
     public func selectWindow() async -> CGWindowID? {

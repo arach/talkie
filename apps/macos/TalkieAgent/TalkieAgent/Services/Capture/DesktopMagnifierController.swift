@@ -43,7 +43,7 @@ final class DesktopMagnifierController {
 
             let overlay = ScreenCaptureOverlay()
             self.selectionOverlay = overlay
-            guard let rect = await overlay.selectRegion(freeze: true),
+            guard let rect = await overlay.selectRegion(freezesDesktop: true),
                   rect.width >= 8,
                   rect.height >= 8 else {
                 return
