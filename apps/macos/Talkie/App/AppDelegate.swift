@@ -132,6 +132,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         return event.keyCode == UInt16(keyCode) && activeModifiers == expectedModifiers
     }
 
+    private static func agentOwnsGlobalHotkeys() -> Bool {
+        let agent = ServiceManager.shared.live
+        return agent.isXPCConnected || agent.isRunning
+    }
+
     // MARK: - Window Lifecycle
 
     /// Prevent macOS from creating untitled windows on launch
@@ -2034,6 +2039,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
 
             // Check screenshot chord
             if Self.keyEvent(event, matches: captureKeyCode, modifiers: captureMods) {
+                guard !Self.agentOwnsGlobalHotkeys() else {
+                    return nil
+                }
                 if self?.capturePerfLoggingEnabled == true {
                     Log(.system).info("Screenshot chord detected (local) — entering capture bar")
                 }
@@ -2046,6 +2054,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
 
             // Check screen record chord
             if Self.keyEvent(event, matches: recordKeyCode, modifiers: recordMods) {
+                guard !Self.agentOwnsGlobalHotkeys() else {
+                    return nil
+                }
                 if self?.capturePerfLoggingEnabled == true {
                     Log(.system).info("Screen record chord detected (local) — entering capture bar")
                 }
@@ -2058,6 +2069,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
 
             // Check paste chord
             if Self.keyEvent(event, matches: pasteKeyCode, modifiers: pasteMods) {
+                guard !Self.agentOwnsGlobalHotkeys() else {
+                    return nil
+                }
                 if self?.capturePerfLoggingEnabled == true {
                     Log(.system).info("Paste chord detected (local) — entering paste bar")
                 }
@@ -2320,13 +2334,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         isPasteChordActive = true
         defer { isPasteChordActive = false }
 
+        Log(.system).info("Quick Paste chord opened (Talkie local)")
+
         // Yield activation back to the previous app — panel floats above
         if let prev = previousApp, prev.bundleIdentifier != Bundle.main.bundleIdentifier {
             prev.activate()
         }
 
         let controller = PasteChordController()
-        guard let result = await controller.beginChord() else { return }
+        guard let result = await controller.beginChord() else {
+            Log(.system).info("Quick Paste chord cancelled (Talkie local)")
+            return
+        }
 
         if result.format == .dragFile {
             // Drag mode: start a drag session from a transparent window at cursor
@@ -2590,6 +2609,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                 return event
             }
 
+            if self?.isPasteChordActive == true {
+                return event
+            }
+
             if event.isARepeat {
                 return nil
             }
@@ -2618,6 +2641,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                     continue
                 }
                 if Self.keyEvent(event, matches: cfg.keyCode, modifiers: cfg.nsModifierFlags) {
+                    guard !Self.agentOwnsGlobalHotkeys() else {
+                        return nil
+                    }
                     Task { @MainActor in
                         await self?.handleDirectScreenshot(mode: mode)
                     }
@@ -2632,6 +2658,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
 
     @MainActor
     private func handleDirectScreenshot(mode: String) async {
+        guard !isPasteChordActive else {
+            Log(.system).debug("Ignoring direct screenshot shortcut while Quick Paste HUD is active")
+            return
+        }
+
         let start = CFAbsoluteTimeGetCurrent()
         let now = Date()
         // Collapse duplicate trigger paths (distributed + local monitors) and bursty repeats.

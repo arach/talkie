@@ -237,7 +237,8 @@ final class HotkeyRegistry {
     // MARK: - Private
 
     private func migrateReservedCaptureDefaultsIfNeeded() {
-        let migrationKey = "hotkeyCapture.safeDefaultsMigration.v1"
+        let legacyMigrationKey = "hotkeyCapture.safeDefaultsMigration.v1"
+        let migrationKey = "hotkeyCapture.safeDefaultsMigration.v2"
         guard !storage.bool(forKey: migrationKey) else { return }
 
         let oldCmdShift = UInt32(cmdKey | shiftKey)
@@ -246,6 +247,7 @@ final class HotkeyRegistry {
             (.captureRegion, HotkeyConfig(keyCode: 21, modifiers: oldCmdShift), .defaultCaptureRegion),
             (.openTrayViewer, HotkeyConfig(keyCode: 23, modifiers: oldCmdShift), .defaultOpenTrayViewer),
             (.captureWindow, HotkeyConfig(keyCode: 22, modifiers: oldCmdShift), .defaultCaptureWindow),
+            (.openTrayShelf, HotkeyConfig(keyCode: 17, modifiers: oldCmdShift), HotkeyAction.openTrayShelf.defaultConfig),
             (.pasteLastScreenshot, HotkeyConfig(keyCode: 9, modifiers: oldCmdShift), .defaultPasteLastScreenshot),
         ]
 
@@ -265,6 +267,7 @@ final class HotkeyRegistry {
             migrated.append(migration.action.rawValue)
         }
 
+        storage.set(true, forKey: legacyMigrationKey)
         storage.set(true, forKey: migrationKey)
 
         if !migrated.isEmpty {
