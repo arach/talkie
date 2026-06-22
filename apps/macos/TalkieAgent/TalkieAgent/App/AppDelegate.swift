@@ -1219,7 +1219,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     private static func migrateReservedCaptureDefaultsIfNeeded() {
-        let migrationKey = "hotkeyCapture.safeDefaultsMigration.v1"
+        let legacyMigrationKey = "hotkeyCapture.safeDefaultsMigration.v1"
+        let migrationKey = "hotkeyCapture.safeDefaultsMigration.v2"
         guard !TalkieSharedSettings.bool(forKey: migrationKey) else { return }
 
         let oldCmdShift = UInt32(cmdKey | shiftKey)
@@ -1228,6 +1229,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             ("hotkeyCapture.region", .init(keyCode: 21, modifiers: oldCmdShift), .init(keyCode: 21, modifiers: hyperModifiers)),
             ("hotkeyCapture.trayViewer", .init(keyCode: 23, modifiers: oldCmdShift), .init(keyCode: 23, modifiers: hyperModifiers)),
             ("hotkeyCapture.window", .init(keyCode: 22, modifiers: oldCmdShift), .init(keyCode: 22, modifiers: hyperModifiers)),
+            ("hotkeyCapture.trayShelf", .init(keyCode: 17, modifiers: oldCmdShift), .init(keyCode: 17, modifiers: hyperModifiers)),
             (AgentSettingsKey.pasteLastScreenshotHotkey, .init(keyCode: 9, modifiers: oldCmdShift), .init(keyCode: 35, modifiers: hyperModifiers)),
         ]
 
@@ -1247,6 +1249,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             migrated.append(migration.key)
         }
 
+        TalkieSharedSettings.set(true, forKey: legacyMigrationKey)
         TalkieSharedSettings.set(true, forKey: migrationKey)
 
         if !migrated.isEmpty {
@@ -1600,6 +1603,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     private func handleAgentDirectScreenshot(mode: String) async {
+        guard !isAgentPasteChordActive else {
+            log.debug("Ignoring direct screenshot shortcut while Quick Paste HUD is active")
+            return
+        }
+
         let now = Date()
         if lastAgentDirectScreenshotMode == mode,
            now.timeIntervalSince(lastAgentDirectScreenshotAt) < 0.20 {
@@ -1824,13 +1832,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         isAgentPasteChordActive = true
         defer { isAgentPasteChordActive = false }
 
+        log.info("Quick Paste chord opened")
+
         let previousApp = NSWorkspace.shared.frontmostApplication
         if let previousApp, previousApp.bundleIdentifier != Bundle.main.bundleIdentifier {
             previousApp.activate()
         }
 
         let controller = PasteChordController()
-        guard let result = await controller.beginChord() else { return }
+        guard let result = await controller.beginChord() else {
+            log.info("Quick Paste chord cancelled")
+            return
+        }
 
         if result.format == .dragFile {
             beginFileDrag(item: result.item)

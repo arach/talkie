@@ -136,6 +136,7 @@ final class PasteChordController {
 
     func beginChord() async -> PasteBarResult? {
         let allItems = await AgentLiveTrayAssetStore.shared.recentItems(limit: 5)
+        log.info("Quick Paste HUD shown", detail: "items=\(allItems.count)")
 
         return await withCheckedContinuation { continuation in
             var resumed = false
