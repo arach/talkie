@@ -226,6 +226,7 @@ final class PasteChordController {
                     if digit >= 1, digit <= min(5, allItems.count) {
                         let index = digit - 1
                         let format = formatFromMods(input.modifierFlags)
+                        log.info("Quick Paste slot selected", detail: "slot=\(digit) format=\(format.rawValue)")
                         timeout.cancel()
                         resume(PasteBarResult(item: allItems[index], format: format))
                     } else {

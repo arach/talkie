@@ -79,6 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private var isAgentCaptureChordActive = false
     private var isAgentDirectScreenshotCaptureActive = false
     private var isAgentPasteChordActive = false
+    private var agentPasteChordSuppressesShortcutTriggersUntil: Date = .distantPast
     private var fileDragPanel: FileDragPanel?
     private var lastAgentDirectScreenshotMode: String?
     private var lastAgentDirectScreenshotAt: Date = .distantPast
@@ -1603,7 +1604,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     private func handleAgentDirectScreenshot(mode: String) async {
-        guard !isAgentPasteChordActive else {
+        guard !isAgentPasteChordSuppressingShortcutTriggers else {
             log.debug("Ignoring direct screenshot shortcut while Quick Paste HUD is active")
             return
         }
@@ -1828,9 +1829,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     private func handleAgentPasteChord() async {
-        guard !isAgentPasteChordActive else { return }
+        guard !isAgentPasteChordSuppressingShortcutTriggers else {
+            log.debug("Ignoring Quick Paste chord while a previous Quick Paste trigger is settling")
+            return
+        }
         isAgentPasteChordActive = true
-        defer { isAgentPasteChordActive = false }
+        pasteChordHotKeyManager.clearPressedState()
+        defer {
+            pasteChordHotKeyManager.clearPressedState()
+            agentPasteChordSuppressesShortcutTriggersUntil = Date().addingTimeInterval(0.35)
+            isAgentPasteChordActive = false
+        }
 
         log.info("Quick Paste chord opened")
 
@@ -1867,6 +1876,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     @MainActor
     private func pasteLatestAgentScreenshot(previousApp: NSRunningApplication? = nil) async {
+        guard !isAgentPasteChordSuppressingShortcutTriggers else {
+            log.debug("Ignoring paste-last screenshot shortcut while Quick Paste HUD is active")
+            return
+        }
+
         let targetApp = previousApp ?? NSWorkspace.shared.frontmostApplication
         guard let latest = await AgentLiveTrayAssetStore.shared
             .recentItems(limit: 20)
@@ -1884,6 +1898,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }
         try? await Task.sleep(for: .milliseconds(80))
         simulateCmdV()
+    }
+
+    private var isAgentPasteChordSuppressingShortcutTriggers: Bool {
+        isAgentPasteChordActive || Date() < agentPasteChordSuppressesShortcutTriggersUntil
     }
 
     @MainActor

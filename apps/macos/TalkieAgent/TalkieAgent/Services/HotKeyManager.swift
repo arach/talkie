@@ -91,6 +91,10 @@ private final class HotKeyRegistry {
         keysDownSince.removeValue(forKey: identifier)
     }
 
+    func clearPressedState(signature: OSType, id: UInt32) {
+        keysDownSince.removeValue(forKey: HotKeyIdentifier(signature: signature, id: id))
+    }
+
     func handleEvent(signature: OSType, id: UInt32, eventType: HotKeyEventType, timestamp: HotKeyTimestamp) {
         let identifier = HotKeyIdentifier(signature: signature, id: id)
 
@@ -272,6 +276,10 @@ final class HotKeyManager {
         registeredKeyCode = nil
         registeredModifiers = nil
         HotKeyRegistry.shared.unregister(signature: signature.fourCharCode, id: hotkeyID)
+    }
+
+    func clearPressedState() {
+        HotKeyRegistry.shared.clearPressedState(signature: signature.fourCharCode, id: hotkeyID)
     }
 
     deinit {

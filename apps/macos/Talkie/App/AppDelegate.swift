@@ -2327,12 +2327,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     // MARK: - Quick Paste Chord (Hyper+V)
 
     private var isPasteChordActive = false
+    private var pasteChordSuppressesShortcutTriggersUntil: Date = .distantPast
 
     @MainActor
     private func handlePasteChord(previousApp: NSRunningApplication?) async {
-        guard !isPasteChordActive else { return }
+        guard !isPasteChordSuppressingShortcutTriggers else {
+            Log(.system).debug("Ignoring Quick Paste chord while a previous Quick Paste trigger is settling")
+            return
+        }
         isPasteChordActive = true
-        defer { isPasteChordActive = false }
+        defer {
+            pasteChordSuppressesShortcutTriggersUntil = Date().addingTimeInterval(0.35)
+            isPasteChordActive = false
+        }
 
         Log(.system).info("Quick Paste chord opened (Talkie local)")
 
@@ -2368,6 +2375,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         // Brief delay for app activation to settle, then simulate Cmd+V
         try? await Task.sleep(for: .milliseconds(80))
         simulateCmdV()
+    }
+
+    private var isPasteChordSuppressingShortcutTriggers: Bool {
+        isPasteChordActive || Date() < pasteChordSuppressesShortcutTriggersUntil
     }
 
     @MainActor
@@ -2658,7 +2669,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
 
     @MainActor
     private func handleDirectScreenshot(mode: String) async {
-        guard !isPasteChordActive else {
+        guard !isPasteChordSuppressingShortcutTriggers else {
             Log(.system).debug("Ignoring direct screenshot shortcut while Quick Paste HUD is active")
             return
         }

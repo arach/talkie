@@ -121,6 +121,9 @@ struct AppShellNext<Content: View>: View {
         .onChange(of: deepLinkManager.pendingAction) { _, action in
             handleGlobalDeepLinkAction(action)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .companionShortcutSurfaceRequested)) { _ in
+            openCompanionShortcutSurfaceIfAllowed()
+        }
     }
 
     private func handlePendingNewMemoText(_ text: String?) {
@@ -157,6 +160,15 @@ struct AppShellNext<Content: View>: View {
             deepLinkManager.clearAction()
         default:
             break
+        }
+    }
+
+    private func openCompanionShortcutSurfaceIfAllowed() {
+        switch router.surface {
+        case .deck, .onboarding, .signIn:
+            return
+        default:
+            router.openDeck()
         }
     }
 

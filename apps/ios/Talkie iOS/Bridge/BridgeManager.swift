@@ -14,6 +14,7 @@ import TalkieMobileKit
 
 extension Notification.Name {
     static let bridgeDidConnect = Notification.Name("com.jdi.talkie.bridgeDidConnect")
+    static let companionShortcutSurfaceRequested = Notification.Name("to.talkie.companionShortcutSurfaceRequested")
 }
 
 @MainActor
@@ -148,6 +149,7 @@ final class BridgeManager {
     private var isCompanionRuntimeActive = false
     private var isCompanionEventStreamConnected = false
     private var lastConnectionAuthFailed = false
+    private var lastCompanionShortcutSurfaceRequestKey: String?
 
     // Retry configuration
     private let maxRetries = 3
@@ -652,6 +654,7 @@ final class BridgeManager {
         stopPendingPairingApprovalMonitor()
         stopCompanionEventStream()
         lastReportedSetupState = nil
+        lastCompanionShortcutSurfaceRequestKey = nil
         retryCount = 0
         status = .disconnected
         sessions = []
@@ -1457,8 +1460,30 @@ final class BridgeManager {
         }
 
         DeckMirrorStore.shared.apply(companionState: nextState)
+        notifyIfCompanionShortcutSurfaceRequested(nextState)
 
         try? await reportDeviceSetupStateIfNeeded()
+    }
+
+    private func notifyIfCompanionShortcutSurfaceRequested(_ nextState: CompanionStateResponse?) {
+        guard status == .connected,
+              TalkieAppSettings.shared.followComputerShortcutMode,
+              nextState?.isAvailable == true,
+              nextState?.requestedSurface == .shortcut else {
+            lastCompanionShortcutSurfaceRequestKey = nil
+            return
+        }
+
+        let requestKey = [
+            activePairedMacID ?? "",
+            String(nextState?.publishRevision ?? 0),
+            nextState?.lastPublishedAt ?? ""
+        ].joined(separator: "|")
+
+        guard requestKey != lastCompanionShortcutSurfaceRequestKey else { return }
+        lastCompanionShortcutSurfaceRequestKey = requestKey
+
+        NotificationCenter.default.post(name: .companionShortcutSurfaceRequested, object: nil)
     }
 
     private func currentDeviceSetupState() -> DeviceSetupStateRequest {
