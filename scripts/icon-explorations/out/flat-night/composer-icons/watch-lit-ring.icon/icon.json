@@ -1,0 +1,28 @@
+{
+  "fill": {
+    "solid": "extended-srgb:0.16863,0.14510,0.09412,1.00000"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "image-name": "watch-lit-ring.png",
+          "name": "watch-lit-ring",
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "supported-platforms": {
+    "circles": [
+      "watchOS"
+    ],
+    "squares": "shared"
+  }
+}

@@ -132,6 +132,30 @@ public enum CaptureMarkupRenderer {
         return units * baseUnit
     }
 
+    private static func strokeDash(_ layer: CaptureMarkupLayer, size: CGSize) -> [CGFloat] {
+        guard let dash = layer.lineDash, !dash.isEmpty else { return [] }
+        let baseUnit = max(1, size.width / 600)
+        return dash.map { CGFloat(max(0, $0)) * baseUnit }
+    }
+
+    private static func strokeWithEffects(
+        _ layer: CaptureMarkupLayer,
+        in context: CGContext,
+        size: CGSize,
+        stroke: () -> Void
+    ) {
+        context.saveGState()
+        context.setLineDash(phase: 0, lengths: strokeDash(layer, size: size))
+        if layer.shadow == true {
+            let baseUnit = max(1, size.width / 600)
+            let color = parseColor(layer.shadowColor ?? "rgba(0, 0, 0, 0.28)")
+            let offset = CGSize(width: 0, height: CGFloat(layer.shadowOffsetY ?? 5) * baseUnit)
+            context.setShadow(offset: offset, blur: CGFloat(layer.shadowBlur ?? 12) * baseUnit, color: color)
+        }
+        stroke()
+        context.restoreGState()
+    }
+
     private static func draw(layer: CaptureMarkupLayer, in context: CGContext, size: CGSize, image: CGImage) {
         let color = parseColor(layer.color)
         switch layer.kind {
@@ -162,7 +186,9 @@ public enum CaptureMarkupRenderer {
             }
             context.setStrokeColor(color)
             context.setLineWidth(strokeLineWidth(layer, size: size))
-            context.stroke(rect)
+            strokeWithEffects(layer, in: context, size: size) {
+                context.stroke(rect)
+            }
             if let label = layer.label {
                 drawLabel(label, near: rect, in: context, size: size)
             }
@@ -171,7 +197,9 @@ public enum CaptureMarkupRenderer {
             let rect = frame.pixelRect(in: size)
             context.setStrokeColor(color)
             context.setLineWidth(strokeLineWidth(layer, size: size))
-            context.strokeEllipse(in: rect)
+            strokeWithEffects(layer, in: context, size: size) {
+                context.strokeEllipse(in: rect)
+            }
             if let label = layer.label {
                 drawLabel(label, near: rect, in: context, size: size)
             }
@@ -187,7 +215,9 @@ public enum CaptureMarkupRenderer {
             for point in points.dropFirst() {
                 context.addLine(to: point.pixelPoint(in: size))
             }
-            context.strokePath()
+            strokeWithEffects(layer, in: context, size: size) {
+                context.strokePath()
+            }
         case .arrow:
             guard let from = layer.from, let to = layer.to else { return }
             let start = from.pixelPoint(in: size)
@@ -195,9 +225,12 @@ public enum CaptureMarkupRenderer {
             let lineWidth = strokeLineWidth(layer, size: size)
             context.setStrokeColor(color)
             context.setLineWidth(lineWidth)
+            context.beginPath()
             context.move(to: start)
             context.addLine(to: end)
-            context.strokePath()
+            strokeWithEffects(layer, in: context, size: size) {
+                context.strokePath()
+            }
             drawPointer(pointer(for: layer, endpoint: .start), at: start, from: end, color: color, in: context, size: size, lineWidth: lineWidth)
             drawPointer(pointer(for: layer, endpoint: .end), at: end, from: start, color: color, in: context, size: size, lineWidth: lineWidth)
             if let label = layer.label, label != "line" {
@@ -575,7 +608,31 @@ public enum CaptureMarkupRenderer {
     }
 
     private static func parseColor(_ hex: String) -> CGColor {
-        var cleaned = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        let raw = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lowered = raw.lowercased()
+        if lowered.hasPrefix("rgb"),
+           let open = raw.firstIndex(of: "("),
+           let close = raw.lastIndex(of: ")"),
+           open < close {
+            let body = raw[raw.index(after: open)..<close]
+            let parts = body.split(separator: ",").map {
+                $0.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            if parts.count >= 3,
+               let red = Double(parts[0]),
+               let green = Double(parts[1]),
+               let blue = Double(parts[2]) {
+                let alpha = parts.count >= 4 ? (Double(parts[3]) ?? 1) : 1
+                return CGColor(
+                    red: CGFloat(min(max(red / 255, 0), 1)),
+                    green: CGFloat(min(max(green / 255, 0), 1)),
+                    blue: CGFloat(min(max(blue / 255, 0), 1)),
+                    alpha: CGFloat(min(max(alpha, 0), 1))
+                )
+            }
+        }
+
+        var cleaned = raw
         if cleaned.hasPrefix("#") { cleaned.removeFirst() }
         guard cleaned.count == 6, let value = UInt64(cleaned, radix: 16) else {
             return CGColor(red: 0.31, green: 0.49, blue: 1.0, alpha: 1)

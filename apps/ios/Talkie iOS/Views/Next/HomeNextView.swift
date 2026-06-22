@@ -929,7 +929,7 @@ private struct RecentSection: View {
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
                     .scrollDisabled(true)
-                    .frame(height: CGFloat(items.count) * 56)
+                    .frame(height: CGFloat(items.count) * 44)
 
                     if hasMore {
                         Button(action: {
@@ -1055,7 +1055,7 @@ private struct RecentRow: View {
                 }
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 11)
+            .padding(.vertical, 9)
         }
     }
 

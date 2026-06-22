@@ -1,0 +1,28 @@
+{
+  "fill": {
+    "solid": "extended-srgb:0.12941,0.10588,0.07451,1.00000"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "image-name": "f5-copper-amber.png",
+          "name": "f5-copper-amber",
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "supported-platforms": {
+    "circles": [
+      "watchOS"
+    ],
+    "squares": "shared"
+  }
+}

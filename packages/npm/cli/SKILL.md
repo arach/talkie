@@ -68,6 +68,13 @@ talkie search "project" --limit 5
 # List recent screenshots and video clips
 talkie captures
 
+# Print the last 3 tray screenshot paths for agents
+talkie screenshots 3 --paths
+
+# Same command with screen-cap aliases
+talkie screencaps 3 --paths
+talkie screen-caps 3 --paths
+
 # List only screen/video clips
 talkie captures --kind video
 
@@ -75,7 +82,10 @@ talkie captures --kind video
 talkie captures --kind screenshot --source tray
 
 # Print paths for shell scripts and agents
-talkie captures --kind screenshot --limit 3 --path
+talkie captures --kind screenshot --limit 3 --paths
+
+# Include recording/library screenshots as well as tray screenshots
+talkie screenshots 10 --all-sources --json
 
 # Get one capture by ID prefix, filename, or absolute path
 talkie captures d9d3cc46

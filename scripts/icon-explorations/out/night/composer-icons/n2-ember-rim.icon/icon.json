@@ -1,0 +1,28 @@
+{
+  "fill": {
+    "solid": "extended-srgb:0.16471,0.14118,0.09412,1.00000"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "image-name": "n2-ember-rim.png",
+          "name": "n2-ember-rim",
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "supported-platforms": {
+    "circles": [
+      "watchOS"
+    ],
+    "squares": "shared"
+  }
+}

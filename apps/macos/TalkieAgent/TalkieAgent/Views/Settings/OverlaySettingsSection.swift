@@ -13,6 +13,8 @@ struct OverlaySettingsSection: View {
     @ObservedObject private var settings = LiveSettings.shared
     @AppStorage(CaptureIslandDefaults.enabled) private var capturePreviewEnabled = true
     @AppStorage(CaptureIslandDefaults.dismissSeconds) private var capturePreviewDismissSeconds = 6.0
+    @AppStorage(CaptureIslandDefaults.placement, store: TalkieSharedSettings)
+    private var capturePreviewPlacementRaw = CaptureIslandPlacement.contextual.rawValue
     @State private var lastTopOverlayStyle: OverlayStyle = .particles
     @State private var notchInfo = NotchInfo.detect()
 
@@ -102,6 +104,28 @@ struct OverlaySettingsSection: View {
                         isOn: $capturePreviewEnabled
                     )
                     .help("Surface recent screenshots and clips at the top edge")
+
+                    OpsDivider()
+
+                    OverlayControlGroup(title: "Placement") {
+                        VStack(alignment: .leading, spacing: OpsSpacing.sm) {
+                            Picker("", selection: $capturePreviewPlacementRaw) {
+                                ForEach(CaptureIslandPlacement.allCases) { placement in
+                                    Text(placement.displayName).tag(placement.rawValue)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+                            .frame(width: 220)
+
+                            Text(capturePreviewPlacement.description)
+                                .font(OpsType.ui(OpsSize.micro))
+                                .foregroundStyle(OpsInk.muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .opacity(capturePreviewEnabled ? 1.0 : 0.45)
+                    .disabled(!capturePreviewEnabled)
 
                     OpsDivider()
 
@@ -198,10 +222,14 @@ struct OverlaySettingsSection: View {
         SurfaceReadout.Item(
             title: "Capture preview",
             value: capturePreviewEnabled ? "On" : "Off",
-            detail: capturePreviewEnabled ? "\(Int(capturePreviewDismissSeconds))s auto-dismiss" : "Hidden after capture",
+            detail: capturePreviewEnabled ? "\(capturePreviewPlacement.displayName) · \(Int(capturePreviewDismissSeconds))s" : "Hidden after capture",
             icon: "rectangle.topthird.inset.filled",
             tint: capturePreviewEnabled ? OpsInk.statusOk : OpsInk.dim
         )
+    }
+
+    private var capturePreviewPlacement: CaptureIslandPlacement {
+        CaptureIslandPlacement(rawValue: capturePreviewPlacementRaw) ?? .contextual
     }
 
     private var macBookNotchReadout: SurfaceReadout.Item {

@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Talkie Export</title>
+  <link rel="stylesheet" href="./export.css">
+</head>
+<body>
+  <div class="app-shell">
+    <main class="preview-pane">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Screenshot export</p>
+          <h1 id="captureTitle">Capture</h1>
+        </div>
+        <button id="closeButton" class="ghost-button" type="button">Close</button>
+      </header>
+
+      <section class="preview-stage" aria-label="Export preview">
+        <div id="previewMat" class="preview-mat" data-bg="paper">
+          <div id="imageShell" class="image-shell">
+            <img id="sourceImage" alt="">
+          </div>
+        </div>
+      </section>
+
+      <footer class="readout">
+        <span id="sourceReadout">Waiting for capture</span>
+        <span id="exportReadout">PNG</span>
+      </footer>
+    </main>
+
+    <aside class="inspector">
+      <section class="panel-section">
+        <p class="section-kicker">Preset</p>
+        <div class="segmented" role="group" aria-label="Preset">
+          <button class="segment" type="button" data-preset="original">Original</button>
+          <button class="segment active" type="button" data-preset="polished">Polished</button>
+        </div>
+      </section>
+
+      <section class="panel-section">
+        <p class="section-kicker">Backdrop</p>
+        <div class="swatch-row" role="group" aria-label="Backdrop">
+          <button class="swatch transparent" type="button" data-background="none" title="None"></button>
+          <button class="swatch paper active" type="button" data-background="paper" title="Paper"></button>
+          <button class="swatch graphite" type="button" data-background="graphite" title="Graphite"></button>
+          <button class="swatch amber" type="button" data-background="amber" title="Amber"></button>
+        </div>
+      </section>
+
+      <section class="panel-section controls">
+        <label>
+          <span>Padding</span>
+          <output id="paddingValue">48</output>
+          <input id="paddingInput" type="range" min="0" max="120" step="4" value="48">
+        </label>
+        <label>
+          <span>Round corners</span>
+          <output id="radiusValue">18</output>
+          <input id="radiusInput" type="range" min="0" max="44" step="2" value="18">
+        </label>
+        <label>
+          <span>Shadow</span>
+          <output id="shadowValue">24</output>
+          <input id="shadowInput" type="range" min="0" max="48" step="2" value="24">
+        </label>
+      </section>
+
+      <section class="panel-section">
+        <p class="section-kicker">Format</p>
+        <div class="segmented" role="group" aria-label="Format">
+          <button class="segment active" type="button" data-format="png">PNG</button>
+          <button class="segment" type="button" data-format="jpeg">JPEG</button>
+        </div>
+      </section>
+
+      <section class="panel-section controls">
+        <label>
+          <span>Quality</span>
+          <output id="qualityValue">92%</output>
+          <input id="qualityInput" type="range" min="50" max="100" step="1" value="92">
+        </label>
+        <label>
+          <span>Scale</span>
+          <select id="scaleInput">
+            <option value="1">1x</option>
+            <option value="1.5">1.5x</option>
+            <option value="2">2x</option>
+          </select>
+        </label>
+      </section>
+
+      <div class="action-row">
+        <button id="copyButton" class="primary-action" type="button">Copy</button>
+        <button id="saveButton" class="secondary-action" type="button">Save As</button>
+      </div>
+    </aside>
+  </div>
+
+  <script src="./export.js"></script>
+</body>
+</html>

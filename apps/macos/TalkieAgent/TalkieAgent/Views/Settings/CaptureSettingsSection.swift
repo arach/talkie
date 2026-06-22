@@ -4,7 +4,7 @@
 //
 //  Capture shortcuts: a configurable hotkey for each individual capture
 //  action — the screenshot/recording HUD chords, quick paste, and the
-//  direct (no-HUD) screenshot family.
+//  direct (no-HUD) capture tools.
 //
 //  Each row writes its HotkeyConfig to the shared AgentSettingsKey that
 //  AppDelegate.registerCaptureHotkeys reads, then HotkeyRecorderButton posts
@@ -61,7 +61,7 @@ private enum CaptureShortcuts {
         ),
     ]
 
-    /// Direct, no-HUD shortcuts that fire a single capture immediately.
+    /// Direct, no-HUD shortcuts that fire a capture tool without opening the HUD.
     static let direct: [CaptureShortcut] = [
         CaptureShortcut(
             id: "hotkeyCapture.fullscreen",
@@ -92,6 +92,12 @@ private enum CaptureShortcuts {
             title: "View shelf",
             subtitle: "Open the capture shelf",
             defaultConfig: HotkeyConfig(keyCode: 17, modifiers: hyper)  // Hyper+T
+        ),
+        CaptureShortcut(
+            id: "hotkeyCapture.desktopMagnifier",
+            title: "Desktop magnifier",
+            subtitle: "Freeze a region and place a magnified copy on the desktop",
+            defaultConfig: HotkeyConfig(keyCode: 46, modifiers: hyper)  // Hyper+M
         ),
     ]
 
@@ -172,7 +178,7 @@ struct CaptureSettingsSection: View {
             SettingsPageHeader(
                 icon: "viewfinder",
                 title: "CAPTURE",
-                subtitle: "A shortcut for each capture action — the HUD chords, paste, and the direct screenshot family."
+                subtitle: "A shortcut for each capture action — the HUD chords, paste, and the direct capture tools."
             )
         } content: {
             if !captureEnabled {
@@ -191,11 +197,11 @@ struct CaptureSettingsSection: View {
                 shortcutRows(CaptureShortcuts.paste)
             }
 
-            SettingsCard(title: "DIRECT SCREENSHOTS") {
+            SettingsCard(title: "DIRECT CAPTURE TOOLS") {
                 shortcutRows(CaptureShortcuts.direct)
             }
 
-            Text("Defaults use the Hyper layer (⌃⌥⇧⌘). Direct screenshots fire immediately; the HUD shortcuts open a chooser first. A shortcut that collides with a HUD chord is skipped when hotkeys register.")
+            Text("Defaults use the Hyper layer (⌃⌥⇧⌘). Direct capture tools skip the HUD; screenshot rows fire immediately. A shortcut that collides with a HUD chord is skipped when hotkeys register.")
                 .font(.system(size: 9))
                 .foregroundColor(TalkieTheme.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)

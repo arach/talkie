@@ -32,6 +32,7 @@ export function createProgram(): Command {
     talkie terminal pair      add iOS SSH terminal access (--ios-only)
     talkie memos              list recent voice memos
     talkie captures           list screenshots and video captures
+    talkie screenshots 3      list recent tray screenshots
     talkie search <query>     full-text search across everything
     talkie stats              usage overview
     talkie install            download & install Talkie.app

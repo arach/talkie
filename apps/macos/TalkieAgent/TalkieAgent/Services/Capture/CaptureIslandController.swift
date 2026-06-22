@@ -36,6 +36,12 @@ final class CaptureIslandController {
         return max(2, stored ?? 6)
     }
 
+    private var placement: CaptureIslandPlacement {
+        TalkieSharedSettings.string(forKey: CaptureIslandDefaults.placement)
+            .flatMap(CaptureIslandPlacement.init(rawValue:))
+            ?? .contextual
+    }
+
     func initialize() {
         guard assetsObserver == nil else { return }
         // The store posts assetsDidChange (distributed) on every tray mutation,
@@ -61,7 +67,7 @@ final class CaptureIslandController {
             // gate on recency + de-dupe by id.
             guard latest.id != shownItemID else { return }
             guard isFreshForPresentation(latest) else { return }
-            present(latest)
+            present(latest, near: nil)
         }
     }
 
@@ -83,7 +89,13 @@ final class CaptureIslandController {
         return now.timeIntervalSince(savedAt) < max(8, dismissSeconds + 2)
     }
 
-    private func present(_ item: AgentLiveTrayItem) {
+    func presentImmediate(_ item: AgentLiveTrayItem, near anchor: NSPoint?) {
+        guard isEnabled else { return }
+        guard isFreshForPresentation(item) else { return }
+        present(item, near: placement == .contextual ? anchor : nil)
+    }
+
+    private func present(_ item: AgentLiveTrayItem, near anchor: NSPoint?) {
         guard FileManager.default.fileExists(atPath: item.fileURL.path) else { return }
         shownItemID = item.id
         dismiss(animated: false)
@@ -93,6 +105,7 @@ final class CaptureIslandController {
             onDragEnded: { [weak self] in self?.dismiss() },
             onDelete: { [weak self] item in self?.delete(item) },
             onMarkup: { [weak self] item in self?.openMarkup(item) },
+            onActivate: { [weak self] item in self?.openMarkup(item) },
             onHoverChanged: { [weak self] hovering in
                 if hovering { self?.cancelDismissTimer() } else { self?.scheduleDismiss() }
             }
@@ -117,7 +130,7 @@ final class CaptureIslandController {
         p.acceptsMouseMovedEvents = true
         p.sharingType = .none
 
-        positionTopCenter(p)
+        position(p, near: anchor)
 
         p.alphaValue = 0
         p.orderFrontRegardless()
@@ -129,7 +142,12 @@ final class CaptureIslandController {
         scheduleDismiss()
     }
 
-    private func positionTopCenter(_ p: NSPanel) {
+    private func position(_ p: NSPanel, near anchor: NSPoint?) {
+        if let anchor {
+            position(p, around: anchor)
+            return
+        }
+
         let screen = NSScreen.screens.first(where: { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) })
             ?? NSScreen.main
             ?? NSScreen.screens.first
@@ -137,6 +155,30 @@ final class CaptureIslandController {
         let visible = screen.visibleFrame
         let x = visible.midX - panelWidth / 2
         let y = visible.maxY - panelHeight - 6  // tucked just under the menu bar
+        p.setFrameOrigin(NSPoint(x: x.rounded(), y: y.rounded()))
+    }
+
+    private func position(_ p: NSPanel, around anchor: NSPoint) {
+        let screen = NSScreen.screens.first(where: { NSMouseInRect(anchor, $0.frame, false) })
+            ?? NSScreen.screens.first(where: { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) })
+            ?? NSScreen.main
+            ?? NSScreen.screens.first
+        guard let screen else { return }
+
+        let visible = screen.visibleFrame
+        let gap: CGFloat = 14
+        var x = anchor.x + gap
+        var y = anchor.y - panelHeight - gap
+
+        if x + panelWidth > visible.maxX {
+            x = anchor.x - panelWidth - gap
+        }
+        if y < visible.minY {
+            y = anchor.y + gap
+        }
+
+        x = min(max(x, visible.minX + gap), visible.maxX - panelWidth - gap)
+        y = min(max(y, visible.minY + gap), visible.maxY - panelHeight - gap)
         p.setFrameOrigin(NSPoint(x: x.rounded(), y: y.rounded()))
     }
 
@@ -211,6 +253,7 @@ final class CaptureIslandController {
 enum CaptureIslandDefaults {
     static let enabled = "agent.captureIsland.enabled"
     static let dismissSeconds = "agent.captureIsland.dismissSeconds"
+    static let placement = AgentSettingsKey.captureIslandPlacement
 }
 
 // MARK: - Island View (pure AppKit for reliable drag-out)
@@ -220,10 +263,15 @@ private final class CaptureIslandView: NSView {
     private let onDragEnded: () -> Void
     private let onDelete: (AgentLiveTrayItem) -> Void
     private let onMarkup: (AgentLiveTrayItem) -> Void
+    private let onActivate: (AgentLiveTrayItem) -> Void
     private let onHoverChanged: (Bool) -> Void
     private let dragSource = FileDragSourceDelegate()
     private let thumbnail: NSImage
     private var performedMenuAction = false
+    /// Press origin in view coords; a click that never drifts past the slop is a
+    /// tap (opens the capture) rather than the start of a drag-out.
+    private var pressOrigin: NSPoint?
+    private var didBeginDrag = false
 
     private let cornerRadius: CGFloat = 12
     private let inset: CGFloat = 8
@@ -234,12 +282,14 @@ private final class CaptureIslandView: NSView {
         onDragEnded: @escaping () -> Void,
         onDelete: @escaping (AgentLiveTrayItem) -> Void,
         onMarkup: @escaping (AgentLiveTrayItem) -> Void,
+        onActivate: @escaping (AgentLiveTrayItem) -> Void,
         onHoverChanged: @escaping (Bool) -> Void
     ) {
         self.item = item
         self.onDragEnded = onDragEnded
         self.onDelete = onDelete
         self.onMarkup = onMarkup
+        self.onActivate = onActivate
         self.onHoverChanged = onHoverChanged
         self.thumbnail = item.image ?? NSWorkspace.shared.icon(forFile: item.fileURL.path)
         super.init(frame: .zero)
@@ -335,7 +385,7 @@ private final class CaptureIslandView: NSView {
         ]
         (label as NSString).draw(at: NSPoint(x: inset + 2, y: stripY + 5), withAttributes: labelAttrs)
 
-        let hint = "drag ↗"
+        let hint = "drag anywhere ↗"
         let hintAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 9, weight: .medium),
             .foregroundColor: NSColor.white.withAlphaComponent(0.35),
@@ -361,12 +411,30 @@ private final class CaptureIslandView: NSView {
             return
         }
 
-        // Only the thumbnail area initiates a drag.
+        // The whole card is interactive. Don't commit to a drag yet —
+        // wait to see whether the pointer drifts (drag-out) or stays put (tap).
         let point = convert(event.locationInWindow, from: nil)
-        guard thumbRect.contains(point) else { return }
+        pressOrigin = bounds.contains(point) ? point : nil
+        didBeginDrag = false
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let origin = pressOrigin, !didBeginDrag else { return }
+        let point = convert(event.locationInWindow, from: nil)
+        guard hypot(point.x - origin.x, point.y - origin.y) >= 4 else { return }
+        didBeginDrag = true
         let draggingItem = NSDraggingItem(pasteboardWriter: item.fileURL as NSURL)
         draggingItem.setDraggingFrame(NSRect(origin: .zero, size: thumbRect.size), contents: thumbnail)
         beginDraggingSession(with: [draggingItem], event: event, source: dragSource)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        defer { pressOrigin = nil; didBeginDrag = false }
+        guard !didBeginDrag, pressOrigin != nil else { return }
+        let point = convert(event.locationInWindow, from: nil)
+        guard thumbRect.contains(point) else { return }
+        // A tap (no drag): open the capture in Talkie for review.
+        onActivate(item)
     }
 
     private func showContextMenu(for event: NSEvent) {

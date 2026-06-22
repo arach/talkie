@@ -707,9 +707,9 @@ struct DictationDeliverySettingsContent: View {
                 }
 
                 StyledToggle(
-                    label: "Return to origin app after pasting",
+                    label: "Paste back into the origin input",
                     isOn: $live.returnToOriginAfterPaste,
-                    help: "Switch back to the app you were using when recording started"
+                    help: "When you move away during dictation, switch back to the original app/input before inserting text"
                 )
                 .padding(Spacing.sm)
                 .background(Theme.current.surface1)

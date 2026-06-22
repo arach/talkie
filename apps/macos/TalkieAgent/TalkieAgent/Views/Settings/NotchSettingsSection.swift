@@ -14,6 +14,12 @@ import TalkieKit
 struct NotchSettingsSection: View {
     @AppStorage(CaptureIslandDefaults.enabled) private var enabled = true
     @AppStorage(CaptureIslandDefaults.dismissSeconds) private var dismissSeconds = 6.0
+    @AppStorage(CaptureIslandDefaults.placement, store: TalkieSharedSettings)
+    private var placementRaw = CaptureIslandPlacement.contextual.rawValue
+
+    private var placement: CaptureIslandPlacement {
+        CaptureIslandPlacement(rawValue: placementRaw) ?? .contextual
+    }
 
     var body: some View {
         SettingsPageContainer {
@@ -31,6 +37,33 @@ struct NotchSettingsSection: View {
                         description: "Surface a draggable preview at the top after each screenshot or clip",
                         isOn: $enabled
                     )
+
+                    Rectangle().fill(Design.divider).frame(height: 0.5)
+
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Placement")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(TalkieTheme.textPrimary)
+                            Text(placement.description)
+                                .font(.system(size: 9))
+                                .foregroundColor(TalkieTheme.textTertiary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        Spacer()
+
+                        Picker("", selection: $placementRaw) {
+                            ForEach(CaptureIslandPlacement.allCases) { placement in
+                                Text(placement.displayName).tag(placement.rawValue)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 190)
+                        .disabled(!enabled)
+                    }
+                    .opacity(enabled ? 1 : 0.45)
 
                     Rectangle().fill(Design.divider).frame(height: 0.5)
 

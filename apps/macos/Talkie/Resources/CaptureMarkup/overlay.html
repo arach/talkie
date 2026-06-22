@@ -41,26 +41,30 @@
 
       <div class="style-group compact">
         <span class="style-label">Stroke</span>
+        <button type="button" class="width" data-width="0.5" title="Hairline stroke">XS</button>
+        <button type="button" class="width" data-width="2" title="Fine stroke">S</button>
         <button type="button" class="width active" data-width="4" title="Medium stroke">M</button>
         <button type="button" class="width" data-width="7" title="Heavy stroke">H</button>
+        <button type="button" class="width" data-width="11" title="Extra heavy stroke">XL</button>
       </div>
     </div>
 
     <div class="toolbar" id="toolbar">
       <div class="tool-segment" role="group" aria-label="Markup tools">
-        <button type="button" class="tool glyph-tool" data-tool="select" data-glyph="↖" title="Select and move — S" aria-label="Select and move">Select</button>
-        <button type="button" class="tool glyph-tool active" data-tool="ink" data-glyph="✎" title="Pen — P" aria-label="Pen">Pen</button>
-        <button type="button" class="tool glyph-tool" data-tool="ellipse" data-glyph="○" title="Circle — C" aria-label="Circle">Circle</button>
-        <button type="button" class="tool glyph-tool" data-tool="arrow" data-glyph="↗" title="Arrow — A" aria-label="Arrow">Arrow</button>
-        <button type="button" class="tool glyph-tool" data-tool="note" data-glyph="T" title="Note — N" aria-label="Note">Note</button>
+        <button type="button" class="tool glyph-tool" data-tool="select" data-glyph="↖" title="Select and move — Option-T, S; Option-drag copies" aria-label="Select and move">Select</button>
+        <button type="button" class="tool glyph-tool active" data-tool="ink" data-glyph="✎" title="Pen — Option-T, P" aria-label="Pen">Pen</button>
+        <button type="button" class="tool glyph-tool" data-tool="ellipse" data-glyph="○" title="Circle — Option-T, C" aria-label="Circle">Circle</button>
+        <button type="button" class="tool glyph-tool" data-tool="line" data-glyph="/" title="Line — Option-T, L; Shift snaps angles" aria-label="Line">Line</button>
+        <button type="button" class="tool glyph-tool" data-tool="arrow" data-glyph="↗" title="Arrow — Option-T, A" aria-label="Arrow">Arrow</button>
+        <button type="button" class="tool glyph-tool" data-tool="note" data-glyph="T" title="Note — Option-T, N" aria-label="Note">Note</button>
       </div>
 
       <div class="mode-switch" role="group" aria-label="Markup mode">
-        <button type="button" class="mode active" data-mode="agent" title="Agent instruction markup — 1">Agent</button>
-        <button type="button" class="mode" data-mode="demo" title="Presentation markup — 2">Demo</button>
+        <button type="button" class="mode active" data-mode="agent" title="Agent instruction markup — Option-T, 1">Agent</button>
+        <button type="button" class="mode" data-mode="demo" title="Presentation markup — Option-T, 2">Demo</button>
       </div>
 
-      <button type="button" class="style-toggle" data-action="toggle-style" title="Show style drawer — T/L" aria-controls="style-panel" aria-expanded="false">
+      <button type="button" class="style-toggle" data-action="toggle-style" title="Show style drawer" aria-controls="style-panel" aria-expanded="false">
         <span class="style-chip-swatch" aria-hidden="true"></span>
         <span class="style-chip-label">Sticky · Solid</span>
       </button>

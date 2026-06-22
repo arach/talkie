@@ -81,6 +81,7 @@ final class AgentController: ObservableObject {
     private var intent: CaptureIntent = .paste  // Routing intent for current recording
     private var originalSelectedText: String?  // Text that was selected when recording started
     private var startApp: NSRunningApplication?  // App where recording started (for return-to-origin)
+    private var originInsertionTarget: TranscriptInsertionTarget?  // Focused input captured at recording start
     private var traceID: String?
 
     /// Performance trace for the current dictation flow (hotkey → paste)
@@ -290,6 +291,7 @@ final class AgentController: ObservableObject {
         recordingEndTime = nil
         capturedContext = nil
         startApp = nil
+        originInsertionTarget = nil
         pendingAudioFilename = nil
         traceID = nil
         if invalidateTrace {
@@ -1395,8 +1397,10 @@ final class AgentController: ObservableObject {
         let targetApp = NSWorkspace.shared.frontmostApplication
         log.info("Target app at hotkey: \(targetApp?.localizedName ?? "none") (\(targetApp?.bundleIdentifier ?? "?"))")
 
-        // Store for return-to-origin (captured before recording starts)
+        // Store an insertion bookmark before recording starts. This is not
+        // document/window context; it only lets paste return to this input.
         startApp = targetApp
+        originInsertionTarget = TranscriptInsertionTarget.capture(from: targetApp)
         recordingStartTime = Date()
         recordingEndTime = nil
 
@@ -2238,7 +2242,7 @@ final class AgentController: ObservableObject {
                     }
 
                     let capturedContext = self.capturedContext
-                    let capturedStartApp = self.startApp
+                    let capturedOriginTarget = self.originInsertionTarget
                     let currentTrace = trace
                     let returnToOrigin = settings.returnToOriginAfterPaste
                     let routingModeStr = settings.routingMode == .paste ? "paste" : "clipboard"
@@ -2296,7 +2300,8 @@ final class AgentController: ObservableObject {
                     )
 
                     trace?.begin("paste")
-                    let routeSucceeded = await router.handle(transcript: deliveryText)
+                    let pasteTarget = returnToOrigin ? capturedOriginTarget : nil
+                    let routeSucceeded = await router.handle(transcript: deliveryText, target: pasteTarget)
                     let pasteMs = trace?.end(routingMode) ?? 0
                     logTiming("Router finished (\(pasteMs)ms)")
                     metadata.wasRouted = routeSucceeded
@@ -2322,12 +2327,6 @@ final class AgentController: ObservableObject {
 
                     Task.detached { [transcriptionMs, wordCount, audioFilename, durationSeconds, traceSuffix, totalMs, appMs, storedRecordingId] in
                         await MainActor.run { SoundManager.shared.playPasted() }
-
-                        if returnToOrigin,
-                           let originApp = capturedStartApp,
-                           capturedMetadata.contextChanged {
-                            await MainActor.run { ContextCapture.activateApp(originApp) }
-                        }
 
                         if let id = storedRecordingId {
                             await TalkieAgentXPCService.shared.notifyDictationAdded()
@@ -2460,7 +2459,7 @@ final class AgentController: ObservableObject {
                     metadataDict["processor.ruleName"] = contextRule.name
 
                     let capturedContext = self.capturedContext
-                    let capturedStartApp = self.startApp
+                    let capturedOriginTarget = self.originInsertionTarget
                     let currentTrace = trace
                     let returnToOrigin = settings.returnToOriginAfterPaste
                     let capturedRecordingId = self.recordingId
@@ -2517,7 +2516,8 @@ final class AgentController: ObservableObject {
                     )
 
                     trace?.begin("paste")
-                    let routeSucceeded = await router.handle(transcript: deliveryText)
+                    let pasteTarget = returnToOrigin ? capturedOriginTarget : nil
+                    let routeSucceeded = await router.handle(transcript: deliveryText, target: pasteTarget)
                     let pasteMs = trace?.end(routingMode) ?? 0
                     logTiming("Router finished (\(pasteMs)ms)")
                     metadata.wasRouted = routeSucceeded
@@ -2543,12 +2543,6 @@ final class AgentController: ObservableObject {
 
                     Task.detached { [transcriptionMs, wordCount, audioFilename, durationSeconds, traceSuffix, totalMs, appMs, storedRecordingId] in
                         await MainActor.run { SoundManager.shared.playPasted() }
-
-                        if returnToOrigin,
-                           let originApp = capturedStartApp,
-                           capturedMetadata.contextChanged {
-                            await MainActor.run { ContextCapture.activateApp(originApp) }
-                        }
 
                         if let id = storedRecordingId {
                             await TalkieAgentXPCService.shared.notifyDictationAdded()
@@ -2673,7 +2667,7 @@ final class AgentController: ObservableObject {
                 metadata.perfPostMs = storedPostMs
 
                 let capturedContext = self.capturedContext
-                let capturedStartApp = self.startApp
+                let capturedOriginTarget = self.originInsertionTarget
                 let dictationText = prepared.text
                 let metadataDict = buildMetadataDict(from: metadata)
                 let currentTrace = trace
@@ -2734,7 +2728,8 @@ final class AgentController: ObservableObject {
 
                 // Trace ONLY the actual paste operation
                 trace?.begin("paste")
-                let routeSucceeded = await router.handle(transcript: deliveryText)
+                let pasteTarget = returnToOrigin ? capturedOriginTarget : nil
+                let routeSucceeded = await router.handle(transcript: deliveryText, target: pasteTarget)
                 let pasteMs = trace?.end(routingMode) ?? 0
                 logTiming("Router finished (\(pasteMs)ms)")
                 metadata.wasRouted = routeSucceeded
@@ -2763,13 +2758,6 @@ final class AgentController: ObservableObject {
                 Task.detached { [transcriptionMs, wordCount, audioFilename, durationSeconds, traceSuffix, totalMs, appMs, storedRecordingId] in
                     // Play sound
                     await MainActor.run { SoundManager.shared.playPasted() }
-
-                    // Return to origin app if enabled (do this early for better UX)
-                    if returnToOrigin,
-                       let originApp = capturedStartApp,
-                       capturedMetadata.contextChanged {
-                        await MainActor.run { ContextCapture.activateApp(originApp) }
-                    }
 
                     if let id = storedRecordingId {
                         await TalkieAgentXPCService.shared.notifyDictationAdded()

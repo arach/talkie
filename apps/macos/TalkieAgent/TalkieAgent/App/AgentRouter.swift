@@ -31,13 +31,162 @@ enum RoutingMode: String, CaseIterable {
     }
 }
 
+struct TranscriptInsertionTarget {
+    let app: NSRunningApplication
+    let processIdentifier: pid_t
+    let focusedElement: AXUIElement?
+    let selectedTextRange: CFRange?
+
+    var label: String {
+        app.localizedName ?? app.bundleIdentifier ?? "\(processIdentifier)"
+    }
+
+    @MainActor
+    static func capture(from app: NSRunningApplication?) -> TranscriptInsertionTarget? {
+        guard let app else { return nil }
+
+        var focusedElement: AXUIElement?
+        var selectedTextRange: CFRange?
+
+        if AXIsProcessTrusted() {
+            let appElement = AXUIElementCreateApplication(app.processIdentifier)
+            focusedElement = Self.focusedElement(in: appElement)
+
+            if let focusedElement {
+                selectedTextRange = Self.selectedTextRange(in: focusedElement)
+            }
+        }
+
+        return TranscriptInsertionTarget(
+            app: app,
+            processIdentifier: app.processIdentifier,
+            focusedElement: focusedElement,
+            selectedTextRange: selectedTextRange
+        )
+    }
+
+    @MainActor
+    func prepareForPaste() async -> Bool {
+        guard !app.isTerminated else {
+            log.warning("Origin app is no longer running: \(label)")
+            return false
+        }
+
+        app.activate()
+        let activated = await waitForActivation()
+        if !activated {
+            log.warning("Timed out activating origin app: \(label)")
+        }
+
+        guard let focusedElement else {
+            log.info("Origin app restored without focused AX element: \(label)")
+            return activated
+        }
+
+        let focusResult = AXUIElementSetAttributeValue(
+            focusedElement,
+            kAXFocusedAttribute as CFString,
+            kCFBooleanTrue
+        )
+
+        if focusResult != .success {
+            log.debug("Could not restore origin focused element (\(focusResult.rawValue)) for \(label)")
+        }
+
+        var restoredTextRange = false
+        if var range = selectedTextRange,
+           let rangeValue = AXValueCreate(.cfRange, &range) {
+            let rangeResult = AXUIElementSetAttributeValue(
+                focusedElement,
+                kAXSelectedTextRangeAttribute as CFString,
+                rangeValue
+            )
+            restoredTextRange = rangeResult == .success
+            if rangeResult != .success {
+                log.debug("Could not restore origin text range (\(rangeResult.rawValue)) for \(label)")
+            }
+        }
+
+        guard activated else {
+            log.warning("Origin app is not frontmost after activation attempt: \(label)")
+            return false
+        }
+
+        guard focusResult == .success || restoredTextRange else {
+            log.warning("Could not restore origin focused input for \(label)")
+            return false
+        }
+
+        log.info("Prepared origin paste target: \(label)")
+        return true
+    }
+
+    @MainActor
+    private func waitForActivation(timeout: TimeInterval = 0.75) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+
+        while Date() < deadline {
+            if NSWorkspace.shared.frontmostApplication?.processIdentifier == processIdentifier {
+                return true
+            }
+            try? await Task.sleep(for: .milliseconds(25))
+        }
+
+        return NSWorkspace.shared.frontmostApplication?.processIdentifier == processIdentifier
+    }
+
+    private static func focusedElement(in appElement: AXUIElement) -> AXUIElement? {
+        var focusedRef: CFTypeRef?
+        var result = AXUIElementCopyAttributeValue(
+            appElement,
+            kAXFocusedUIElementAttribute as CFString,
+            &focusedRef
+        )
+
+        if result != .success {
+            var windowRef: CFTypeRef?
+            if AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &windowRef) == .success,
+               let windowRef {
+                let window = windowRef as! AXUIElement
+                result = AXUIElementCopyAttributeValue(
+                    window,
+                    kAXFocusedUIElementAttribute as CFString,
+                    &focusedRef
+                )
+            }
+        }
+
+        guard result == .success else { return nil }
+        guard let focusedRef else { return nil }
+        return (focusedRef as! AXUIElement)
+    }
+
+    private static func selectedTextRange(in element: AXUIElement) -> CFRange? {
+        var rangeRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            element,
+            kAXSelectedTextRangeAttribute as CFString,
+            &rangeRef
+        ) == .success,
+              let rangeRef else {
+            return nil
+        }
+
+        let rangeValue = rangeRef as! AXValue
+        var range = CFRange(location: 0, length: 0)
+        guard AXValueGetValue(rangeValue, .cfRange, &range) else { return nil }
+        return range
+    }
+
+}
+
 struct TranscriptRouter: AgentRouter {
     private static let postPasteSubmitDelay: Duration = .milliseconds(180)
 
     var mode: RoutingMode = .paste
 
     @MainActor @discardableResult
-    func handle(transcript: String) async -> Bool {
+    func handle(transcript: String, target: TranscriptInsertionTarget?) async -> Bool {
         let cleaned = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Filter noise
@@ -65,6 +214,14 @@ struct TranscriptRouter: AgentRouter {
             let shouldPressEnter = await MainActor.run { LiveSettings.shared.pressEnterAfterPaste }
 
             guard !Task.isCancelled else { return false }
+
+            if let target {
+                let prepared = await target.prepareForPaste()
+                guard prepared else {
+                    log.error("Could not restore origin paste target; leaving transcript on clipboard")
+                    return false
+                }
+            }
 
             // Paste: clipboard + simulated Cmd+V
             let pasted = simulatePaste()
@@ -100,6 +257,7 @@ struct TranscriptRouter: AgentRouter {
         return true
     }
 
+    @MainActor
     private func simulatePaste() -> Bool {
         // Use cached accessibility check (pre-warmed on boot) for fast path.
         // If permission is missing, report failure to invalidate cache and force re-check.

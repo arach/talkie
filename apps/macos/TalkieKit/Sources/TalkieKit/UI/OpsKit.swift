@@ -174,7 +174,25 @@ public enum OpsAnimation {
 
 public enum OpsType {
     public static func mono(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight, design: .monospaced)
+        // JetBrains Mono — the brand monospace, bundled + registered at launch
+        // (TalkieKitFonts). Mirrors ScopeType.mono so the agent no longer splits
+        // between SF Mono (Ops chrome) and JetBrains Mono (Scope / library rows);
+        // that family mismatch — SF Mono's wider, rounder glyphs next to the real
+        // brand mono — is what read "rough". Falls back to SF Mono only if the
+        // face isn't registered.
+        let face: String
+        switch weight {
+        case .bold, .heavy, .black: face = "JetBrainsMono-Bold"
+        case .semibold:             face = "JetBrainsMono-SemiBold"
+        case .medium:               face = "JetBrainsMono-Medium"
+        default:                    face = "JetBrainsMono-Regular"
+        }
+        #if canImport(AppKit)
+        if NSFont(name: face, size: size) != nil {
+            return .custom(face, size: size)
+        }
+        #endif
+        return .system(size: size, weight: weight, design: .monospaced)
     }
     public static func ui(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
         .system(size: size, weight: weight, design: .default)
@@ -298,7 +316,11 @@ public struct OpsButton: View {
                 if let icon {
                     Image(systemName: icon).font(OpsType.ui(OpsSize.xs, weight: .semibold))
                 }
-                Text(title).font(OpsType.mono(OpsSize.xs, weight: .semibold))
+                // Actions read in the UI sans, not mono — mono is reserved for
+                // instrument readouts and metadata (bay labels, status, meta
+                // rows). Mono on stacked action buttons read as rough "console
+                // commands"; the sans keeps them as refined UI affordances.
+                Text(title).font(OpsType.ui(OpsSize.xs, weight: .semibold))
             }
             .foregroundStyle(foreground)
             .padding(.horizontal, OpsSpacing.xl)

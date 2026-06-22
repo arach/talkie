@@ -91,7 +91,7 @@ body[data-tool="select"].dragging {
 
 .toolbar {
   flex-wrap: nowrap;
-  max-width: min(620px, calc(100vw - 28px));
+  max-width: min(654px, calc(100vw - 28px));
   gap: 4px;
 }
 
@@ -250,7 +250,7 @@ button:focus-visible {
   display: flex;
   align-items: center;
   gap: 6px;
-  min-width: 122px;
+  min-width: 144px;
   color: rgba(255, 255, 255, 0.82);
 }
 
@@ -264,7 +264,7 @@ button:focus-visible {
 }
 
 .style-chip-label {
-  max-width: 96px;
+  max-width: 118px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -364,12 +364,12 @@ button:focus-visible {
   }
 
   .style-toggle {
-    min-width: 112px;
+    min-width: 118px;
     padding: 0 7px;
   }
 
   .style-chip-label {
-    max-width: 88px;
+    max-width: 92px;
   }
 }
 

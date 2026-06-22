@@ -583,10 +583,16 @@ private struct AgentHomeOverviewPage: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack {
-                AgentHomePageScaffold(title: "Home", subtitle: "Runtime status, recent history, and quick actions.") {
+                AgentHomePageScaffold(title: "Home", subtitle: "Runtime status, recent history, and quick actions.", showsHeader: false) {
                     VStack(alignment: .leading, spacing: OpsSpacing.xxxl) {
-                        metrics
-                        libraryPreview
+                        VStack(alignment: .leading, spacing: OpsSpacing.md) {
+                            OpsSectionLabel("· Agent")
+                            bay
+                        }
+                        VStack(alignment: .leading, spacing: OpsSpacing.md) {
+                            OpsSectionLabel("· Recent")
+                            libraryPreview
+                        }
                         shortcuts
                     }
                 }
@@ -643,44 +649,29 @@ private struct AgentHomeOverviewPage: View {
         }
     }
 
-    private var metrics: some View {
-        LazyVGrid(columns: AgentHomeGrid.columns, alignment: .leading, spacing: OpsSpacing.xl) {
-            AgentHomeMetricCard(
-                title: "Agents",
-                value: "\(store.agents.count)",
-                detail: "\(availableAgentCount) available",
-                icon: "person.2.fill",
-                tint: OpsInk.muted
-            )
-            AgentHomeMetricCard(
-                title: "Active work",
-                value: "\(store.activeJobs.count)",
-                detail: "\(store.completedJobs.count) recent complete",
-                icon: "arrow.triangle.2.circlepath",
-                tint: store.activeJobs.isEmpty ? OpsInk.muted : OpsInk.statusWarn
-            )
-            AgentHomeMetricCard(
-                title: "Live tray",
-                value: "\(traySnapshot.totalCount)",
-                detail: "\(traySnapshot.pinnedCount) pinned · \(traySnapshot.latestLabel)",
-                icon: "tray.full.fill",
-                tint: OpsInk.muted
-            )
-            AgentHomeMetricCard(
-                title: "Library",
-                value: "\(librarySummary.total)",
-                detail: libraryDetail,
-                icon: "clock.arrow.circlepath",
-                tint: OpsInk.muted
-            )
-            AgentHomeMetricCard(
-                title: "Dictations",
-                value: "\(dictationCount)",
-                detail: "\(storageSize) local audio",
-                icon: "waveform",
-                tint: OpsInk.muted
-            )
-        }
+    // The Agent Bay — the Home page's runtime "instrument" moment (replaces
+    // the old flat stat tiles). Three cells in the agent's own tally:
+    // dictations + captures it owns, plus a real day-streak so it reads
+    // "live". History deliberately omits the bay.
+    private var bay: some View {
+        AgentHomeBay(
+            runtime: "\(runtimeStateWord) · TALKIE.AGENT",
+            runtimeRight: "Local only · No telemetry",
+            footer: "· Live · Signal Path · Local",
+            stats: [
+                .init(value: "\(librarySummary.dictations)", label: "Dictations"),
+                .init(value: "\(librarySummary.captures)", label: "Captures"),
+                .init(value: "\(dayStreak)", label: "Day Streak"),
+            ]
+        )
+    }
+
+    private var runtimeStateWord: String {
+        store.runtimePing != nil ? "Running" : "Offline"
+    }
+
+    private var dayStreak: Int {
+        AgentHomeStreak.current(from: libraryItems)
     }
 
     private var ownership: some View {
@@ -708,7 +699,7 @@ private struct AgentHomeOverviewPage: View {
                 HStack(alignment: .top, spacing: OpsSpacing.xl) {
                     AgentHomeSectionHeader(
                         icon: "clock.arrow.circlepath",
-                        title: "Recent history",
+                        title: "Library",
                         subtitle: "Latest useful work across dictations, captures, memos, notes, and selections."
                     )
 
@@ -1216,16 +1207,19 @@ private struct AgentHomeLibraryPage: View {
         AgentHomePageScaffold(
             title: "History",
             subtitle: "Read-only history from Talkie's shared recordings table.",
+            showsHeader: false,
             scrolls: false,
             maxContentWidth: 1_260
         ) {
-            VStack(alignment: .leading, spacing: OpsSpacing.xxxl) {
+            VStack(alignment: .leading, spacing: OpsSpacing.md) {
+                OpsSectionLabel("· History")
+
                 OpsCard(padding: 0) {
                     VStack(alignment: .leading, spacing: 0) {
                         HStack(alignment: .top, spacing: OpsSpacing.xl) {
                             AgentHomeSectionHeader(
                                 icon: "clock.arrow.circlepath",
-                                title: "Recent library history",
+                                title: "Library",
                                 subtitle: "Memos, dictations, notes, captures, and selections from Talkie."
                             )
 
@@ -1296,16 +1290,19 @@ private struct AgentHomeLibraryPage: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     HStack(spacing: 0) {
+                        // List hugs its row width (the ScopeLibraryList rows cap
+                        // out around here), so the detail pane fills the rest
+                        // instead of leaving dead space between the two.
                         content
-                            .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
+                            .frame(width: min(460, max(360, proxy.size.width * 0.40)))
+                            .frame(maxHeight: .infinity)
 
                         OpsDivider(color: OpsHairline.subtle)
 
                         AgentHomeLibraryDetailPane(item: selectedItem) { item in
                             AgentHomeTalkieLibraryOpener.open(item)
                         }
-                        .frame(width: min(380, max(300, proxy.size.width * 0.34)))
-                        .frame(maxHeight: .infinity)
+                        .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
 
@@ -1544,6 +1541,17 @@ private struct AgentHomeInspectorContent: View {
 private struct AgentHomePageScaffold<Content: View>: View {
     let title: String
     let subtitle: String
+    /// Optional uppercase mono eyebrow rendered above the title. When set,
+    /// the page header switches to the editorial treatment borrowed from
+    /// Talkie's homepage — eyebrow + serif display headline — instead of
+    /// the plain semibold title. `nil` keeps the original look for every
+    /// page that doesn't opt in.
+    let eyebrow: String?
+    /// When false, the page drops its title/subtitle header entirely and
+    /// lands straight in `content` — used by Home (leads with the Agent Bay)
+    /// and History (leads with the recordings list), which label their own
+    /// sections with `OpsSectionLabel` instead.
+    let showsHeader: Bool
     let scrolls: Bool
     let maxContentWidth: CGFloat
     let content: () -> Content
@@ -1551,12 +1559,16 @@ private struct AgentHomePageScaffold<Content: View>: View {
     init(
         title: String,
         subtitle: String,
+        eyebrow: String? = nil,
+        showsHeader: Bool = true,
         scrolls: Bool = true,
         maxContentWidth: CGFloat = 980,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self.title = title
         self.subtitle = subtitle
+        self.eyebrow = eyebrow
+        self.showsHeader = showsHeader
         self.scrolls = scrolls
         self.maxContentWidth = maxContentWidth
         self.content = content
@@ -1567,12 +1579,16 @@ private struct AgentHomePageScaffold<Content: View>: View {
             if scrolls {
                 ScrollView {
                     pageContent
-                        .padding(OpsSpacing.huge)
+                        .padding(.horizontal, OpsSpacing.huge)
+                        .padding(.top, OpsSpacing.xxl)
+                        .padding(.bottom, OpsSpacing.huge)
                         .frame(maxWidth: maxContentWidth, alignment: .leading)
                 }
             } else {
                 pageContent
-                    .padding(OpsSpacing.huge)
+                    .padding(.horizontal, OpsSpacing.huge)
+                    .padding(.top, OpsSpacing.xxl)
+                    .padding(.bottom, OpsSpacing.huge)
                     .frame(maxWidth: maxContentWidth, maxHeight: .infinity, alignment: .topLeading)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
@@ -1583,17 +1599,24 @@ private struct AgentHomePageScaffold<Content: View>: View {
 
     @ViewBuilder
     private var pageContent: some View {
-        let stack = VStack(alignment: .leading, spacing: OpsSpacing.xxxl) {
-            VStack(alignment: .leading, spacing: OpsSpacing.sm) {
-                Text(title)
-                    .font(OpsType.ui(OpsSize.xxl, weight: .semibold))
-                    .foregroundStyle(OpsInk.ink)
+        let stack = VStack(alignment: .leading, spacing: OpsSpacing.xxl) {
+            if showsHeader {
+                if let eyebrow {
+                    AgentHomeEditorialHeader(eyebrow: eyebrow, title: title, subtitle: subtitle)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    VStack(alignment: .leading, spacing: OpsSpacing.sm) {
+                        Text(title)
+                            .font(OpsType.ui(OpsSize.xxl, weight: .semibold))
+                            .foregroundStyle(OpsInk.ink)
 
-                Text(subtitle)
-                    .font(OpsType.ui(OpsSize.base))
-                    .foregroundStyle(OpsInk.muted)
+                        Text(subtitle)
+                            .font(OpsType.ui(OpsSize.base))
+                            .foregroundStyle(OpsInk.muted)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
 
             content()
         }
@@ -1606,12 +1629,63 @@ private struct AgentHomePageScaffold<Content: View>: View {
     }
 }
 
+/// Editorial page header copied from Talkie's homepage vocabulary
+/// (`ScopeHomeView` / `ScopePageHero`): a small uppercase mono eyebrow
+/// over a Cormorant Garamond display headline, with a refined subtitle
+/// and a tapering hairline beneath. Uses `ScopeType.display` — the
+/// homepage's actual Cormorant face, now bundled + registered for the
+/// Agent via `TalkieKitFonts.registerBundledFonts()` — so the headline
+/// matches the homepage exactly, set over TalkieAgent's dark Ops palette.
+private struct AgentHomeEditorialHeader: View {
+    let eyebrow: String
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: OpsSpacing.sm) {
+            HStack(spacing: OpsSpacing.sm) {
+                OpsStatusDot(color: OpsTint.amber.color, size: OpsDot.tiny)
+                Text(eyebrow.uppercased())
+                    .font(OpsType.mono(OpsSize.micro, weight: .bold))
+                    .tracking(2.0)
+                    .foregroundStyle(OpsTint.amber.color)
+            }
+
+            Text(title)
+                .font(ScopeType.display(size: OpsSize.xxxl, weight: .regular))
+                .foregroundStyle(OpsInk.ink)
+                .tracking(-0.3)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Text(subtitle)
+                .font(OpsType.ui(OpsSize.base))
+                .foregroundStyle(OpsInk.muted)
+                .lineSpacing(2)
+
+            // Tapering hairline — the donor's `ScopeDivider` flourish,
+            // drawn Ops-native so the band reads as one editorial unit.
+            LinearGradient(
+                colors: [OpsHairline.standard, OpsHairline.standard.opacity(0)],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(height: 1)
+            .padding(.top, OpsSpacing.xs)
+        }
+    }
+}
+
 private struct AgentHomeMetricCard: View {
     let title: String
     let value: String
     let detail: String
     let icon: String
     let tint: Color
+    /// Optional channel tag (e.g. `CH-01`) rendered top-right, mirroring
+    /// the donor's instrument-bay `ChannelLabel`. `nil` keeps the plain
+    /// card used elsewhere.
+    var channel: String? = nil
 
     var body: some View {
         OpsCard(padding: OpsSpacing.xl) {
@@ -1627,6 +1701,19 @@ private struct AgentHomeMetricCard: View {
                     )
 
                     Spacer(minLength: 0)
+
+                    if let channel {
+                        Text(channel.uppercased())
+                            .font(OpsType.mono(OpsSize.micro, weight: .semibold))
+                            .tracking(1.2)
+                            .foregroundStyle(OpsSurface.tintStrong(tint))
+                            .padding(.horizontal, OpsSpacing.sm)
+                            .padding(.vertical, OpsSpacing.xxs)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: OpsRadius.tight)
+                                    .stroke(OpsSurface.tintBorder(tint), lineWidth: OpsStroke.thin)
+                            )
+                    }
                 }
 
                 VStack(alignment: .leading, spacing: OpsSpacing.xs) {
@@ -1649,6 +1736,237 @@ private struct AgentHomeMetricCard: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            // Left-edge accent stripe — the donor's "armed channel"
+            // affordance (InsetStripe), leaning into the per-card tint.
+            // Only on channel-tagged (instrument-bay) cards so the plain
+            // metric cards used by other pages stay unchanged.
+            .overlay(alignment: .leading) {
+                if channel != nil {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(OpsSurface.tintMuted(tint))
+                        .frame(width: 2)
+                        .padding(.vertical, OpsSpacing.xxs)
+                        .offset(x: -OpsSpacing.xl)
+                        .allowsHitTesting(false)
+                }
+            }
+        }
+    }
+}
+
+/// Warm-paper instrument panel that leads the **Home** page — the agent's
+/// runtime "instrument" moment, ported from the design studio's Agent Bay
+/// (donor: design/studio/components/studies/Bay.tsx + MacAgentHomeShell.tsx).
+/// A top runtime rail, divided stat cells (serif value · mono label · brass
+/// sparkline), and a signal-path footer rail. Carries its own warm palette
+/// (`AgentBayPalette`) so it lifts off the cool Ops case with an artifact
+/// shadow. Home only — History stays a plain recordings list, no bay.
+private struct AgentHomeBay: View {
+    struct Stat: Identifiable {
+        let id = UUID()
+        let value: String
+        let label: String
+    }
+
+    let runtime: String
+    let runtimeRight: String
+    let footer: String
+    let stats: [Stat]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            rail(leading: runtime, trailing: runtimeRight, leadingDot: true)
+                .overlay(alignment: .bottom) { hairline }
+            cells
+            rail(leading: footer, trailing: timeLabel, leadingDot: false)
+                .overlay(alignment: .top) { hairline }
+        }
+        .background(AgentBayPalette.bg)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(AgentBayPalette.edge, lineWidth: 1)
+        )
+        // The home study's `shadow-artifact` lift (0 6px 14px /.18) so the
+        // bay reads as a raised instrument panel on the cool case.
+        .shadow(color: Color.black.opacity(0.18), radius: 7, x: 0, y: 4)
+    }
+
+    private var hairline: some View {
+        Rectangle().fill(AgentBayPalette.edge).frame(height: 1)
+    }
+
+    private func rail(leading: String, trailing: String, leadingDot: Bool) -> some View {
+        HStack(spacing: OpsSpacing.md) {
+            if leadingDot {
+                Circle()
+                    .fill(AgentBayPalette.accent)
+                    .frame(width: 6, height: 6)
+                    .shadow(color: AgentBayPalette.accent.opacity(0.4), radius: 2)
+            }
+            Text(leading.uppercased())
+                .font(OpsType.mono(8.5, weight: .semibold))
+                .tracking(1.3)
+                .foregroundStyle(AgentBayPalette.inkFaint)
+                .lineLimit(1)
+
+            Spacer(minLength: OpsSpacing.md)
+
+            Text(trailing.uppercased())
+                .font(OpsType.mono(8.5, weight: .semibold))
+                .tracking(1.3)
+                .foregroundStyle(AgentBayPalette.inkSubtle)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, OpsSpacing.xxl)
+        .padding(.vertical, 7)
+        .background(AgentBayPalette.strip)
+    }
+
+    private var cells: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(stats.enumerated()), id: \.element.id) { index, stat in
+                cell(stat, seed: index)
+                    .overlay(alignment: .trailing) {
+                        if index < stats.count - 1 {
+                            Rectangle().fill(AgentBayPalette.edge).frame(width: 1)
+                        }
+                    }
+            }
+        }
+        .padding(.horizontal, OpsSpacing.xs)
+    }
+
+    private func cell(_ stat: Stat, seed: Int) -> some View {
+        VStack(alignment: .leading, spacing: OpsSpacing.xs) {
+            Text(stat.value)
+                .font(ScopeType.display(size: OpsSize.xxxl, weight: .regular))
+                .foregroundStyle(AgentBayPalette.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+
+            Text(stat.label.uppercased())
+                .font(OpsType.mono(8.5, weight: .bold))
+                .tracking(1.1)
+                .foregroundStyle(AgentBayPalette.inkFaint)
+                .lineLimit(1)
+
+            AgentBaySparkline(seed: seed)
+                .stroke(AgentBayPalette.accent.opacity(0.65), lineWidth: 1)
+                .frame(height: 11)
+                .padding(.top, 2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, OpsSpacing.lg)
+        .padding(.vertical, OpsSpacing.xxl)
+    }
+
+    private var timeLabel: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        return formatter.string(from: Date())
+    }
+}
+
+/// Warm "CHIFFON-family" paper palette for the Agent Bay — adaptive so it
+/// stays warm-on-light and a deeper warm on dark, lifting off the neutral
+/// Ops surface either way. Mirrors `BAY` in the studio's MacAgentHomeShell.
+private enum AgentBayPalette {
+    private static func c(_ r: Double, _ g: Double, _ b: Double) -> Color {
+        Color(.sRGB, red: r / 255, green: g / 255, blue: b / 255, opacity: 1)
+    }
+    static let bg     = opsAdaptive(light: c(243, 239, 226), dark: c(31, 29, 24))
+    static let strip  = opsAdaptive(light: c(237, 232, 214), dark: c(38, 35, 28))
+    static let edge   = opsAdaptive(light: c(226, 218, 198), dark: c(58, 53, 42))
+    static let accent = opsAdaptive(light: c(154, 106, 34),  dark: c(201, 150, 74)) // brass
+    static let ink      = OpsInk.ink
+    static let inkFaint = OpsInk.muted
+    static let inkSubtle = OpsInk.dim
+}
+
+/// Deterministic decorative sparkline for a bay cell — ported verbatim from
+/// the studio's `sparklineSamples`/`sparklinePath` so each cell gets a
+/// distinct, stable trace (no animation, no live data — pure instrument trim).
+private struct AgentBaySparkline: Shape {
+    let seed: Int
+
+    func path(in rect: CGRect) -> Path {
+        let samples = Self.samples(seed: seed)
+        var path = Path()
+        let step = rect.width / CGFloat(samples.count - 1)
+        for (i, v) in samples.enumerated() {
+            let x = rect.minX + CGFloat(i) * step
+            let y = rect.maxY - CGFloat(v) * rect.height
+            if i == 0 {
+                path.move(to: CGPoint(x: x, y: y))
+            } else {
+                path.addLine(to: CGPoint(x: x, y: y))
+            }
+        }
+        return path
+    }
+
+    private static func samples(seed: Int) -> [Double] {
+        var out: [Double] = []
+        for i in 0..<7 {
+            let phase = Double(seed) * 0.9
+            let sine = sin(Double(i) * 0.85 + phase) * 0.3 + 0.55
+            let jitter = Double((seed * 31 + i * 17) & 0xff) / 255.0 * 0.18
+            out.append(min(0.95, max(0.08, sine + jitter - 0.09)))
+        }
+        return out
+    }
+}
+
+/// Current day-streak from real library activity: consecutive calendar days
+/// (ending at the most recent item's day) that have at least one item. Honest
+/// — derived from `createdAt`, not a fabricated figure.
+private enum AgentHomeStreak {
+    static func current(from items: [TalkieObject], now: Date = Date()) -> Int {
+        guard !items.isEmpty else { return 0 }
+        let calendar = Calendar.current
+        let days = Set(items.map { calendar.startOfDay(for: $0.createdAt) })
+        guard var cursor = days.max() else { return 0 }
+        var streak = 0
+        while days.contains(cursor) {
+            streak += 1
+            guard let previous = calendar.date(byAdding: .day, value: -1, to: cursor) else { break }
+            cursor = previous
+        }
+        return streak
+    }
+}
+
+/// Compact KPI tile in Talkie's Stats vocabulary (`StatsScreen.StatCard`):
+/// a centered icon, a serif (Cormorant) value, and an uppercase mono
+/// label — no detail line. Drives the lean "stats land" first row on the
+/// Home and History pages so the Agent reads as the same family as Talkie,
+/// set on the dark Ops surface that keeps the two apps distinct.
+private struct AgentHomeStatTile: View {
+    let value: String
+    let label: String
+    let icon: String
+
+    var body: some View {
+        OpsCard(padding: OpsSpacing.xl) {
+            VStack(spacing: OpsSpacing.sm) {
+                Image(systemName: icon)
+                    .font(OpsType.ui(OpsSize.base, weight: .medium))
+                    .foregroundStyle(OpsInk.muted)
+
+                Text(value)
+                    .font(ScopeType.display(size: OpsSize.xxxl, weight: .regular))
+                    .foregroundStyle(OpsInk.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+
+                Text(label.uppercased())
+                    .font(OpsType.mono(OpsSize.micro, weight: .bold))
+                    .tracking(1.2)
+                    .foregroundStyle(OpsInk.dim)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
         }
     }
 }

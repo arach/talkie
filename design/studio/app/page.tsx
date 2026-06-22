@@ -117,6 +117,14 @@ const STUDIES: Study[] = [
       "Redesign of the bottom band: a coding-agent identity line (agent ▸ model · scope ▸ target · pass/saved), the mic + field + run as one tight composer cluster, and a single adaptive footer (try-examples / attachment / listening — never stacked). Brings the bar back to warm-amber canon. Ports to CaptureMarkupPanelChrome.swift.",
   },
   {
+    slug: "mac-markup-dock",
+    name: "Markup Dock · Level Up",
+    kind: "Component study",
+    platform: "macOS",
+    blurb:
+      "Level-up of the floating tool cluster on the live overlay — shared by screen-recording markup and the new desktop ink layer. Layout frozen; material, shape and iconography vary across four flat, squared directions (Slate · Graphite · Warm Deck · Paper Rail) over light/dark/photo backdrops. Real line-art icons replace the unicode glyphs (↖ ✎ ○ ↗ T) + adds the Rectangle tool. Ports to overlay.css + overlay.html.",
+  },
+  {
     slug: "mac-capture-detail",
     name: "Capture Detail",
     kind: "Composition study",
