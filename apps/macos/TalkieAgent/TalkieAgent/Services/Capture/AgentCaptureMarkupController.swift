@@ -625,6 +625,9 @@ private enum AgentCaptureMarkupLayout {
     static let bottomToolbarHeight: CGFloat = 42
     static let edgePadding: CGFloat = 8
     static let zoomStep: CGFloat = 1.14
+    static let chromeRadius: CGFloat = 7
+    static let imageRadius: CGFloat = 5
+    static let controlRadius: CGFloat = 4
 }
 
 private struct AgentCaptureMarkupTool {
@@ -764,8 +767,12 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         NSColor.clear.setFill()
         dirtyRect.fill()
 
-        let shell = NSBezierPath(roundedRect: bounds, xRadius: 12, yRadius: 12)
-        NSColor(calibratedWhite: 0.055, alpha: 0.98).setFill()
+        let shell = NSBezierPath(
+            roundedRect: bounds,
+            xRadius: AgentCaptureMarkupLayout.chromeRadius,
+            yRadius: AgentCaptureMarkupLayout.chromeRadius
+        )
+        NSColor(calibratedWhite: 0.052, alpha: 0.98).setFill()
         shell.fill()
 
         let titleRect = NSRect(
@@ -774,17 +781,36 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
             width: bounds.width,
             height: AgentCaptureMarkupLayout.titlebarHeight
         )
-        NSColor(calibratedWhite: 0.075, alpha: 0.98).setFill()
+        NSGraphicsContext.saveGraphicsState()
+        shell.addClip()
+        NSColor(calibratedWhite: 0.074, alpha: 0.98).setFill()
         titleRect.fill()
 
-        NSColor(calibratedWhite: 0.068, alpha: 0.98).setFill()
+        NSColor(calibratedWhite: 0.064, alpha: 0.98).setFill()
         bottomToolbarRect.fill()
+        drawChromeRelief(in: bounds)
+        drawChromeRelief(in: titleRect)
+        drawChromeRelief(in: bottomToolbarRect)
+        NSGraphicsContext.restoreGraphicsState()
+
+        NSColor.white.withAlphaComponent(0.10).setFill()
+        NSRect(x: 1, y: bounds.maxY - 1, width: bounds.width - 2, height: 1).fill()
+        NSColor.black.withAlphaComponent(0.34).setFill()
+        NSRect(x: 1, y: 0, width: bounds.width - 2, height: 1).fill()
+        NSColor.black.withAlphaComponent(0.30).setFill()
+        NSRect(x: 0, y: titleRect.minY - 1, width: bounds.width, height: 1).fill()
+        NSColor.white.withAlphaComponent(0.04).setFill()
+        NSRect(x: 0, y: bottomToolbarRect.maxY, width: bounds.width, height: 1).fill()
 
         drawBrand(in: titleRect)
         drawChromeButtons()
         drawBottomControls()
 
-        let imageClip = NSBezierPath(roundedRect: imageRect, xRadius: 7, yRadius: 7)
+        let imageClip = NSBezierPath(
+            roundedRect: imageRect,
+            xRadius: AgentCaptureMarkupLayout.imageRadius,
+            yRadius: AgentCaptureMarkupLayout.imageRadius
+        )
         NSGraphicsContext.saveGraphicsState()
         imageClip.addClip()
         NSColor.black.setFill()
@@ -798,14 +824,39 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         NSGraphicsContext.restoreGraphicsState()
 
         NSColor.white.withAlphaComponent(0.18).setStroke()
-        let imageBorder = NSBezierPath(roundedRect: imageRect.insetBy(dx: 0.5, dy: 0.5), xRadius: 7, yRadius: 7)
+        let imageBorder = NSBezierPath(
+            roundedRect: imageRect.insetBy(dx: 0.5, dy: 0.5),
+            xRadius: AgentCaptureMarkupLayout.imageRadius,
+            yRadius: AgentCaptureMarkupLayout.imageRadius
+        )
         imageBorder.lineWidth = 1
         imageBorder.stroke()
 
-        NSColor.white.withAlphaComponent(0.16).setStroke()
-        let shellBorder = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 12, yRadius: 12)
+        NSColor.white.withAlphaComponent(0.18).setStroke()
+        let shellBorder = NSBezierPath(
+            roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5),
+            xRadius: AgentCaptureMarkupLayout.chromeRadius,
+            yRadius: AgentCaptureMarkupLayout.chromeRadius
+        )
         shellBorder.lineWidth = 1
         shellBorder.stroke()
+    }
+
+    private func drawChromeRelief(in rect: NSRect) {
+        guard rect.width > 2, rect.height > 2 else { return }
+        NSColor.white.withAlphaComponent(0.018).setFill()
+        var y = rect.minY + 2
+        while y < rect.maxY - 1 {
+            NSRect(x: rect.minX + 1, y: y.rounded(.down), width: rect.width - 2, height: 1).fill()
+            y += 5
+        }
+
+        NSColor.black.withAlphaComponent(0.08).setFill()
+        y = rect.minY + 4
+        while y < rect.maxY - 1 {
+            NSRect(x: rect.minX + 1, y: y.rounded(.down), width: rect.width - 2, height: 1).fill()
+            y += 7
+        }
     }
 
     private func drawBrand(in rect: NSRect) {
@@ -935,9 +986,15 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         fill: NSColor,
         border: NSColor
     ) {
-        let path = NSBezierPath(roundedRect: rect, xRadius: 6, yRadius: 6)
+        let path = NSBezierPath(
+            roundedRect: rect,
+            xRadius: AgentCaptureMarkupLayout.controlRadius,
+            yRadius: AgentCaptureMarkupLayout.controlRadius
+        )
         fill.setFill()
         path.fill()
+        NSColor.white.withAlphaComponent(0.05).setFill()
+        NSRect(x: rect.minX + 1, y: rect.maxY - 1, width: rect.width - 2, height: 1).fill()
         border.setStroke()
         path.lineWidth = 1
         path.stroke()
@@ -1076,7 +1133,7 @@ private final class AgentCaptureMarkupDragHandleView: NSView {
         self.fileURLProvider = fileURLProvider
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = 17
+        layer?.cornerRadius = AgentCaptureMarkupLayout.controlRadius
         layer?.backgroundColor = NSColor(calibratedWhite: 0.09, alpha: 0.94).cgColor
         layer?.borderWidth = 1
         layer?.borderColor = NSColor.white.withAlphaComponent(0.16).cgColor
