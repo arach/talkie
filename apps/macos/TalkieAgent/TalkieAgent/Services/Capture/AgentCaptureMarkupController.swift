@@ -210,12 +210,6 @@ final class AgentCaptureMarkupController {
             onZoom: { [weak self] factor in
                 self?.zoomSurface(by: factor)
             },
-            onUndo: { [weak self] in
-                self?.overlay?.undo()
-            },
-            onRedo: { [weak self] in
-                self?.overlay?.redo()
-            },
             onDone: { [weak self] in
                 self?.overlay?.finish()
             },
@@ -641,8 +635,6 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
     private var imageRect: NSRect
     private let onDragDelta: (CGSize) -> Void
     private let onZoom: (CGFloat) -> Void
-    private let onUndo: () -> Void
-    private let onRedo: () -> Void
     private let onDone: () -> Void
     private let onCancel: () -> Void
     private var lastDragScreenPoint: NSPoint?
@@ -652,8 +644,6 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         imageRect: NSRect,
         onDragDelta: @escaping (CGSize) -> Void,
         onZoom: @escaping (CGFloat) -> Void,
-        onUndo: @escaping () -> Void,
-        onRedo: @escaping () -> Void,
         onDone: @escaping () -> Void,
         onCancel: @escaping () -> Void
     ) {
@@ -661,8 +651,6 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         self.imageRect = imageRect
         self.onDragDelta = onDragDelta
         self.onZoom = onZoom
-        self.onUndo = onUndo
-        self.onRedo = onRedo
         self.onDone = onDone
         self.onCancel = onCancel
         super.init(frame: .zero)
@@ -677,8 +665,6 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         addCursorRect(dragRegion, cursor: .openHand)
         addCursorRect(doneButtonRect, cursor: .pointingHand)
         addCursorRect(cancelButtonRect, cursor: .pointingHand)
-        addCursorRect(undoButtonRect, cursor: .pointingHand)
-        addCursorRect(redoButtonRect, cursor: .pointingHand)
         addCursorRect(zoomOutButtonRect, cursor: .pointingHand)
         addCursorRect(zoomInButtonRect, cursor: .pointingHand)
     }
@@ -687,14 +673,6 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         let point = convert(event.locationInWindow, from: nil)
         if cancelButtonRect.contains(point) {
             onCancel()
-            return
-        }
-        if undoButtonRect.contains(point) {
-            onUndo()
-            return
-        }
-        if redoButtonRect.contains(point) {
-            onRedo()
             return
         }
         if zoomOutButtonRect.contains(point) {
@@ -855,8 +833,7 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         ]
         let titleSize = (title as NSString).size(withAttributes: attrs)
         let titleX = markRect.maxX + 8
-        let nextControlX = undoButtonRect.minX
-        if titleX + titleSize.width + 12 < nextControlX {
+        if titleX + titleSize.width + 12 < rect.maxX {
             (title as NSString).draw(
                 at: NSPoint(x: titleX, y: rect.midY - 7),
                 withAttributes: attrs
@@ -869,20 +846,6 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
             rect: cancelButtonRect,
             title: "x",
             foreground: NSColor.white.withAlphaComponent(0.78),
-            fill: NSColor.white.withAlphaComponent(0.07),
-            border: NSColor.white.withAlphaComponent(0.14)
-        )
-        drawButton(
-            rect: undoButtonRect,
-            title: "Undo",
-            foreground: NSColor.white.withAlphaComponent(0.86),
-            fill: NSColor.white.withAlphaComponent(0.07),
-            border: NSColor.white.withAlphaComponent(0.14)
-        )
-        drawButton(
-            rect: redoButtonRect,
-            title: "Redo",
-            foreground: NSColor.white.withAlphaComponent(0.86),
             fill: NSColor.white.withAlphaComponent(0.07),
             border: NSColor.white.withAlphaComponent(0.14)
         )
@@ -1009,7 +972,7 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         return NSRect(
             x: left,
             y: title.minY,
-            width: max(1, undoButtonRect.minX - left - 8),
+            width: max(1, title.maxX - left - 8),
             height: title.height
         )
     }
@@ -1037,24 +1000,6 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
             x: 9,
             y: bounds.maxY - 33,
             width: 26,
-            height: 24
-        )
-    }
-
-    private var undoButtonRect: NSRect {
-        NSRect(
-            x: bounds.maxX - 90,
-            y: bounds.maxY - 33,
-            width: 36,
-            height: 24
-        )
-    }
-
-    private var redoButtonRect: NSRect {
-        NSRect(
-            x: bounds.maxX - 51,
-            y: bounds.maxY - 33,
-            width: 36,
             height: 24
         )
     }
