@@ -22,23 +22,6 @@
     startedAt: performance.now(),
   };
 
-  const modePresets = {
-    agent: {
-      color: "#D03A1C",
-      strokeWidth: 4,
-      stylePreset: "agent-instruction",
-      noteStyle: "sticky",
-      lineStyle: "solid",
-    },
-    demo: {
-      color: "#FFFFFF",
-      strokeWidth: 7,
-      stylePreset: "demo-callout",
-      noteStyle: "glass",
-      lineStyle: "glow",
-    },
-  };
-
   const noteStylePresets = {
     sticky: {
       id: "sticky",
@@ -215,10 +198,6 @@
       x: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
       y: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)),
     };
-  }
-
-  function currentPreset() {
-    return modePresets[state.mode] || modePresets.agent;
   }
 
   function currentNotePreset() {
@@ -1070,9 +1049,8 @@
     closeNoteEditor(true);
     const element = document.createElement("textarea");
     element.className = "note-editor";
-    element.dataset.mode = state.mode;
     element.dataset.noteStyle = state.noteStyle;
-    element.placeholder = state.mode === "demo" ? "Demo note" : "Note for agent";
+    element.placeholder = "Note";
     element.spellcheck = true;
     applyNotePresetToEditor(element, currentNotePreset());
     const editorLeft = Math.min(
@@ -1120,12 +1098,6 @@
         return;
       }
 
-      const mode = button.getAttribute("data-mode");
-      if (mode) {
-        setMode(mode);
-        return;
-      }
-
       const noteStyle = button.getAttribute("data-note-style");
       if (noteStyle) {
         setNoteStyle(noteStyle);
@@ -1168,9 +1140,6 @@
     if (!controls) return;
     controls.querySelectorAll(".tool").forEach((el) => {
       el.classList.toggle("active", el.getAttribute("data-tool") === state.tool);
-    });
-    controls.querySelectorAll(".mode").forEach((el) => {
-      el.classList.toggle("active", el.getAttribute("data-mode") === state.mode);
     });
     controls.querySelectorAll(".swatch").forEach((el) => {
       el.classList.toggle("active", el.getAttribute("data-color") === state.color);
@@ -1217,21 +1186,6 @@
     state.tool = tool;
     document.body.dataset.tool = tool;
     setStyleOpen(false);
-    syncToolbarState();
-  }
-
-  function setMode(mode) {
-    if (!modePresets[mode]) return;
-    closeNoteEditor(true);
-    state.mode = mode;
-    const preset = currentPreset();
-    state.color = preset.color;
-    state.strokeWidth = preset.strokeWidth;
-    state.noteStyle = preset.noteStyle;
-    state.lineStyle = preset.lineStyle;
-    document.body.dataset.mode = mode;
-    document.body.dataset.noteStyle = state.noteStyle;
-    document.body.dataset.lineStyle = state.lineStyle;
     syncToolbarState();
   }
 
@@ -1325,12 +1279,6 @@
     case "t":
       cycleNoteStyle();
       break;
-    case "1":
-      setMode("agent");
-      break;
-    case "2":
-      setMode("demo");
-      break;
     case "escape":
       clearToolChord();
       break;
@@ -1402,7 +1350,6 @@
     setTool,
     setColor,
     setStrokeWidth,
-    setMode,
     setNoteStyle,
     setLineStyle,
     setStyleOpen,

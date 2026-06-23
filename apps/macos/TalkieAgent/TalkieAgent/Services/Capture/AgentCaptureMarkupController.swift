@@ -21,6 +21,8 @@ final class AgentCaptureMarkupController {
     private var backgroundPanel: NSPanel?
     private var dragHandlePanel: NSPanel?
     private var dragExportURLs: [URL] = []
+    private var currentPlacement: AgentCaptureMarkupPlacement?
+    private var activeImageSize: CGSize?
 
     private init() {}
 
@@ -69,6 +71,8 @@ final class AgentCaptureMarkupController {
         }
 
         dismiss()
+        currentPlacement = placement
+        activeImageSize = CGSize(width: sourceImage.width, height: sourceImage.height)
         showBackground(image: sourceImage, placement: placement)
 
         let overlay = LiveCaptureMarkupOverlayController()
@@ -99,6 +103,8 @@ final class AgentCaptureMarkupController {
     func dismiss() {
         overlay?.dismiss(discardLayers: true)
         overlay = nil
+        currentPlacement = nil
+        activeImageSize = nil
         hideDragHandle()
         hideBackground()
         cleanupDragExports()
@@ -113,6 +119,8 @@ final class AgentCaptureMarkupController {
         hideBackground()
         hideDragHandle()
         overlay = nil
+        currentPlacement = nil
+        activeImageSize = nil
 
         Task { @MainActor in
             await bakeIfNeeded(
@@ -129,6 +137,8 @@ final class AgentCaptureMarkupController {
         hideBackground()
         hideDragHandle()
         overlay = nil
+        currentPlacement = nil
+        activeImageSize = nil
         log.info("Agent quick markup cancelled", detail: item.fileURL.lastPathComponent)
     }
 
@@ -194,14 +204,12 @@ final class AgentCaptureMarkupController {
     private func showBackground(image: CGImage, placement: AgentCaptureMarkupPlacement) {
         let view = AgentCaptureMarkupBackgroundView(
             image: NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height)),
-            imageRect: NSRect(
-                x: placement.imageRect.minX - placement.surfaceRect.minX,
-                y: placement.imageRect.minY - placement.surfaceRect.minY,
-                width: placement.imageRect.width,
-                height: placement.imageRect.height
-            ),
+            imageRect: Self.relativeImageRect(for: placement),
             onDragDelta: { [weak self] delta in
                 self?.moveSurface(by: delta)
+            },
+            onZoom: { [weak self] factor in
+                self?.zoomSurface(by: factor)
             },
             onDone: { [weak self] in
                 self?.overlay?.finish()
@@ -238,6 +246,9 @@ final class AgentCaptureMarkupController {
         Self.move(backgroundPanel, by: delta)
         overlay?.moveBy(delta)
         Self.move(dragHandlePanel, by: delta)
+        if let placement = currentPlacement {
+            currentPlacement = placement.offsetBy(delta)
+        }
     }
 
     private static func move(_ panel: NSPanel?, by delta: CGSize) {
@@ -254,6 +265,32 @@ final class AgentCaptureMarkupController {
         backgroundPanel = nil
     }
 
+    private func zoomSurface(by factor: CGFloat) {
+        guard let placement = currentPlacement,
+              let imageSize = activeImageSize else {
+            return
+        }
+
+        applyPlacement(Self.zoomedPlacement(
+            from: placement,
+            imageSize: imageSize,
+            factor: factor
+        ))
+    }
+
+    private func applyPlacement(_ placement: AgentCaptureMarkupPlacement) {
+        currentPlacement = placement
+
+        backgroundPanel?.setFrame(placement.surfaceRect, display: true)
+        if let backgroundView = backgroundPanel?.contentView as? AgentCaptureMarkupBackgroundView {
+            backgroundView.frame = NSRect(origin: .zero, size: placement.surfaceRect.size)
+            backgroundView.updateImageRect(Self.relativeImageRect(for: placement))
+        }
+
+        overlay?.setFrame(placement.imageRect)
+        dragHandlePanel?.setFrame(Self.dragHandleFrame(for: placement.surfaceRect), display: true)
+    }
+
     private func showDragHandle(
         item: AgentLiveTrayItem,
         sourceImage: CGImage,
@@ -262,12 +299,7 @@ final class AgentCaptureMarkupController {
         hideDragHandle()
 
         let size = NSSize(width: 132, height: 34)
-        let handleFrame = NSRect(
-            x: (frame.midX - size.width / 2).rounded(),
-            y: (frame.minY + 14).rounded(),
-            width: size.width,
-            height: size.height
-        )
+        let handleFrame = Self.dragHandleFrame(for: frame)
         let view = AgentCaptureMarkupDragHandleView(
             fileURLProvider: { [weak self] in
                 self?.dragURL(item: item, sourceImage: sourceImage)
@@ -293,6 +325,16 @@ final class AgentCaptureMarkupController {
         panel.sharingType = .none
         panel.orderFrontRegardless()
         dragHandlePanel = panel
+    }
+
+    private static func dragHandleFrame(for frame: CGRect) -> NSRect {
+        let size = NSSize(width: 132, height: 34)
+        return NSRect(
+            x: (frame.midX - size.width / 2).rounded(),
+            y: (frame.minY + 14).rounded(),
+            width: size.width,
+            height: size.height
+        )
     }
 
     private func hideDragHandle() {
@@ -442,6 +484,53 @@ final class AgentCaptureMarkupController {
         )
     }
 
+    private static func relativeImageRect(for placement: AgentCaptureMarkupPlacement) -> NSRect {
+        NSRect(
+            x: placement.imageRect.minX - placement.surfaceRect.minX,
+            y: placement.imageRect.minY - placement.surfaceRect.minY,
+            width: placement.imageRect.width,
+            height: placement.imageRect.height
+        )
+    }
+
+    private static func zoomedPlacement(
+        from placement: AgentCaptureMarkupPlacement,
+        imageSize: CGSize,
+        factor: CGFloat
+    ) -> AgentCaptureMarkupPlacement {
+        let visible = placement.screen.visibleFrame.insetBy(dx: 18, dy: 36)
+        let chromeWidth = AgentCaptureMarkupLayout.edgePadding * 2
+        let chromeHeight = AgentCaptureMarkupLayout.edgePadding * 2 + AgentCaptureMarkupLayout.titlebarHeight
+        let maxImageWidth = max(1, visible.width - chromeWidth)
+        let maxImageHeight = max(1, visible.height - chromeHeight)
+        let maxScale = max(0.01, min(maxImageWidth / max(1, imageSize.width), maxImageHeight / max(1, imageSize.height)))
+        let minScale = min(
+            maxScale,
+            max(220 / max(1, imageSize.width), 150 / max(1, imageSize.height))
+        )
+        let currentScale = placement.imageRect.width / max(1, imageSize.width)
+        let nextScale = clamp(currentScale * factor, min: minScale, max: maxScale)
+        let imageWidth = imageSize.width * nextScale
+        let imageHeight = imageSize.height * nextScale
+        let width = imageWidth + chromeWidth
+        let height = imageHeight + chromeHeight
+        let center = NSPoint(x: placement.surfaceRect.midX, y: placement.surfaceRect.midY)
+        let x = clamp(center.x - width / 2, min: visible.minX, max: visible.maxX - width)
+        let y = clamp(center.y - height / 2, min: visible.minY, max: visible.maxY - height)
+        let surfaceRect = CGRect(
+            x: x.rounded(),
+            y: y.rounded(),
+            width: width.rounded(),
+            height: height.rounded()
+        )
+        let imageRect = aspectFitRect(imageSize: imageSize, in: contentRect(in: surfaceRect))
+        return AgentCaptureMarkupPlacement(
+            screen: placement.screen,
+            surfaceRect: surfaceRect,
+            imageRect: imageRect
+        )
+    }
+
     private static func aspectFitRect(imageSize: CGSize, in rect: CGRect) -> CGRect {
         let ratio = max(0.05, imageSize.width / max(1, imageSize.height))
         var width = rect.width
@@ -501,11 +590,20 @@ private struct AgentCaptureMarkupPlacement {
     let screen: NSScreen
     let surfaceRect: CGRect
     let imageRect: CGRect
+
+    func offsetBy(_ delta: CGSize) -> AgentCaptureMarkupPlacement {
+        AgentCaptureMarkupPlacement(
+            screen: screen,
+            surfaceRect: surfaceRect.offsetBy(dx: delta.width, dy: delta.height),
+            imageRect: imageRect.offsetBy(dx: delta.width, dy: delta.height)
+        )
+    }
 }
 
 private enum AgentCaptureMarkupLayout {
     static let titlebarHeight: CGFloat = 34
     static let edgePadding: CGFloat = 8
+    static let zoomStep: CGFloat = 1.14
 }
 
 private final class AgentCaptureMarkupDragHandlePanel: NSPanel {
@@ -515,8 +613,9 @@ private final class AgentCaptureMarkupDragHandlePanel: NSPanel {
 
 private final class AgentCaptureMarkupBackgroundView: NSView {
     private let image: NSImage
-    private let imageRect: NSRect
+    private var imageRect: NSRect
     private let onDragDelta: (CGSize) -> Void
+    private let onZoom: (CGFloat) -> Void
     private let onDone: () -> Void
     private let onCancel: () -> Void
     private var lastDragScreenPoint: NSPoint?
@@ -525,12 +624,14 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         image: NSImage,
         imageRect: NSRect,
         onDragDelta: @escaping (CGSize) -> Void,
+        onZoom: @escaping (CGFloat) -> Void,
         onDone: @escaping () -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.image = image
         self.imageRect = imageRect
         self.onDragDelta = onDragDelta
+        self.onZoom = onZoom
         self.onDone = onDone
         self.onCancel = onCancel
         super.init(frame: .zero)
@@ -545,16 +646,26 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         addCursorRect(dragRegion, cursor: .openHand)
         addCursorRect(doneButtonRect, cursor: .pointingHand)
         addCursorRect(cancelButtonRect, cursor: .pointingHand)
+        addCursorRect(zoomOutButtonRect, cursor: .pointingHand)
+        addCursorRect(zoomInButtonRect, cursor: .pointingHand)
     }
 
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        if doneButtonRect.contains(point) {
-            onDone()
-            return
-        }
         if cancelButtonRect.contains(point) {
             onCancel()
+            return
+        }
+        if zoomOutButtonRect.contains(point) {
+            onZoom(1 / AgentCaptureMarkupLayout.zoomStep)
+            return
+        }
+        if zoomInButtonRect.contains(point) {
+            onZoom(AgentCaptureMarkupLayout.zoomStep)
+            return
+        }
+        if doneButtonRect.contains(point) {
+            onDone()
             return
         }
         guard dragRegion.contains(point) else {
@@ -575,6 +686,12 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
 
     override func mouseUp(with event: NSEvent) {
         lastDragScreenPoint = nil
+    }
+
+    func updateImageRect(_ imageRect: NSRect) {
+        self.imageRect = imageRect
+        needsDisplay = true
+        window?.invalidateCursorRects(for: self)
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -622,7 +739,7 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
     }
 
     private func drawBrand(in rect: NSRect) {
-        let markRect = NSRect(x: 12, y: rect.midY - 6, width: 12, height: 12)
+        let markRect = NSRect(x: cancelButtonRect.maxX + 10, y: rect.midY - 6, width: 12, height: 12)
         let mark = NSBezierPath(roundedRect: markRect, xRadius: 3, yRadius: 3)
         NSColor(calibratedRed: 0.49, green: 0.55, blue: 1.0, alpha: 0.96).setFill()
         mark.fill()
@@ -657,26 +774,43 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
             .foregroundColor: NSColor.white.withAlphaComponent(0.42),
         ]
         let hintSize = (hint as NSString).size(withAttributes: hintAttrs)
-        (hint as NSString).draw(
-            at: NSPoint(x: max(markRect.maxX + 110, cancelButtonRect.minX - hintSize.width - 12), y: rect.midY - 6),
-            withAttributes: hintAttrs
-        )
+        let hintX = min(max(markRect.maxX + 110, zoomOutButtonRect.minX - hintSize.width - 12), zoomOutButtonRect.minX - hintSize.width - 12)
+        if hintX > markRect.maxX + 76 {
+            (hint as NSString).draw(
+                at: NSPoint(x: hintX, y: rect.midY - 6),
+                withAttributes: hintAttrs
+            )
+        }
     }
 
     private func drawChromeButtons() {
+        drawButton(
+            rect: cancelButtonRect,
+            title: "x",
+            foreground: NSColor.white.withAlphaComponent(0.78),
+            fill: NSColor.white.withAlphaComponent(0.07),
+            border: NSColor.white.withAlphaComponent(0.14)
+        )
+        drawButton(
+            rect: zoomOutButtonRect,
+            title: "-",
+            foreground: NSColor.white.withAlphaComponent(0.74),
+            fill: NSColor.white.withAlphaComponent(0.06),
+            border: NSColor.white.withAlphaComponent(0.13)
+        )
+        drawButton(
+            rect: zoomInButtonRect,
+            title: "+",
+            foreground: NSColor.white.withAlphaComponent(0.78),
+            fill: NSColor.white.withAlphaComponent(0.06),
+            border: NSColor.white.withAlphaComponent(0.13)
+        )
         drawButton(
             rect: doneButtonRect,
             title: "Done",
             foreground: NSColor.white.withAlphaComponent(0.92),
             fill: NSColor(calibratedRed: 0.38, green: 0.47, blue: 1.0, alpha: 0.84),
             border: NSColor.white.withAlphaComponent(0.20)
-        )
-        drawButton(
-            rect: cancelButtonRect,
-            title: "Esc / X",
-            foreground: NSColor.white.withAlphaComponent(0.78),
-            fill: NSColor.white.withAlphaComponent(0.08),
-            border: NSColor.white.withAlphaComponent(0.14)
         )
     }
 
@@ -707,10 +841,11 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
 
     private var dragRegion: NSRect {
         let title = titleRect
+        let left = cancelButtonRect.maxX + 4
         return NSRect(
-            x: title.minX,
+            x: left,
             y: title.minY,
-            width: max(1, doneButtonRect.minX - title.minX - 8),
+            width: max(1, zoomOutButtonRect.minX - left - 8),
             height: title.height
         )
     }
@@ -726,7 +861,7 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
 
     private var doneButtonRect: NSRect {
         NSRect(
-            x: max(12, bounds.maxX - 150),
+            x: max(104, bounds.maxX - 70),
             y: bounds.maxY - 27,
             width: 58,
             height: 21
@@ -735,9 +870,27 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
 
     private var cancelButtonRect: NSRect {
         NSRect(
-            x: max(12, bounds.maxX - 86),
+            x: 10,
+            y: bounds.maxY - 28,
+            width: 24,
+            height: 22
+        )
+    }
+
+    private var zoomOutButtonRect: NSRect {
+        NSRect(
+            x: doneButtonRect.minX - 60,
             y: bounds.maxY - 27,
-            width: 62,
+            width: 24,
+            height: 21
+        )
+    }
+
+    private var zoomInButtonRect: NSRect {
+        NSRect(
+            x: doneButtonRect.minX - 31,
+            y: bounds.maxY - 27,
+            width: 24,
             height: 21
         )
     }

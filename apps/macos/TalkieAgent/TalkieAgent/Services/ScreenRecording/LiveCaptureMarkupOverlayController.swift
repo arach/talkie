@@ -171,6 +171,13 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         }
     }
 
+    func setFrame(_ frame: CGRect) {
+        let next = frame.standardized
+        guard next.width >= 8, next.height >= 8 else { return }
+        panel?.setFrame(next, display: true)
+        webView?.frame = NSRect(origin: .zero, size: next.size)
+    }
+
     func setTool(_ tool: String) {
         selectedTool = tool
         evaluate("window.talkieLiveMarkup && window.talkieLiveMarkup.setTool(\(Self.jsString(tool)));")
