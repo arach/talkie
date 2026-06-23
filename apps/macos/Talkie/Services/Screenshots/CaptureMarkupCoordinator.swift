@@ -70,8 +70,9 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
         webSession = session
         self.panel = panel
 
-        panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        panel.orderFrontRegardless()
+        panel.makeKeyAndOrderFront(nil)
 
         session.start(imageURL: imageURL, document: doc, instruction: instruction)
         SettingsManager.shared.isMarkupSessionActive = true
@@ -487,7 +488,7 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
     private func makePanel() -> NSPanel {
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 1180, height: 720),
-            styleMask: [.titled, .closable, .resizable, .nonactivatingPanel],
+            styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
         )

@@ -1418,7 +1418,7 @@
     }
     if (isTypingTarget(event.target)) return;
     const key = event.key.toLowerCase();
-    if (event.key === "Escape") {
+    if (event.key === "Escape" || key === "x") {
       post("liveMarkup.cancel", {});
     } else if (event.key === "Enter") {
       post("liveMarkup.done", {

@@ -37,6 +37,7 @@ final class CaptureBarController {
         let showCameraOption = options.showCameraOption && FeatureFlags.shared.enableCameraBubble
         let hasTrayItems = options.showTrayOption && !allItems.isEmpty
         let hasSelectionItems = options.showSelectionOption && SelectionTray.shared.isNotEmpty
+        let showMarkupOption = options.showMarkupOption
         let trayCount = allItems.count
 
         return await withCheckedContinuation { continuation in
@@ -55,6 +56,7 @@ final class CaptureBarController {
                 showCameraOption: showCameraOption,
                 showTrayOption: hasTrayItems,
                 showSelectionOption: hasSelectionItems,
+                showMarkupOption: showMarkupOption,
                 trayCount: trayCount
             )
 
@@ -107,23 +109,29 @@ final class CaptureBarController {
                 case "a":
                     timeout.cancel()
                     switch currentMode {
-                    case .screenshot: resume(.screenshot(.region))
+                    case .screenshot: resume(self.screenshotResult(for: .region))
                     case .video:      resume(.screenRecord(.region))
                     }
 
                 case "s":
                     timeout.cancel()
                     switch currentMode {
-                    case .screenshot: resume(.screenshot(.fullscreen))
+                    case .screenshot: resume(self.screenshotResult(for: .fullscreen))
                     case .video:      resume(.screenRecord(.fullscreen))
                     }
 
                 case "d":
                     timeout.cancel()
                     switch currentMode {
-                    case .screenshot: resume(.screenshot(.window))
+                    case .screenshot: resume(self.screenshotResult(for: .window))
                     case .video:      resume(.screenRecord(.window))
                     }
+
+                case "m":
+                    if showMarkupOption, currentMode == .screenshot {
+                        self.panel.state.markupDestinationEnabled.toggle()
+                    }
+                    resetTimeout()
 
                 case "c":
                     if showCameraOption {
@@ -174,7 +182,7 @@ final class CaptureBarController {
                     timeout.cancel()
                     let selected = self.panel.state.selectedCaptureMode
                     switch self.panel.state.mode {
-                    case .screenshot: resume(.screenshot(selected))
+                    case .screenshot: resume(self.screenshotResult(for: selected))
                     case .video:      resume(.screenRecord(selected))
                     }
                 }
@@ -200,6 +208,10 @@ final class CaptureBarController {
     }
 
     // MARK: - Private
+
+    private func screenshotResult(for mode: CaptureMode) -> CaptureBarResult {
+        panel.state.markupDestinationEnabled ? .screenshotMarkup(mode) : .screenshot(mode)
+    }
 
     private func tearDown() {
         CaptureChord.isActive = false

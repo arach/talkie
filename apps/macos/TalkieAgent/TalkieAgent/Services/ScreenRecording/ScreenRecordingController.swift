@@ -559,6 +559,7 @@ private final class ScreenRecordingCountdownController {
             showCameraOption: false,
             showTrayOption: false,
             showSelectionOption: false,
+            showMarkupOption: false,
             trayCount: 0,
             palette: WallpaperLuminanceSampler.fallbackPalette()
         )

@@ -300,7 +300,11 @@ final class ConsoleTerminalCaptureController {
             switch result {
             case .screenshot(let mode):
                 await captureSelectedScreenshot(mode: mode, sendTo: session)
+            case .screenshotMarkup(let mode):
+                await captureSelectedScreenshot(mode: mode, sendTo: session)
             case .screenshotRegion(let rect):
+                await captureSelectedScreenshot(mode: .region, preselectedRegion: rect, sendTo: session)
+            case .screenshotMarkupRegion(let rect):
                 await captureSelectedScreenshot(mode: .region, preselectedRegion: rect, sendTo: session)
             case .screenRecord(let mode):
                 await ScreenRecordingController.shared.startRecording(mode: mode)

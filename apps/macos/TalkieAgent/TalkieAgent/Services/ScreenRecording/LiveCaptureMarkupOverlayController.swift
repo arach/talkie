@@ -155,6 +155,22 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         }
     }
 
+    func moveBy(_ delta: CGSize) {
+        guard delta.width != 0 || delta.height != 0 else { return }
+        if let panel {
+            panel.setFrameOrigin(NSPoint(
+                x: panel.frame.minX + delta.width,
+                y: panel.frame.minY + delta.height
+            ))
+        }
+        if let passthroughControlsPanel {
+            passthroughControlsPanel.setFrameOrigin(NSPoint(
+                x: passthroughControlsPanel.frame.minX + delta.width,
+                y: passthroughControlsPanel.frame.minY + delta.height
+            ))
+        }
+    }
+
     func setTool(_ tool: String) {
         selectedTool = tool
         evaluate("window.talkieLiveMarkup && window.talkieLiveMarkup.setTool(\(Self.jsString(tool)));")

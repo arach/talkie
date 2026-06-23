@@ -8,7 +8,7 @@
 //  (no physical notch required) since it positions itself at top-center.
 //
 //  This is the minimal recreation that replaces the legacy Talkie notch
-//  island. Capture review and markup still defer to launching Talkie.
+//  island. Capture review uses Agent's lightweight in-place markup surface.
 //
 
 import AppKit
@@ -232,20 +232,7 @@ final class CaptureIslandController {
         }
         cancelDismissTimer()
 
-        var components = URLComponents()
-        components.scheme = TalkieEnvironment.current.talkieURLScheme
-        components.host = "capture"
-        components.path = "/markup"
-        components.queryItems = [
-            URLQueryItem(name: "path", value: item.fileURL.path),
-        ]
-
-        guard let url = components.url else {
-            scheduleDismiss()
-            return
-        }
-
-        TalkieAppOpener.open(url)
+        AgentCaptureMarkupController.shared.open(item: item)
         dismiss()
     }
 }
@@ -433,7 +420,7 @@ private final class CaptureIslandView: NSView {
         guard !didBeginDrag, pressOrigin != nil else { return }
         let point = convert(event.locationInWindow, from: nil)
         guard thumbRect.contains(point) else { return }
-        // A tap (no drag): open the capture in Talkie for review.
+        // A tap (no drag): open the capture in Agent's quick markup surface.
         onActivate(item)
     }
 

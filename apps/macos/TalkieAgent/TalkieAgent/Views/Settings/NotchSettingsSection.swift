@@ -3,9 +3,8 @@
 //  TalkieAgent
 //
 //  Settings for the agent-owned capture island — the draggable preview that
-//  drops in at the top of the screen after a screenshot/clip. Heavy actions
-//  (markup, full tray) deliberately defer to launching Talkie; the island
-//  stays minimal: preview + drag-out.
+//  drops in at the top of the screen after a screenshot/clip. Markup stays
+//  Agent-local; full tray browsing remains in Talkie.
 //
 
 import SwiftUI
@@ -101,10 +100,10 @@ struct NotchSettingsSection: View {
                         .frame(width: 20)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Markup & tray live in Talkie")
+                        Text("Markup opens in Agent")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(TalkieTheme.textSecondary)
-                        Text("The island stays intentionally minimal — preview and drag-out. To annotate a capture or browse the full tray, open Talkie. This replaces the old Talkie notch island, which is now retired.")
+                        Text("Tap a screenshot preview to annotate it in place, then drag the saved PNG anywhere. Open Talkie when you want the full tray.")
                             .font(.system(size: 9))
                             .foregroundColor(TalkieTheme.textTertiary)
                             .fixedSize(horizontal: false, vertical: true)

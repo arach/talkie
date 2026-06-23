@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private var cachedAgentMenuActions: AgentMenuActions?
     private var agentMenuPrewarmTask: Task<Void, Never>?
     private var agentMenuRefreshTask: Task<Void, Never>?
+    private var modelPreloadTask: Task<Void, Never>?
     private var agentController: AgentController!
     private let speechPlaybackController = SelectionSpeechPlaybackController.shared
     private let selectionFeedbackController = SelectionFeedbackOverlayController.shared
@@ -32,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private let composeHotKeyManager = HotKeyManager(signature: "\(sig)CO", hotkeyID: 7)  // Compose with selection
     private let speakSelectionHotKeyManager = HotKeyManager(signature: "\(sig)SP", hotkeyID: 14)  // Speak selected text
     private let screenshotHotKeyManager = HotKeyManager(signature: "\(sig)SS", hotkeyID: 8)  // Screenshot during recording
+    private let markupScreenshotHotKeyManager = HotKeyManager(signature: "\(sig)SM", hotkeyID: 21)  // Screenshot with markup destination
 
     // Direct screenshot shortcuts. Defaults intentionally avoid macOS screenshot shortcuts.
     private let ssFullscreenHotKey = HotKeyManager(signature: "\(sig)S3", hotkeyID: 9)
@@ -214,9 +216,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         // Set controller reference in XPC service for remote toggle
         TalkieAgentXPCService.shared.agentController = agentController
 
-        // Pre-load the embedded engine model
-        await preloadModel(settings: settings)
-
         // Setup UI wiring
         setupStateObservation()
         setupHotkeys()
@@ -230,6 +229,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         refreshAgentMenuCacheAndPopover(reason: "post-boot")
 
         log.info("Boot complete — hotkey change observers active")
+
+        // Pre-load the embedded engine after hotkeys/UI are responsive. Model
+        // loading can take a while on a clean launch, but shortcuts should not
+        // be gated on warmup.
+        modelPreloadTask?.cancel()
+        modelPreloadTask = Task { @MainActor [weak self, settings] in
+            await self?.preloadModel(settings: settings)
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -244,6 +251,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }
         agentMenuPrewarmTask?.cancel()
         agentMenuRefreshTask?.cancel()
+        modelPreloadTask?.cancel()
         AgentCameraBubbleController.shared.teardown()
         ScreenRecordingService.shared.teardown()
     }
@@ -1221,7 +1229,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     private static func migrateReservedCaptureDefaultsIfNeeded() {
         let legacyMigrationKey = "hotkeyCapture.safeDefaultsMigration.v1"
-        let migrationKey = "hotkeyCapture.safeDefaultsMigration.v2"
+        let previousMigrationKey = "hotkeyCapture.safeDefaultsMigration.v2"
+        let migrationKey = "hotkeyCapture.safeDefaultsMigration.v3"
         guard !TalkieSharedSettings.bool(forKey: migrationKey) else { return }
 
         let oldCmdShift = UInt32(cmdKey | shiftKey)
@@ -1232,6 +1241,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             ("hotkeyCapture.window", .init(keyCode: 22, modifiers: oldCmdShift), .init(keyCode: 22, modifiers: hyperModifiers)),
             ("hotkeyCapture.trayShelf", .init(keyCode: 17, modifiers: oldCmdShift), .init(keyCode: 17, modifiers: hyperModifiers)),
             (AgentSettingsKey.pasteLastScreenshotHotkey, .init(keyCode: 9, modifiers: oldCmdShift), .init(keyCode: 35, modifiers: hyperModifiers)),
+            ("hotkeyCapture.desktopMagnifier", .init(keyCode: 46, modifiers: hyperModifiers), .init(keyCode: 6, modifiers: hyperModifiers)),
         ]
 
         let decoder = JSONDecoder()
@@ -1251,6 +1261,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }
 
         TalkieSharedSettings.set(true, forKey: legacyMigrationKey)
+        TalkieSharedSettings.set(true, forKey: previousMigrationKey)
         TalkieSharedSettings.set(true, forKey: migrationKey)
 
         if !migrated.isEmpty {
@@ -1399,6 +1410,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }
         log.info("Screenshot hotkey registered: keyCode=\(captureChord.keyCode) modifiers=\(captureChord.modifiers)")
 
+        let markupCaptureChord = Self.loadHotkeyConfig(
+            key: AgentSettingsKey.markupCaptureChordHotkey,
+            fallbackKeyCode: 46,
+            fallbackModifiers: Self.hyperModifiers
+        )
+        markupScreenshotHotKeyManager.registerHotKey(
+            modifiers: markupCaptureChord.modifiers,
+            keyCode: markupCaptureChord.keyCode
+        ) { [weak self] _ in
+            Task { @MainActor in
+                await self?.handleAgentCaptureChord(initialMode: .screenshot, startsMarkupEnabled: true)
+            }
+        }
+        log.info("Markup screenshot hotkey registered: keyCode=\(markupCaptureChord.keyCode) modifiers=\(markupCaptureChord.modifiers)")
+
         screenRecordHotKeyManager.registerHotKey(
             modifiers: screenRecordChord.modifiers,
             keyCode: screenRecordChord.keyCode
@@ -1458,13 +1484,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         let magnifier = Self.loadHotkeyConfig(
             key: "hotkeyCapture.desktopMagnifier",
-            fallbackKeyCode: 46,                  // M - freeze a source region into a movable magnifier
+            fallbackKeyCode: 6,                   // Z - freeze a source region into a movable magnifier
             fallbackModifiers: Self.hyperModifiers
         )
-        desktopMagnifierHotKey.registerHotKey(modifiers: magnifier.modifiers, keyCode: magnifier.keyCode) { [weak self] _ in
-            Task { @MainActor in self?.startDesktopMagnifier() }
+        if magnifier.keyCode == markupCaptureChord.keyCode,
+           magnifier.modifiers == markupCaptureChord.modifiers {
+            log.warning("Desktop magnifier hotkey skipped because it conflicts with Markup capture")
+        } else {
+            desktopMagnifierHotKey.registerHotKey(modifiers: magnifier.modifiers, keyCode: magnifier.keyCode) { [weak self] _ in
+                Task { @MainActor in self?.startDesktopMagnifier() }
+            }
+            log.info("Desktop magnifier hotkey registered: keyCode=\(magnifier.keyCode) modifiers=\(magnifier.modifiers)")
         }
-        log.info("Desktop magnifier hotkey registered: keyCode=\(magnifier.keyCode) modifiers=\(magnifier.modifiers)")
 
         let pasteChord = Self.loadHotkeyConfig(
             key: AgentSettingsKey.pasteChordHotkey,
@@ -1547,7 +1578,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         DesktopMagnifierController.shared.startSelection()
     }
 
-    private func handleAgentCaptureChord(initialMode: CaptureBarMode) async {
+    private func handleAgentCaptureChord(
+        initialMode: CaptureBarMode,
+        startsMarkupEnabled: Bool = false
+    ) async {
         if initialMode == .video && ScreenRecordingController.shared.state == .recording {
             await ScreenRecordingController.shared.stopRecording()
             return
@@ -1556,6 +1590,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         guard !isAgentCaptureChordActive else { return }
         isAgentCaptureChordActive = true
         defer { isAgentCaptureChordActive = false }
+
+        if startsMarkupEnabled {
+            TalkieSharedSettings.set(true, forKey: CaptureDestinationSettings.markupEnabled)
+            log.info("Markup capture destination enabled from hotkey")
+        }
 
         let previousApp = NSWorkspace.shared.frontmostApplication
         if let previousApp, previousApp.bundleIdentifier != Bundle.main.bundleIdentifier {
@@ -1582,8 +1621,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         switch result {
         case .screenshot(let mode):
             _ = await executeAgentScreenshotCapture(mode: mode)
+        case .screenshotMarkup(let mode):
+            _ = await executeAgentScreenshotCapture(mode: mode, opensMarkup: true)
         case .screenshotRegion(let rect):
             _ = await executeAgentScreenshotCapture(mode: .region, preselectedRegion: rect)
+        case .screenshotMarkupRegion(let rect):
+            _ = await executeAgentScreenshotCapture(mode: .region, preselectedRegion: rect, opensMarkup: true)
         case .screenRecord(let mode):
             await ScreenRecordingController.shared.startRecording(mode: mode)
         case .toggleCamera:
@@ -1638,7 +1681,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     @discardableResult
     private func executeAgentScreenshotCapture(
         mode: CaptureMode,
-        preselectedRegion: CGRect? = nil
+        preselectedRegion: CGRect? = nil,
+        opensMarkup: Bool = false
     ) async -> Bool {
         // The ink overlay sits above the capture's own selection UI and is key,
         // so step it aside while we capture — otherwise the crosshair is
@@ -1732,15 +1776,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 displayName: result.displayName,
                 fileURL: stored.fileURL
             )
-            CaptureIslandController.shared.presentImmediate(
-                item,
-                near: screenshotPreviewAnchor(for: result)
-            )
+            if opensMarkup {
+                openMarkupForAgentCapture(item, captureRect: result.captureRect)
+            } else {
+                CaptureIslandController.shared.presentImmediate(
+                    item,
+                    near: screenshotPreviewAnchor(for: result)
+                )
+            }
             return true
         } catch {
             log.error("Agent screenshot tray write failed: \(error.localizedDescription)")
             return recordedLive
         }
+    }
+
+    private func openMarkupForAgentCapture(_ item: AgentLiveTrayItem, captureRect: CGRect?) {
+        log.info("Opening agent screenshot in quick markup", detail: item.fileURL.lastPathComponent)
+        AgentCaptureMarkupController.shared.open(item: item, captureRect: captureRect)
     }
 
     private func screenshotPreviewAnchor(for result: TalkieKit.CaptureResult) -> NSPoint {
@@ -2036,6 +2089,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     private func unregisterCaptureHotkeys() {
         screenshotHotKeyManager.unregisterAll()
+        markupScreenshotHotKeyManager.unregisterAll()
         screenRecordHotKeyManager.unregisterAll()
         pasteChordHotKeyManager.unregisterAll()
         ssFullscreenHotKey.unregisterAll()
@@ -2089,6 +2143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         if TalkieSharedSettings.bool(forKey: AgentSettingsKey.featureCaptureEnabled) {
             managers.append(("Screenshot Chord", screenshotHotKeyManager))
+            managers.append(("Markup Screenshot Chord", markupScreenshotHotKeyManager))
             managers.append(("Screen Record", screenRecordHotKeyManager))
             managers.append(("Paste Chord", pasteChordHotKeyManager))
             managers.append(("Hyper+3 Fullscreen", ssFullscreenHotKey))
@@ -2097,7 +2152,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             managers.append(("Hyper+6 Window", ssWindowHotKey))
             managers.append(("Hyper+T Shelf", ssShelfHotKey))
             managers.append(("Hyper+P Paste Last Screenshot", pasteLastScreenshotHotKey))
-            managers.append(("Hyper+M Desktop Magnifier", desktopMagnifierHotKey))
+            managers.append(("Hyper+Z Desktop Magnifier", desktopMagnifierHotKey))
         }
 
         if pttEnabled {

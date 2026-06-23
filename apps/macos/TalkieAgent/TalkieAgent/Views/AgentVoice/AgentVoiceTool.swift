@@ -129,8 +129,8 @@ enum AgentVoiceToolCatalog {
             "function": [
                 "name": "capture_markup_open",
                 "description": """
-                Open Talkie's agentic screenshot markup bay for an image file on disk. \
-                Optionally pass a natural-language instruction for the agent to apply markup.
+                Open TalkieAgent's lightweight screenshot markup surface for an image file on disk. \
+                The optional instruction is accepted for compatibility; markup is currently manual.
                 """,
                 "parameters": [
                     "type": "object",
@@ -174,23 +174,7 @@ enum AgentVoiceToolExecutor {
         guard let path = arguments["path"] as? String, !path.isEmpty else {
             throw AgentVoiceToolError.missingArgs
         }
-        let instruction = arguments["instruction"] as? String
-        var components = URLComponents()
-        components.scheme = TalkieEnvironment.current.talkieURLScheme
-        components.host = "capture"
-        components.path = "/markup"
-        var query: [URLQueryItem] = [
-            URLQueryItem(name: "path", value: path),
-        ]
-        if let instruction, !instruction.isEmpty {
-            query.append(URLQueryItem(name: "instruction", value: instruction))
-        }
-        components.queryItems = query
-        guard let url = components.url else {
-            throw AgentVoiceToolError.execFailed("Invalid capture markup URL")
-        }
-
-        let display = "\(TalkieEnvironment.current.talkieURLScheme)://capture/markup path=\(path)"
+        let display = "agent-capture-markup path=\(path)"
         var invocation = AgentVoiceToolInvocation(
             toolName: "capture_markup_open",
             displayCommand: display,
@@ -199,14 +183,14 @@ enum AgentVoiceToolExecutor {
 
         let started = Date()
         let opened = await MainActor.run {
-            TalkieAppOpener.open(url)
+            AgentCaptureMarkupController.shared.open(fileURL: URL(fileURLWithPath: path))
         }
         invocation.durationMs = Int(Date().timeIntervalSince(started) * 1000)
         if opened {
             invocation.status = .done
-            invocation.output = "{\"ok\":true,\"url\":\"\(url.absoluteString)\"}"
+            invocation.output = "{\"ok\":true,\"surface\":\"agentQuickMarkup\"}"
         } else {
-            invocation.status = .failed("Talkie did not open the markup URL")
+            invocation.status = .failed("TalkieAgent could not open the markup surface")
         }
         return invocation
     }

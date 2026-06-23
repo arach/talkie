@@ -49,19 +49,27 @@ struct CaptureChordOptions: Equatable {
     var showCameraOption: Bool = false
     var showTrayOption: Bool = false
     var showSelectionOption: Bool = false
+    var showMarkupOption: Bool = false
 
     static let captureOnly = CaptureChordOptions()
     static let captureWithPeripherals = CaptureChordOptions(
         showTrayOption: true,
-        showSelectionOption: true
+        showSelectionOption: true,
+        showMarkupOption: true
     )
+}
+
+enum CaptureDestinationSettings {
+    static let markupEnabled = "capture.markupDestinationEnabled"
 }
 
 // MARK: - Result Type
 
 enum CaptureBarResult {
     case screenshot(CaptureMode)     // A/S/D in screenshot mode
+    case screenshotMarkup(CaptureMode) // A/S/D in screenshot mode, then open Agent quick markup
     case screenshotRegion(CGRect)    // Region was selected by the armed overlay
+    case screenshotMarkupRegion(CGRect) // Region selected by armed overlay, then open Agent quick markup
     case screenRecord(CaptureMode)   // A/S/D in video mode
     case toggleCamera                // C key
     case saveSelection               // N key
@@ -73,6 +81,7 @@ enum CaptureBarResult {
     var isBackground: Bool {
         switch self {
         case .screenshot, .screenshotRegion, .screenRecord, .toggleCamera, .pasteLastTray, .saveSelection: return true
+        case .screenshotMarkup, .screenshotMarkupRegion: return false
         case .viewTray: return false
         }
     }
@@ -92,7 +101,19 @@ final class CaptureBarState {
     var showCameraOption: Bool = false
     var showTrayOption: Bool = false
     var showSelectionOption: Bool = false
+    var showMarkupOption: Bool = false
     var trayCount: Int = 0
+    /// Destination toggle for one-off share captures. When enabled in
+    /// screenshot mode, A/S/D still pick the target but the captured PNG opens
+    /// directly in Agent's quick markup surface instead of the tray preview.
+    var markupDestinationEnabled: Bool = sharedBool(forKey: CaptureDestinationSettings.markupEnabled) {
+        didSet {
+            Self.setSharedBool(
+                markupDestinationEnabled,
+                forKey: CaptureDestinationSettings.markupEnabled
+            )
+        }
+    }
     /// Currently armed capture mode. Region is the preselected default
     /// when the HUD opens — the picker visual highlights this cell, and
     /// ↵ commits it. A/S/D keep their existing single-press fire
@@ -142,6 +163,10 @@ final class CaptureBarState {
         }
     }
 
+    func reloadMarkupDestination() {
+        markupDestinationEnabled = Self.sharedBool(forKey: CaptureDestinationSettings.markupEnabled)
+    }
+
     private static func sharedBool(forKey key: String) -> Bool {
         TalkieSharedSettings.object(forKey: key) as? Bool ?? false
     }
@@ -159,13 +184,24 @@ final class CaptureBarPanel {
     private var panel: NSPanel?
     let state = CaptureBarState()
 
-    func show(mode: CaptureBarMode, showCameraOption: Bool, showTrayOption: Bool, showSelectionOption: Bool, trayCount: Int) {
+    func show(
+        mode: CaptureBarMode,
+        showCameraOption: Bool,
+        showTrayOption: Bool,
+        showSelectionOption: Bool,
+        showMarkupOption: Bool,
+        trayCount: Int
+    ) {
         dismiss()
 
         state.mode = mode
         state.showCameraOption = showCameraOption
         state.showTrayOption = showTrayOption
         state.showSelectionOption = showSelectionOption
+        state.showMarkupOption = showMarkupOption
+        if showMarkupOption {
+            state.reloadMarkupDestination()
+        }
         state.trayCount = trayCount
 
         let hostingView = NSHostingView(rootView: CaptureBarView(state: state))
@@ -396,10 +432,31 @@ private struct CaptureBarView: View {
         }
     }
 
-    // MARK: - Extras (C + N + V + T)
+    // MARK: - Extras (M + C + N + V + T)
 
     private var extras: some View {
         HStack(spacing: 12) {
+            if state.showMarkupOption && !isVideo {
+                HStack(spacing: 3) {
+                    Text("M")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(.orange)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(state.markupDestinationEnabled ? Color.orange.opacity(0.18) : .clear)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .strokeBorder(Color.orange.opacity(0.36), lineWidth: 0.5)
+                                )
+                        )
+                    Image(systemName: "pencil.tip.crop.circle")
+                        .font(.system(size: 9))
+                        .foregroundColor(.orange.opacity(state.markupDestinationEnabled ? 0.9 : 0.6))
+                }
+            }
+
             if state.showCameraOption {
                 // Camera toggle
                 HStack(spacing: 3) {

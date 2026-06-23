@@ -109,6 +109,7 @@ final class CaptureHUDPanel {
         showCameraOption: Bool,
         showTrayOption: Bool,
         showSelectionOption: Bool,
+        showMarkupOption: Bool,
         trayCount: Int,
         palette: Palette
     ) {
@@ -118,6 +119,10 @@ final class CaptureHUDPanel {
         state.showCameraOption = showCameraOption
         state.showTrayOption = showTrayOption
         state.showSelectionOption = showSelectionOption
+        state.showMarkupOption = showMarkupOption
+        if showMarkupOption {
+            state.reloadMarkupDestination()
+        }
         state.trayCount = trayCount
         self.palette = palette
 
@@ -494,6 +499,19 @@ private struct CaptureHUDView: View {
 
     private var bottomStrip: some View {
         HStack(spacing: 4) {
+            if state.showMarkupOption && !isVideo {
+                extraCell(
+                    key: "M",
+                    label: "Markup",
+                    systemImage: "pencil.tip.crop.circle",
+                    tone: .accent,
+                    isActive: state.markupDestinationEnabled
+                ) {
+                    state.markupDestinationEnabled.toggle()
+                    state.onAction?(nil)
+                }
+                .help("Open the capture directly in Markup after A, S, D, or Return")
+            }
             if state.showCameraOption {
                 extraCell(key: "C", label: "Camera", systemImage: "video.fill", tone: .accent) {
                     state.onAction?(.toggleCamera)
@@ -518,7 +536,7 @@ private struct CaptureHUDView: View {
                     state.onAction?(.viewTray)
                 }
             }
-            if !hasSecondaryActions {
+            if !hasContextualActions {
                 keyboardLegend
             }
         }
@@ -535,7 +553,7 @@ private struct CaptureHUDView: View {
 
     private enum ExtraTone { case ink, accent }
 
-    private var hasSecondaryActions: Bool {
+    private var hasContextualActions: Bool {
         state.showCameraOption || state.showSelectionOption || state.showTrayOption
     }
 
@@ -590,11 +608,19 @@ private struct CaptureHUDView: View {
         systemImage: String,
         badge: String? = nil,
         tone: ExtraTone,
+        isActive: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
         let id = "extra_\(key)"
         let isHovered = hoveredKey == id
         let keyColor: Color = tone == .accent ? accent : Color(hex: tokens.inkHex)
+        let foregroundColor: Color = isActive ? accent : Color(hex: tokens.inkFaintHex)
+        let fillColor: Color = isActive
+            ? accent.opacity(0.14)
+            : (isHovered ? tokens.detailsBg.color : Color.clear)
+        let strokeColor: Color = isActive
+            ? accent.opacity(0.52)
+            : (isHovered ? tokens.edgeStrong.color : Color.clear)
 
         return Button(action: action) {
             HStack(spacing: 4) {
@@ -607,7 +633,7 @@ private struct CaptureHUDView: View {
                 Text(label)
                     .font(.system(size: 8.5, weight: .medium))
                     .tracking(0.7)
-                    .foregroundColor(Color(hex: tokens.inkFaintHex))
+                    .foregroundColor(foregroundColor)
                     .textCase(.uppercase)
                     .lineLimit(1)
 
@@ -631,7 +657,11 @@ private struct CaptureHUDView: View {
             .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(isHovered ? tokens.detailsBg.color : Color.clear)
+                    .fill(fillColor)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .strokeBorder(strokeColor, lineWidth: 0.5)
             )
             .contentShape(Rectangle())
         }
