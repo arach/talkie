@@ -303,7 +303,7 @@ final class AgentCaptureMarkupController {
     ) {
         hideDragHandle()
 
-        let size = NSSize(width: 132, height: 34)
+        let size = Self.dragHandleSize
         let handleFrame = Self.dragHandleFrame(for: frame)
         let view = AgentCaptureMarkupDragHandleView(
             fileURLProvider: { [weak self] in
@@ -332,11 +332,15 @@ final class AgentCaptureMarkupController {
         dragHandlePanel = panel
     }
 
+    private static var dragHandleSize: NSSize {
+        NSSize(width: 138, height: 28)
+    }
+
     private static func dragHandleFrame(for frame: CGRect) -> NSRect {
-        let size = NSSize(width: 132, height: 34)
+        let size = dragHandleSize
         return NSRect(
-            x: (frame.midX - size.width / 2).rounded(),
-            y: (frame.minY + 14).rounded(),
+            x: (frame.minX + 14).rounded(),
+            y: (frame.minY + (AgentCaptureMarkupLayout.bottomToolbarHeight - size.height) / 2).rounded(),
             width: size.width,
             height: size.height
         )
@@ -1113,10 +1117,10 @@ private final class AgentCaptureMarkupDragHandleView: NSView {
         self.fileURLProvider = fileURLProvider
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = AgentCaptureMarkupLayout.controlRadius
-        layer?.backgroundColor = NSColor(calibratedRed: 0.085, green: 0.078, blue: 0.064, alpha: 0.95).cgColor
+        layer?.cornerRadius = 7
+        layer?.backgroundColor = NSColor(calibratedRed: 0.105, green: 0.092, blue: 0.070, alpha: 0.96).cgColor
         layer?.borderWidth = 1
-        layer?.borderColor = NSColor(calibratedRed: 0.78, green: 0.66, blue: 0.48, alpha: 0.26).cgColor
+        layer?.borderColor = NSColor(calibratedRed: 0.82, green: 0.68, blue: 0.46, alpha: 0.34).cgColor
     }
 
     required init?(coder: NSCoder) {
@@ -1125,18 +1129,38 @@ private final class AgentCaptureMarkupDragHandleView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
+        drawGrip()
+
         let text = "DRAG COPY"
         let attrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold),
-            .foregroundColor: NSColor(calibratedRed: 0.86, green: 0.72, blue: 0.52, alpha: 0.96),
+            .foregroundColor: NSColor(calibratedRed: 0.90, green: 0.74, blue: 0.48, alpha: 0.98),
             .kern: 0.6,
         ]
         let size = (text as NSString).size(withAttributes: attrs)
         let point = NSPoint(
-            x: (bounds.midX - size.width / 2).rounded(),
+            x: 38,
             y: (bounds.midY - size.height / 2).rounded()
         )
         (text as NSString).draw(at: point, withAttributes: attrs)
+    }
+
+    private func drawGrip() {
+        NSColor(calibratedRed: 0.90, green: 0.74, blue: 0.48, alpha: 0.72).setFill()
+        for column in 0..<2 {
+            for row in 0..<3 {
+                let dot = NSRect(
+                    x: 17 + CGFloat(column) * 6,
+                    y: bounds.midY - 7 + CGFloat(row) * 6,
+                    width: 2,
+                    height: 2
+                )
+                NSBezierPath(ovalIn: dot).fill()
+            }
+        }
+
+        NSColor.white.withAlphaComponent(0.05).setFill()
+        NSRect(x: 1, y: bounds.maxY - 1, width: bounds.width - 2, height: 1).fill()
     }
 
     override func mouseDown(with event: NSEvent) {
