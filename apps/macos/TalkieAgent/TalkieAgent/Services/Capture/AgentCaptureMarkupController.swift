@@ -16,7 +16,6 @@ final class AgentCaptureMarkupController {
     static let shared = AgentCaptureMarkupController()
 
     private let log = Log(.ui)
-    private let dragPanel = FileDragPanel()
     private var overlay: LiveCaptureMarkupOverlayController?
     private var backgroundPanel: NSPanel?
     private var dragHandlePanel: NSPanel?
@@ -129,7 +128,6 @@ final class AgentCaptureMarkupController {
                 layers: layers,
                 updatesLibrary: updatesLibrary
             )
-            dragPanel.show(item: item)
         }
     }
 
@@ -784,6 +782,7 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
     }
 
     private func drawChromeButtons() {
+        drawZoomLabel()
         drawButton(
             rect: cancelButtonRect,
             title: "x",
@@ -794,16 +793,16 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         drawButton(
             rect: zoomOutButtonRect,
             title: "-",
-            foreground: NSColor.white.withAlphaComponent(0.74),
-            fill: NSColor.white.withAlphaComponent(0.06),
-            border: NSColor.white.withAlphaComponent(0.13)
+            foreground: NSColor.white.withAlphaComponent(0.86),
+            fill: NSColor(calibratedRed: 0.38, green: 0.47, blue: 1.0, alpha: 0.18),
+            border: NSColor(calibratedRed: 0.55, green: 0.63, blue: 1.0, alpha: 0.34)
         )
         drawButton(
             rect: zoomInButtonRect,
             title: "+",
-            foreground: NSColor.white.withAlphaComponent(0.78),
-            fill: NSColor.white.withAlphaComponent(0.06),
-            border: NSColor.white.withAlphaComponent(0.13)
+            foreground: NSColor.white.withAlphaComponent(0.9),
+            fill: NSColor(calibratedRed: 0.38, green: 0.47, blue: 1.0, alpha: 0.18),
+            border: NSColor(calibratedRed: 0.55, green: 0.63, blue: 1.0, alpha: 0.34)
         )
         drawButton(
             rect: doneButtonRect,
@@ -811,6 +810,21 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
             foreground: NSColor.white.withAlphaComponent(0.92),
             fill: NSColor(calibratedRed: 0.38, green: 0.47, blue: 1.0, alpha: 0.84),
             border: NSColor.white.withAlphaComponent(0.20)
+        )
+    }
+
+    private func drawZoomLabel() {
+        let label = "zoom"
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: 9, weight: .semibold),
+            .foregroundColor: NSColor.white.withAlphaComponent(0.48),
+        ]
+        let size = (label as NSString).size(withAttributes: attrs)
+        let x = zoomOutButtonRect.minX - size.width - 8
+        guard x > cancelButtonRect.maxX + 92 else { return }
+        (label as NSString).draw(
+            at: NSPoint(x: x, y: zoomOutButtonRect.midY - size.height / 2),
+            withAttributes: attrs
         )
     }
 
@@ -861,37 +875,37 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
 
     private var doneButtonRect: NSRect {
         NSRect(
-            x: max(104, bounds.maxX - 70),
-            y: bounds.maxY - 27,
-            width: 58,
-            height: 21
+            x: max(124, bounds.maxX - 76),
+            y: bounds.maxY - 29,
+            width: 62,
+            height: 24
         )
     }
 
     private var cancelButtonRect: NSRect {
         NSRect(
-            x: 10,
-            y: bounds.maxY - 28,
-            width: 24,
-            height: 22
+            x: 9,
+            y: bounds.maxY - 29,
+            width: 26,
+            height: 24
         )
     }
 
     private var zoomOutButtonRect: NSRect {
         NSRect(
-            x: doneButtonRect.minX - 60,
-            y: bounds.maxY - 27,
-            width: 24,
-            height: 21
+            x: doneButtonRect.minX - 70,
+            y: bounds.maxY - 29,
+            width: 30,
+            height: 24
         )
     }
 
     private var zoomInButtonRect: NSRect {
         NSRect(
-            x: doneButtonRect.minX - 31,
-            y: bounds.maxY - 27,
-            width: 24,
-            height: 21
+            x: doneButtonRect.minX - 35,
+            y: bounds.maxY - 29,
+            width: 30,
+            height: 24
         )
     }
 

@@ -665,7 +665,7 @@
     ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
     for (const layer of state.layers) drawLayer(layer);
     const selectedLayer = state.layers.find((layer) => layer.id === state.selectedLayerId);
-    if (selectedLayer) drawSelection(selectedLayer);
+    if (state.tool === "select" && selectedLayer) drawSelection(selectedLayer);
     if (state.creating) drawLayer(previewLayer(state.creating));
   }
 
@@ -897,7 +897,6 @@
     }
     state.layers.push(layer);
     state.selectedLayerId = layer.id;
-    setTool("select");
     render();
     sendUpdate();
   }
@@ -1053,7 +1052,6 @@
     };
     state.layers.push(layer);
     state.selectedLayerId = layer.id;
-    setTool("select");
     render();
     sendUpdate();
   }
