@@ -78,6 +78,7 @@ final class AgentCaptureMarkupController {
         overlay.passthrough = false
         overlay.persistsLayersOnDone = false
         overlay.showsCaptureAction = false
+        overlay.showsDock = false
         overlay.onDone = { [weak self] layers in
             self?.finish(item: item, sourceImage: sourceImage, layers: layers, updatesLibrary: updatesLibrary)
         }
@@ -208,6 +209,15 @@ final class AgentCaptureMarkupController {
             },
             onZoom: { [weak self] factor in
                 self?.zoomSurface(by: factor)
+            },
+            onTool: { [weak self] tool in
+                self?.overlay?.setTool(tool)
+            },
+            onUndo: { [weak self] in
+                self?.overlay?.undo()
+            },
+            onRedo: { [weak self] in
+                self?.overlay?.redo()
             },
             onDone: { [weak self] in
                 self?.overlay?.finish()
@@ -427,9 +437,11 @@ final class AgentCaptureMarkupController {
         let safe = screen.frame.insetBy(dx: 4, dy: 4)
         let surfaceRect = CGRect(
             x: imageRect.minX - AgentCaptureMarkupLayout.edgePadding,
-            y: imageRect.minY - AgentCaptureMarkupLayout.edgePadding,
+            y: imageRect.minY - AgentCaptureMarkupLayout.edgePadding - AgentCaptureMarkupLayout.bottomToolbarHeight,
             width: imageRect.width + AgentCaptureMarkupLayout.edgePadding * 2,
-            height: imageRect.height + AgentCaptureMarkupLayout.edgePadding * 2 + AgentCaptureMarkupLayout.titlebarHeight
+            height: imageRect.height + AgentCaptureMarkupLayout.edgePadding * 2
+                + AgentCaptureMarkupLayout.titlebarHeight
+                + AgentCaptureMarkupLayout.bottomToolbarHeight
         )
 
         guard safe.contains(surfaceRect) else { return nil }
@@ -451,7 +463,9 @@ final class AgentCaptureMarkupController {
         let maxHeight = min(760, visible.height)
 
         let chromeWidth = AgentCaptureMarkupLayout.edgePadding * 2
-        let chromeHeight = AgentCaptureMarkupLayout.edgePadding * 2 + AgentCaptureMarkupLayout.titlebarHeight
+        let chromeHeight = AgentCaptureMarkupLayout.edgePadding * 2
+            + AgentCaptureMarkupLayout.titlebarHeight
+            + AgentCaptureMarkupLayout.bottomToolbarHeight
         let maxImageWidth = max(1, maxWidth - chromeWidth)
         let maxImageHeight = max(1, maxHeight - chromeHeight)
         var imageWidth = maxImageWidth
@@ -476,9 +490,15 @@ final class AgentCaptureMarkupController {
     private static func contentRect(in surfaceRect: CGRect) -> CGRect {
         CGRect(
             x: surfaceRect.minX + AgentCaptureMarkupLayout.edgePadding,
-            y: surfaceRect.minY + AgentCaptureMarkupLayout.edgePadding,
+            y: surfaceRect.minY + AgentCaptureMarkupLayout.edgePadding + AgentCaptureMarkupLayout.bottomToolbarHeight,
             width: max(1, surfaceRect.width - AgentCaptureMarkupLayout.edgePadding * 2),
-            height: max(1, surfaceRect.height - AgentCaptureMarkupLayout.edgePadding * 2 - AgentCaptureMarkupLayout.titlebarHeight)
+            height: max(
+                1,
+                surfaceRect.height
+                    - AgentCaptureMarkupLayout.edgePadding * 2
+                    - AgentCaptureMarkupLayout.titlebarHeight
+                    - AgentCaptureMarkupLayout.bottomToolbarHeight
+            )
         )
     }
 
@@ -498,7 +518,9 @@ final class AgentCaptureMarkupController {
     ) -> AgentCaptureMarkupPlacement {
         let visible = placement.screen.visibleFrame.insetBy(dx: 18, dy: 36)
         let chromeWidth = AgentCaptureMarkupLayout.edgePadding * 2
-        let chromeHeight = AgentCaptureMarkupLayout.edgePadding * 2 + AgentCaptureMarkupLayout.titlebarHeight
+        let chromeHeight = AgentCaptureMarkupLayout.edgePadding * 2
+            + AgentCaptureMarkupLayout.titlebarHeight
+            + AgentCaptureMarkupLayout.bottomToolbarHeight
         let maxImageWidth = max(1, visible.width - chromeWidth)
         let maxImageHeight = max(1, visible.height - chromeHeight)
         let maxScale = max(0.01, min(maxImageWidth / max(1, imageSize.width), maxImageHeight / max(1, imageSize.height)))
@@ -599,9 +621,26 @@ private struct AgentCaptureMarkupPlacement {
 }
 
 private enum AgentCaptureMarkupLayout {
-    static let titlebarHeight: CGFloat = 34
+    static let titlebarHeight: CGFloat = 42
+    static let bottomToolbarHeight: CGFloat = 42
     static let edgePadding: CGFloat = 8
     static let zoomStep: CGFloat = 1.14
+}
+
+private struct AgentCaptureMarkupTool {
+    let id: String
+    let label: String
+    let width: CGFloat
+
+    static let all: [AgentCaptureMarkupTool] = [
+        AgentCaptureMarkupTool(id: "select", label: "SEL", width: 31),
+        AgentCaptureMarkupTool(id: "ink", label: "P", width: 24),
+        AgentCaptureMarkupTool(id: "rect", label: "R", width: 24),
+        AgentCaptureMarkupTool(id: "ellipse", label: "O", width: 24),
+        AgentCaptureMarkupTool(id: "line", label: "/", width: 24),
+        AgentCaptureMarkupTool(id: "arrow", label: "->", width: 28),
+        AgentCaptureMarkupTool(id: "note", label: "T", width: 24),
+    ]
 }
 
 private final class AgentCaptureMarkupDragHandlePanel: NSPanel {
@@ -614,15 +653,22 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
     private var imageRect: NSRect
     private let onDragDelta: (CGSize) -> Void
     private let onZoom: (CGFloat) -> Void
+    private let onTool: (String) -> Void
+    private let onUndo: () -> Void
+    private let onRedo: () -> Void
     private let onDone: () -> Void
     private let onCancel: () -> Void
     private var lastDragScreenPoint: NSPoint?
+    private var selectedTool = "ink"
 
     init(
         image: NSImage,
         imageRect: NSRect,
         onDragDelta: @escaping (CGSize) -> Void,
         onZoom: @escaping (CGFloat) -> Void,
+        onTool: @escaping (String) -> Void,
+        onUndo: @escaping () -> Void,
+        onRedo: @escaping () -> Void,
         onDone: @escaping () -> Void,
         onCancel: @escaping () -> Void
     ) {
@@ -630,6 +676,9 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         self.imageRect = imageRect
         self.onDragDelta = onDragDelta
         self.onZoom = onZoom
+        self.onTool = onTool
+        self.onUndo = onUndo
+        self.onRedo = onRedo
         self.onDone = onDone
         self.onCancel = onCancel
         super.init(frame: .zero)
@@ -644,14 +693,33 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         addCursorRect(dragRegion, cursor: .openHand)
         addCursorRect(doneButtonRect, cursor: .pointingHand)
         addCursorRect(cancelButtonRect, cursor: .pointingHand)
+        addCursorRect(undoButtonRect, cursor: .pointingHand)
+        addCursorRect(redoButtonRect, cursor: .pointingHand)
         addCursorRect(zoomOutButtonRect, cursor: .pointingHand)
         addCursorRect(zoomInButtonRect, cursor: .pointingHand)
+        for control in toolButtonRects {
+            addCursorRect(control.rect, cursor: .pointingHand)
+        }
     }
 
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
+        if let tool = toolButtonRects.first(where: { $0.rect.contains(point) }) {
+            selectedTool = tool.id
+            onTool(tool.id)
+            needsDisplay = true
+            return
+        }
         if cancelButtonRect.contains(point) {
             onCancel()
+            return
+        }
+        if undoButtonRect.contains(point) {
+            onUndo()
+            return
+        }
+        if redoButtonRect.contains(point) {
+            onRedo()
             return
         }
         if zoomOutButtonRect.contains(point) {
@@ -709,8 +777,12 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         NSColor(calibratedWhite: 0.075, alpha: 0.98).setFill()
         titleRect.fill()
 
+        NSColor(calibratedWhite: 0.068, alpha: 0.98).setFill()
+        bottomToolbarRect.fill()
+
         drawBrand(in: titleRect)
         drawChromeButtons()
+        drawBottomControls()
 
         let imageClip = NSBezierPath(roundedRect: imageRect, xRadius: 7, yRadius: 7)
         NSGraphicsContext.saveGraphicsState()
@@ -756,33 +828,23 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
             }
         }
 
-        let title = "Talkie Markup"
+        let title = "Talkie"
         let attrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
             .foregroundColor: NSColor.white.withAlphaComponent(0.86),
         ]
-        (title as NSString).draw(
-            at: NSPoint(x: markRect.maxX + 8, y: rect.midY - 7),
-            withAttributes: attrs
-        )
-
-        let hint = "drag bezel to move"
-        let hintAttrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 9, weight: .medium),
-            .foregroundColor: NSColor.white.withAlphaComponent(0.42),
-        ]
-        let hintSize = (hint as NSString).size(withAttributes: hintAttrs)
-        let hintX = min(max(markRect.maxX + 110, zoomOutButtonRect.minX - hintSize.width - 12), zoomOutButtonRect.minX - hintSize.width - 12)
-        if hintX > markRect.maxX + 76 {
-            (hint as NSString).draw(
-                at: NSPoint(x: hintX, y: rect.midY - 6),
-                withAttributes: hintAttrs
+        let titleSize = (title as NSString).size(withAttributes: attrs)
+        let titleX = markRect.maxX + 8
+        let nextControlX = toolButtonRects.first?.rect.minX ?? undoButtonRect.minX
+        if titleX + titleSize.width + 12 < nextControlX {
+            (title as NSString).draw(
+                at: NSPoint(x: titleX, y: rect.midY - 7),
+                withAttributes: attrs
             )
         }
     }
 
     private func drawChromeButtons() {
-        drawZoomLabel()
         drawButton(
             rect: cancelButtonRect,
             title: "x",
@@ -790,6 +852,32 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
             fill: NSColor.white.withAlphaComponent(0.07),
             border: NSColor.white.withAlphaComponent(0.14)
         )
+        drawButton(
+            rect: undoButtonRect,
+            title: "Undo",
+            foreground: NSColor.white.withAlphaComponent(0.86),
+            fill: NSColor.white.withAlphaComponent(0.07),
+            border: NSColor.white.withAlphaComponent(0.14)
+        )
+        drawButton(
+            rect: redoButtonRect,
+            title: "Redo",
+            foreground: NSColor.white.withAlphaComponent(0.86),
+            fill: NSColor.white.withAlphaComponent(0.07),
+            border: NSColor.white.withAlphaComponent(0.14)
+        )
+        drawButton(
+            rect: doneButtonRect,
+            title: "Done",
+            foreground: NSColor.white.withAlphaComponent(0.92),
+            fill: NSColor(calibratedRed: 0.38, green: 0.47, blue: 1.0, alpha: 0.84),
+            border: NSColor.white.withAlphaComponent(0.20)
+        )
+        drawToolButtons()
+    }
+
+    private func drawBottomControls() {
+        drawZoomLabel()
         drawButton(
             rect: zoomOutButtonRect,
             title: "-",
@@ -804,13 +892,25 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
             fill: NSColor(calibratedRed: 0.38, green: 0.47, blue: 1.0, alpha: 0.18),
             border: NSColor(calibratedRed: 0.55, green: 0.63, blue: 1.0, alpha: 0.34)
         )
-        drawButton(
-            rect: doneButtonRect,
-            title: "Done",
-            foreground: NSColor.white.withAlphaComponent(0.92),
-            fill: NSColor(calibratedRed: 0.38, green: 0.47, blue: 1.0, alpha: 0.84),
-            border: NSColor.white.withAlphaComponent(0.20)
-        )
+    }
+
+    private func drawToolButtons() {
+        for control in toolButtonRects {
+            let active = control.id == selectedTool
+            drawButton(
+                rect: control.rect,
+                title: control.label,
+                foreground: active
+                    ? NSColor(calibratedRed: 0.72, green: 0.78, blue: 1.0, alpha: 1)
+                    : NSColor.white.withAlphaComponent(0.78),
+                fill: active
+                    ? NSColor(calibratedRed: 0.38, green: 0.47, blue: 1.0, alpha: 0.22)
+                    : NSColor.white.withAlphaComponent(0.06),
+                border: active
+                    ? NSColor(calibratedRed: 0.55, green: 0.63, blue: 1.0, alpha: 0.42)
+                    : NSColor.white.withAlphaComponent(0.12)
+            )
+        }
     }
 
     private func drawZoomLabel() {
@@ -821,7 +921,7 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         ]
         let size = (label as NSString).size(withAttributes: attrs)
         let x = zoomOutButtonRect.minX - size.width - 8
-        guard x > cancelButtonRect.maxX + 92 else { return }
+        guard x > bottomToolbarRect.minX + 12 else { return }
         (label as NSString).draw(
             at: NSPoint(x: x, y: zoomOutButtonRect.midY - size.height / 2),
             withAttributes: attrs
@@ -859,7 +959,7 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         return NSRect(
             x: left,
             y: title.minY,
-            width: max(1, zoomOutButtonRect.minX - left - 8),
+            width: max(1, undoButtonRect.minX - left - 8),
             height: title.height
         )
     }
@@ -876,7 +976,7 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
     private var doneButtonRect: NSRect {
         NSRect(
             x: max(124, bounds.maxX - 76),
-            y: bounds.maxY - 29,
+            y: bounds.maxY - 33,
             width: 62,
             height: 24
         )
@@ -885,16 +985,34 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
     private var cancelButtonRect: NSRect {
         NSRect(
             x: 9,
-            y: bounds.maxY - 29,
+            y: bounds.maxY - 33,
             width: 26,
+            height: 24
+        )
+    }
+
+    private var undoButtonRect: NSRect {
+        NSRect(
+            x: doneButtonRect.minX - 76,
+            y: bounds.maxY - 33,
+            width: 36,
+            height: 24
+        )
+    }
+
+    private var redoButtonRect: NSRect {
+        NSRect(
+            x: doneButtonRect.minX - 37,
+            y: bounds.maxY - 33,
+            width: 36,
             height: 24
         )
     }
 
     private var zoomOutButtonRect: NSRect {
         NSRect(
-            x: doneButtonRect.minX - 70,
-            y: bounds.maxY - 29,
+            x: bounds.maxX - 80,
+            y: bottomToolbarRect.midY - 12,
             width: 30,
             height: 24
         )
@@ -902,11 +1020,47 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
 
     private var zoomInButtonRect: NSRect {
         NSRect(
-            x: doneButtonRect.minX - 35,
-            y: bounds.maxY - 29,
+            x: bounds.maxX - 45,
+            y: bottomToolbarRect.midY - 12,
             width: 30,
             height: 24
         )
+    }
+
+    private var bottomToolbarRect: NSRect {
+        NSRect(
+            x: 0,
+            y: 0,
+            width: bounds.width,
+            height: AgentCaptureMarkupLayout.bottomToolbarHeight
+        )
+    }
+
+    private var toolButtonRects: [(id: String, label: String, rect: NSRect)] {
+        let gap: CGFloat = 4
+        let totalPreferredWidth = AgentCaptureMarkupTool.all.reduce(CGFloat(0)) { $0 + $1.width }
+            + CGFloat(max(0, AgentCaptureMarkupTool.all.count - 1)) * gap
+        let startX = cancelButtonRect.maxX + 32
+        let maxX = undoButtonRect.minX - 8
+        guard maxX - startX >= min(totalPreferredWidth, 170) else { return [] }
+
+        let scale = min(1, (maxX - startX - CGFloat(AgentCaptureMarkupTool.all.count - 1) * gap) /
+            max(1, AgentCaptureMarkupTool.all.reduce(CGFloat(0)) { $0 + $1.width }))
+        var x = startX
+        return AgentCaptureMarkupTool.all.map { tool in
+            let width = max(20, floor(tool.width * scale))
+            defer { x += width + gap }
+            return (
+                id: tool.id,
+                label: tool.label,
+                rect: NSRect(
+                    x: x,
+                    y: bounds.maxY - 33,
+                    width: width,
+                    height: 24
+                )
+            )
+        }
     }
 
     private func screenPoint(for event: NSEvent) -> NSPoint? {

@@ -25,6 +25,10 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         didSet { applyToolbarContext() }
     }
 
+    var showsDock = true {
+        didSet { applyDockVisibility() }
+    }
+
     private var panel: NSPanel?
     private var passthroughControlsPanel: NSPanel?
     private var webView: WKWebView?
@@ -46,7 +50,7 @@ final class LiveCaptureMarkupOverlayController: NSObject {
                 showPassthroughControls()
             } else {
                 hidePassthroughControls()
-                setWebDockHidden(false)
+                applyDockVisibility()
                 panel.makeKeyAndOrderFront(nil)
                 if let webView { panel.makeFirstResponder(webView) }
             }
@@ -197,6 +201,10 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         evaluate("window.talkieLiveMarkup && window.talkieLiveMarkup.undo();")
     }
 
+    func redo() {
+        evaluate("window.talkieLiveMarkup && window.talkieLiveMarkup.redo();")
+    }
+
     func finish() {
         evaluate("window.talkieLiveMarkup && window.talkieLiveMarkup.done();")
     }
@@ -339,11 +347,20 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         setColor(selectedColor)
         setStrokeWidth(selectedStrokeWidth)
         applyToolbarContext()
+        applyDockVisibility()
     }
 
     private func applyToolbarContext() {
         let context = showsCaptureAction ? "desktopInk" : "recording"
         evaluate("window.talkieLiveMarkup && window.talkieLiveMarkup.setContext(\(Self.jsString(context)));")
+    }
+
+    private func applyDockVisibility() {
+        guard !passthrough else {
+            setWebDockHidden(true)
+            return
+        }
+        setWebDockHidden(!showsDock)
     }
 }
 

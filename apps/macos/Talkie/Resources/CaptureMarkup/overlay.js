@@ -14,6 +14,7 @@
     lineStyle: "solid",
     styleOpen: false,
     layers: [],
+    redoStack: [],
     creating: null,
     noteEditor: null,
     selectedLayerId: null,
@@ -807,6 +808,7 @@
         if (!source) return;
         const copy = duplicateLayer(source);
         state.layers.push(copy);
+        state.redoStack = [];
         state.dragging.layerId = copy.id;
         state.dragging.original = cloneLayer(copy);
         state.dragging.copied = true;
@@ -883,6 +885,7 @@
       }
     }
     state.layers.push(layer);
+    state.redoStack = [];
     state.selectedLayerId = layer.id;
     render();
     sendUpdate();
@@ -1038,6 +1041,7 @@
       endTime: nowSeconds(),
     };
     state.layers.push(layer);
+    state.redoStack = [];
     state.selectedLayerId = layer.id;
     render();
     sendUpdate();
@@ -1288,10 +1292,21 @@
 
   function undo() {
     closeNoteEditor(false);
-    state.layers.pop();
+    const layer = state.layers.pop();
+    if (layer) state.redoStack.push(layer);
     if (!state.layers.some((layer) => layer.id === state.selectedLayerId)) {
       state.selectedLayerId = null;
     }
+    render();
+    sendUpdate();
+  }
+
+  function redo() {
+    closeNoteEditor(false);
+    const layer = state.redoStack.pop();
+    if (!layer) return;
+    state.layers.push(layer);
+    state.selectedLayerId = layer.id;
     render();
     sendUpdate();
   }
@@ -1331,13 +1346,10 @@
         layers: state.layers,
         document: exportDocument(),
       });
+    } else if ((event.metaKey || event.ctrlKey) && event.shiftKey && key === "z") {
+      redo();
     } else if ((event.metaKey || event.ctrlKey) && key === "z") {
-      state.layers.pop();
-      if (!state.layers.some((layer) => layer.id === state.selectedLayerId)) {
-        state.selectedLayerId = null;
-      }
-      render();
-      sendUpdate();
+      undo();
     } else if (event.metaKey || event.ctrlKey || event.altKey) {
       return;
     }
@@ -1352,10 +1364,12 @@
     setLineStyle,
     setStyleOpen,
     undo,
+    redo,
     done,
     cancel,
     clear() {
       state.layers = [];
+      state.redoStack = [];
       render();
       sendUpdate();
     },
