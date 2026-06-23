@@ -626,7 +626,7 @@ private enum AgentCaptureMarkupLayout {
     static let edgePadding: CGFloat = 8
     static let zoomStep: CGFloat = 1.14
     static let chromeRadius: CGFloat = 7
-    static let imageRadius: CGFloat = 5
+    static let imageRadius: CGFloat = 3
     static let controlRadius: CGFloat = 4
 }
 
@@ -789,16 +789,18 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         NSColor(calibratedWhite: 0.064, alpha: 0.98).setFill()
         bottomToolbarRect.fill()
         drawChromeRelief(in: bounds)
-        drawChromeRelief(in: titleRect)
-        drawChromeRelief(in: bottomToolbarRect)
         NSGraphicsContext.restoreGraphicsState()
 
-        NSColor.white.withAlphaComponent(0.10).setFill()
+        NSColor.white.withAlphaComponent(0.13).setFill()
         NSRect(x: 1, y: bounds.maxY - 1, width: bounds.width - 2, height: 1).fill()
         NSColor.black.withAlphaComponent(0.34).setFill()
         NSRect(x: 1, y: 0, width: bounds.width - 2, height: 1).fill()
         NSColor.black.withAlphaComponent(0.30).setFill()
         NSRect(x: 0, y: titleRect.minY - 1, width: bounds.width, height: 1).fill()
+        NSColor.white.withAlphaComponent(0.05).setFill()
+        NSRect(x: 0, y: titleRect.minY - 2, width: bounds.width, height: 1).fill()
+        NSColor.black.withAlphaComponent(0.18).setFill()
+        NSRect(x: 0, y: bottomToolbarRect.maxY + 1, width: bounds.width, height: 1).fill()
         NSColor.white.withAlphaComponent(0.04).setFill()
         NSRect(x: 0, y: bottomToolbarRect.maxY, width: bounds.width, height: 1).fill()
 
@@ -823,7 +825,7 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         )
         NSGraphicsContext.restoreGraphicsState()
 
-        NSColor.white.withAlphaComponent(0.18).setStroke()
+        NSColor.white.withAlphaComponent(0.14).setStroke()
         let imageBorder = NSBezierPath(
             roundedRect: imageRect.insetBy(dx: 0.5, dy: 0.5),
             xRadius: AgentCaptureMarkupLayout.imageRadius,
@@ -832,7 +834,7 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         imageBorder.lineWidth = 1
         imageBorder.stroke()
 
-        NSColor.white.withAlphaComponent(0.18).setStroke()
+        NSColor.white.withAlphaComponent(0.14).setStroke()
         let shellBorder = NSBezierPath(
             roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5),
             xRadius: AgentCaptureMarkupLayout.chromeRadius,
@@ -844,18 +846,13 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
 
     private func drawChromeRelief(in rect: NSRect) {
         guard rect.width > 2, rect.height > 2 else { return }
-        NSColor.white.withAlphaComponent(0.018).setFill()
         var y = rect.minY + 2
         while y < rect.maxY - 1 {
+            NSColor.white.withAlphaComponent(0.020).setFill()
             NSRect(x: rect.minX + 1, y: y.rounded(.down), width: rect.width - 2, height: 1).fill()
-            y += 5
-        }
-
-        NSColor.black.withAlphaComponent(0.08).setFill()
-        y = rect.minY + 4
-        while y < rect.maxY - 1 {
-            NSRect(x: rect.minX + 1, y: y.rounded(.down), width: rect.width - 2, height: 1).fill()
-            y += 7
+            NSColor.black.withAlphaComponent(0.055).setFill()
+            NSRect(x: rect.minX + 1, y: (y + 1).rounded(.down), width: rect.width - 2, height: 1).fill()
+            y += 6
         }
     }
 
@@ -917,31 +914,17 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
             fill: NSColor.white.withAlphaComponent(0.07),
             border: NSColor.white.withAlphaComponent(0.14)
         )
+        drawToolButtons()
+    }
+
+    private func drawBottomControls() {
+        drawZoomControl()
         drawButton(
             rect: doneButtonRect,
             title: "Done",
             foreground: NSColor.white.withAlphaComponent(0.92),
             fill: NSColor(calibratedRed: 0.38, green: 0.47, blue: 1.0, alpha: 0.84),
             border: NSColor.white.withAlphaComponent(0.20)
-        )
-        drawToolButtons()
-    }
-
-    private func drawBottomControls() {
-        drawZoomLabel()
-        drawButton(
-            rect: zoomOutButtonRect,
-            title: "-",
-            foreground: NSColor.white.withAlphaComponent(0.86),
-            fill: NSColor(calibratedRed: 0.38, green: 0.47, blue: 1.0, alpha: 0.18),
-            border: NSColor(calibratedRed: 0.55, green: 0.63, blue: 1.0, alpha: 0.34)
-        )
-        drawButton(
-            rect: zoomInButtonRect,
-            title: "+",
-            foreground: NSColor.white.withAlphaComponent(0.9),
-            fill: NSColor(calibratedRed: 0.38, green: 0.47, blue: 1.0, alpha: 0.18),
-            border: NSColor(calibratedRed: 0.55, green: 0.63, blue: 1.0, alpha: 0.34)
         )
     }
 
@@ -964,19 +947,77 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         }
     }
 
-    private func drawZoomLabel() {
-        let label = "zoom"
+    private func drawZoomControl() {
+        let controlRect = zoomControlRect
+        guard controlRect.width > 72 else { return }
+
+        let path = NSBezierPath(
+            roundedRect: controlRect,
+            xRadius: AgentCaptureMarkupLayout.controlRadius,
+            yRadius: AgentCaptureMarkupLayout.controlRadius
+        )
+        NSColor(calibratedWhite: 0.045, alpha: 0.82).setFill()
+        path.fill()
+        NSColor(calibratedRed: 0.55, green: 0.63, blue: 1.0, alpha: 0.26).setStroke()
+        path.lineWidth = 1
+        path.stroke()
+
+        NSColor.white.withAlphaComponent(0.08).setFill()
+        NSRect(x: controlRect.minX + 1, y: controlRect.maxY - 1, width: controlRect.width - 2, height: 1).fill()
+
+        NSColor.white.withAlphaComponent(0.10).setFill()
+        NSRect(x: zoomOutButtonRect.maxX, y: controlRect.minY + 4, width: 1, height: controlRect.height - 8).fill()
+        NSRect(x: zoomInButtonRect.minX - 1, y: controlRect.minY + 4, width: 1, height: controlRect.height - 8).fill()
+
+        drawZoomGlyph(minus: true, in: zoomOutButtonRect)
+        drawZoomGlyph(minus: false, in: zoomInButtonRect)
+
+        let label = zoomPercentLabel
         let attrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 9, weight: .semibold),
-            .foregroundColor: NSColor.white.withAlphaComponent(0.48),
+            .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold),
+            .foregroundColor: NSColor.white.withAlphaComponent(0.66),
         ]
         let size = (label as NSString).size(withAttributes: attrs)
-        let x = zoomOutButtonRect.minX - size.width - 8
-        guard x > bottomToolbarRect.minX + 12 else { return }
         (label as NSString).draw(
-            at: NSPoint(x: x, y: zoomOutButtonRect.midY - size.height / 2),
+            at: NSPoint(
+                x: zoomValueRect.midX - size.width / 2,
+                y: zoomValueRect.midY - size.height / 2
+            ),
             withAttributes: attrs
         )
+    }
+
+    private func drawZoomGlyph(minus: Bool, in rect: NSRect) {
+        let color = NSColor.white.withAlphaComponent(minus ? 0.76 : 0.86)
+        color.setStroke()
+        color.setFill()
+
+        let center = NSPoint(x: rect.midX - 1, y: rect.midY + 1)
+        let lens = NSBezierPath(ovalIn: NSRect(x: center.x - 4, y: center.y - 4, width: 8, height: 8))
+        lens.lineWidth = 1
+        lens.stroke()
+
+        let handle = NSBezierPath()
+        handle.move(to: NSPoint(x: center.x + 3, y: center.y - 3))
+        handle.line(to: NSPoint(x: center.x + 7, y: center.y - 7))
+        handle.lineWidth = 1.2
+        handle.stroke()
+
+        let sign = NSBezierPath()
+        sign.move(to: NSPoint(x: center.x - 2.4, y: center.y))
+        sign.line(to: NSPoint(x: center.x + 2.4, y: center.y))
+        if !minus {
+            sign.move(to: NSPoint(x: center.x, y: center.y - 2.4))
+            sign.line(to: NSPoint(x: center.x, y: center.y + 2.4))
+        }
+        sign.lineWidth = 1.2
+        sign.stroke()
+    }
+
+    private var zoomPercentLabel: String {
+        let scale = imageRect.width / max(1, image.size.width)
+        let percent = max(1, Int((scale * 100).rounded()))
+        return "\(percent)%"
     }
 
     private func drawButton(
@@ -1033,7 +1074,7 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
     private var doneButtonRect: NSRect {
         NSRect(
             x: max(124, bounds.maxX - 76),
-            y: bounds.maxY - 33,
+            y: bottomToolbarRect.midY - 12,
             width: 62,
             height: 24
         )
@@ -1050,7 +1091,7 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
 
     private var undoButtonRect: NSRect {
         NSRect(
-            x: doneButtonRect.minX - 76,
+            x: bounds.maxX - 90,
             y: bounds.maxY - 33,
             width: 36,
             height: 24
@@ -1059,27 +1100,45 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
 
     private var redoButtonRect: NSRect {
         NSRect(
-            x: doneButtonRect.minX - 37,
+            x: bounds.maxX - 51,
             y: bounds.maxY - 33,
             width: 36,
             height: 24
         )
     }
 
+    private var zoomControlRect: NSRect {
+        NSRect(
+            x: max(bottomToolbarRect.minX + 12, doneButtonRect.minX - 122),
+            y: bottomToolbarRect.midY - 12,
+            width: min(108, max(78, doneButtonRect.minX - bottomToolbarRect.minX - 24)),
+            height: 24
+        )
+    }
+
     private var zoomOutButtonRect: NSRect {
         NSRect(
-            x: bounds.maxX - 80,
-            y: bottomToolbarRect.midY - 12,
-            width: 30,
+            x: zoomControlRect.minX,
+            y: zoomControlRect.minY,
+            width: 28,
             height: 24
+        )
+    }
+
+    private var zoomValueRect: NSRect {
+        NSRect(
+            x: zoomOutButtonRect.maxX + 1,
+            y: zoomControlRect.minY,
+            width: max(22, zoomInButtonRect.minX - zoomOutButtonRect.maxX - 2),
+            height: zoomControlRect.height
         )
     }
 
     private var zoomInButtonRect: NSRect {
         NSRect(
-            x: bounds.maxX - 45,
-            y: bottomToolbarRect.midY - 12,
-            width: 30,
+            x: zoomControlRect.maxX - 28,
+            y: zoomControlRect.minY,
+            width: 28,
             height: 24
         )
     }
@@ -1134,9 +1193,9 @@ private final class AgentCaptureMarkupDragHandleView: NSView {
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = AgentCaptureMarkupLayout.controlRadius
-        layer?.backgroundColor = NSColor(calibratedWhite: 0.09, alpha: 0.94).cgColor
+        layer?.backgroundColor = NSColor(calibratedRed: 0.085, green: 0.078, blue: 0.064, alpha: 0.95).cgColor
         layer?.borderWidth = 1
-        layer?.borderColor = NSColor.white.withAlphaComponent(0.16).cgColor
+        layer?.borderColor = NSColor(calibratedRed: 0.78, green: 0.66, blue: 0.48, alpha: 0.26).cgColor
     }
 
     required init?(coder: NSCoder) {
@@ -1148,8 +1207,8 @@ private final class AgentCaptureMarkupDragHandleView: NSView {
         let text = "DRAG COPY"
         let attrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold),
-            .foregroundColor: NSColor(calibratedRed: 1.0, green: 0.78, blue: 0.48, alpha: 0.96),
-            .kern: 0.8,
+            .foregroundColor: NSColor(calibratedRed: 0.86, green: 0.72, blue: 0.52, alpha: 0.96),
+            .kern: 0.6,
         ]
         let size = (text as NSString).size(withAttributes: attrs)
         let point = NSPoint(
