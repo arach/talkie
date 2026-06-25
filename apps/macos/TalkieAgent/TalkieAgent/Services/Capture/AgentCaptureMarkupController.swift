@@ -77,6 +77,7 @@ final class AgentCaptureMarkupController {
         let overlay = LiveCaptureMarkupOverlayController()
         overlay.passthrough = false
         overlay.persistsLayersOnDone = false
+        overlay.isVisibleInScreenCapture = true
         overlay.showsCaptureAction = false
         overlay.showsDock = false
         overlay.onDone = { [weak self] layers in
@@ -234,7 +235,7 @@ final class AgentCaptureMarkupController {
         panel.hidesOnDeactivate = false
         panel.canHide = false
         panel.ignoresMouseEvents = false
-        panel.sharingType = .none
+        panel.sharingType = .readOnly
         panel.setFrameOrigin(placement.surfaceRect.origin)
         panel.orderFrontRegardless()
         backgroundPanel = panel
@@ -321,7 +322,7 @@ final class AgentCaptureMarkupController {
         panel.hidesOnDeactivate = false
         panel.canHide = false
         panel.acceptsMouseMovedEvents = true
-        panel.sharingType = .none
+        panel.sharingType = .readOnly
         panel.orderFrontRegardless()
         dragHandlePanel = panel
     }
@@ -619,7 +620,7 @@ private enum AgentCaptureMarkupLayout {
     static let titlebarHeight: CGFloat = 42
     static let bottomToolbarHeight: CGFloat = 42
     static let edgePadding: CGFloat = 8
-    static let zoomStep: CGFloat = 1.14
+    static let zoomStep: CGFloat = 1.08
     static let chromeRadius: CGFloat = 7
     static let imageRadius: CGFloat = 3
     static let controlRadius: CGFloat = 4

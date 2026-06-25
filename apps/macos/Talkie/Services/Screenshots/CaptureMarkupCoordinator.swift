@@ -496,6 +496,9 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
         panel.isFloatingPanel = true
         panel.level = .floating
         panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+        panel.sharingType = .readOnly
+        panel.hidesOnDeactivate = false
+        panel.minSize = NSSize(width: 760, height: 500)
         panel.center()
         panel.contentView = NSView(frame: panel.contentRect(forFrameRect: panel.frame))
         panel.contentView?.wantsLayer = true

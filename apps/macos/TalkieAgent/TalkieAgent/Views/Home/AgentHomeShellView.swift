@@ -8,6 +8,7 @@
 //
 
 import AppKit
+import ImageIO
 import SwiftUI
 import TalkieKit
 
@@ -583,7 +584,12 @@ private struct AgentHomeOverviewPage: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack {
-                AgentHomePageScaffold(title: "Home", subtitle: "Runtime status, recent history, and quick actions.", showsHeader: false) {
+                AgentHomePageScaffold(
+                    title: "Home",
+                    subtitle: "Runtime status, recent history, and quick actions.",
+                    showsHeader: false,
+                    maxContentWidth: 1260
+                ) {
                     VStack(alignment: .leading, spacing: OpsSpacing.xxxl) {
                         VStack(alignment: .leading, spacing: OpsSpacing.md) {
                             OpsSectionLabel("· Agent")
@@ -694,7 +700,9 @@ private struct AgentHomeOverviewPage: View {
     }
 
     private var libraryPreview: some View {
-        OpsCard(padding: 0) {
+        let visualCaptures = recentVisualCaptureItems
+
+        return OpsCard(padding: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .top, spacing: OpsSpacing.xl) {
                     AgentHomeSectionHeader(
@@ -720,6 +728,16 @@ private struct AgentHomeOverviewPage: View {
                     )
                     .padding(OpsSpacing.xxl)
                 } else {
+                    if !visualCaptures.isEmpty {
+                        AgentHomeCapturePreviewStrip(
+                            items: visualCaptures,
+                            selectedID: showingLibraryPreview ? previewItemID : nil,
+                            onSelect: previewLibraryItem
+                        )
+
+                        OpsDivider(color: OpsHairline.subtle)
+                    }
+
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(recentLibraryItems) { item in
                             HStack(alignment: .center, spacing: 0) {
@@ -745,6 +763,7 @@ private struct AgentHomeOverviewPage: View {
                     .background(ScopeCanvas.canvas)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -774,6 +793,7 @@ private struct AgentHomeOverviewPage: View {
                     OpsButton("Open shared settings", icon: "gearshape", style: .secondary, action: onOpenSettings)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -792,6 +812,15 @@ private struct AgentHomeOverviewPage: View {
 
     private var recentLibraryItems: [TalkieObject] {
         Array(libraryItems.prefix(6))
+    }
+
+    private var recentVisualCaptureItems: [TalkieObject] {
+        Array(
+            libraryItems
+                .lazy
+                .filter(\.agentHomeHasVisualPreview)
+                .prefix(5)
+        )
     }
 
     private func previewLibraryItem(_ item: TalkieObject) {
@@ -1195,6 +1224,9 @@ private struct AgentHomePermissionsPage: View {
 
 private struct AgentHomeLibraryPage: View {
     private static let compactDetailThreshold: CGFloat = 860
+    private static func listWidth(for availableWidth: CGFloat) -> CGFloat {
+        min(380, max(340, availableWidth * 0.30))
+    }
 
     @ObservedObject var store: AgentHomeLibraryStore
     let onOpenSettings: () -> Void
@@ -1283,27 +1315,33 @@ private struct AgentHomeLibraryPage: View {
     private var libraryBody: some View {
         GeometryReader { proxy in
             let compact = proxy.size.width < Self.compactDetailThreshold
+            let listWidth = Self.listWidth(for: proxy.size.width)
+            let dividerWidth: CGFloat = 1
+            let detailWidth = max(0, proxy.size.width - listWidth - dividerWidth)
 
-            ZStack {
+            ZStack(alignment: .topLeading) {
                 if compact {
                     content
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     HStack(spacing: 0) {
-                        // List hugs its row width (the ScopeLibraryList rows cap
-                        // out around here), so the detail pane fills the rest
-                        // instead of leaving dead space between the two.
+                        // The Scope list has a natural scanning width; keep
+                        // it compact so the selected item can use the rest.
                         content
-                            .frame(width: min(460, max(360, proxy.size.width * 0.40)))
-                            .frame(maxHeight: .infinity)
+                            .frame(width: listWidth)
+                            .frame(maxHeight: .infinity, alignment: .topLeading)
+                            .clipped()
 
-                        OpsDivider(color: OpsHairline.subtle)
+                        OpsDivider(color: OpsHairline.subtle, axis: .vertical)
+                            .frame(width: dividerWidth)
 
                         AgentHomeLibraryDetailPane(item: selectedItem) { item in
                             AgentHomeTalkieLibraryOpener.open(item)
                         }
-                        .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
+                        .frame(width: detailWidth)
+                        .frame(maxHeight: .infinity, alignment: .topLeading)
                     }
+                    .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
                 }
 
                 if compact, showingDetailSheet, let selectedItem {
@@ -1781,6 +1819,7 @@ private struct AgentHomeBay: View {
             rail(leading: footer, trailing: timeLabel, leadingDot: false)
                 .overlay(alignment: .top) { hairline }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(AgentBayPalette.bg)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
@@ -2008,6 +2047,7 @@ private struct AgentHomeKeyValueStack<Content: View>: View {
             VStack(alignment: .leading, spacing: OpsSpacing.md) {
                 content()
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
@@ -2238,28 +2278,65 @@ private struct AgentHomeLibraryDetailPane: View {
     @State private var copiedItemID: UUID?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if let item {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: OpsSpacing.xxl) {
-                        header(for: item)
+        GeometryReader { proxy in
+            let contentWidth = max(0, proxy.size.width - OpsSpacing.xxl * 2)
+
+            VStack(alignment: .leading, spacing: 0) {
+                if let item {
+                    ScrollView {
+                        detailContent(for: item, availableWidth: contentWidth)
+                            .frame(width: contentWidth, alignment: .topLeading)
+                            .padding(OpsSpacing.xxl)
+                            .frame(width: proxy.size.width, alignment: .topLeading)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .clipped()
+                    .background(OpsInk.bg)
+                } else {
+                    AgentHomeEmptyInset(
+                        title: "Select a library item",
+                        detail: "Recordings and captures show a compact read-only summary here."
+                    )
+                    .padding(OpsSpacing.xxl)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(OpsInk.bg)
+        }
+    }
+
+    @ViewBuilder
+    private func detailContent(for item: TalkieObject, availableWidth: CGFloat) -> some View {
+        let usesWideReadout = availableWidth >= 680 && item.agentHomeHasVisualPreview
+        let mediaHeight = min(320, max(220, availableWidth * 0.36))
+
+        if usesWideReadout {
+            VStack(alignment: .leading, spacing: OpsSpacing.xxl) {
+                header(for: item)
+
+                HStack(alignment: .top, spacing: OpsSpacing.xxl) {
+                    mediaPreview(for: item, height: mediaHeight)
+                        .frame(maxWidth: .infinity)
+
+                    VStack(alignment: .leading, spacing: OpsSpacing.xl) {
                         facts(for: item)
                         media(for: item)
-                        textPreview(for: item)
                     }
-                    .padding(OpsSpacing.xxl)
+                    .frame(width: min(280, max(230, availableWidth * 0.30)), alignment: .topLeading)
                 }
-                .background(OpsInk.bg)
-            } else {
-                AgentHomeEmptyInset(
-                    title: "Select a library item",
-                    detail: "Recordings and captures show a compact read-only summary here."
-                )
-                .padding(OpsSpacing.xxl)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+                textPreview(for: item)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: OpsSpacing.xxl) {
+                header(for: item)
+                mediaPreview(for: item, height: mediaHeight)
+                facts(for: item)
+                media(for: item)
+                textPreview(for: item)
             }
         }
-        .background(OpsInk.bg)
     }
 
     private func header(for item: TalkieObject) -> some View {
@@ -2336,6 +2413,14 @@ private struct AgentHomeLibraryDetailPane: View {
         }
     }
 
+    @ViewBuilder
+    private func mediaPreview(for item: TalkieObject, height: CGFloat = 220) -> some View {
+        if item.agentHomeHasVisualPreview {
+            AgentHomeMediaPreview(media: CaptureMediaFileResolver.primaryMedia(for: item), maxPixelSize: 760)
+                .frame(height: height)
+        }
+    }
+
     private func facts(for item: TalkieObject) -> some View {
         AgentHomeKeyValueStack {
             OpsKVRow("Source", value: item.source.displayName)
@@ -2408,6 +2493,273 @@ private struct AgentHomeLibraryDetailPane: View {
     }
 }
 
+private struct AgentHomeCapturePreviewStrip: View {
+    let items: [TalkieObject]
+    let selectedID: UUID?
+    let onSelect: (TalkieObject) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: OpsSpacing.md) {
+            OpsSectionLabel("· Captures")
+                .padding(.horizontal, OpsSpacing.xxl)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: OpsSpacing.lg) {
+                    ForEach(items) { item in
+                        AgentHomeCapturePreviewTile(
+                            item: item,
+                            isSelected: selectedID == item.id,
+                            onSelect: { onSelect(item) }
+                        )
+                    }
+                }
+                .padding(.horizontal, OpsSpacing.xxl)
+                .padding(.bottom, 2)
+            }
+        }
+        .padding(.top, OpsSpacing.xl)
+        .padding(.bottom, OpsSpacing.xxl)
+    }
+}
+
+private struct AgentHomeCapturePreviewTile: View {
+    private enum Metrics {
+        static let width: CGFloat = 176
+        static let imageHeight: CGFloat = 102
+        static let captionGap: CGFloat = 9
+        static let labelHeight: CGFloat = 36
+        static let padding: CGFloat = 4
+    }
+
+    let item: TalkieObject
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    private var media: CaptureMediaAsset? {
+        CaptureMediaFileResolver.primaryMedia(for: item)
+    }
+
+    private var sourceLabel: String {
+        let appName = item.appContext?.name?.agentHomeTrimmed ?? ""
+        return appName.isEmpty ? item.source.displayName : appName
+    }
+
+    var body: some View {
+        Button(action: onSelect) {
+            VStack(alignment: .leading, spacing: Metrics.captionGap) {
+                AgentHomeMediaPreview(media: media, maxPixelSize: 360)
+                    .frame(width: Metrics.width, height: Metrics.imageHeight)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.agentHomeDisplayTitle)
+                        .font(OpsType.ui(OpsSize.xs, weight: .semibold))
+                        .foregroundStyle(OpsInk.ink)
+                        .lineLimit(1)
+
+                    HStack(spacing: 5) {
+                        Text(sourceLabel.uppercased())
+                        Text("·")
+                        Text(AgentHomeRelative.shortLabel(for: item.createdAt).uppercased())
+                    }
+                    .font(OpsType.mono(OpsSize.micro, weight: .medium))
+                    .tracking(0.9)
+                    .foregroundStyle(OpsInk.dim)
+                    .lineLimit(1)
+                }
+                .frame(width: Metrics.width, height: Metrics.labelHeight, alignment: .topLeading)
+            }
+            .frame(
+                width: Metrics.width,
+                height: Metrics.imageHeight + Metrics.captionGap + Metrics.labelHeight,
+                alignment: .topLeading
+            )
+            .padding(Metrics.padding)
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: OpsRadius.standard, style: .continuous)
+                        .fill(OpsSurface.tintFill(OpsTint.amber.color))
+                }
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: OpsRadius.standard, style: .continuous)
+                    .stroke(
+                        isSelected ? OpsSurface.tintBorder(OpsTint.amber.color) : Color.clear,
+                        lineWidth: OpsStroke.thin
+                    )
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct AgentHomeMediaPreview: View {
+    let media: CaptureMediaAsset?
+    var maxPixelSize: CGFloat = 420
+
+    @State private var image: NSImage?
+
+    private var cacheKey: String {
+        guard let media else { return "none" }
+        return "\(Int(maxPixelSize)):\(media.url.path)"
+    }
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: OpsRadius.standard, style: .continuous)
+                .fill(OpsSurface.inset)
+
+            if let image {
+                Image(nsImage: image)
+                    .interpolation(.medium)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+            } else {
+                AgentHomeMediaPlaceholder(isVideo: media?.isVideo == true)
+            }
+
+            LinearGradient(
+                colors: [
+                    .white.opacity(0.18),
+                    .clear,
+                    OpsInk.ink.opacity(0.08),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .allowsHitTesting(false)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: OpsRadius.standard, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: OpsRadius.standard, style: .continuous)
+                .stroke(OpsHairline.standard, lineWidth: OpsStroke.thin)
+        }
+        .overlay(alignment: .topTrailing) {
+            if media?.isVideo == true {
+                Image(systemName: "play.fill")
+                    .font(OpsType.ui(OpsSize.micro, weight: .bold))
+                    .foregroundStyle(OpsInk.ink)
+                    .padding(5)
+                    .background(Circle().fill(OpsInk.surface.opacity(0.82)))
+                    .padding(5)
+            }
+        }
+        .task(id: cacheKey) {
+            await loadPreviewImage()
+        }
+    }
+
+    private func loadPreviewImage() async {
+        guard let media else {
+            await MainActor.run { image = nil }
+            return
+        }
+
+        if let cached = await MainActor.run(body: { AgentHomeMediaPreviewCache.image(for: cacheKey) }) {
+            await MainActor.run { image = cached }
+            return
+        }
+
+        await MainActor.run { image = nil }
+        let loaded = await AgentHomeMediaPreviewLoader.thumbnail(
+            for: media,
+            maxPixelSize: Int(maxPixelSize)
+        )
+        guard !Task.isCancelled else { return }
+
+        if let loaded {
+            await MainActor.run {
+                AgentHomeMediaPreviewCache.set(loaded, for: cacheKey)
+            }
+        }
+        await MainActor.run { image = loaded }
+    }
+}
+
+private struct AgentHomeMediaPlaceholder: View {
+    let isVideo: Bool
+
+    var body: some View {
+        VStack(spacing: OpsSpacing.xs) {
+            Image(systemName: isVideo ? "play.rectangle" : "photo")
+                .font(OpsType.ui(OpsSize.lg, weight: .semibold))
+                .foregroundStyle(OpsInk.dim)
+
+            Rectangle()
+                .fill(OpsHairline.standard)
+                .frame(width: 34, height: 1)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+@MainActor
+private enum AgentHomeMediaPreviewCache {
+    private static let images: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 120
+        return cache
+    }()
+
+    static func image(for key: String) -> NSImage? {
+        images.object(forKey: key as NSString)
+    }
+
+    static func set(_ image: NSImage, for key: String) {
+        images.setObject(image, forKey: key as NSString)
+    }
+}
+
+private enum AgentHomeMediaPreviewLoader {
+    static func thumbnail(for media: CaptureMediaAsset, maxPixelSize: Int) async -> NSImage? {
+        switch media {
+        case .image(let url):
+            return await imageThumbnail(for: url, maxPixelSize: maxPixelSize)
+        case .video(let url):
+            return await VideoFrameThumbnailer.thumbnailAsync(
+                for: url,
+                maxSize: CGFloat(maxPixelSize)
+            )
+        }
+    }
+
+    private static func imageThumbnail(for url: URL, maxPixelSize: Int) async -> NSImage? {
+        let box = await Task.detached(priority: .utility) {
+            SendableCGImageBox(decodeImage(for: url, maxPixelSize: maxPixelSize))
+        }.value
+
+        guard let cgImage = box.image else { return nil }
+        return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+    }
+
+    private static func decodeImage(for url: URL, maxPixelSize: Int) -> CGImage? {
+        let options: [CFString: Any] = [
+            kCGImageSourceShouldCache: false,
+        ]
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, options as CFDictionary) else {
+            return nil
+        }
+
+        let thumbnailOptions: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary)
+    }
+
+    private final class SendableCGImageBox: @unchecked Sendable {
+        let image: CGImage?
+
+        init(_ image: CGImage?) {
+            self.image = image
+        }
+    }
+}
+
 private struct AgentHomeEmptyInset: View {
     let title: String
     let detail: String
@@ -2464,6 +2816,21 @@ private extension String {
 }
 
 private extension TalkieObject {
+    var agentHomeHasVisualPreview: Bool {
+        type == .capture
+            || !screenshots.isEmpty
+            || !clips.isEmpty
+            || !visualContexts.isEmpty
+            || attachments.contains { attachment in
+                switch attachment.kind {
+                case .image, .video:
+                    return true
+                case .audio, .document, .pdf, .other:
+                    return false
+                }
+            }
+    }
+
     var agentHomeDisplayTitle: String {
         if let title = title?.agentHomeTrimmed, !title.isEmpty {
             return title

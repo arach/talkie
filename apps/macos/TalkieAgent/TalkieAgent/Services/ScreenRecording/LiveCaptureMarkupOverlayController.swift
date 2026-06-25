@@ -29,6 +29,13 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         didSet { applyDockVisibility() }
     }
 
+    /// Most live markup overlays are intentionally invisible to ScreenCaptureKit
+    /// and get baked into artifacts later. Agent quick-markup is an inspectable
+    /// popup, so it opts in to being directly screenshottable.
+    var isVisibleInScreenCapture = false {
+        didSet { applyPanelSharingType() }
+    }
+
     private var panel: NSPanel?
     private var passthroughControlsPanel: NSPanel?
     private var webView: WKWebView?
@@ -98,7 +105,7 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
-        panel.sharingType = .none
+        panel.sharingType = sharingType
         panel.ignoresMouseEvents = passthrough
         panel.acceptsMouseMovedEvents = true
         panel.hidesOnDeactivate = false
@@ -262,7 +269,7 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         controlsPanel.hasShadow = false
         controlsPanel.hidesOnDeactivate = false
         controlsPanel.canHide = false
-        controlsPanel.sharingType = .none
+        controlsPanel.sharingType = sharingType
         controlsPanel.contentView = LiveCapturePassthroughControlsView(
             onEdit: { [weak self] in
                 self?.passthrough = false
@@ -285,6 +292,15 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         passthroughControlsPanel?.orderOut(nil)
         passthroughControlsPanel?.contentView = nil
         passthroughControlsPanel = nil
+    }
+
+    private var sharingType: NSWindow.SharingType {
+        isVisibleInScreenCapture ? .readOnly : .none
+    }
+
+    private func applyPanelSharingType() {
+        panel?.sharingType = sharingType
+        passthroughControlsPanel?.sharingType = sharingType
     }
 
     private static func passthroughControlsOrigin(panelFrame: NSRect, size: NSSize) -> NSPoint {
