@@ -182,6 +182,13 @@ struct TranscriptInsertionTarget {
 
 struct TranscriptRouter: AgentRouter {
     private static let postPasteSubmitDelay: Duration = .milliseconds(180)
+    private static let modifierReleasePoll: Duration = .milliseconds(20)
+    private static let maxModifierReleaseWait: TimeInterval = 0.25
+    private static let blockingModifierFlags: NSEvent.ModifierFlags = [
+        .command,
+        .option,
+        .control
+    ]
 
     var mode: RoutingMode = .paste
 
@@ -223,6 +230,10 @@ struct TranscriptRouter: AgentRouter {
                 }
             }
 
+            let modifiersReleased = await waitForModifierReleaseBeforePaste()
+            if !modifiersReleased {
+                log.warning("Continuing paste after modifier release timeout using isolated shortcut events")
+            }
             // Paste: clipboard + simulated Cmd+V
             let pasted = simulatePaste()
             guard pasted else { return false }
@@ -257,6 +268,57 @@ struct TranscriptRouter: AgentRouter {
         return true
     }
 
+    private func waitForModifierReleaseBeforePaste() async -> Bool {
+        let startedAt = Date()
+        var lastFlags = Self.currentBlockingModifierFlags()
+        guard !lastFlags.isEmpty else { return true }
+
+        log.info("Waiting for physical hotkey modifiers to release before paste: \(Self.describeModifiers(lastFlags))")
+        while !Task.isCancelled {
+            let activeFlags = Self.currentBlockingModifierFlags()
+
+            if activeFlags.isEmpty {
+                let waitedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+                if waitedMs > 40 {
+                    log.info("Waited \(waitedMs)ms for hotkey modifiers to release before paste")
+                }
+                return true
+            }
+
+            lastFlags = activeFlags
+            if Date().timeIntervalSince(startedAt) >= Self.maxModifierReleaseWait {
+                log.warning("Timed out waiting for hotkey modifiers to release before paste: \(Self.describeModifiers(lastFlags))")
+                return false
+            }
+
+            try? await Task.sleep(for: Self.modifierReleasePoll)
+        }
+
+        log.warning("Cancelled synthetic paste while physical modifiers remain active: \(Self.describeModifiers(lastFlags))")
+        return false
+    }
+
+    private static func currentBlockingModifierFlags() -> NSEvent.ModifierFlags {
+        // NSEvent.modifierFlags can retain synthetic flags from a global hotkey
+        // event. Read the HID state so Caps Lock -> Hyper transports don't
+        // make paste wait forever after the physical key is released.
+        let flags = CGEventSource.flagsState(.hidSystemState)
+        var modifiers: NSEvent.ModifierFlags = []
+        if flags.contains(.maskControl) { modifiers.insert(.control) }
+        if flags.contains(.maskAlternate) { modifiers.insert(.option) }
+        if flags.contains(.maskCommand) { modifiers.insert(.command) }
+        return modifiers.intersection(Self.blockingModifierFlags)
+    }
+
+    private static func describeModifiers(_ flags: NSEvent.ModifierFlags) -> String {
+        var parts: [String] = []
+        if flags.contains(.control) { parts.append("control") }
+        if flags.contains(.option) { parts.append("option") }
+        if flags.contains(.shift) { parts.append("shift") }
+        if flags.contains(.command) { parts.append("command") }
+        return parts.isEmpty ? "none" : parts.joined(separator: "+")
+    }
+
     @MainActor
     private func simulatePaste() -> Bool {
         // Use cached accessibility check (pre-warmed on boot) for fast path.
@@ -280,7 +342,7 @@ struct TranscriptRouter: AgentRouter {
             return false
         }
 
-        log.info("Pasted via private shortcut event source")
+        log.info("Pasted via isolated shortcut event source")
         return true
     }
 
@@ -292,7 +354,7 @@ struct TranscriptRouter: AgentRouter {
     }
 
     private func simulateEnter() -> Bool {
-        // Return/Enter key = 0x24. Use the same private event source as paste
+        // Return/Enter key = 0x24. Use the same isolated event source as paste
         // so a just-released hotkey cannot turn this into a modified Enter.
         if postSyntheticShortcut(keyCode: 0x24, modifiers: []) {
             log.info("Sent Enter key")
@@ -305,7 +367,7 @@ struct TranscriptRouter: AgentRouter {
 
     private func postSyntheticShortcut(keyCode: UInt16, modifiers: CGEventFlags) -> Bool {
         guard let source = CGEventSource(stateID: .privateState) else {
-            log.error("Failed to create private CGEventSource")
+            log.error("Failed to create isolated CGEventSource")
             return false
         }
 

@@ -683,9 +683,6 @@ private struct ScopeLibraryMediaThumbnail: View {
         .task(id: taskID) {
             await loadThumbnail()
         }
-        .onDisappear {
-            image = nil
-        }
     }
 
     private func loadThumbnail() async {
@@ -785,12 +782,13 @@ private enum ScopeLibraryThumbnailCache {
 private enum ScopeLibraryImageThumbnailer {
     static func thumbnailAsync(for url: URL, maxPixelSize: Int) async -> NSImage? {
         let box = await Task.detached(priority: .utility) {
-            SendableThumbnailBox(decodeThumbnail(for: url, maxPixelSize: maxPixelSize))
+            SendableCGImageBox(decodeThumbnail(for: url, maxPixelSize: maxPixelSize))
         }.value
-        return box.image
+        guard let cgImage = box.image else { return nil }
+        return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
     }
 
-    private static func decodeThumbnail(for url: URL, maxPixelSize: Int) -> NSImage? {
+    private static func decodeThumbnail(for url: URL, maxPixelSize: Int) -> CGImage? {
         let options: [CFString: Any] = [
             kCGImageSourceShouldCache: false
         ]
@@ -808,13 +806,13 @@ private enum ScopeLibraryImageThumbnailer {
             return nil
         }
 
-        return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+        return cgImage
     }
 
-    private final class SendableThumbnailBox: @unchecked Sendable {
-        let image: NSImage?
+    private final class SendableCGImageBox: @unchecked Sendable {
+        let image: CGImage?
 
-        init(_ image: NSImage?) {
+        init(_ image: CGImage?) {
             self.image = image
         }
     }
@@ -995,6 +993,7 @@ public struct ScopeLibraryList: View {
                                 isSelected: selectedID == object.id,
                                 onSelect: { onSelect?(object) }
                             )
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .overlay(alignment: .top) {
                                 if idx > 0 {
                                     ScopeRule(.row)
@@ -1004,7 +1003,9 @@ public struct ScopeLibraryList: View {
                     }
                 }
                 .padding(.bottom, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .frame(maxWidth: .infinity)
             .background(ScopeCanvas.canvas)
         }
     }

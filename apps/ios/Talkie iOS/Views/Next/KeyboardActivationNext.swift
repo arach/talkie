@@ -57,6 +57,15 @@ final class KeyboardActivationStore: ObservableObject {
         case idle, arming, ready, recording, stopping, transcribing, done, error
     }
 
+    var showsKeyboardSetup: Bool {
+        switch phase {
+        case .idle, .arming, .ready, .error:
+            true
+        case .recording, .stopping, .transcribing, .done:
+            false
+        }
+    }
+
     init() {
         returnInfoDismissed = UserDefaults.standard.bool(forKey: Self.returnInfoDismissedKey)
 
@@ -113,6 +122,11 @@ final class KeyboardActivationStore: ObservableObject {
     func performRecovery(_ action: RecoveryAction) {
         checker.perform(action)
         refreshFromLiveState()
+    }
+
+    func openKeyboardSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
     }
 
     private func refreshFromLiveState() {
@@ -178,6 +192,12 @@ struct KeyboardActivationNext: View {
                     .padding(.horizontal, 16)
 
                 Spacer()
+
+                if store.showsKeyboardSetup {
+                    keyboardSetupCard
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 12)
+                }
 
                 bottomInfoArea
                     .padding(.horizontal, 16)
@@ -424,6 +444,60 @@ struct KeyboardActivationNext: View {
                 .talkieType(.preview)
                 .foregroundStyle(theme.colors.textSecondary)
         }
+    }
+
+    private var keyboardSetupCard: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: "keyboard")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(theme.colors.textSecondary)
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(theme.colors.textTertiary.opacity(0.10)))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Talkie Keyboard")
+                    .talkieType(.fieldLabel)
+                    .foregroundStyle(theme.colors.textSecondary)
+                Text("Add it in iOS Settings, then allow full access.")
+                    .talkieType(.hint)
+                    .foregroundStyle(theme.colors.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 8)
+
+            Button(action: store.openKeyboardSettings) {
+                HStack(spacing: 4) {
+                    Image(systemName: "gear")
+                        .font(.system(size: 9, weight: .semibold))
+                    Text("Settings")
+                        .talkieType(.channelLabelTiny)
+                }
+                .foregroundStyle(theme.colors.textSecondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(theme.colors.textTertiary.opacity(0.1))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .strokeBorder(theme.colors.textTertiary.opacity(0.22), lineWidth: 0.5)
+                        )
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open Talkie settings")
+            .accessibilityHint("Shows iOS settings for enabling the Talkie Keyboard extension.")
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(theme.colors.cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(theme.colors.textTertiary.opacity(0.15), lineWidth: 0.5)
+                )
+        )
     }
 
     private func errorView(_ message: String) -> some View {

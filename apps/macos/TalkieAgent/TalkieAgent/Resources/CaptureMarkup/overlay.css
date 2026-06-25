@@ -9,7 +9,7 @@
   /* Slate · flat opaque charcoal — no gradient, no translucency, no blur. */
   --surface: #16181D;
 
-  /* the recessed well behind the segmented tool/mode keys */
+  /* the recessed well behind the segmented tool keys */
   --well: rgba(0, 0, 0, 0.22);
 
   /* flat accent active: faint tint + crisp 1px square inset border.
@@ -156,8 +156,7 @@ button:focus-visible {
 }
 
 /* Recessed wells — flat, hairline edge, tight 1px gaps between keys. */
-.tool-segment,
-.mode-switch {
+.tool-segment {
   display: flex;
   align-items: center;
   gap: 1px;
@@ -174,7 +173,6 @@ button:focus-visible {
 }
 
 .tool,
-.mode,
 .note-style,
 .line-style,
 .action,
@@ -212,7 +210,6 @@ button:focus-visible {
 
 /* flat active: accent tint + crisp 1px square inset border. */
 .tool.active,
-.mode.active,
 .width.active,
 .style-toggle.active,
 .note-style.active,
@@ -361,7 +358,6 @@ button:focus-visible {
   }
 
   .tool,
-  .mode,
   .action,
   .style-toggle {
     height: 27px;
@@ -371,10 +367,6 @@ button:focus-visible {
   .glyph-action {
     width: 27px;
     padding: 0;
-  }
-
-  .mode {
-    padding: 0 7px;
   }
 
   .style-toggle {
@@ -405,17 +397,6 @@ button:focus-visible {
   font: 650 15px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
 }
 
-.note-editor[data-mode="demo"] {
-  border-color: rgba(255, 255, 255, 0.22);
-  color: rgba(255, 255, 255, 0.95);
-  background: rgba(19, 22, 30, 0.9);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.34);
-}
-
 .note-editor::placeholder {
   color: rgba(84, 65, 33, 0.52);
-}
-
-.note-editor[data-mode="demo"]::placeholder {
-  color: rgba(255, 255, 255, 0.46);
 }

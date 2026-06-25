@@ -2234,6 +2234,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             if trackCapturePerf {
                 CapturePerformanceMonitor.shared.endSession(outcome: success ? "success" : "cancelled_or_failed")
             }
+        case .screenshotMarkup(let mode):
+            if trackCapturePerf {
+                CapturePerformanceMonitor.shared.updateMode(mode.rawValue)
+                CapturePerformanceMonitor.shared.mark("capture.route.begin")
+            }
+            let success = await executeCapture(mode: mode, opensMarkup: true)
+            if trackCapturePerf {
+                CapturePerformanceMonitor.shared.endSession(outcome: success ? "markup_success" : "cancelled_or_failed")
+            }
         case .screenshotRegion(let rect):
             if trackCapturePerf {
                 CapturePerformanceMonitor.shared.updateMode(CaptureMode.region.rawValue)
@@ -2242,6 +2251,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             let success = await executeCapture(mode: .region, preselectedRegion: rect)
             if trackCapturePerf {
                 CapturePerformanceMonitor.shared.endSession(outcome: success ? "success" : "cancelled_or_failed")
+            }
+        case .screenshotMarkupRegion(let rect):
+            if trackCapturePerf {
+                CapturePerformanceMonitor.shared.updateMode(CaptureMode.region.rawValue)
+                CapturePerformanceMonitor.shared.mark("capture.route.begin")
+            }
+            let success = await executeCapture(mode: .region, preselectedRegion: rect, opensMarkup: true)
+            if trackCapturePerf {
+                CapturePerformanceMonitor.shared.endSession(outcome: success ? "markup_success" : "cancelled_or_failed")
             }
         case .screenRecord(let mode):
             await ScreenRecordingController.shared.startRecording(mode: mode)
@@ -2287,7 +2305,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     /// Otherwise, checks the preferred launcher setting.
     /// Internal so Home-screen CTAs can fire the same path the hotkeys take.
     @MainActor
-    func executeCapture(mode: CaptureMode, preselectedRegion: CGRect? = nil) async -> Bool {
+    func executeCapture(
+        mode: CaptureMode,
+        preselectedRegion: CGRect? = nil,
+        opensMarkup: Bool = false
+    ) async -> Bool {
         let recorder = MemoRecordingController.shared
 
         if recorder.state.isRecording {
@@ -2297,7 +2319,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             return true
         }
 
-        return await captureWithBuiltin(mode: mode, preselectedRegion: preselectedRegion)
+        return await captureWithBuiltin(
+            mode: mode,
+            preselectedRegion: preselectedRegion,
+            opensMarkup: opensMarkup
+        )
     }
 
     @MainActor
@@ -2515,7 +2541,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     }
 
     @MainActor
-    private func captureWithBuiltin(mode: CaptureMode, preselectedRegion: CGRect? = nil) async -> Bool {
+    private func captureWithBuiltin(
+        mode: CaptureMode,
+        preselectedRegion: CGRect? = nil,
+        opensMarkup: Bool = false
+    ) async -> Bool {
         CapturePerformanceMonitor.shared.mark("capture.service.begin")
         guard let result = await ScreenshotCaptureService.shared.captureStandalone(
             mode: mode,
@@ -2526,14 +2556,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         }
         CapturePerformanceMonitor.shared.mark("capture.service.complete")
 
-        // Show preview immediately; file-backed drag/copy attaches after the tray write.
-        CapturePerformanceMonitor.shared.mark("preview.show.begin")
-        let previewID = ScreenshotPreviewPanel.shared.show(
-            thumbnail: result.previewImage,
-            sourceWidth: result.width,
-            sourceHeight: result.height
-        )
-        CapturePerformanceMonitor.shared.mark("preview.show.complete")
+        let previewID: UUID?
+        if opensMarkup {
+            ScreenshotPreviewPanel.shared.dismiss()
+            previewID = nil
+        } else {
+            // Show preview immediately; file-backed drag/copy attaches after the tray write.
+            CapturePerformanceMonitor.shared.mark("preview.show.begin")
+            previewID = ScreenshotPreviewPanel.shared.show(
+                thumbnail: result.previewImage,
+                sourceWidth: result.width,
+                sourceHeight: result.height
+            )
+            CapturePerformanceMonitor.shared.mark("preview.show.complete")
+        }
         recordLiveScreenshotForActiveDictationIfNeeded(result, mode: mode)
 
         CapturePerformanceMonitor.shared.mark("tray.add.begin")
@@ -2552,7 +2588,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             return false
         }
         CapturePerformanceMonitor.shared.mark("tray.add.complete")
-        ScreenshotPreviewPanel.shared.attachFileURL(latestItem.tempURL, to: previewID)
+        if let previewID {
+            ScreenshotPreviewPanel.shared.attachFileURL(latestItem.tempURL, to: previewID)
+        }
         ScreenRecordingController.shared.recordScreenshotHighlight(
             capturedAt: result.capturedAt,
             filename: latestItem.filename,
@@ -2565,6 +2603,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             displayName: result.displayName
         )
         TrayActionService.shared.persistStandaloneScreenshotToLibrary(latestItem)
+        if opensMarkup {
+            CaptureMarkupCoordinator.shared.openSession(imageURL: latestItem.tempURL)
+        }
         return true
     }
 

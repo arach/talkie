@@ -24,6 +24,7 @@ final class CaptureHUDController: CaptureChordController {
         let showCameraOption = options.showCameraOption && FeatureFlags.shared.enableCameraBubble
         let hasTrayItems = options.showTrayOption && !allItems.isEmpty
         let hasSelectionItems = options.showSelectionOption && SelectionTray.shared.isNotEmpty
+        let showMarkupOption = options.showMarkupOption
         let trayCount = allItems.count
 
         let expectedFrame = CaptureHUDPanel.expectedFrame(
@@ -50,6 +51,7 @@ final class CaptureHUDController: CaptureChordController {
                 showCameraOption: showCameraOption,
                 showTrayOption: hasTrayItems,
                 showSelectionOption: hasSelectionItems,
+                showMarkupOption: showMarkupOption,
                 trayCount: trayCount,
                 palette: initialPalette
             )
@@ -74,11 +76,7 @@ final class CaptureHUDController: CaptureChordController {
                 let selected = self.panel.state.selectedCaptureMode
                 switch self.panel.state.mode {
                 case .screenshot:
-                    if selected == .region, self.armedRegionOverlay != nil {
-                        resetTimeout()
-                    } else {
-                        resume(.screenshot(selected))
-                    }
+                    resume(self.screenshotResult(for: selected))
                 case .video:
                     resume(.screenRecord(selected))
                 }
@@ -123,27 +121,30 @@ final class CaptureHUDController: CaptureChordController {
                     timeout.cancel()
                     switch currentMode {
                     case .screenshot:
-                        if self.armedRegionOverlay != nil {
-                            resetTimeout()
-                        } else {
-                            resume(.screenshot(.region))
-                        }
+                        resume(self.screenshotResult(for: .region))
                     case .video:      resume(.screenRecord(.region))
                     }
 
                 case "s":
                     timeout.cancel()
                     switch currentMode {
-                    case .screenshot: resume(.screenshot(.fullscreen))
+                    case .screenshot: resume(self.screenshotResult(for: .fullscreen))
                     case .video:      resume(.screenRecord(.fullscreen))
                     }
 
                 case "d":
                     timeout.cancel()
                     switch currentMode {
-                    case .screenshot: resume(.screenshot(.window))
+                    case .screenshot: resume(self.screenshotResult(for: .window))
                     case .video:      resume(.screenRecord(.window))
                     }
+
+                case "m":
+                    if showMarkupOption, currentMode == .screenshot {
+                        self.panel.state.markupDestinationEnabled.toggle()
+                        self.syncArmedRegionOverlay(resume: resume)
+                    }
+                    resetTimeout()
 
                 case "c":
                     if showCameraOption {
@@ -215,6 +216,14 @@ final class CaptureHUDController: CaptureChordController {
 
     // MARK: - Private
 
+    private func screenshotResult(for mode: CaptureMode) -> CaptureBarResult {
+        panel.state.markupDestinationEnabled ? .screenshotMarkup(mode) : .screenshot(mode)
+    }
+
+    private func screenshotRegionResult(for rect: CGRect) -> CaptureBarResult {
+        panel.state.markupDestinationEnabled ? .screenshotMarkupRegion(rect) : .screenshotRegion(rect)
+    }
+
     private func tearDown() {
         cancelArmedRegionOverlay()
         panel.dismiss()
@@ -250,7 +259,7 @@ final class CaptureHUDController: CaptureChordController {
                 self?.armedRegionTask = nil
             }
             if let rect {
-                resume(.screenshotRegion(rect))
+                resume(self?.screenshotRegionResult(for: rect))
             } else {
                 resume(nil)
             }

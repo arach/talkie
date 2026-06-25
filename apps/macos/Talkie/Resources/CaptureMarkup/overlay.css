@@ -147,8 +147,7 @@ button:focus-visible {
   outline-offset: 1px;
 }
 
-.tool-segment,
-.mode-switch {
+.tool-segment {
   display: flex;
   align-items: center;
   gap: 0;
@@ -159,8 +158,7 @@ button:focus-visible {
 }
 
 /* crisp 1px wells between segmented keys */
-.tool-segment > * + *,
-.mode-switch > * + * {
+.tool-segment > * + * {
   box-shadow: inset 1px 0 0 var(--hairline);
 }
 
@@ -171,7 +169,6 @@ button:focus-visible {
 }
 
 .tool,
-.mode,
 .note-style,
 .line-style,
 .action,
@@ -183,7 +180,6 @@ button:focus-visible {
 
 /* unified active state: faint flat fill + crisp amber bottom rule (tool-tab) */
 .tool.active,
-.mode.active,
 .width.active,
 .style-toggle.active,
 .note-style.active,
@@ -350,7 +346,6 @@ button:focus-visible {
   }
 
   .tool,
-  .mode,
   .action,
   .style-toggle {
     height: 27px;
@@ -391,17 +386,6 @@ button:focus-visible {
   font: 650 15px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
 }
 
-.note-editor[data-mode="demo"] {
-  border-color: rgba(255, 255, 255, 0.22);
-  color: rgba(255, 255, 255, 0.95);
-  background: rgba(19, 22, 30, 0.9);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.34);
-}
-
 .note-editor::placeholder {
   color: rgba(84, 65, 33, 0.52);
-}
-
-.note-editor[data-mode="demo"]::placeholder {
-  color: rgba(255, 255, 255, 0.46);
 }

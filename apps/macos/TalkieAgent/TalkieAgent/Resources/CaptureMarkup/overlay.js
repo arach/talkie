@@ -15,29 +15,13 @@
     styleOpen: false,
     context: "recording",
     layers: [],
+    redoStack: [],
     creating: null,
     noteEditor: null,
     selectedLayerId: null,
     dragging: null,
     lastPointer: { x: 0.5, y: 0.5 },
     startedAt: performance.now(),
-  };
-
-  const modePresets = {
-    agent: {
-      color: "#D03A1C",
-      strokeWidth: 4,
-      stylePreset: "agent-instruction",
-      noteStyle: "sticky",
-      lineStyle: "solid",
-    },
-    demo: {
-      color: "#FFFFFF",
-      strokeWidth: 7,
-      stylePreset: "demo-callout",
-      noteStyle: "glass",
-      lineStyle: "glow",
-    },
   };
 
   const noteStylePresets = {
@@ -216,10 +200,6 @@
       x: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
       y: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)),
     };
-  }
-
-  function currentPreset() {
-    return modePresets[state.mode] || modePresets.agent;
   }
 
   function currentNotePreset() {
@@ -686,7 +666,7 @@
     ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
     for (const layer of state.layers) drawLayer(layer);
     const selectedLayer = state.layers.find((layer) => layer.id === state.selectedLayerId);
-    if (selectedLayer) drawSelection(selectedLayer);
+    if (state.tool === "select" && selectedLayer) drawSelection(selectedLayer);
     if (state.creating) drawLayer(previewLayer(state.creating));
   }
 
@@ -841,6 +821,7 @@
         if (!source) return;
         const copy = duplicateLayer(source);
         state.layers.push(copy);
+        state.redoStack = [];
         state.dragging.layerId = copy.id;
         state.dragging.original = cloneLayer(copy);
         state.dragging.copied = true;
@@ -917,8 +898,8 @@
       }
     }
     state.layers.push(layer);
+    state.redoStack = [];
     state.selectedLayerId = layer.id;
-    setTool("select");
     render();
     sendUpdate();
   }
@@ -1073,8 +1054,8 @@
       endTime: nowSeconds(),
     };
     state.layers.push(layer);
+    state.redoStack = [];
     state.selectedLayerId = layer.id;
-    setTool("select");
     render();
     sendUpdate();
   }
@@ -1083,9 +1064,8 @@
     closeNoteEditor(true);
     const element = document.createElement("textarea");
     element.className = "note-editor";
-    element.dataset.mode = state.mode;
     element.dataset.noteStyle = state.noteStyle;
-    element.placeholder = state.mode === "demo" ? "Demo note" : "Note for agent";
+    element.placeholder = "Note";
     element.spellcheck = true;
     applyNotePresetToEditor(element, currentNotePreset());
     const editorLeft = Math.min(
@@ -1130,12 +1110,6 @@
       const tool = button.getAttribute("data-tool");
       if (tool) {
         setTool(tool);
-        return;
-      }
-
-      const mode = button.getAttribute("data-mode");
-      if (mode) {
-        setMode(mode);
         return;
       }
 
@@ -1184,9 +1158,6 @@
     controls.querySelectorAll(".tool").forEach((el) => {
       el.classList.toggle("active", el.getAttribute("data-tool") === state.tool);
     });
-    controls.querySelectorAll(".mode").forEach((el) => {
-      el.classList.toggle("active", el.getAttribute("data-mode") === state.mode);
-    });
     controls.querySelectorAll(".swatch").forEach((el) => {
       el.classList.toggle("active", el.getAttribute("data-color") === state.color);
     });
@@ -1232,21 +1203,6 @@
     state.tool = tool;
     document.body.dataset.tool = tool;
     setStyleOpen(false);
-    syncToolbarState();
-  }
-
-  function setMode(mode) {
-    if (!modePresets[mode]) return;
-    closeNoteEditor(true);
-    state.mode = mode;
-    const preset = currentPreset();
-    state.color = preset.color;
-    state.strokeWidth = preset.strokeWidth;
-    state.noteStyle = preset.noteStyle;
-    state.lineStyle = preset.lineStyle;
-    document.body.dataset.mode = mode;
-    document.body.dataset.noteStyle = state.noteStyle;
-    document.body.dataset.lineStyle = state.lineStyle;
     syncToolbarState();
   }
 
@@ -1343,12 +1299,6 @@
     case "t":
       cycleNoteStyle();
       break;
-    case "1":
-      setMode("agent");
-      break;
-    case "2":
-      setMode("demo");
-      break;
     case "escape":
       clearToolChord();
       break;
@@ -1360,10 +1310,21 @@
 
   function undo() {
     closeNoteEditor(false);
-    state.layers.pop();
+    const layer = state.layers.pop();
+    if (layer) state.redoStack.push(layer);
     if (!state.layers.some((layer) => layer.id === state.selectedLayerId)) {
       state.selectedLayerId = null;
     }
+    render();
+    sendUpdate();
+  }
+
+  function redo() {
+    closeNoteEditor(false);
+    const layer = state.redoStack.pop();
+    if (!layer) return;
+    state.layers.push(layer);
+    state.selectedLayerId = layer.id;
     render();
     sendUpdate();
   }
@@ -1418,20 +1379,17 @@
     }
     if (isTypingTarget(event.target)) return;
     const key = event.key.toLowerCase();
-    if (event.key === "Escape") {
+    if (event.key === "Escape" || key === "x") {
       post("liveMarkup.cancel", {});
     } else if (event.key === "Enter") {
       post("liveMarkup.done", {
         layers: state.layers,
         document: exportDocument(),
       });
+    } else if ((event.metaKey || event.ctrlKey) && event.shiftKey && key === "z") {
+      redo();
     } else if ((event.metaKey || event.ctrlKey) && key === "z") {
-      state.layers.pop();
-      if (!state.layers.some((layer) => layer.id === state.selectedLayerId)) {
-        state.selectedLayerId = null;
-      }
-      render();
-      sendUpdate();
+      undo();
     } else if (event.metaKey || event.ctrlKey || event.altKey) {
       return;
     }
@@ -1442,17 +1400,18 @@
     setTool,
     setColor,
     setStrokeWidth,
-    setMode,
     setNoteStyle,
     setLineStyle,
     setStyleOpen,
     setContext,
     undo,
+    redo,
     done,
     capture,
     cancel,
     clear() {
       state.layers = [];
+      state.redoStack = [];
       render();
       sendUpdate();
     },

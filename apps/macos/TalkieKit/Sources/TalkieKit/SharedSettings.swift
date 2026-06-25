@@ -98,6 +98,7 @@ public enum AgentSettingsKey {
     public static let pttEnabled = "pttEnabled"
     public static let selectionQuickHotkey = "selectionQuickHotkey"
     public static let captureChordHotkey = "captureChordHotkey"
+    public static let markupCaptureChordHotkey = "hotkeyCapture.markupChord"
     public static let screenRecordChordHotkey = "screenRecordChordHotkey"
     public static let pasteChordHotkey = "pasteChordHotkey"
     public static let pasteLastScreenshotHotkey = "hotkeyCapture.pasteLastScreenshot"

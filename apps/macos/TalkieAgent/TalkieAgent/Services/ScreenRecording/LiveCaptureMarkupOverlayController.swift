@@ -25,6 +25,17 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         didSet { applyToolbarContext() }
     }
 
+    var showsDock = true {
+        didSet { applyDockVisibility() }
+    }
+
+    /// Most live markup overlays are intentionally invisible to ScreenCaptureKit
+    /// and get baked into artifacts later. Agent quick-markup is an inspectable
+    /// popup, so it opts in to being directly screenshottable.
+    var isVisibleInScreenCapture = false {
+        didSet { applyPanelSharingType() }
+    }
+
     private var panel: NSPanel?
     private var passthroughControlsPanel: NSPanel?
     private var webView: WKWebView?
@@ -46,7 +57,7 @@ final class LiveCaptureMarkupOverlayController: NSObject {
                 showPassthroughControls()
             } else {
                 hidePassthroughControls()
-                setWebDockHidden(false)
+                applyDockVisibility()
                 panel.makeKeyAndOrderFront(nil)
                 if let webView { panel.makeFirstResponder(webView) }
             }
@@ -94,7 +105,7 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
-        panel.sharingType = .none
+        panel.sharingType = sharingType
         panel.ignoresMouseEvents = passthrough
         panel.acceptsMouseMovedEvents = true
         panel.hidesOnDeactivate = false
@@ -155,6 +166,29 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         }
     }
 
+    func moveBy(_ delta: CGSize) {
+        guard delta.width != 0 || delta.height != 0 else { return }
+        if let panel {
+            panel.setFrameOrigin(NSPoint(
+                x: panel.frame.minX + delta.width,
+                y: panel.frame.minY + delta.height
+            ))
+        }
+        if let passthroughControlsPanel {
+            passthroughControlsPanel.setFrameOrigin(NSPoint(
+                x: passthroughControlsPanel.frame.minX + delta.width,
+                y: passthroughControlsPanel.frame.minY + delta.height
+            ))
+        }
+    }
+
+    func setFrame(_ frame: CGRect) {
+        let next = frame.standardized
+        guard next.width >= 8, next.height >= 8 else { return }
+        panel?.setFrame(next, display: true)
+        webView?.frame = NSRect(origin: .zero, size: next.size)
+    }
+
     func setTool(_ tool: String) {
         selectedTool = tool
         evaluate("window.talkieLiveMarkup && window.talkieLiveMarkup.setTool(\(Self.jsString(tool)));")
@@ -172,6 +206,10 @@ final class LiveCaptureMarkupOverlayController: NSObject {
 
     func undo() {
         evaluate("window.talkieLiveMarkup && window.talkieLiveMarkup.undo();")
+    }
+
+    func redo() {
+        evaluate("window.talkieLiveMarkup && window.talkieLiveMarkup.redo();")
     }
 
     func finish() {
@@ -231,7 +269,7 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         controlsPanel.hasShadow = false
         controlsPanel.hidesOnDeactivate = false
         controlsPanel.canHide = false
-        controlsPanel.sharingType = .none
+        controlsPanel.sharingType = sharingType
         controlsPanel.contentView = LiveCapturePassthroughControlsView(
             onEdit: { [weak self] in
                 self?.passthrough = false
@@ -254,6 +292,15 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         passthroughControlsPanel?.orderOut(nil)
         passthroughControlsPanel?.contentView = nil
         passthroughControlsPanel = nil
+    }
+
+    private var sharingType: NSWindow.SharingType {
+        isVisibleInScreenCapture ? .readOnly : .none
+    }
+
+    private func applyPanelSharingType() {
+        panel?.sharingType = sharingType
+        passthroughControlsPanel?.sharingType = sharingType
     }
 
     private static func passthroughControlsOrigin(panelFrame: NSRect, size: NSSize) -> NSPoint {
@@ -316,11 +363,20 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         setColor(selectedColor)
         setStrokeWidth(selectedStrokeWidth)
         applyToolbarContext()
+        applyDockVisibility()
     }
 
     private func applyToolbarContext() {
         let context = showsCaptureAction ? "desktopInk" : "recording"
         evaluate("window.talkieLiveMarkup && window.talkieLiveMarkup.setContext(\(Self.jsString(context)));")
+    }
+
+    private func applyDockVisibility() {
+        guard !passthrough else {
+            setWebDockHidden(true)
+            return
+        }
+        setWebDockHidden(!showsDock)
     }
 }
 

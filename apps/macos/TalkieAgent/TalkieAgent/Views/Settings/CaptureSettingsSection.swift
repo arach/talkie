@@ -38,6 +38,12 @@ private enum CaptureShortcuts {
             defaultConfig: HotkeyConfig(keyCode: 1, modifiers: hyper)   // Hyper+S
         ),
         CaptureShortcut(
+            id: AgentSettingsKey.markupCaptureChordHotkey,
+            title: "Screenshot to markup",
+            subtitle: "Open the screenshot HUD with Markup already enabled",
+            defaultConfig: HotkeyConfig(keyCode: 46, modifiers: hyper)  // Hyper+M
+        ),
+        CaptureShortcut(
             id: AgentSettingsKey.screenRecordChordHotkey,
             title: "Screen recording",
             subtitle: "Open the capture HUD on the recording tab",
@@ -97,7 +103,7 @@ private enum CaptureShortcuts {
             id: "hotkeyCapture.desktopMagnifier",
             title: "Desktop magnifier",
             subtitle: "Freeze a region and place a magnified copy on the desktop",
-            defaultConfig: HotkeyConfig(keyCode: 46, modifiers: hyper)  // Hyper+M
+            defaultConfig: HotkeyConfig(keyCode: 6, modifiers: hyper)   // Hyper+Z
         ),
     ]
 

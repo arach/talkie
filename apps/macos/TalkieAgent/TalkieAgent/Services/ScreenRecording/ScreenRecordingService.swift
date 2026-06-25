@@ -449,18 +449,26 @@ final class ScreenRecordingService: NSObject {
         case .region(let display, let rect):
             filter = SCContentFilter(display: display, excludingWindows: [])
             let scale = scaleFactorForDisplay(display)
-            // Set source rect to capture only the selected region
-            let displayFrame = CGRect(
+            // `rect` is in AppKit global coordinates (bottom-left origin). SCStreamConfiguration
+            // .sourceRect is display-local with a TOP-left origin, so flip Y against the matching
+            // NSScreen frame — NOT SCDisplay.frame, which is CoreGraphics (top-left). The two
+            // origins coincide on the main display but diverge on a vertically-offset secondary
+            // display, which pushed the source past the display bottom and baked a black band
+            // into the clip. Clamp to the display so the source can never spill off-screen.
+            let screenFrame = nsScreen(for: display)?.frame ?? CGRect(
                 x: CGFloat(display.frame.origin.x),
                 y: CGFloat(display.frame.origin.y),
                 width: CGFloat(display.width),
                 height: CGFloat(display.height)
             )
-            let relX = rect.origin.x - displayFrame.origin.x
-            let relY = displayFrame.height - (rect.origin.y - displayFrame.origin.y) - rect.height  // Flip Y
-            config.sourceRect = CGRect(x: relX, y: relY, width: rect.width, height: rect.height)
-            config.width = Self.videoDimension(rect.width * CGFloat(scale))
-            config.height = Self.videoDimension(rect.height * CGFloat(scale))
+            let relX = rect.origin.x - screenFrame.origin.x
+            let relY = screenFrame.height - (rect.origin.y - screenFrame.origin.y) - rect.height  // Flip Y
+            let sourceRect = CGRect(x: relX, y: relY, width: rect.width, height: rect.height)
+                .intersection(CGRect(origin: .zero, size: screenFrame.size))
+                .standardized
+            config.sourceRect = sourceRect
+            config.width = Self.videoDimension(sourceRect.width * CGFloat(scale))
+            config.height = Self.videoDimension(sourceRect.height * CGFloat(scale))
 
         case .window(let scWindow):
             let windowFilter = SCContentFilter(desktopIndependentWindow: scWindow)
@@ -756,7 +764,21 @@ final class ScreenRecordingService: NSObject {
         }
     }
 
+    /// Map an `SCDisplay` to its `NSScreen` by display ID. Needed because SCDisplay
+    /// frames are CoreGraphics (top-left) while region selection works in AppKit
+    /// (bottom-left) coordinates — matching on geometry across the two spaces is
+    /// unreliable on multi-display setups, so we match on the stable display ID.
+    private func nsScreen(for display: SCDisplay) -> NSScreen? {
+        NSScreen.screens.first { screen in
+            let id = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
+            return id == display.displayID
+        }
+    }
+
     private func scaleFactorForDisplay(_ display: SCDisplay) -> Int {
+        if let screen = nsScreen(for: display) {
+            return Int(screen.backingScaleFactor)
+        }
         let frame = displayFrame(display)
         for screen in NSScreen.screens {
             if screen.frame == frame || screen.frame.intersects(frame) {
