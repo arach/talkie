@@ -208,6 +208,9 @@ final class AgentCaptureMarkupController {
             onDragDelta: { [weak self] delta in
                 self?.moveSurface(by: delta)
             },
+            onResizeDelta: { [weak self] edges, delta in
+                self?.resizeSurface(edges: edges, by: delta)
+            },
             onZoom: { [weak self] factor in
                 self?.zoomSurface(by: factor)
             },
@@ -275,6 +278,21 @@ final class AgentCaptureMarkupController {
             from: placement,
             imageSize: imageSize,
             factor: factor
+        ))
+    }
+
+    private func resizeSurface(edges: AgentCaptureMarkupResizeEdges, by delta: CGSize) {
+        guard !edges.isEmpty,
+              let placement = currentPlacement,
+              let imageSize = activeImageSize else {
+            return
+        }
+
+        applyPlacement(Self.resizedPlacement(
+            from: placement,
+            imageSize: imageSize,
+            edges: edges,
+            delta: delta
         ))
     }
 
@@ -547,6 +565,59 @@ final class AgentCaptureMarkupController {
         )
     }
 
+    private static func resizedPlacement(
+        from placement: AgentCaptureMarkupPlacement,
+        imageSize: CGSize,
+        edges: AgentCaptureMarkupResizeEdges,
+        delta: CGSize
+    ) -> AgentCaptureMarkupPlacement {
+        let bounds = placement.screen.frame.insetBy(dx: 4, dy: 4)
+        let minimum = minimumSurfaceSize(in: bounds)
+        let old = placement.surfaceRect.standardized
+
+        var minX = old.minX
+        var maxX = old.maxX
+        var minY = old.minY
+        var maxY = old.maxY
+
+        if edges.contains(.left) {
+            minX = clamp(old.minX + delta.width, min: bounds.minX, max: old.maxX - minimum.width)
+        }
+        if edges.contains(.right) {
+            maxX = clamp(old.maxX + delta.width, min: old.minX + minimum.width, max: bounds.maxX)
+        }
+        if edges.contains(.bottom) {
+            minY = clamp(old.minY + delta.height, min: bounds.minY, max: old.maxY - minimum.height)
+        }
+        if edges.contains(.top) {
+            maxY = clamp(old.maxY + delta.height, min: old.minY + minimum.height, max: bounds.maxY)
+        }
+
+        let surfaceRect = CGRect(
+            x: minX.rounded(),
+            y: minY.rounded(),
+            width: max(minimum.width, maxX - minX).rounded(),
+            height: max(minimum.height, maxY - minY).rounded()
+        )
+        let imageRect = aspectFitRect(imageSize: imageSize, in: contentRect(in: surfaceRect))
+        return AgentCaptureMarkupPlacement(
+            screen: placement.screen,
+            surfaceRect: surfaceRect,
+            imageRect: imageRect
+        )
+    }
+
+    private static func minimumSurfaceSize(in bounds: CGRect) -> CGSize {
+        let chromeWidth = AgentCaptureMarkupLayout.edgePadding * 2
+        let chromeHeight = AgentCaptureMarkupLayout.edgePadding * 2
+            + AgentCaptureMarkupLayout.titlebarHeight
+            + AgentCaptureMarkupLayout.bottomToolbarHeight
+        return CGSize(
+            width: min(bounds.width, AgentCaptureMarkupLayout.minimumImageWidth + chromeWidth),
+            height: min(bounds.height, AgentCaptureMarkupLayout.minimumImageHeight + chromeHeight)
+        )
+    }
+
     private static func aspectFitRect(imageSize: CGSize, in rect: CGRect) -> CGRect {
         let ratio = max(0.05, imageSize.width / max(1, imageSize.height))
         var width = rect.width
@@ -620,10 +691,23 @@ private enum AgentCaptureMarkupLayout {
     static let titlebarHeight: CGFloat = 42
     static let bottomToolbarHeight: CGFloat = 42
     static let edgePadding: CGFloat = 8
+    static let resizeHitSlop: CGFloat = 12
+    static let resizeGripSize: CGFloat = 18
+    static let minimumImageWidth: CGFloat = 220
+    static let minimumImageHeight: CGFloat = 150
     static let zoomStep: CGFloat = 1.08
     static let chromeRadius: CGFloat = 7
     static let imageRadius: CGFloat = 3
     static let controlRadius: CGFloat = 4
+}
+
+private struct AgentCaptureMarkupResizeEdges: OptionSet {
+    let rawValue: Int
+
+    static let left = AgentCaptureMarkupResizeEdges(rawValue: 1 << 0)
+    static let right = AgentCaptureMarkupResizeEdges(rawValue: 1 << 1)
+    static let bottom = AgentCaptureMarkupResizeEdges(rawValue: 1 << 2)
+    static let top = AgentCaptureMarkupResizeEdges(rawValue: 1 << 3)
 }
 
 private final class AgentCaptureMarkupDragHandlePanel: NSPanel {
@@ -632,18 +716,26 @@ private final class AgentCaptureMarkupDragHandlePanel: NSPanel {
 }
 
 private final class AgentCaptureMarkupBackgroundView: NSView {
+    private enum DragMode {
+        case move
+        case resize(AgentCaptureMarkupResizeEdges)
+    }
+
     private let image: NSImage
     private var imageRect: NSRect
     private let onDragDelta: (CGSize) -> Void
+    private let onResizeDelta: (AgentCaptureMarkupResizeEdges, CGSize) -> Void
     private let onZoom: (CGFloat) -> Void
     private let onDone: () -> Void
     private let onCancel: () -> Void
     private var lastDragScreenPoint: NSPoint?
+    private var activeDragMode: DragMode?
 
     init(
         image: NSImage,
         imageRect: NSRect,
         onDragDelta: @escaping (CGSize) -> Void,
+        onResizeDelta: @escaping (AgentCaptureMarkupResizeEdges, CGSize) -> Void,
         onZoom: @escaping (CGFloat) -> Void,
         onDone: @escaping () -> Void,
         onCancel: @escaping () -> Void
@@ -651,6 +743,7 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         self.image = image
         self.imageRect = imageRect
         self.onDragDelta = onDragDelta
+        self.onResizeDelta = onResizeDelta
         self.onZoom = onZoom
         self.onDone = onDone
         self.onCancel = onCancel
@@ -663,6 +756,10 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
     }
 
     override func resetCursorRects() {
+        addCursorRect(topResizeRect, cursor: .resizeUpDown)
+        addCursorRect(bottomResizeRect, cursor: .resizeUpDown)
+        addCursorRect(leftResizeRect, cursor: .resizeLeftRight)
+        addCursorRect(rightResizeRect, cursor: .resizeLeftRight)
         addCursorRect(dragRegion, cursor: .openHand)
         addCursorRect(doneButtonRect, cursor: .pointingHand)
         addCursorRect(cancelButtonRect, cursor: .pointingHand)
@@ -688,10 +785,17 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
             onDone()
             return
         }
+        if let edges = resizeEdges(at: point) {
+            activeDragMode = .resize(edges)
+            lastDragScreenPoint = screenPoint(for: event)
+            return
+        }
         guard dragRegion.contains(point) else {
+            activeDragMode = nil
             lastDragScreenPoint = nil
             return
         }
+        activeDragMode = .move
         lastDragScreenPoint = screenPoint(for: event)
     }
 
@@ -701,11 +805,20 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
             return
         }
         lastDragScreenPoint = current
-        onDragDelta(CGSize(width: current.x - last.x, height: current.y - last.y))
+        let delta = CGSize(width: current.x - last.x, height: current.y - last.y)
+        switch activeDragMode {
+        case .move:
+            onDragDelta(delta)
+        case .resize(let edges):
+            onResizeDelta(edges, delta)
+        case nil:
+            break
+        }
     }
 
     override func mouseUp(with event: NSEvent) {
         lastDragScreenPoint = nil
+        activeDragMode = nil
     }
 
     func updateImageRect(_ imageRect: NSRect) {
@@ -758,6 +871,7 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         drawBrand(in: titleRect)
         drawChromeButtons()
         drawBottomControls()
+        drawResizeGrip()
 
         let imageClip = NSBezierPath(
             roundedRect: imageRect,
@@ -793,6 +907,20 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         )
         shellBorder.lineWidth = 1
         shellBorder.stroke()
+    }
+
+    private func drawResizeGrip() {
+        let corner = resizeGripRect
+        guard corner.width >= 10, corner.height >= 10 else { return }
+
+        NSColor.white.withAlphaComponent(0.20).setStroke()
+        for offset in stride(from: CGFloat(0), through: CGFloat(8), by: CGFloat(4)) {
+            let path = NSBezierPath()
+            path.move(to: NSPoint(x: corner.maxX - 4 - offset, y: corner.minY + 4))
+            path.line(to: NSPoint(x: corner.maxX - 4, y: corner.minY + 4 + offset))
+            path.lineWidth = 1
+            path.stroke()
+        }
     }
 
     private func drawChromeRelief(in rect: NSRect) {
@@ -973,9 +1101,62 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         return NSRect(
             x: left,
             y: title.minY,
-            width: max(1, title.maxX - left - 8),
-            height: title.height
+            width: max(1, title.maxX - left - AgentCaptureMarkupLayout.resizeHitSlop - 8),
+            height: max(1, title.height - AgentCaptureMarkupLayout.resizeHitSlop)
         )
+    }
+
+    private var leftResizeRect: NSRect {
+        NSRect(x: 0, y: 0, width: AgentCaptureMarkupLayout.resizeHitSlop, height: bounds.height)
+    }
+
+    private var rightResizeRect: NSRect {
+        NSRect(
+            x: bounds.maxX - AgentCaptureMarkupLayout.resizeHitSlop,
+            y: 0,
+            width: AgentCaptureMarkupLayout.resizeHitSlop,
+            height: bounds.height
+        )
+    }
+
+    private var bottomResizeRect: NSRect {
+        NSRect(x: 0, y: 0, width: bounds.width, height: AgentCaptureMarkupLayout.resizeHitSlop)
+    }
+
+    private var topResizeRect: NSRect {
+        NSRect(
+            x: 0,
+            y: bounds.maxY - AgentCaptureMarkupLayout.resizeHitSlop,
+            width: bounds.width,
+            height: AgentCaptureMarkupLayout.resizeHitSlop
+        )
+    }
+
+    private var resizeGripRect: NSRect {
+        NSRect(
+            x: bounds.maxX - AgentCaptureMarkupLayout.resizeGripSize,
+            y: 0,
+            width: AgentCaptureMarkupLayout.resizeGripSize,
+            height: AgentCaptureMarkupLayout.resizeGripSize
+        )
+    }
+
+    private func resizeEdges(at point: NSPoint) -> AgentCaptureMarkupResizeEdges? {
+        var edges: AgentCaptureMarkupResizeEdges = []
+
+        if point.x <= bounds.minX + AgentCaptureMarkupLayout.resizeHitSlop {
+            edges.insert(.left)
+        } else if point.x >= bounds.maxX - AgentCaptureMarkupLayout.resizeHitSlop {
+            edges.insert(.right)
+        }
+
+        if point.y <= bounds.minY + AgentCaptureMarkupLayout.resizeHitSlop {
+            edges.insert(.bottom)
+        } else if point.y >= bounds.maxY - AgentCaptureMarkupLayout.resizeHitSlop {
+            edges.insert(.top)
+        }
+
+        return edges.isEmpty ? nil : edges
     }
 
     private var titleRect: NSRect {
