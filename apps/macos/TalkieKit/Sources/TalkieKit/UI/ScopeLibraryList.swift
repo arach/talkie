@@ -983,30 +983,56 @@ public struct ScopeLibraryList: View {
         if objects.isEmpty {
             emptyState
         } else {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(ScopeLibraryDateBucket.grouped(objects), id: \.bucket) { group in
-                        ScopeLibraryBucketHeader(bucket: group.bucket, count: group.items.count)
-                        ForEach(Array(group.items.enumerated()), id: \.element.id) { idx, object in
-                            ScopeLibraryRow(
-                                recording: object,
-                                isSelected: selectedID == object.id,
-                                onSelect: { onSelect?(object) }
-                            )
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .overlay(alignment: .top) {
-                                if idx > 0 {
-                                    ScopeRule(.row)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(ScopeLibraryDateBucket.grouped(objects), id: \.bucket) { group in
+                            ScopeLibraryBucketHeader(bucket: group.bucket, count: group.items.count)
+                            ForEach(Array(group.items.enumerated()), id: \.element.id) { idx, object in
+                                ScopeLibraryRow(
+                                    recording: object,
+                                    isSelected: selectedID == object.id,
+                                    onSelect: { onSelect?(object) }
+                                )
+                                .id(object.id)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .overlay(alignment: .top) {
+                                    if idx > 0 {
+                                        ScopeRule(.row)
+                                    }
                                 }
                             }
                         }
                     }
+                    .padding(.bottom, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(.bottom, 12)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .onAppear {
+                    scrollToSelection(with: proxy, animated: false)
+                }
+                .onChange(of: selectedID) { _, _ in
+                    scrollToSelection(with: proxy, animated: true)
+                }
             }
             .frame(maxWidth: .infinity)
             .background(ScopeCanvas.canvas)
+        }
+    }
+
+    private func scrollToSelection(with proxy: ScrollViewProxy, animated: Bool) {
+        guard let selectedID,
+              objects.contains(where: { $0.id == selectedID }) else { return }
+
+        let scroll = {
+            proxy.scrollTo(selectedID, anchor: .center)
+        }
+
+        if animated {
+            withAnimation(.easeOut(duration: 0.16)) {
+                scroll()
+            }
+        } else {
+            scroll()
         }
     }
 

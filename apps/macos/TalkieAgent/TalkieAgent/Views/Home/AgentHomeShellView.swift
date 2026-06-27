@@ -1281,6 +1281,11 @@ private struct AgentHomeLibraryPage: View {
         .onChange(of: store.items) { _, _ in
             reconcileSelection()
         }
+        .scopeLibraryKeyboardNavigation(
+            isEnabled: !store.items.isEmpty && store.errorMessage == nil,
+            onMoveUp: { moveSelection(by: -1) },
+            onMoveDown: { moveSelection(by: 1) }
+        )
     }
 
     @ViewBuilder
@@ -1397,6 +1402,28 @@ private struct AgentHomeLibraryPage: View {
         selectedID = item.id
         guard revealDetail, isCompactLayout else { return }
         showingDetailSheet = true
+    }
+
+    private func moveSelection(by offset: Int) {
+        guard !store.items.isEmpty else { return }
+
+        let currentIndex = selectedID.flatMap { id in
+            store.items.firstIndex { $0.id == id }
+        }
+
+        let targetIndex: Int
+        if let currentIndex {
+            targetIndex = min(
+                max(currentIndex + offset, store.items.startIndex),
+                store.items.index(before: store.items.endIndex)
+            )
+        } else {
+            targetIndex = offset < 0
+                ? store.items.index(before: store.items.endIndex)
+                : store.items.startIndex
+        }
+
+        selectItem(store.items[targetIndex], revealDetail: false)
     }
 
     private func closeDetailSheet() {

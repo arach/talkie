@@ -3,7 +3,7 @@
 //  Talkie macOS
 //
 //  Reusable keyboard navigation for list views
-//  Provides arrow keys, Enter, Tab, Shift+arrows for range selection, Cmd+A
+//  Provides arrow keys, j/k, Enter, Tab, Shift+arrows for range selection, Cmd+A
 //
 
 import SwiftUI
@@ -105,6 +105,21 @@ final class ListKeyboardNavigator<ItemID: Hashable> {
 
         let hasShift = event.modifierFlags.contains(.shift)
         let hasCmd = event.modifierFlags.contains(.command)
+        let hasControl = event.modifierFlags.contains(.control)
+        let hasOption = event.modifierFlags.contains(.option)
+
+        if !hasCmd && !hasControl && !hasOption {
+            switch event.charactersIgnoringModifiers?.lowercased() {
+            case "j":
+                moveDown(extendSelection: hasShift)
+                return nil
+            case "k":
+                moveUp(extendSelection: hasShift)
+                return nil
+            default:
+                break
+            }
+        }
 
         switch event.keyCode {
         case 125: // Down arrow
