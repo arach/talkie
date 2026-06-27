@@ -4,7 +4,9 @@
 //
 
 import AppKit
+import ImageIO
 import SwiftUI
+import TalkieKit
 
 struct AgentMenuModel: Sendable {
     var stateTitle: String
@@ -246,6 +248,7 @@ struct AgentMenuPopoverView: View {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 8) {
                     captureSection
+                    recentGrabsSection
                     recentSection
                     toolsSection
 
@@ -254,9 +257,9 @@ struct AgentMenuPopoverView: View {
                 .padding(.horizontal, 8)
                 .padding(.bottom, 8)
             }
-            .frame(maxHeight: 340)
+            .frame(maxHeight: .infinity)
         }
-        .frame(width: 320)
+        .frame(width: 320, height: 535)
         .background {
             skin.background
         }
@@ -404,6 +407,10 @@ struct AgentMenuPopoverView: View {
                 }
             }
         }
+    }
+
+    private var recentGrabsSection: some View {
+        AgentMenuRecentGrabsSection()
     }
 
     private var toolsSection: some View {
@@ -726,6 +733,253 @@ private struct AgentMenuRecentRow: View {
         .focusable(false)
         .onHover { hovering in
             isHovered = hovering
+        }
+    }
+}
+
+private struct AgentMenuRecentGrabsSection: View {
+    @State private var previews: [AgentMenuGrabPreview] = []
+    @State private var isLoading = true
+    @State private var loadGeneration = 0
+
+    var body: some View {
+        AgentMenuSection(title: "Recent Grabs") {
+            if previews.isEmpty && isLoading {
+                AgentMenuGrabSkeletonStrip()
+            } else if previews.isEmpty {
+                AgentMenuEmptyRow(title: "No recent grabs", systemImage: "photo.on.rectangle")
+            } else {
+                ScrollView(.horizontal, showsIndicators: true) {
+                    HStack(spacing: 6) {
+                        ForEach(previews) { preview in
+                            AgentMenuGrabTile(preview: preview)
+                            .transition(.opacity.combined(with: .scale(scale: 0.97)))
+                        }
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 6)
+                }
+                .frame(height: 78)
+            }
+        }
+        .task {
+            await loadPreviews()
+        }
+        .onReceive(DistributedNotificationCenter.default().publisher(
+            for: Notification.Name(LiveTrayNotifications.assetsDidChange)
+        )) { _ in
+            Task { await loadPreviews() }
+        }
+        .animation(.easeInOut(duration: 0.16), value: previews.map(\.id))
+    }
+
+    @MainActor
+    private func loadPreviews() async {
+        loadGeneration += 1
+        let generation = loadGeneration
+
+        if previews.isEmpty {
+            isLoading = true
+        }
+
+        let loadedPreviews = await AgentMenuGrabPreviewLoader.previews(limit: 8)
+        guard generation == loadGeneration, !Task.isCancelled else { return }
+        previews = loadedPreviews
+        isLoading = false
+    }
+}
+
+private struct AgentMenuGrabPreview: Identifiable {
+    let item: AgentLiveTrayItem
+    let thumbnail: NSImage?
+
+    var id: UUID { item.id }
+}
+
+private struct AgentMenuGrabSkeletonStrip: View {
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: true) {
+            HStack(spacing: 6) {
+                ForEach(0..<6, id: \.self) { _ in
+                    AgentMenuGrabSkeletonTile()
+                }
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 6)
+        }
+        .frame(height: 78)
+    }
+}
+
+private struct AgentMenuGrabSkeletonTile: View {
+    @Environment(\.agentTraySkin) private var skin
+    @State private var shimmer = false
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 6)
+            .fill(skin.tileFill)
+            .frame(width: 58, height: 54)
+            .overlay {
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0),
+                        Color.white.opacity(skin.isDark ? 0.14 : 0.34),
+                        Color.white.opacity(0),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(width: 22, height: 70)
+                .rotationEffect(.degrees(12))
+                .offset(x: shimmer ? 70 : -70)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(skin.tileStroke, lineWidth: 0.5)
+            }
+            .clipShape(.rect(cornerRadius: 6))
+            .onAppear {
+                shimmer = true
+            }
+            .animation(
+                .easeInOut(duration: 1.05)
+                    .repeatForever(autoreverses: false),
+                value: shimmer
+            )
+    }
+}
+
+private struct AgentMenuGrabTile: View {
+    @Environment(\.agentTraySkin) private var skin
+    let preview: AgentMenuGrabPreview
+
+    @State private var isHovered = false
+
+    private var item: AgentLiveTrayItem { preview.item }
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            if let thumbnail = preview.thumbnail {
+                Image(nsImage: thumbnail)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 58, height: 54)
+                    .clipped()
+            } else {
+                placeholder
+            }
+
+            LinearGradient(
+                colors: [
+                    Color.black.opacity(0),
+                    Color.black.opacity(item.isClip ? 0.56 : 0.36),
+                ],
+                startPoint: .center,
+                endPoint: .bottom
+            )
+
+            Image(systemName: item.isClip ? "play.fill" : "camera.viewfinder")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(Color.white.opacity(0.92))
+                .padding(4)
+        }
+        .frame(width: 58, height: 54)
+        .background(skin.iconWellFill)
+        .clipShape(.rect(cornerRadius: 6))
+        .overlay {
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(isHovered ? skin.accent.opacity(0.75) : skin.tileStroke, lineWidth: 0.75)
+        }
+        .shadow(color: Color.black.opacity(skin.isDark ? 0.30 : 0.10), radius: isHovered ? 5 : 2, x: 0, y: 2)
+        .scaleEffect(isHovered ? 1.03 : 1)
+        .contentShape(.rect)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .onDrag {
+            let provider = NSItemProvider(contentsOf: item.fileURL) ?? NSItemProvider()
+            provider.suggestedName = item.filename
+            return provider
+        }
+        .help(helpTitle)
+    }
+
+    private var placeholder: some View {
+        ZStack {
+            Rectangle()
+                .fill(skin.tileFill)
+
+            Image(systemName: item.isClip ? "film.fill" : "photo.fill")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(skin.inkSubtle)
+        }
+    }
+
+    private var helpTitle: String {
+        let title = item.displayName ?? item.windowTitle ?? item.appName ?? (item.isClip ? "Screen recording" : "Screenshot")
+        return "\(title) • \(item.capturedAt.timeAgoShort)"
+    }
+}
+
+private enum AgentMenuGrabPreviewLoader {
+    static func previews(limit: Int) async -> [AgentMenuGrabPreview] {
+        let items = await AgentLiveTrayAssetStore.shared.recentItems(limit: limit)
+        var previews: [AgentMenuGrabPreview] = []
+        previews.reserveCapacity(items.count)
+
+        for item in items {
+            guard !Task.isCancelled else { return previews }
+            let thumbnail = await AgentMenuGrabThumbnailLoader.thumbnail(for: item)
+            previews.append(AgentMenuGrabPreview(item: item, thumbnail: thumbnail))
+        }
+
+        return previews
+    }
+}
+
+private enum AgentMenuGrabThumbnailLoader {
+    static func thumbnail(for item: AgentLiveTrayItem) async -> NSImage? {
+        switch item.kind {
+        case .screenshot:
+            return await AgentMenuImageThumbnailer.thumbnailAsync(for: item.fileURL, maxPixelSize: 180)
+        case .clip:
+            return await VideoFrameThumbnailer.thumbnailAsync(for: item.fileURL, maxSize: 180)
+                ?? NSWorkspace.shared.icon(forFile: item.fileURL.path)
+        }
+    }
+}
+
+private enum AgentMenuImageThumbnailer {
+    static func thumbnailAsync(for url: URL, maxPixelSize: Int) async -> NSImage? {
+        let box = await Task.detached(priority: .utility) {
+            SendableCGImageBox(decodeThumbnail(for: url, maxPixelSize: maxPixelSize))
+        }.value
+        guard let cgImage = box.image else { return nil }
+        return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+    }
+
+    private static func decodeThumbnail(for url: URL, maxPixelSize: Int) -> CGImage? {
+        let options: [CFString: Any] = [
+            kCGImageSourceShouldCache: false
+        ]
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, options as CFDictionary) else {
+            return nil
+        }
+
+        let thumbnailOptions: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary)
+    }
+
+    private final class SendableCGImageBox: @unchecked Sendable {
+        let image: CGImage?
+
+        init(_ image: CGImage?) {
+            self.image = image
         }
     }
 }
@@ -1074,10 +1328,11 @@ private struct AgentMenuStatusPill: View {
 private struct AgentMenuEmptyRow: View {
     @Environment(\.agentTraySkin) private var skin
     let title: String
+    var systemImage = "text.bubble"
 
     var body: some View {
         HStack(spacing: 8) {
-            AgentMenuIconWell(systemImage: "text.bubble", tint: skin.inkSubtle)
+            AgentMenuIconWell(systemImage: systemImage, tint: skin.inkSubtle)
             Text(title)
                 .font(.system(size: 11))
                 .foregroundStyle(skin.inkMuted)

@@ -187,6 +187,10 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
     public var pointerStart: String?
     public var pointerEnd: String?
     public var pointerStyle: String?
+    /// Arrow body/path styling. Values are "straight" | "curved" | "shaped".
+    /// Optional preserves legacy straight arrows.
+    public var arrowStyle: String?
+    public var curveOffset: Double?
     public var label: String?
     public var orientation: String?
     public var interval: Double?
@@ -244,6 +248,8 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         case pointerStart
         case pointerEnd
         case pointerStyle
+        case arrowStyle
+        case curveOffset
         case label
         case orientation
         case interval
@@ -297,6 +303,8 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         pointerStart: String? = nil,
         pointerEnd: String? = nil,
         pointerStyle: String? = nil,
+        arrowStyle: String? = nil,
+        curveOffset: Double? = nil,
         label: String? = nil,
         orientation: String? = nil,
         interval: Double? = nil,
@@ -348,6 +356,8 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         self.pointerStart = pointerStart
         self.pointerEnd = pointerEnd
         self.pointerStyle = pointerStyle
+        self.arrowStyle = arrowStyle
+        self.curveOffset = curveOffset
         self.label = label
         self.orientation = orientation
         self.interval = interval
@@ -402,6 +412,8 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         pointerStart = try container.decodeIfPresent(String.self, forKey: .pointerStart)
         pointerEnd = try container.decodeIfPresent(String.self, forKey: .pointerEnd)
         pointerStyle = try container.decodeIfPresent(String.self, forKey: .pointerStyle)
+        arrowStyle = try container.decodeIfPresent(String.self, forKey: .arrowStyle)
+        curveOffset = try container.decodeIfPresent(Double.self, forKey: .curveOffset)
         label = try container.decodeIfPresent(String.self, forKey: .label)
         orientation = try container.decodeIfPresent(String.self, forKey: .orientation)
         interval = try container.decodeIfPresent(Double.self, forKey: .interval)

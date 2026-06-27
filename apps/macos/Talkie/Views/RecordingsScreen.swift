@@ -573,7 +573,7 @@ struct RecordingsScreen: View {
                     }
 
                     // Pagination loading
-                    if viewModel.isLoading && !viewModel.recordings.isEmpty {
+                    if viewModel.isLoadingNextPage {
                         HStack {
                             BrailleSpinner(size: 12)
                             Text("Loading more...")

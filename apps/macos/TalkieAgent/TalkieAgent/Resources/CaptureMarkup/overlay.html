@@ -9,27 +9,46 @@
 <body>
   <canvas id="overlay-canvas" aria-label="Live markup canvas"></canvas>
 
+  <button type="button" class="action glyph-action cancel window-close" data-action="cancel" title="Cancel markup" aria-label="Cancel markup">
+    <svg class="icon" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4.4 4.4 L11.6 11.6"/><path d="M11.6 4.4 L4.4 11.6"/></svg>
+  </button>
+
+  <div class="surface-actions" role="group" aria-label="Markup surface actions">
+    <button type="button" class="action glyph-action" data-action="undo" title="Undo" aria-label="Undo">
+      <svg class="icon" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 6 H9.6 a3.3 3.3 0 0 1 0 6.6 H6.4"/><path d="M6.9 3.4 L4 6 L6.9 8.6"/></svg>
+    </button>
+    <button type="button" class="action glyph-action" data-action="redo" title="Redo" aria-label="Redo">
+      <svg class="icon" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 6 H6.4 a3.3 3.3 0 0 0 0 6.6 H9.6"/><path d="M9.1 3.4 L12 6 L9.1 8.6"/></svg>
+    </button>
+    <button type="button" class="action glyph-action capture" data-action="capture" title="Take screenshot — strokes bake in" aria-label="Take screenshot" hidden>
+      <svg class="icon" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.4 6 a1.1 1.1 0 0 1 1.1 -1.1 H5 L5.9 3.5 h4.2 L11 4.9 h1.5 a1.1 1.1 0 0 1 1.1 1.1 v5.9 a1.1 1.1 0 0 1 -1.1 1.1 H3.5 a1.1 1.1 0 0 1 -1.1 -1.1 Z"/><circle cx="8" cy="8.9" r="2.2"/></svg>
+    </button>
+  </div>
+
   <div class="markup-dock" id="markup-dock">
     <div class="style-panel" id="style-panel" hidden>
-      <div class="style-group">
+      <div class="style-group note-options">
         <span class="style-label">Note</span>
         <button type="button" class="note-style active" data-note-style="sticky" title="Sticky note">Sticky</button>
         <button type="button" class="note-style" data-note-style="bubble" title="Rounded note">Bubble</button>
         <button type="button" class="note-style" data-note-style="glass" title="Glass note">Glass</button>
       </div>
 
-      <span class="divider" aria-hidden="true"></span>
-
-      <div class="style-group">
+      <div class="style-group line-options">
         <span class="style-label">Line</span>
         <button type="button" class="line-style active" data-line-style="solid" title="Solid line">Solid</button>
         <button type="button" class="line-style" data-line-style="dashed" title="Dashed line">Dash</button>
         <button type="button" class="line-style" data-line-style="glow" title="Glow line">Glow</button>
       </div>
 
-      <span class="divider" aria-hidden="true"></span>
+      <div class="style-group arrow-options">
+        <span class="style-label">Arrow</span>
+        <button type="button" class="arrow-style active" data-arrow-style="straight" title="Straight arrow">Straight</button>
+        <button type="button" class="arrow-style" data-arrow-style="curved" title="Curved arrow">Curve</button>
+        <button type="button" class="arrow-style" data-arrow-style="shaped" title="Shaped arrow">Block</button>
+      </div>
 
-      <div class="style-group compact">
+      <div class="style-group compact shared-options">
         <span class="style-label">Color</span>
         <button type="button" class="swatch active" data-color="#D03A1C" title="Red"></button>
         <button type="button" class="swatch" data-color="#4F7DFF" title="Blue"></button>
@@ -37,9 +56,7 @@
         <button type="button" class="swatch swatch-light" data-color="#FFFFFF" title="White"></button>
       </div>
 
-      <span class="divider" aria-hidden="true"></span>
-
-      <div class="style-group compact">
+      <div class="style-group compact shared-options">
         <span class="style-label">Stroke</span>
         <button type="button" class="width" data-width="0.5" title="Hairline stroke">XS</button>
         <button type="button" class="width" data-width="2" title="Fine stroke">S</button>
@@ -66,7 +83,7 @@
         <button type="button" class="tool" data-tool="line" title="Line — Option-T, L; Shift snaps angles" aria-label="Line">
           <svg class="icon" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M3.2 12.8 L12.8 3.2"/></svg>
         </button>
-        <button type="button" class="tool" data-tool="arrow" title="Arrow — Option-T, A" aria-label="Arrow">
+        <button type="button" class="tool" data-tool="arrow" title="Arrow — Option-T, A; Shift snaps angles while drawing or reshaping" aria-label="Arrow">
           <svg class="icon" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.4 12.6 L12.4 3.6"/><path d="M12.4 7.6 L12.4 3.6 L8.4 3.6"/></svg>
         </button>
         <button type="button" class="tool" data-tool="note" title="Note — Option-T, N" aria-label="Note">
@@ -74,22 +91,15 @@
         </button>
       </div>
 
-      <button type="button" class="style-toggle" data-action="toggle-style" title="Show style drawer" aria-controls="style-panel" aria-expanded="false">
-        <span class="style-chip-swatch" aria-hidden="true"></span>
-        <span class="style-chip-label">Sticky · Solid</span>
+      <button type="button" class="style-toggle" data-action="toggle-style" title="Show tool options" aria-controls="style-panel" aria-expanded="false">
+        <span class="style-summary">Pen · Solid · 4px</span>
+        <svg class="style-disclosure" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4.5 6.4 L8 9.9 L11.5 6.4" />
+        </svg>
       </button>
 
       <div class="commit-cluster" role="group" aria-label="Markup actions">
-        <button type="button" class="action glyph-action" data-action="undo" title="Undo" aria-label="Undo">
-          <svg class="icon" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 6 H9.6 a3.3 3.3 0 0 1 0 6.6 H6.4"/><path d="M6.9 3.4 L4 6 L6.9 8.6"/></svg>
-        </button>
-        <button type="button" class="action glyph-action capture" data-action="capture" title="Take screenshot — strokes bake in" aria-label="Take screenshot" hidden>
-          <svg class="icon" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.4 6 a1.1 1.1 0 0 1 1.1 -1.1 H5 L5.9 3.5 h4.2 L11 4.9 h1.5 a1.1 1.1 0 0 1 1.1 1.1 v5.9 a1.1 1.1 0 0 1 -1.1 1.1 H3.5 a1.1 1.1 0 0 1 -1.1 -1.1 Z"/><circle cx="8" cy="8.9" r="2.2"/></svg>
-        </button>
         <button type="button" class="action done" data-action="done" title="Done">Done</button>
-        <button type="button" class="action glyph-action cancel" data-action="cancel" title="Cancel" aria-label="Cancel">
-          <svg class="icon" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4.4 4.4 L11.6 11.6"/><path d="M11.6 4.4 L4.4 11.6"/></svg>
-        </button>
       </div>
     </div>
   </div>

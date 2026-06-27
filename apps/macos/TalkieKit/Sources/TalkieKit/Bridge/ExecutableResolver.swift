@@ -231,7 +231,6 @@ public enum ExecutableResolver {
             "tailscale": [
                 "/opt/homebrew/bin/tailscale",
                 "/usr/local/bin/tailscale",
-                "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
             ],
             "gh": [
                 "/opt/homebrew/bin/gh",

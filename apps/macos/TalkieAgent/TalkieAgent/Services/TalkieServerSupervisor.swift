@@ -46,7 +46,6 @@ final class TalkieAgentServerSupervisor {
     private var backoffInterval: TimeInterval = 10
     private var lastHealthCheckOk = false
     private var lastError: String?
-    private var tailscaleReady = false
     private var processState: TalkieAgentServerStatus.ProcessState = .stopped
 
     // Guards
@@ -71,7 +70,7 @@ final class TalkieAgentServerSupervisor {
             consecutiveFailures: consecutiveFailures,
             restartCount: restartCount,
             lastError: lastError,
-            tailscaleReady: tailscaleReady,
+            tailscaleReady: false,
             backoffSeconds: consecutiveFailures > 0 ? backoffInterval : nil
         )
     }
@@ -113,8 +112,6 @@ final class TalkieAgentServerSupervisor {
             await installDependencies(bunPath: bunPath, sourcePath: sourcePath)
         }
 
-        await refreshTailscaleStatus()
-
         switch await probeServerHealth(timeout: 2) {
         case .ready:
             log.info("TalkieAgentServerSupervisor: found existing healthy bridge, adopting it")
@@ -129,8 +126,8 @@ final class TalkieAgentServerSupervisor {
             break
         }
 
-        // The supervised bridge is reachable on local LAN and, when available,
-        // Tailscale. App-level pairing/auth gates sensitive routes.
+        // The supervised bridge is reachable on local LAN. Agent startup must
+        // never launch or revive optional network providers.
         let args = ["run", "src/server.ts", "--nearby", "--allow-lan", "--require-approval"]
         let instanceID = UUID().uuidString
         // Spawn
@@ -387,45 +384,6 @@ final class TalkieAgentServerSupervisor {
         }
     }
 
-    // MARK: - Tailscale
-
-    private func refreshTailscaleStatus() async {
-        let paths = ["/opt/homebrew/bin/tailscale", "/usr/local/bin/tailscale", "/Applications/Tailscale.app/Contents/MacOS/Tailscale"]
-        var tailscalePath: String?
-        for path in paths {
-            if FileManager.default.fileExists(atPath: path) {
-                tailscalePath = path
-                break
-            }
-        }
-
-        guard let tsPath = tailscalePath else {
-            tailscaleReady = false
-            return
-        }
-
-        do {
-            let proc = Process()
-            proc.executableURL = URL(fileURLWithPath: tsPath)
-            proc.arguments = ["status", "--json"]
-            let pipe = Pipe()
-            proc.standardOutput = pipe
-            proc.standardError = Pipe()
-            try proc.run()
-            proc.waitUntilExit()
-
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let backendState = json["BackendState"] as? String {
-                tailscaleReady = backendState == "Running"
-            } else {
-                tailscaleReady = false
-            }
-        } catch {
-            tailscaleReady = false
-        }
-    }
-
     // MARK: - Process Helpers
 
     private func handleProcessTermination(_ terminatedProcess: Process) async {
@@ -490,7 +448,7 @@ final class TalkieAgentServerSupervisor {
 
             let snapshot = try JSONDecoder().decode(ServerHealthSnapshot.self, from: data)
             if !snapshot.pairingReady {
-                let occupant = portOccupantDescription()
+                let occupant = await portOccupantDescription()
                 let suffix = occupant.map { " (\($0))" } ?? ""
                 return .conflict("Port \(port) is serving a bridge that is not pairable\(suffix). Stop the other bridge before pairing devices.")
             }
@@ -501,7 +459,7 @@ final class TalkieAgentServerSupervisor {
         }
     }
 
-    private func portOccupantDescription() -> String? {
+    private func portOccupantDescription() async -> String? {
         do {
             let proc = Process()
             proc.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
@@ -509,8 +467,7 @@ final class TalkieAgentServerSupervisor {
             let pipe = Pipe()
             proc.standardOutput = pipe
             proc.standardError = Pipe()
-            try proc.run()
-            proc.waitUntilExit()
+            _ = try await Self.runProcess(proc)
 
             let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
             var pid: String?
@@ -547,20 +504,33 @@ final class TalkieAgentServerSupervisor {
     private func installDependencies(bunPath: String, sourcePath: String) async {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: bunPath)
-        proc.arguments = ["install"]
+        proc.arguments = ["install", "--ignore-scripts"]
         proc.currentDirectoryURL = URL(fileURLWithPath: sourcePath)
         proc.standardOutput = Pipe()
         proc.standardError = Pipe()
         do {
-            try proc.run()
-            proc.waitUntilExit()
-            if proc.terminationStatus == 0 {
+            let status = try await Self.runProcess(proc)
+            if status == 0 {
                 log.info("TalkieServer dependencies installed")
             } else {
-                log.error("TalkieServer bun install failed with code \(proc.terminationStatus)")
+                log.error("TalkieServer bun install failed with code \(status)")
             }
         } catch {
             log.error("TalkieServer bun install error: \(error)")
+        }
+    }
+
+    private nonisolated static func runProcess(_ process: Process) async throws -> Int32 {
+        try await withCheckedThrowingContinuation { continuation in
+            process.terminationHandler = { terminatedProcess in
+                continuation.resume(returning: terminatedProcess.terminationStatus)
+            }
+            do {
+                try process.run()
+            } catch {
+                process.terminationHandler = nil
+                continuation.resume(throwing: error)
+            }
         }
     }
 
@@ -577,9 +547,13 @@ final class TalkieAgentServerSupervisor {
         consecutiveFailures = 0
         backoffInterval = minBackoff
         lastHealthCheckOk = true
+        startAdvertiser()
+    }
+
+    private func startAdvertiser() {
         NearbyBridgeAdvertiser.shared.start(
             port: Int32(port),
-            route: tailscaleReady ? "local,tailscale" : "local",
+            route: "local",
             mode: "nearby"
         )
     }

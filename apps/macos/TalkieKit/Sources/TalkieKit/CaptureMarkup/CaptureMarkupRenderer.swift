@@ -156,6 +156,42 @@ public enum CaptureMarkupRenderer {
         context.restoreGState()
     }
 
+    private static func smoothedInkPoints(_ points: [CaptureMarkupPoint], size: CGSize) -> [CGPoint] {
+        let pixelPoints = points.map { $0.pixelPoint(in: size) }
+        guard pixelPoints.count >= 3 else { return pixelPoints }
+        var smoothed: [CGPoint] = [pixelPoints[0]]
+        for index in 1..<(pixelPoints.count - 1) {
+            let previous = pixelPoints[index - 1]
+            let point = pixelPoints[index]
+            let next = pixelPoints[index + 1]
+            smoothed.append(CGPoint(
+                x: point.x * 0.5 + (previous.x + next.x) * 0.25,
+                y: point.y * 0.5 + (previous.y + next.y) * 0.25
+            ))
+        }
+        smoothed.append(pixelPoints[pixelPoints.count - 1])
+        return smoothed
+    }
+
+    private static func addSmoothedInkPath(_ points: [CaptureMarkupPoint], to context: CGContext, size: CGSize) {
+        let smoothed = smoothedInkPoints(points, size: size)
+        guard smoothed.count >= 2 else { return }
+        context.move(to: smoothed[0])
+        if smoothed.count == 2 {
+            context.addLine(to: smoothed[1])
+            return
+        }
+        for index in 1..<(smoothed.count - 1) {
+            let current = smoothed[index]
+            let next = smoothed[index + 1]
+            context.addQuadCurve(
+                to: CGPoint(x: (current.x + next.x) / 2, y: (current.y + next.y) / 2),
+                control: current
+            )
+        }
+        context.addLine(to: smoothed[smoothed.count - 1])
+    }
+
     private static func draw(layer: CaptureMarkupLayer, in context: CGContext, size: CGSize, image: CGImage) {
         let color = parseColor(layer.color)
         switch layer.kind {
@@ -211,10 +247,7 @@ public enum CaptureMarkupRenderer {
             context.setLineCap(.round)
             context.setLineJoin(.round)
             context.beginPath()
-            context.move(to: points[0].pixelPoint(in: size))
-            for point in points.dropFirst() {
-                context.addLine(to: point.pixelPoint(in: size))
-            }
+            addSmoothedInkPath(points, to: context, size: size)
             strokeWithEffects(layer, in: context, size: size) {
                 context.strokePath()
             }
@@ -225,14 +258,14 @@ public enum CaptureMarkupRenderer {
             let lineWidth = strokeLineWidth(layer, size: size)
             context.setStrokeColor(color)
             context.setLineWidth(lineWidth)
-            context.beginPath()
-            context.move(to: start)
-            context.addLine(to: end)
-            strokeWithEffects(layer, in: context, size: size) {
-                context.strokePath()
+            switch arrowStyle(for: layer) {
+            case "curved":
+                drawCurvedArrow(layer: layer, start: start, end: end, color: color, in: context, size: size, lineWidth: lineWidth)
+            case "shaped":
+                drawShapedArrow(layer: layer, start: start, end: end, color: color, in: context, size: size, lineWidth: lineWidth)
+            default:
+                drawStraightArrow(layer: layer, start: start, end: end, color: color, in: context, size: size, lineWidth: lineWidth)
             }
-            drawPointer(pointer(for: layer, endpoint: .start), at: start, from: end, color: color, in: context, size: size, lineWidth: lineWidth)
-            drawPointer(pointer(for: layer, endpoint: .end), at: end, from: start, color: color, in: context, size: size, lineWidth: lineWidth)
             if let label = layer.label, label != "line" {
                 drawLabel(label, near: CGRect(origin: end, size: .zero), in: context, size: size)
             }
@@ -345,6 +378,139 @@ public enum CaptureMarkupRenderer {
         default:
             return "open"
         }
+    }
+
+    private static func arrowStyle(for layer: CaptureMarkupLayer) -> String {
+        if layer.label == "line" {
+            return "straight"
+        }
+        switch layer.arrowStyle {
+        case "curved", "shaped":
+            return layer.arrowStyle ?? "straight"
+        default:
+            return "straight"
+        }
+    }
+
+    private static func curvedArrowControlPoint(layer: CaptureMarkupLayer, start: CGPoint, end: CGPoint) -> CGPoint {
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let distance = hypot(dx, dy)
+        guard distance > 0.0001 else {
+            return CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
+        }
+        let offset = CGFloat(layer.curveOffset ?? 0.2)
+        return CGPoint(
+            x: (start.x + end.x) / 2 - (dy / distance) * distance * offset,
+            y: (start.y + end.y) / 2 + (dx / distance) * distance * offset
+        )
+    }
+
+    private static func drawStraightArrow(
+        layer: CaptureMarkupLayer,
+        start: CGPoint,
+        end: CGPoint,
+        color: CGColor,
+        in context: CGContext,
+        size: CGSize,
+        lineWidth: CGFloat
+    ) {
+        context.beginPath()
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
+        context.move(to: start)
+        context.addLine(to: end)
+        strokeWithEffects(layer, in: context, size: size) {
+            context.strokePath()
+        }
+        drawPointer(pointer(for: layer, endpoint: .start), at: start, from: end, color: color, in: context, size: size, lineWidth: lineWidth)
+        drawPointer(pointer(for: layer, endpoint: .end), at: end, from: start, color: color, in: context, size: size, lineWidth: lineWidth)
+    }
+
+    private static func drawCurvedArrow(
+        layer: CaptureMarkupLayer,
+        start: CGPoint,
+        end: CGPoint,
+        color: CGColor,
+        in context: CGContext,
+        size: CGSize,
+        lineWidth: CGFloat
+    ) {
+        let control = curvedArrowControlPoint(layer: layer, start: start, end: end)
+        context.beginPath()
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
+        context.move(to: start)
+        context.addQuadCurve(to: end, control: control)
+        strokeWithEffects(layer, in: context, size: size) {
+            context.strokePath()
+        }
+        drawPointer(pointer(for: layer, endpoint: .start), at: start, from: control, color: color, in: context, size: size, lineWidth: lineWidth)
+        drawPointer(pointer(for: layer, endpoint: .end), at: end, from: control, color: color, in: context, size: size, lineWidth: lineWidth)
+    }
+
+    private static func drawShapedArrow(
+        layer: CaptureMarkupLayer,
+        start: CGPoint,
+        end: CGPoint,
+        color: CGColor,
+        in context: CGContext,
+        size: CGSize,
+        lineWidth: CGFloat
+    ) {
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let distance = hypot(dx, dy)
+        guard distance >= max(24, lineWidth * 8) else {
+            drawStraightArrow(layer: layer, start: start, end: end, color: color, in: context, size: size, lineWidth: lineWidth)
+            return
+        }
+
+        let ux = dx / distance
+        let uy = dy / distance
+        let px = -uy
+        let py = ux
+        let tailHalf = max(5, lineWidth * 1.35)
+        let headHalf = max(tailHalf * 2.2, lineWidth * 3.2)
+        let headLength = min(max(18, lineWidth * 5.2), distance * 0.48)
+        let neckX = distance - headLength
+
+        func pointAlong(_ x: CGFloat, _ half: CGFloat) -> CGPoint {
+            CGPoint(
+                x: start.x + ux * x + px * half,
+                y: start.y + uy * x + py * half
+            )
+        }
+
+        let path = CGMutablePath()
+        path.move(to: pointAlong(0, tailHalf))
+        path.addLine(to: pointAlong(neckX, tailHalf))
+        path.addLine(to: pointAlong(neckX, headHalf))
+        path.addLine(to: pointAlong(distance, 0))
+        path.addLine(to: pointAlong(neckX, -headHalf))
+        path.addLine(to: pointAlong(neckX, -tailHalf))
+        path.addLine(to: pointAlong(0, -tailHalf))
+        path.closeSubpath()
+
+        context.saveGState()
+        if layer.shadow == true {
+            let baseUnit = max(1, size.width / 600)
+            let shadowColor = parseColor(layer.shadowColor ?? "rgba(0, 0, 0, 0.28)")
+            let offset = CGSize(width: 0, height: CGFloat(layer.shadowOffsetY ?? 5) * baseUnit)
+            context.setShadow(offset: offset, blur: CGFloat(layer.shadowBlur ?? 12) * baseUnit, color: shadowColor)
+        }
+        context.addPath(path)
+        context.setFillColor(color.copy(alpha: 0.94) ?? color)
+        context.fillPath()
+        context.restoreGState()
+
+        context.saveGState()
+        context.addPath(path)
+        context.setStrokeColor(color.copy(alpha: 0.92) ?? color)
+        context.setLineWidth(max(1, lineWidth * 0.38))
+        context.setLineJoin(.round)
+        context.strokePath()
+        context.restoreGState()
     }
 
     private static func pointer(for layer: CaptureMarkupLayer, endpoint: PointerEndpoint) -> String {

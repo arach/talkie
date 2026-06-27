@@ -48,6 +48,7 @@ final class RecordingsViewModel {
 
     var recordings: [TalkieObject] = []
     var isLoading = false
+    var isLoadingNextPage = false
     var error: Error?
 
     // Semantic filter state
@@ -68,6 +69,7 @@ final class RecordingsViewModel {
     var totalCount = 0
     private var currentLimit = 50
     private let pageSize = 50
+    private var pageLoadGeneration = 0
 
     // MARK: - Dependencies
 
@@ -112,11 +114,72 @@ final class RecordingsViewModel {
         await startObservation()
     }
 
-    /// Load next page (expands the observation window)
+    /// Load the next page and quietly expand the observation window.
     func loadNextPage() async {
-        guard hasMorePages, !isLoading else { return }
-        currentLimit += pageSize
-        await startObservation()
+        guard hasMorePages, !isLoading, !isLoadingNextPage else { return }
+
+        let whereClause = filterState.toSQL()
+        let orderBy = orderByClause()
+        let offset = recordings.count
+        let generation = pageLoadGeneration
+        let requestID = String(UUID().uuidString.prefix(8))
+
+        isLoadingNextPage = true
+
+        do {
+            async let nextPage = repository.fetchRecordingsWithSQL(
+                whereClause: whereClause,
+                sortBy: sortField,
+                ascending: sortAscending,
+                limit: pageSize,
+                offset: offset,
+                requester: "RecordingsViewModel.loadNextPage",
+                queryLabel: filterState.description,
+                requestID: requestID
+            )
+            async let count = repository.countRecordingsWithSQL(
+                whereClause: whereClause,
+                requester: "RecordingsViewModel.loadNextPage",
+                queryLabel: filterState.description,
+                requestID: requestID
+            )
+
+            let (newRecordings, newTotalCount) = try await (nextPage, count)
+
+            guard generation == pageLoadGeneration,
+                  whereClause == filterState.toSQL(),
+                  orderBy == orderByClause()
+            else {
+                if generation == pageLoadGeneration {
+                    isLoadingNextPage = false
+                }
+                return
+            }
+
+            totalCount = newTotalCount
+
+            let existingIDs = Set(recordings.map(\.id))
+            let uniqueNewRecordings = newRecordings.filter { !existingIDs.contains($0.id) }
+
+            if !uniqueNewRecordings.isEmpty {
+                withAnimation(.easeOut(duration: 0.18)) {
+                    recordings.append(contentsOf: uniqueNewRecordings)
+                }
+            }
+
+            currentLimit = max(pageSize, recordings.count)
+            isLoadingNextPage = false
+
+            // Keep the live observation aligned with the enlarged window,
+            // but do it quietly after the append so the visible interaction
+            // stays incremental instead of replacing the whole list.
+            await startObservation(showsLoading: false)
+        } catch {
+            guard generation == pageLoadGeneration else { return }
+            self.error = error
+            isLoadingNextPage = false
+            log.error("loadNextPage failed: \(error.localizedDescription)")
+        }
     }
 
     /// Change type filter (legacy - now uses semantic filter)
@@ -228,11 +291,15 @@ final class RecordingsViewModel {
 
     /// Start (or restart) the database observation with current filters/sort.
     /// The observation automatically pushes new values whenever the recordings table changes.
-    func startObservation() async {
+    func startObservation(showsLoading: Bool = true) async {
+        pageLoadGeneration += 1
+        isLoadingNextPage = false
         observationCancellable?.cancel()
         observationCancellable = nil
 
-        isLoading = true
+        if showsLoading {
+            isLoading = true
+        }
         error = nil
 
         let whereClause = filterState.toSQL()

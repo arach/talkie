@@ -352,7 +352,7 @@ final class AgentCaptureMarkupController {
     private static func dragHandleFrame(for frame: CGRect) -> NSRect {
         let size = dragHandleSize
         return NSRect(
-            x: (frame.minX + 14).rounded(),
+            x: (frame.midX - size.width / 2).rounded(),
             y: (frame.minY + (AgentCaptureMarkupLayout.bottomToolbarHeight - size.height) / 2).rounded(),
             width: size.width,
             height: size.height

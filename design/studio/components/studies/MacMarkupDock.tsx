@@ -28,11 +28,13 @@
  *
  * Names (so studio · Swift · chat share one vocabulary):
  *   · Dock          — the whole floating cluster
- *   · Tool Rail     — Select · Pen · Circle · Arrow · Note  (segmented)
+ *   · Tool Rail     — Select · Pen · Rect · Circle · Line · Arrow · Note (segmented)
  *   · Mode Pair     — Agent / Demo
  *   · Style Chip    — swatch + label; opens the Style Drawer
- *   · Style Drawer  — Note / Line / Color / Stroke (expands above)
- *   · Commit Cluster— Undo · Done · Cancel
+ *   · Style Drawer  — Note / Line / Arrow / Color / Stroke (expands above)
+ *   · Window Chrome — Cancel at the top-left of the markup window
+ *   · Surface Actions — Undo · Redo · Capture at the top-right
+ *   · Commit Cluster— Done only
  *
  * Four directions to compare:
  *   · Slate      — today's dark slab, leveled up (icons + air + radius).
@@ -80,6 +82,13 @@ function CircleIcon() {
     </svg>
   );
 }
+function LineIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" aria-hidden>
+      <path d="M3.2 12.8 L12.8 3.2" />
+    </svg>
+  );
+}
 function ArrowIcon() {
   return (
     <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -105,6 +114,14 @@ function UndoIcon() {
     </svg>
   );
 }
+function RedoIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M11 6 H6.4 a3.3 3.3 0 0 0 0 6.6 H9.6" />
+      <path d="M9.1 3.4 L12 6 L9.1 8.6" />
+    </svg>
+  );
+}
 function CheckIcon() {
   return (
     <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -120,15 +137,56 @@ function CloseIcon() {
     </svg>
   );
 }
+function CameraIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M2.4 6 a1.1 1.1 0 0 1 1.1 -1.1 H5 L5.9 3.5 h4.2 L11 4.9 h1.5 a1.1 1.1 0 0 1 1.1 1.1 v5.9 a1.1 1.1 0 0 1 -1.1 1.1 H3.5 a1.1 1.1 0 0 1 -1.1 -1.1 Z" />
+      <circle cx="8" cy="8.9" r="2.2" />
+    </svg>
+  );
+}
 
 const TOOLS = [
   { key: "select", label: "Select", Icon: CursorIcon },
   { key: "ink", label: "Pen", Icon: PenIcon },
   { key: "rect", label: "Rect", Icon: RectangleIcon },
   { key: "ellipse", label: "Circle", Icon: CircleIcon },
+  { key: "line", label: "Line", Icon: LineIcon },
   { key: "arrow", label: "Arrow", Icon: ArrowIcon },
   { key: "note", label: "Note", Icon: NoteIcon },
 ] as const;
+
+type ToolKey = (typeof TOOLS)[number]["key"];
+
+type ArrowStyleKey = "straight" | "curved" | "shaped";
+
+const ARROW_STYLE_OPTIONS: { key: ArrowStyleKey; label: string }[] = [
+  { key: "straight", label: "Straight" },
+  { key: "curved", label: "Curve" },
+  { key: "shaped", label: "Block" },
+];
+
+const TOOL_LABELS: Record<ToolKey, string> = {
+  select: "Select",
+  ink: "Pen",
+  rect: "Rectangle",
+  ellipse: "Circle",
+  line: "Line",
+  arrow: "Arrow",
+  note: "Note",
+};
+
+function toolOptionsLabel(tool: ToolKey) {
+  return tool === "select" ? "Select" : `${TOOL_LABELS[tool]} options`;
+}
+
+function toolSummary(tool: ToolKey, arrowStyle: ArrowStyleKey) {
+  const arrowStyleLabel = ARROW_STYLE_OPTIONS.find((option) => option.key === arrowStyle)?.label ?? "Straight";
+  if (tool === "note") return "Sticky · 4px";
+  if (tool === "arrow") return `${arrowStyleLabel} · Solid · 4px`;
+  if (tool === "select") return "Move and reshape";
+  return "Solid · 4px";
+}
 
 // ─── Variant themes ──────────────────────────────────────────────────
 // Each block is one "material" — read top to bottom to compare. Layout
@@ -375,14 +433,20 @@ function Divider({ color }: { color: string }) {
 function Dock({
   theme,
   activeTool,
+  arrowStyle,
   drawerOpen,
   scale = 1,
 }: {
   theme: DockTheme;
   activeTool: string;
+  arrowStyle: ArrowStyleKey;
   drawerOpen: boolean;
   scale?: number;
 }) {
+  const toolKey = activeTool as ToolKey;
+  const styleChipLabel = toolOptionsLabel(toolKey);
+  const styleChipDetail = toolSummary(toolKey, arrowStyle);
+
   return (
     <div
       style={{
@@ -394,7 +458,7 @@ function Dock({
         transformOrigin: "bottom center",
       }}
     >
-      {drawerOpen ? <StyleDrawer theme={theme} /> : null}
+      {drawerOpen ? <StyleDrawer theme={theme} activeTool={toolKey} arrowStyle={arrowStyle} /> : null}
 
       {/* Toolbar */}
       <div
@@ -427,12 +491,13 @@ function Dock({
 
         <Divider color={theme.divider} />
 
-        {/* Style Chip */}
+        {/* Tool Options */}
         <button
           type="button"
           className="flex items-center gap-1.5 transition-colors"
           style={{
             height: 30,
+            minWidth: 152,
             padding: "0 9px",
             borderRadius: theme.radius,
             border: "none",
@@ -442,19 +507,25 @@ function Dock({
             cursor: "pointer",
             ...theme.chip,
           }}
-          title="Show style drawer"
+          title={`Show ${styleChipLabel}`}
         >
+          <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" aria-hidden>
+            <path d="M3 4.5 H13" />
+            <path d="M3 11.5 H13" />
+            <circle cx="6" cy="4.5" r="1.5" fill="currentColor" stroke="none" />
+            <circle cx="10.5" cy="11.5" r="1.5" fill="currentColor" stroke="none" />
+          </svg>
           <span style={{ width: 11, height: 11, borderRadius: 3, background: "#D03A1C", boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.25)" }} />
-          <span>Sticky · Solid</span>
+          <span style={{ display: "flex", minWidth: 0, flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
+            <span style={{ maxWidth: 102, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{styleChipLabel}</span>
+            <span style={{ maxWidth: 102, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: theme.cancel, fontSize: 9 }}>{styleChipDetail}</span>
+          </span>
         </button>
 
         <Divider color={theme.divider} />
 
         {/* Commit Cluster */}
         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-          <Key theme={theme} title="Undo">
-            <UndoIcon />
-          </Key>
           <button
             type="button"
             className="grid place-items-center font-bold transition-colors"
@@ -472,19 +543,17 @@ function Dock({
           >
             Done
           </button>
-          <Key theme={theme} title="Cancel">
-            <span style={{ color: theme.cancel, display: "grid", placeItems: "center" }}>
-              <CloseIcon />
-            </span>
-          </Key>
         </div>
       </div>
     </div>
   );
 }
 
-function StyleDrawer({ theme }: { theme: DockTheme }) {
+function StyleDrawer({ theme, activeTool, arrowStyle }: { theme: DockTheme; activeTool: ToolKey; arrowStyle: ArrowStyleKey }) {
   const swatches = ["#D03A1C", "#4F7DFF", "#12A594", "#FFFFFF"];
+  const showNote = activeTool === "note";
+  const showLine = activeTool === "ink" || activeTool === "rect" || activeTool === "ellipse" || activeTool === "line" || activeTool === "arrow";
+  const showArrow = activeTool === "arrow";
   const Group = ({ label, children }: { label: string; children: React.ReactNode }) => (
     <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
       <span style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.2, color: theme.labelColor }}>{label}</span>
@@ -510,17 +579,42 @@ function StyleDrawer({ theme }: { theme: DockTheme }) {
   );
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "8px 12px", ...theme.surface }}>
-      <Group label="Note">
-        <Pill active>Sticky</Pill>
-        <Pill>Bubble</Pill>
-        <Pill>Glass</Pill>
-      </Group>
-      <Divider color={theme.divider} />
-      <Group label="Line">
-        <Pill active>Solid</Pill>
-        <Pill>Dash</Pill>
-        <Pill>Glow</Pill>
-      </Group>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+        <span style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", color: theme.labelColor }}>Tool</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: theme.text }}>{toolOptionsLabel(activeTool)}</span>
+      </div>
+      {showNote ? (
+        <>
+          <Divider color={theme.divider} />
+          <Group label="Note">
+            <Pill active>Sticky</Pill>
+            <Pill>Bubble</Pill>
+            <Pill>Glass</Pill>
+          </Group>
+        </>
+      ) : null}
+      {showLine ? (
+        <>
+          <Divider color={theme.divider} />
+          <Group label="Line">
+            <Pill active>Solid</Pill>
+            <Pill>Dash</Pill>
+            <Pill>Glow</Pill>
+          </Group>
+        </>
+      ) : null}
+      {showArrow ? (
+        <>
+          <Divider color={theme.divider} />
+          <Group label="Arrow">
+            {ARROW_STYLE_OPTIONS.map((style) => (
+              <Pill key={style.key} active={arrowStyle === style.key}>
+                {style.label}
+              </Pill>
+            ))}
+          </Group>
+        </>
+      ) : null}
       <Divider color={theme.divider} />
       <Group label="Color">
         {swatches.map((c, i) => (
@@ -545,16 +639,274 @@ function StyleDrawer({ theme }: { theme: DockTheme }) {
   );
 }
 
+function BehaviorCard({
+  title,
+  caption,
+  children,
+}: {
+  title: string;
+  caption: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-[6px] border border-studio-edge bg-white p-3">
+      <div className="mb-2 flex items-baseline justify-between gap-3">
+        <h3 className="m-0 font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-studio-ink">{title}</h3>
+        <span className="text-[10px] text-studio-ink-faint">{caption}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function HandleDot({
+  left,
+  top,
+  square,
+  theme,
+}: {
+  left: string;
+  top: string;
+  square?: boolean;
+  theme: DockTheme;
+}) {
+  return (
+    <span
+      className="absolute"
+      style={{
+        left,
+        top,
+        width: 14,
+        height: 14,
+        transform: "translate(-50%, -50%)",
+        borderRadius: square ? 3 : 999,
+        background: theme.doneText,
+        boxShadow: `0 0 0 2px ${theme.textActive}, 0 0 0 9px rgba(223,161,58,0.16)`,
+      }}
+    />
+  );
+}
+
+function MarkupBehaviorStrip({ theme, arrowStyle }: { theme: DockTheme; arrowStyle: ArrowStyleKey }) {
+  const arrowStyleLabel = ARROW_STYLE_OPTIONS.find((option) => option.key === arrowStyle)?.label ?? "Straight";
+
+  return (
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <BehaviorCard title="Frame Handles" caption="18 px grab area">
+        <div className="relative h-[132px] rounded-[5px] border border-studio-edge bg-[#F7F4EE]">
+          <div
+            className="absolute"
+            style={{
+              left: "22%",
+              top: "24%",
+              width: "56%",
+              height: "52%",
+              border: `2px solid ${theme.textActive}`,
+              background: "rgba(223,161,58,0.08)",
+            }}
+          />
+          {[
+            ["22%", "24%"],
+            ["50%", "24%"],
+            ["78%", "24%"],
+            ["22%", "50%"],
+            ["78%", "50%"],
+            ["22%", "76%"],
+            ["50%", "76%"],
+            ["78%", "76%"],
+          ].map(([left, top]) => (
+            <HandleDot key={`${left}-${top}`} left={left} top={top} square theme={theme} />
+          ))}
+        </div>
+      </BehaviorCard>
+
+      <BehaviorCard title="Arrow Handles" caption="free drag, Shift = 15 deg">
+        <div className="relative h-[132px] rounded-[5px] border border-studio-edge bg-[#15171C]">
+          <svg className="absolute inset-0 h-full w-full" viewBox="0 0 260 132" aria-hidden>
+            <path d="M54 92 Q132 18 208 64" fill="none" stroke={theme.textActive} strokeWidth="4" strokeLinecap="round" />
+            <path d="M195 52 L208 64 L190 70" fill="none" stroke={theme.textActive} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M44 100 L216 36" fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth="1" strokeDasharray="4 5" />
+          </svg>
+          <HandleDot left="21%" top="70%" theme={theme} />
+          <HandleDot left="80%" top="49%" theme={theme} />
+          <span className="absolute right-3 top-3 rounded-[3px] bg-white/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-white/70">
+            15 deg
+          </span>
+        </div>
+      </BehaviorCard>
+
+      <BehaviorCard title="Arrow Styles" caption={arrowStyleLabel}>
+        <div className="grid h-[132px] grid-cols-3 gap-2">
+          {ARROW_STYLE_OPTIONS.map((style) => (
+            <div
+              key={style.key}
+              className={cn(
+                "relative rounded-[5px] border bg-[#F7F4EE]",
+                arrowStyle === style.key ? "border-studio-ink" : "border-studio-edge"
+              )}
+            >
+              <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 96" aria-hidden>
+                {style.key === "straight" ? (
+                  <>
+                    <path d="M22 72 L76 24" fill="none" stroke="#2B2520" strokeWidth="6" strokeLinecap="round" />
+                    <path d="M74 44 L76 24 L55 27" fill="none" stroke="#2B2520" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+                  </>
+                ) : null}
+                {style.key === "curved" ? (
+                  <>
+                    <path d="M22 72 Q44 20 76 44" fill="none" stroke="#2B2520" strokeWidth="6" strokeLinecap="round" />
+                    <path d="M58 49 L76 44 L69 27" fill="none" stroke="#2B2520" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+                  </>
+                ) : null}
+                {style.key === "shaped" ? (
+                  <path d="M20 62 L60 32 L56 18 L84 30 L73 58 L67 45 L29 75 Z" fill="#2B2520" />
+                ) : null}
+              </svg>
+              <span className="absolute inset-x-0 bottom-2 text-center font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-studio-ink-faint">
+                {style.label}
+              </span>
+            </div>
+          ))}
+        </div>
+      </BehaviorCard>
+    </div>
+  );
+}
+
 // ─── Stage ───────────────────────────────────────────────────────────
+
+type RealMarkupAPI = {
+  setTool: (tool: string) => void;
+  setArrowStyle: (style: string) => void;
+  setStyleOpen: (open: boolean) => void;
+  setContext: (context: string) => void;
+  clear: () => void;
+};
+
+type RealMarkupWindow = Window & {
+  talkieLiveMarkup?: RealMarkupAPI;
+};
+
+function RealMarkupSurface({
+  themeKey,
+  activeTool,
+  arrowStyle,
+  drawerOpen,
+  clearSignal,
+}: {
+  themeKey: string;
+  activeTool: ToolKey;
+  arrowStyle: ArrowStyleKey;
+  drawerOpen: boolean;
+  clearSignal: number;
+}) {
+  const frameRef = React.useRef<HTMLIFrameElement>(null);
+  const src = `/real-capture-markup/overlay.html?theme=${encodeURIComponent(themeKey)}&context=desktopInk`;
+
+  const syncFrame = React.useCallback(() => {
+    const frameWindow = frameRef.current?.contentWindow as RealMarkupWindow | null | undefined;
+    const api = frameWindow?.talkieLiveMarkup;
+    if (!api) return;
+    api.setContext("desktopInk");
+    api.setTool(activeTool);
+    api.setArrowStyle(arrowStyle);
+    api.setStyleOpen(drawerOpen && activeTool !== "select");
+  }, [activeTool, arrowStyle, drawerOpen]);
+
+  React.useEffect(() => {
+    syncFrame();
+  }, [syncFrame]);
+
+  React.useEffect(() => {
+    const api = (frameRef.current?.contentWindow as RealMarkupWindow | null | undefined)?.talkieLiveMarkup;
+    if (api && clearSignal > 0) api.clear();
+  }, [clearSignal]);
+
+  return (
+    <iframe
+      ref={frameRef}
+      title="Live Talkie markup overlay"
+      src={src}
+      onLoad={() => {
+        window.setTimeout(syncFrame, 0);
+      }}
+      className="absolute inset-0 h-full w-full border-0"
+      style={{ background: "transparent", colorScheme: themeKey === "paper" ? "light" : "dark" }}
+    />
+  );
+}
+
+function ChromeKey({
+  theme,
+  children,
+  title,
+  accent = false,
+}: {
+  theme: DockTheme;
+  children: React.ReactNode;
+  title: string;
+  accent?: boolean;
+}) {
+  const [hover, setHover] = React.useState(false);
+  return (
+    <button
+      type="button"
+      title={title}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      className="grid place-items-center transition-colors"
+      style={{
+        width: 30,
+        height: 30,
+        border: "none",
+        borderRadius: theme.radius,
+        color: accent ? theme.doneText : theme.text,
+        cursor: "pointer",
+        ...(accent ? theme.done : hover ? { background: theme.keyHover } : { background: "transparent" }),
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function MarkupWindowChrome({ theme }: { theme: DockTheme }) {
+  return (
+    <>
+      <div className="absolute left-4 top-4 z-20" style={{ padding: 4, ...theme.surface }}>
+        <ChromeKey theme={theme} title="Cancel markup">
+          <span style={{ color: theme.cancel, display: "grid", placeItems: "center" }}>
+            <CloseIcon />
+          </span>
+        </ChromeKey>
+      </div>
+      <div className="absolute right-4 top-4 z-20 flex items-center gap-[5px]" style={{ padding: 4, ...theme.surface }}>
+        <ChromeKey theme={theme} title="Undo">
+          <UndoIcon />
+        </ChromeKey>
+        <ChromeKey theme={theme} title="Redo">
+          <RedoIcon />
+        </ChromeKey>
+        <ChromeKey theme={theme} title="Take screenshot" accent>
+          <CameraIcon />
+        </ChromeKey>
+      </div>
+    </>
+  );
+}
 
 function Stage({
   backdrop,
   children,
   height = 360,
+  fill = false,
+  chromeTheme,
 }: {
   backdrop: Backdrop;
   children: React.ReactNode;
   height?: number;
+  fill?: boolean;
+  chromeTheme?: DockTheme;
 }) {
   return (
     <div
@@ -564,7 +916,8 @@ function Stage({
       {backdrop.windows.map((w, i) => (
         <div key={i} className="absolute rounded-[10px]" style={{ position: "absolute", borderRadius: 10, ...w }} />
       ))}
-      <div className="absolute inset-x-0 bottom-6 flex justify-center">{children}</div>
+      {chromeTheme ? <MarkupWindowChrome theme={chromeTheme} /> : null}
+      {fill ? children : <div className="absolute inset-x-0 bottom-6 flex justify-center">{children}</div>}
     </div>
   );
 }
@@ -610,8 +963,10 @@ function SegPicker<T extends string>({
 export function MacMarkupDock() {
   const [variant, setVariant] = React.useState<string>("warm");
   const [backdropKey, setBackdropKey] = React.useState<string>("dark");
-  const [drawerOpen, setDrawerOpen] = React.useState(false);
-  const [activeTool, setActiveTool] = React.useState<string>("ink");
+  const [drawerOpen, setDrawerOpen] = React.useState(true);
+  const [activeTool, setActiveTool] = React.useState<ToolKey>("arrow");
+  const [arrowStyle, setArrowStyle] = React.useState<ArrowStyleKey>("curved");
+  const [clearSignal, setClearSignal] = React.useState(0);
 
   const theme = VARIANTS.find((v) => v.key === variant) ?? VARIANTS[0];
   const backdrop = BACKDROPS[backdropKey];
@@ -638,6 +993,12 @@ export function MacMarkupDock() {
           onChange={setActiveTool}
           options={TOOLS.map((t) => ({ key: t.key, label: t.label }))}
         />
+        <SegPicker
+          label="Arrow"
+          value={arrowStyle}
+          onChange={setArrowStyle}
+          options={ARROW_STYLE_OPTIONS}
+        />
         <button
           onClick={() => setDrawerOpen((o) => !o)}
           className={cn(
@@ -647,6 +1008,12 @@ export function MacMarkupDock() {
         >
           {drawerOpen ? "Drawer open" : "Drawer closed"}
         </button>
+        <button
+          onClick={() => setClearSignal((value) => value + 1)}
+          className="rounded-[4px] border border-studio-edge px-3 py-1.5 font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-studio-ink-faint transition-colors hover:text-studio-ink"
+        >
+          Clear
+        </button>
       </div>
 
       {/* Featured */}
@@ -655,10 +1022,18 @@ export function MacMarkupDock() {
           <h2 className="m-0 font-display text-[19px] font-medium text-studio-ink">{theme.name}</h2>
           <p className="m-0 text-[12px] text-studio-ink-faint">{theme.blurb}</p>
         </div>
-        <Stage backdrop={backdrop} height={drawerOpen ? 420 : 360}>
-          <Dock theme={theme} activeTool={activeTool} drawerOpen={drawerOpen} />
+        <Stage backdrop={backdrop} height={drawerOpen ? 420 : 360} fill>
+          <RealMarkupSurface
+            themeKey={theme.key}
+            activeTool={activeTool}
+            arrowStyle={arrowStyle}
+            drawerOpen={drawerOpen}
+            clearSignal={clearSignal}
+          />
         </Stage>
       </div>
+
+      <MarkupBehaviorStrip theme={theme} arrowStyle={arrowStyle} />
 
       {/* Board — all four, same backdrop, for side-by-side */}
       <div>
@@ -686,8 +1061,9 @@ export function MacMarkupDock() {
               <Stage
                 backdrop={v.bias === "light" && backdrop.key === "dark" ? BACKDROPS.dark : v.bias === "dark" && backdrop.key === "light" ? BACKDROPS.light : backdrop}
                 height={210}
+                chromeTheme={v}
               >
-                <Dock theme={v} activeTool={activeTool} drawerOpen={false} scale={0.82} />
+                <Dock theme={v} activeTool={activeTool} arrowStyle={arrowStyle} drawerOpen={false} scale={0.82} />
               </Stage>
               <div className="mt-1.5 flex items-center gap-2 px-1">
                 <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-studio-ink">{v.name}</span>
@@ -703,11 +1079,13 @@ export function MacMarkupDock() {
         <span className="font-mono text-[9px] font-semibold uppercase tracking-ch text-studio-ink">Names</span>
         <span className="mx-2 text-studio-edge">·</span>
         <b className="text-studio-ink">Dock</b> the whole cluster ·{" "}
-        <b className="text-studio-ink">Tool Rail</b> Select/Pen/Circle/Arrow/Note ·{" "}
+        <b className="text-studio-ink">Tool Rail</b> Select/Pen/Rect/Circle/Line/Arrow/Note ·{" "}
         <b className="text-studio-ink">Mode Pair</b> Agent/Demo ·{" "}
-        <b className="text-studio-ink">Style Chip</b> swatch + label ·{" "}
-        <b className="text-studio-ink">Style Drawer</b> Note/Line/Color/Stroke ·{" "}
-        <b className="text-studio-ink">Commit Cluster</b> Undo/Done/Cancel.
+        <b className="text-studio-ink">Tool Options</b> sliders + swatch + summary ·{" "}
+        <b className="text-studio-ink">Options Drawer</b> contextual tool controls ·{" "}
+        <b className="text-studio-ink">Window Chrome</b> cancel ·{" "}
+        <b className="text-studio-ink">Surface Actions</b> undo/redo/capture ·{" "}
+        <b className="text-studio-ink">Commit Cluster</b> Done.
         <span className="mt-1.5 block">
           Ports to <code className="text-studio-ink">overlay.css</code> ·{" "}
           <code className="text-studio-ink">overlay.html</code> (shared by live-recording markup + desktop ink).

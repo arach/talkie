@@ -4,6 +4,9 @@
   const dock = document.getElementById("markup-dock");
   const toolbar = document.getElementById("toolbar");
   const stylePanel = document.getElementById("style-panel");
+  const windowChrome = document.querySelectorAll(".window-close, .surface-actions");
+  const query = new URLSearchParams(window.location.search);
+  const initialContext = query.get("context") === "desktopInk" ? "desktopInk" : "recording";
 
   const state = {
     tool: "ink",
@@ -12,8 +15,9 @@
     strokeWidth: 4,
     noteStyle: "sticky",
     lineStyle: "solid",
-    styleOpen: false,
-    context: "recording",
+    arrowStyle: "straight",
+    styleOpen: true,
+    context: initialContext,
     layers: [],
     redoStack: [],
     creating: null,
@@ -27,60 +31,62 @@
   const noteStylePresets = {
     sticky: {
       id: "sticky",
-      textColor: "#17191F",
-      backgroundColor: "#FFF7DF",
-      backgroundAlpha: 0.96,
-      borderColor: "#D9912B",
-      borderAlpha: 0.52,
+      textColor: "#1C1D21",
+      backgroundColor: "#F8F6F2",
+      backgroundAlpha: 0.97,
+      borderColor: "#DFA13A",
+      borderAlpha: 0.30,
       borderWidth: 1,
-      cornerRadius: 13,
-      fontSize: 15,
-      lineHeight: 21,
-      paddingX: 14,
-      paddingY: 11,
-      bold: true,
+      cornerRadius: 5,
+      fontSize: 14,
+      lineHeight: 20,
+      paddingX: 11,
+      paddingY: 9,
+      bold: false,
       shadow: true,
-      shadowColor: "rgba(0, 0, 0, 0.22)",
-      shadowBlur: 18,
-      shadowOffsetY: 8,
+      shadowColor: "rgba(7, 9, 13, 0.16)",
+      shadowBlur: 10,
+      shadowOffsetY: 3,
+      editorBackground: "rgba(248, 246, 242, 0.97)",
+      editorShadow: "0 4px 14px rgba(7, 9, 13, 0.18)",
     },
     bubble: {
       id: "bubble",
-      textColor: "#101826",
-      backgroundColor: "#F3F7FF",
-      backgroundAlpha: 0.95,
-      borderColor: "#4F7DFF",
-      borderAlpha: 0.42,
-      borderWidth: 1.25,
-      cornerRadius: 24,
-      fontSize: 15,
-      lineHeight: 21,
-      paddingX: 16,
-      paddingY: 12,
-      bold: true,
+      textColor: "#1A1D26",
+      backgroundColor: "#FFFFFF",
+      backgroundAlpha: 0.96,
+      borderColor: "#C5CCD6",
+      borderAlpha: 0.55,
+      borderWidth: 1,
+      cornerRadius: 8,
+      fontSize: 14,
+      lineHeight: 20,
+      paddingX: 12,
+      paddingY: 9,
+      bold: false,
       shadow: true,
-      shadowColor: "rgba(23, 35, 64, 0.2)",
-      shadowBlur: 18,
-      shadowOffsetY: 8,
+      shadowColor: "rgba(14, 18, 28, 0.12)",
+      shadowBlur: 10,
+      shadowOffsetY: 3,
     },
     glass: {
       id: "glass",
-      textColor: "#FFFFFF",
-      backgroundColor: "#13161E",
-      backgroundAlpha: 0.9,
+      textColor: "#F2F3F5",
+      backgroundColor: "#16181D",
+      backgroundAlpha: 0.92,
       borderColor: "#FFFFFF",
-      borderAlpha: 0.2,
+      borderAlpha: 0.12,
       borderWidth: 1,
-      cornerRadius: 16,
-      fontSize: 16,
-      lineHeight: 22,
-      paddingX: 16,
-      paddingY: 12,
-      bold: true,
+      cornerRadius: 6,
+      fontSize: 14,
+      lineHeight: 20,
+      paddingX: 12,
+      paddingY: 9,
+      bold: false,
       shadow: true,
-      shadowColor: "rgba(0, 0, 0, 0.34)",
-      shadowBlur: 22,
-      shadowOffsetY: 10,
+      shadowColor: "rgba(0, 0, 0, 0.22)",
+      shadowBlur: 12,
+      shadowOffsetY: 4,
     },
   };
 
@@ -111,6 +117,21 @@
     },
   };
 
+  const arrowStylePresets = {
+    straight: {
+      id: "straight",
+    },
+    curved: {
+      id: "curved",
+      curveOffset: 0.2,
+    },
+    shaped: {
+      id: "shaped",
+      pointerEnd: "filled",
+      pointerStyle: "filled",
+    },
+  };
+
   const noteStyleLabels = {
     sticky: "Sticky",
     bubble: "Bubble",
@@ -123,12 +144,29 @@
     glow: "Glow",
   };
 
+  const arrowStyleLabels = {
+    straight: "Straight",
+    curved: "Curve",
+    shaped: "Block",
+  };
+
+  const toolLabels = {
+    select: "Select",
+    ink: "Pen",
+    rect: "Rectangle",
+    ellipse: "Circle",
+    line: "Line",
+    arrow: "Arrow",
+    note: "Note",
+  };
+
+  const optionTools = new Set(["ink", "rect", "ellipse", "line", "arrow", "note"]);
+
   const toolChordTimeoutMs = 1600;
   let toolChordActive = false;
   let toolChordTimer = null;
 
-  const angleSnapStep = Math.PI / 4;
-  const angleSnapMagnet = Math.PI / 12;
+  const angleSnapStep = Math.PI / 12;
 
   function shortcutToken(event) {
     if (event.code && event.code.startsWith("Key")) {
@@ -210,6 +248,10 @@
     return lineStylePresets[state.lineStyle] || lineStylePresets.solid;
   }
 
+  function currentArrowPreset() {
+    return arrowStylePresets[state.arrowStyle] || arrowStylePresets.straight;
+  }
+
   function colorWithAlpha(hexColor, alpha) {
     const match = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hexColor || "");
     if (!match) return hexColor || "transparent";
@@ -222,14 +264,14 @@
   function applyNotePresetToEditor(element, preset) {
     if (!element || !preset) return;
     element.style.color = preset.textColor;
-    element.style.background = colorWithAlpha(preset.backgroundColor, preset.backgroundAlpha || 1);
+    element.style.background = preset.editorBackground || colorWithAlpha(preset.backgroundColor, preset.backgroundAlpha || 1);
     element.style.borderColor = colorWithAlpha(preset.borderColor, preset.borderAlpha || 1);
     element.style.borderWidth = `${Number(preset.borderWidth || 1)}px`;
-    element.style.borderRadius = `${Number(preset.cornerRadius || 13)}px`;
+    element.style.borderRadius = `${Number(preset.cornerRadius || 5)}px`;
     element.style.padding = `${Number(preset.paddingY || 11)}px ${Number(preset.paddingX || 14)}px`;
     element.style.font = noteFont(preset);
     element.style.boxShadow = preset.shadow
-      ? `0 ${Number(preset.shadowOffsetY || 8)}px ${Number(preset.shadowBlur || 18) + 10}px rgba(0, 0, 0, 0.26)`
+      ? preset.editorShadow || `0 ${Number(preset.shadowOffsetY || 8)}px ${Number(preset.shadowBlur || 18) + 10}px ${preset.shadowColor || "rgba(0, 0, 0, 0.26)"}`
       : "none";
   }
 
@@ -257,11 +299,7 @@
     return Math.min(max, Math.max(min, value));
   }
 
-  function angleDistance(a, b) {
-    return Math.atan2(Math.sin(a - b), Math.cos(a - b));
-  }
-
-  function snappedSegmentPoint(start, point, forceSnap = false) {
+  function snappedSegmentPoint(start, point) {
     const dx = (point.x - start.x) * window.innerWidth;
     const dy = (point.y - start.y) * window.innerHeight;
     const distance = Math.hypot(dx, dy);
@@ -269,10 +307,6 @@
 
     const angle = Math.atan2(dy, dx);
     const snappedAngle = Math.round(angle / angleSnapStep) * angleSnapStep;
-    if (!forceSnap && Math.abs(angleDistance(angle, snappedAngle)) > angleSnapMagnet) {
-      return point;
-    }
-
     return {
       x: clamp(start.x + Math.cos(snappedAngle) * distance / Math.max(1, window.innerWidth), 0, 1),
       y: clamp(start.y + Math.sin(snappedAngle) * distance / Math.max(1, window.innerHeight), 0, 1),
@@ -281,7 +315,8 @@
 
   function adjustedSegmentPoint(creating, point, event) {
     if (!creating || !["line", "arrow"].includes(creating.tool)) return point;
-    return snappedSegmentPoint(creating.start, point, Boolean(event && event.shiftKey));
+    if (!(event && event.shiftKey)) return point;
+    return snappedSegmentPoint(creating.start, point);
   }
 
   function isLineLayer(layer) {
@@ -325,6 +360,42 @@
     return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
   }
 
+  function normalizedArrowStyle(value) {
+    return arrowStylePresets[value] ? value : "straight";
+  }
+
+  function arrowStyleForLayer(layer) {
+    if (!layer || isLineLayer(layer)) return "straight";
+    return normalizedArrowStyle(layer.arrowStyle);
+  }
+
+  function arrowControlPointPixels(layer) {
+    if (!layer || !layer.from || !layer.to) return null;
+    const from = pointToCanvas(layer.from);
+    const to = pointToCanvas(layer.to);
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance < 0.0001) return {
+      x: (from.x + to.x) / 2,
+      y: (from.y + to.y) / 2,
+    };
+    const offset = Number(layer.curveOffset || 0.2);
+    return {
+      x: (from.x + to.x) / 2 - (dy / distance) * distance * offset,
+      y: (from.y + to.y) / 2 + (dx / distance) * distance * offset,
+    };
+  }
+
+  function arrowControlPoint(layer) {
+    const control = arrowControlPointPixels(layer);
+    if (!control) return null;
+    return {
+      x: clamp(control.x / Math.max(1, window.innerWidth), 0, 1),
+      y: clamp(control.y / Math.max(1, window.innerHeight), 0, 1),
+    };
+  }
+
   function paddedRect(rect, pixels) {
     if (!rect) return null;
     const dx = pixels / Math.max(1, window.innerWidth);
@@ -339,7 +410,12 @@
   function layerBounds(layer) {
     if (!layer || layer.visible === false) return null;
     if (layer.frame) return paddedRect(layer.frame, 6);
-    if (layer.from && layer.to) return paddedRect(frameFromPoints(layer.from, layer.to), 10);
+    if (layer.from && layer.to) {
+      const points = [layer.from, layer.to];
+      const control = arrowStyleForLayer(layer) === "curved" ? arrowControlPoint(layer) : null;
+      if (control) points.push(control);
+      return paddedRect(normalizedRectFromPoints(points), 10);
+    }
     if (layer.points && layer.points.length) {
       return paddedRect(normalizedRectFromPoints(layer.points), Number(layer.strokeWidth || 4) + 6);
     }
@@ -369,13 +445,41 @@
     return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
   }
 
+  function distanceToQuadraticCurve(point, layer) {
+    if (!layer || !layer.from || !layer.to) return Infinity;
+    const control = arrowControlPoint(layer);
+    if (!control) return Infinity;
+    let minDistance = Infinity;
+    let previous = layer.from;
+    for (let step = 1; step <= 24; step += 1) {
+      const t = step / 24;
+      const inv = 1 - t;
+      const current = {
+        x: inv * inv * layer.from.x + 2 * inv * t * control.x + t * t * layer.to.x,
+        y: inv * inv * layer.from.y + 2 * inv * t * control.y + t * t * layer.to.y,
+      };
+      minDistance = Math.min(minDistance, distanceToSegment(point, previous, current));
+      previous = current;
+    }
+    return minDistance;
+  }
+
+  function distanceToArrowPath(point, layer) {
+    if (arrowStyleForLayer(layer) === "curved") {
+      return distanceToQuadraticCurve(point, layer);
+    }
+    return distanceToSegment(point, layer.from, layer.to);
+  }
+
   function layerContainsPoint(layer, point) {
     if (!layer || layer.visible === false) return false;
     if ((layer.kind === "label" || layer.kind === "ellipse" || layer.kind === "rect") && layer.frame) {
       return rectContains(paddedRect(layer.frame, 8), point);
     }
     if (layer.kind === "arrow" && layer.from && layer.to) {
-      return distanceToSegment(point, layer.from, layer.to) <= 12;
+      const width = Number(layer.strokeWidth || 4);
+      const threshold = arrowStyleForLayer(layer) === "shaped" ? Math.max(18, width * 4) : Math.max(14, width + 10);
+      return distanceToArrowPath(point, layer) <= threshold;
     }
     if (layer.kind === "ink" && layer.points && layer.points.length > 1) {
       const threshold = Math.max(10, Number(layer.strokeWidth || 4) + 6);
@@ -394,6 +498,92 @@
       if (layerContainsPoint(layer, point)) return layer;
     }
     return null;
+  }
+
+  const frameHandleGrabPixels = 18;
+  const segmentHandleGrabPixels = 20;
+  const frameMinSizePixels = 12;
+
+  function frameHandlePoints(layer) {
+    if (!layer || !layer.frame) return [];
+    const frame = layer.frame;
+    const left = frame.x * window.innerWidth;
+    const top = frame.y * window.innerHeight;
+    const right = (frame.x + frame.width) * window.innerWidth;
+    const bottom = (frame.y + frame.height) * window.innerHeight;
+    const midX = (left + right) / 2;
+    const midY = (top + bottom) / 2;
+    return [
+      { name: "nw", x: left, y: top },
+      { name: "n", x: midX, y: top },
+      { name: "ne", x: right, y: top },
+      { name: "e", x: right, y: midY },
+      { name: "se", x: right, y: bottom },
+      { name: "s", x: midX, y: bottom },
+      { name: "sw", x: left, y: bottom },
+      { name: "w", x: left, y: midY },
+    ];
+  }
+
+  function frameHandleAt(point, layer) {
+    const px = point.x * window.innerWidth;
+    const py = point.y * window.innerHeight;
+    for (const handle of frameHandlePoints(layer)) {
+      if (Math.abs(px - handle.x) <= frameHandleGrabPixels && Math.abs(py - handle.y) <= frameHandleGrabPixels) {
+        return handle.name;
+      }
+    }
+    return null;
+  }
+
+  function segmentHandlePoints(layer) {
+    if (!layer || !layer.from || !layer.to) return [];
+    const from = pointToCanvas(layer.from);
+    const to = pointToCanvas(layer.to);
+    return [
+      { name: "from", x: from.x, y: from.y },
+      { name: "to", x: to.x, y: to.y },
+    ];
+  }
+
+  function segmentHandleAt(point, layer) {
+    const px = point.x * window.innerWidth;
+    const py = point.y * window.innerHeight;
+    for (const handle of segmentHandlePoints(layer)) {
+      if (Math.hypot(px - handle.x, py - handle.y) <= segmentHandleGrabPixels) {
+        return handle.name;
+      }
+    }
+    return null;
+  }
+
+  function cursorForFrameHandle(handle) {
+    if (handle === "n" || handle === "s") return "ns-resize";
+    if (handle === "e" || handle === "w") return "ew-resize";
+    if (handle === "nw" || handle === "se") return "nwse-resize";
+    if (handle === "ne" || handle === "sw") return "nesw-resize";
+    return "default";
+  }
+
+  function selectedHandleAt(point) {
+    const layer = selectedLayer();
+    if (!layer) return null;
+    if (layer.frame) {
+      const handle = frameHandleAt(point, layer);
+      return handle ? { kind: "frame", handle, layer } : null;
+    }
+    if (layer.from && layer.to) {
+      const handle = segmentHandleAt(point, layer);
+      return handle ? { kind: "segment", handle, layer } : null;
+    }
+    return null;
+  }
+
+  function cursorForSelectPoint(point) {
+    const handle = selectedHandleAt(point);
+    if (handle && handle.kind === "frame") return cursorForFrameHandle(handle.handle);
+    if (handle && handle.kind === "segment") return "grab";
+    return hitTestLayer(point) ? "grab" : "default";
   }
 
   function drawArrowHead(from, to, width, style = "open") {
@@ -446,6 +636,110 @@
       to.y - length * Math.sin(angle + Math.PI / 6)
     );
     ctx.stroke();
+  }
+
+  function drawStraightArrow(layer, from, to, width) {
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    applyLayerShadow(layer);
+    ctx.stroke();
+    clearLayerShadow();
+    ctx.setLineDash([]);
+    drawArrowHead(to, from, width, pointerStyleForLayer(layer, "start"));
+    drawArrowHead(from, to, width, pointerStyleForLayer(layer, "end"));
+  }
+
+  function drawCurvedArrow(layer, from, to, width) {
+    const control = arrowControlPointPixels(layer);
+    if (!control) {
+      drawStraightArrow(layer, from, to, width);
+      return;
+    }
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.quadraticCurveTo(control.x, control.y, to.x, to.y);
+    applyLayerShadow(layer);
+    ctx.stroke();
+    clearLayerShadow();
+    ctx.setLineDash([]);
+    drawArrowHead(control, from, width, pointerStyleForLayer(layer, "start"));
+    drawArrowHead(control, to, width, pointerStyleForLayer(layer, "end"));
+  }
+
+  function drawShapedArrow(layer, from, to, width) {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance < 2) return;
+    if (distance < Math.max(24, width * 8)) {
+      drawStraightArrow(layer, from, to, width);
+      return;
+    }
+
+    const ux = dx / distance;
+    const uy = dy / distance;
+    const px = -uy;
+    const py = ux;
+    const tailHalf = Math.max(5, width * 1.35);
+    const headHalf = Math.max(tailHalf * 2.2, width * 3.2);
+    const headLength = Math.min(Math.max(18, width * 5.2), distance * 0.48);
+    const neckX = distance - headLength;
+
+    function pointAlong(x, half) {
+      return {
+        x: from.x + ux * x + px * half,
+        y: from.y + uy * x + py * half,
+      };
+    }
+
+    const tailTop = pointAlong(0, tailHalf);
+    const neckTop = pointAlong(neckX, tailHalf);
+    const headTop = pointAlong(neckX, headHalf);
+    const tip = pointAlong(distance, 0);
+    const headBottom = pointAlong(neckX, -headHalf);
+    const neckBottom = pointAlong(neckX, -tailHalf);
+    const tailBottom = pointAlong(0, -tailHalf);
+
+    ctx.save();
+    ctx.setLineDash([]);
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(tailTop.x, tailTop.y);
+    ctx.lineTo(neckTop.x, neckTop.y);
+    ctx.lineTo(headTop.x, headTop.y);
+    ctx.lineTo(tip.x, tip.y);
+    ctx.lineTo(headBottom.x, headBottom.y);
+    ctx.lineTo(neckBottom.x, neckBottom.y);
+    ctx.lineTo(tailBottom.x, tailBottom.y);
+    ctx.closePath();
+    applyLayerShadow(layer);
+    ctx.globalAlpha = 0.94;
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.fill();
+    clearLayerShadow();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = colorWithAlpha(layer.color || "#D03A1C", 0.92);
+    ctx.lineWidth = Math.max(1, width * 0.38);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawArrowLayer(layer, width) {
+    const from = pointToCanvas(layer.from);
+    const to = pointToCanvas(layer.to);
+    switch (arrowStyleForLayer(layer)) {
+    case "curved":
+      drawCurvedArrow(layer, from, to, width);
+      break;
+    case "shaped":
+      drawShapedArrow(layer, from, to, width);
+      break;
+    default:
+      drawStraightArrow(layer, from, to, width);
+      break;
+    }
   }
 
   function normalizedPointerStyle(value) {
@@ -546,6 +840,46 @@
     };
   }
 
+  function smoothedInkPoints(points) {
+    if (!Array.isArray(points) || points.length < 3) return points || [];
+    const smoothed = [points[0]];
+    for (let index = 1; index < points.length - 1; index += 1) {
+      const previous = points[index - 1];
+      const point = points[index];
+      const next = points[index + 1];
+      smoothed.push({
+        x: point.x * 0.5 + (previous.x + next.x) * 0.25,
+        y: point.y * 0.5 + (previous.y + next.y) * 0.25,
+      });
+    }
+    smoothed.push(points[points.length - 1]);
+    return smoothed;
+  }
+
+  function drawSmoothedInkPath(points) {
+    const smoothed = smoothedInkPoints(points);
+    if (smoothed.length < 2) return;
+    const first = pointToCanvas(smoothed[0]);
+    ctx.moveTo(first.x, first.y);
+    if (smoothed.length === 2) {
+      const last = pointToCanvas(smoothed[1]);
+      ctx.lineTo(last.x, last.y);
+      return;
+    }
+    for (let index = 1; index < smoothed.length - 1; index += 1) {
+      const current = pointToCanvas(smoothed[index]);
+      const next = pointToCanvas(smoothed[index + 1]);
+      ctx.quadraticCurveTo(
+        current.x,
+        current.y,
+        (current.x + next.x) / 2,
+        (current.y + next.y) / 2
+      );
+    }
+    const last = pointToCanvas(smoothed[smoothed.length - 1]);
+    ctx.lineTo(last.x, last.y);
+  }
+
   function drawLayer(layer) {
     if (layer.visible === false) return;
     const width = Number(layer.strokeWidth || 4);
@@ -557,13 +891,8 @@
     ctx.setLineDash(Array.isArray(layer.lineDash) ? layer.lineDash : []);
 
     if (layer.kind === "ink" && layer.points && layer.points.length > 1) {
-      const first = pointToCanvas(layer.points[0]);
       ctx.beginPath();
-      ctx.moveTo(first.x, first.y);
-      for (const point of layer.points.slice(1)) {
-        const p = pointToCanvas(point);
-        ctx.lineTo(p.x, p.y);
-      }
+      drawSmoothedInkPath(layer.points);
       applyLayerShadow(layer);
       ctx.stroke();
     } else if (layer.kind === "ellipse" && layer.frame) {
@@ -597,16 +926,7 @@
       applyLayerShadow(layer);
       ctx.stroke();
     } else if (layer.kind === "arrow" && layer.from && layer.to) {
-      const from = pointToCanvas(layer.from);
-      const to = pointToCanvas(layer.to);
-      ctx.beginPath();
-      ctx.moveTo(from.x, from.y);
-      ctx.lineTo(to.x, to.y);
-      applyLayerShadow(layer);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      drawArrowHead(to, from, width, pointerStyleForLayer(layer, "start"));
-      drawArrowHead(from, to, width, pointerStyleForLayer(layer, "end"));
+      drawArrowLayer(layer, width);
     } else if (layer.kind === "label" && layer.frame) {
       const frame = layer.frame;
       const rect = {
@@ -622,11 +942,11 @@
       ctx.font = noteFont(layer);
       const lines = wrapText(text, Math.max(10, rect.width - paddingX * 2));
       const backgroundAlpha = layer.backgroundColor ? Number(layer.backgroundAlpha || 0.96) : 1;
-      ctx.fillStyle = layer.backgroundColor || "#FFF7DF";
-      ctx.strokeStyle = layer.borderColor || "#D9912B";
+      ctx.fillStyle = layer.backgroundColor || "#F8F6F2";
+      ctx.strokeStyle = layer.borderColor || "#DFA13A";
       ctx.lineWidth = Number(layer.borderWidth || 1);
       ctx.beginPath();
-      roundedRect(rect.x, rect.y, rect.width, rect.height, Number(layer.cornerRadius || 13));
+      roundedRect(rect.x, rect.y, rect.width, rect.height, Number(layer.cornerRadius || 5));
       ctx.globalAlpha = backgroundAlpha;
       applyLayerShadow(layer);
       ctx.fill();
@@ -659,6 +979,26 @@
     ctx.lineWidth = 1;
     ctx.setLineDash([6, 5]);
     ctx.strokeRect(rect.x, rect.y, Math.max(1, rect.width), Math.max(1, rect.height));
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#FFFFFF";
+    ctx.strokeStyle = "rgba(79, 125, 255, 0.95)";
+    ctx.lineWidth = 1.4;
+    if (layer.frame) {
+      const handleSize = 8;
+      for (const handle of frameHandlePoints(layer)) {
+        ctx.beginPath();
+        ctx.rect(handle.x - handleSize / 2, handle.y - handleSize / 2, handleSize, handleSize);
+        ctx.fill();
+        ctx.stroke();
+      }
+    } else if (layer.from && layer.to) {
+      for (const handle of segmentHandlePoints(layer)) {
+        ctx.beginPath();
+        ctx.arc(handle.x, handle.y, 5.25, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
     ctx.restore();
   }
 
@@ -716,6 +1056,8 @@
       pointerStart: isLine ? "none" : (creating.pointerStart || "none"),
       pointerEnd: isLine ? "none" : (creating.pointerEnd || "open"),
       pointerStyle: isLine ? "none" : (creating.pointerStyle || "open"),
+      arrowStyle: isLine ? "straight" : (creating.arrowStyle || "straight"),
+      curveOffset: creating.curveOffset,
       lineStyle: creating.lineStyle,
       lineDash: creating.lineDash,
       shadow: creating.shadow,
@@ -754,18 +1096,35 @@
     state.lastPointer = point;
     if (state.tool === "select") {
       closeNoteEditor(true);
-      const layer = hitTestLayer(point);
-      state.selectedLayerId = layer ? layer.id : null;
-      state.dragging = layer ? {
-        layerId: layer.id,
-        start: point,
-        original: cloneLayer(layer),
-        copyRequested: Boolean(event.altKey),
-        copied: false,
-      } : null;
+      const selectedHandle = event.altKey ? null : selectedHandleAt(point);
+      if (selectedHandle) {
+        state.selectedLayerId = selectedHandle.layer.id;
+        state.dragging = {
+          kind: selectedHandle.kind === "frame" ? "resizeFrame" : "resizeSegment",
+          layerId: selectedHandle.layer.id,
+          handle: selectedHandle.handle,
+          start: point,
+          original: cloneLayer(selectedHandle.layer),
+          copyRequested: false,
+          copied: false,
+        };
+      } else {
+        const layer = hitTestLayer(point);
+        state.selectedLayerId = layer ? layer.id : null;
+        state.dragging = layer ? {
+          kind: "move",
+          layerId: layer.id,
+          start: point,
+          original: cloneLayer(layer),
+          copyRequested: Boolean(event.altKey),
+          copied: false,
+        } : null;
+      }
       if (state.dragging) {
         document.body.classList.add("dragging");
-        canvas.style.cursor = "grabbing";
+        canvas.style.cursor = state.dragging.kind === "resizeFrame"
+          ? cursorForFrameHandle(state.dragging.handle)
+          : "grabbing";
         canvas.setPointerCapture(event.pointerId);
       }
       render();
@@ -778,6 +1137,7 @@
       return;
     }
     const linePreset = currentLinePreset();
+    const arrowPreset = currentArrowPreset();
     const base = {
       tool: state.tool,
       start: point,
@@ -789,8 +1149,10 @@
       lineStyle: state.lineStyle,
       lineDash: linePreset.lineDash,
       pointerStart: "none",
-      pointerEnd: linePreset.pointerEnd,
-      pointerStyle: linePreset.pointerStyle,
+      pointerEnd: arrowPreset.pointerEnd || linePreset.pointerEnd,
+      pointerStyle: arrowPreset.pointerStyle || linePreset.pointerStyle,
+      arrowStyle: arrowPreset.id,
+      curveOffset: arrowPreset.curveOffset,
       shadow: linePreset.shadow,
       shadowColor: linePreset.shadowColor,
       shadowBlur: linePreset.shadowBlur,
@@ -802,6 +1164,8 @@
       base.pointerEnd = "none";
       base.pointerStyle = "none";
       base.label = "line";
+      base.arrowStyle = "straight";
+      delete base.curveOffset;
     }
     state.creating = base;
     canvas.setPointerCapture(event.pointerId);
@@ -814,6 +1178,18 @@
       const point = state.lastPointer;
       const dx = point.x - state.dragging.start.x;
       const dy = point.y - state.dragging.start.y;
+      if (state.dragging.kind === "resizeFrame") {
+        resizeLayerFrame(state.dragging.layerId, state.dragging.original, state.dragging.handle, dx, dy);
+        canvas.style.cursor = cursorForFrameHandle(state.dragging.handle);
+        render();
+        return;
+      }
+      if (state.dragging.kind === "resizeSegment") {
+        resizeSegmentEndpoint(state.dragging.layerId, state.dragging.original, state.dragging.handle, dx, dy, event);
+        canvas.style.cursor = "grabbing";
+        render();
+        return;
+      }
       if (state.dragging.copyRequested && !state.dragging.copied) {
         const distance = Math.hypot(dx * window.innerWidth, dy * window.innerHeight);
         if (distance < 2) return;
@@ -834,7 +1210,7 @@
 
     if (state.tool === "select") {
       const point = state.lastPointer;
-      canvas.style.cursor = hitTestLayer(point) ? "grab" : "default";
+      canvas.style.cursor = cursorForSelectPoint(point);
       return;
     }
 
@@ -861,7 +1237,7 @@
       state.dragging = null;
       document.body.classList.remove("dragging");
       const point = event ? eventPoint(event) : null;
-      canvas.style.cursor = point && hitTestLayer(point) ? "grab" : "default";
+      canvas.style.cursor = point ? cursorForSelectPoint(point) : "default";
       render();
       sendUpdate();
       return;
@@ -932,6 +1308,54 @@
       width: frame.width,
       height: frame.height,
     };
+  }
+
+  function resizedFrame(frame, handle, dx, dy) {
+    const minWidth = frameMinSizePixels / Math.max(1, window.innerWidth);
+    const minHeight = frameMinSizePixels / Math.max(1, window.innerHeight);
+    let left = frame.x;
+    let top = frame.y;
+    let right = frame.x + frame.width;
+    let bottom = frame.y + frame.height;
+
+    if (handle.includes("w")) left = clamp(Math.min(frame.x + dx, right - minWidth), 0, right - minWidth);
+    if (handle.includes("e")) right = clamp(Math.max(frame.x + frame.width + dx, left + minWidth), left + minWidth, 1);
+    if (handle.includes("n")) top = clamp(Math.min(frame.y + dy, bottom - minHeight), 0, bottom - minHeight);
+    if (handle.includes("s")) bottom = clamp(Math.max(frame.y + frame.height + dy, top + minHeight), top + minHeight, 1);
+
+    return {
+      x: left,
+      y: top,
+      width: right - left,
+      height: bottom - top,
+    };
+  }
+
+  function resizeLayerFrame(layerId, original, handle, dx, dy) {
+    const index = state.layers.findIndex((layer) => layer.id === layerId);
+    if (index < 0 || !original.frame) return;
+    const next = cloneLayer(original);
+    next.frame = resizedFrame(original.frame, handle, dx, dy);
+    state.layers[index] = next;
+  }
+
+  function adjustedEndpointPoint(anchor, point, event) {
+    if (!(event && event.shiftKey)) return point;
+    return snappedSegmentPoint(anchor, point);
+  }
+
+  function resizeSegmentEndpoint(layerId, original, handle, dx, dy, event) {
+    const index = state.layers.findIndex((layer) => layer.id === layerId);
+    if (index < 0 || !original.from || !original.to) return;
+    const next = cloneLayer(original);
+    if (handle === "from") {
+      const moving = movedPoint(original.from, dx, dy);
+      next.from = adjustedEndpointPoint(original.to, moving, event);
+    } else {
+      const moving = movedPoint(original.to, dx, dy);
+      next.to = adjustedEndpointPoint(original.from, moving, event);
+    }
+    state.layers[index] = next;
   }
 
   function movedLayer(layer, dx, dy) {
@@ -1006,6 +1430,17 @@
       layer.pointerEnd = lineLayer ? "none" : preset.pointerEnd;
       layer.pointerStyle = lineLayer ? "none" : preset.pointerStyle;
       if (lineLayer) layer.label = "line";
+    }
+    return true;
+  }
+
+  function applyArrowPresetToLayer(layer, preset) {
+    if (!layer || layer.kind !== "arrow" || isLineLayer(layer) || !preset) return false;
+    layer.arrowStyle = preset.id;
+    layer.curveOffset = preset.curveOffset;
+    if (preset.pointerEnd) {
+      layer.pointerEnd = preset.pointerEnd;
+      layer.pointerStyle = preset.pointerStyle || preset.pointerEnd;
     }
     return true;
   }
@@ -1125,6 +1560,12 @@
         return;
       }
 
+      const arrowStyle = button.getAttribute("data-arrow-style");
+      if (arrowStyle) {
+        setArrowStyle(arrowStyle);
+        return;
+      }
+
       const color = button.getAttribute("data-color");
       if (color) {
         setColor(color);
@@ -1138,18 +1579,37 @@
       }
 
       const action = button.getAttribute("data-action");
-      if (action === "toggle-style") {
-        setStyleOpen(!state.styleOpen);
-      } else if (action === "undo") {
-        undo();
-      } else if (action === "capture") {
-        capture();
-      } else if (action === "done") {
-        done();
-      } else if (action === "cancel") {
-        cancel();
-      }
+      performAction(action);
     });
+  }
+
+  windowChrome.forEach((element) => {
+    element.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+    });
+  });
+
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest(".window-close, .surface-actions button");
+    if (!button) return;
+    event.stopPropagation();
+    performAction(button.getAttribute("data-action"));
+  });
+
+  function performAction(action) {
+    if (action === "toggle-style") {
+      if (optionTools.has(state.tool)) setStyleOpen(!state.styleOpen);
+    } else if (action === "undo") {
+      undo();
+    } else if (action === "redo") {
+      redo();
+    } else if (action === "capture") {
+      capture();
+    } else if (action === "done") {
+      done();
+    } else if (action === "cancel") {
+      cancel();
+    }
   }
 
   function syncToolbarState() {
@@ -1170,17 +1630,15 @@
     controls.querySelectorAll(".line-style").forEach((el) => {
       el.classList.toggle("active", el.getAttribute("data-line-style") === state.lineStyle);
     });
+    controls.querySelectorAll(".arrow-style").forEach((el) => {
+      el.classList.toggle("active", el.getAttribute("data-arrow-style") === state.arrowStyle);
+    });
     controls.querySelectorAll(".style-toggle").forEach((el) => {
       el.classList.toggle("active", state.styleOpen);
       el.setAttribute("aria-expanded", state.styleOpen ? "true" : "false");
-      const swatch = el.querySelector(".style-chip-swatch");
-      const label = el.querySelector(".style-chip-label");
-      if (swatch) swatch.style.setProperty("--chip-color", state.color);
-      if (label) {
-        const note = noteStyleLabels[state.noteStyle] || state.noteStyle;
-        const line = lineStyleLabels[state.lineStyle] || state.lineStyle;
-        label.textContent = `${note} · ${line} · ${Number(state.strokeWidth)}px`;
-      }
+      el.title = state.styleOpen ? `Hide ${toolOptionsLabel()}` : `Show ${toolOptionsLabel()}`;
+      const summary = el.querySelector(".style-summary");
+      if (summary) summary.textContent = styleSummaryForTool();
     });
   }
 
@@ -1202,7 +1660,7 @@
     canvas.style.cursor = "";
     state.tool = tool;
     document.body.dataset.tool = tool;
-    setStyleOpen(false);
+    setStyleOpen(optionTools.has(tool));
     syncToolbarState();
   }
 
@@ -1234,6 +1692,17 @@
     syncToolbarState();
   }
 
+  function setArrowStyle(arrowStyle) {
+    if (!arrowStylePresets[arrowStyle]) return;
+    state.arrowStyle = arrowStyle;
+    document.body.dataset.arrowStyle = arrowStyle;
+    if (applyArrowPresetToLayer(selectedLayer(), currentArrowPreset())) {
+      render();
+      sendUpdate();
+    }
+    syncToolbarState();
+  }
+
   function cyclePreset(keys, current, delta = 1) {
     const index = Math.max(0, keys.indexOf(current));
     return keys[(index + delta + keys.length) % keys.length];
@@ -1245,6 +1714,34 @@
 
   function cycleLineStyle() {
     setLineStyle(cyclePreset(Object.keys(lineStylePresets), state.lineStyle));
+  }
+
+  function toolOptionsLabel(tool = state.tool) {
+    const label = toolLabels[tool] || "Tool";
+    return optionTools.has(tool) ? `${label} options` : label;
+  }
+
+  function styleSummaryForTool(tool = state.tool) {
+    const note = noteStyleLabels[state.noteStyle] || state.noteStyle;
+    const line = lineStyleLabels[state.lineStyle] || state.lineStyle;
+    const arrow = arrowStyleLabels[state.arrowStyle] || state.arrowStyle;
+    const width = `${Number(state.strokeWidth)}px`;
+    switch (tool) {
+    case "note":
+      return `Note · ${note} · ${width}`;
+    case "arrow":
+      return `Arrow · ${arrow} · ${line} · ${width}`;
+    case "line":
+      return `Line · ${line} · ${width}`;
+    case "ink":
+      return `Pen · ${line} · ${width}`;
+    case "rect":
+      return `Rect · ${line} · ${width}`;
+    case "ellipse":
+      return `Circle · ${line} · ${width}`;
+    default:
+      return "Move and reshape";
+    }
   }
 
   function setColor(color) {
@@ -1402,6 +1899,7 @@
     setStrokeWidth,
     setNoteStyle,
     setLineStyle,
+    setArrowStyle,
     setStyleOpen,
     setContext,
     undo,
@@ -1423,7 +1921,9 @@
   document.body.dataset.mode = state.mode;
   document.body.dataset.noteStyle = state.noteStyle;
   document.body.dataset.lineStyle = state.lineStyle;
-  document.body.dataset.styleOpen = "false";
-  syncToolbarState();
+  document.body.dataset.arrowStyle = state.arrowStyle;
+  document.body.dataset.styleOpen = state.styleOpen ? "true" : "false";
+  setContext(state.context);
+  setStyleOpen(state.styleOpen);
   post("liveMarkup.ready", {});
 })();

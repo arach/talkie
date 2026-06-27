@@ -887,9 +887,11 @@ extension ScreenRecordingService: SCStreamOutput {
 
 extension ScreenRecordingService: SCStreamDelegate {
     nonisolated func stream(_ stream: SCStream, didStopWithError error: any Error) {
-        Log(.system).error("SCStream stopped with error: \(error)")
+        let reason = String(describing: error)
+        Log(.system).error("SCStream stopped with error: \(reason)")
         Task { @MainActor in
             self.teardown()
+            ScreenRecordingController.shared.handleServiceInterruption(reason: reason)
         }
     }
 }

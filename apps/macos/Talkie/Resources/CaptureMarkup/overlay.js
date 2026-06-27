@@ -26,60 +26,62 @@
   const noteStylePresets = {
     sticky: {
       id: "sticky",
-      textColor: "#17191F",
-      backgroundColor: "#FFF7DF",
-      backgroundAlpha: 0.96,
-      borderColor: "#D9912B",
-      borderAlpha: 0.52,
+      textColor: "#1C1D21",
+      backgroundColor: "#F8F6F2",
+      backgroundAlpha: 0.97,
+      borderColor: "#DFA13A",
+      borderAlpha: 0.30,
       borderWidth: 1,
-      cornerRadius: 13,
-      fontSize: 15,
-      lineHeight: 21,
-      paddingX: 14,
-      paddingY: 11,
-      bold: true,
+      cornerRadius: 5,
+      fontSize: 14,
+      lineHeight: 20,
+      paddingX: 11,
+      paddingY: 9,
+      bold: false,
       shadow: true,
-      shadowColor: "rgba(0, 0, 0, 0.22)",
-      shadowBlur: 18,
-      shadowOffsetY: 8,
+      shadowColor: "rgba(7, 9, 13, 0.16)",
+      shadowBlur: 10,
+      shadowOffsetY: 3,
+      editorBackground: "rgba(248, 246, 242, 0.97)",
+      editorShadow: "0 4px 14px rgba(7, 9, 13, 0.18)",
     },
     bubble: {
       id: "bubble",
-      textColor: "#101826",
-      backgroundColor: "#F3F7FF",
-      backgroundAlpha: 0.95,
-      borderColor: "#4F7DFF",
-      borderAlpha: 0.42,
-      borderWidth: 1.25,
-      cornerRadius: 24,
-      fontSize: 15,
-      lineHeight: 21,
-      paddingX: 16,
-      paddingY: 12,
-      bold: true,
+      textColor: "#1A1D26",
+      backgroundColor: "#FFFFFF",
+      backgroundAlpha: 0.96,
+      borderColor: "#C5CCD6",
+      borderAlpha: 0.55,
+      borderWidth: 1,
+      cornerRadius: 8,
+      fontSize: 14,
+      lineHeight: 20,
+      paddingX: 12,
+      paddingY: 9,
+      bold: false,
       shadow: true,
-      shadowColor: "rgba(23, 35, 64, 0.2)",
-      shadowBlur: 18,
-      shadowOffsetY: 8,
+      shadowColor: "rgba(14, 18, 28, 0.12)",
+      shadowBlur: 10,
+      shadowOffsetY: 3,
     },
     glass: {
       id: "glass",
-      textColor: "#FFFFFF",
-      backgroundColor: "#13161E",
-      backgroundAlpha: 0.9,
+      textColor: "#F2F3F5",
+      backgroundColor: "#16181D",
+      backgroundAlpha: 0.92,
       borderColor: "#FFFFFF",
-      borderAlpha: 0.2,
+      borderAlpha: 0.12,
       borderWidth: 1,
-      cornerRadius: 16,
-      fontSize: 16,
-      lineHeight: 22,
-      paddingX: 16,
-      paddingY: 12,
-      bold: true,
+      cornerRadius: 6,
+      fontSize: 14,
+      lineHeight: 20,
+      paddingX: 12,
+      paddingY: 9,
+      bold: false,
       shadow: true,
-      shadowColor: "rgba(0, 0, 0, 0.34)",
-      shadowBlur: 22,
-      shadowOffsetY: 10,
+      shadowColor: "rgba(0, 0, 0, 0.22)",
+      shadowBlur: 12,
+      shadowOffsetY: 4,
     },
   };
 
@@ -224,7 +226,7 @@
     element.style.background = colorWithAlpha(preset.backgroundColor, preset.backgroundAlpha || 1);
     element.style.borderColor = colorWithAlpha(preset.borderColor, preset.borderAlpha || 1);
     element.style.borderWidth = `${Number(preset.borderWidth || 1)}px`;
-    element.style.borderRadius = `${Number(preset.cornerRadius || 13)}px`;
+    element.style.borderRadius = `${Number(preset.cornerRadius || 5)}px`;
     element.style.padding = `${Number(preset.paddingY || 11)}px ${Number(preset.paddingX || 14)}px`;
     element.style.font = noteFont(preset);
     element.style.boxShadow = preset.shadow
@@ -609,11 +611,11 @@
       ctx.font = noteFont(layer);
       const lines = wrapText(text, Math.max(10, rect.width - paddingX * 2));
       const backgroundAlpha = layer.backgroundColor ? Number(layer.backgroundAlpha || 0.96) : 1;
-      ctx.fillStyle = layer.backgroundColor || "#FFF7DF";
-      ctx.strokeStyle = layer.borderColor || "#D9912B";
+      ctx.fillStyle = layer.backgroundColor || "#F8F6F2";
+      ctx.strokeStyle = layer.borderColor || "#DFA13A";
       ctx.lineWidth = Number(layer.borderWidth || 1);
       ctx.beginPath();
-      roundedRect(rect.x, rect.y, rect.width, rect.height, Number(layer.cornerRadius || 13));
+      roundedRect(rect.x, rect.y, rect.width, rect.height, Number(layer.cornerRadius || 5));
       ctx.globalAlpha = backgroundAlpha;
       applyLayerShadow(layer);
       ctx.fill();

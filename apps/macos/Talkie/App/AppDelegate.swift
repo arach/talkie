@@ -2170,9 +2170,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     @MainActor
     private func handleCaptureChord(initialMode: CaptureBarMode, previousApp: NSRunningApplication?) async {
         // If video mode and already recording, Hyper+R stops the recording
-        if initialMode == .video && ScreenRecordingController.shared.state == .recording {
-            await ScreenRecordingController.shared.stopRecording()
-            return
+        if initialMode == .video {
+            if await ScreenRecordingController.shared.stopIfRecording() {
+                return
+            }
         }
 
         guard !isCaptureChordActive else { return }

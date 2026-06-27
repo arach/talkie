@@ -689,6 +689,7 @@ struct ScopeLibraryView: View {
     private var recordingsList: some View {
         // Bucket the recordings so we can render section headers as eyebrows.
         let groups = ScopeLibraryDateBucket.grouped(viewModel.recordings)
+        let prefetchIDs = Set(viewModel.recordings.suffix(8).map(\.id))
 
         return ScrollViewReader { proxy in
             ScrollView {
@@ -706,6 +707,11 @@ struct ScopeLibraryView: View {
                             .overlay(alignment: .top) {
                                 if idx > 0 {
                                     ScopeRule(.row)
+                                }
+                            }
+                            .onAppear {
+                                if prefetchIDs.contains(recording.id) {
+                                    Task { await viewModel.loadNextPage() }
                                 }
                             }
                         }
@@ -726,16 +732,23 @@ struct ScopeLibraryView: View {
 
     @ViewBuilder
     private var paginationFooter: some View {
-        if viewModel.isLoading && !viewModel.recordings.isEmpty {
+        if viewModel.isLoadingNextPage {
             HStack(spacing: 8) {
-                PhosphorDot(color: ScopeInk.faint, size: 5)
+                BrailleSpinner(size: 10, speed: 0.10)
+                    .foregroundStyle(ScopeInk.faint)
                 Text("LOADING MORE")
                     .font(ScopeType.chrome)
                     .tracking(ScopeType.Tracking.wide)
                     .foregroundStyle(ScopeInk.faint)
+                Text("\(viewModel.displayedCount) / \(viewModel.totalCount)")
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopeInk.faint.opacity(0.7))
             }
             .padding(.vertical, 16)
             .padding(.horizontal, 32)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .transition(.opacity)
         } else if viewModel.hasMorePages {
             Button {
                 Task { await viewModel.loadNextPage() }
@@ -756,6 +769,7 @@ struct ScopeLibraryView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
+            .transition(.opacity)
         }
     }
 

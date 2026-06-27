@@ -37,6 +37,9 @@ final class ScreenRecordingController {
 
     private(set) var state: State = .idle
     private(set) var recordingStartTime: Date?
+    var isRecording: Bool {
+        state == .recording || ScreenRecordingService.shared.state == .recording
+    }
 
     @ObservationIgnored
     private var metadataSampleTask: Task<Void, Never>?
@@ -48,6 +51,8 @@ final class ScreenRecordingController {
     private var activeOverlayController: ScreenRecordingActiveOverlayController?
     @ObservationIgnored
     private var cameraBubbleShownForRecording = false
+    @ObservationIgnored
+    private var isStoppingRecording = false
 
     private init() {}
 
@@ -126,8 +131,20 @@ final class ScreenRecordingController {
     // MARK: - Stop Recording
 
     /// Stop the current screen recording and add the clip to the tray.
-    func stopRecording() async {
-        guard state == .recording else { return }
+    @discardableResult
+    func stopRecording() async -> Bool {
+        guard !isStoppingRecording else {
+            log.debug("Screen recording stop ignored - stop already in progress")
+            return true
+        }
+        guard isRecording else { return false }
+
+        isStoppingRecording = true
+        defer { isStoppingRecording = false }
+
+        if state != .recording, ScreenRecordingService.shared.state == .recording {
+            log.warning("Screen recording controller state drifted; stopping active service recording")
+        }
 
         // Capture start time before stop clears it
         let startTime = ScreenRecordingService.shared.recordingStartTime ?? recordingStartTime
@@ -141,7 +158,7 @@ final class ScreenRecordingController {
             hideActiveOverlay()
             hideCameraBubbleIfNeeded()
             resetMetadataSampler()
-            return
+            return false
         }
 
         // Calculate duration
@@ -198,15 +215,38 @@ final class ScreenRecordingController {
         NotchOverlayController.shared.deactivateScreenRecording()
         hideActiveOverlay()
         hideCameraBubbleIfNeeded()
+        return true
     }
 
     // MARK: - Toggle (for stop via hotkey)
 
     /// If recording, stop. Otherwise do nothing (chord handles start).
-    func stopIfRecording() async {
-        if state == .recording {
-            await stopRecording()
+    @discardableResult
+    func stopIfRecording() async -> Bool {
+        if isRecording || isStoppingRecording {
+            return await stopRecording()
         }
+        return false
+    }
+
+    /// Reset controller UI/state after ScreenCaptureKit ends the stream unexpectedly.
+    func handleServiceInterruption(reason: String) {
+        guard !isStoppingRecording else {
+            log.debug("Screen recording stream interruption observed during stop: \(reason)")
+            return
+        }
+        guard state != .idle || recordingStartTime != nil else {
+            return
+        }
+
+        log.error("Screen recording interrupted by ScreenCaptureKit: \(reason)")
+        stopMetadataSampler()
+        recordingStartTime = nil
+        state = .idle
+        NotchOverlayController.shared.deactivateScreenRecording()
+        hideActiveOverlay()
+        hideCameraBubbleIfNeeded()
+        resetMetadataSampler()
     }
 
     /// Mark a screenshot captured while this screen recording is active.

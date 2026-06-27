@@ -368,24 +368,24 @@ button:focus-visible {
   }
 }
 
-/* Note content stays warm because it is a user artifact, not chrome. */
+/* Note editor — clean annotation card; preset styles applied in JS. */
 .note-editor {
   position: fixed;
   z-index: 3;
   width: min(300px, calc(100vw - 32px));
-  min-height: 48px;
+  min-height: 44px;
   max-height: 160px;
   resize: none;
-  padding: 11px 14px;
-  border: 1px solid rgba(217, 145, 43, 0.55);
-  border-radius: 13px;
-  color: rgba(23, 25, 31, 0.96);
-  background: rgba(255, 247, 223, 0.97);
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.26);
+  padding: 9px 11px;
+  border: 1px solid rgba(223, 161, 58, 0.30);
+  border-radius: 5px;
+  color: rgba(28, 29, 33, 0.97);
+  background: rgba(248, 246, 242, 0.97);
+  box-shadow: 0 4px 14px rgba(7, 9, 13, 0.18);
   outline: none;
-  font: 650 15px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  font: 500 14px/1.43 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
 }
 
 .note-editor::placeholder {
-  color: rgba(84, 65, 33, 0.52);
+  color: rgba(28, 29, 33, 0.38);
 }

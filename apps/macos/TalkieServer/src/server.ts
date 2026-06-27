@@ -23,7 +23,7 @@
  * RUNNING:
  *   bun run src/server.ts --local        # Dev mode, port 8767
  *   bun run src/server.ts --nearby --allow-lan
- *                                       # Nearby bridge, port 8765 (LAN/Tailscale)
+ *                                       # Nearby bridge, port 8765 (LAN/Bonjour)
  *   bun run src/server.ts --local       # Also exposes /tmp/talkie-server.sock
  *
  * See ARCHITECTURE.md for full documentation.
@@ -92,16 +92,6 @@ const serverConfig = {
 let requestGracefulShutdown: ((reason: string) => void) | undefined;
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
-
-function appendAlternateHost(host: string | undefined): void {
-  const normalized = host?.trim().replace(/\.$/, "");
-  if (!normalized || normalized === serverConfig.hostname) {
-    return;
-  }
-  if (!serverConfig.alternateHosts.includes(normalized)) {
-    serverConfig.alternateHosts.push(normalized);
-  }
-}
 
 function getLocalBonjourHostname(): string {
   const raw = systemHostname().trim().replace(/\.$/, "");
@@ -471,12 +461,7 @@ async function main() {
     log.info(`Token file: ${LOCAL_AUTH_TOKEN_FILE}`);
   } else if (NEARBY_MODE) {
     serverConfig.hostname = getLocalBonjourHostname();
-    const tailscaleState = await getTailscaleState();
-    if (tailscaleState.status === "ready" || tailscaleState.status === "no-peers") {
-      appendAlternateHost(tailscaleState.hostname);
-    }
-    log.info("Running in NEARBY mode (explicit LAN/Tailscale interfaces, Bonjour discovery)");
-    log.info(`Tailscale: ${getStateMessage(tailscaleState)}`);
+    log.info("Running in NEARBY mode (explicit LAN + Bonjour discovery; Tailscale check skipped)");
   } else {
     const tailscaleState = await getTailscaleState();
     log.info(`Tailscale: ${getStateMessage(tailscaleState)}`);
@@ -546,7 +531,7 @@ async function main() {
   // reachable only on the tailnet.
   app.listen({ hostname: bindAddress, port: PORT });
   log.info(`TalkieServer HTTP at http://${bindAddress}:${PORT}`);
-  if (!LOCAL_MODE) {
+  if (!LOCAL_MODE && !NEARBY_MODE) {
     log.info(`Tailscale hostname: ${serverConfig.hostname}`);
   }
 
@@ -556,7 +541,7 @@ async function main() {
       hostname: serverConfig.hostname,
       port: PORT,
       mode: SERVER_MODE,
-      route: serverConfig.alternateHosts.length > 0 ? "lan,tailscale" : "lan",
+      route: "lan",
       capabilities: ["bridge", "pairing", "hyper-scan"],
     });
   }

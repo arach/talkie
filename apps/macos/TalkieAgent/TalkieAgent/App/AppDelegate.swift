@@ -634,7 +634,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         popover.behavior = .transient
         // Match the popover chrome (menus, scrollbars) to the active tray skin.
         popover.appearance = NSAppearance(named: AgentTraySkin.current().isDark ? .darkAqua : .aqua)
-        popover.contentSize = NSSize(width: 320, height: 470)
+        popover.contentSize = NSSize(width: 320, height: 535)
 
         if let hostingController = popover.contentViewController as? NSHostingController<AgentMenuPopoverView> {
             hostingController.rootView = AgentMenuPopoverView(
@@ -1582,9 +1582,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         initialMode: CaptureBarMode,
         startsMarkupEnabled: Bool = false
     ) async {
-        if initialMode == .video && ScreenRecordingController.shared.state == .recording {
-            await ScreenRecordingController.shared.stopRecording()
-            return
+        if initialMode == .video {
+            if await ScreenRecordingController.shared.stopIfRecording() {
+                return
+            }
         }
 
         guard !isAgentCaptureChordActive else { return }
