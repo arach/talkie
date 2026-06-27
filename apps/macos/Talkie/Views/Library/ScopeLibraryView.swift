@@ -214,6 +214,11 @@ struct ScopeLibraryView: View {
             withAnimation(.easeInOut(duration: 0.2)) { showingRecordingView = true }
         }
         .background(cmdShortcutBindings)
+        .scopeLibraryKeyboardNavigation(
+            isEnabled: !viewModel.recordings.isEmpty,
+            onMoveUp: { moveSelection(by: -1) },
+            onMoveDown: { moveSelection(by: 1) }
+        )
         .onAppear { startCmdMonitor() }
         .onDisappear { stopCmdMonitor() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
@@ -269,6 +274,31 @@ struct ScopeLibraryView: View {
         guard items.indices.contains(n - 1) else { return }
         let recording = items[n - 1]
         selectRecording(recording.id)
+        pendingScrollID = recording.id
+    }
+
+    private func moveSelection(by offset: Int) {
+        guard !viewModel.recordings.isEmpty else { return }
+
+        let currentID = selectedRecordingIDs.count == 1 ? selectedRecordingIDs.first : nil
+        let currentIndex = currentID.flatMap { id in
+            viewModel.recordings.firstIndex { $0.id == id }
+        }
+
+        let targetIndex: Int
+        if let currentIndex {
+            targetIndex = min(
+                max(currentIndex + offset, viewModel.recordings.startIndex),
+                viewModel.recordings.index(before: viewModel.recordings.endIndex)
+            )
+        } else {
+            targetIndex = offset < 0
+                ? viewModel.recordings.index(before: viewModel.recordings.endIndex)
+                : viewModel.recordings.startIndex
+        }
+
+        let recording = viewModel.recordings[targetIndex]
+        selectRecording(recording.id, revealInspector: false)
         pendingScrollID = recording.id
     }
 
