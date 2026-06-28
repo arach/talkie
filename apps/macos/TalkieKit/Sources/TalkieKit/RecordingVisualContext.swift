@@ -393,6 +393,7 @@ public enum VisualContextStorage {
                 manifest: manifest,
                 to: bundleURL.appendingPathComponent(summaryFilename)
             )
+            VisualContextFrameProcessor.schedule(for: context)
             return context
         } catch {
             context.status = .failed
@@ -400,6 +401,27 @@ public enum VisualContextStorage {
             Log(.system).error("Failed to create visual context bundle: \(error)")
             return nil
         }
+    }
+
+    public static func loadManifest(from bundleURL: URL) throws -> RecordingVisualContextManifest {
+        let url = bundleURL.appendingPathComponent(manifestFilename)
+        let data = try Data(contentsOf: url)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(RecordingVisualContextManifest.self, from: data)
+    }
+
+    public static func writeProcessedBundle(
+        context: RecordingVisualContext,
+        manifest: RecordingVisualContextManifest,
+        bundleURL: URL
+    ) throws {
+        try writeManifest(manifest, to: bundleURL.appendingPathComponent(manifestFilename))
+        try writeSummary(
+            context: context,
+            manifest: manifest,
+            to: bundleURL.appendingPathComponent(summaryFilename)
+        )
     }
 
     private static func writeManifest(_ manifest: RecordingVisualContextManifest, to url: URL) throws {
@@ -434,7 +456,7 @@ public enum VisualContextStorage {
         ]
 
         if let contactSheet = context.contactSheetFilename {
-            lines.append("Contact sheet: \(contactSheet)")
+            lines.append("Frame canvas: \(contactSheet)")
         }
         if context.frameCount != nil {
             lines.append("Frames: frames/")

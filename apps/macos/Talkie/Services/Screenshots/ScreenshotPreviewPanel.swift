@@ -105,7 +105,7 @@ final class ScreenshotPreviewPanel {
             },
             onAnnotate: { [weak self] url in
                 self?.dismiss()
-                CaptureMarkupCoordinator.shared.openSession(imageURL: url)
+                CaptureMarkupCoordinator.shared.openAgentOwnedSession(imageURL: url)
             },
             onInteractionChanged: { [weak self] isInteracting in
                 if isInteracting {

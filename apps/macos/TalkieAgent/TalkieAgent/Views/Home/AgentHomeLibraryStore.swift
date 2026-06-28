@@ -12,6 +12,66 @@ import TalkieKit
 
 private let agentHomeLibraryLog = Log(.database)
 
+enum AgentHomeLibraryFilter: Equatable {
+    case all
+    case captures
+
+    var title: String {
+        switch self {
+        case .all: return "History"
+        case .captures: return "Captures"
+        }
+    }
+
+    var eyebrow: String {
+        switch self {
+        case .all: return "· History"
+        case .captures: return "· Captures"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .all:
+            return "Read-only history from Talkie's shared recordings table."
+        case .captures:
+            return "Screenshots and clips from Talkie's shared recordings table."
+        }
+    }
+
+    var sectionSubtitle: String {
+        switch self {
+        case .all:
+            return "Memos, dictations, notes, captures, and selections from Talkie."
+        case .captures:
+            return "Screenshots, screen recordings, and visual context captured by Talkie."
+        }
+    }
+
+    var emptyTitle: String {
+        switch self {
+        case .all: return "NO LIBRARY ITEMS YET"
+        case .captures: return "NO CAPTURES YET"
+        }
+    }
+
+    var emptyDetail: String {
+        switch self {
+        case .all:
+            return "New memos, dictations, captures, notes, and selections will appear here after Talkie writes them."
+        case .captures:
+            return "New screenshots and clips will appear here after Talkie writes them."
+        }
+    }
+
+    fileprivate var typeRawValue: String? {
+        switch self {
+        case .all: return nil
+        case .captures: return TalkieObjectType.capture.rawValue
+        }
+    }
+}
+
 @MainActor
 final class AgentHomeLibraryStore: ObservableObject {
     struct Summary: Equatable {
@@ -48,11 +108,13 @@ final class AgentHomeLibraryStore: ObservableObject {
     @Published private(set) var errorMessage: String?
 
     let displayLimit: Int?
+    let filter: AgentHomeLibraryFilter
 
     private var observation: AnyDatabaseCancellable?
 
-    init(displayLimit: Int? = 200) {
+    init(displayLimit: Int? = 200, filter: AgentHomeLibraryFilter = .all) {
         self.displayLimit = displayLimit
+        self.filter = filter
     }
 
     func start() {
@@ -62,9 +124,31 @@ final class AgentHomeLibraryStore: ObservableObject {
         errorMessage = nil
 
         let displayLimit = displayLimit
+        let typeRawValue = filter.typeRawValue
         let valueObservation = ValueObservation.tracking { db -> AgentHomeLibrarySnapshot in
             let rows: [TalkieObject]
-            if let displayLimit {
+            if let typeRawValue, let displayLimit {
+                rows = try TalkieObject.fetchAll(
+                    db,
+                    sql: """
+                    SELECT * FROM recordings
+                    WHERE deletedAt IS NULL AND type != 'segment' AND type = ?
+                    ORDER BY createdAt DESC
+                    LIMIT ?
+                    """,
+                    arguments: [typeRawValue, displayLimit]
+                )
+            } else if let typeRawValue {
+                rows = try TalkieObject.fetchAll(
+                    db,
+                    sql: """
+                    SELECT * FROM recordings
+                    WHERE deletedAt IS NULL AND type != 'segment' AND type = ?
+                    ORDER BY createdAt DESC
+                    """,
+                    arguments: [typeRawValue]
+                )
+            } else if let displayLimit {
                 rows = try TalkieObject.fetchAll(
                     db,
                     sql: """

@@ -244,6 +244,14 @@ public enum ExecutableResolver {
                 "/opt/homebrew/bin/npx",
                 "/usr/local/bin/npx",
             ],
+            "ffmpeg": [
+                "/opt/homebrew/bin/ffmpeg",
+                "/usr/local/bin/ffmpeg",
+            ],
+            "ffprobe": [
+                "/opt/homebrew/bin/ffprobe",
+                "/usr/local/bin/ffprobe",
+            ],
         ]
     }()
 

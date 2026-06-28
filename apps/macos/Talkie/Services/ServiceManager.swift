@@ -1548,6 +1548,33 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
         }
     }
 
+    /// Open the Agent-owned quick capture markup tool for an image file.
+    @discardableResult
+    public func openCaptureMarkup(fileURL: URL) async -> Bool {
+        startXPCMonitoring(autoConnect: true)
+        if !isXPCConnected {
+            await xpcManager?.connect()
+        }
+
+        guard let service = xpcManager?.remoteObjectProxy(errorHandler: { error in
+            logger.error("[Agent] openCaptureMarkup error: \(error.localizedDescription)")
+        }) else {
+            logger.warning("[Agent] Cannot open capture markup - not connected")
+            return false
+        }
+
+        return await withCheckedContinuation { continuation in
+            service.openCaptureMarkup(filePath: fileURL.path) { success, error in
+                if success {
+                    logger.info("[Agent] Capture markup opened")
+                } else {
+                    logger.warning("[Agent] Capture markup failed", detail: error ?? "unknown")
+                }
+                continuation.resume(returning: success)
+            }
+        }
+    }
+
     /// Paste text via TalkieAgent (uses robust AX insertion with clipboard fallback)
     /// - Parameters:
     ///   - text: The text to insert

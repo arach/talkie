@@ -1151,7 +1151,7 @@ private struct TrayViewerView: View {
                 }
 
                 Button(action: {
-                    CaptureMarkupCoordinator.shared.openSession(imageURL: item.tempURL)
+                    CaptureMarkupCoordinator.shared.openAgentOwnedSession(imageURL: item.tempURL)
                 }) {
                     Image(systemName: "sparkles.rectangle.stack")
                         .font(.system(size: 11))
@@ -1465,7 +1465,7 @@ private struct TrayViewerView: View {
 
                     if let selectedScreenshot {
                         Button(action: {
-                            CaptureMarkupCoordinator.shared.openSession(imageURL: selectedScreenshot.tempURL)
+                            CaptureMarkupCoordinator.shared.openAgentOwnedSession(imageURL: selectedScreenshot.tempURL)
                         }) {
                             Label("Markup", systemImage: "sparkles.rectangle.stack")
                                 .font(.system(size: 12, weight: .medium))
@@ -1653,7 +1653,7 @@ private struct TrayViewerView: View {
             }
 
             Button("Annotate…") {
-                CaptureMarkupCoordinator.shared.openSession(imageURL: ts.tempURL)
+                CaptureMarkupCoordinator.shared.openAgentOwnedSession(imageURL: ts.tempURL)
             }
 
             Button("Open in Preview") {
@@ -1725,7 +1725,7 @@ private struct TrayViewerView: View {
 
             if targetScreenshots.count == 1, let screenshot = targetScreenshots.first {
                 menu.addItem(TrayContextMenuItem(title: "Annotate…") {
-                    CaptureMarkupCoordinator.shared.openSession(imageURL: screenshot.tempURL)
+                    CaptureMarkupCoordinator.shared.openAgentOwnedSession(imageURL: screenshot.tempURL)
                 })
 
                 let screenshotItem = TrayItem.screenshot(screenshot)

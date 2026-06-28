@@ -397,6 +397,34 @@
     return null;
   }
 
+  const segmentHandleGrabPixels = 20;
+
+  function segmentHandlePoints(layer) {
+    if (!layer || !layer.from || !layer.to) return [];
+    const from = pointToCanvas(layer.from);
+    const to = pointToCanvas(layer.to);
+    return [
+      { name: "from", x: from.x, y: from.y },
+      { name: "to", x: to.x, y: to.y },
+    ];
+  }
+
+  function segmentHandleAt(point, layer) {
+    const canvasPoint = pointToCanvas(point);
+    for (const handle of segmentHandlePoints(layer)) {
+      if (Math.hypot(canvasPoint.x - handle.x, canvasPoint.y - handle.y) <= segmentHandleGrabPixels) {
+        return handle.name;
+      }
+    }
+    return null;
+  }
+
+  function cursorForSelectPoint(point) {
+    const layer = selectedLayer();
+    if (layer && segmentHandleAt(point, layer)) return "grab";
+    return hitTestLayer(point) ? "grab" : "default";
+  }
+
   function drawArrowHead(from, to, width, style = "open") {
     if (!style || style === "none") return;
     const angle = Math.atan2(to.y - from.y, to.x - from.x);
@@ -635,15 +663,33 @@
   }
 
   function drawSelection(layer) {
+    ctx.save();
+    if (layer.from && layer.to) {
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#FFFFFF";
+      ctx.strokeStyle = "rgba(79, 125, 255, 0.95)";
+      ctx.lineWidth = 1.4;
+      for (const handle of segmentHandlePoints(layer)) {
+        ctx.beginPath();
+        ctx.arc(handle.x, handle.y, 5.25, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
+      return;
+    }
+
     const bounds = layerBounds(layer);
-    if (!bounds) return;
+    if (!bounds) {
+      ctx.restore();
+      return;
+    }
     const rect = {
       x: bounds.x * window.innerWidth,
       y: bounds.y * window.innerHeight,
       width: bounds.width * window.innerWidth,
       height: bounds.height * window.innerHeight,
     };
-    ctx.save();
     ctx.strokeStyle = "rgba(255, 255, 255, 0.78)";
     ctx.lineWidth = 1;
     ctx.setLineDash([6, 5]);
@@ -743,15 +789,30 @@
     state.lastPointer = point;
     if (state.tool === "select") {
       closeNoteEditor(true);
-      const layer = hitTestLayer(point);
-      state.selectedLayerId = layer ? layer.id : null;
-      state.dragging = layer ? {
-        layerId: layer.id,
-        start: point,
-        original: cloneLayer(layer),
-        copyRequested: Boolean(event.altKey),
-        copied: false,
-      } : null;
+      const already = selectedLayer();
+      const selectedHandle = event.altKey || !already ? null : segmentHandleAt(point, already);
+      if (selectedHandle) {
+        state.dragging = {
+          kind: "resizeSegment",
+          layerId: already.id,
+          handle: selectedHandle,
+          start: point,
+          original: cloneLayer(already),
+          copyRequested: false,
+          copied: false,
+        };
+      } else {
+        const layer = hitTestLayer(point);
+        state.selectedLayerId = layer ? layer.id : null;
+        state.dragging = layer ? {
+          kind: "move",
+          layerId: layer.id,
+          start: point,
+          original: cloneLayer(layer),
+          copyRequested: Boolean(event.altKey),
+          copied: false,
+        } : null;
+      }
       if (state.dragging) {
         document.body.classList.add("dragging");
         canvas.style.cursor = "grabbing";
@@ -803,6 +864,12 @@
       const point = state.lastPointer;
       const dx = point.x - state.dragging.start.x;
       const dy = point.y - state.dragging.start.y;
+      if (state.dragging.kind === "resizeSegment") {
+        resizeSegmentHandle(state.dragging.layerId, state.dragging.original, state.dragging.handle, dx, dy, event);
+        canvas.style.cursor = "grabbing";
+        render();
+        return;
+      }
       if (state.dragging.copyRequested && !state.dragging.copied) {
         const distance = Math.hypot(dx * window.innerWidth, dy * window.innerHeight);
         if (distance < 2) return;
@@ -823,7 +890,7 @@
 
     if (state.tool === "select") {
       const point = state.lastPointer;
-      canvas.style.cursor = hitTestLayer(point) ? "grab" : "default";
+      canvas.style.cursor = cursorForSelectPoint(point);
       return;
     }
 
@@ -850,7 +917,7 @@
       state.dragging = null;
       document.body.classList.remove("dragging");
       const point = event ? eventPoint(event) : null;
-      canvas.style.cursor = point && hitTestLayer(point) ? "grab" : "default";
+      canvas.style.cursor = point ? cursorForSelectPoint(point) : "default";
       render();
       sendUpdate();
       return;
@@ -921,6 +988,22 @@
       width: frame.width,
       height: frame.height,
     };
+  }
+
+  function adjustedEndpointPoint(anchor, point, event) {
+    return snappedSegmentPoint(anchor, point, Boolean(event && event.shiftKey));
+  }
+
+  function resizeSegmentHandle(layerId, original, handle, dx, dy, event) {
+    const index = state.layers.findIndex((layer) => layer.id === layerId);
+    if (index < 0 || !original.from || !original.to) return;
+    const next = cloneLayer(original);
+    if (handle === "from") {
+      next.from = adjustedEndpointPoint(original.to, movedPoint(original.from, dx, dy), event);
+    } else {
+      next.to = adjustedEndpointPoint(original.from, movedPoint(original.to, dx, dy), event);
+    }
+    state.layers[index] = next;
   }
 
   function movedLayer(layer, dx, dy) {

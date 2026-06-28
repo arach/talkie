@@ -19,11 +19,13 @@ struct AgentHomeShellView: View {
 
     @StateObject private var store = AgentHomeActivityStore()
     @StateObject private var libraryStore = AgentHomeLibraryStore(displayLimit: 120)
+    @StateObject private var captureLibraryStore = AgentHomeLibraryStore(displayLimit: 120, filter: .captures)
     @StateObject private var permissionManager = PermissionManager.shared
     @ObservedObject private var homeController = AgentHomeController.shared
     @ObservedObject private var settings = LiveSettings.shared
 
     @State private var selectedSection: AgentHomeShellSection = .home
+    @State private var libraryFilter: AgentHomeLibraryFilter = .all
     @State private var overflowMenu = AgentRailOverflowMenu()
     @AppStorage("talkie.agentHome.sidebar.compact") private var railCompact = true
     @AppStorage("talkie.agentHome.sidebar.labelWidth") private var navigationSidebarLabelWidth = 120.0
@@ -84,6 +86,7 @@ struct AgentHomeShellView: View {
         .onAppear {
             store.startRefreshing()
             libraryStore.start()
+            captureLibraryStore.start()
             permissionManager.refreshAll()
             applyPendingRoute()
         }
@@ -93,6 +96,7 @@ struct AgentHomeShellView: View {
         .onDisappear {
             store.stopRefreshing()
             libraryStore.stop()
+            captureLibraryStore.stop()
         }
         .task {
             await refreshOperationalSnapshotsLoop()
@@ -119,8 +123,7 @@ struct AgentHomeShellView: View {
                         presentOverflowMenu()
                         return
                     }
-                    selectedSection = next
-                    closeSettings()   // primary nav stays live; selecting it exits settings
+                    selectSection(next)
                 }
             ),
             entries: AgentHomeShellSection.sidebarEntries,
@@ -196,6 +199,14 @@ struct AgentHomeShellView: View {
         homeController.isShowingSettings = false
     }
 
+    private func selectSection(_ section: AgentHomeShellSection) {
+        selectedSection = section
+        if section == .library {
+            libraryFilter = .all
+        }
+        closeSettings()   // primary nav stays live; selecting it exits settings
+    }
+
     private func collapseInspectorIfNeeded(width: CGFloat) {
         guard width < Self.inspectorAutoCollapseWidth, !inspectorCollapsed else { return }
         inspectorCollapsed = true
@@ -206,6 +217,9 @@ struct AgentHomeShellView: View {
     private func applyPendingRoute() {
         guard let route = homeController.pendingSection else { return }
         selectedSection = route.shellSection
+        if let filter = route.libraryFilter {
+            libraryFilter = filter
+        }
         closeSettings()
         homeController.pendingSection = nil
     }
@@ -216,8 +230,7 @@ struct AgentHomeShellView: View {
         overflowMenu.present(
             items: AgentHomeShellSection.overflowSections.map { section in
                 AgentRailOverflowMenu.Item(title: section.title, systemImage: section.icon) {
-                    selectedSection = section
-                    closeSettings()
+                    selectSection(section)
                 }
             }
         )
@@ -246,12 +259,13 @@ struct AgentHomeShellView: View {
                 storageSize: storageSize,
                 librarySummary: libraryStore.summary,
                 libraryItems: libraryStore.items,
-                onSelect: { selectedSection = $0 },
+                onSelect: selectSection,
                 onOpenSettings: openSettings
             )
         case .library:
             AgentHomeLibraryPage(
-                store: libraryStore,
+                store: libraryFilter == .captures ? captureLibraryStore : libraryStore,
+                filter: libraryFilter,
                 onOpenSettings: openSettings
             )
         case .capture:
@@ -324,7 +338,7 @@ struct AgentHomeShellView: View {
                 traySnapshot: traySnapshot,
                 librarySummary: libraryStore.summary,
                 lastOperationalRefresh: lastOperationalRefresh,
-                onSelect: { selectedSection = $0 },
+                onSelect: selectSection,
                 onOpenSettings: openSettings
             )
         }
@@ -555,10 +569,18 @@ private extension AgentHomeRoute {
     var shellSection: AgentHomeShellSection {
         switch self {
         case .home: return .home
-        case .history: return .library
+        case .history, .libraryCaptures: return .library
         case .conversations: return .conversations
         case .permissions: return .permissions
         case .logs: return .logs
+        }
+    }
+
+    var libraryFilter: AgentHomeLibraryFilter? {
+        switch self {
+        case .history: return .all
+        case .libraryCaptures: return .captures
+        case .home, .conversations, .permissions, .logs: return nil
         }
     }
 }
@@ -1229,6 +1251,7 @@ private struct AgentHomeLibraryPage: View {
     }
 
     @ObservedObject var store: AgentHomeLibraryStore
+    let filter: AgentHomeLibraryFilter
     let onOpenSettings: () -> Void
 
     @State private var selectedID: UUID?
@@ -1237,22 +1260,22 @@ private struct AgentHomeLibraryPage: View {
 
     var body: some View {
         AgentHomePageScaffold(
-            title: "History",
-            subtitle: "Read-only history from Talkie's shared recordings table.",
+            title: filter.title,
+            subtitle: filter.subtitle,
             showsHeader: false,
             scrolls: false,
             maxContentWidth: 1_260
         ) {
             VStack(alignment: .leading, spacing: OpsSpacing.md) {
-                OpsSectionLabel("· History")
+                OpsSectionLabel(filter.eyebrow)
 
                 OpsCard(padding: 0) {
                     VStack(alignment: .leading, spacing: 0) {
                         HStack(alignment: .top, spacing: OpsSpacing.xl) {
                             AgentHomeSectionHeader(
                                 icon: "clock.arrow.circlepath",
-                                title: "Library",
-                                subtitle: "Memos, dictations, notes, captures, and selections from Talkie."
+                                title: filter.title,
+                                subtitle: filter.sectionSubtitle
                             )
 
                             Spacer(minLength: 0)
@@ -1310,8 +1333,8 @@ private struct AgentHomeLibraryPage: View {
             ScopeLibraryList(
                 objects: store.items,
                 selectedID: selectedID,
-                emptyTitle: "NO LIBRARY ITEMS YET",
-                emptyDetail: "New memos, dictations, captures, notes, and selections will appear here after Talkie writes them.",
+                emptyTitle: filter.emptyTitle,
+                emptyDetail: filter.emptyDetail,
                 onSelect: { item in selectItem(item) }
             )
         }

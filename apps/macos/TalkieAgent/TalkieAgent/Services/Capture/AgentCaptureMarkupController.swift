@@ -79,14 +79,15 @@ final class AgentCaptureMarkupController {
         overlay.persistsLayersOnDone = false
         overlay.isVisibleInScreenCapture = true
         overlay.showsCaptureAction = false
-        overlay.showsDock = false
+        overlay.showsDock = true
         overlay.onDone = { [weak self] layers in
             self?.finish(item: item, sourceImage: sourceImage, layers: layers, updatesLibrary: updatesLibrary)
         }
         overlay.onCancel = { [weak self] in
             self?.cancel(item: item)
         }
-        overlay.show(on: placement.screen, targetRect: placement.imageRect)
+        overlay.show(on: placement.screen, targetRect: Self.overlayRect(for: placement))
+        overlay.setDrawableRect(Self.overlayDrawableRect(for: placement))
         overlay.setTool("ink")
         showDragHandle(
             item: item,
@@ -305,7 +306,8 @@ final class AgentCaptureMarkupController {
             backgroundView.updateImageRect(Self.relativeImageRect(for: placement))
         }
 
-        overlay?.setFrame(placement.imageRect)
+        overlay?.setFrame(Self.overlayRect(for: placement))
+        overlay?.setDrawableRect(Self.overlayDrawableRect(for: placement))
         dragHandlePanel?.setFrame(Self.dragHandleFrame(for: placement.surfaceRect), display: true)
     }
 
@@ -353,7 +355,7 @@ final class AgentCaptureMarkupController {
         let size = dragHandleSize
         return NSRect(
             x: (frame.midX - size.width / 2).rounded(),
-            y: (frame.minY + (AgentCaptureMarkupLayout.bottomToolbarHeight - size.height) / 2).rounded(),
+            y: (frame.minY + 12).rounded(),
             width: size.width,
             height: size.height
         )
@@ -513,6 +515,25 @@ final class AgentCaptureMarkupController {
                     - AgentCaptureMarkupLayout.titlebarHeight
                     - AgentCaptureMarkupLayout.bottomToolbarHeight
             )
+        )
+    }
+
+    private static func overlayRect(for placement: AgentCaptureMarkupPlacement) -> CGRect {
+        CGRect(
+            x: placement.imageRect.minX,
+            y: placement.surfaceRect.minY,
+            width: placement.imageRect.width,
+            height: placement.surfaceRect.height
+        )
+    }
+
+    private static func overlayDrawableRect(for placement: AgentCaptureMarkupPlacement) -> CGRect {
+        let overlay = overlayRect(for: placement)
+        return CGRect(
+            x: placement.imageRect.minX - overlay.minX,
+            y: overlay.maxY - placement.imageRect.maxY,
+            width: placement.imageRect.width,
+            height: placement.imageRect.height
         )
     }
 
@@ -689,7 +710,7 @@ private struct AgentCaptureMarkupPlacement {
 
 private enum AgentCaptureMarkupLayout {
     static let titlebarHeight: CGFloat = 42
-    static let bottomToolbarHeight: CGFloat = 42
+    static let bottomToolbarHeight: CGFloat = 156
     static let edgePadding: CGFloat = 8
     static let resizeHitSlop: CGFloat = 12
     static let resizeGripSize: CGFloat = 18

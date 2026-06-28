@@ -361,9 +361,18 @@ public actor AgentLiveTrayAssetStore {
         )
     }
 
+    /// Returns every live tray screenshot and clip, newest first.
+    public func allItems() -> [AgentLiveTrayItem] {
+        liveTrayItems(limit: nil)
+    }
+
     /// Returns recent live tray media items, newest first, using the same
     /// manifest/file layout Talkie already reads for review surfaces.
     public func recentItems(limit: Int = 5) -> [AgentLiveTrayItem] {
+        liveTrayItems(limit: limit)
+    }
+
+    private func liveTrayItems(limit: Int?) -> [AgentLiveTrayItem] {
         let screenshotItems = Manifest<StoredTrayScreenshot>(
             directory: screenshotsDirectory,
             fileManager: fileManager
@@ -408,10 +417,10 @@ public actor AgentLiveTrayAssetStore {
             )
         }
 
-        return (screenshotItems + clipItems)
+        let sorted = (screenshotItems + clipItems)
             .sorted { $0.capturedAt > $1.capturedAt }
-            .prefix(max(0, limit))
-            .map { $0 }
+        guard let limit else { return sorted }
+        return Array(sorted.prefix(max(0, limit)))
     }
 
     /// Deletes one live tray item from the manifest and removes its stored

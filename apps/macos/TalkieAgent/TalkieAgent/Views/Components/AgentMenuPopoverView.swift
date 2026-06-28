@@ -44,6 +44,7 @@ struct AgentMenuActions {
     var openTalkie: () -> Void
     var openSettings: () -> Void
     var openHistory: () -> Void
+    var openAllGrabs: () -> Void
     var openAudioSettings: () -> Void
     var openLogs: () -> Void
     var openPermissions: () -> Void
@@ -392,7 +393,12 @@ struct AgentMenuPopoverView: View {
     }
 
     private var recentSection: some View {
-        AgentMenuSection(title: "Recent", trailingTitle: "All", trailingAction: actions.openHistory) {
+        AgentMenuSection(
+            title: "Recent",
+            trailingTitle: "All",
+            trailingAction: actions.openHistory,
+            trailingHelp: "Show all history"
+        ) {
             if model.isLoadingData {
                 AgentMenuEmptyRow(title: "Loading recent...")
             } else if model.recentItems.isEmpty {
@@ -410,7 +416,7 @@ struct AgentMenuPopoverView: View {
     }
 
     private var recentGrabsSection: some View {
-        AgentMenuRecentGrabsSection()
+        AgentMenuRecentGrabsSection(onOpenAll: actions.openAllGrabs)
     }
 
     private var toolsSection: some View {
@@ -522,6 +528,7 @@ private struct AgentMenuSection<Content: View>: View {
     let title: String
     var trailingTitle: String? = nil
     var trailingAction: (() -> Void)? = nil
+    var trailingHelp: String = "Show all"
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -552,7 +559,7 @@ private struct AgentMenuSection<Content: View>: View {
                     }
                     .buttonStyle(.plain)
                     .focusable(false)
-                    .help("Show all history")
+                    .help(trailingHelp)
                 }
             }
             .padding(.horizontal, 6)
@@ -738,18 +745,25 @@ private struct AgentMenuRecentRow: View {
 }
 
 private struct AgentMenuRecentGrabsSection: View {
+    let onOpenAll: () -> Void
+
     @State private var previews: [AgentMenuGrabPreview] = []
     @State private var isLoading = true
     @State private var loadGeneration = 0
 
     var body: some View {
-        AgentMenuSection(title: "Recent Grabs") {
+        AgentMenuSection(
+            title: "Recent Grabs",
+            trailingTitle: "All",
+            trailingAction: onOpenAll,
+            trailingHelp: "Show all screenshots and clips"
+        ) {
             if previews.isEmpty && isLoading {
                 AgentMenuGrabSkeletonStrip()
             } else if previews.isEmpty {
                 AgentMenuEmptyRow(title: "No recent grabs", systemImage: "photo.on.rectangle")
             } else {
-                ScrollView(.horizontal, showsIndicators: true) {
+                ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         ForEach(previews) { preview in
                             AgentMenuGrabTile(preview: preview)
@@ -798,7 +812,7 @@ private struct AgentMenuGrabPreview: Identifiable {
 
 private struct AgentMenuGrabSkeletonStrip: View {
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: true) {
+        ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
                 ForEach(0..<6, id: \.self) { _ in
                     AgentMenuGrabSkeletonTile()
@@ -1375,6 +1389,7 @@ private struct AgentMenuEmptyRow: View {
             openTalkie: {},
             openSettings: {},
             openHistory: {},
+            openAllGrabs: {},
             openAudioSettings: {},
             openLogs: {},
             openPermissions: {},

@@ -2605,7 +2605,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         )
         TrayActionService.shared.persistStandaloneScreenshotToLibrary(latestItem)
         if opensMarkup {
-            CaptureMarkupCoordinator.shared.openSession(imageURL: latestItem.tempURL)
+            CaptureMarkupCoordinator.shared.openAgentOwnedSession(imageURL: latestItem.tempURL)
         }
         return true
     }

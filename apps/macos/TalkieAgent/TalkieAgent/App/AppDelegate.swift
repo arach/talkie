@@ -889,6 +889,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                     self.showHistory()
                 }
             },
+            openAllGrabs: { [weak self] in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.dismissAgentMenuPopover()
+                    AgentHomeController.shared.show(section: .libraryCaptures)
+                }
+            },
             openAudioSettings: { [weak self] in
                 Task { @MainActor in
                     guard let self else { return }

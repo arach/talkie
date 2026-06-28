@@ -43,6 +43,7 @@ final class LiveCaptureMarkupOverlayController: NSObject {
     private var selectedTool = "ink"
     private var selectedColor = "#D03A1C"
     private var selectedStrokeWidth = 4.0
+    private var drawableRect: CGRect?
 
     /// Lets clicks fall through to the apps beneath while keeping strokes
     /// visible (arrange mode for the desktop ink layer). Drawing resumes when
@@ -187,6 +188,12 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         guard next.width >= 8, next.height >= 8 else { return }
         panel?.setFrame(next, display: true)
         webView?.frame = NSRect(origin: .zero, size: next.size)
+        applyDrawableRect()
+    }
+
+    func setDrawableRect(_ rect: CGRect?) {
+        drawableRect = rect
+        applyDrawableRect()
     }
 
     func setTool(_ tool: String) {
@@ -362,8 +369,25 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         setTool(selectedTool)
         setColor(selectedColor)
         setStrokeWidth(selectedStrokeWidth)
+        applyDrawableRect()
         applyToolbarContext()
         applyDockVisibility()
+    }
+
+    private func applyDrawableRect() {
+        guard let drawableRect else {
+            evaluate("window.talkieLiveMarkup && window.talkieLiveMarkup.setDrawableRect(null);")
+            return
+        }
+        let rect = drawableRect.standardized
+        evaluate("""
+        window.talkieLiveMarkup && window.talkieLiveMarkup.setDrawableRect({
+          x: \(Double(rect.minX)),
+          y: \(Double(rect.minY)),
+          width: \(Double(rect.width)),
+          height: \(Double(rect.height))
+        });
+        """)
     }
 
     private func applyToolbarContext() {

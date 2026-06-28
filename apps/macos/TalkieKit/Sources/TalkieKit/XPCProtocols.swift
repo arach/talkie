@@ -174,6 +174,12 @@ public struct HotKeyStatusInfo: Codable, Sendable, Identifiable {
     /// Use this instead of URL schemes to ensure the correct instance opens.
     func showSettings(reply: @escaping (_ success: Bool) -> Void)
 
+    /// Open an image file in Agent-owned quick capture markup.
+    ///
+    /// Talkie uses this to hand screenshot annotation to Agent while retaining
+    /// the legacy in-app markup editor as a local fallback.
+    func openCaptureMarkup(filePath: String, reply: @escaping (_ success: Bool, _ error: String?) -> Void)
+
     /// Simulate a Cmd+V paste keystroke
     ///
     /// Used by Talkie after loading images onto the clipboard to deliver
