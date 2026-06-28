@@ -29,6 +29,19 @@ interface RecordingRef {
   createdAt?: string | null;
 }
 
+interface VisualContextInfo {
+  id: string;
+  recordingId: string;
+  bundlePath: string;
+  sourceClipPath?: string;
+  summaryPath?: string;
+  manifestPath?: string;
+  contactSheetPath?: string;
+  framesDir?: string;
+  frameCount?: number;
+  status?: string;
+}
+
 interface CaptureItem {
   id: string;
   kind: CaptureKind;
@@ -54,6 +67,7 @@ interface CaptureItem {
   sidecarPath?: string;
   markupPath?: string;
   recording?: RecordingRef;
+  visualContext?: VisualContextInfo;
 }
 
 interface CaptureCommandOptions {
@@ -68,9 +82,16 @@ interface CaptureCommandOptions {
   paths?: boolean;
   open?: boolean;
   reveal?: boolean;
+  context?: boolean;
+  contactSheet?: boolean;
+  frames?: boolean;
 }
 
 interface ScreenshotsCommandOptions extends Omit<CaptureCommandOptions, "kind" | "recording"> {
+  allSources?: boolean;
+}
+
+interface ClipsCommandOptions extends Omit<CaptureCommandOptions, "kind" | "recording"> {
   allSources?: boolean;
 }
 
@@ -94,6 +115,7 @@ const TRAY_SCREENSHOTS_DIR = join(APP_SUPPORT, "Tray", "screenshots");
 const TRAY_CLIPS_DIR = join(APP_SUPPORT, "Tray", "clips");
 const BUFFER_SCREENSHOTS_DIR = join(APP_SUPPORT, "Buffer", "screenshots");
 const BUFFER_CLIPS_DIR = join(APP_SUPPORT, "Buffer", "clips");
+const VISUAL_CONTEXTS_DIR = join(APP_SUPPORT, "VisualContexts");
 
 const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".heic"]);
 const VIDEO_EXTS = new Set([".mp4", ".mov", ".m4v"]);
@@ -119,8 +141,38 @@ export function registerCapturesCommand(program: Command): void {
     .option("--paths", "print only capture file paths")
     .option("--open", "open the matched capture file(s)")
     .option("--reveal", "reveal the matched capture file(s) in Finder")
+    .option("--context", "include visual-context bundle paths and frame canvas metadata")
+    .option("--contact-sheet", "print only contact-sheet.jpg paths when available")
+    .option("--frames", "print only frames/ directory paths when available")
     .action((id: string | undefined, opts: CaptureCommandOptions) => {
       runCaptureSelection(program, id, opts, 50);
+    });
+
+  program
+    .command("clips [n]")
+    .aliases(["screen-clips", "screenclips"])
+    .description("List recent Talkie screen clips from the capture tray")
+    .option("-n, --limit <n>", "max clips", "5")
+    .option("--since <date>", "filter by capture/file date (e.g. 2026-06-01 or 7d)")
+    .option("--source <source>", "tray, recording, library, or all", "tray")
+    .option("--all-sources", "include tray, recording, and library clips")
+    .option("--app <name>", "filter by app, window, display, or filename")
+    .option("--path", "print only clip file paths")
+    .option("--paths", "print only clip file paths")
+    .option("--context", "include visual-context bundle paths and frame canvas metadata")
+    .option("--contact-sheet", "print only contact-sheet.jpg paths when available")
+    .option("--frames", "print only frames/ directory paths when available")
+    .option("--open", "open the matched clip file(s)")
+    .option("--reveal", "reveal the matched clip file(s) in Finder")
+    .action((n: string | undefined, opts: ClipsCommandOptions) => {
+      const limit = n ?? opts.limit ?? "5";
+      const source = opts.allSources ? "all" : opts.source ?? "tray";
+      runCaptureSelection(program, undefined, {
+        ...opts,
+        kind: "clip",
+        source,
+        limit,
+      }, 5);
     });
 
   program
@@ -208,6 +260,9 @@ function collectCaptures(dbOverride?: string): CaptureItem[] {
     mergeItem(byPath, item);
   }
 
+  const visualContexts = collectVisualContexts(dbOverride);
+  attachVisualContexts(Array.from(byPath.values()), visualContexts);
+
   return Array.from(byPath.values());
 }
 
@@ -238,7 +293,7 @@ function collectDatabaseCaptures(dbOverride?: string): CaptureItem[] {
   const mediaClauses: string[] = [];
   if (hasAssets) {
     mediaClauses.push(
-      "(assetsJSON LIKE '%\"screenshots\"%' OR assetsJSON LIKE '%\"clips\"%')"
+      "(assetsJSON LIKE '%\"screenshots\"%' OR assetsJSON LIKE '%\"clips\"%' OR assetsJSON LIKE '%\"visualContexts\"%')"
     );
   }
   if (hasScreenshots) mediaClauses.push("screenshotsJSON IS NOT NULL");
@@ -274,6 +329,7 @@ function collectDatabaseCaptures(dbOverride?: string): CaptureItem[] {
       ...arrayFrom(assets?.clips),
       ...arrayFrom(parseJSON(row.clipsJSON)),
     ];
+    const visualContexts = arrayFrom(assets?.visualContexts);
 
     screenshots.forEach((asset, index) => {
       const path = resolveCapturePath(asset.filename, SCREENSHOTS_DIR);
@@ -287,16 +343,163 @@ function collectDatabaseCaptures(dbOverride?: string): CaptureItem[] {
 
     clips.forEach((asset, index) => {
       const path = resolveCapturePath(asset.filename, VIDEOS_DIR);
-      items.push(
-        withFileMetadata({
-          ...itemFromAsset(asset, "clip", path, recording, index),
-          recording,
-        })
-      );
+      const item = withFileMetadata({
+        ...itemFromAsset(asset, "clip", path, recording, index),
+        recording,
+      });
+      item.visualContext = pickVisualContext(visualContexts, recording.id, item.path);
+      items.push(item);
     });
   }
 
   return items;
+}
+
+function collectVisualContexts(dbOverride?: string): VisualContextInfo[] {
+  const byId = new Map<string, VisualContextInfo>();
+
+  for (const item of collectDatabaseVisualContexts(dbOverride)) {
+    byId.set(item.id.toLowerCase(), item);
+  }
+
+  for (const item of collectFilesystemVisualContexts()) {
+    const key = item.id.toLowerCase();
+    const current = byId.get(key);
+    byId.set(key, current ? { ...current, ...item } : item);
+  }
+
+  return Array.from(byId.values());
+}
+
+function collectDatabaseVisualContexts(dbOverride?: string): VisualContextInfo[] {
+  const dbPath = resolveDbPath(dbOverride);
+  if (!existsSync(dbPath)) return [];
+
+  getDb(dbOverride);
+  const columns = new Set(
+    queryAll("PRAGMA table_info(recordings)").map((row) => String(row.name))
+  );
+  if (!columns.has("assetsJSON")) return [];
+
+  const rows = queryAll(`
+    SELECT id, assetsJSON
+    FROM recordings
+    WHERE ${columns.has("deletedAt") ? "deletedAt IS NULL AND " : ""}assetsJSON LIKE '%"visualContexts"%'
+    ORDER BY ${columns.has("createdAt") ? "createdAt DESC" : "id DESC"}
+  `);
+
+  const items: VisualContextInfo[] = [];
+  for (const row of rows) {
+    const assets = parseObject(row.assetsJSON);
+    for (const context of arrayFrom(assets?.visualContexts)) {
+      const info = visualContextFromRecord(context, String(row.id));
+      if (info) items.push(info);
+    }
+  }
+  return items;
+}
+
+function collectFilesystemVisualContexts(): VisualContextInfo[] {
+  if (!existsSync(VISUAL_CONTEXTS_DIR)) return [];
+
+  const items: VisualContextInfo[] = [];
+  for (const recordingId of listDirectories(VISUAL_CONTEXTS_DIR)) {
+    const recordingDir = join(VISUAL_CONTEXTS_DIR, recordingId);
+    for (const contextId of listDirectories(recordingDir)) {
+      const bundlePath = join(recordingDir, contextId);
+      const manifestPath = join(bundlePath, "visual-context.json");
+      const manifest = parseJSONFile(manifestPath);
+      if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) continue;
+      const info = visualContextFromRecord(manifest as Record<string, unknown>, recordingId, bundlePath);
+      if (info) items.push(info);
+    }
+  }
+  return items;
+}
+
+function visualContextFromRecord(
+  context: Record<string, unknown>,
+  recordingId: string,
+  bundlePathOverride?: string
+): VisualContextInfo | null {
+  const id = stringOrUndefined(context.id)
+    ?? stringOrUndefined(context.visualContextId);
+  const relativeDirectory = stringOrUndefined(context.relativeDirectory)
+    ?? (id ? `${recordingId.toLowerCase()}/${id.toLowerCase()}` : undefined);
+  if (!id || !relativeDirectory) return null;
+
+  const bundlePath = bundlePathOverride ?? join(VISUAL_CONTEXTS_DIR, ...relativeDirectory.split("/"));
+  const sourceClipFilename = stringOrUndefined(context.sourceClipFilename)
+    ?? stringOrUndefined(context.sourceClip);
+  const sourceClipPath = sourceClipFilename
+    ? join(bundlePath, sourceClipFilename)
+    : undefined;
+  const summaryFilename = stringOrUndefined(context.summaryFilename) ?? "visual-context.md";
+  const manifestFilename = stringOrUndefined(context.manifestFilename) ?? "visual-context.json";
+  const contactSheetFilename = stringOrUndefined(context.contactSheetFilename) ?? "contact-sheet.jpg";
+  const summaryPath = join(bundlePath, summaryFilename);
+  const manifestPath = join(bundlePath, manifestFilename);
+  const contactSheetPath = join(bundlePath, contactSheetFilename);
+  const framesDir = join(bundlePath, "frames");
+  const frameCount = numberOrUndefined(context.frameCount)
+    ?? (Array.isArray((context as { frames?: unknown }).frames)
+      ? ((context as { frames: unknown[] }).frames.length)
+      : undefined);
+
+  return {
+    id: id.toLowerCase(),
+    recordingId: recordingId.toLowerCase(),
+    bundlePath,
+    sourceClipPath: sourceClipPath && existsSync(sourceClipPath) ? sourceClipPath : undefined,
+    summaryPath: existsSync(summaryPath) ? summaryPath : undefined,
+    manifestPath: existsSync(manifestPath) ? manifestPath : undefined,
+    contactSheetPath: existsSync(contactSheetPath) ? contactSheetPath : undefined,
+    framesDir: existsSync(framesDir) ? framesDir : undefined,
+    frameCount,
+    status: stringOrUndefined(context.status),
+  };
+}
+
+function attachVisualContexts(items: CaptureItem[], contexts: VisualContextInfo[]): void {
+  if (contexts.length === 0) return;
+
+  const byRecording = new Map<string, VisualContextInfo[]>();
+  const bySourceClip = new Map<string, VisualContextInfo>();
+  for (const context of contexts) {
+    const recordingContexts = byRecording.get(context.recordingId) ?? [];
+    recordingContexts.push(context);
+    byRecording.set(context.recordingId, recordingContexts);
+    if (context.sourceClipPath) {
+      bySourceClip.set(resolve(context.sourceClipPath), context);
+    }
+  }
+
+  for (const item of items) {
+    if (item.visualContext) continue;
+    item.visualContext = bySourceClip.get(resolve(item.path))
+      ?? pickVisualContextFromList(byRecording.get(item.recording?.id.toLowerCase() ?? "") ?? [], item.path);
+  }
+}
+
+function pickVisualContext(
+  contexts: Record<string, unknown>[],
+  recordingId: string,
+  clipPath: string
+): VisualContextInfo | undefined {
+  const parsed = contexts
+    .map((context) => visualContextFromRecord(context, recordingId))
+    .filter((context): context is VisualContextInfo => Boolean(context));
+  return pickVisualContextFromList(parsed, clipPath);
+}
+
+function pickVisualContextFromList(
+  contexts: VisualContextInfo[],
+  clipPath: string
+): VisualContextInfo | undefined {
+  if (contexts.length === 0) return undefined;
+  const resolvedClipPath = resolve(clipPath);
+  const exact = contexts.find((context) => context.sourceClipPath && resolve(context.sourceClipPath) === resolvedClipPath);
+  return exact ?? contexts[0];
 }
 
 function collectTrayManifestCaptures(dir: string, kind: CaptureKind): CaptureItem[] {
@@ -434,6 +637,24 @@ function outputSelection(
     }
   }
 
+  if (opts.contactSheet) {
+    for (const item of items) {
+      if (item.visualContext?.contactSheetPath) {
+        console.log(item.visualContext.contactSheetPath);
+      }
+    }
+    return;
+  }
+
+  if (opts.frames) {
+    for (const item of items) {
+      if (item.visualContext?.framesDir) {
+        console.log(item.visualContext.framesDir);
+      }
+    }
+    return;
+  }
+
   if (opts.path || opts.paths) {
     for (const item of items) {
       console.log(item.path);
@@ -442,18 +663,24 @@ function outputSelection(
   }
 
   const includeOCR = opts.ocr ?? false;
+  const includeContext = opts.context ?? false;
 
   if (!fmt.pretty) {
-    output(detail ? serializeItem(items[0], includeOCR) : items.map((item) => serializeItem(item, includeOCR)), fmt);
+    output(
+      detail
+        ? serializeItem(items[0], includeOCR, includeContext)
+        : items.map((item) => serializeItem(item, includeOCR, includeContext)),
+      fmt
+    );
     return;
   }
 
   if (detail) {
-    prettyPrintDetail(items[0], includeOCR);
+    prettyPrintDetail(items[0], includeOCR, includeContext);
     return;
   }
 
-  outputTable(items.map((item) => serializeItem(item, false)), [
+  outputTable(items.map((item) => serializeItem(item, false, includeContext)), [
     { key: "id", label: "ID", width: 14, format: (v) => String(v ?? "").slice(0, 14) },
     { key: "kind", label: "Kind", width: 10 },
     { key: "source", label: "Source", width: 10 },
@@ -465,7 +692,7 @@ function outputSelection(
   ], fmt);
 }
 
-function prettyPrintDetail(item: CaptureItem, includeOCR: boolean): void {
+function prettyPrintDetail(item: CaptureItem, includeOCR: boolean, includeContext: boolean): void {
   const label = item.kind === "clip" ? "Video Capture" : "Screenshot";
   console.log(`# ${label}\n`);
   console.log(`ID:       ${item.id}`);
@@ -491,9 +718,30 @@ function prettyPrintDetail(item: CaptureItem, includeOCR: boolean): void {
   if (includeOCR && item.ocrText) {
     console.log(`\n## OCR\n${item.ocrText}`);
   }
+  if (includeContext && item.visualContext) {
+    prettyPrintVisualContext(item.visualContext);
+  }
 }
 
-function serializeItem(item: CaptureItem, includeOCR: boolean): Record<string, unknown> {
+function prettyPrintVisualContext(context: VisualContextInfo): void {
+  console.log("\n## Visual Context\n");
+  console.log(`Bundle:        ${context.bundlePath}`);
+  if (context.status) console.log(`Status:        ${context.status}`);
+  if (context.summaryPath) console.log(`Summary:       ${context.summaryPath}`);
+  if (context.manifestPath) console.log(`Manifest:      ${context.manifestPath}`);
+  if (context.contactSheetPath) console.log(`Frame canvas:  ${context.contactSheetPath}`);
+  if (context.framesDir) {
+    const count = context.frameCount ? ` (${context.frameCount} frames)` : "";
+    console.log(`Frames:        ${context.framesDir}${count}`);
+  }
+  if (context.sourceClipPath) console.log(`Source clip:   ${context.sourceClipPath}`);
+}
+
+function serializeItem(
+  item: CaptureItem,
+  includeOCR: boolean,
+  includeContext: boolean
+): Record<string, unknown> {
   const target = captureTarget(item);
   const dimensions = item.width && item.height ? `${item.width}x${item.height}` : null;
   const out: Record<string, unknown> = {
@@ -526,6 +774,9 @@ function serializeItem(item: CaptureItem, includeOCR: boolean): Record<string, u
   };
   if (includeOCR && item.ocrText !== undefined) {
     out.ocrText = item.ocrText;
+  }
+  if (includeContext && item.visualContext) {
+    out.visualContext = item.visualContext;
   }
   return out;
 }
@@ -569,6 +820,17 @@ function withFileMetadata(item: CaptureItem): CaptureItem {
     };
   } catch {
     return item;
+  }
+}
+
+function listDirectories(root: string): string[] {
+  if (!existsSync(root)) return [];
+  try {
+    return readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+      .map((entry) => entry.name);
+  } catch {
+    return [];
   }
 }
 

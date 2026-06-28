@@ -33,6 +33,7 @@ export function createProgram(): Command {
     talkie memos              list recent voice memos
     talkie captures           list screenshots and video captures
     talkie screenshots 3      list recent tray screenshots
+    talkie clips 3            list recent tray screen clips
     talkie search <query>     full-text search across everything
     talkie stats              usage overview
     talkie install            download & install Talkie.app

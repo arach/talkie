@@ -27,7 +27,7 @@
     "darwin"
   ],
   "dependencies": {
-    "@talkie/cli": "^0.4.5",
+    "@talkie/cli": "^0.4.7",
     "@talkie/client": "^0.1.1"
   }
 }
