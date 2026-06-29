@@ -72,6 +72,14 @@ final class DesktopMagnifierController {
         }
     }
 
+    func dismissForSafety() {
+        selectionTask?.cancel()
+        selectionTask = nil
+        selectionOverlay?.cancel()
+        selectionOverlay = nil
+        CaptureFreezeStore.shared.clear()
+    }
+
     private func showMagnifier(image: CGImage, sourceRect: CGRect) {
         let id = UUID()
         let screen = screen(for: sourceRect)
