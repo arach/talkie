@@ -21,6 +21,11 @@ final class LiveCaptureMarkupOverlayController: NSObject {
     private var selectedTool = "ink"
     private var selectedColor = "#D03A1C"
     private var selectedStrokeWidth = 4.0
+    private var localSafetyKeyMonitor: Any?
+    private var globalSafetyKeyMonitor: Any?
+    private var localSafeAreaMouseMonitor: Any?
+    private var globalSafeAreaMouseMonitor: Any?
+    private let protectedCornerSize = CGSize(width: 96, height: 96)
 
     var isVisible: Bool {
         panel?.isVisible == true
@@ -70,10 +75,14 @@ final class LiveCaptureMarkupOverlayController: NSObject {
 
         self.panel = panel
         self.webView = webView
+        installSafetyMonitors()
+        applyMousePassthroughState()
         loadOverlayResources()
     }
 
     func dismiss(discardLayers: Bool) {
+        removeSafetyMonitors()
+
         if discardLayers {
             layers.removeAll()
             onLayersChanged?(layers)
@@ -133,6 +142,98 @@ final class LiveCaptureMarkupOverlayController: NSObject {
 
     private func evaluate(_ script: String) {
         webView?.evaluateJavaScript(script)
+    }
+
+    private func installSafetyMonitors() {
+        removeSafetyMonitors()
+
+        localSafetyKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard Self.isEmergencyDismissEvent(event) else { return event }
+            self?.dismiss(discardLayers: false)
+            return nil
+        }
+        globalSafetyKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard Self.isEmergencyDismissEvent(event) else { return }
+            Task { @MainActor in
+                self?.dismiss(discardLayers: false)
+            }
+        }
+
+        let mouseMask: NSEvent.EventTypeMask = [
+            .mouseMoved,
+            .leftMouseDragged,
+            .rightMouseDragged,
+            .otherMouseDragged,
+            .leftMouseDown,
+            .rightMouseDown,
+            .otherMouseDown,
+        ]
+        localSafeAreaMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: mouseMask) { [weak self] event in
+            self?.applyMousePassthroughState()
+            return event
+        }
+        globalSafeAreaMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: mouseMask) { [weak self] _ in
+            Task { @MainActor in
+                self?.applyMousePassthroughState()
+            }
+        }
+    }
+
+    private func removeSafetyMonitors() {
+        if let localSafetyKeyMonitor {
+            NSEvent.removeMonitor(localSafetyKeyMonitor)
+            self.localSafetyKeyMonitor = nil
+        }
+        if let globalSafetyKeyMonitor {
+            NSEvent.removeMonitor(globalSafetyKeyMonitor)
+            self.globalSafetyKeyMonitor = nil
+        }
+        if let localSafeAreaMouseMonitor {
+            NSEvent.removeMonitor(localSafeAreaMouseMonitor)
+            self.localSafeAreaMouseMonitor = nil
+        }
+        if let globalSafeAreaMouseMonitor {
+            NSEvent.removeMonitor(globalSafeAreaMouseMonitor)
+            self.globalSafeAreaMouseMonitor = nil
+        }
+    }
+
+    private func applyMousePassthroughState() {
+        guard let panel else { return }
+        panel.ignoresMouseEvents = mouseIsInProtectedCorner(of: panel)
+    }
+
+    private func mouseIsInProtectedCorner(of panel: NSPanel) -> Bool {
+        let mouse = NSEvent.mouseLocation
+        guard panel.frame.contains(mouse),
+              let screen = Self.screen(for: mouse) ?? panel.screen else {
+            return false
+        }
+
+        let size = protectedCornerSize
+        let topLeft = NSRect(
+            x: screen.frame.minX,
+            y: screen.frame.maxY - size.height,
+            width: size.width,
+            height: size.height
+        )
+        let topRight = NSRect(
+            x: screen.frame.maxX - size.width,
+            y: screen.frame.maxY - size.height,
+            width: size.width,
+            height: size.height
+        )
+        return topLeft.contains(mouse) || topRight.contains(mouse)
+    }
+
+    private static func screen(for point: NSPoint) -> NSScreen? {
+        NSScreen.screens.first { NSMouseInRect(point, $0.frame, false) }
+    }
+
+    private static func isEmergencyDismissEvent(_ event: NSEvent) -> Bool {
+        guard event.keyCode == 53 else { return false }
+        let activeModifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+        return activeModifiers.isSuperset(of: [.command, .option, .control, .shift])
     }
 
     private func handle(_ message: LiveCaptureMarkupBridgeMessage) {

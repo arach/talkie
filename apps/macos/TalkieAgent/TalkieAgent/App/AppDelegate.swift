@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     // Hotkey signatures derived from TalkieEnvironment (see TalkieEnvironment.swift for philosophy)
     private static var sig: String { TalkieEnvironment.current.hotkeySignaturePrefix }
+    private static let markupEmergencyDismissNotification = Notification.Name("to.talkie.shared.markupEmergencyDismiss")
 
     private let hotKeyManager = HotKeyManager(signature: "\(sig)IV", hotkeyID: 1)  // Toggle mode
     private let pttHotKeyManager = HotKeyManager(signature: "\(sig)PT", hotkeyID: 3)  // Push-to-talk
@@ -45,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private let desktopInkHotKey   = HotKeyManager(signature: "\(sig)DI", hotkeyID: 18)  // Toggle desktop ink layer
     private let desktopInkPassthroughHotKey = HotKeyManager(signature: "\(sig)DP", hotkeyID: 19)  // Draw <-> arrange
     private let desktopMagnifierHotKey = HotKeyManager(signature: "\(sig)DM", hotkeyID: 20)  // Freeze a region into a desktop magnifier
+    private let markupEmergencyHotKey = HotKeyManager(signature: "\(sig)MX", hotkeyID: 22)  // Force-dismiss capture markup
     private var desktopInkTapMonitor: ModifierTapMonitor?  // Bare left/right Ctrl taps for ink
 
     private struct AgentMenuInputState {
@@ -240,6 +242,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        forceDismissCaptureSurfaces(reason: "application termination")
         TalkieAgentServerSupervisor.shared.stopSync()
         TalkieHelperRuntimeStateStore.clear(for: .agent)
         TalkieAgentXPCService.shared.stopService()
@@ -1301,6 +1304,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }
 
         registerCaptureHotkeys()
+        registerMarkupSafetyHotkey()
 
         // Register compose hotkey: ⌥⌘E (Option + Command + E) — capture selection and open Compose
         // keyCode 14 = E key
@@ -1361,6 +1365,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             self,
             selector: #selector(sharedHotkeysDidChange(_:)),
             name: NSNotification.Name("to.talkie.app.agentHotkeysDidChange"),
+            object: nil
+        )
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(markupEmergencyDismissReceived(_:)),
+            name: Self.markupEmergencyDismissNotification,
             object: nil
         )
 
@@ -1561,6 +1571,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             }
         }
         log.info("Paste last screenshot hotkey registered: keyCode=\(pasteLastScreenshot.keyCode) modifiers=\(pasteLastScreenshot.modifiers)")
+    }
+
+    private func registerMarkupSafetyHotkey() {
+        markupEmergencyHotKey.unregisterAll()
+        markupEmergencyHotKey.registerHotKey(
+            modifiers: Self.hyperModifiers,
+            keyCode: 53
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.forceDismissCaptureSurfaces(reason: "Hyper+Escape")
+                self?.broadcastMarkupEmergencyDismiss(reason: "Hyper+Escape")
+            }
+        }
+        log.info("Capture markup emergency hotkey registered: Hyper+Escape")
+    }
+
+    @MainActor
+    private func forceDismissCaptureSurfaces(reason: String) {
+        log.warning("Force dismissing capture surfaces", detail: reason)
+        ScreenRecordingController.shared.dismissMarkupOverlaysForSafety(reason: reason)
+        AgentCaptureMarkupController.shared.dismiss()
+        DesktopInkController.shared.hide(clear: true)
+        DesktopMagnifierController.shared.dismissForSafety()
+        CaptureIslandController.shared.dismiss(animated: false)
+        CaptureFreezeStore.shared.clear()
+    }
+
+    @objc private func markupEmergencyDismissReceived(_ notification: Notification) {
+        let reason = notification.object as? String ?? "shared emergency dismiss"
+        forceDismissCaptureSurfaces(reason: reason)
+    }
+
+    private func broadcastMarkupEmergencyDismiss(reason: String) {
+        DistributedNotificationCenter.default().postNotificationName(
+            Self.markupEmergencyDismissNotification,
+            object: reason,
+            userInfo: nil,
+            deliverImmediately: true
+        )
     }
 
     @MainActor
@@ -2101,6 +2150,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         desktopInkHotKey.unregisterAll()
         desktopInkPassthroughHotKey.unregisterAll()
         desktopMagnifierHotKey.unregisterAll()
+        markupEmergencyHotKey.unregisterAll()
         desktopInkTapMonitor?.stop()
         desktopInkTapMonitor = nil
     }
@@ -2154,6 +2204,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             managers.append(("Hyper+P Paste Last Screenshot", pasteLastScreenshotHotKey))
             managers.append(("Hyper+Z Desktop Magnifier", desktopMagnifierHotKey))
         }
+        managers.append(("Hyper+Esc Markup Safety", markupEmergencyHotKey))
 
         if pttEnabled {
             managers.append(("Push-to-Talk", pttHotKeyManager))
@@ -2259,6 +2310,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         registerHotkeys()
         registerSelectionQuickHotkey()
         registerCaptureHotkeys()
+        registerMarkupSafetyHotkey()
 
         // Track current config for debounce comparison
         lastHotkey = settings.hotkey
