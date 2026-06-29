@@ -1483,6 +1483,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        ScreenRecordingController.shared.dismissMarkupOverlaysForSafety(reason: "application termination")
+        ScreenRecordingService.shared.teardown()
         tearDownEventMonitors()
         DistributedNotificationCenter.default().removeObserver(self)
         NotificationCenter.default.removeObserver(self)

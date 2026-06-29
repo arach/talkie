@@ -226,6 +226,11 @@ final class ScreenRecordingController {
         resetMetadataSampler()
     }
 
+    func dismissMarkupOverlaysForSafety(reason: String) {
+        log.warning("Dismissing screen recording markup overlay", detail: reason)
+        activeOverlayController?.dismissMarkupOverlay()
+    }
+
     /// Mark a screenshot captured while this screen recording is active.
     /// The raw clip stays untouched; the marker lets visual-context processors
     /// overlay or summarize the user's intentional highlight later.
@@ -867,6 +872,11 @@ private final class ScreenRecordingActiveOverlayController {
         panel = nil
         stopPanel?.orderOut(nil)
         stopPanel = nil
+        markupOverlayController?.dismiss(discardLayers: false)
+        markupOverlayController = nil
+    }
+
+    func dismissMarkupOverlay() {
         markupOverlayController?.dismiss(discardLayers: false)
         markupOverlayController = nil
     }
