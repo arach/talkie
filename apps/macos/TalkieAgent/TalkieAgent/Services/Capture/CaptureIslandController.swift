@@ -104,8 +104,9 @@ final class CaptureIslandController {
             item: item,
             onDragEnded: { [weak self] in self?.dismiss() },
             onDelete: { [weak self] item in self?.delete(item) },
-            onMarkup: { [weak self] item in self?.openMarkup(item) },
-            onActivate: { [weak self] item in self?.openMarkup(item) },
+            onOpen: { [weak self] item in self?.open(item) },
+            onActivate: { [weak self] item in self?.open(item) },
+            onDismiss: { [weak self] in self?.dismiss() },
             onHoverChanged: { [weak self] hovering in
                 if hovering { self?.cancelDismissTimer() } else { self?.scheduleDismiss() }
             }
@@ -225,7 +226,14 @@ final class CaptureIslandController {
         }
     }
 
-    private func openMarkup(_ item: AgentLiveTrayItem) {
+    private func open(_ item: AgentLiveTrayItem) {
+        if item.isClip {
+            cancelDismissTimer()
+            AgentCaptureClipPreviewController.shared.open(item: item)
+            dismiss()
+            return
+        }
+
         guard supportsCaptureMarkup(item) else {
             scheduleDismiss()
             return
@@ -249,42 +257,99 @@ private final class CaptureIslandView: NSView {
     private let item: AgentLiveTrayItem
     private let onDragEnded: () -> Void
     private let onDelete: (AgentLiveTrayItem) -> Void
-    private let onMarkup: (AgentLiveTrayItem) -> Void
+    private let onOpen: (AgentLiveTrayItem) -> Void
     private let onActivate: (AgentLiveTrayItem) -> Void
+    private let onDismiss: () -> Void
     private let onHoverChanged: (Bool) -> Void
     private let dragSource = FileDragSourceDelegate()
     private let thumbnail: NSImage
-    private var performedMenuAction = false
     /// Press origin in view coords; a click that never drifts past the slop is a
     /// tap (opens the capture) rather than the start of a drag-out.
     private var pressOrigin: NSPoint?
     private var didBeginDrag = false
+    private var swipeAccumulator = CGSize.zero
 
     private let cornerRadius: CGFloat = 12
     private let inset: CGFloat = 8
     private let stripHeight: CGFloat = 22
+    private let actionButtonSize: CGFloat = 18
+    private let openButton: NSButton
+    private let deleteButton: NSButton
 
     init(
         item: AgentLiveTrayItem,
         onDragEnded: @escaping () -> Void,
         onDelete: @escaping (AgentLiveTrayItem) -> Void,
-        onMarkup: @escaping (AgentLiveTrayItem) -> Void,
+        onOpen: @escaping (AgentLiveTrayItem) -> Void,
         onActivate: @escaping (AgentLiveTrayItem) -> Void,
+        onDismiss: @escaping () -> Void,
         onHoverChanged: @escaping (Bool) -> Void
     ) {
         self.item = item
         self.onDragEnded = onDragEnded
         self.onDelete = onDelete
-        self.onMarkup = onMarkup
+        self.onOpen = onOpen
         self.onActivate = onActivate
+        self.onDismiss = onDismiss
         self.onHoverChanged = onHoverChanged
         self.thumbnail = item.image ?? NSWorkspace.shared.icon(forFile: item.fileURL.path)
+        openButton = Self.makeActionButton(
+            symbol: item.isClip ? "play.rectangle" : "pencil.tip.crop.circle",
+            toolTip: item.isClip ? "Preview" : "Markup",
+            action: #selector(openCapture(_:)),
+            tint: NSColor.white.withAlphaComponent(0.82)
+        )
+        deleteButton = Self.makeActionButton(
+            symbol: "trash",
+            toolTip: "Delete",
+            action: #selector(deleteCapture(_:)),
+            tint: NSColor.systemRed.withAlphaComponent(0.78)
+        )
         super.init(frame: .zero)
         wantsLayer = true
+        openButton.target = self
+        deleteButton.target = self
+        openButton.isEnabled = item.isClip || supportsCaptureMarkup(item)
+        addSubview(openButton)
+        addSubview(deleteButton)
         dragSource.onEnd = { [weak self] in self?.onDragEnded() }
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    override func layout() {
+        super.layout()
+        let size = actionButtonSize
+        let originY = inset + (stripHeight - size) / 2
+        let edgeInset: CGFloat = 2
+        deleteButton.frame = NSRect(
+            x: inset + edgeInset,
+            y: originY,
+            width: size,
+            height: size
+        )
+        openButton.frame = NSRect(
+            x: bounds.width - inset - edgeInset - size,
+            y: originY,
+            width: size,
+            height: size
+        )
+    }
+
+    private static func makeActionButton(symbol: String, toolTip: String, action: Selector, tint: NSColor) -> NSButton {
+        let button = NSButton()
+        button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: toolTip)
+        button.imageScaling = .scaleProportionallyDown
+        button.bezelStyle = .regularSquare
+        button.isBordered = false
+        button.wantsLayer = true
+        button.layer?.cornerRadius = 4
+        button.layer?.backgroundColor = NSColor.clear.cgColor
+        button.contentTintColor = tint
+        button.toolTip = toolTip
+        button.action = action
+        return button
+    }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
@@ -304,32 +369,8 @@ private final class CaptureIslandView: NSView {
         addCursorRect(thumbRect, cursor: .openHand)
     }
 
-    override func menu(for event: NSEvent) -> NSMenu? {
-        let point = convert(event.locationInWindow, from: nil)
-        guard bounds.contains(point) else { return nil }
-
-        let menu = NSMenu()
-        let deleteItem = NSMenuItem(
-            title: "Delete",
-            action: #selector(deleteCapture(_:)),
-            keyEquivalent: ""
-        )
-        deleteItem.target = self
-        menu.addItem(deleteItem)
-
-        let annotateItem = NSMenuItem(
-            title: "Markup",
-            action: #selector(annotateInTalkie(_:)),
-            keyEquivalent: ""
-        )
-        annotateItem.target = self
-        annotateItem.isEnabled = supportsCaptureMarkup(item)
-        menu.addItem(annotateItem)
-        return menu
-    }
-
     override func rightMouseDown(with event: NSEvent) {
-        showContextMenu(for: event)
+        onDismiss()
     }
 
     private var thumbRect: NSRect {
@@ -350,35 +391,63 @@ private final class CaptureIslandView: NSView {
         border.lineWidth = 1
         border.stroke()
 
-        // Thumbnail
+        // Thumbnail - soft halo so a fresh capture reads on dark UI behind it
         let tRect = thumbRect
-        let clip = NSBezierPath(roundedRect: tRect, xRadius: 7, yRadius: 7)
+        let thumbCornerRadius: CGFloat = 7
+        if let ctx = NSGraphicsContext.current?.cgContext {
+            ctx.saveGState()
+            ctx.setShadow(
+                offset: .zero,
+                blur: 5,
+                color: NSColor.white.withAlphaComponent(0.20).cgColor
+            )
+            let halo = NSBezierPath(
+                roundedRect: tRect.insetBy(dx: -0.5, dy: -0.5),
+                xRadius: thumbCornerRadius + 0.5,
+                yRadius: thumbCornerRadius + 0.5
+            )
+            NSColor.white.withAlphaComponent(0.06).setFill()
+            halo.fill()
+            ctx.restoreGState()
+        }
+
+        let clip = NSBezierPath(roundedRect: tRect, xRadius: thumbCornerRadius, yRadius: thumbCornerRadius)
+        NSGraphicsContext.current?.saveGraphicsState()
         clip.addClip()
         NSColor(white: 0.13, alpha: 1).setFill()
         NSBezierPath(rect: tRect).fill()
         drawAspectFit(thumbnail, in: tRect)
-        clip.setClip()
+        NSGraphicsContext.current?.restoreGraphicsState()
 
-        // Reset clip for strip text
+        let thumbBorder = NSBezierPath(roundedRect: tRect, xRadius: thumbCornerRadius, yRadius: thumbCornerRadius)
+        NSColor.white.withAlphaComponent(0.22).setStroke()
+        thumbBorder.lineWidth = 0.75
+        thumbBorder.stroke()
+
+        // Bottom bezel
         NSGraphicsContext.current?.saveGraphicsState()
-        NSBezierPath(rect: bounds).setClip()
+        let stripRect = NSRect(x: inset, y: inset, width: bounds.width - inset * 2, height: stripHeight)
+        NSBezierPath(rect: stripRect).setClip()
+        NSColor(white: 0.06, alpha: 1).setFill()
+        stripRect.fill()
 
-        // Bottom strip: kind + dimensions on the left, drag hint on the right
-        let stripY = inset
         let label = "\(item.isClip ? "CLIP" : "SHOT")  \(item.width)×\(item.height)"
         let labelAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedSystemFont(ofSize: 9, weight: .semibold),
             .foregroundColor: NSColor.white.withAlphaComponent(0.6),
         ]
-        (label as NSString).draw(at: NSPoint(x: inset + 2, y: stripY + 5), withAttributes: labelAttrs)
-
-        let hint = "drag anywhere ↗"
-        let hintAttrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 9, weight: .medium),
-            .foregroundColor: NSColor.white.withAlphaComponent(0.35),
-        ]
-        let hintSize = (hint as NSString).size(withAttributes: hintAttrs)
-        (hint as NSString).draw(at: NSPoint(x: bounds.width - inset - 2 - hintSize.width, y: stripY + 5), withAttributes: hintAttrs)
+        let labelSize = (label as NSString).size(withAttributes: labelAttrs)
+        let actionReserve = actionButtonSize + 8
+        let availableLabelWidth = stripRect.width - actionReserve * 2
+        if labelSize.width <= availableLabelWidth {
+            (label as NSString).draw(
+                at: NSPoint(
+                    x: stripRect.midX - labelSize.width / 2,
+                    y: stripRect.minY + (stripHeight - labelSize.height) / 2
+                ),
+                withAttributes: labelAttrs
+            )
+        }
 
         NSGraphicsContext.current?.restoreGraphicsState()
     }
@@ -394,7 +463,7 @@ private final class CaptureIslandView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         if event.modifierFlags.contains(.control) {
-            showContextMenu(for: event)
+            onDismiss()
             return
         }
 
@@ -408,7 +477,17 @@ private final class CaptureIslandView: NSView {
     override func mouseDragged(with event: NSEvent) {
         guard let origin = pressOrigin, !didBeginDrag else { return }
         let point = convert(event.locationInWindow, from: nil)
-        guard hypot(point.x - origin.x, point.y - origin.y) >= 4 else { return }
+        let delta = CGSize(width: point.x - origin.x, height: point.y - origin.y)
+        guard hypot(delta.width, delta.height) >= 4 else { return }
+
+        if !thumbRect.contains(origin) {
+            if abs(delta.width) >= 44, abs(delta.width) > abs(delta.height) * 1.35 {
+                pressOrigin = nil
+                onDismiss()
+            }
+            return
+        }
+
         didBeginDrag = true
         let draggingItem = NSDraggingItem(pasteboardWriter: item.fileURL as NSURL)
         draggingItem.setDraggingFrame(NSRect(origin: .zero, size: thumbRect.size), contents: thumbnail)
@@ -420,27 +499,30 @@ private final class CaptureIslandView: NSView {
         guard !didBeginDrag, pressOrigin != nil else { return }
         let point = convert(event.locationInWindow, from: nil)
         guard thumbRect.contains(point) else { return }
-        // A tap (no drag): open the capture in Agent's quick markup surface.
+        // A tap (no drag): open the capture in its lightweight review surface.
         onActivate(item)
     }
 
-    private func showContextMenu(for event: NSEvent) {
-        guard let menu = menu(for: event) else { return }
-        performedMenuAction = false
-        onHoverChanged(true)
-        NSMenu.popUpContextMenu(menu, with: event, for: self)
-        if !performedMenuAction {
-            onHoverChanged(false)
+    override func scrollWheel(with event: NSEvent) {
+        swipeAccumulator.width += event.scrollingDeltaX
+        swipeAccumulator.height += event.scrollingDeltaY
+        let horizontal = abs(swipeAccumulator.width)
+        let vertical = abs(swipeAccumulator.height)
+        if horizontal >= 22, horizontal > vertical * 1.4 {
+            swipeAccumulator = .zero
+            onDismiss()
+            return
+        }
+        if vertical > horizontal * 1.8 || horizontal > 80 {
+            swipeAccumulator = .zero
         }
     }
 
-    @objc private func annotateInTalkie(_ sender: NSMenuItem) {
-        performedMenuAction = true
-        onMarkup(item)
+    @objc private func openCapture(_ sender: Any) {
+        onOpen(item)
     }
 
-    @objc private func deleteCapture(_ sender: NSMenuItem) {
-        performedMenuAction = true
+    @objc private func deleteCapture(_ sender: Any) {
         onDelete(item)
     }
 }

@@ -45,6 +45,7 @@ struct AgentMenuActions {
     var openSettings: () -> Void
     var openHistory: () -> Void
     var openAllGrabs: () -> Void
+    var openGrab: (AgentLiveTrayItem) -> Void
     var openAudioSettings: () -> Void
     var openLogs: () -> Void
     var openPermissions: () -> Void
@@ -416,7 +417,10 @@ struct AgentMenuPopoverView: View {
     }
 
     private var recentGrabsSection: some View {
-        AgentMenuRecentGrabsSection(onOpenAll: actions.openAllGrabs)
+        AgentMenuRecentGrabsSection(
+            onOpenAll: actions.openAllGrabs,
+            onOpenGrab: actions.openGrab
+        )
     }
 
     private var toolsSection: some View {
@@ -746,6 +750,7 @@ private struct AgentMenuRecentRow: View {
 
 private struct AgentMenuRecentGrabsSection: View {
     let onOpenAll: () -> Void
+    let onOpenGrab: (AgentLiveTrayItem) -> Void
 
     @State private var previews: [AgentMenuGrabPreview] = []
     @State private var isLoading = true
@@ -766,7 +771,10 @@ private struct AgentMenuRecentGrabsSection: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         ForEach(previews) { preview in
-                            AgentMenuGrabTile(preview: preview)
+                            AgentMenuGrabTile(
+                                preview: preview,
+                                action: { onOpenGrab(preview.item) }
+                            )
                             .transition(.opacity.combined(with: .scale(scale: 0.97)))
                         }
                     }
@@ -866,12 +874,31 @@ private struct AgentMenuGrabSkeletonTile: View {
 private struct AgentMenuGrabTile: View {
     @Environment(\.agentTraySkin) private var skin
     let preview: AgentMenuGrabPreview
+    let action: () -> Void
 
     @State private var isHovered = false
 
     private var item: AgentLiveTrayItem { preview.item }
 
     var body: some View {
+        Button(action: action) {
+            tileContent
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .contentShape(.rect)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .onDrag {
+            let provider = NSItemProvider(contentsOf: item.fileURL) ?? NSItemProvider()
+            provider.suggestedName = item.filename
+            return provider
+        }
+        .help(helpTitle)
+    }
+
+    private var tileContent: some View {
         ZStack(alignment: .bottomLeading) {
             if let thumbnail = preview.thumbnail {
                 Image(nsImage: thumbnail)
@@ -906,16 +933,6 @@ private struct AgentMenuGrabTile: View {
         }
         .shadow(color: Color.black.opacity(skin.isDark ? 0.30 : 0.10), radius: isHovered ? 5 : 2, x: 0, y: 2)
         .scaleEffect(isHovered ? 1.03 : 1)
-        .contentShape(.rect)
-        .onHover { hovering in
-            isHovered = hovering
-        }
-        .onDrag {
-            let provider = NSItemProvider(contentsOf: item.fileURL) ?? NSItemProvider()
-            provider.suggestedName = item.filename
-            return provider
-        }
-        .help(helpTitle)
     }
 
     private var placeholder: some View {
@@ -1390,6 +1407,7 @@ private struct AgentMenuEmptyRow: View {
             openSettings: {},
             openHistory: {},
             openAllGrabs: {},
+            openGrab: { _ in },
             openAudioSettings: {},
             openLogs: {},
             openPermissions: {},

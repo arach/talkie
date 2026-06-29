@@ -80,6 +80,8 @@ final class AgentCaptureMarkupController {
         overlay.isVisibleInScreenCapture = true
         overlay.showsCaptureAction = false
         overlay.showsDock = true
+        overlay.showsWindowChrome = false
+        overlay.usesCompactDock = true
         overlay.onDone = { [weak self] layers in
             self?.finish(item: item, sourceImage: sourceImage, layers: layers, updatesLibrary: updatesLibrary)
         }
@@ -92,7 +94,7 @@ final class AgentCaptureMarkupController {
         showDragHandle(
             item: item,
             sourceImage: sourceImage,
-            frame: placement.surfaceRect
+            placement: placement
         )
 
         self.overlay = overlay
@@ -308,18 +310,18 @@ final class AgentCaptureMarkupController {
 
         overlay?.setFrame(Self.overlayRect(for: placement))
         overlay?.setDrawableRect(Self.overlayDrawableRect(for: placement))
-        dragHandlePanel?.setFrame(Self.dragHandleFrame(for: placement.surfaceRect), display: true)
+        dragHandlePanel?.setFrame(Self.dragHandleFrame(for: placement), display: true)
     }
 
     private func showDragHandle(
         item: AgentLiveTrayItem,
         sourceImage: CGImage,
-        frame: CGRect
+        placement: AgentCaptureMarkupPlacement
     ) {
         hideDragHandle()
 
         let size = Self.dragHandleSize
-        let handleFrame = Self.dragHandleFrame(for: frame)
+        let handleFrame = Self.dragHandleFrame(for: placement)
         let view = AgentCaptureMarkupDragHandleView(
             fileURLProvider: { [weak self] in
                 self?.dragURL(item: item, sourceImage: sourceImage)
@@ -348,14 +350,27 @@ final class AgentCaptureMarkupController {
     }
 
     private static var dragHandleSize: NSSize {
-        NSSize(width: 138, height: 28)
+        NSSize(width: 118, height: 24)
     }
 
-    private static func dragHandleFrame(for frame: CGRect) -> NSRect {
+    private static func dragHandleFrame(for placement: AgentCaptureMarkupPlacement) -> NSRect {
         let size = dragHandleSize
+        let frame = placement.surfaceRect
+        let inset: CGFloat = 12
+        let visible = placement.screen.visibleFrame.insetBy(dx: 4, dy: 4)
+        let x = clamp(
+            frame.minX + inset,
+            min: visible.minX,
+            max: visible.maxX - size.width
+        )
+        let y = clamp(
+            frame.minY + (AgentCaptureMarkupLayout.bottomToolbarHeight - size.height) / 2,
+            min: visible.minY,
+            max: visible.maxY - size.height
+        )
         return NSRect(
-            x: (frame.midX - size.width / 2).rounded(),
-            y: (frame.minY + 12).rounded(),
+            x: x.rounded(),
+            y: y.rounded(),
             width: size.width,
             height: size.height
         )
@@ -520,10 +535,10 @@ final class AgentCaptureMarkupController {
 
     private static func overlayRect(for placement: AgentCaptureMarkupPlacement) -> CGRect {
         CGRect(
-            x: placement.imageRect.minX,
+            x: placement.surfaceRect.minX,
             y: placement.surfaceRect.minY,
-            width: placement.imageRect.width,
-            height: placement.surfaceRect.height
+            width: placement.surfaceRect.width,
+            height: placement.imageRect.maxY - placement.surfaceRect.minY
         )
     }
 
@@ -710,8 +725,8 @@ private struct AgentCaptureMarkupPlacement {
 
 private enum AgentCaptureMarkupLayout {
     static let titlebarHeight: CGFloat = 42
-    static let bottomToolbarHeight: CGFloat = 156
-    static let edgePadding: CGFloat = 8
+    static let bottomToolbarHeight: CGFloat = 36
+    static let edgePadding: CGFloat = 6
     static let resizeHitSlop: CGFloat = 12
     static let resizeGripSize: CGFloat = 18
     static let minimumImageWidth: CGFloat = 220
@@ -782,28 +797,13 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         addCursorRect(leftResizeRect, cursor: .resizeLeftRight)
         addCursorRect(rightResizeRect, cursor: .resizeLeftRight)
         addCursorRect(dragRegion, cursor: .openHand)
-        addCursorRect(doneButtonRect, cursor: .pointingHand)
         addCursorRect(cancelButtonRect, cursor: .pointingHand)
-        addCursorRect(zoomOutButtonRect, cursor: .pointingHand)
-        addCursorRect(zoomInButtonRect, cursor: .pointingHand)
     }
 
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         if cancelButtonRect.contains(point) {
             onCancel()
-            return
-        }
-        if zoomOutButtonRect.contains(point) {
-            onZoom(1 / AgentCaptureMarkupLayout.zoomStep)
-            return
-        }
-        if zoomInButtonRect.contains(point) {
-            onZoom(AgentCaptureMarkupLayout.zoomStep)
-            return
-        }
-        if doneButtonRect.contains(point) {
-            onDone()
             return
         }
         if let edges = resizeEdges(at: point) {
@@ -891,7 +891,6 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
 
         drawBrand(in: titleRect)
         drawChromeButtons()
-        drawBottomControls()
         drawResizeGrip()
 
         let imageClip = NSBezierPath(
@@ -957,47 +956,40 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
     }
 
     private func drawBrand(in rect: NSRect) {
-        let markRect = NSRect(x: cancelButtonRect.maxX + 10, y: rect.midY - 6, width: 12, height: 12)
-        let mark = NSBezierPath(roundedRect: markRect, xRadius: 3, yRadius: 3)
-        NSColor(calibratedRed: 0.49, green: 0.55, blue: 1.0, alpha: 0.96).setFill()
+        let markRect = NSRect(x: cancelButtonRect.maxX + 10, y: rect.midY - 8, width: 16, height: 16)
+        let mark = NSBezierPath(
+            roundedRect: markRect,
+            xRadius: AgentCaptureMarkupLayout.controlRadius,
+            yRadius: AgentCaptureMarkupLayout.controlRadius
+        )
+        NSColor(calibratedWhite: 0.09, alpha: 0.88).setFill()
         mark.fill()
+        NSColor.white.withAlphaComponent(0.22).setStroke()
+        mark.lineWidth = 1
+        mark.stroke()
 
-        let dotColor = NSColor.white.withAlphaComponent(0.9)
-        dotColor.setFill()
-        for row in 0..<2 {
-            for column in 0..<2 {
-                let dot = NSRect(
-                    x: markRect.minX + 3 + CGFloat(column) * 4,
-                    y: markRect.minY + 3 + CGFloat(row) * 4,
-                    width: 2,
-                    height: 2
-                )
-                NSBezierPath(ovalIn: dot).fill()
-            }
-        }
-
-        let title = "Talkie"
+        let title = "T"
         let attrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
-            .foregroundColor: NSColor.white.withAlphaComponent(0.86),
+            .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .bold),
+            .foregroundColor: NSColor.white.withAlphaComponent(0.78),
         ]
         let titleSize = (title as NSString).size(withAttributes: attrs)
-        let titleX = markRect.maxX + 8
-        if titleX + titleSize.width + 12 < rect.maxX {
-            (title as NSString).draw(
-                at: NSPoint(x: titleX, y: rect.midY - 7),
-                withAttributes: attrs
-            )
-        }
+        (title as NSString).draw(
+            at: NSPoint(
+                x: markRect.midX - titleSize.width / 2,
+                y: markRect.midY - titleSize.height / 2
+            ),
+            withAttributes: attrs
+        )
     }
 
     private func drawChromeButtons() {
         drawButton(
             rect: cancelButtonRect,
             title: "x",
-            foreground: NSColor.white.withAlphaComponent(0.78),
-            fill: NSColor.white.withAlphaComponent(0.07),
-            border: NSColor.white.withAlphaComponent(0.14)
+            foreground: NSColor.white.withAlphaComponent(0.82),
+            fill: NSColor(calibratedWhite: 0.09, alpha: 0.86),
+            border: NSColor.white.withAlphaComponent(0.26)
         )
     }
 
@@ -1265,10 +1257,10 @@ private final class AgentCaptureMarkupDragHandleView: NSView {
         self.fileURLProvider = fileURLProvider
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = 7
-        layer?.backgroundColor = NSColor(calibratedRed: 0.105, green: 0.092, blue: 0.070, alpha: 0.96).cgColor
+        layer?.cornerRadius = AgentCaptureMarkupLayout.controlRadius
+        layer?.backgroundColor = NSColor(calibratedWhite: 0.09, alpha: 0.88).cgColor
         layer?.borderWidth = 1
-        layer?.borderColor = NSColor(calibratedRed: 0.82, green: 0.68, blue: 0.46, alpha: 0.34).cgColor
+        layer?.borderColor = NSColor.white.withAlphaComponent(0.22).cgColor
     }
 
     required init?(coder: NSCoder) {
@@ -1282,7 +1274,7 @@ private final class AgentCaptureMarkupDragHandleView: NSView {
         let text = "DRAG COPY"
         let attrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold),
-            .foregroundColor: NSColor(calibratedRed: 0.90, green: 0.74, blue: 0.48, alpha: 0.98),
+            .foregroundColor: NSColor.white.withAlphaComponent(0.76),
             .kern: 0.6,
         ]
         let size = (text as NSString).size(withAttributes: attrs)
@@ -1294,7 +1286,7 @@ private final class AgentCaptureMarkupDragHandleView: NSView {
     }
 
     private func drawGrip() {
-        NSColor(calibratedRed: 0.90, green: 0.74, blue: 0.48, alpha: 0.72).setFill()
+        NSColor.white.withAlphaComponent(0.48).setFill()
         for column in 0..<2 {
             for row in 0..<3 {
                 let dot = NSRect(

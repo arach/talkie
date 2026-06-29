@@ -29,6 +29,14 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         didSet { applyDockVisibility() }
     }
 
+    var showsWindowChrome = true {
+        didSet { applyWindowChromeVisibility() }
+    }
+
+    var usesCompactDock = false {
+        didSet { applyCompactDockMode() }
+    }
+
     /// Most live markup overlays are intentionally invisible to ScreenCaptureKit
     /// and get baked into artifacts later. Agent quick-markup is an inspectable
     /// popup, so it opts in to being directly screenshottable.
@@ -364,6 +372,26 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         """)
     }
 
+    private func setWebWindowChromeHidden(_ hidden: Bool) {
+        let value = hidden ? "true" : "false"
+        evaluate("""
+        (() => {
+          document.querySelectorAll(".window-close, .surface-actions").forEach((element) => {
+            element.hidden = \(value);
+          });
+        })();
+        """)
+    }
+
+    private func setWebCompactDockEnabled(_ enabled: Bool) {
+        let value = enabled ? "true" : "false"
+        evaluate("""
+        (() => {
+          document.body.dataset.agentCompactDock = \(Self.jsString(value));
+        })();
+        """)
+    }
+
     private func showPassthroughControls() {
         guard showsCaptureAction, passthroughControlsPanel == nil, let panel else { return }
 
@@ -478,6 +506,8 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         applyDrawableRect()
         applyToolbarContext()
         applyDockVisibility()
+        applyWindowChromeVisibility()
+        applyCompactDockMode()
     }
 
     private func applyDrawableRect() {
@@ -507,6 +537,14 @@ final class LiveCaptureMarkupOverlayController: NSObject {
             return
         }
         setWebDockHidden(!showsDock)
+    }
+
+    private func applyWindowChromeVisibility() {
+        setWebWindowChromeHidden(!showsWindowChrome)
+    }
+
+    private func applyCompactDockMode() {
+        setWebCompactDockEnabled(usesCompactDock)
     }
 }
 

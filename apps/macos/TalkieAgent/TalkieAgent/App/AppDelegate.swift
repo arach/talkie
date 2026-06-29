@@ -898,6 +898,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                     AgentHomeController.shared.show(section: .libraryCaptures)
                 }
             },
+            openGrab: { [weak self] item in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.dismissAgentMenuPopover()
+                    self.openAgentMenuGrab(item)
+                }
+            },
             openAudioSettings: { [weak self] in
                 Task { @MainActor in
                     guard let self else { return }
@@ -990,6 +997,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         )
         cachedAgentMenuActions = actions
         return actions
+    }
+
+    private func openAgentMenuGrab(_ item: AgentLiveTrayItem) {
+        if item.isClip {
+            AgentCaptureClipPreviewController.shared.open(item: item)
+        } else if item.isScreenshot {
+            AgentCaptureMarkupController.shared.open(item: item)
+        } else {
+            NSWorkspace.shared.open(item.fileURL)
+        }
     }
 
     private func dismissAgentMenuPopover() {
