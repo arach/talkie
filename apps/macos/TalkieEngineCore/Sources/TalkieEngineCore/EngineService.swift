@@ -175,13 +175,6 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         return modelsDir
     }
 
-    private var parakeetModelsBaseURL: URL {
-        let supportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let modelsDir = supportDir.appendingPathComponent("Talkie/ParakeetModels")
-        try? FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
-        return modelsDir
-    }
-
     private func whisperModelPath(for modelId: String) -> String {
         whisperModelsBaseURL
             .appendingPathComponent("models/argmaxinc/whisperkit-coreml")
@@ -190,8 +183,8 @@ final class EngineService: NSObject, TalkieEngineProtocol {
     }
 
     private func parakeetModelPath(for modelId: String) -> String {
-        parakeetModelsBaseURL
-            .appendingPathComponent(modelId)
+        ParakeetModelInstallation.talkieModelsBaseURL()
+            .appendingPathComponent(modelId, isDirectory: true)
             .path
     }
 
@@ -207,14 +200,8 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             FileManager.default.fileExists(atPath: whisperModelPath(for: $0))
         })
 
-        // Refresh Parakeet models
-        let knownParakeetModels = ["v2", "v3"]
-        downloadedParakeetModels = Set(knownParakeetModels.filter {
-            let markerPath = parakeetModelsBaseURL
-                .appendingPathComponent($0)
-                .appendingPathComponent(".marker")
-            return FileManager.default.fileExists(atPath: markerPath.path)
-        })
+        // Refresh Parakeet models from both Talkie's marker and FluidAudio's model cache.
+        downloadedParakeetModels = ParakeetModelInstallation.installedModelIds()
 
         // Log cached models (debug only - don't spam startup logs)
         AppLogger.shared.debug(.model, "Cached models", detail: "whisper=\(downloadedWhisperModels.count), parakeet=\(downloadedParakeetModels.count)")
@@ -240,9 +227,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
     }
 
     private func markParakeetModelDownloaded(_ modelId: String) {
-        let markerPath = parakeetModelsBaseURL.appendingPathComponent(modelId)
-        try? FileManager.default.createDirectory(at: markerPath, withIntermediateDirectories: true)
-        try? "downloaded".write(to: markerPath.appendingPathComponent(".marker"), atomically: true, encoding: .utf8)
+        try? ParakeetModelInstallation.markDownloaded(modelId)
         downloadedParakeetModels.insert(modelId)
     }
 
@@ -1189,12 +1174,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
                     let _ = try await AsrModels.downloadAndLoad(version: asrVersion)
 
                     await MainActor.run {
-                        // Mark as downloaded
-                        let markerPath = self.parakeetModelsBaseURL.appendingPathComponent(actualModelId)
-                        try? FileManager.default.createDirectory(at: markerPath, withIntermediateDirectories: true)
-                        try? "downloaded".write(to: markerPath.appendingPathComponent(".marker"), atomically: true, encoding: .utf8)
-
-                        self.downloadedParakeetModels.insert(actualModelId)
+                        self.markParakeetModelDownloaded(actualModelId)
                         self.isDownloading = false
                         self.currentDownloadModelId = nil
                         self.downloadProgress = 1.0

@@ -824,12 +824,17 @@ public final class EngineClient {
             )
         }
 
-        // Check engine status for downloaded/loaded state
-        let isDownloaded = status?.downloadedModels.contains(modelId) ?? false
+        // Check engine status for downloaded/loaded state, then fall back to the
+        // local Parakeet cache so settings remain accurate while XPC is down.
+        let engineDownloaded = status?.downloadedModels.contains(modelId) ?? false
         let isLoaded = status?.loadedModelId == modelId
+        let parsedModelId = EngineModelInfo.parseModelId(modelId)
+        let localParakeetDownloaded = parsedModelId.family == "parakeet"
+            ? ParakeetModelInstallation.isInstalled(parsedModelId.modelId)
+            : false
 
         return ModelStatusInfo(
-            isDownloaded: isDownloaded || isLoaded,  // Loaded implies downloaded
+            isDownloaded: engineDownloaded || localParakeetDownloaded || isLoaded,
             isLoaded: isLoaded,
             isDownloading: false,
             downloadProgress: 0
