@@ -1102,28 +1102,14 @@ struct ScopeHomeView: View {
     private func panelBody(scheme: BayScheme) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                statTile(
-                    scheme: scheme,
-                    seed: 0,
-                    value: "\(todayMemos)",
-                    label: "MEMOS · TODAY",
-                    action: { TalkieLibraryCSVExporter.exportAndOpenInNumbers(.memos) },
-                    help: "Export all memos to CSV in Numbers"
-                )
+                statTile(scheme: scheme, seed: 0, value: ScopeType.statCount(todayMemos),    label: "MEMOS · TODAY")
                 tileDivider(scheme: scheme)
-                statTile(
-                    scheme: scheme,
-                    seed: 1,
-                    value: "\(todayDictations)",
-                    label: "DICTATIONS · TODAY",
-                    action: { TalkieLibraryCSVExporter.exportAndOpenInNumbers(.dictations) },
-                    help: "Export all dictations to CSV in Numbers"
-                )
+                statTile(scheme: scheme, seed: 1, value: ScopeType.statCount(todayDictations), label: "DICTATIONS · TODAY")
                 tileDivider(scheme: scheme)
                 statTile(
                     scheme: scheme,
                     seed: 2,
-                    value: "\(streak)",
+                    value: ScopeType.statCount(streak),
                     label: "DAY STREAK",
                     extra: (bayHeatmap && !bayCompact) ? AnyView(ActivityHeatmap(scheme: scheme)) : nil
                 )
@@ -1155,44 +1141,7 @@ struct ScopeHomeView: View {
             .padding(.vertical, 18)
     }
 
-    @ViewBuilder
-    private func statTile(
-        scheme: BayScheme,
-        seed: Int,
-        value: String,
-        label: String,
-        extra: AnyView? = nil,
-        action: (() -> Void)? = nil,
-        help: String? = nil
-    ) -> some View {
-        let content = statTileContent(
-            scheme: scheme,
-            seed: seed,
-            value: value,
-            label: label,
-            extra: extra
-        )
-
-        Group {
-            if let action {
-                Button(action: action) {
-                    content
-                }
-                .buttonStyle(.plain)
-                .help(help ?? "Open in Numbers")
-            } else {
-                content
-            }
-        }
-    }
-
-    private func statTileContent(
-        scheme: BayScheme,
-        seed: Int,
-        value: String,
-        label: String,
-        extra: AnyView?
-    ) -> some View {
+    private func statTile(scheme: BayScheme, seed: Int, value: String, label: String, extra: AnyView? = nil) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(value)
                 .font(ScopeType.display(size: bayCompact ? 26 : 34))
@@ -1214,7 +1163,6 @@ struct ScopeHomeView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 14)
-        .contentShape(Rectangle())
     }
 
     private func panelFooter(scheme: BayScheme) -> some View {

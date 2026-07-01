@@ -687,19 +687,9 @@ private struct AgentHomeOverviewPage: View {
             runtimeRight: "Local only · No telemetry",
             footer: "· Live · Signal Path · Local",
             stats: [
-                .init(
-                    value: "\(librarySummary.dictations)",
-                    label: "Dictations",
-                    action: { TalkieLibraryCSVExporter.exportAndOpenInNumbers(.dictations) },
-                    help: "Export all dictations to CSV in Numbers"
-                ),
-                .init(
-                    value: "\(librarySummary.captures)",
-                    label: "Captures",
-                    action: { TalkieLibraryCSVExporter.exportAndOpenInNumbers(.captures) },
-                    help: "Export all captures to CSV in Numbers"
-                ),
-                .init(value: "\(dayStreak)", label: "Day Streak"),
+                .init(value: ScopeType.statCount(librarySummary.dictations), label: "Dictations"),
+                .init(value: ScopeType.statCount(librarySummary.captures), label: "Captures"),
+                .init(value: ScopeType.statCount(dayStreak), label: "Day Streak"),
             ]
         )
     }
@@ -1864,8 +1854,6 @@ private struct AgentHomeBay: View {
         let id = UUID()
         let value: String
         let label: String
-        var action: (() -> Void)? = nil
-        var help: String? = nil
     }
 
     let runtime: String
@@ -1938,24 +1926,7 @@ private struct AgentHomeBay: View {
         .padding(.horizontal, OpsSpacing.xs)
     }
 
-    @ViewBuilder
     private func cell(_ stat: Stat, seed: Int) -> some View {
-        let content = cellContent(stat, seed: seed)
-
-        Group {
-            if let action = stat.action {
-                Button(action: action) {
-                    content
-                }
-                .buttonStyle(.plain)
-                .help(stat.help ?? "Open \(stat.label) in Numbers")
-            } else {
-                content
-            }
-        }
-    }
-
-    private func cellContent(_ stat: Stat, seed: Int) -> some View {
         VStack(alignment: .leading, spacing: OpsSpacing.xs) {
             Text(stat.value)
                 .font(ScopeType.display(size: OpsSize.xxxl, weight: .regular))
@@ -1977,7 +1948,6 @@ private struct AgentHomeBay: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, OpsSpacing.lg)
         .padding(.vertical, OpsSpacing.xxl)
-        .contentShape(Rectangle())
     }
 
     private var timeLabel: String {
