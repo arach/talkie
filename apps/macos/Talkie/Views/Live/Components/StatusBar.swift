@@ -47,6 +47,10 @@ struct StatusBar: View {
     @State private var gitBranch: String? = nil
     @State private var didLoadGitBranch = false
 
+    private var shouldShowDevelopmentReadouts: Bool {
+        TalkieEnvironment.current != .production
+    }
+
     private static func readGitBranch(from directory: URL) -> String? {
         let fm = FileManager.default
         let gitPath = directory.appendingPathComponent(".git")
@@ -258,47 +262,47 @@ struct StatusBar: View {
                         .help("Open About settings")
 
                         #if DEBUG
-                        // FPS — relocated here from a floating overlay that
-                        // overlapped content. Dev-only (DEBUG), sits with the
-                        // other dev readouts.
-                        PerfStatusReadout()
+                        if shouldShowDevelopmentReadouts {
+                            // FPS — relocated here from a floating overlay that
+                            // overlapped content. Dev-only (DEBUG + dev bundle),
+                            // sitting with the other dev readouts.
+                            PerfStatusReadout()
 
-                        // PID always visible in debug
-                        Text(verbatim: "PID \(ProcessInfo.processInfo.processIdentifier)")
-                            .font(Theme.current.fontXSMedium)
-                            .foregroundColor(TalkieTheme.textMuted)
-
-                        // Git branch indicator
-                        if let branch = gitBranch {
-                            Text(branch)
+                            Text(verbatim: "PID \(ProcessInfo.processInfo.processIdentifier)")
                                 .font(Theme.current.fontXSMedium)
-                                .foregroundColor(TalkieTheme.accent)
-                                .padding(.horizontal, Spacing.xs)
-                                .padding(.vertical, Spacing.xxs)
-                                .background(
-                                    RoundedRectangle(cornerRadius: CornerRadius.xs)
-                                        .fill(TalkieTheme.hover)
-                                )
-                        }
+                                .foregroundColor(TalkieTheme.textMuted)
 
-                        // Theme indicator — click to open appearance settings
-                        Text(SettingsManager.shared.currentTheme?.displayName ?? "Default")
-                            .font(Theme.current.fontXS)
-                            .foregroundColor(TechnicalStyle.isActive ? TechnicalStyle.accent : TalkieTheme.textMuted)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 2)
-                            .background(
-                                RoundedRectangle(cornerRadius: 3)
-                                    .fill(TechnicalStyle.isActive ? TechnicalStyle.accent.opacity(0.15) : Color.clear)
-                            )
-                            .onTapGesture {
-                                NavigationState.shared.navigateToSettings(.appearance)
+                            if let branch = gitBranch {
+                                Text(branch)
+                                    .font(Theme.current.fontXSMedium)
+                                    .foregroundColor(TalkieTheme.accent)
+                                    .padding(.horizontal, Spacing.xs)
+                                    .padding(.vertical, Spacing.xxs)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: CornerRadius.xs)
+                                            .fill(TalkieTheme.hover)
+                                    )
                             }
 
-                        if controlPressed {
-                            Divider()
-                                .frame(height: 12)
-                            DevBadgeButton(showConsole: $showConsolePopover)
+                            // Theme indicator — click to open appearance settings
+                            Text(SettingsManager.shared.currentTheme?.displayName ?? "Default")
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(TechnicalStyle.isActive ? TechnicalStyle.accent : TalkieTheme.textMuted)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 2)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .fill(TechnicalStyle.isActive ? TechnicalStyle.accent.opacity(0.15) : Color.clear)
+                                )
+                                .onTapGesture {
+                                    NavigationState.shared.navigateToSettings(.appearance)
+                                }
+
+                            if controlPressed {
+                                Divider()
+                                    .frame(height: 12)
+                                DevBadgeButton(showConsole: $showConsolePopover)
+                            }
                         }
                         #endif
                     }

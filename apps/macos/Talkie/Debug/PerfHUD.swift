@@ -466,4 +466,32 @@ struct PerfStatusReadout: View {
         return .red
     }
 }
+#else
+import Foundation
+
+@MainActor
+final class FrameRateMonitor {
+    static let shared = FrameRateMonitor()
+
+    private init() {}
+
+    func start() {}
+    func stop() {}
+
+    func setSection(_ name: String) {}
+    func setSidebarMode(_ mode: String) {}
+    func setInteraction(_ kind: String) {}
+    func logEvent(_ name: String, _ detail: String = "") {}
+
+    func beginNavigation(to target: String, source: String) {}
+    func markNavigationShellVisible(section: String, source: String) {}
+    func markNavigationDataVisible(section: String, source: String, detail: String = "") {}
+
+    func beginRecordingsObservation(filter: String, sort: String, limit: Int) {}
+    func markRecordingsObservation(stage: String) {}
+    func finishRecordingsObservation(displayed: Int, total: Int) {}
+    func failRecordingsObservation(_ message: String) {}
+
+    nonisolated func recordBodyAccess(_ name: String) {}
+}
 #endif

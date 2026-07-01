@@ -93,6 +93,10 @@ struct AgentHomeShellView: View {
         .onChange(of: homeController.pendingSection) { _, _ in
             applyPendingRoute()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .switchToLogs)) { _ in
+            selectedSection = .logs
+            closeSettings()
+        }
         .onDisappear {
             store.stopRefreshing()
             libraryStore.stop()
