@@ -86,29 +86,7 @@ class ParakeetService {
 
     /// Actually check filesystem for model existence (used internally)
     private func checkModelExists(_ model: ParakeetModel) -> Bool {
-        let modelPath = getParakeetModelPath(for: model)
-        return FileManager.default.fileExists(atPath: modelPath)
-    }
-
-    /// Get Parakeet model storage path
-    private func getParakeetModelPath(for model: ParakeetModel) -> String {
-        guard let supportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
-            return ""
-        }
-        return supportDir
-            .appendingPathComponent("Talkie/ParakeetModels")
-            .appendingPathComponent(model.rawValue)
-            .path
-    }
-
-    /// Get URL for model storage base
-    private func getModelsBaseURL() -> URL {
-        guard let supportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
-            return URL(fileURLWithPath: NSTemporaryDirectory())
-        }
-        let modelsDir = supportDir.appendingPathComponent("Talkie/ParakeetModels")
-        try? FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
-        return modelsDir
+        ParakeetModelInstallation.isInstalled(model.rawValue)
     }
 
     /// Download a model if not already present
@@ -128,10 +106,7 @@ class ParakeetService {
             // FluidAudio handles model download automatically
             _ = try await AsrModels.downloadAndLoad(version: model.asrVersion)
 
-            // Mark download location
-            let markerPath = getModelsBaseURL().appendingPathComponent(model.rawValue)
-            try? FileManager.default.createDirectory(at: markerPath, withIntermediateDirectories: true)
-            try? "downloaded".write(to: markerPath.appendingPathComponent(".marker"), atomically: true, encoding: .utf8)
+            try? ParakeetModelInstallation.markDownloaded(model.rawValue)
 
             downloadProgress = 1.0
             downloadedModels.insert(model) // Update cached state
@@ -276,11 +251,7 @@ class ParakeetService {
 
     /// Delete a downloaded model
     func deleteModel(_ model: ParakeetModel) throws {
-        let modelPath = getParakeetModelPath(for: model)
-
-        if FileManager.default.fileExists(atPath: modelPath) {
-            try FileManager.default.removeItem(atPath: modelPath)
-        }
+        try ParakeetModelInstallation.removeTalkieMarkerDirectory(model.rawValue)
 
         // Update cached state
         downloadedModels.remove(model)
