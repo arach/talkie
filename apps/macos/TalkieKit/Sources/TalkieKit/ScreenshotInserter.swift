@@ -311,7 +311,9 @@ public enum ScreenshotInserter {
             lines.append("  Summary: [\(summaryFilename)](\(markdownDestination(summaryPath)))")
         }
 
-        let sourcePath = bundleURL.appendingPathComponent(context.sourceClipFilename).path
+        let sourcePath = CaptureMediaFileResolver.visualContextSourceURL(for: context)?
+            .path
+            ?? bundleURL.appendingPathComponent(context.sourceClipFilename).path
         lines.append("  Source clip: [\(context.sourceClipFilename)](\(markdownDestination(sourcePath)))")
 
         if let contactSheetFilename = context.contactSheetFilename {

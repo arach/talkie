@@ -36,7 +36,8 @@ func visualContextBundlePreservesSourceClipAndManifestMetadata() throws {
         appName: "Codex",
         displayName: "Built-in Display",
         metadataEvents: [metadataEvent],
-        rootDirectory: root
+        rootDirectory: root,
+        schedulesProcessing: false
     ))
 
     let bundleURL = bundleURL(for: context, root: root)
@@ -58,6 +59,51 @@ func visualContextBundlePreservesSourceClipAndManifestMetadata() throws {
     let encodedAssets = TalkieObjectAssets(visualContexts: [context]).toJSON()
     let decodedAssets = TalkieObjectAssets.from(json: encodedAssets)
     #expect(decodedAssets?.visualContexts == [context])
+}
+
+@Test("Visual context bundle can reference source clip without copying")
+func visualContextBundleCanReferenceSourceClipWithoutCopying() throws {
+    let fm = FileManager.default
+    let root = fm.temporaryDirectory
+        .appendingPathComponent("talkie-visual-context-test-\(UUID().uuidString)", isDirectory: true)
+    defer { try? fm.removeItem(at: root) }
+
+    let canonicalDirectory = root.appendingPathComponent("canonical", isDirectory: true)
+    let visualContextRoot = root.appendingPathComponent("contexts", isDirectory: true)
+    try fm.createDirectory(at: canonicalDirectory, withIntermediateDirectories: true)
+    let sourceURL = canonicalDirectory.appendingPathComponent("canonical-window.mp4")
+    try Data([0, 0, 0, 24, 102, 116, 121, 112]).write(to: sourceURL)
+
+    let context = try #require(VisualContextStorage.createBundle(
+        sourceClipURL: sourceURL,
+        recordingId: UUID(),
+        timestampMs: 0,
+        capturedAt: Date(timeIntervalSince1970: 2_000),
+        durationMs: 1_250,
+        captureMode: "window",
+        width: 1280,
+        height: 720,
+        windowTitle: "Window",
+        appName: "App",
+        displayName: "Display",
+        rootDirectory: visualContextRoot,
+        copiesSourceClip: false,
+        schedulesProcessing: false
+    ))
+
+    let bundleURL = bundleURL(for: context, root: visualContextRoot)
+    #expect(context.sourceClipFilename == sourceURL.lastPathComponent)
+    #expect(context.sourceClipPath == sourceURL.path)
+    #expect(!fm.fileExists(atPath: bundleURL.appendingPathComponent(context.sourceClipFilename).path))
+    #expect(CaptureMediaFileResolver.visualContextSourceURL(for: context) == sourceURL)
+
+    let manifestURL = bundleURL.appendingPathComponent("visual-context.json")
+    let manifestData = try Data(contentsOf: manifestURL)
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    let manifest = try decoder.decode(RecordingVisualContextManifest.self, from: manifestData)
+    #expect(manifest.sourceClip == sourceURL.lastPathComponent)
+    #expect(manifest.sourceClipPath == sourceURL.path)
 }
 
 @Test("Visual context storage ignores non-screen clips")
@@ -83,7 +129,8 @@ func visualContextStorageIgnoresNonScreenClips() throws {
         windowTitle: nil,
         appName: nil,
         displayName: nil,
-        rootDirectory: root
+        rootDirectory: root,
+        schedulesProcessing: false
     )
 
     #expect(context == nil)

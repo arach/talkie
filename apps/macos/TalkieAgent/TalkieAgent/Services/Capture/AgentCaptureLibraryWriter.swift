@@ -11,6 +11,12 @@ import TalkieKit
 
 private let agentCaptureLibraryLog = Log(.database)
 
+struct AgentPersistedCaptureMedia {
+    let object: TalkieObject
+    let fileURL: URL
+    let filename: String
+}
+
 enum AgentCaptureLibraryWriter {
     @discardableResult
     static func persistScreenshot(
@@ -25,7 +31,7 @@ enum AgentCaptureLibraryWriter {
         appBundleID: String?,
         displayName: String?,
         ocrText: String? = nil
-    ) -> TalkieObject? {
+    ) -> AgentPersistedCaptureMedia? {
         guard let savedURL = ScreenshotStorage.save(
             data,
             recordingId: id,
@@ -43,8 +49,37 @@ enum AgentCaptureLibraryWriter {
             return nil
         }
 
+        return persistScreenshotReference(
+            fileURL: savedURL,
+            id: id,
+            capturedAt: capturedAt,
+            captureMode: captureMode,
+            width: width,
+            height: height,
+            windowTitle: windowTitle,
+            appName: appName,
+            appBundleID: appBundleID,
+            displayName: displayName,
+            ocrText: ocrText
+        )
+    }
+
+    @discardableResult
+    static func persistScreenshotReference(
+        fileURL: URL,
+        id: UUID,
+        capturedAt: Date,
+        captureMode: String,
+        width: Int,
+        height: Int,
+        windowTitle: String?,
+        appName: String?,
+        appBundleID: String?,
+        displayName: String?,
+        ocrText: String? = nil
+    ) -> AgentPersistedCaptureMedia? {
         let screenshot = RecordingScreenshot(
-            filename: savedURL.lastPathComponent,
+            filename: fileURL.lastPathComponent,
             timestampMs: 0,
             captureMode: captureMode,
             width: width,
@@ -61,13 +96,13 @@ enum AgentCaptureLibraryWriter {
                 ProvenanceSegment(
                     source: .ocr,
                     originalText: text,
-                    sourceAssetId: savedURL.lastPathComponent,
+                    sourceAssetId: fileURL.lastPathComponent,
                     sourceDetail: "Vision"
                 )
             ]
         }
 
-        return persistCapture(
+        guard let object = persistCapture(
             id: id,
             createdAt: capturedAt,
             title: captureTitle(
@@ -80,6 +115,14 @@ enum AgentCaptureLibraryWriter {
             appBundleID: appBundleID,
             appName: appName,
             windowTitle: windowTitle
+        ) else {
+            return nil
+        }
+
+        return AgentPersistedCaptureMedia(
+            object: object,
+            fileURL: fileURL,
+            filename: fileURL.lastPathComponent
         )
     }
 
@@ -96,7 +139,7 @@ enum AgentCaptureLibraryWriter {
         appName: String?,
         displayName: String?,
         metadataEvents: [RecordingVisualContextEvent] = []
-    ) -> TalkieObject? {
+    ) -> AgentPersistedCaptureMedia? {
         guard let savedURL = VideoClipStorage.save(
             sourceURL,
             recordingId: id,
@@ -108,7 +151,8 @@ enum AgentCaptureLibraryWriter {
             height: height,
             windowTitle: windowTitle,
             appName: appName,
-            displayName: displayName
+            displayName: displayName,
+            moveSource: true
         ) else {
             agentCaptureLibraryLog.error("Agent screen clip failed to save permanent asset")
             return nil
@@ -138,7 +182,8 @@ enum AgentCaptureLibraryWriter {
             windowTitle: windowTitle,
             appName: appName,
             displayName: displayName,
-            metadataEvents: metadataEvents
+            metadataEvents: metadataEvents,
+            copiesSourceClip: false
         )
 
         let assets = TalkieObjectAssets(
@@ -147,7 +192,7 @@ enum AgentCaptureLibraryWriter {
         )
         let activeWindow = metadataEvents.first { $0.type == .activeWindow }
 
-        return persistCapture(
+        guard let object = persistCapture(
             id: id,
             createdAt: capturedAt,
             title: captureTitle(
@@ -160,6 +205,14 @@ enum AgentCaptureLibraryWriter {
             appBundleID: activeWindow?.appBundleID,
             appName: appName ?? activeWindow?.appName,
             windowTitle: windowTitle ?? activeWindow?.windowTitle
+        ) else {
+            return nil
+        }
+
+        return AgentPersistedCaptureMedia(
+            object: object,
+            fileURL: savedURL,
+            filename: savedURL.lastPathComponent
         )
     }
 

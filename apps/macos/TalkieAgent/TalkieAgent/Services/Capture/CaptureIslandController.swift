@@ -489,7 +489,7 @@ private final class CaptureIslandView: NSView {
         }
 
         didBeginDrag = true
-        let draggingItem = NSDraggingItem(pasteboardWriter: item.fileURL as NSURL)
+        let draggingItem = NSDraggingItem(pasteboardWriter: TalkieInternalDrag.pasteboardItem(for: item.fileURL))
         draggingItem.setDraggingFrame(NSRect(origin: .zero, size: thumbRect.size), contents: thumbnail)
         beginDraggingSession(with: [draggingItem], event: event, source: dragSource)
     }

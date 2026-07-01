@@ -229,6 +229,26 @@ extension EnvironmentValues {
 }
 
 struct AgentMenuPopoverView: View {
+    static func preferredContentSize(for model: AgentMenuModel) -> NSSize {
+        NSSize(width: popoverWidth, height: preferredHeight(for: model))
+    }
+
+    private static let popoverWidth: CGFloat = 320
+    private static let headerHeight: CGFloat = 50
+    private static let contentBottomPadding: CGFloat = 8
+    private static let sectionSpacing: CGFloat = 8
+    private static let sectionTitleHeight: CGFloat = 12
+    private static let sectionTitleSpacing: CGFloat = 4
+    private static let captureRowHeight: CGFloat = 44
+    private static let commandRowHeight: CGFloat = 40
+    private static let recentGrabsHeight: CGFloat = 78
+    private static let recentRowHeight: CGFloat = 26
+    private static let emptyRowHeight: CGFloat = 32
+    private static let toolGridHeight: CGFloat = 90
+    private static let bareSectionTitleSpacing: CGFloat = 5
+    private static let recoveryRowHeight: CGFloat = 30
+    private static let maxPopoverHeight: CGFloat = 535
+
     let model: AgentMenuModel
     let actions: AgentMenuActions
 
@@ -241,6 +261,37 @@ struct AgentMenuPopoverView: View {
         self.model = model
         self.actions = actions
         self.skin = AgentTraySkin.current()
+    }
+
+    private static func preferredHeight(for model: AgentMenuModel) -> CGFloat {
+        let sectionHeader = sectionTitleHeight + sectionTitleSpacing
+
+        let captureHeight = captureRowHeight + (model.permissionsGranted ? 0 : sectionSpacing + commandRowHeight)
+        let recentGrabsSectionHeight = sectionHeader + recentGrabsHeight
+        let recentRows = model.isLoadingData || model.recentItems.isEmpty
+            ? emptyRowHeight
+            : CGFloat(model.recentItems.count) * recentRowHeight
+        let recentSectionHeight = sectionHeader + recentRows
+        let toolsHeight = sectionTitleHeight + bareSectionTitleSpacing + toolGridHeight
+
+        var sectionHeights = [
+            captureHeight,
+            recentGrabsSectionHeight,
+            recentSectionHeight,
+            toolsHeight,
+        ]
+
+        if model.failedQueueCount > 0 {
+            sectionHeights.append(sectionHeader + recoveryRowHeight)
+        }
+
+        let sectionSpacingHeight = CGFloat(max(0, sectionHeights.count - 1)) * sectionSpacing
+        let height = headerHeight
+            + sectionHeights.reduce(0, +)
+            + sectionSpacingHeight
+            + contentBottomPadding
+
+        return min(height, maxPopoverHeight)
     }
 
     var body: some View {
@@ -261,7 +312,7 @@ struct AgentMenuPopoverView: View {
             }
             .frame(maxHeight: .infinity)
         }
-        .frame(width: 320, height: 535)
+        .frame(width: Self.popoverWidth, height: Self.preferredHeight(for: model))
         .background {
             skin.background
         }
@@ -893,7 +944,7 @@ private struct AgentMenuGrabTile: View {
         .onDrag {
             let provider = NSItemProvider(contentsOf: item.fileURL) ?? NSItemProvider()
             provider.suggestedName = item.filename
-            return provider
+            return TalkieInternalDrag.mark(provider)
         }
         .help(helpTitle)
     }

@@ -46,9 +46,10 @@ public enum VisualContextFrameProcessor {
         var updated = context
         updated.status = .processing
         let bundleURL = VisualContextStorage.bundleURL(for: context)
-        let sourceURL = bundleURL.appendingPathComponent(context.sourceClipFilename)
+        let sourceURL = CaptureMediaFileResolver.visualContextSourceURL(for: context)
 
-        guard FileManager.default.fileExists(atPath: sourceURL.path) else {
+        guard let sourceURL,
+              FileManager.default.fileExists(atPath: sourceURL.path) else {
             updated.status = .failed
             updated.errorMessage = "Source clip missing"
             return updated

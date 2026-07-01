@@ -20,7 +20,11 @@ import TalkieKit
 @MainActor
 final class DesktopInkController {
     static let shared = DesktopInkController()
-    private init() {}
+    private init() {
+        overlay.onDismissRequest = { [weak self] in
+            self?.hide(clear: true)
+        }
+    }
 
     private let overlay = LiveCaptureMarkupOverlayController()
 

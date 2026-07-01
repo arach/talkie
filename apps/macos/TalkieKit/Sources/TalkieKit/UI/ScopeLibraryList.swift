@@ -831,7 +831,9 @@ public struct CaptureRowDragModifier: ViewModifier {
 
     public func body(content: Content) -> some View {
         if let url = fileURL {
-            content.onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider() }
+            content.onDrag {
+                TalkieInternalDrag.mark(NSItemProvider(contentsOf: url) ?? NSItemProvider())
+            }
         } else {
             content
         }

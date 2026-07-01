@@ -181,7 +181,11 @@ struct HistoryView: View {
                 AgentSettings.shared.applyAppearance()
             }
             .onDrop(of: [UTType.audio, UTType.fileURL], isTargeted: $isDropTargeted) { providers in
-                handleAudioDrop(providers)
+                guard !TalkieInternalDrag.isInternal(providers) else {
+                    isDropTargeted = false
+                    return false
+                }
+                return handleAudioDrop(providers)
             }
             .overlay {
                 if isDropTargeted || isTranscribingDrop {
@@ -264,6 +268,7 @@ struct HistoryView: View {
 
     /// Handle dropped audio files
     private func handleAudioDrop(_ providers: [NSItemProvider]) -> Bool {
+        guard !TalkieInternalDrag.isInternal(providers) else { return false }
         guard let provider = providers.first else { return false }
 
         // Log what types we're getting for debugging

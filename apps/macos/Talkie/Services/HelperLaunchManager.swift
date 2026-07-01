@@ -10,10 +10,22 @@
 //
 
 import Foundation
-import AppKit
 import TalkieKit
 
 private let log = Log(.system)
+
+private struct DevBuildExpectation: Equatable {
+    let version: String
+    let build: String
+
+    var displayVersion: String {
+        "\(version) (\(build))"
+    }
+
+    func matches(_ identity: TalkieBundleBuildIdentity) -> Bool {
+        identity.version == version && identity.build == build
+    }
+}
 
 @MainActor
 public final class HelperLaunchManager {
@@ -113,15 +125,24 @@ public final class HelperLaunchManager {
 
         let newExecutable = firstProgramArgument(of: plistURL)
         let newKeepAlive = keepAliveFlag(of: plistURL)
+        let newManifest = devManifest(of: plistURL)
         let installed = FileManager.default.fileExists(atPath: destPlist.path)
         let existingExecutable = installed ? firstProgramArgument(of: destPlist) : nil
         let existingKeepAlive = installed ? keepAliveFlag(of: destPlist) : nil
+        let existingManifest = installed ? devManifest(of: destPlist) : nil
 
         let pathUnchanged = existingExecutable != nil && existingExecutable == newExecutable
         let modeUnchanged = existingKeepAlive == newKeepAlive
+        let manifestUnchanged: Bool
+        if let existingManifest, let newManifest {
+            manifestUnchanged = NSDictionary(dictionary: existingManifest)
+                .isEqual(NSDictionary(dictionary: newManifest))
+        } else {
+            manifestUnchanged = false
+        }
         let alreadyLoaded = isAgentLoaded(label: label)
 
-        if pathUnchanged && modeUnchanged && alreadyLoaded {
+        if pathUnchanged && modeUnchanged && manifestUnchanged && alreadyLoaded {
             log.info("[\(kind.displayName)] Dev plist unchanged and job loaded — skipping reinstall")
             await bootstrap(label: label, plistPath: destPlist)
             return
@@ -158,6 +179,17 @@ public final class HelperLaunchManager {
             return nil
         }
         return plist["KeepAlive"] as? Bool
+    }
+
+    /// Read the persisted dev build identity embedded in a generated launchd plist.
+    private func devManifest(of plistURL: URL) -> [String: Any]? {
+        guard let data = try? Data(contentsOf: plistURL),
+              let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
+              let manifest = plist["TalkieDevManifest"] as? [String: Any],
+              !manifest.isEmpty else {
+            return nil
+        }
+        return manifest
     }
 
     // MARK: - Terminate
@@ -374,6 +406,12 @@ public final class HelperLaunchManager {
         //   .attached → launchd loads the plist but does not restart if it exits
         //   .onDemand → caller short-circuits before reaching plist generation
         let keepAlive = (mode == .alwaysOn)
+        let devManifest = devLaunchManifest(
+            for: appURL,
+            kind: kind,
+            env: env,
+            executablePath: executablePath
+        )
         let plist: [String: Any] = [
             "Label": label,
             "ProgramArguments": programArguments,
@@ -385,6 +423,7 @@ public final class HelperLaunchManager {
             "LimitLoadToSessionType": "Aqua",
             "StandardOutPath": "/tmp/\(label).stdout.log",
             "StandardErrorPath": "/tmp/\(label).stderr.log",
+            "TalkieDevManifest": devManifest,
         ]
 
         let tempURL = FileManager.default.temporaryDirectory
@@ -399,6 +438,7 @@ public final class HelperLaunchManager {
 
         log.info("[\(kind.displayName)] Generated dev plist at \(tempURL.path)")
         log.debug("[\(kind.displayName)]   executable: \(executablePath)")
+        log.debug("[\(kind.displayName)]   version: \(devManifest["version"] ?? "unknown") (\(devManifest["build"] ?? "unknown"))")
         log.debug("[\(kind.displayName)]   MachService: \(xpcService)")
 
         return tempURL
@@ -471,96 +511,109 @@ public final class HelperLaunchManager {
         return result
     }
 
-    /// Resolve the debug build path for a helper.
-    /// Prefers the stable dev install path written by run.sh, then repo-local
-    /// build products. DerivedData is opt-in for one-off Xcode-only debugging.
-    private func resolveDebugBuild(for kind: TalkieHelper, env: TalkieEnvironment) -> URL? {
-        if let explicitApp = explicitHelperAppURL(for: kind) {
-            let executableURL = explicitApp
-                .appendingPathComponent("Contents/MacOS")
-                .appendingPathComponent(kind.executableName)
-            if FileManager.default.fileExists(atPath: executableURL.path) {
-                if resolvedDebugPaths[kind] != explicitApp {
-                    log.info("[\(kind.displayName)] Using explicit helper path: \(explicitApp.path)")
-                }
-                resolvedDebugPaths[kind] = explicitApp
-                return explicitApp
-            }
-            log.warning("[\(kind.displayName)] Explicit helper path missing executable: \(executableURL.path)")
+    private func currentAppBuildExpectation() -> DevBuildExpectation? {
+        guard let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+              let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String,
+              !version.isEmpty,
+              !build.isEmpty else {
+            return nil
         }
 
-        let installedApp = kind.userInstalledAppURL(for: env)
-        let installedExecutable = installedApp
+        return DevBuildExpectation(version: version, build: build)
+    }
+
+    private func devLaunchManifest(
+        for appURL: URL,
+        kind: TalkieHelper,
+        env: TalkieEnvironment,
+        executablePath: String
+    ) -> [String: Any] {
+        let identity = TalkieDevBuildManifestStore.bundleIdentity(for: appURL)
+        let sidecar = TalkieDevBuildManifestStore.readAppManifest(for: appURL)
+        let executableURL = URL(fileURLWithPath: executablePath)
+        let modifiedAt = (try? executableURL.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+
+        var manifest: [String: Any] = [
+            "schemaVersion": sidecar?.schemaVersion ?? 1,
+            "product": sidecar?.product ?? kind.displayName,
+            "environment": env.rawValue,
+            "bundleIdentifier": sidecar?.bundleIdentifier ?? identity?.bundleIdentifier ?? kind.bundleId(for: env),
+            "version": sidecar?.version ?? identity?.version ?? "unknown",
+            "build": sidecar?.build ?? identity?.build ?? "unknown",
+            "installedPath": sidecar?.installedPath ?? appURL.path,
+            "executablePath": executablePath,
+        ]
+
+        if let sourcePath = sidecar?.sourcePath {
+            manifest["sourcePath"] = sourcePath
+        }
+        if let builtAt = sidecar?.builtAt {
+            manifest["builtAt"] = builtAt
+        }
+        if let installedAt = sidecar?.installedAt {
+            manifest["installedAt"] = installedAt
+        }
+        if let gitBranch = sidecar?.gitBranch {
+            manifest["gitBranch"] = gitBranch
+        }
+        if let gitCommit = sidecar?.gitCommit {
+            manifest["gitCommit"] = gitCommit
+        }
+        if let workspaceRoot = sidecar?.workspaceRoot {
+            manifest["workspaceRoot"] = workspaceRoot
+        }
+        if let modifiedAt {
+            manifest["executableModifiedAt"] = iso8601String(modifiedAt)
+        }
+
+        return manifest
+    }
+
+    private func iso8601String(_ date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: date)
+    }
+
+    /// Resolve the debug build path for a helper.
+    /// Dev helper launch always uses the stable install path written by run.sh.
+    private func resolveDebugBuild(for kind: TalkieHelper, env: TalkieEnvironment) -> URL? {
+        let expectedBuild = currentAppBuildExpectation()
+
+        let stableApp = kind.userInstalledAppURL(for: env)
+        let stableExecutable = stableApp
             .appendingPathComponent("Contents/MacOS")
             .appendingPathComponent(kind.executableName)
-        if FileManager.default.fileExists(atPath: installedExecutable.path) {
-            if resolvedDebugPaths[kind] != installedApp {
-                log.info("[\(kind.displayName)] Using stable dev install: \(installedApp.path)")
-            }
-            resolvedDebugPaths[kind] = installedApp
-            return installedApp
+        guard FileManager.default.fileExists(atPath: stableExecutable.path) else {
+            log.warning("[\(kind.displayName)] Stable dev install missing executable: \(stableExecutable.path)")
+            return nil
         }
-
-        guard let found = findDebugBuild(
+        guard stableDevAppMatches(
+            stableApp,
             appName: kind.appName,
-            executableName: kind.executableName,
-            environment: env
-        ) else { return nil }
-
-        if resolvedDebugPaths[kind] != found {
-            log.info("[\(kind.displayName)] Resolved debug build: \(found.path)")
+            expectedBundleId: kind.bundleId(for: env),
+            expectedBuild: expectedBuild
+        ) else {
+            return nil
         }
-        resolvedDebugPaths[kind] = found
-        return found
+
+        if resolvedDebugPaths[kind] != stableApp {
+            log.info("[\(kind.displayName)] Using stable dev install: \(stableApp.path)")
+        }
+        resolvedDebugPaths[kind] = stableApp
+        return stableApp
     }
 
-    /// Optional explicit app path override per helper.
+    /// Find the stable dev install for a helper.
     ///
-    /// Environment variables:
-    /// - TALKIE_SYNC_APP_PATH
-    /// - TALKIE_AGENT_APP_PATH
-    /// - TALKIE_ENGINE_APP_PATH
-    ///
-    /// UserDefaults overrides:
-    /// - HelperLaunchManager.syncAppPath
-    /// - HelperLaunchManager.agentAppPath
-    /// - HelperLaunchManager.engineAppPath
-    private func explicitHelperAppURL(for kind: TalkieHelper) -> URL? {
-        let envKey: String
-        let defaultsKey: String
-        switch kind {
-        case .sync:
-            envKey = "TALKIE_SYNC_APP_PATH"
-            defaultsKey = "HelperLaunchManager.syncAppPath"
-        case .agent:
-            envKey = "TALKIE_AGENT_APP_PATH"
-            defaultsKey = "HelperLaunchManager.agentAppPath"
-        case .engine:
-            envKey = "TALKIE_ENGINE_APP_PATH"
-            defaultsKey = "HelperLaunchManager.engineAppPath"
-        }
-
-        if let fromEnv = ProcessInfo.processInfo.environment[envKey],
-           let normalized = normalizeAppPath(fromEnv) {
-            return normalized
-        }
-
-        if let fromDefaults = UserDefaults.standard.string(forKey: defaultsKey),
-           let normalized = normalizeAppPath(fromDefaults) {
-            return normalized
-        }
-
-        return nil
-    }
-
-    /// Find a debug .app in deterministic locations.
-    ///
-    /// First checks the stable dev install and repo-local build output. Legacy
-    /// DerivedData scanning is only enabled when explicitly requested.
+    /// Dev helper launch is intentionally not a search. `run.sh` is responsible
+    /// for installing the chosen build at a stable path before launchd sees it.
     private func findDebugBuild(
         appName: String,
         executableName: String? = nil,
-        environment: TalkieEnvironment = .dev
+        environment: TalkieEnvironment = .dev,
+        expectedBundleId: String? = nil,
+        expectedBuild: DevBuildExpectation? = nil
     ) -> URL? {
         let resolvedExecutableName: String = executableName ?? {
             if appName.hasSuffix(".app") {
@@ -569,195 +622,56 @@ public final class HelperLaunchManager {
             return appName
         }()
 
-        let installedAppURL = environment.userInstalledAppURL(named: appName)
-        let installedExecutableURL = installedAppURL
+        let stableApp = environment.userInstalledAppURL(named: appName)
+        let executableURL = stableApp
             .appendingPathComponent("Contents/MacOS")
             .appendingPathComponent(resolvedExecutableName)
-        if FileManager.default.fileExists(atPath: installedExecutableURL.path) {
-            log.debug("[HelperLaunchManager] Using stable dev install for \(appName): \(installedAppURL.path)")
-            return installedAppURL
-        }
-
-        if let repoRoot = LocalCheckoutLocator.talkieRepositoryRootURL(compileTimeFilePath: #filePath) {
-            let repoBuildRoots = [
-                repoRoot
-                    .appendingPathComponent("build")
-                    .appendingPathComponent("macos"),
-                repoRoot.appendingPathComponent("build")
-            ]
-
-            for buildRoot in repoBuildRoots {
-                let repoBuildURL = buildRoot
-                    .appendingPathComponent(resolvedExecutableName)
-                    .appendingPathComponent("Build/Products/Debug")
-                    .appendingPathComponent(appName)
-                if FileManager.default.fileExists(atPath: repoBuildURL.path) {
-                    log.debug("[HelperLaunchManager] Using repository debug build for \(appName): \(repoBuildURL.path)")
-                    return repoBuildURL
-                }
-            }
-        }
-
-        for productsDir in preferredDebugProductsDirectories() {
-            let preferredAppURL = productsDir.appendingPathComponent(appName)
-            if FileManager.default.fileExists(atPath: preferredAppURL.path) {
-                log.debug("[HelperLaunchManager] Using preferred debug build for \(appName): \(preferredAppURL.path)")
-                return preferredAppURL
-            }
-        }
-
-        guard allowsDerivedDataFallback else {
+        guard FileManager.default.fileExists(atPath: executableURL.path) else {
+            log.warning("[HelperLaunchManager] Stable dev install missing executable for \(appName): \(executableURL.path)")
             return nil
         }
 
-        let derivedDataPath = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Developer/Xcode/DerivedData")
-
-        guard let topLevel = try? FileManager.default.contentsOfDirectory(
-            at: derivedDataPath,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
+        guard stableDevAppMatches(
+            stableApp,
+            appName: appName,
+            expectedBundleId: expectedBundleId,
+            expectedBuild: expectedBuild
         ) else { return nil }
 
-        var candidates: [(url: URL, date: Date)] = []
-
-        for projectDir in topLevel {
-            let debugDir = projectDir.appendingPathComponent("Build/Products/Debug")
-            let appURL = debugDir.appendingPathComponent(appName)
-            if FileManager.default.fileExists(atPath: appURL.path) {
-                let executableURL = appURL
-                    .appendingPathComponent("Contents/MacOS")
-                    .appendingPathComponent(resolvedExecutableName)
-
-                let date = (try? executableURL.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
-                    ?? (try? appURL.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
-                    ?? .distantPast
-                candidates.append((appURL, date))
-            }
-        }
-
-        let best = candidates.max(by: { $0.date < $1.date })
-        if let best {
-            log.debug("[HelperLaunchManager] Found \(appName) at \(best.url.path) (executable modified: \(best.date))")
-        }
-        return best?.url
+        log.debug("[HelperLaunchManager] Using stable dev install for \(appName): \(stableApp.path)")
+        return stableApp
     }
 
-    private var allowsDerivedDataFallback: Bool {
-        if ProcessInfo.processInfo.environment["TALKIE_ALLOW_DERIVEDDATA_FALLBACK"] == "1" {
+    private func stableDevAppMatches(
+        _ appURL: URL,
+        appName: String,
+        expectedBundleId: String?,
+        expectedBuild: DevBuildExpectation?
+    ) -> Bool {
+        guard expectedBundleId != nil || expectedBuild != nil else {
             return true
         }
 
-        return UserDefaults.standard.bool(forKey: "HelperLaunchManager.allowDerivedDataFallback")
+        guard let identity = TalkieDevBuildManifestStore.bundleIdentity(for: appURL) else {
+            log.warning("[HelperLaunchManager] Stable dev install for \(appName) has no readable bundle version identity: \(appURL.path)")
+            return false
+        }
+
+        if let expectedBundleId,
+           let bundleIdentifier = identity.bundleIdentifier,
+           bundleIdentifier != expectedBundleId {
+            log.warning("[HelperLaunchManager] Stable dev install for \(appName) has bundle \(bundleIdentifier), expected \(expectedBundleId)")
+            return false
+        }
+
+        if let expectedBuild, !expectedBuild.matches(identity) {
+            log.warning("[HelperLaunchManager] Stable dev install for \(appName) is \(identity.displayVersion), expected Talkie \(expectedBuild.displayVersion)")
+            return false
+        }
+
+        return true
     }
 
-    /// Preferred debug product roots (highest priority first).
-    /// 1) Explicitly configured path via env/defaults
-    /// 2) Colocated path of the currently running Talkie build
-    private func preferredDebugProductsDirectories() -> [URL] {
-        var results: [URL] = []
-
-        if let configuredPath = ProcessInfo.processInfo.environment["TALKIE_HELPER_PRODUCTS_PATH"],
-           !configuredPath.isEmpty {
-            if let url = normalizeProductsPath(configuredPath),
-               FileManager.default.fileExists(atPath: url.path) {
-                results.append(url)
-            }
-        }
-
-        if let configuredPath = UserDefaults.standard.string(forKey: "HelperLaunchManager.preferredProductsPath"),
-           !configuredPath.isEmpty {
-            if let url = normalizeProductsPath(configuredPath),
-               FileManager.default.fileExists(atPath: url.path) {
-                results.append(url)
-            }
-        }
-
-        // Best-effort discovery of current app's Debug products directory:
-        // /.../DerivedData/<Project>/Build/Products/Debug/Talkie.app
-        //                        -> /.../DerivedData/<Project>/Build/Products/Debug
-        let bundleURL = Bundle.main.bundleURL
-        let productsDir = bundleURL.deletingLastPathComponent()
-        if allowsDerivedDataFallback,
-           productsDir.lastPathComponent.hasPrefix("Debug"),
-           productsDir.path.contains("/DerivedData/") {
-            results.append(productsDir)
-        }
-
-        // Remove duplicates while preserving order.
-        var deduped: [URL] = []
-        var seen = Set<String>()
-        for url in results {
-            if seen.insert(url.path).inserted {
-                deduped.append(url)
-            }
-        }
-        return deduped
-    }
-
-    private func normalizeAppPath(_ rawPath: String) -> URL? {
-        guard !rawPath.isEmpty else { return nil }
-        let expanded = (rawPath as NSString).expandingTildeInPath
-        let url = URL(fileURLWithPath: expanded)
-        guard url.pathExtension == "app" else { return nil }
-        return url
-    }
-
-    private func normalizeProductsPath(_ rawPath: String) -> URL? {
-        guard !rawPath.isEmpty else { return nil }
-        let expanded = (rawPath as NSString).expandingTildeInPath
-        let url = URL(fileURLWithPath: expanded)
-        if url.pathExtension == "app" {
-            return url.deletingLastPathComponent()
-        }
-        return url
-    }
-
-    private func launchViaWorkspace(bundleId: String, appName: String) {
-        var appURL: URL?
-
-        // 1. Embedded location
-        if let mainBundle = Bundle.main.bundleURL as URL? {
-            let embeddedURL = mainBundle
-                .appendingPathComponent("Contents/Library/LoginItems")
-                .appendingPathComponent(appName)
-            if FileManager.default.fileExists(atPath: embeddedURL.path) {
-                appURL = embeddedURL
-            }
-        }
-
-        // 2. System-wide
-        if appURL == nil {
-            appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId)
-        }
-
-        // 3. Debug products
-        #if DEBUG
-        if appURL == nil {
-            appURL = findDebugBuild(appName: appName, environment: ServiceManager.shared.effectiveHelperEnvironment)
-        }
-        #endif
-
-        guard let url = appURL else {
-            log.error("[HelperLaunchManager] App not found: \(appName)")
-            return
-        }
-
-        let config = NSWorkspace.OpenConfiguration()
-        config.activates = false
-        config.addsToRecentItems = false
-
-        NSWorkspace.shared.openApplication(at: url, configuration: config) { _, error in
-            Task { @MainActor in
-                if let error = error {
-                    log.error("[HelperLaunchManager] Failed to launch \(appName): \(error.localizedDescription)")
-                } else {
-                    log.info("[HelperLaunchManager] Launched \(appName) via NSWorkspace")
-                }
-                ServiceManager.shared.refreshStatus()
-            }
-        }
-    }
 }
 
 // MARK: - Errors

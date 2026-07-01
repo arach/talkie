@@ -25,6 +25,7 @@ public struct RecordingVisualContext: Codable, Sendable, Equatable, Identifiable
     public var recordingId: UUID
     public var relativeDirectory: String
     public var sourceClipFilename: String
+    public var sourceClipPath: String?
     public var captureMode: String
     public var timestampMs: Int
     public var startedAt: Date
@@ -48,6 +49,7 @@ public struct RecordingVisualContext: Codable, Sendable, Equatable, Identifiable
         recordingId: UUID,
         relativeDirectory: String,
         sourceClipFilename: String,
+        sourceClipPath: String? = nil,
         captureMode: String,
         timestampMs: Int,
         startedAt: Date,
@@ -70,6 +72,7 @@ public struct RecordingVisualContext: Codable, Sendable, Equatable, Identifiable
         self.recordingId = recordingId
         self.relativeDirectory = relativeDirectory
         self.sourceClipFilename = sourceClipFilename
+        self.sourceClipPath = sourceClipPath
         self.captureMode = captureMode
         self.timestampMs = timestampMs
         self.startedAt = startedAt
@@ -246,6 +249,7 @@ public struct RecordingVisualContextManifest: Codable, Sendable, Equatable {
     public var recordingId: UUID
     public var visualContextId: UUID
     public var sourceClip: String
+    public var sourceClipPath: String?
     public var durationSeconds: Double?
     public var capture: RecordingVisualContextCapture
     public var frames: [RecordingVisualContextFrame]
@@ -257,6 +261,7 @@ public struct RecordingVisualContextManifest: Codable, Sendable, Equatable {
         recordingId: UUID,
         visualContextId: UUID,
         sourceClip: String,
+        sourceClipPath: String? = nil,
         durationSeconds: Double? = nil,
         capture: RecordingVisualContextCapture,
         frames: [RecordingVisualContextFrame] = [],
@@ -267,6 +272,7 @@ public struct RecordingVisualContextManifest: Codable, Sendable, Equatable {
         self.recordingId = recordingId
         self.visualContextId = visualContextId
         self.sourceClip = sourceClip
+        self.sourceClipPath = sourceClipPath
         self.durationSeconds = durationSeconds
         self.capture = capture
         self.frames = frames
@@ -321,7 +327,9 @@ public enum VisualContextStorage {
         appName: String?,
         displayName: String?,
         metadataEvents: [RecordingVisualContextEvent] = [],
-        rootDirectory: URL? = nil
+        rootDirectory: URL? = nil,
+        copiesSourceClip: Bool = true,
+        schedulesProcessing: Bool = true
     ) -> RecordingVisualContext? {
         guard RecordingVisualContext.isScreenCaptureMode(captureMode) else { return nil }
 
@@ -332,7 +340,10 @@ public enum VisualContextStorage {
             .appendingPathComponent(recordingId.uuidString.lowercased(), isDirectory: true)
             .appendingPathComponent(id.uuidString.lowercased(), isDirectory: true)
         let sourceExtension = sourceClipURL.pathExtension.isEmpty ? "mp4" : sourceClipURL.pathExtension
-        let sourceFilename = "source.\(sourceExtension.lowercased())"
+        let sourceFilename = copiesSourceClip
+            ? "source.\(sourceExtension.lowercased())"
+            : sourceClipURL.lastPathComponent
+        let sourceClipPath = copiesSourceClip ? nil : sourceClipURL.path
         let sourceDestination = bundleURL.appendingPathComponent(sourceFilename)
         let endedAt = capturedAt.addingTimeInterval(Double(durationMs) / 1000.0)
 
@@ -341,6 +352,7 @@ public enum VisualContextStorage {
             recordingId: recordingId,
             relativeDirectory: relativeDirectory,
             sourceClipFilename: sourceFilename,
+            sourceClipPath: sourceClipPath,
             captureMode: captureMode,
             timestampMs: timestampMs,
             startedAt: capturedAt,
@@ -360,6 +372,7 @@ public enum VisualContextStorage {
             recordingId: recordingId,
             visualContextId: id,
             sourceClip: sourceFilename,
+            sourceClipPath: sourceClipPath,
             durationSeconds: Double(durationMs) / 1000.0,
             capture: RecordingVisualContextCapture(
                 mode: captureMode,
@@ -383,17 +396,21 @@ public enum VisualContextStorage {
 
         do {
             try FileManager.default.createDirectory(at: bundleURL, withIntermediateDirectories: true)
-            if FileManager.default.fileExists(atPath: sourceDestination.path) {
-                try FileManager.default.removeItem(at: sourceDestination)
+            if copiesSourceClip {
+                if FileManager.default.fileExists(atPath: sourceDestination.path) {
+                    try FileManager.default.removeItem(at: sourceDestination)
+                }
+                try FileManager.default.copyItem(at: sourceClipURL, to: sourceDestination)
             }
-            try FileManager.default.copyItem(at: sourceClipURL, to: sourceDestination)
             try writeManifest(manifest, to: bundleURL.appendingPathComponent(manifestFilename))
             try writeSummary(
                 context: context,
                 manifest: manifest,
                 to: bundleURL.appendingPathComponent(summaryFilename)
             )
-            VisualContextFrameProcessor.schedule(for: context)
+            if schedulesProcessing {
+                VisualContextFrameProcessor.schedule(for: context)
+            }
             return context
         } catch {
             context.status = .failed

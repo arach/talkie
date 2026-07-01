@@ -72,7 +72,22 @@ final class AgentCaptureMarkupController {
         dismiss()
         currentPlacement = placement
         activeImageSize = CGSize(width: sourceImage.width, height: sourceImage.height)
-        showBackground(image: sourceImage, placement: placement)
+        showBackground(
+            image: sourceImage,
+            placement: placement,
+            onDone: { [weak self] in
+                guard let self else { return }
+                finish(
+                    item: item,
+                    sourceImage: sourceImage,
+                    layers: self.overlay?.layers ?? [],
+                    updatesLibrary: updatesLibrary
+                )
+            },
+            onCancel: { [weak self] in
+                self?.cancel(item: item)
+            }
+        )
 
         let overlay = LiveCaptureMarkupOverlayController()
         overlay.passthrough = false
@@ -87,6 +102,9 @@ final class AgentCaptureMarkupController {
         }
         overlay.onCancel = { [weak self] in
             self?.cancel(item: item)
+        }
+        overlay.onDismissRequest = { [weak self] in
+            self?.dismiss()
         }
         overlay.show(on: placement.screen, targetRect: Self.overlayRect(for: placement))
         overlay.setDrawableRect(Self.overlayDrawableRect(for: placement))
@@ -120,6 +138,7 @@ final class AgentCaptureMarkupController {
         layers: [CaptureMarkupLayer],
         updatesLibrary: Bool
     ) {
+        overlay?.dismiss(discardLayers: false)
         hideBackground()
         hideDragHandle()
         overlay = nil
@@ -137,6 +156,7 @@ final class AgentCaptureMarkupController {
     }
 
     private func cancel(item: AgentLiveTrayItem) {
+        overlay?.dismiss(discardLayers: true)
         hideBackground()
         hideDragHandle()
         overlay = nil
@@ -180,8 +200,8 @@ final class AgentCaptureMarkupController {
             try data.write(to: item.fileURL, options: .atomic)
             CaptureMarkupStorage.deleteSidecar(forImageURL: item.fileURL)
             if updatesLibrary {
-                AgentCaptureLibraryWriter.persistScreenshot(
-                    data: data,
+                AgentCaptureLibraryWriter.persistScreenshotReference(
+                    fileURL: item.fileURL,
                     id: item.id,
                     capturedAt: item.capturedAt,
                     captureMode: item.captureMode,
@@ -204,7 +224,12 @@ final class AgentCaptureMarkupController {
         }
     }
 
-    private func showBackground(image: CGImage, placement: AgentCaptureMarkupPlacement) {
+    private func showBackground(
+        image: CGImage,
+        placement: AgentCaptureMarkupPlacement,
+        onDone: @escaping () -> Void,
+        onCancel: @escaping () -> Void
+    ) {
         let view = AgentCaptureMarkupBackgroundView(
             image: NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height)),
             imageRect: Self.relativeImageRect(for: placement),
@@ -217,12 +242,8 @@ final class AgentCaptureMarkupController {
             onZoom: { [weak self] factor in
                 self?.zoomSurface(by: factor)
             },
-            onDone: { [weak self] in
-                self?.overlay?.finish()
-            },
-            onCancel: { [weak self] in
-                self?.overlay?.cancel()
-            }
+            onDone: onDone,
+            onCancel: onCancel
         )
         view.frame = NSRect(origin: .zero, size: placement.surfaceRect.size)
 
@@ -350,7 +371,7 @@ final class AgentCaptureMarkupController {
     }
 
     private static var dragHandleSize: NSSize {
-        NSSize(width: 118, height: 24)
+        NSSize(width: 86, height: 24)
     }
 
     private static func dragHandleFrame(for placement: AgentCaptureMarkupPlacement) -> NSRect {
@@ -359,12 +380,12 @@ final class AgentCaptureMarkupController {
         let inset: CGFloat = 12
         let visible = placement.screen.visibleFrame.insetBy(dx: 4, dy: 4)
         let x = clamp(
-            frame.minX + inset,
+            frame.maxX - inset - size.width,
             min: visible.minX,
             max: visible.maxX - size.width
         )
         let y = clamp(
-            frame.minY + (AgentCaptureMarkupLayout.bottomToolbarHeight - size.height) / 2,
+            frame.maxY - AgentCaptureMarkupLayout.titlebarHeight + (AgentCaptureMarkupLayout.titlebarHeight - size.height) / 2,
             min: visible.minY,
             max: visible.maxY - size.height
         )
@@ -1257,6 +1278,7 @@ private final class AgentCaptureMarkupDragHandleView: NSView {
         self.fileURLProvider = fileURLProvider
         super.init(frame: .zero)
         wantsLayer = true
+        toolTip = "Drag a copy"
         layer?.cornerRadius = AgentCaptureMarkupLayout.controlRadius
         layer?.backgroundColor = NSColor(calibratedWhite: 0.09, alpha: 0.88).cgColor
         layer?.borderWidth = 1
@@ -1271,7 +1293,7 @@ private final class AgentCaptureMarkupDragHandleView: NSView {
         super.draw(dirtyRect)
         drawGrip()
 
-        let text = "DRAG COPY"
+        let text = "COPY"
         let attrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold),
             .foregroundColor: NSColor.white.withAlphaComponent(0.76),
@@ -1279,7 +1301,7 @@ private final class AgentCaptureMarkupDragHandleView: NSView {
         ]
         let size = (text as NSString).size(withAttributes: attrs)
         let point = NSPoint(
-            x: 38,
+            x: 36,
             y: (bounds.midY - size.height / 2).rounded()
         )
         (text as NSString).draw(at: point, withAttributes: attrs)
@@ -1309,7 +1331,7 @@ private final class AgentCaptureMarkupDragHandleView: NSView {
             return
         }
         let dragImage = Self.thumbnail(for: url) ?? NSWorkspace.shared.icon(forFile: url.path)
-        let draggingItem = NSDraggingItem(pasteboardWriter: url as NSURL)
+        let draggingItem = NSDraggingItem(pasteboardWriter: TalkieInternalDrag.pasteboardItem(for: url))
         draggingItem.setDraggingFrame(
             NSRect(origin: .zero, size: dragImage.size),
             contents: dragImage

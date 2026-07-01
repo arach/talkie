@@ -195,7 +195,7 @@ private class DragInitiatorView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         let imageSize = NSSize(width: bounds.width, height: bounds.height)
-        let draggingItem = NSDraggingItem(pasteboardWriter: fileURL as NSURL)
+        let draggingItem = NSDraggingItem(pasteboardWriter: TalkieInternalDrag.pasteboardItem(for: fileURL))
         draggingItem.setDraggingFrame(
             NSRect(origin: .zero, size: imageSize),
             contents: dragImage

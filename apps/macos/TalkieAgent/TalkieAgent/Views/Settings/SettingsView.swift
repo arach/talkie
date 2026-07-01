@@ -10,6 +10,31 @@ import AppKit
 import Carbon.HIToolbox
 import TalkieKit
 
+private let settingsCanvasBackground = opsAdaptive(
+    light: Color(red: 242.0 / 255.0, green: 243.0 / 255.0, blue: 245.0 / 255.0),
+    dark: OpsInk.bg
+)
+
+private let settingsCardBackground = opsAdaptive(
+    light: Color.white,
+    dark: OpsInk.surface
+)
+
+private let settingsCardBorder = opsAdaptive(
+    light: Color(red: 211.0 / 255.0, green: 213.0 / 255.0, blue: 218.0 / 255.0),
+    dark: OpsHairline.standard
+)
+
+private let settingsCardShadow = opsAdaptive(
+    light: Color.black.opacity(0.035),
+    dark: Color.clear
+)
+
+private let settingsHeaderDivider = opsAdaptive(
+    light: Color(red: 222.0 / 255.0, green: 224.0 / 255.0, blue: 228.0 / 255.0),
+    dark: OpsHairline.subtle
+)
+
 // MARK: - Settings Section Enum
 
 enum SettingsSection: String, Hashable, CaseIterable {
@@ -91,7 +116,7 @@ struct SettingsView: View {
     }
 
     private var sidebarBackground: Color { OpsInk.chrome }
-    private var contentBackground: Color { OpsInk.bg }
+    private var contentBackground: Color { settingsCanvasBackground }
     private var bottomBarBackground: Color { OpsInk.chrome }
 
     var body: some View {
@@ -478,7 +503,7 @@ struct SettingsDoneButtonStyle: ButtonStyle {
             .padding(.horizontal, 20)
             .padding(.vertical, 8)
             .background(OpsTint.amber.color)
-            .cornerRadius(OpsRadius.standard)
+            .clipShape(.rect(cornerRadius: OpsRadius.standard))
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
@@ -498,7 +523,7 @@ struct SettingsPageContainer<Header: View, Content: View>: View {
                 .padding(.top, 22)
                 .padding(.bottom, 14)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
-                .background(OpsInk.bg)
+                .background(settingsCanvasBackground)
 
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: OpsSpacing.xxxl) {
@@ -509,7 +534,7 @@ struct SettingsPageContainer<Header: View, Content: View>: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(OpsInk.bg)
+        .background(settingsCanvasBackground)
     }
 }
 
@@ -551,7 +576,7 @@ struct SettingsPageHeader: View {
                     .frame(maxWidth: 640, alignment: .leading)
             }
 
-            OpsDivider().padding(.top, 6)
+            OpsDivider(color: settingsHeaderDivider).padding(.top, 6)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -574,12 +599,17 @@ struct SettingsCard<Content: View>: View {
                 OpsSectionLabel(title)
             }
 
-            OpsCard(padding: OpsSpacing.xl) {
+            OpsCard(
+                padding: OpsSpacing.xl,
+                fill: settingsCardBackground,
+                stroke: settingsCardBorder
+            ) {
                 VStack(alignment: .leading, spacing: OpsSpacing.md) {
                     content
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .shadow(color: settingsCardShadow, radius: 10, x: 0, y: 3)
         }
     }
 }

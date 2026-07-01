@@ -73,6 +73,39 @@ struct ScreenRecordingTarget {
     let displayName: String?
 }
 
+struct ScreenRecordingFinishedClip {
+    let url: URL
+    let width: Int
+    let height: Int
+    let target: ScreenRecordingTarget
+    let startedAt: Date
+    let interrupted: Bool
+}
+
+struct ScreenRecordingCaptureContext: Sendable {
+    let mode: String
+    let windowID: UInt32?
+    let windowTitle: String?
+    let appName: String?
+    let displayName: String?
+    let width: Int
+    let height: Int
+    let systemAudio: Bool
+    let microphone: Bool
+    let startedAt: Date
+
+    var summary: String {
+        var parts = ["mode=\(mode)", "\(width)x\(height)"]
+        if let windowID { parts.append("windowID=\(windowID)") }
+        if let windowTitle, !windowTitle.isEmpty { parts.append("title=\(windowTitle)") }
+        if let appName, !appName.isEmpty { parts.append("app=\(appName)") }
+        if let displayName, !displayName.isEmpty { parts.append("display=\(displayName)") }
+        parts.append("systemAudio=\(systemAudio)")
+        parts.append("microphone=\(microphone)")
+        return parts.joined(separator: ", ")
+    }
+}
+
 private struct ScreenRecordingPreset: Codable {
     var mode: CaptureMode
     var displayID: UInt32?
@@ -207,6 +240,8 @@ final class ScreenRecordingService: NSObject {
     private var stream: SCStream?
     @ObservationIgnored
     private var target: ScreenRecordingTarget?
+    @ObservationIgnored
+    private(set) var lastCaptureContext: ScreenRecordingCaptureContext?
 
     /// Max recording duration safety valve (seconds)
     private let maxDuration: TimeInterval = 300  // 5 minutes
@@ -273,6 +308,59 @@ final class ScreenRecordingService: NSObject {
 
     var hasReusableTarget: Bool {
         ScreenRecordingPresetStore.shared.hasPreset
+    }
+
+    func diagnosticSummary(for target: ScreenRecordingTarget) -> String {
+        switch target.kind {
+        case .fullscreen:
+            return "mode=fullscreen, display=\(target.displayName ?? "unknown")"
+        case .region(_, let rect):
+            return "mode=region, rect=\(Int(rect.width))x\(Int(rect.height)), display=\(target.displayName ?? "unknown")"
+        case .window(let window):
+            return "mode=window, windowID=\(window.windowID), title=\(target.windowTitle ?? "unknown"), app=\(target.appName ?? "unknown"), frame=\(Int(window.frame.width))x\(Int(window.frame.height))"
+        }
+    }
+
+    func validateTargetForRecording(_ target: ScreenRecordingTarget) async -> Bool {
+        await isCaptureTargetStillValid(target)
+    }
+
+    func isCaptureTargetStillValid(_ target: ScreenRecordingTarget) async -> Bool {
+        guard await hasPermission() else { return false }
+
+        do {
+            let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+            switch target.kind {
+            case .fullscreen(let display):
+                return content.displays.contains { $0.displayID == display.displayID }
+
+            case .region(let display, let rect):
+                guard rect.width > 5, rect.height > 5,
+                      let match = content.displays.first(where: { $0.displayID == display.displayID }) else {
+                    return false
+                }
+                return displayFrame(match).intersects(rect)
+
+            case .window(let scWindow):
+                guard let match = content.windows.first(where: { $0.windowID == scWindow.windowID }) else {
+                    return false
+                }
+                return match.frame.width > 5 && match.frame.height > 5
+            }
+        } catch {
+            log.warning("Screen recording target validation failed: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    func logCaptureFailure(reason: String) {
+        if let context = lastCaptureContext {
+            log.error("Screen recording failed: \(context.summary) | error=\(reason)")
+        } else if let target {
+            log.error("Screen recording failed: \(diagnosticSummary(for: target)) | error=\(reason)")
+        } else {
+            log.error("Screen recording failed: error=\(reason)")
+        }
     }
 
     func reusableTarget() async -> ScreenRecordingTarget? {
@@ -559,11 +647,26 @@ final class ScreenRecordingService: NSObject {
             self.stream = scStream
             self.recordingURL = url
             self.target = target
-            self.recordingStartTime = Date()
+            let startedAt = Date()
+            self.recordingStartTime = startedAt
             state = .recording
             ScreenRecordingPresetStore.shared.save(target: target)
 
-            log.info("Screen recording started → \(url.lastPathComponent) (\(config.width)x\(config.height), \(recordingQualityPreset.rawValue), \(recordingQualityPreset.bitrateSummary), \(recordingQualityPreset.fpsSummary), systemAudio=\(audioOptions.includesSystemAudio), microphone=\(audioOptions.includesMicrophone))")
+            lastCaptureContext = ScreenRecordingCaptureContext(
+                mode: captureModeString(for: target),
+                windowID: windowID(for: target),
+                windowTitle: target.windowTitle,
+                appName: target.appName,
+                displayName: target.displayName,
+                width: config.width,
+                height: config.height,
+                systemAudio: audioOptions.includesSystemAudio,
+                microphone: audioOptions.includesMicrophone,
+                startedAt: startedAt
+            )
+            log.info(
+                "Screen recording started → \(url.lastPathComponent) (\(lastCaptureContext?.summary ?? diagnosticSummary(for: target)), \(recordingQualityPreset.rawValue), \(recordingQualityPreset.bitrateSummary), \(recordingQualityPreset.fpsSummary))"
+            )
 
             // Safety valve: auto-stop after max duration (routes through controller for proper cleanup)
             maxDurationTimer = Timer.scheduledTimer(withTimeInterval: maxDuration, repeats: false) { _ in
@@ -616,6 +719,50 @@ final class ScreenRecordingService: NSObject {
         return (url: url, width: width, height: height, target: savedTarget)
     }
 
+    /// Finalize whatever frames were already written when ScreenCaptureKit stops the stream.
+    func finalizeAfterInterruption() async -> ScreenRecordingFinishedClip? {
+        guard state == .recording else {
+            teardown()
+            return nil
+        }
+
+        maxDurationTimer?.invalidate()
+        maxDurationTimer = nil
+        stream = nil
+
+        if stopContinuation != nil {
+            log.debug("Screen recording interruption observed while explicit stop is finalizing")
+            return nil
+        }
+
+        let savedTarget = target
+        let startedAt = recordingStartTime ?? Date()
+        let (width, height) = recordedDimensions()
+
+        let result: URL? = await withCheckedContinuation { continuation in
+            stopContinuation = continuation
+            finishWriting()
+        }
+
+        target = nil
+        recordingStartTime = nil
+
+        guard let url = result, let savedTarget else {
+            teardown()
+            return nil
+        }
+
+        log.warning("Salvaged partial screen recording after interruption: \(url.lastPathComponent)")
+        return ScreenRecordingFinishedClip(
+            url: url,
+            width: width,
+            height: height,
+            target: savedTarget,
+            startedAt: startedAt,
+            interrupted: true
+        )
+    }
+
     private func finishWriting() {
         let (writer, videoInput, systemAudioInput, microphoneInput) = prepareWriterForFinish()
 
@@ -647,6 +794,7 @@ final class ScreenRecordingService: NSObject {
 
                 self.stopContinuation = nil
                 self.recordingURL = nil
+                self.lastCaptureContext = nil
 
                 self.resetWriterState()
 
@@ -690,11 +838,25 @@ final class ScreenRecordingService: NSObject {
         recordingURL = nil
         target = nil
         recordingStartTime = nil
+        lastCaptureContext = nil
         state = .idle
         log.info("Screen recording service torn down")
     }
 
     // MARK: - Helpers
+
+    private func captureModeString(for target: ScreenRecordingTarget) -> String {
+        switch target.kind {
+        case .fullscreen: return CaptureMode.fullscreen.rawValue
+        case .region: return CaptureMode.region.rawValue
+        case .window: return CaptureMode.window.rawValue
+        }
+    }
+
+    private func windowID(for target: ScreenRecordingTarget) -> UInt32? {
+        guard case .window(let window) = target.kind else { return nil }
+        return window.windowID
+    }
 
     private func displayUnderCursor(from displays: [SCDisplay]) -> SCDisplay? {
         let mouseLocation = NSEvent.mouseLocation
@@ -1044,8 +1206,12 @@ extension ScreenRecordingService: SCStreamDelegate {
         let reason = String(describing: error)
         Log(.system).error("SCStream stopped with error: \(reason)")
         Task { @MainActor in
-            self.teardown()
-            ScreenRecordingController.shared.handleServiceInterruption(reason: reason)
+            self.logCaptureFailure(reason: reason)
+            let salvaged = await self.finalizeAfterInterruption()
+            await ScreenRecordingController.shared.handleServiceInterruption(
+                reason: reason,
+                salvaged: salvaged
+            )
         }
     }
 }

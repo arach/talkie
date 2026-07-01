@@ -68,6 +68,8 @@ final class FrameRateMonitor: ObservableObject {
     /// the debug HUD does not become its own source of SwiftUI churn while
     /// profiling navigation and sidebar interactions.
     private static let windowSeconds: Double = 1.0
+    private static let logsFrameSamples =
+        ProcessInfo.processInfo.environment["TALKIE_LOG_FPS"] == "1"
 
     private var displayLink: CVDisplayLink?
     private var frameCount: Int = 0
@@ -407,9 +409,6 @@ final class FrameRateMonitor: ObservableObject {
         }
         bodyInvalidationsPerSec = snapshot
 
-        // Emit a structured log line every window so we can scrub the
-        // FPS time series via `talkie-dev logs talkie` after a session.
-        // Format chosen for easy grep + awk: key=value pairs.
         let hottest = snapshot.max(by: { $0.value < $1.value })
         let hottestField: String
         if let h = hottest, h.value > 0 {
@@ -424,7 +423,9 @@ final class FrameRateMonitor: ObservableObject {
         // `privacy: .public` so the values aren't redacted by the
         // unified log (default for string interpolations is .private,
         // which renders as `<private>` in `log show` output).
-        perfLogger.info("fps=\(fpsStr) minMs=\(minMsStr) maxMs=\(maxMsStr) frames=\(self.frameCount) section=\(self.currentSection) sidebar=\(self.sidebarMode)\(interactionField)\(hottestField)")
+        if Self.logsFrameSamples {
+            perfLogger.info("fps=\(fpsStr) minMs=\(minMsStr) maxMs=\(maxMsStr) frames=\(self.frameCount) section=\(self.currentSection) sidebar=\(self.sidebarMode)\(interactionField)\(hottestField)")
+        }
 
         frameCount = 0
         windowStartTime = now

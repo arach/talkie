@@ -15,7 +15,11 @@
 //
 
 import SwiftUI
+import HudsonUI
 import TalkieKit
+import UniformTypeIdentifiers
+
+private let agentHomeViewLog = Log(.ui)
 
 struct AgentHomeView: View {
     let onDismiss: () -> Void
@@ -25,15 +29,20 @@ struct AgentHomeView: View {
     @StateObject private var voiceCapture = AgentHomeVoiceCapture()
     @State private var selectedTopicId: String?
     @State private var agentPrompt = ""
+    @State private var pendingAttachments: [AgentInvocationAttachment] = []
     @State private var continuation: AgentHomeContinuationContext?
     @State private var voicePromptTarget: AgentHomePromptTarget?
+    @State private var voicePromptAttachments: [AgentInvocationAttachment] = []
     @State private var openWorkTurnIds: Set<String> = []
+    @State private var isAttachmentImporterPresented = false
+    @State private var agentHomeReplySpeech = HudAgentReplySpeechController()
+    @State private var agentHomeSpeechTask: Task<Void, Never>?
     /// The agent the composer chip points at. nil → the runtime's preferred
     /// default. (Routing the invocation to a chosen agent is a follow-up;
     /// today the runtime selects the agent.)
     @State private var selectedAgentId: String?
     /// Agent voice (TTS) — read replies aloud. Toggled by the reader-header
-    /// speaker. Persisted; actual playback wiring is separate.
+    /// speaker. Persisted per app, and speaks only newly-arriving replies.
     @AppStorage("talkie.agentHome.speakReplies") private var speakReplies = false
     @FocusState private var agentPromptFocused: Bool
 
@@ -49,11 +58,42 @@ struct AgentHomeView: View {
             reader
         }
         .background(ScopeCanvas.canvas)
-        .onAppear { store.startRefreshing() }
+        .onAppear {
+            configureAgentHomeReplySpeech()
+            store.startRefreshing()
+            agentHomeReplySpeech.prime(with: latestSpeakableReply)
+        }
         .onDisappear {
             store.stopRefreshing()
             voiceCapture.cancel()
+            agentHomeSpeechTask?.cancel()
+            agentHomeSpeechTask = nil
+            SelectionSpeechPlaybackController.shared.stop()
         }
+        .onChange(of: selectedTopic.id) { _, _ in
+            agentHomeSpeechTask?.cancel()
+            agentHomeSpeechTask = nil
+            SelectionSpeechPlaybackController.shared.stop()
+            agentHomeReplySpeech.prime(with: latestSpeakableReply)
+        }
+        .onChange(of: speakReplies) { _, enabled in
+            if enabled {
+                agentHomeReplySpeech.prime(with: latestSpeakableReply)
+            } else {
+                agentHomeSpeechTask?.cancel()
+                agentHomeSpeechTask = nil
+                SelectionSpeechPlaybackController.shared.stop()
+            }
+        }
+        .onChange(of: latestSpeakableReply) { _, reply in
+            speakAgentHomeReplyIfNeeded(reply)
+        }
+        .fileImporter(
+            isPresented: $isAttachmentImporterPresented,
+            allowedContentTypes: [.item],
+            allowsMultipleSelection: true,
+            onCompletion: handleAttachmentImport
+        )
     }
 
     // MARK: Sidebar
@@ -180,15 +220,21 @@ struct AgentHomeView: View {
                     AgentHomeIdleHero(
                         text: $agentPrompt,
                         isSending: store.isInvokingAgent,
+                        hasActiveTurn: selectedTopic.activeCount > 0,
                         placeholder: composerPlaceholder,
-                        continuation: continuation,
+                        continuation: promptContinuation,
+                        continuationMode: promptContinuationMode,
                         voiceCapture: voiceCapture,
+                        attachments: pendingAttachments,
                         error: store.invokeError,
                         isFocused: $agentPromptFocused,
                         agents: store.agents,
                         selectedAgentId: $selectedAgentId,
-                        onClearContinuation: { continuation = nil },
+                        onClearContinuation: clearPromptContinuation,
+                        onAddAttachment: pickAttachments,
+                        onRemoveAttachment: removeAttachment,
                         onSend: sendAgentPrompt,
+                        onStop: stopActiveTurn,
                         onCancelTalkBack: cancelTalkBack,
                         onTalkBack: talkBack,
                         onStarter: useStarter
@@ -301,15 +347,21 @@ struct AgentHomeView: View {
             AgentHomeComposer(
                 text: $agentPrompt,
                 isSending: store.isInvokingAgent,
+                hasActiveTurn: selectedTopic.activeCount > 0,
                 placeholder: composerPlaceholder,
-                continuation: continuation,
+                continuation: promptContinuation,
+                continuationMode: promptContinuationMode,
                 voiceCapture: voiceCapture,
+                attachments: pendingAttachments,
                 error: store.invokeError,
                 isFocused: $agentPromptFocused,
                 agents: store.agents,
                 selectedAgentId: $selectedAgentId,
-                onClearContinuation: { continuation = nil },
+                onClearContinuation: clearPromptContinuation,
+                onAddAttachment: pickAttachments,
+                onRemoveAttachment: removeAttachment,
                 onSend: sendAgentPrompt,
+                onStop: stopActiveTurn,
                 onCancelTalkBack: cancelTalkBack,
                 onTalkBack: talkBack
             )
@@ -349,9 +401,40 @@ struct AgentHomeView: View {
         store.executorTurns(in: selectedTopic.id)
     }
 
+    private var latestContinuableTurn: AgentHomeExecutorTurn? {
+        selectedTurns.last { $0.status.isTerminal }
+    }
+
+    private var latestSpeakableReply: HudAgentReplySpeechReply? {
+        guard let turn = selectedTurns.last(where: { $0.status == .done }),
+              let text = turn.spokenBody?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
+        else {
+            return nil
+        }
+        return HudAgentReplySpeechReply(
+            id: turn.id,
+            conversationID: selectedTopic.id,
+            revision: "\(turn.updatedAt.timeIntervalSinceReferenceDate)",
+            text: text,
+            metadata: [
+                "agent": turn.agentDisplayName,
+                "source": turn.source ?? "agent-home",
+            ]
+        )
+    }
+
+    private var promptContinuation: AgentHomeContinuationContext? {
+        continuation ?? latestContinuableTurn.map(AgentHomeContinuationContext.init)
+    }
+
+    private var promptContinuationMode: AgentHomeContinuationMode? {
+        guard promptContinuation != nil else { return nil }
+        return continuation == nil ? .automatic : .pinned
+    }
+
     private var headerSubtitle: String {
         let count = selectedTopic.turnCount
-        let turnLabel = count == 1 ? "1 turn" : "\(count) turns"
+        let turnLabel = count == 1 ? "1 message" : "\(count) messages"
         var parts: [String] = []
         if let last = selectedTopic.lastActivityAt {
             parts.append(AgentHomeActivityStore.groupLabel(for: last) + " " +
@@ -363,9 +446,13 @@ struct AgentHomeView: View {
     }
 
     private var composerPlaceholder: String {
-        selectedTopic.turnCount == 0
-            ? "Say something, or type here"
-            : "Reply by voice or text"
+        if selectedTopic.turnCount == 0 {
+            return "Say something, or type here"
+        }
+        if selectedTopic.activeCount > 0 {
+            return "Add another note to this chat"
+        }
+        return "Reply to \(selectedTopic.title) by voice or text"
     }
 
     // MARK: Actions
@@ -381,6 +468,58 @@ struct AgentHomeView: View {
         continuation = nil
         if voiceCapture.phase == .idle {
             agentPromptFocused = true
+        }
+    }
+
+    private func configureAgentHomeReplySpeech() {
+        agentHomeReplySpeech.register(
+            HudAgentReplySpeechSynthesizer { request in
+                let audio = try await SelectionSpeechPlaybackController.shared.synthesizeSelectionAudio(request.text)
+                return HudAgentReplySpeechAudio(
+                    data: audio.data,
+                    format: HudAgentReplySpeechAudioFormat(talkieFormat: audio.format),
+                    mimeType: audio.mimeType,
+                    provider: audio.provider,
+                    voice: audio.voiceId,
+                    model: audio.model
+                )
+            }
+        )
+    }
+
+    private func speakAgentHomeReplyIfNeeded(_ reply: HudAgentReplySpeechReply?) {
+        guard speakReplies, reply != nil else { return }
+
+        agentHomeSpeechTask?.cancel()
+        agentHomeSpeechTask = Task { @MainActor in
+            guard !Task.isCancelled else { return }
+            do {
+                guard let output = try await agentHomeReplySpeech.audioIfNeeded(for: reply, enabled: speakReplies) else {
+                    return
+                }
+                guard !Task.isCancelled else { return }
+                try SelectionSpeechPlaybackController.shared.playSynthesizedAudio(
+                    SelectionSpeechAudio(
+                        data: output.audio.data,
+                        format: output.audio.format.rawValue,
+                        mimeType: output.audio.mimeType ?? "application/octet-stream",
+                        voiceId: output.audio.voice ?? "unknown",
+                        provider: output.audio.provider ?? "unknown",
+                        model: output.audio.model
+                    )
+                )
+            } catch {
+                guard !Task.isCancelled else { return }
+                agentHomeViewLog.error("Agent Home reply TTS failed", detail: error.localizedDescription)
+            }
+        }
+    }
+
+    private func clearPromptContinuation() {
+        if continuation != nil {
+            continuation = nil
+        } else if selectedTopic.turnCount > 0 {
+            startNewTopic()
         }
     }
 
@@ -404,13 +543,16 @@ struct AgentHomeView: View {
         let prompt = agentPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty, !store.isInvokingAgent else { return }
 
+        let attachments = pendingAttachments
         agentPrompt = ""
+        pendingAttachments = []
         let target = currentPromptTarget()
         continuation = nil
-        submitAgentPrompt(prompt, target: target)
+        submitAgentPrompt(prompt, target: target, attachments: attachments)
     }
 
     private func continueConversation(from turn: AgentHomeExecutorTurn) {
+        guard turn.status.isTerminal else { return }
         continuation = AgentHomeContinuationContext(turn: turn)
         selectedTopicId = continuation?.conversationId
         agentPromptFocused = true
@@ -420,17 +562,21 @@ struct AgentHomeView: View {
         switch voiceCapture.phase {
         case .idle:
             voicePromptTarget = currentPromptTarget()
+            voicePromptAttachments = pendingAttachments
             agentPromptFocused = false
             voiceCapture.start()
         case .recording:
             let target = voicePromptTarget ?? currentPromptTarget()
+            let attachments = voicePromptAttachments
             voiceCapture.stopAndTranscribe(
                 onTranscript: { transcript in
                     continuation = nil
-                    submitAgentPrompt(transcript, target: target)
+                    pendingAttachments.removeAll()
+                    submitAgentPrompt(transcript, target: target, attachments: attachments)
                 },
                 onFinish: {
                     voicePromptTarget = nil
+                    voicePromptAttachments = []
                 }
             )
         case .processing:
@@ -440,27 +586,91 @@ struct AgentHomeView: View {
 
     private func cancelTalkBack() {
         voicePromptTarget = nil
+        voicePromptAttachments = []
         voiceCapture.cancel()
     }
 
     private func currentPromptTarget() -> AgentHomePromptTarget {
-        AgentHomePromptTarget(
-            conversationId: continuation?.conversationId ?? selectedTopic.id,
-            parentSessionId: continuation?.parentSessionId
+        let resolvedContinuation = promptContinuation
+        return AgentHomePromptTarget(
+            conversationId: resolvedContinuation?.conversationId ?? selectedTopic.id,
+            parentSessionId: resolvedContinuation?.parentSessionId,
+            continueLatestTurn: false
         )
     }
 
-    private func submitAgentPrompt(_ prompt: String, target: AgentHomePromptTarget) {
+    private func submitAgentPrompt(
+        _ prompt: String,
+        target: AgentHomePromptTarget,
+        attachments: [AgentInvocationAttachment] = []
+    ) {
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !store.isInvokingAgent else { return }
 
         Task {
             await store.invokeAgent(
                 text: trimmed,
+                attachments: attachments,
                 conversationId: target.conversationId,
-                parentSessionId: target.parentSessionId
+                parentSessionId: target.parentSessionId,
+                continueLatestTurn: target.continueLatestTurn
             )
         }
+    }
+
+    private func stopActiveTurn() {
+        Task {
+            await store.cancelLatestActiveTurn(in: selectedTopic.id)
+        }
+    }
+
+    private func pickAttachments() {
+        isAttachmentImporterPresented = true
+    }
+
+    private func removeAttachment(_ attachmentId: UUID) {
+        pendingAttachments.removeAll { $0.id == attachmentId }
+    }
+
+    private func handleAttachmentImport(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            let newAttachments = urls.map(makeAttachment)
+            pendingAttachments.append(contentsOf: newAttachments)
+        case .failure(let error):
+            agentHomeViewLog.warning("Agent Home attachment import failed", detail: error.localizedDescription)
+        }
+    }
+
+    private func makeAttachment(from url: URL) -> AgentInvocationAttachment {
+        let type = UTType(filenameExtension: url.pathExtension)
+        let mediaType = type?.preferredMIMEType ?? "application/octet-stream"
+        return AgentInvocationAttachment(
+            name: url.lastPathComponent.nonEmpty ?? "Attachment",
+            mediaType: mediaType,
+            path: url.path,
+            url: url.isFileURL ? nil : url.absoluteString,
+            systemImage: systemImage(for: type, mediaType: mediaType, filename: url.lastPathComponent)
+        )
+    }
+
+    private func systemImage(for type: UTType?, mediaType: String, filename: String) -> String {
+        if type?.conforms(to: .image) == true || mediaType.hasPrefix("image/") {
+            return "photo"
+        }
+        if type?.conforms(to: .audio) == true || mediaType.hasPrefix("audio/") {
+            return "waveform"
+        }
+        if type?.conforms(to: .movie) == true || mediaType.hasPrefix("video/") {
+            return "film"
+        }
+        if type?.conforms(to: .pdf) == true || filename.localizedCaseInsensitiveContains(".pdf") {
+            return "doc.richtext"
+        }
+        if type?.conforms(to: .text) == true || mediaType.hasPrefix("text/") {
+            return "doc.text"
+        }
+        return "paperclip"
     }
 }
 
@@ -473,9 +683,76 @@ private enum AgentHomeMetrics {
     static let gutter: CGFloat = 32
 }
 
+private enum AgentHomeHudTheme {
+    static var theme: HudTheme {
+        HudTheme(
+            palette: HudThemePalette(
+                bg: ScopeCanvas.canvas,
+                surface: Color.white,
+                chrome: ScopeCanvas.canvasAlt,
+                ink: ScopeInk.primary,
+                muted: ScopeInk.muted,
+                dim: ScopeInk.subtle,
+                border: ScopeEdge.faint,
+                accent: ScopeAmber.solid,
+                accentSoft: ScopeAmber.tint,
+                statusOk: .green,
+                statusWarn: ScopeAmber.solid,
+                statusError: .red,
+                statusInfo: .blue
+            ),
+            hairline: HudThemeHairline(
+                subtle: ScopeEdge.subtle,
+                standard: ScopeEdge.faint
+            ),
+            radius: .default,
+            focus: .default
+        )
+    }
+}
+
 private struct AgentHomePromptTarget: Equatable {
     let conversationId: String
     let parentSessionId: String?
+    let continueLatestTurn: Bool
+}
+
+private extension HudAgentReplySpeechAudioFormat {
+    init(talkieFormat: String) {
+        switch talkieFormat.lowercased() {
+        case "mp3":
+            self = .mp3
+        case "wav":
+            self = .wav
+        case "caf":
+            self = .caf
+        case "m4a":
+            self = .m4a
+        case "aac":
+            self = .aac
+        default:
+            self = .unknown
+        }
+    }
+}
+
+private enum AgentHomeContinuationMode: Equatable {
+    case automatic
+    case pinned
+
+    var title: String {
+        switch self {
+        case .automatic: return "Continuing this chat"
+        case .pinned: return "Continuing selected reply"
+        }
+    }
+
+    var clearHelp: String {
+        switch self {
+        case .automatic: return "Start a new chat"
+        case .pinned: return "Use the latest reply instead"
+        }
+    }
 }
 
 // MARK: - Continuation context
@@ -539,16 +816,14 @@ private struct AgentHomeConversationRow: View {
                     trailing
                 }
 
-                if let wireLabel = topic.wireLabel {
-                    Text(wireLabel)
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundStyle(selected ? ScopeBrass.solid.opacity(0.85) : ScopeInk.subtle)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
+                Text(topic.subtitle)
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundStyle(ScopeInk.subtle)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, topic.wireLabel == nil ? 8 : 7)
+            .padding(.vertical, 7)
             .background(
                 RoundedRectangle(cornerRadius: 7)
                     .fill(rowFill)
@@ -753,29 +1028,44 @@ private struct AgentHomeTurnBlock: View {
     let onCopy: (String) -> Void
     let onContinue: () -> Void
 
+    @State private var hovered = false
+
     private var isLive: Bool {
-        turn.status == .running || turn.status == .waiting
+        turn.isLive
     }
 
     private var talkieBody: String {
         if isLive {
             return turn.response?.nonEmpty ?? turn.ack ?? "Working on it…"
         }
-        return turn.spokenBody ?? turn.ack ?? "—"
+        return turn.response?.nonEmpty ?? turn.spokenSummary?.nonEmpty ?? turn.ack ?? "—"
     }
 
     private var talkieMeta: String? {
-        if isLive { return "working" }
-        return turn.latencyLabel
+        if isLive {
+            return turn.status == .waiting ? "starting" : "working"
+        }
+        if turn.status == .failed {
+            return "needs attention"
+        }
+        return nil
+    }
+
+    private var footerVisible: Bool {
+        isLive || showWork || hovered
+    }
+
+    private var assistantFooter: AnyView {
+        guard footerVisible else { return AnyView(EmptyView()) }
+        return AnyView(showWorkFooter)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            AgentHomeWireTrace(turn: turn)
-
+        VStack(alignment: .leading, spacing: 14) {
             AgentHomeSpeech(
                 speaker: .you,
                 bodyText: turn.askBody ?? "—",
+                attachments: turn.attachments,
                 time: timeLabel(turn.createdAt),
                 onCopy: { onCopy(turn.askBody ?? "") }
             )
@@ -785,25 +1075,32 @@ private struct AgentHomeTurnBlock: View {
                 meta: talkieMeta,
                 live: isLive,
                 bodyText: talkieBody,
-                italic: isLive,
+                rendersMarkdown: true,
                 time: timeLabel(turn.updatedAt),
                 onCopy: { onCopy(talkieBody) },
                 onContinue: isLive ? nil : onContinue,
-                footer: AnyView(showWorkFooter)
+                footer: assistantFooter
             )
         }
         .padding(.leading, isLive ? 14 : 16)
+        .hudTheme(AgentHomeHudTheme.theme)
         .overlay(alignment: .leading) {
             Rectangle()
                 .fill(isLive ? ScopeAmber.solid : Color.clear)
                 .frame(width: 2)
         }
         .animation(.easeOut(duration: 0.18), value: isLive)
+        .contentShape(Rectangle())
+        .onHover { hovered = $0 }
     }
 
     @ViewBuilder
     private var showWorkFooter: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
+            if isLive {
+                AgentHomeLiveTurnRow(turn: turn)
+            }
+
             Button(action: onToggleWork) {
                 Text(showWork ? "Hide details" : "Details")
                     .font(.system(size: 11, weight: .medium))
@@ -813,15 +1110,54 @@ private struct AgentHomeTurnBlock: View {
             .help(showWork ? "Hide reply details" : "Show reply details")
 
             if showWork {
-                AgentHomeWorkBlock(turn: turn, onCopy: onCopy, onContinue: onContinue)
+                AgentHomeWorkBlock(turn: turn)
             }
         }
     }
 
     private func timeLabel(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        return formatter.string(from: date).lowercased()
+        date.formatted(date: .omitted, time: .shortened).lowercased()
+    }
+}
+
+private struct AgentHomeLiveTurnRow: View {
+    let turn: AgentHomeExecutorTurn
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 9) {
+            ProgressView()
+                .controlSize(.small)
+                .frame(width: 14, height: 14)
+
+            Text(turn.liveHeadline)
+                .font(.system(size: 11.5, weight: .semibold))
+                .foregroundStyle(ScopeBrass.solid)
+
+            if let detail = detailText {
+                Text(detail)
+                    .font(.system(size: 11))
+                    .foregroundStyle(ScopeInk.subtle)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(ScopeAmber.tint.opacity(0.78))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(ScopeAmber.solid.opacity(0.22), lineWidth: 0.5)
+        )
+    }
+
+    private var detailText: String? {
+        guard let detail = turn.liveDetail?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty else {
+            return nil
+        }
+        return detail == turn.liveHeadline ? nil : detail
     }
 }
 
@@ -889,6 +1225,8 @@ private struct AgentHomeSpeech: View {
     var live: Bool = false
     let bodyText: String
     var italic: Bool = false
+    var rendersMarkdown: Bool = false
+    var attachments: [AgentInvocationAttachment] = []
     var time: String? = nil
     var onCopy: () -> Void = {}
     var onContinue: (() -> Void)? = nil
@@ -904,13 +1242,11 @@ private struct AgentHomeSpeech: View {
             VStack(alignment: .leading, spacing: 6) {
                 speakerLine
 
-                Text(displayedText)
-                    .font(.system(size: 13))
-                    .italic(italic)
-                    .foregroundStyle(italic ? ScopeInk.muted : ScopeInk.primary)
-                    .lineSpacing(3)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .textSelection(.enabled)
+                messageBody
+
+                if !attachments.isEmpty {
+                    AgentHomeAttachmentStrip(attachments: attachments)
+                }
 
                 footer
             }
@@ -921,20 +1257,31 @@ private struct AgentHomeSpeech: View {
         .onHover { hovered = $0 }
     }
 
-    private var displayedText: String {
-        italic ? "\u{201C}\(bodyText)\u{201D}" : bodyText
+    @ViewBuilder
+    private var messageBody: some View {
+        if rendersMarkdown {
+            HudMarkdownView(text: bodyText, contentSize: 13, style: .agent)
+                .italic(italic)
+        } else {
+            Text(bodyText)
+                .font(.system(size: 13))
+                .italic(italic)
+                .foregroundStyle(italic ? ScopeInk.muted : ScopeInk.primary)
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+        }
     }
 
     private var speakerLine: some View {
-        HStack(spacing: 8) {
-            Text(speaker.label.uppercased())
-                .font(.system(size: 10, weight: .semibold))
-                .tracking(1.6)
+        HStack(spacing: 7) {
+            Text(speaker.label)
+                .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(ScopeInk.primary)
 
             if let meta {
                 Text("· \(meta)")
-                    .font(.system(size: 10, weight: live ? .semibold : .medium, design: .monospaced))
+                    .font(.system(size: 11, weight: live ? .semibold : .medium))
                     .foregroundStyle(live ? ScopeBrass.solid : ScopeInk.subtle)
             }
 
@@ -949,7 +1296,18 @@ private struct AgentHomeSpeech: View {
 
             Spacer(minLength: 0)
 
-            if let onContinue, hovered {
+            Button(action: onCopy) {
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(ScopeInk.subtle)
+                    .frame(width: 20, height: 20)
+            }
+            .buttonStyle(.plain)
+            .help("Copy message")
+            .opacity(hovered ? 1 : 0)
+            .animation(.easeOut(duration: 0.15), value: hovered)
+
+            if let onContinue {
                 Button(action: onContinue) {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.turn.down.right")
@@ -961,6 +1319,8 @@ private struct AgentHomeSpeech: View {
                 }
                 .buttonStyle(.plain)
                 .help("Continue from this turn")
+                .opacity(hovered ? 1 : 0)
+                .animation(.easeOut(duration: 0.15), value: hovered)
                 .transition(.opacity)
             }
 
@@ -971,6 +1331,40 @@ private struct AgentHomeSpeech: View {
                     .opacity(hovered ? 1 : 0)
                     .animation(.easeOut(duration: 0.15), value: hovered)
                     .help("Sent at \(time)")
+            }
+        }
+    }
+}
+
+private struct AgentHomeAttachmentStrip: View {
+    let attachments: [AgentInvocationAttachment]
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(attachments) { attachment in
+                    HStack(spacing: 5) {
+                        Image(systemName: attachment.systemImage)
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(ScopeBrass.solid)
+
+                        Text(attachment.name)
+                            .font(.system(size: 10.5, weight: .medium))
+                            .foregroundStyle(ScopeInk.muted)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(ScopeAmber.tint.opacity(0.62))
+                            .overlay(
+                                Capsule()
+                                    .stroke(ScopeAmber.solid.opacity(0.18), lineWidth: 0.5)
+                            )
+                    )
+                }
             }
         }
     }
@@ -1000,20 +1394,9 @@ private struct AgentHomeAvatar: View {
 
 private struct AgentHomeWorkBlock: View {
     let turn: AgentHomeExecutorTurn
-    let onCopy: (String) -> Void
-    let onContinue: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let summary = turn.spokenSummary?.nonEmpty, summary != turn.spokenBody {
-                Text(summary)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(ScopeInk.muted)
-                    .lineSpacing(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .textSelection(.enabled)
-            }
-
             if !turn.threads.isEmpty {
                 VStack(alignment: .leading, spacing: 3) {
                     ForEach(turn.threads) { thread in
@@ -1022,15 +1405,7 @@ private struct AgentHomeWorkBlock: View {
                 }
             }
 
-            if let response = turn.response?.nonEmpty,
-               response != turn.spokenBody && response != turn.spokenSummary {
-                Text(response)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(ScopeInk.muted)
-                    .lineSpacing(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .textSelection(.enabled)
-            }
+            AgentHomeWireTrace(turn: turn)
 
             HStack(spacing: 8) {
                 Text(identityLine)
@@ -1038,20 +1413,6 @@ private struct AgentHomeWorkBlock: View {
                     .foregroundStyle(ScopeInk.subtle)
 
                 Spacer(minLength: 8)
-
-                if turn.spokenSummary?.nonEmpty != nil {
-                    Button(action: onContinue) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "arrow.turn.down.right")
-                                .font(.system(size: 9, weight: .semibold))
-                            Text("Continue")
-                                .font(.system(size: 10.5, weight: .semibold))
-                        }
-                        .foregroundStyle(ScopeBrass.solid)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Continue this conversation")
-                }
             }
         }
     }
@@ -1151,15 +1512,21 @@ private struct AgentHomeActionRow: View {
 private struct AgentHomeIdleHero: View {
     @Binding var text: String
     let isSending: Bool
+    let hasActiveTurn: Bool
     let placeholder: String
     let continuation: AgentHomeContinuationContext?
+    let continuationMode: AgentHomeContinuationMode?
     @ObservedObject var voiceCapture: AgentHomeVoiceCapture
+    let attachments: [AgentInvocationAttachment]
     let error: String?
     var isFocused: FocusState<Bool>.Binding
     let agents: [AgentRuntimeAgentSnapshot]
     @Binding var selectedAgentId: String?
     let onClearContinuation: () -> Void
+    let onAddAttachment: () -> Void
+    let onRemoveAttachment: (UUID) -> Void
     let onSend: () -> Void
+    let onStop: () -> Void
     let onCancelTalkBack: () -> Void
     let onTalkBack: () -> Void
     let onStarter: (String) -> Void
@@ -1191,15 +1558,21 @@ private struct AgentHomeIdleHero: View {
             AgentHomeComposer(
                 text: $text,
                 isSending: isSending,
+                hasActiveTurn: hasActiveTurn,
                 placeholder: placeholder,
                 continuation: continuation,
+                continuationMode: continuationMode,
                 voiceCapture: voiceCapture,
+                attachments: attachments,
                 error: error,
                 isFocused: isFocused,
                 agents: agents,
                 selectedAgentId: $selectedAgentId,
                 onClearContinuation: onClearContinuation,
+                onAddAttachment: onAddAttachment,
+                onRemoveAttachment: onRemoveAttachment,
                 onSend: onSend,
+                onStop: onStop,
                 onCancelTalkBack: onCancelTalkBack,
                 onTalkBack: onTalkBack
             )
@@ -1350,15 +1723,21 @@ private struct AgentHomeStarterChip: View {
 private struct AgentHomeComposer: View {
     @Binding var text: String
     let isSending: Bool
+    let hasActiveTurn: Bool
     let placeholder: String
     let continuation: AgentHomeContinuationContext?
+    let continuationMode: AgentHomeContinuationMode?
     @ObservedObject var voiceCapture: AgentHomeVoiceCapture
+    let attachments: [AgentInvocationAttachment]
     let error: String?
     var isFocused: FocusState<Bool>.Binding
     let agents: [AgentRuntimeAgentSnapshot]
     @Binding var selectedAgentId: String?
     let onClearContinuation: () -> Void
+    let onAddAttachment: () -> Void
+    let onRemoveAttachment: (UUID) -> Void
     let onSend: () -> Void
+    let onStop: () -> Void
     let onCancelTalkBack: () -> Void
     let onTalkBack: () -> Void
 
@@ -1368,61 +1747,65 @@ private struct AgentHomeComposer: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .center, spacing: 10) {
-                // Agent selector lives INSIDE the input.
-                AgentHomeAgentChip(agents: agents, selectedAgentId: $selectedAgentId)
+            if let continuation, let continuationMode {
+                AgentHomeContinuationPill(
+                    continuation: continuation,
+                    mode: continuationMode,
+                    onClear: onClearContinuation
+                )
+                .padding(.leading, 2)
+            }
 
-                Rectangle()
-                    .fill(ScopeEdge.subtle)
-                    .frame(width: 0.5, height: 20)
-
-                TextField(placeholder, text: $text, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 13))
-                    .foregroundStyle(ScopeInk.primary)
-                    .lineLimit(1...5)
-                    .focused(isFocused)
-                    .onSubmit { if canSend { onSend() } }
-
-                // Mic (voice input) + send, consolidated as one control cluster.
-                HStack(spacing: 8) {
+            HudComposer(
+                text: $text,
+                phase: isSending || hasActiveTurn ? .streaming : .idle,
+                style: HudComposerStyle(
+                    placeholder: placeholder,
+                    fontSize: 13,
+                    lineLimit: 1...5,
+                    fieldHorizontalPadding: 12,
+                    fieldVerticalPadding: 9,
+                    fieldCornerRadius: 14,
+                    controlSize: 30
+                ),
+                layout: .stacked,
+                focus: isFocused,
+                leadingAccessory: {
+                    AgentHomeAgentChip(agents: agents, selectedAgentId: $selectedAgentId)
+                },
+                trailingAccessory: {
                     Button(action: onTalkBack) {
                         Image(systemName: voiceButtonIcon)
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(ScopeBrass.solid)
-                            .frame(width: 28, height: 28)
+                            .frame(width: 30, height: 30)
                             .background(Circle().fill(ScopeAmber.tint))
                     }
                     .buttonStyle(.plain)
                     .disabled(voiceCapture.phase == .processing || isSending)
                     .help(voiceButtonHelp)
-
-                    Button(action: onSend) {
-                        Image(systemName: isSending ? "hourglass" : "paperplane.fill")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(canSend ? .white : ScopeInk.subtle)
-                            .frame(width: 28, height: 28)
-                            .background(
-                                Circle().fill(canSend ? ScopeAmber.solid : ScopeInk.primary.opacity(0.06))
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!canSend)
-                    .help("Send")
+                },
+                onAction: handleComposerAction,
+                attachments: attachments.map { attachment in
+                    HudComposerAttachment(
+                        id: attachment.id,
+                        name: attachment.name,
+                        systemImage: attachment.systemImage
+                    )
+                },
+                model: HudComposerModelInfo(model: activeAgentName, effort: "medium"),
+                onAddAttachment: onAddAttachment,
+                onRemoveAttachment: { attachment in
+                    onRemoveAttachment(attachment.id)
                 }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            )
+            .hudTheme(AgentHomeHudTheme.theme)
             .background(
                 RoundedRectangle(cornerRadius: 14)
                     .fill(Color.white)
+                    .shadow(color: Color.black.opacity(0.04), radius: 1, x: 0, y: 1)
+                    .shadow(color: Color.black.opacity(0.06), radius: 14, x: 0, y: 12)
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(ScopeEdge.faint, lineWidth: 0.5)
-            )
-            .shadow(color: Color.black.opacity(0.04), radius: 1, x: 0, y: 1)
-            .shadow(color: Color.black.opacity(0.06), radius: 14, x: 0, y: 12)
 
             if showsVoiceStatus {
                 AgentHomeVoiceCaptureStatus(
@@ -1433,27 +1816,6 @@ private struct AgentHomeComposer: View {
                     onPrimary: onTalkBack,
                     onCancel: onCancelTalkBack
                 )
-                .padding(.leading, 40)
-            }
-
-            if let continuation {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.turn.down.right")
-                        .font(.system(size: 9, weight: .semibold))
-                    Text(continuation.label)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    Button(action: onClearContinuation) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 8, weight: .bold))
-                    }
-                    .buttonStyle(.plain)
-                }
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(ScopeBrass.solid)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(Capsule().fill(ScopeAmber.tint))
                 .padding(.leading, 40)
             }
 
@@ -1470,6 +1832,25 @@ private struct AgentHomeComposer: View {
         voiceCapture.phase != .idle || voiceCapture.errorMessage != nil
     }
 
+    private var activeAgentName: String {
+        if let selectedAgentId, let agent = agents.first(where: { $0.id == selectedAgentId }) {
+            return agent.name
+        }
+        return agents.first(where: { $0.isPreferred == true })?.name
+            ?? agents.first?.name
+            ?? "Agent"
+    }
+
+    private func handleComposerAction(_ action: HudComposerAction) {
+        switch action {
+        case .submit, .queue, .steer:
+            guard canSend else { return }
+            onSend()
+        case .stop:
+            onStop()
+        }
+    }
+
     private var voiceButtonIcon: String {
         switch voiceCapture.phase {
         case .idle: return "mic.fill"
@@ -1484,6 +1865,44 @@ private struct AgentHomeComposer: View {
         case .recording: return "Stop and send this voice reply"
         case .processing: return "Transcribing voice reply"
         }
+    }
+}
+
+private struct AgentHomeContinuationPill: View {
+    let continuation: AgentHomeContinuationContext
+    let mode: AgentHomeContinuationMode
+    let onClear: () -> Void
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "arrow.turn.down.right")
+                .font(.system(size: 9, weight: .semibold))
+
+            Text(mode.title)
+                .font(.system(size: 10.5, weight: .semibold))
+
+            Text("·")
+                .font(.system(size: 10.5, weight: .semibold))
+                .foregroundStyle(ScopeBrass.solid.opacity(0.65))
+
+            Text(continuation.label)
+                .font(.system(size: 10.5, weight: .medium))
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Button(action: onClear) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .bold))
+                    .frame(width: 14, height: 14)
+            }
+            .buttonStyle(.plain)
+            .help(mode.clearHelp)
+        }
+        .foregroundStyle(ScopeBrass.solid)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 4)
+        .background(Capsule().fill(ScopeAmber.tint))
+        .overlay(Capsule().stroke(ScopeAmber.solid.opacity(0.28), lineWidth: 0.5))
     }
 }
 

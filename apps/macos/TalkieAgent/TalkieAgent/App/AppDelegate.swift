@@ -108,30 +108,97 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         return true
     }
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        // Single-instance guard: prevent duplicate TalkieAgent processes
+    /// Keep the process that owns the launchd MachService alive.
+    ///
+    /// Talkie talks to Agent through the launchd-registered MachService. A
+    /// LaunchServices-opened Agent can show UI, but it cannot satisfy that
+    /// launchd endpoint. When both exist, prefer the launchd process so XPC
+    /// calls like ping/transcribe have a live receiver.
+    private func claimLaunchOwnership() -> Bool {
         let myPID = ProcessInfo.processInfo.processIdentifier
         let myBundleID = Bundle.main.bundleIdentifier ?? ""
+        let expectedLaunchLabel = TalkieHelper.agent.launchdLabel(for: TalkieEnvironment.current)
+        let xpcServiceName = ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"]
+        let isLaunchAgentOwned = xpcServiceName == expectedLaunchLabel
+        let allowStandalone = ProcessInfo.processInfo.environment["TALKIE_AGENT_ALLOW_STANDALONE"] == "1"
+
         let others = NSRunningApplication.runningApplications(withBundleIdentifier: myBundleID)
             .filter { $0.processIdentifier != myPID }
-        if !others.isEmpty {
-            // Check if existing instances are actually responsive (not zombie/stuck)
-            let terminated = others.filter { $0.isTerminated }
-            let alive = others.filter { !$0.isTerminated }
+        let terminated = others.filter { $0.isTerminated }
+        let alive = others.filter { !$0.isTerminated }
 
+        if isLaunchAgentOwned {
             if !alive.isEmpty {
-                let alivePIDs = alive.map { String($0.processIdentifier) }.joined(separator: ", ")
-                AgentConsole.critical("[TalkieAgent] Another instance already running (PID: %@) — exiting duplicate (PID: %d)", alivePIDs, myPID)
-                NSApplication.shared.terminate(nil)
-                return
+                terminateDuplicateInstances(alive, reason: "LaunchAgent instance is taking over XPC")
             }
 
-            // All other instances are terminated/zombie — we're the valid one, continue
             if !terminated.isEmpty {
                 let zombiePIDs = terminated.map { String($0.processIdentifier) }.joined(separator: ", ")
                 AgentConsole.critical("[TalkieAgent] Found zombie instances (PID: %@) — taking over as PID %d", zombiePIDs, myPID)
             }
+
+            return true
         }
+
+        if !allowStandalone && launchAgentIsLoaded(label: expectedLaunchLabel, uid: getuid()) {
+            AgentConsole.critical(
+                "[TalkieAgent] LaunchAgent %@ owns XPC; handing off standalone PID %d",
+                expectedLaunchLabel,
+                myPID
+            )
+            _ = kickstartLaunchAgentForHandoff(label: expectedLaunchLabel, uid: getuid())
+            NSApplication.shared.terminate(nil)
+            return false
+        }
+
+        if !alive.isEmpty {
+            let alivePIDs = alive.map { String($0.processIdentifier) }.joined(separator: ", ")
+            AgentConsole.critical("[TalkieAgent] Another instance already running (PID: %@) — exiting duplicate (PID: %d)", alivePIDs, myPID)
+            NSApplication.shared.terminate(nil)
+            return false
+        }
+
+        if !terminated.isEmpty {
+            let zombiePIDs = terminated.map { String($0.processIdentifier) }.joined(separator: ", ")
+            AgentConsole.critical("[TalkieAgent] Found zombie instances (PID: %@) — taking over as PID %d", zombiePIDs, myPID)
+        }
+
+        return true
+    }
+
+    private func terminateDuplicateInstances(_ apps: [NSRunningApplication], reason: String) {
+        for app in apps {
+            let pid = app.processIdentifier
+            AgentConsole.critical("[TalkieAgent] %@ — terminating duplicate PID %d", reason, pid)
+            _ = app.terminate()
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                guard !app.isTerminated else { return }
+                AgentConsole.critical("[TalkieAgent] Duplicate PID %d still running — force terminating", pid)
+                _ = app.forceTerminate()
+            }
+        }
+    }
+
+    private func kickstartLaunchAgentForHandoff(label: String, uid: uid_t) -> Bool {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        process.arguments = ["kickstart", "gui/\(uid)/\(label)"]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        } catch {
+            AgentConsole.critical("[TalkieAgent] Failed to hand off to LaunchAgent %@: %@", label, error.localizedDescription)
+            return false
+        }
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        guard claimLaunchOwnership() else { return }
 
         // Register brand fonts bundled in TalkieKit so JetBrains Mono resolves
         // here (the Agent target doesn't ship fonts of its own).
@@ -636,7 +703,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         popover.behavior = .transient
         // Match the popover chrome (menus, scrollbars) to the active tray skin.
         popover.appearance = NSAppearance(named: AgentTraySkin.current().isDark ? .darkAqua : .aqua)
-        popover.contentSize = NSSize(width: 320, height: 535)
+        popover.contentSize = AgentMenuPopoverView.preferredContentSize(for: model)
 
         if let hostingController = popover.contentViewController as? NSHostingController<AgentMenuPopoverView> {
             hostingController.rootView = AgentMenuPopoverView(
@@ -777,6 +844,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     private func updateAgentMenuPopoverContent(with model: AgentMenuModel) {
         guard let popover = agentMenuPopover, popover.isShown else { return }
+        popover.contentSize = AgentMenuPopoverView.preferredContentSize(for: model)
 
         if let hostingController = popover.contentViewController as? NSHostingController<AgentMenuPopoverView> {
             hostingController.rootView = AgentMenuPopoverView(
@@ -1775,23 +1843,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             displayName: result.displayName
         ) ?? false
 
+        let captureID = UUID()
+        guard let persisted = AgentCaptureLibraryWriter.persistScreenshot(
+            data: result.data,
+            id: captureID,
+            capturedAt: result.capturedAt,
+            captureMode: mode.rawValue,
+            width: result.width,
+            height: result.height,
+            windowTitle: result.windowTitle,
+            appName: result.appName,
+            appBundleID: result.appBundleID,
+            displayName: result.displayName
+        ) else {
+            log.error("Agent screenshot Library write failed")
+            return recordedLive
+        }
+
         do {
-            let stored = try await AgentLiveTrayAssetStore.shared.storeScreenshot(
-                data: result.data,
+            let stored = try await AgentLiveTrayAssetStore.shared.registerScreenshot(
+                fileURL: persisted.fileURL,
+                id: captureID,
                 capturedAt: result.capturedAt,
                 mode: mode.rawValue,
-                width: result.width,
-                height: result.height,
-                windowTitle: result.windowTitle,
-                appName: result.appName,
-                appBundleID: result.appBundleID,
-                displayName: result.displayName
-            )
-            AgentCaptureLibraryWriter.persistScreenshot(
-                data: result.data,
-                id: stored.id,
-                capturedAt: result.capturedAt,
-                captureMode: mode.rawValue,
                 width: result.width,
                 height: result.height,
                 windowTitle: result.windowTitle,
@@ -3454,6 +3528,15 @@ struct SelectionSpeechPlaybackResult {
     let model: String?
 }
 
+struct SelectionSpeechAudio {
+    let data: Data
+    let format: String
+    let mimeType: String
+    let voiceId: String
+    let provider: String
+    let model: String?
+}
+
 @MainActor
 final class SelectionSpeechPlaybackController: NSObject, ObservableObject, AVAudioPlayerDelegate {
     static let shared = SelectionSpeechPlaybackController()
@@ -3477,15 +3560,29 @@ final class SelectionSpeechPlaybackController: NSObject, ObservableObject, AVAud
     func speakSelection(_ text: String) async throws -> SelectionSpeechPlaybackResult {
         stopPlayback(notify: false)
 
+        let synthesis = try await synthesizeSelectionAudio(text)
+        try playSynthesizedAudio(synthesis)
+        return SelectionSpeechPlaybackResult(
+            voiceId: synthesis.voiceId,
+            provider: synthesis.provider,
+            model: synthesis.model
+        )
+    }
+
+    func synthesizeSelectionAudio(_ text: String) async throws -> SelectionSpeechAudio {
         var lastError: Error?
         for voiceId in candidateVoiceIDs() {
             do {
                 let synthesis = try await synthesizeSelection(text: text, selectedVoiceId: voiceId)
-                try playAudioFile(at: synthesis.audioURL)
                 if synthesis.voiceId != voiceId {
                     log.info("Quick selection TTS used normalized voice", detail: "requested=\(voiceId) used=\(synthesis.voiceId)")
                 }
-                return SelectionSpeechPlaybackResult(
+                let audioData = try Data(contentsOf: synthesis.audioURL)
+                let descriptor = speechAudioDescriptor(for: synthesis.audioURL)
+                return SelectionSpeechAudio(
+                    data: audioData,
+                    format: descriptor.format,
+                    mimeType: descriptor.mimeType,
                     voiceId: synthesis.voiceId,
                     provider: synthesis.provider,
                     model: synthesis.model
@@ -3499,8 +3596,13 @@ final class SelectionSpeechPlaybackController: NSObject, ObservableObject, AVAud
         throw lastError ?? SelectionSpeechError.audioPlaybackUnavailable
     }
 
-    private func playAudioFile(at url: URL) throws {
-        let player = try AVAudioPlayer(contentsOf: url)
+    func playSynthesizedAudio(_ audio: SelectionSpeechAudio) throws {
+        stopPlayback(notify: false)
+        try playAudioData(audio.data)
+    }
+
+    private func playAudioData(_ data: Data) throws {
+        let player = try AVAudioPlayer(data: data)
         player.delegate = self
         player.enableRate = true
         player.isMeteringEnabled = true
@@ -3515,6 +3617,23 @@ final class SelectionSpeechPlaybackController: NSObject, ObservableObject, AVAud
         isPaused = false
         startMetering()
         notifyPlaybackStarted()
+    }
+
+    private func speechAudioDescriptor(for url: URL) -> (format: String, mimeType: String) {
+        switch url.pathExtension.lowercased() {
+        case "mp3":
+            return ("mp3", "audio/mpeg")
+        case "wav":
+            return ("wav", "audio/wav")
+        case "caf":
+            return ("caf", "audio/x-caf")
+        case "m4a":
+            return ("m4a", "audio/mp4")
+        case "aac":
+            return ("aac", "audio/aac")
+        default:
+            return ("unknown", "application/octet-stream")
+        }
     }
 
     private func normalizeSelectionVoiceId(_ voiceId: String) -> String {

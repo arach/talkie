@@ -1674,7 +1674,7 @@ struct ScreenshotsScreen: View {
             for obj in objects {
                 for ss in obj.screenshots {
                     items.append(ScreenshotItem(
-                        id: "lib-\(ss.filename)",
+                        id: "lib-\(obj.id.uuidString)-\(ss.filename)",
                         fileURL: ScreenshotStorage.screenshotsDirectory.appendingPathComponent(ss.filename),
                         date: obj.createdAt,
                         label: ss.windowTitle ?? ss.appName ?? obj.title,
@@ -1690,7 +1690,7 @@ struct ScreenshotsScreen: View {
                 for clip in obj.clips {
                     guard let url = CaptureMediaFileResolver.clipURL(filename: clip.filename) else { continue }
                     items.append(ScreenshotItem(
-                        id: "clip-\(clip.filename)",
+                        id: "clip-\(obj.id.uuidString)-\(clip.filename)",
                         fileURL: url,
                         date: obj.createdAt.addingTimeInterval(Double(clip.timestampMs) / 1000.0),
                         label: clip.windowTitle ?? clip.appName ?? obj.title,
@@ -1732,6 +1732,10 @@ struct ScreenshotsScreen: View {
     private func removeAttachedScreenshot(_ ss: RecordingScreenshot, from parent: TalkieObject) async {
         do {
             guard let fresh = try await repository.fetchRecording(id: parent.id) else { return }
+            let removedItemIDs = libraryItems
+                .filter { $0.parent?.id == parent.id && $0.screenshot?.filename == ss.filename }
+                .map(\.id)
+            let shouldDeleteFile = !isMediaFilenameReferenced(ss.filename, excluding: Set(removedItemIDs))
 
             var assets = fresh.assets ?? TalkieObjectAssets()
             let remaining = (assets.screenshots ?? []).filter { $0.filename != ss.filename }
@@ -1739,11 +1743,12 @@ struct ScreenshotsScreen: View {
 
             try await repository.updateAssets(id: parent.id, assetsJSON: assets.isEmpty ? nil : assets.toJSON())
 
-            let fileURL = ScreenshotStorage.screenshotsDirectory.appendingPathComponent(ss.filename)
-            try? FileManager.default.removeItem(at: fileURL)
+            if shouldDeleteFile, let fileURL = CaptureMediaFileResolver.screenshotURL(filename: ss.filename) {
+                try? FileManager.default.removeItem(at: fileURL)
+            }
 
             await MainActor.run {
-                libraryItems.removeAll { $0.id == "lib-\(ss.filename)" }
+                libraryItems.removeAll { removedItemIDs.contains($0.id) }
 
                 let stillHasScreenshots = libraryItems.contains { $0.parent?.id == parent.id }
                 if !stillHasScreenshots {
@@ -1758,6 +1763,10 @@ struct ScreenshotsScreen: View {
     private func removeAttachedClip(_ clip: RecordingClip, from parent: TalkieObject) async {
         do {
             guard let fresh = try await repository.fetchRecording(id: parent.id) else { return }
+            let removedItemIDs = libraryItems
+                .filter { $0.parent?.id == parent.id && $0.clip?.filename == clip.filename }
+                .map(\.id)
+            let shouldDeleteFile = !isMediaFilenameReferenced(clip.filename, excluding: Set(removedItemIDs))
 
             var assets = fresh.assets ?? TalkieObjectAssets()
             let remaining = (assets.clips ?? []).filter { $0.filename != clip.filename }
@@ -1765,20 +1774,36 @@ struct ScreenshotsScreen: View {
 
             try await repository.updateAssets(id: parent.id, assetsJSON: assets.isEmpty ? nil : assets.toJSON())
 
-            if let fileURL = CaptureMediaFileResolver.clipURL(filename: clip.filename) {
+            if shouldDeleteFile, let fileURL = CaptureMediaFileResolver.clipURL(filename: clip.filename) {
                 try? FileManager.default.removeItem(at: fileURL)
                 CaptureMarkupStorage.deleteSidecar(forAssetURL: fileURL)
                 TKSidecarStore.delete(forAsset: fileURL)
             }
 
             await MainActor.run {
-                libraryItems.removeAll { $0.clip?.filename == clip.filename }
+                libraryItems.removeAll { removedItemIDs.contains($0.id) }
                 if !libraryItems.contains(where: { $0.parent?.id == parent.id }) {
                     objectsWithScreenshots.removeAll { $0.id == parent.id }
                 }
             }
         } catch {
             Log(.ui).error("Failed to remove video clip: \(error)")
+        }
+    }
+
+    private func isMediaFilenameReferenced(_ filename: String, excluding itemIDs: Set<String>) -> Bool {
+        libraryItems.contains { item in
+            guard !itemIDs.contains(item.id) else { return false }
+            if item.screenshot?.filename == filename { return true }
+            if item.clip?.filename == filename { return true }
+            if let visualContext = item.visualContext {
+                if visualContext.sourceClipFilename == filename { return true }
+                if let sourceClipPath = visualContext.sourceClipPath,
+                   URL(fileURLWithPath: sourceClipPath).lastPathComponent == filename {
+                    return true
+                }
+            }
+            return false
         }
     }
 

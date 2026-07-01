@@ -439,7 +439,7 @@ private final class AgentClipPreviewDragHandleView: NSView, NSDraggingSource {
         let icon = NSWorkspace.shared.icon(forFile: item.fileURL.path)
         icon.size = NSSize(width: 34, height: 34)
 
-        let draggingItem = NSDraggingItem(pasteboardWriter: item.fileURL as NSURL)
+        let draggingItem = NSDraggingItem(pasteboardWriter: TalkieInternalDrag.pasteboardItem(for: item.fileURL))
         draggingItem.setDraggingFrame(bounds, contents: icon)
         beginDraggingSession(with: [draggingItem], event: event, source: self)
     }

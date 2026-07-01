@@ -172,15 +172,18 @@ public actor AgentLiveTrayAssetStore {
     private let log = Log(.system)
     private let fileManager: FileManager
     private let trayRootDirectory: URL
+    private let schedulesVisualContextProcessing: Bool
 
     public init(
         fileManager: FileManager = .default,
         trayRootDirectory: URL = URL.applicationSupportDirectory
             .appending(path: "Talkie", directoryHint: .isDirectory)
-            .appending(path: "Tray", directoryHint: .isDirectory)
+            .appending(path: "Tray", directoryHint: .isDirectory),
+        schedulesVisualContextProcessing: Bool = true
     ) {
         self.fileManager = fileManager
         self.trayRootDirectory = trayRootDirectory
+        self.schedulesVisualContextProcessing = schedulesVisualContextProcessing
     }
 
     /// Copies eligible unpinned live tray assets into durable recording storage.
@@ -532,6 +535,64 @@ public actor AgentLiveTrayAssetStore {
         )
     }
 
+    /// Registers a live tray screenshot that is already stored canonically.
+    /// The tray owns only the manifest row; deleting/dismissing the tray item
+    /// must not delete the referenced media file.
+    public func registerScreenshot(
+        fileURL: URL,
+        id: UUID,
+        capturedAt: Date,
+        mode: String,
+        width: Int,
+        height: Int,
+        windowTitle: String? = nil,
+        appName: String? = nil,
+        appBundleID: String? = nil,
+        displayName: String? = nil,
+        pinned: Bool = false,
+        ocrText: String? = nil
+    ) throws -> AgentLiveTrayStoredScreenshot {
+        guard fileManager.fileExists(atPath: fileURL.path) else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+
+        let manifest = Manifest<StoredTrayScreenshot>(
+            directory: screenshotsDirectory,
+            fileManager: fileManager
+        )
+        var items = manifest.loadExistingItems().filter { $0.id != id }
+        items.append(StoredTrayScreenshot(
+            id: id,
+            capturedAt: capturedAt,
+            mode: mode,
+            width: width,
+            height: height,
+            filename: fileURL.lastPathComponent,
+            windowTitle: windowTitle,
+            appName: appName,
+            appBundleID: appBundleID,
+            displayName: displayName,
+            pinned: pinned,
+            ocrText: ocrText,
+            fileURL: fileURL,
+            ownsFile: false
+        ))
+        manifest.save(items)
+        postAssetsDidChange()
+
+        log.info(
+            "[Tray] Agent registered live tray screenshot reference",
+            detail: "id=\(id.uuidString.prefix(8)) mode=\(mode) size=\(width)x\(height)"
+        )
+
+        return AgentLiveTrayStoredScreenshot(
+            id: id,
+            capturedAt: capturedAt,
+            fileURL: fileURL,
+            filename: fileURL.lastPathComponent
+        )
+    }
+
     /// Stores a live tray screen clip using the same manifest/file layout Talkie
     /// already reads. Agent produces the clip; Talkie observes it for view/edit.
     public func storeClip(
@@ -607,6 +668,64 @@ public actor AgentLiveTrayAssetStore {
         )
     }
 
+    /// Registers a live tray clip that is already stored canonically.
+    /// The tray owns only the manifest row; deleting/dismissing the tray item
+    /// must not delete the referenced media file.
+    public func registerClip(
+        fileURL: URL,
+        id: UUID,
+        capturedAt: Date,
+        durationMs: Int,
+        width: Int,
+        height: Int,
+        captureMode: String,
+        windowTitle: String? = nil,
+        appName: String? = nil,
+        displayName: String? = nil,
+        metadataEvents: [RecordingVisualContextEvent] = [],
+        pinned: Bool = false
+    ) throws -> AgentLiveTrayStoredClip {
+        guard fileManager.fileExists(atPath: fileURL.path) else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+
+        let manifest = Manifest<StoredTrayClip>(
+            directory: clipsDirectory,
+            fileManager: fileManager
+        )
+        var items = manifest.loadExistingItems().filter { $0.id != id }
+        items.append(StoredTrayClip(
+            id: id,
+            capturedAt: capturedAt,
+            durationMs: durationMs,
+            filename: fileURL.lastPathComponent,
+            width: width,
+            height: height,
+            captureMode: captureMode,
+            windowTitle: windowTitle,
+            appName: appName,
+            displayName: displayName,
+            metadataEvents: metadataEvents,
+            pinned: pinned,
+            fileURL: fileURL,
+            ownsFile: false
+        ))
+        manifest.save(items)
+        postAssetsDidChange()
+
+        log.info(
+            "[Tray] Agent registered live tray clip reference",
+            detail: "id=\(id.uuidString.prefix(8)) mode=\(captureMode) durationMs=\(durationMs) size=\(width)x\(height)"
+        )
+
+        return AgentLiveTrayStoredClip(
+            id: id,
+            capturedAt: capturedAt,
+            fileURL: fileURL,
+            filename: fileURL.lastPathComponent
+        )
+    }
+
     private var screenshotsDirectory: URL {
         trayRootDirectory.appending(path: "screenshots", directoryHint: .isDirectory)
     }
@@ -632,7 +751,9 @@ public actor AgentLiveTrayAssetStore {
         guard let deleted = items.first(where: { $0.id == id }) else { return false }
         manifest.save(items.filter { $0.id != id })
         manifest.removeFiles(for: [deleted])
-        CaptureMarkupStorage.deleteSidecar(forImageURL: deleted.fileURL)
+        if deleted.ownsFile {
+            CaptureMarkupStorage.deleteSidecar(forImageURL: deleted.fileURL)
+        }
         return true
     }
 
@@ -646,8 +767,17 @@ public actor AgentLiveTrayAssetStore {
 
         for (index, item) in items.enumerated() {
             let timestampMs = max(0, Int(item.capturedAt.timeIntervalSince(recordingStartedAt) * 1000))
-            guard let data = try? Data(contentsOf: item.fileURL),
-                  let savedURL = ScreenshotStorage.save(
+
+            let savedURL: URL?
+            if item.ownsFile {
+                guard let data = try? Data(contentsOf: item.fileURL) else {
+                    log.warning(
+                        "[Tray] Agent failed to read live tray screenshot",
+                        detail: item.filename
+                    )
+                    continue
+                }
+                savedURL = ScreenshotStorage.save(
                     data,
                     recordingId: recordingId,
                     timestampMs: timestampMs,
@@ -659,7 +789,13 @@ public actor AgentLiveTrayAssetStore {
                     windowTitle: item.windowTitle,
                     appName: item.appName,
                     displayName: item.displayName
-                  ) else {
+                )
+            } else {
+                savedURL = item.fileURL
+            }
+
+            guard let savedURL,
+                  fileManager.fileExists(atPath: savedURL.path) else {
                 log.warning(
                     "[Tray] Agent failed to promote live tray screenshot",
                     detail: item.filename
@@ -695,19 +831,27 @@ public actor AgentLiveTrayAssetStore {
 
         for (index, item) in items.enumerated() {
             let timestampMs = max(0, Int(item.capturedAt.timeIntervalSince(recordingStartedAt) * 1000))
-            guard let savedURL = VideoClipStorage.save(
-                item.fileURL,
-                recordingId: recordingId,
-                timestampMs: timestampMs,
-                index: index,
-                capturedAt: item.capturedAt,
-                captureMode: item.captureMode,
-                width: item.width,
-                height: item.height,
-                windowTitle: item.windowTitle,
-                appName: item.appName,
-                displayName: item.displayName
-            ) else {
+            let savedURL: URL?
+            if item.ownsFile {
+                savedURL = VideoClipStorage.save(
+                    item.fileURL,
+                    recordingId: recordingId,
+                    timestampMs: timestampMs,
+                    index: index,
+                    capturedAt: item.capturedAt,
+                    captureMode: item.captureMode,
+                    width: item.width,
+                    height: item.height,
+                    windowTitle: item.windowTitle,
+                    appName: item.appName,
+                    displayName: item.displayName
+                )
+            } else {
+                savedURL = item.fileURL
+            }
+
+            guard let savedURL,
+                  fileManager.fileExists(atPath: savedURL.path) else {
                 log.warning(
                     "[Tray] Agent failed to promote live tray clip",
                     detail: item.filename
@@ -739,7 +883,9 @@ public actor AgentLiveTrayAssetStore {
                 windowTitle: item.windowTitle,
                 appName: item.appName,
                 displayName: item.displayName,
-                metadataEvents: item.metadataEvents
+                metadataEvents: item.metadataEvents,
+                copiesSourceClip: false,
+                schedulesProcessing: schedulesVisualContextProcessing
             ) {
                 visualContexts.append(visualContext)
             } else if RecordingVisualContext.isScreenCaptureMode(item.captureMode) {
@@ -760,6 +906,8 @@ public actor AgentLiveTrayAssetStore {
 
 private protocol StoredTrayAsset: Codable, Identifiable where ID == UUID {
     var filename: String { get }
+    var filePath: String? { get }
+    var ownsFile: Bool { get }
     var fileURL: URL { get set }
 }
 
@@ -776,6 +924,8 @@ private struct StoredTrayScreenshot: StoredTrayAsset {
     let displayName: String?
     var pinned: Bool
     var ocrText: String?
+    let filePath: String?
+    let ownsFile: Bool
 
     var fileURL: URL = URL(fileURLWithPath: "/")
 
@@ -792,6 +942,8 @@ private struct StoredTrayScreenshot: StoredTrayAsset {
         case displayName
         case pinned
         case ocrText
+        case filePath
+        case ownsFile
     }
 
     init(
@@ -807,7 +959,8 @@ private struct StoredTrayScreenshot: StoredTrayAsset {
         displayName: String?,
         pinned: Bool,
         ocrText: String?,
-        fileURL: URL
+        fileURL: URL,
+        ownsFile: Bool = true
     ) {
         self.id = id
         self.capturedAt = capturedAt
@@ -821,6 +974,8 @@ private struct StoredTrayScreenshot: StoredTrayAsset {
         self.displayName = displayName
         self.pinned = pinned
         self.ocrText = ocrText
+        self.filePath = ownsFile ? nil : fileURL.path
+        self.ownsFile = ownsFile
         self.fileURL = fileURL
     }
 
@@ -838,6 +993,8 @@ private struct StoredTrayScreenshot: StoredTrayAsset {
         displayName = try container.decodeIfPresent(String.self, forKey: .displayName)
         pinned = try container.decodeIfPresent(Bool.self, forKey: .pinned) ?? false
         ocrText = try container.decodeIfPresent(String.self, forKey: .ocrText)
+        filePath = try container.decodeIfPresent(String.self, forKey: .filePath)
+        ownsFile = try container.decodeIfPresent(Bool.self, forKey: .ownsFile) ?? true
     }
 
     func encode(to encoder: Encoder) throws {
@@ -854,6 +1011,8 @@ private struct StoredTrayScreenshot: StoredTrayAsset {
         try container.encodeIfPresent(displayName, forKey: .displayName)
         try container.encode(pinned, forKey: .pinned)
         try container.encodeIfPresent(ocrText, forKey: .ocrText)
+        try container.encodeIfPresent(filePath, forKey: .filePath)
+        try container.encode(ownsFile, forKey: .ownsFile)
     }
 }
 
@@ -870,6 +1029,8 @@ private struct StoredTrayClip: StoredTrayAsset {
     let displayName: String?
     let metadataEvents: [RecordingVisualContextEvent]
     var pinned: Bool
+    let filePath: String?
+    let ownsFile: Bool
 
     var fileURL: URL = URL(fileURLWithPath: "/")
 
@@ -886,6 +1047,8 @@ private struct StoredTrayClip: StoredTrayAsset {
         case displayName
         case metadataEvents
         case pinned
+        case filePath
+        case ownsFile
     }
 
     init(
@@ -901,7 +1064,8 @@ private struct StoredTrayClip: StoredTrayAsset {
         displayName: String?,
         metadataEvents: [RecordingVisualContextEvent],
         pinned: Bool,
-        fileURL: URL
+        fileURL: URL,
+        ownsFile: Bool = true
     ) {
         self.id = id
         self.capturedAt = capturedAt
@@ -915,6 +1079,8 @@ private struct StoredTrayClip: StoredTrayAsset {
         self.displayName = displayName
         self.metadataEvents = metadataEvents
         self.pinned = pinned
+        self.filePath = ownsFile ? nil : fileURL.path
+        self.ownsFile = ownsFile
         self.fileURL = fileURL
     }
 
@@ -932,6 +1098,8 @@ private struct StoredTrayClip: StoredTrayAsset {
         displayName = try container.decodeIfPresent(String.self, forKey: .displayName)
         metadataEvents = try container.decodeIfPresent([RecordingVisualContextEvent].self, forKey: .metadataEvents) ?? []
         pinned = try container.decodeIfPresent(Bool.self, forKey: .pinned) ?? false
+        filePath = try container.decodeIfPresent(String.self, forKey: .filePath)
+        ownsFile = try container.decodeIfPresent(Bool.self, forKey: .ownsFile) ?? true
     }
 
     func encode(to encoder: Encoder) throws {
@@ -948,6 +1116,8 @@ private struct StoredTrayClip: StoredTrayAsset {
         try container.encodeIfPresent(displayName, forKey: .displayName)
         try container.encode(metadataEvents, forKey: .metadataEvents)
         try container.encode(pinned, forKey: .pinned)
+        try container.encodeIfPresent(filePath, forKey: .filePath)
+        try container.encode(ownsFile, forKey: .ownsFile)
     }
 
     func overlaps(start: Date, end: Date) -> Bool {
@@ -971,7 +1141,11 @@ private struct Manifest<Item: StoredTrayAsset> {
             let data = try Data(contentsOf: url)
             var items = try Self.decoder.decode([Item].self, from: data)
             for index in items.indices {
-                items[index].fileURL = directory.appending(path: items[index].filename, directoryHint: .notDirectory)
+                if let filePath = items[index].filePath, !filePath.isEmpty {
+                    items[index].fileURL = URL(fileURLWithPath: filePath)
+                } else {
+                    items[index].fileURL = directory.appending(path: items[index].filename, directoryHint: .notDirectory)
+                }
             }
             return items.filter { item in
                 fileManager.fileExists(atPath: item.fileURL.path)
@@ -994,6 +1168,7 @@ private struct Manifest<Item: StoredTrayAsset> {
 
     func removeFiles(for items: [Item]) {
         for item in items {
+            guard item.ownsFile else { continue }
             try? fileManager.removeItem(at: item.fileURL)
             TKSidecarStore.delete(forAsset: item.fileURL)
         }

@@ -18,6 +18,9 @@ final class LiveCaptureMarkupOverlayController: NSObject {
     /// host runs region selection and bakes the strokes in. Recording leaves
     /// this nil (it commits via Done instead).
     var onCapture: (() -> Void)?
+    /// Called for keyboard-level safety exits that need owner cleanup beyond
+    /// the web overlay itself, such as agent quick-markup chrome panels.
+    var onDismissRequest: (() -> Void)?
 
     /// Swaps the toolbar's commit cluster: `false` (default) shows Done for the
     /// recording-markup flow; `true` shows the screenshot button for desktop ink.
@@ -274,14 +277,14 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         removeSafetyMonitors()
 
         localSafetyKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard Self.isEmergencyDismissEvent(event) else { return event }
-            self?.dismiss(discardLayers: false)
+            guard Self.isKeyboardDismissEvent(event) else { return event }
+            self?.requestSafetyDismiss()
             return nil
         }
         globalSafetyKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard Self.isEmergencyDismissEvent(event) else { return }
+            guard Self.isKeyboardDismissEvent(event) else { return }
             Task { @MainActor in
-                self?.dismiss(discardLayers: false)
+                self?.requestSafetyDismiss()
             }
         }
 
@@ -356,10 +359,16 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         NSScreen.screens.first { NSMouseInRect(point, $0.frame, false) }
     }
 
-    private static func isEmergencyDismissEvent(_ event: NSEvent) -> Bool {
-        guard event.keyCode == 53 else { return false }
-        let activeModifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
-        return activeModifiers.isSuperset(of: [.command, .option, .control, .shift])
+    private static func isKeyboardDismissEvent(_ event: NSEvent) -> Bool {
+        event.keyCode == 53
+    }
+
+    private func requestSafetyDismiss() {
+        if let onDismissRequest {
+            onDismissRequest()
+        } else {
+            dismiss(discardLayers: false)
+        }
     }
 
     private func setWebDockHidden(_ hidden: Bool) {
@@ -422,7 +431,7 @@ final class LiveCaptureMarkupOverlayController: NSObject {
                 self?.requestCapture()
             },
             onCancel: { [weak self] in
-                self?.cancel()
+                self?.requestSafetyDismiss()
             }
         )
         controlsPanel.orderFrontRegardless()

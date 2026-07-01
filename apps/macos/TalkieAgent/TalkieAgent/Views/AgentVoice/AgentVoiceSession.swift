@@ -416,12 +416,13 @@ final class AgentVoiceSession: ObservableObject {
             if let sessionId = result.sessionId {
                 continuationSessionId = sessionId
             }
+            let waitsForExecutor = result.sessionId != nil
             executorRuntimeName = agentRuntimeDisplayName(for: result.providerId) ?? "Agent Runtime Dispatcher"
             routeMode = .async
             replyText = result.ack
-            executorBranchState = result.sessionId == nil ? .done : .working
+            executorBranchState = waitsForExecutor ? .working : .done
             phase = .receiving
-            if autoPlayEnabled {
+            if autoPlayEnabled && !waitsForExecutor {
                 playReply()
             }
 
@@ -528,8 +529,8 @@ final class AgentVoiceSession: ObservableObject {
             guard !Task.isCancelled else { return nil }
             let status = try await AgentRuntimeClient.shared.status()
             if let activity = status.activities.first(where: { $0.sessionId == sessionId }) {
-                let state = activity.state.lowercased()
-                if ["done", "completed", "complete", "succeeded", "failed", "cancelled", "canceled"].contains(state) {
+                if Self.isTerminalRuntimeState(activity.state)
+                    || Self.isTerminalRuntimeState(activity.agentSessionStatus) {
                     return activity
                 }
                 updatePartialRuntimeOutput(activity, previousOutput: &lastPartialOutput)
@@ -538,6 +539,32 @@ final class AgentVoiceSession: ObservableObject {
         }
 
         throw AgentRuntimeClientError.runtimeTimedOut
+    }
+
+    private static func isTerminalRuntimeState(_ value: String?) -> Bool {
+        guard let value else { return false }
+        let normalized = value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacing("_", with: "-")
+            .replacing(" ", with: "-")
+        return [
+            "done",
+            "completed",
+            "complete",
+            "succeeded",
+            "success",
+            "finished",
+            "failed",
+            "cancelled",
+            "canceled",
+            "error",
+            "errored",
+            "interrupted",
+            "timeout",
+            "timed-out",
+            "timedout",
+        ].contains(normalized)
     }
 
     private func updatePartialRuntimeOutput(

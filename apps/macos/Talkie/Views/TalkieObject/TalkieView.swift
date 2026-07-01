@@ -412,6 +412,10 @@ struct TalkieView: View {
             }
         }
         .onDrop(of: [.fileURL, .image, .pdf], isTargeted: $isDropTargeted) { providers in
+            guard !TalkieInternalDrag.isInternal(providers) else {
+                isDropTargeted = false
+                return false
+            }
             handleDrop(providers)
             return true
         }
@@ -1197,6 +1201,8 @@ struct TalkieView: View {
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) {
+        guard !TalkieInternalDrag.isInternal(providers) else { return }
+
         for provider in providers {
             if provider.hasItemConformingToTypeIdentifier("public.file-url") {
                 provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { data, _ in

@@ -344,10 +344,12 @@ public class XPCServiceManager<ServiceProtocol> {
 
                         // Use error-handling proxy to catch XPC failures during verification
                         guard let proxy = conn.remoteObjectProxyWithErrorHandler({ error in
+                            log.info(" ❌ Ping verification XPC error for \(serviceName): \(error.localizedDescription)")
                             lock.lock()
                             if !completed { completed = true; lock.unlock(); conn.invalidate(); continuation.resume(returning: false) }
                             else { lock.unlock() }
                         }) as? ServiceProtocol else {
+                            log.info(" ❌ Ping verification proxy type mismatch for \(serviceName)")
                             lock.lock()
                             if !completed { completed = true; lock.unlock(); conn.invalidate(); continuation.resume(returning: false) }
                             else { lock.unlock() }
@@ -497,10 +499,12 @@ public class XPCServiceManager<ServiceProtocol> {
 
                         // Use error-handling proxy to catch XPC failures during verification
                         guard let proxy = conn.remoteObjectProxyWithErrorHandler({ error in
+                            log.info(" ❌ Endpoint verification XPC error: \(error.localizedDescription)")
                             lock.lock()
                             if !completed { completed = true; lock.unlock(); conn.invalidate(); continuation.resume(returning: false) }
                             else { lock.unlock() }
                         }) as? ServiceProtocol else {
+                            log.info(" ❌ Endpoint verification proxy type mismatch")
                             lock.lock()
                             if !completed { completed = true; lock.unlock(); conn.invalidate(); continuation.resume(returning: false) }
                             else { lock.unlock() }
