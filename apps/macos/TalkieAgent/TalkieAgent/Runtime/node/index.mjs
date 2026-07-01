@@ -13,7 +13,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
-import { delimiter, dirname, join } from 'node:path';
+import { basename, delimiter, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const runtimeDir = dirname(fileURLToPath(import.meta.url));
@@ -39,6 +39,11 @@ const jobStorePath = process.env.TALKIE_AGENT_ACTIVITY_STORE
   ?? (existsSync(defaultJobStorePath) || !existsSync(legacyJobStorePath) ? defaultJobStorePath : legacyJobStorePath);
 const agentRuntimeHome = process.env.TALKIE_AGENT_RUNTIME_HOME
   ?? join(homedir(), '.talkie', 'agent-runtime');
+const defaultAgentEffort = normalizeEffort(
+  process.env.TALKIE_AGENT_SESSION_EFFORT
+  ?? process.env.TALKIE_AGENT_REASONING_EFFORT
+  ?? 'medium'
+);
 const runtimeBase = {
   id: 'agent-node-dispatcher',
   name: 'Agent Runtime Dispatcher',
@@ -523,6 +528,7 @@ async function invoke(invocation, runtime) {
     channelCode: invocation.channel?.code ?? null,
     instruction: invocation.instruction,
     transcript: invocation.transcript,
+    attachments: normalizedAttachments(invocation.attachments),
     topLevelModel: invocation.topLevelModel ?? null,
     runtimeId: runtime.id,
     runtimeName: runtime.name,
@@ -633,10 +639,10 @@ async function runInvocationWorker(sessionId) {
       latest.output = outputChunks.join('');
     } else if (event.event === 'turn:end') {
       terminalStatus = event.status;
-      latest.state = event.status === 'completed' ? 'done' : 'failed';
+      latest.state = stateForTerminalTurnStatus(event.status);
       latest.output = finalOutput(registry, agentSessionId, outputChunks);
       latest.spokenSummary = spokenSummaryForOutput(latest.output);
-      latest.error = event.status === 'completed' ? null : `Agent session ended with status: ${event.status}`;
+      latest.error = latest.state === 'done' ? null : `Agent session ended with status: ${event.status}`;
     } else if (event.event === 'turn:error') {
       terminalStatus = 'failed';
       latest.state = 'failed';
@@ -689,10 +695,16 @@ function adapterOptions(record, workspace) {
   const systemPrompt = [
     'You are the Talkie agent running inside the OpenScout agent runtime.',
     'You receive one user request that was routed to background work.',
+    `Default effort level: ${defaultAgentEffort}. Start at medium effort unless the task explicitly needs deeper investigation.`,
     'Be direct, report what you did, and do not modify files unless the request explicitly asks for changes.',
     `Workspace: ${workspace}`,
   ].join('\n');
-  const options = { systemPrompt };
+  const options = {
+    systemPrompt,
+    effort: defaultAgentEffort,
+    reasoningEffort: defaultAgentEffort,
+    reasoning_effort: defaultAgentEffort,
+  };
 
   if (model) {
     options.model = model;
@@ -701,8 +713,53 @@ function adapterOptions(record, workspace) {
   return options;
 }
 
+function stateForTerminalTurnStatus(value) {
+  switch (normalizeStatusToken(value)) {
+    case 'completed':
+    case 'complete':
+    case 'done':
+    case 'succeeded':
+    case 'success':
+    case 'finished':
+    case 'resolved':
+      return 'done';
+    case 'failed':
+    case 'cancelled':
+    case 'canceled':
+    case 'error':
+    case 'errored':
+    case 'interrupted':
+    case 'timeout':
+    case 'timed-out':
+    case 'timedout':
+      return 'failed';
+    default:
+      return 'failed';
+  }
+}
+
+function normalizeEffort(value) {
+  const normalized = normalizeString(value)?.toLowerCase();
+  if (['low', 'medium', 'high'].includes(normalized)) {
+    return normalized;
+  }
+  return 'medium';
+}
+
+function normalizeStatusToken(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[_\s]+/g, '-');
+}
+
 function promptForRecord(record, workspace) {
   const context = conversationContextFor(record);
+  const attachments = attachmentContextFor(record);
   return [
     'Talkie agent request',
     '',
@@ -710,6 +767,8 @@ function promptForRecord(record, workspace) {
     `Channel: ${record.channelCode ?? 'CH-01'}`,
     `Conversation: ${conversationIdFor(record)}`,
     record.parentSessionId ? `Parent session: ${record.parentSessionId}` : null,
+    attachments.length > 0 ? 'Attachments:' : null,
+    ...attachments,
     '',
     context.length > 0 ? 'Recent conversation context:' : null,
     ...context,
@@ -898,6 +957,7 @@ function publicActivity(record) {
     channelCode: record.channelCode,
     instruction: record.instruction,
     transcript: record.transcript,
+    attachments: normalizedAttachments(record.attachments),
     output: record.output ?? null,
     spokenSummary: record.spokenSummary ?? spokenSummaryForOutput(record.output),
     bridgeStatus: record.bridgeStatus,
@@ -939,6 +999,87 @@ function normalizeString(value) {
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizedAttachments(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((attachment) => {
+    if (!attachment || typeof attachment !== 'object') {
+      return [];
+    }
+
+    const id = normalizeString(attachment.id) ?? cryptoSafeId();
+    const name = normalizeString(attachment.name)
+      ?? normalizeString(attachment.fileName)
+      ?? inferredAttachmentName(attachment)
+      ?? 'Attachment';
+    const mediaType = normalizeString(attachment.mediaType) ?? normalizeString(attachment.mimeType) ?? 'application/octet-stream';
+    const path = normalizeString(attachment.path);
+    const url = normalizeString(attachment.url);
+    const systemImage = normalizeString(attachment.systemImage) ?? systemImageForAttachment(mediaType, name);
+
+    return [{
+      id,
+      name,
+      mediaType,
+      path,
+      url,
+      systemImage,
+    }];
+  });
+}
+
+function attachmentContextFor(record) {
+  return normalizedAttachments(record.attachments).map((attachment, index) => {
+    const locator = attachment.url ?? attachment.path ?? 'metadata only';
+    return `${index + 1}. ${attachment.name} (${attachment.mediaType}) - ${locator}`;
+  });
+}
+
+function inferredAttachmentName(attachment) {
+  const locator = normalizeString(attachment.path) ?? normalizeString(attachment.url);
+  if (!locator) {
+    return null;
+  }
+
+  try {
+    if (/^[a-z][a-z0-9+.-]*:/i.test(locator)) {
+      const url = new URL(locator);
+      return basename(decodeURIComponent(url.pathname)) || null;
+    }
+  } catch {
+    // Fall back to path-style inference below.
+  }
+
+  return basename(locator) || null;
+}
+
+function systemImageForAttachment(mediaType, name) {
+  const lowerType = mediaType.toLowerCase();
+  const lowerName = name.toLowerCase();
+  if (lowerType.startsWith('image/')) {
+    return 'photo';
+  }
+  if (lowerType.startsWith('audio/')) {
+    return 'waveform';
+  }
+  if (lowerType.startsWith('video/')) {
+    return 'film';
+  }
+  if (lowerType === 'application/pdf' || lowerName.endsWith('.pdf')) {
+    return 'doc.richtext';
+  }
+  if (lowerType.startsWith('text/') || lowerName.endsWith('.txt') || lowerName.endsWith('.md')) {
+    return 'doc.text';
+  }
+  return 'paperclip';
+}
+
+function cryptoSafeId() {
+  return `attachment-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
 function slugify(value) {

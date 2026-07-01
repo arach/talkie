@@ -48,7 +48,7 @@ struct EngineSettingsSection: View {
                             if engineClient.isConnected, let status = engineClient.status {
                                 Text("\(status.totalTranscriptions) transcriptions processed")
                                     .font(.system(size: 10))
-                                    .foregroundColor(TalkieTheme.textTertiary)
+                                    .foregroundColor(TalkieTheme.textSecondary)
                             } else if let error = engineClient.lastError {
                                 Text(error)
                                     .font(.system(size: 10))
@@ -56,7 +56,7 @@ struct EngineSettingsSection: View {
                             } else {
                                 Text("Starting transcription service...")
                                     .font(.system(size: 10))
-                                    .foregroundColor(TalkieTheme.textTertiary)
+                                    .foregroundColor(TalkieTheme.textSecondary)
                             }
                         }
 
@@ -76,7 +76,7 @@ struct EngineSettingsSection: View {
                                 .padding(.horizontal, Spacing.sm)
                                 .padding(.vertical, 6)
                                 .background(Color.accentColor.opacity(0.15))
-                                .cornerRadius(CornerRadius.xs)
+                                .clipShape(.rect(cornerRadius: CornerRadius.xs))
                             }
                             .buttonStyle(.plain)
                         }
@@ -104,7 +104,7 @@ struct EngineSettingsSection: View {
 
                                 if model.id != models.last?.id {
                                     Divider()
-                                        .background(TalkieTheme.hover)
+                                        .background(TalkieTheme.divider)
                                 }
                             }
                         }
@@ -137,7 +137,7 @@ struct EngineSettingsSection: View {
                 VStack(alignment: .leading, spacing: Spacing.md) {
                     Text("The transcription engine is hosted inside TalkieAgent and stays available whenever Agent is running. It supports multiple speech recognition models including Whisper and Parakeet, all running locally via Apple's Neural Engine.")
                         .font(.system(size: 10))
-                        .foregroundColor(TalkieTheme.textTertiary)
+                        .foregroundColor(TalkieTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
 
                     // Technical details
@@ -383,7 +383,7 @@ struct ModelManagementRow: View {
             Button(action: onSelect) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 14))
-                    .foregroundColor(isSelected ? .accentColor : TalkieTheme.textMuted)
+                    .foregroundColor(isSelected ? .accentColor : (model.isDownloaded ? TalkieTheme.textSecondary : TalkieTheme.textMuted))
             }
             .buttonStyle(.plain)
             .disabled(!model.isDownloaded)
@@ -393,7 +393,7 @@ struct ModelManagementRow: View {
                 HStack(spacing: 6) {
                     Text(model.displayName)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(model.isDownloaded ? .white : TalkieTheme.textTertiary)
+                        .foregroundColor(model.isDownloaded ? TalkieTheme.textPrimary : TalkieTheme.textSecondary)
 
                     if model.isLoaded {
                         Text("LOADED")
@@ -402,21 +402,21 @@ struct ModelManagementRow: View {
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
                             .background(SemanticColor.success.opacity(0.2))
-                            .cornerRadius(3)
+                            .clipShape(.rect(cornerRadius: 3))
                     }
 
                     Text(model.sizeDescription)
                         .font(.system(size: 8))
-                        .foregroundColor(TalkieTheme.textMuted)
+                        .foregroundColor(TalkieTheme.textSecondary)
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1)
-                        .background(TalkieTheme.hover)
-                        .cornerRadius(3)
+                        .background(OpsSurface.control)
+                        .clipShape(.rect(cornerRadius: 3))
                 }
 
                 Text(model.description)
                     .font(.system(size: 9))
-                    .foregroundColor(TalkieTheme.textMuted)
+                    .foregroundColor(model.isDownloaded ? TalkieTheme.textSecondary : TalkieTheme.textTertiary)
             }
 
             Spacer()
@@ -453,7 +453,8 @@ struct ModelManagementRow: View {
         }
         .padding(.vertical, Spacing.sm)
         .padding(.horizontal, Spacing.xs)
-        .background(isHovered ? TalkieTheme.divider : Color.clear)
+        .background(isHovered ? OpsSurface.hover : Color.clear)
+        .clipShape(.rect(cornerRadius: OpsRadius.standard))
         .onHover { isHovered = $0 }
     }
 }
@@ -472,10 +473,14 @@ struct ModelInfoBadge: View {
             Text(label)
                 .font(.system(size: 9))
         }
-        .foregroundColor(TalkieTheme.textTertiary)
+        .foregroundColor(TalkieTheme.textSecondary)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(TalkieTheme.hover)
-        .cornerRadius(4)
+        .background(OpsSurface.control)
+        .clipShape(.rect(cornerRadius: 4))
+        .overlay(
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(OpsHairline.subtle, lineWidth: 1)
+        )
     }
 }

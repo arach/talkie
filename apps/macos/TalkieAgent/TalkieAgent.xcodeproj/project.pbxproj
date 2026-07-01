@@ -12,6 +12,8 @@
 		E3D8B2A1F7C5409B6A1E8D23 /* DebugKit in Frameworks */ = {isa = PBXBuildFile; productRef = A1F7C5E3D8B2409B6A1E8D24 /* DebugKit */; };
 		E4A9C672D1B24D7AA9F25C11 /* TalkieEngineCore in Frameworks */ = {isa = PBXBuildFile; productRef = E4A9C672D1B24D7AA9F25C12 /* TalkieEngineCore */; };
 		F8D3B2A1E7C5409B6A2E9D31 /* TalkieKit in Frameworks */ = {isa = PBXBuildFile; productRef = D9F3A5E1C8B74026A2D8E9F2 /* TalkieKit */; };
+		HDTK00012EF00000000A11CE1 /* HudsonUI in Frameworks */ = {isa = PBXBuildFile; productRef = HDTKPROD12EF00000000A11CE5 /* HudsonUI */; };
+		SCOUTCAP12EF00000000A11CE2 /* ScoutCapabilities in Frameworks */ = {isa = PBXBuildFile; productRef = SCOUTPROD12EF00000000A11CE6 /* ScoutCapabilities */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -56,6 +58,8 @@
 				E4A9C672D1B24D7AA9F25C11 /* TalkieEngineCore in Frameworks */,
 				F8D3B2A1E7C5409B6A2E9D31 /* TalkieKit in Frameworks */,
 				53GRDB0012EE70000004EEAF4 /* GRDB in Frameworks */,
+				HDTK00012EF00000000A11CE1 /* HudsonUI in Frameworks */,
+				SCOUTCAP12EF00000000A11CE2 /* ScoutCapabilities in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -138,6 +142,8 @@
 				A1F7C5E3D8B2409B6A1E8D24 /* DebugKit */,
 				E4A9C672D1B24D7AA9F25C12 /* TalkieEngineCore */,
 				D9F3A5E1C8B74026A2D8E9F2 /* TalkieKit */,
+				HDTKPROD12EF00000000A11CE5 /* HudsonUI */,
+				SCOUTPROD12EF00000000A11CE6 /* ScoutCapabilities */,
 			);
 			productName = TalkieAgent;
 			productReference = 539FB5B92EE6785C004EEAF4 /* TalkieAgent.app */;
@@ -216,6 +222,8 @@
 				B7E9A4D2C1F630E58A3B7C16 /* XCLocalSwiftPackageReference "../../../packages/swift/DebugKit" */,
 				E4A9C672D1B24D7AA9F25C13 /* XCLocalSwiftPackageReference "../TalkieEngineCore" */,
 				C8F3A5D1E9B74026A2D8E9F1 /* XCLocalSwiftPackageReference "../TalkieKit" */,
+				HDTKPKG12EF00000000A11CE3 /* XCLocalSwiftPackageReference "../../../../hudson" */,
+				SCOUTPKG12EF00000000A11CE4 /* XCLocalSwiftPackageReference "../../../../openscout/packages/scout-native-core" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 539FB5BA2EE6785C004EEAF4 /* Products */;
@@ -468,7 +476,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "$(TALKIE_CODE_SIGN_IDENTITY)";
 				CODE_SIGN_STYLE = "$(TALKIE_CODE_SIGN_STYLE)";
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 22;
+				CURRENT_PROJECT_VERSION = 20;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -485,7 +493,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2.5.28;
+				MARKETING_VERSION = 2.5.26;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_BUNDLE_ID_DEBUG)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -508,7 +516,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 22;
+				CURRENT_PROJECT_VERSION = 20;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -525,7 +533,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2.5.28;
+				MARKETING_VERSION = 2.5.26;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -542,11 +550,11 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 22;
+				CURRENT_PROJECT_VERSION = 20;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 2.5.28;
+				MARKETING_VERSION = 2.5.26;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_TESTS_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -561,11 +569,11 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 22;
+				CURRENT_PROJECT_VERSION = 20;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 2.5.28;
+				MARKETING_VERSION = 2.5.26;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_TESTS_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -579,10 +587,10 @@
 			baseConfigurationReference = 084FDC674076926357ED425D /* Signing.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 22;
+				CURRENT_PROJECT_VERSION = 20;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 2.5.28;
+				MARKETING_VERSION = 2.5.26;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_UITESTS_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -596,10 +604,10 @@
 			baseConfigurationReference = 084FDC674076926357ED425D /* Signing.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 22;
+				CURRENT_PROJECT_VERSION = 20;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 2.5.28;
+				MARKETING_VERSION = 2.5.26;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_UITESTS_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -662,6 +670,14 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../TalkieEngineCore;
 		};
+		HDTKPKG12EF00000000A11CE3 /* XCLocalSwiftPackageReference "../../../../hudson" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../../../hudson;
+		};
+		SCOUTPKG12EF00000000A11CE4 /* XCLocalSwiftPackageReference "../../../../openscout/packages/scout-native-core" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "../../../../openscout/packages/scout-native-core";
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -692,6 +708,14 @@
 		E4A9C672D1B24D7AA9F25C12 /* TalkieEngineCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = TalkieEngineCore;
+		};
+		HDTKPROD12EF00000000A11CE5 /* HudsonUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = HudsonUI;
+		};
+		SCOUTPROD12EF00000000A11CE6 /* ScoutCapabilities */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ScoutCapabilities;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

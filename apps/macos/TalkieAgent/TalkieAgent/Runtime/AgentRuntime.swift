@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import ScoutCapabilities
 import TalkieKit
 
 private let runtimeLog = Log(.workflow)
@@ -56,6 +57,40 @@ struct AgentModelUse: Codable, Sendable {
     let modelId: String
 }
 
+struct AgentInvocationAttachment: Identifiable, Codable, Equatable, Sendable {
+    let id: UUID
+    var name: String
+    var mediaType: String
+    var path: String?
+    var url: String?
+    var systemImage: String
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        mediaType: String,
+        path: String? = nil,
+        url: String? = nil,
+        systemImage: String = "paperclip"
+    ) {
+        self.id = id
+        self.name = name
+        self.mediaType = mediaType
+        self.path = path
+        self.url = url
+        self.systemImage = systemImage
+    }
+
+    var scoutMessageAttachment: MessageAttachment {
+        MessageAttachment(
+            id: id.uuidString,
+            mediaType: mediaType,
+            fileName: name,
+            url: url ?? path
+        )
+    }
+}
+
 struct AgentInvocation: Codable, Sendable {
     let id: UUID
     let channel: AgentChannel
@@ -66,6 +101,7 @@ struct AgentInvocation: Codable, Sendable {
     let conversationId: String?
     let parentSessionId: String?
     let source: String?
+    var attachments: [AgentInvocationAttachment] = []
 }
 
 struct AgentRuntimeResult: Sendable {

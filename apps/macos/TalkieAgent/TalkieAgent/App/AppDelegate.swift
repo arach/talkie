@@ -3451,6 +3451,15 @@ struct SelectionSpeechPlaybackResult {
     let model: String?
 }
 
+struct SelectionSpeechAudio {
+    let data: Data
+    let format: String
+    let mimeType: String
+    let voiceId: String
+    let provider: String
+    let model: String?
+}
+
 @MainActor
 final class SelectionSpeechPlaybackController: NSObject, ObservableObject, AVAudioPlayerDelegate {
     static let shared = SelectionSpeechPlaybackController()
@@ -3474,15 +3483,29 @@ final class SelectionSpeechPlaybackController: NSObject, ObservableObject, AVAud
     func speakSelection(_ text: String) async throws -> SelectionSpeechPlaybackResult {
         stopPlayback(notify: false)
 
+        let synthesis = try await synthesizeSelectionAudio(text)
+        try playSynthesizedAudio(synthesis)
+        return SelectionSpeechPlaybackResult(
+            voiceId: synthesis.voiceId,
+            provider: synthesis.provider,
+            model: synthesis.model
+        )
+    }
+
+    func synthesizeSelectionAudio(_ text: String) async throws -> SelectionSpeechAudio {
         var lastError: Error?
         for voiceId in candidateVoiceIDs() {
             do {
                 let synthesis = try await synthesizeSelection(text: text, selectedVoiceId: voiceId)
-                try playAudioFile(at: synthesis.audioURL)
                 if synthesis.voiceId != voiceId {
                     log.info("Quick selection TTS used normalized voice", detail: "requested=\(voiceId) used=\(synthesis.voiceId)")
                 }
-                return SelectionSpeechPlaybackResult(
+                let audioData = try Data(contentsOf: synthesis.audioURL)
+                let descriptor = speechAudioDescriptor(for: synthesis.audioURL)
+                return SelectionSpeechAudio(
+                    data: audioData,
+                    format: descriptor.format,
+                    mimeType: descriptor.mimeType,
                     voiceId: synthesis.voiceId,
                     provider: synthesis.provider,
                     model: synthesis.model
@@ -3496,8 +3519,13 @@ final class SelectionSpeechPlaybackController: NSObject, ObservableObject, AVAud
         throw lastError ?? SelectionSpeechError.audioPlaybackUnavailable
     }
 
-    private func playAudioFile(at url: URL) throws {
-        let player = try AVAudioPlayer(contentsOf: url)
+    func playSynthesizedAudio(_ audio: SelectionSpeechAudio) throws {
+        stopPlayback(notify: false)
+        try playAudioData(audio.data)
+    }
+
+    private func playAudioData(_ data: Data) throws {
+        let player = try AVAudioPlayer(data: data)
         player.delegate = self
         player.enableRate = true
         player.isMeteringEnabled = true
@@ -3512,6 +3540,23 @@ final class SelectionSpeechPlaybackController: NSObject, ObservableObject, AVAud
         isPaused = false
         startMetering()
         notifyPlaybackStarted()
+    }
+
+    private func speechAudioDescriptor(for url: URL) -> (format: String, mimeType: String) {
+        switch url.pathExtension.lowercased() {
+        case "mp3":
+            return ("mp3", "audio/mpeg")
+        case "wav":
+            return ("wav", "audio/wav")
+        case "caf":
+            return ("caf", "audio/x-caf")
+        case "m4a":
+            return ("m4a", "audio/mp4")
+        case "aac":
+            return ("aac", "audio/aac")
+        default:
+            return ("unknown", "application/octet-stream")
+        }
     }
 
     private func normalizeSelectionVoiceId(_ voiceId: String) -> String {

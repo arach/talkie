@@ -57,6 +57,7 @@ struct AgentRuntimeActivitySnapshot: Decodable, Equatable, Sendable {
     let channelCode: String?
     let instruction: String?
     let transcript: String?
+    let attachments: [AgentInvocationAttachment]?
     let output: String?
     let spokenSummary: String?
     let bridgeStatus: String?

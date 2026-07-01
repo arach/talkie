@@ -5,6 +5,7 @@
 
 import Foundation
 import AppKit
+import ScoutCapabilities
 import SwiftUI
 import TalkieKit
 
@@ -15,6 +16,20 @@ enum AgentHomeJobStatus: String {
     case running
     case done
     case failed
+
+    var isActive: Bool {
+        switch self {
+        case .waiting, .running: return true
+        case .done, .failed: return false
+        }
+    }
+
+    var isTerminal: Bool {
+        switch self {
+        case .done, .failed: return true
+        case .waiting, .running: return false
+        }
+    }
 
     var title: String {
         switch self {
@@ -40,6 +55,15 @@ enum AgentHomeJobStatus: String {
         case .running: return .blue
         case .done: return .green
         case .failed: return .red
+        }
+    }
+
+    var scoutLifecycleState: ConversationLifecycleState {
+        switch self {
+        case .waiting: return .queued
+        case .running: return .working
+        case .done: return .completed
+        case .failed: return .failed
         }
     }
 }
@@ -234,6 +258,7 @@ struct AgentHomeExecutorJob: Identifiable, Decodable, Equatable {
     let channelCode: String?
     let instruction: String?
     let transcript: String?
+    let attachments: [AgentInvocationAttachment]
     let output: String?
     let spokenSummary: String?
     let bridgeStatus: String?
@@ -250,16 +275,13 @@ struct AgentHomeExecutorJob: Identifiable, Decodable, Equatable {
     var id: String { sessionId }
 
     var status: AgentHomeJobStatus {
-        switch state.lowercased() {
-        case "working", "running", "started":
-            return .running
-        case "completed", "complete", "done", "succeeded":
-            return .done
-        case "failed", "cancelled", "canceled":
-            return .failed
-        default:
-            return .waiting
+        if let status = Self.status(for: state) {
+            return status
         }
+        if let agentSessionStatus, let status = Self.status(for: agentSessionStatus) {
+            return status
+        }
+        return .waiting
     }
 
     var title: String {
@@ -304,6 +326,7 @@ struct AgentHomeExecutorJob: Identifiable, Decodable, Equatable {
         self.channelCode = snapshot.channelCode
         self.instruction = snapshot.instruction
         self.transcript = snapshot.transcript
+        self.attachments = snapshot.attachments ?? []
         self.output = snapshot.output
         self.spokenSummary = snapshot.spokenSummary
         self.bridgeStatus = snapshot.bridgeStatus
@@ -338,6 +361,7 @@ struct AgentHomeExecutorJob: Identifiable, Decodable, Equatable {
         self.channelCode = try container.decodeIfPresent(String.self, forKey: .channelCode)
         self.instruction = try container.decodeIfPresent(String.self, forKey: .instruction)
         self.transcript = try container.decodeIfPresent(String.self, forKey: .transcript)
+        self.attachments = try container.decodeIfPresent([AgentInvocationAttachment].self, forKey: .attachments) ?? []
         self.output = try container.decodeIfPresent(String.self, forKey: .output)
         self.spokenSummary = try container.decodeIfPresent(String.self, forKey: .spokenSummary)
         self.bridgeStatus = try container.decodeIfPresent(String.self, forKey: .bridgeStatus)
@@ -371,6 +395,7 @@ struct AgentHomeExecutorJob: Identifiable, Decodable, Equatable {
         case channelCode
         case instruction
         case transcript
+        case attachments
         case output
         case spokenSummary
         case bridgeStatus
@@ -393,6 +418,29 @@ struct AgentHomeExecutorJob: Identifiable, Decodable, Equatable {
         }
 
         return ISO8601DateFormatter().date(from: value)
+    }
+
+    private static func status(for value: String) -> AgentHomeJobStatus? {
+        switch normalizedStatusToken(value) {
+        case "queued", "queue", "pending", "waiting", "waking", "starting", "created", "new", "acked":
+            return .waiting
+        case "working", "running", "started", "in-progress", "inprogress", "processing", "receiving", "active":
+            return .running
+        case "completed", "complete", "done", "succeeded", "success", "finished", "resolved":
+            return .done
+        case "failed", "cancelled", "canceled", "error", "errored", "interrupted", "timeout", "timed-out", "timedout":
+            return .failed
+        default:
+            return nil
+        }
+    }
+
+    private static func normalizedStatusToken(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacing("_", with: "-")
+            .replacing(" ", with: "-")
     }
 }
 
@@ -431,6 +479,7 @@ struct AgentHomeExecutorTurn: Identifiable {
     let updatedAt: Date
     let transcript: String?
     let instruction: String?
+    let attachments: [AgentInvocationAttachment]
     let ack: String?
     let response: String?
     let spokenSummary: String?
@@ -463,6 +512,38 @@ struct AgentHomeExecutorTurn: Identifiable {
     /// (what Talkie would say aloud), then the longer response, then the ack.
     var spokenBody: String? {
         spokenSummary?.nonEmpty ?? response?.nonEmpty ?? ack?.nonEmpty
+    }
+
+    var isLive: Bool {
+        status.isActive
+    }
+
+    var lifecycleState: ConversationLifecycleState {
+        status.scoutLifecycleState
+    }
+
+    var liveHeadline: String {
+        switch status {
+        case .waiting:
+            return "Starting up"
+        case .running:
+            return parentSessionId == nil && continuedFromSessionId == nil
+                ? "Working"
+                : "Continuing this chat"
+        case .done:
+            return "Turn complete"
+        case .failed:
+            return "Needs attention"
+        }
+    }
+
+    var liveDetail: String? {
+        if status == .failed {
+            return error?.nonEmpty ?? "The agent did not finish this turn."
+        }
+        return response?.nonEmpty
+            ?? spokenSummary?.nonEmpty
+            ?? ack?.nonEmpty
     }
 
     /// Body the You speaker line should show — what the user actually said or
@@ -512,6 +593,7 @@ struct AgentHomeExecutorTurn: Identifiable {
         updatedAt = job.updatedDate
         transcript = turnTranscript
         instruction = turnInstruction
+        attachments = job.attachments
         ack = job.ack.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
         response = job.output?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
         spokenSummary = job.spokenSummary?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
@@ -557,17 +639,6 @@ struct AgentHomeExecutorTurn: Identifiable {
             executorDetail = job.error?.nonEmpty ?? "I couldn't finish this turn."
         }
 
-        let responseDetail: String
-        if let output = job.output?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty {
-            responseDetail = output
-        } else if job.status == .failed {
-            responseDetail = job.error?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
-                ?? "The agent did not return a reply."
-        } else {
-            responseDetail = job.ack.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
-                ?? executorDetail
-        }
-
         let branchLabel: String
         switch job.status {
         case .waiting:
@@ -579,11 +650,6 @@ struct AgentHomeExecutorTurn: Identifiable {
         case .failed:
             branchLabel = "Needs attention"
         }
-
-        let branchDetail = job.spokenSummary?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
-            ?? job.output?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
-            ?? responseDetail.nonEmpty
-            ?? executorDetail
 
         let branchMetadata = [
             job.continuedFromSessionId == nil ? nil : "follow-up",
@@ -601,7 +667,7 @@ struct AgentHomeExecutorTurn: Identifiable {
                 runtimeId: runtimeId,
                 providerId: job.providerId ?? topLevelProvider,
                 modelId: job.modelId ?? topLevelModel,
-                detail: branchDetail,
+                detail: executorDetail,
                 metadata: branchMetadata,
                 timestamp: job.updatedDate
             ),
@@ -628,11 +694,11 @@ final class AgentHomeActivityStore: ObservableObject {
     private let defaultConversationId = "agent-home-main"
 
     var activeJobs: [AgentHomeExecutorJob] {
-        executorJobs.filter { $0.status == .waiting || $0.status == .running }
+        executorJobs.filter { $0.status.isActive }
     }
 
     var completedJobs: [AgentHomeExecutorJob] {
-        executorJobs.filter { $0.status == .done || $0.status == .failed }
+        executorJobs.filter { $0.status.isTerminal }
     }
 
     var conversationTopics: [AgentHomeConversationTopic] {
@@ -641,7 +707,7 @@ final class AgentHomeActivityStore: ObservableObject {
         }
 
         let projected = grouped.map { conversationId, jobs in
-            let activeCount = jobs.filter { $0.status == .waiting || $0.status == .running }.count
+            let activeCount = jobs.filter { $0.status.isActive }.count
             let sortedJobs = jobs.sorted { $0.updatedDate > $1.updatedDate }
             let lastActivityAt = sortedJobs.first?.updatedDate
             return AgentHomeConversationTopic(
@@ -739,14 +805,17 @@ final class AgentHomeActivityStore: ObservableObject {
 
     func invokeAgent(
         text: String,
+        attachments: [AgentInvocationAttachment] = [],
         conversationId explicitConversationId: String? = nil,
-        parentSessionId explicitParentSessionId: String? = nil
+        parentSessionId explicitParentSessionId: String? = nil,
+        continueLatestTurn: Bool = true
     ) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !isInvokingAgent else { return }
 
         let conversationId = explicitConversationId ?? currentConversationId
-        let parentSessionId = explicitParentSessionId ?? latestSessionId(in: conversationId)
+        let parentSessionId = explicitParentSessionId
+            ?? (continueLatestTurn ? latestContinuableSessionId(in: conversationId) : nil)
         isInvokingAgent = true
         invokeError = nil
 
@@ -764,7 +833,8 @@ final class AgentHomeActivityStore: ObservableObject {
                 requestedAt: Date(),
                 conversationId: conversationId,
                 parentSessionId: parentSessionId,
-                source: "agent-home"
+                source: "agent-home",
+                attachments: attachments
             )
             _ = try await AgentRuntimeClient.shared.invoke(invocation)
             await refreshRuntimeStatus()
@@ -777,6 +847,19 @@ final class AgentHomeActivityStore: ObservableObject {
         }
 
         isInvokingAgent = false
+    }
+
+    func cancelLatestActiveTurn(in conversationId: String) async {
+        guard let job = executorJobs
+            .filter({ ($0.conversationId?.nonEmpty ?? defaultConversationId) == conversationId })
+            .filter({ $0.status.isActive })
+            .max(by: { $0.createdDate < $1.createdDate })
+        else {
+            return
+        }
+
+        await AgentRuntimeClient.shared.cancel(sessionId: job.sessionId)
+        await refreshRuntimeStatus()
     }
 
     private func refreshRuntimeStatus() async {
@@ -817,9 +900,10 @@ final class AgentHomeActivityStore: ObservableObject {
         }
     }
 
-    private func latestSessionId(in conversationId: String) -> String? {
+    private func latestContinuableSessionId(in conversationId: String) -> String? {
         executorJobs
             .filter { ($0.conversationId?.nonEmpty ?? defaultConversationId) == conversationId }
+            .filter { $0.status.isTerminal }
             .max { $0.createdDate < $1.createdDate }?
             .sessionId
     }
@@ -857,7 +941,7 @@ final class AgentHomeActivityStore: ObservableObject {
         }
 
         let turnCount = jobs.count
-        let turnLabel = turnCount == 1 ? "1 turn" : "\(turnCount) turns"
+        let turnLabel = turnCount == 1 ? "1 message" : "\(turnCount) messages"
         if activeCount > 0 {
             let activeLabel = activeCount == 1 ? "working now" : "\(activeCount) replies working"
             return "\(activeLabel) · \(turnLabel)"
