@@ -373,6 +373,7 @@ final class BridgeManager {
             port: port
         )
         let encryptionPinned = existingPairedMac.map { Self.isEncryptionPinned($0.id) } ?? false
+        let streamEncryptionPinned = existingPairedMac.map { Self.isStreamEncryptionPinned($0.id) } ?? false
 
         do {
             let result = try await Task.detached(priority: .userInitiated) { [client] in
@@ -392,6 +393,7 @@ final class BridgeManager {
 
                         await client.configureAuth(deviceId: localDeviceId, sharedSecret: sharedSecret)
                         await client.setEncryptionRequired(encryptionPinned)
+                        await client.setStreamEncryptionRequired(streamEncryptionPinned)
                         try await client.connect()
 
                         let response = try await client.pair(
@@ -463,6 +465,9 @@ final class BridgeManager {
                 updateActiveMacContactDate(.now)
                 if let storedPairedMacId, await client.didNegotiateEncryption {
                     Self.pinEncryption(storedPairedMacId)
+                }
+                if let storedPairedMacId, await client.didNegotiateStreamEncryption {
+                    Self.pinStreamEncryption(storedPairedMacId)
                 }
                 justCompletedPairing = true
                 status = .connected
@@ -538,6 +543,27 @@ final class BridgeManager {
         UserDefaults.standard.removeObject(forKey: encryptionPinKey(macId))
     }
 
+    // Stream (SSE/WS per-frame) encryption pin — tracked separately from the body
+    // pin because an older server may legitimately support body encryption only.
+    private static func streamEncryptionPinKey(_ macId: String) -> String {
+        "bridge.streamEncryptionRequired.\(macId)"
+    }
+
+    static func isStreamEncryptionPinned(_ macId: String) -> Bool {
+        guard !macId.isEmpty else { return false }
+        return UserDefaults.standard.bool(forKey: streamEncryptionPinKey(macId))
+    }
+
+    static func pinStreamEncryption(_ macId: String) {
+        guard !macId.isEmpty else { return }
+        UserDefaults.standard.set(true, forKey: streamEncryptionPinKey(macId))
+    }
+
+    static func clearStreamEncryptionPin(_ macId: String) {
+        guard !macId.isEmpty else { return }
+        UserDefaults.standard.removeObject(forKey: streamEncryptionPinKey(macId))
+    }
+
     func connect() async {
         retryTask?.cancel()
         retryTask = nil
@@ -554,6 +580,7 @@ final class BridgeManager {
         let deviceClass = currentDeviceClass
         let macId = bridgeConfiguration.id
         let encryptionPinned = Self.isEncryptionPinned(macId)
+        let streamEncryptionPinned = Self.isStreamEncryptionPinned(macId)
 
         status = .connecting
         errorMessage = nil
@@ -568,9 +595,10 @@ final class BridgeManager {
                     privateKeyBase64: privateKeyBase64,
                     serverPublicKeyBase64: serverPublicKeyBase64
                 )
-                // Apply the per-Mac encryption pin so client.connect() refuses a
+                // Apply the per-Mac encryption pins so client.connect() refuses a
                 // plaintext downgrade if this Mac has used encryption before.
                 await client.setEncryptionRequired(encryptionPinned)
+                await client.setStreamEncryptionRequired(streamEncryptionPinned)
                 try await client.connect()
                 _ = try await client.companionState(
                     deviceId: configuredDeviceId,
@@ -592,6 +620,9 @@ final class BridgeManager {
             if await client.didNegotiateEncryption {
                 Self.pinEncryption(macId)
             }
+            if await client.didNegotiateStreamEncryption {
+                Self.pinStreamEncryption(macId)
+            }
             status = .connected
             retryCount = 0
             startCompanionPolling()
@@ -605,7 +636,7 @@ final class BridgeManager {
             status = .error
             errorMessage = "Auth keys missing - please re-pair"
             retryCount = maxRetries
-        } catch BridgeError.httpError(401) {
+        } catch BridgeError.httpError(401, detail: _) {
             lastConnectionAuthFailed = true
             status = .disconnected
             if awaitingPairingApproval {
@@ -737,9 +768,10 @@ final class BridgeManager {
         disconnect()
 
         privateKeyStore.delete(id: id)
-        // Drop the encryption pin so re-pairing this Mac on a trusted network
+        // Drop the encryption pins so re-pairing this Mac on a trusted network
         // can re-negotiate cleanly.
         Self.clearEncryptionPin(id)
+        Self.clearStreamEncryptionPin(id)
         configurationStore.update { configuration in
             configuration.bridge.pairedMacs.removeAll(where: { $0.id == id })
             if configuration.bridge.pairedMacs.isEmpty {
@@ -961,6 +993,25 @@ final class BridgeManager {
         return response
     }
 
+    func sendMemo(body: MemoTransferRequest) async throws -> MemoTransferResponse {
+        guard isPaired else {
+            throw BridgeError.notConfigured
+        }
+
+        if status != .connected {
+            await connect()
+        }
+
+        guard status == .connected else {
+            throw BridgeError.connectionFailed
+        }
+
+        let response = try await client.sendMemo(body: body)
+        lastSuccessfulContactAt = .now
+        updateActiveMacContactDate(.now)
+        return response
+    }
+
     func sendHyperScanCapture(
         body: HyperScanUploadRequest
     ) async throws -> HyperScanUploadResponse {
@@ -1134,7 +1185,7 @@ final class BridgeManager {
                 level: .success
             )
             return result
-        } catch BridgeError.httpError(401) {
+        } catch BridgeError.httpError(401, detail: _) {
             recordCredentialImportEvent(
                 "The Mac rejected this iPhone's stored bridge signature.",
                 level: .warning
@@ -1691,6 +1742,7 @@ final class BridgeManager {
         let serverPublicKeyBase64 = activePairedMac.serverPublicKey
         let currentName = sanitizedMacName(activePairedMac.pairedMacName) ?? activePairedMac.hostname
         let encryptionPinned = Self.isEncryptionPinned(activePairedMac.id)
+        let streamEncryptionPinned = Self.isStreamEncryptionPinned(activePairedMac.id)
 
         guard !hostname.isEmpty, port > 0, !serverPublicKeyBase64.isEmpty else {
             throw BridgeError.notConfigured
@@ -1718,6 +1770,7 @@ final class BridgeManager {
 
             await client.configureAuth(deviceId: localDeviceId, sharedSecret: sharedSecret)
             await client.setEncryptionRequired(encryptionPinned)
+            await client.setStreamEncryptionRequired(streamEncryptionPinned)
             try await client.connect()
 
             let response = try await client.pair(
@@ -1769,6 +1822,9 @@ final class BridgeManager {
             if await client.didNegotiateEncryption {
                 Self.pinEncryption(storedPairedMacId)
             }
+            if await client.didNegotiateStreamEncryption {
+                Self.pinStreamEncryption(storedPairedMacId)
+            }
             await connect()
 
         case .pendingApproval:
@@ -1805,7 +1861,10 @@ final class BridgeManager {
             switch bridgeError {
             case .messageFailed(let reason):
                 return reason
-            case .httpError(let code):
+            case .httpError(let code, detail: let detail):
+                if let detail = detail?.trimmingCharacters(in: .whitespacesAndNewlines), !detail.isEmpty {
+                    return "The Mac bridge returned HTTP \(code): \(detail)"
+                }
                 return "The Mac bridge returned HTTP \(code)."
             case .connectionFailed:
                 return "Could not connect to the Mac bridge."

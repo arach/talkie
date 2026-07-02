@@ -119,8 +119,16 @@ public final class TalkieLogger: @unchecked Sendable {
 
     // MARK: - Configuration
 
+    // Release builds default to .info so verbose debug payloads (full responses,
+    // transcript fragments) never reach the persistent unified log.
+    #if DEBUG
+    public static let defaultMinimumLevel: LogLevel = .debug
+    #else
+    public static let defaultMinimumLevel: LogLevel = .info
+    #endif
+
     private var source: LogSource = .talkieMemos
-    private var minimumLevel: LogLevel = .debug
+    private var minimumLevel: LogLevel = TalkieLogger.defaultMinimumLevel
     private var osLoggers: [LogCategory: Logger] = [:]
 
     private let queue = DispatchQueue(label: "jdi.talkie.logger", qos: .utility)
@@ -133,7 +141,13 @@ public final class TalkieLogger: @unchecked Sendable {
 
     /// Configure the logger for a specific app/extension
     /// Call once at startup
-    public static func configure(source: LogSource, minimumLevel: LogLevel = .debug) {
+    public static func configure(source: LogSource) {
+        configure(source: source, minimumLevel: TalkieLogger.defaultMinimumLevel)
+    }
+
+    /// Configure the logger for a specific app/extension with an explicit minimum level.
+    /// Call once at startup.
+    public static func configure(source: LogSource, minimumLevel: LogLevel) {
         shared.queue.sync {
             shared.source = source
             shared.minimumLevel = minimumLevel
@@ -194,16 +208,25 @@ public final class TalkieLogger: @unchecked Sendable {
         let filename = URL(fileURLWithPath: file).deletingPathExtension().lastPathComponent
         let location = "[\(filename):\(line)]"
 
-        // Always use NSLog for extensions (most reliable for debugging)
+        // NSLog is debug-only: it bypasses os_log privacy redaction entirely, so in
+        // release the persistent unified log would carry every message in cleartext.
+        #if DEBUG
         let nslogMsg = "[\(source.rawValue)] \(level.emoji) [\(category.rawValue.uppercased())] \(message)\(fullDetail.isEmpty ? "" : " - \(fullDetail)") \(location)"
         NSLog("%@", nslogMsg)
+        #endif
 
         // Also log to os.Logger for Console.app/Instruments
         queue.async { [weak self] in
             guard let self = self else { return }
             if let osLogger = self.osLoggers[category] {
                 let osMsg = "\(message)\(fullDetail.isEmpty ? "" : " - \(fullDetail)") \(location)"
+                #if DEBUG
                 osLogger.log(level: level.osLogType, "\(osMsg, privacy: .public)")
+                #else
+                // Default (.private) redaction: message content stays out of
+                // sysdiagnoses and paired-Mac log captures in release builds.
+                osLogger.log(level: level.osLogType, "\(osMsg)")
+                #endif
             }
         }
     }
