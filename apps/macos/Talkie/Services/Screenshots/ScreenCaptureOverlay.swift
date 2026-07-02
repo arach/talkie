@@ -736,15 +736,15 @@ private final class OverlayView: NSView {
 
     private func windowIDUnderCursor(includeFrame: Bool = false, forceRefresh: Bool) -> CGWindowID? {
         let screenPoint = NSEvent.mouseLocation
-        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
-        let mouseYInCG = primaryHeight - screenPoint.y
+        let referenceHeight = Self.windowCoordinateReferenceHeight()
+        let cgPoint = Self.cgPoint(forCocoaPoint: screenPoint, referenceHeight: referenceHeight)
 
-        refreshWindowCandidatesIfNeeded(primaryHeight: primaryHeight, forceRefresh: forceRefresh)
+        refreshWindowCandidatesIfNeeded(referenceHeight: referenceHeight, forceRefresh: forceRefresh)
 
         for candidate in windowCandidates {
             let frame = candidate.frameCG
-            if screenPoint.x >= frame.minX, screenPoint.x <= frame.maxX,
-               mouseYInCG >= frame.minY, mouseYInCG <= frame.maxY {
+            if cgPoint.x >= frame.minX, cgPoint.x <= frame.maxX,
+               cgPoint.y >= frame.minY, cgPoint.y <= frame.maxY {
                 if includeFrame {
                     highlightedWindowFrame = candidate.highlightFrameCocoa
                 }
@@ -756,11 +756,11 @@ private final class OverlayView: NSView {
     }
 
     private func refreshWindowCandidatesForCurrentScreen(forceRefresh: Bool) {
-        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
-        refreshWindowCandidatesIfNeeded(primaryHeight: primaryHeight, forceRefresh: forceRefresh)
+        let referenceHeight = Self.windowCoordinateReferenceHeight()
+        refreshWindowCandidatesIfNeeded(referenceHeight: referenceHeight, forceRefresh: forceRefresh)
     }
 
-    private func refreshWindowCandidatesIfNeeded(primaryHeight: CGFloat, forceRefresh: Bool) {
+    private func refreshWindowCandidatesIfNeeded(referenceHeight: CGFloat, forceRefresh: Bool) {
         let nowNs = DispatchTime.now().uptimeNanoseconds
         if !forceRefresh, nowNs - windowCandidatesUpdatedAtNs < windowCacheRefreshIntervalNs {
             return
@@ -769,7 +769,7 @@ private final class OverlayView: NSView {
         let overlayWindowID = window.map { CGWindowID($0.windowNumber) }
 
         if forceRefresh {
-            windowCandidates = Self.buildWindowCandidates(primaryHeight: primaryHeight, overlayWindowID: overlayWindowID)
+            windowCandidates = Self.buildWindowCandidates(referenceHeight: referenceHeight, overlayWindowID: overlayWindowID)
             windowCandidatesUpdatedAtNs = nowNs
             return
         }
@@ -784,7 +784,7 @@ private final class OverlayView: NSView {
             guard let self else { return }
 
             let candidates = await Task.detached(priority: .utility) {
-                Self.buildWindowCandidates(primaryHeight: primaryHeight, overlayWindowID: overlayWindowID)
+                Self.buildWindowCandidates(referenceHeight: referenceHeight, overlayWindowID: overlayWindowID)
             }.value
 
             guard !Task.isCancelled else { return }
@@ -794,7 +794,22 @@ private final class OverlayView: NSView {
         }
     }
 
-    nonisolated private static func buildWindowCandidates(primaryHeight: CGFloat, overlayWindowID: CGWindowID?) -> [WindowCandidate] {
+    private static func windowCoordinateReferenceHeight() -> CGFloat {
+        NSScreen.screens.first(where: { $0.frame.origin == .zero })?.frame.height
+            ?? NSScreen.screens.first?.frame.height
+            ?? 0
+    }
+
+    nonisolated private static func cgPoint(forCocoaPoint point: CGPoint, referenceHeight: CGFloat) -> CGPoint {
+        CGPoint(x: point.x, y: referenceHeight - point.y)
+    }
+
+    nonisolated private static func cocoaFrame(forCGWindowFrame frame: CGRect, referenceHeight: CGFloat) -> CGRect {
+        CGRect(x: frame.minX, y: referenceHeight - frame.minY - frame.height, width: frame.width, height: frame.height)
+            .standardized
+    }
+
+    nonisolated private static func buildWindowCandidates(referenceHeight: CGFloat, overlayWindowID: CGWindowID?) -> [WindowCandidate] {
         guard let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
             return []
         }
@@ -813,24 +828,18 @@ private final class OverlayView: NSView {
             if w < 4 || h < 4 { continue }
 
             let frameCG = CGRect(x: x, y: y, width: w, height: h)
-            let frameCocoa = CGRect(x: x, y: primaryHeight - y - h, width: w, height: h)
+            let frameCocoa = Self.cocoaFrame(forCGWindowFrame: frameCG, referenceHeight: referenceHeight)
             candidates.append(
                 WindowCandidate(
                     id: windowID,
                     frameCG: frameCG,
                     snapFrameCocoa: frameCocoa.standardized,
-                    highlightFrameCocoa: Self.trimmedWindowHighlightFrame(frameCocoa)
+                    highlightFrameCocoa: frameCocoa.standardized
                 )
             )
         }
 
         return candidates
-    }
-
-    nonisolated private static func trimmedWindowHighlightFrame(_ frame: CGRect) -> CGRect {
-        let horizontalInset = min(6, frame.width * 0.04)
-        let verticalInset = min(20, frame.height * 0.08)
-        return frame.insetBy(dx: horizontalInset, dy: verticalInset).standardized
     }
 
     func handleControlKey(_ event: NSEvent) -> Bool {

@@ -31,12 +31,26 @@ actor BridgeClient {
     /// BridgeManager to persist the per-Mac pin.
     var didNegotiateEncryption: Bool { serverSupportsEncryption }
 
+    /// Whether the most recent connect negotiated per-frame stream encryption —
+    /// read by BridgeManager to persist the per-Mac stream pin.
+    var didNegotiateStreamEncryption: Bool { serverSupportsStreamEncryption }
+
     func setEncryptionRequired(_ required: Bool) {
         encryptionRequired = required
     }
 
+    func setStreamEncryptionRequired(_ required: Bool) {
+        streamEncryptionRequired = required
+    }
+
     /// Per-frame stream encryption (SSE/WS), negotiated from /health.encStream.
     private var serverSupportsStreamEncryption = false
+
+    /// Per-Mac pin for stream encryption: once a Mac has sealed streams, a later
+    /// /health without encStream is treated as a downgrade attack, same as the
+    /// body-encryption pin. /health is plaintext and unauthenticated, so it must
+    /// not be able to talk us back down to cleartext frames.
+    private var streamEncryptionRequired = false
 
     /// Whether outgoing traffic should be sealed: we hold the derived key and
     /// either the server advertised support this session or it's pinned-required.
@@ -45,10 +59,12 @@ actor BridgeClient {
     }
 
     /// Whether stream frames should be sealed/opened — gated on the server
-    /// advertising per-frame stream support. Old servers → plaintext streams,
-    /// unchanged (fully backward compatible).
+    /// advertising per-frame stream support, or on the per-Mac pin. Old servers
+    /// that never advertised encStream → plaintext streams, unchanged (fully
+    /// backward compatible); servers that ever sealed streams can't be talked
+    /// back down by a stripped /health.
     private var shouldEncryptStreams: Bool {
-        encryptionKey != nil && serverSupportsStreamEncryption
+        encryptionKey != nil && (serverSupportsStreamEncryption || streamEncryptionRequired)
     }
 
     // MARK: - Configuration
@@ -82,6 +98,7 @@ actor BridgeClient {
         self.serverSupportsEncryption = false
         self.serverSupportsStreamEncryption = false
         self.encryptionRequired = false
+        self.streamEncryptionRequired = false
     }
 
     var isConfigured: Bool {
@@ -108,6 +125,9 @@ actor BridgeClient {
         // unauthenticated) /health no longer advertises it, refuse — a network
         // attacker may have stripped the flag to force cleartext.
         if encryptionRequired && !serverSupportsEncryption {
+            throw BridgeError.encryptionDowngrade
+        }
+        if streamEncryptionRequired && !serverSupportsStreamEncryption {
             throw BridgeError.encryptionDowngrade
         }
         if let serverTimeValue = health.time {
@@ -396,6 +416,11 @@ actor BridgeClient {
         return try JSONDecoder().decode(IngestResponse.self, from: data)
     }
 
+    func sendMemo(body: MemoTransferRequest) async throws -> MemoTransferResponse {
+        let data = try await post("/memos/\(body.memoId)", body: body, timeout: 120)
+        return try JSONDecoder().decode(MemoTransferResponse.self, from: data)
+    }
+
     // MARK: - Text-to-Speech
 
     func requestTTS(text: String, voice: String = "echo", provider: String = "openai") async throws -> TTSResponse {
@@ -474,7 +499,7 @@ actor BridgeClient {
 
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-            throw BridgeError.httpError(statusCode)
+            throw BridgeError.httpError(statusCode, detail: nil)
         }
 
         // Parse SSE stream
@@ -649,7 +674,7 @@ actor BridgeClient {
         }
 
         guard httpResponse.statusCode == 200 else {
-            throw BridgeError.httpError(httpResponse.statusCode)
+            throw BridgeError.httpError(httpResponse.statusCode, detail: bridgeErrorDetail(from: data))
         }
 
         return data
@@ -692,7 +717,7 @@ actor BridgeClient {
         }
 
         guard httpResponse.statusCode == 200 else {
-            throw BridgeError.httpError(httpResponse.statusCode)
+            throw BridgeError.httpError(httpResponse.statusCode, detail: bridgeErrorDetail(from: data))
         }
 
         return encrypted ? try open(data) : data
@@ -739,7 +764,7 @@ actor BridgeClient {
         }
 
         guard httpResponse.statusCode == 200 else {
-            throw BridgeError.httpError(httpResponse.statusCode)
+            throw BridgeError.httpError(httpResponse.statusCode, detail: bridgeErrorDetail(from: data))
         }
 
         return encrypted ? try open(data) : data
@@ -766,6 +791,31 @@ actor BridgeClient {
         }
         let response = try JSONDecoder().decode(ErrorResponse.self, from: data)
         return response.serverTime
+    }
+
+    private func bridgeErrorDetail(from data: Data) -> String? {
+        struct ErrorResponse: Decodable {
+            let error: String?
+            let message: String?
+            let details: String?
+            let hint: String?
+        }
+
+        guard let response = try? JSONDecoder().decode(ErrorResponse.self, from: data) else {
+            return String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .nilIfEmpty
+        }
+
+        return [
+            response.error,
+            response.message,
+            response.details,
+            response.hint,
+        ]
+        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty }
+        .joined(separator: " ")
+        .nilIfEmpty
     }
 
     // MARK: - Transport Encryption (v2)
@@ -1019,6 +1069,39 @@ struct IngestResponse: Codable {
     let objectId: String?
     let storedAt: String?
     let error: String?
+}
+
+// MARK: - Memo Transfer Types
+
+struct MemoTransferAudio: Codable {
+    let filename: String?
+    let mimeType: String?
+    let fileSizeBytes: Int64
+    let dataBase64: String
+}
+
+struct MemoTransferRequest: Codable {
+    let schemaVersion: Int
+    let memoId: String
+    let title: String?
+    let transcript: String?
+    let notes: String?
+    let summary: String?
+    let durationSeconds: Double
+    let createdAt: String
+    let lastModified: String?
+    let originDeviceId: String?
+    let sourceDeviceName: String?
+    let audio: MemoTransferAudio?
+    let attachments: [MemoAttachmentUploadItem]
+}
+
+struct MemoTransferResponse: Codable {
+    let success: Bool
+    let memoId: String
+    let storedAt: String
+    let attachmentCount: Int
+    let hasAudio: Bool
 }
 
 // MARK: - Memo Attachment Types
@@ -1478,7 +1561,7 @@ struct WindowCapture: Codable, Identifiable {
 enum BridgeError: LocalizedError {
     case notConfigured
     case invalidResponse
-    case httpError(Int)
+    case httpError(Int, detail: String?)
     case connectionFailed
     case pairingRejected
     case messageFailed(String)
@@ -1490,7 +1573,10 @@ enum BridgeError: LocalizedError {
             return "Bridge not configured. Scan QR code first."
         case .invalidResponse:
             return "Invalid response from bridge"
-        case .httpError(let code):
+        case .httpError(let code, detail: let detail):
+            if let detail = detail?.trimmingCharacters(in: .whitespacesAndNewlines), !detail.isEmpty {
+                return "HTTP \(code): \(detail)"
+            }
             return "HTTP error: \(code)"
         case .connectionFailed:
             return "Could not connect to Mac"
@@ -1501,5 +1587,11 @@ enum BridgeError: LocalizedError {
         case .encryptionDowngrade:
             return "This Mac previously used an encrypted connection but is now offering an unencrypted one. Refusing to connect — this can indicate a network attacker. Re-pair on a trusted network if your Mac server genuinely changed."
         }
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
     }
 }

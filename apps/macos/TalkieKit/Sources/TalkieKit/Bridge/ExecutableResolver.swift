@@ -231,7 +231,6 @@ public enum ExecutableResolver {
             "tailscale": [
                 "/opt/homebrew/bin/tailscale",
                 "/usr/local/bin/tailscale",
-                "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
             ],
             "gh": [
                 "/opt/homebrew/bin/gh",
@@ -244,6 +243,14 @@ public enum ExecutableResolver {
             "npx": [
                 "/opt/homebrew/bin/npx",
                 "/usr/local/bin/npx",
+            ],
+            "ffmpeg": [
+                "/opt/homebrew/bin/ffmpeg",
+                "/usr/local/bin/ffmpeg",
+            ],
+            "ffprobe": [
+                "/opt/homebrew/bin/ffprobe",
+                "/usr/local/bin/ffprobe",
             ],
         ]
     }()

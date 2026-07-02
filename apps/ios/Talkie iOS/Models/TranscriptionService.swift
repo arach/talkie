@@ -223,6 +223,7 @@ class TranscriptionService {
             guard let memo = try? context.existingObject(with: memoObjectID) as? VoiceMemo else { return }
             memo.isTranscribing = true
             try? context.save()
+            VoiceMemoStore.publishChange(context: context)
             AppLogger.transcription.info("Starting transcription for: \(filename)")
         }
 
@@ -240,7 +241,7 @@ class TranscriptionService {
 
                 switch result {
                 case .success(let transcription):
-                    AppLogger.transcription.info("Transcription succeeded: \(transcription.prefix(50))...")
+                    AppLogger.transcription.info("Transcription succeeded (\(transcription.count) chars)")
                     // Create versioned transcript (also sets legacy field for compatibility)
                     memo.addSystemTranscript(
                         content: transcription,

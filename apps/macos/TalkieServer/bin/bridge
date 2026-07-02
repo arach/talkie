@@ -35,6 +35,26 @@ HOSTS_ENTRIES="
 127.0.0.1   dev.usetalkie.com
 "
 
+resolve_bun_bin() {
+    if [ -n "${TALKIE_BUN_BIN:-}" ] && [ -x "$TALKIE_BUN_BIN" ]; then
+        echo "$TALKIE_BUN_BIN"
+        return 0
+    fi
+
+    local from_path
+    from_path="$(command -v bun 2>/dev/null || true)"
+
+    local candidate
+    for candidate in "$from_path" /opt/homebrew/bin/bun /usr/local/bin/bun "$HOME/.bun/bin/bun"; do
+        if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -46,6 +66,29 @@ log_info() { echo -e "${BLUE}→${NC} $1"; }
 log_success() { echo -e "${GREEN}✓${NC} $1"; }
 log_warn() { echo -e "${YELLOW}⚠${NC} $1"; }
 log_error() { echo -e "${RED}✗${NC} $1"; }
+
+healthy_url_for_port() {
+    local port="$1"
+    local candidate
+
+    for candidate in "127.0.0.1" "localhost"; do
+        if curl -s "http://$candidate:$port/health" > /dev/null 2>&1; then
+            echo "http://$candidate:$port/health"
+            return 0
+        fi
+    done
+
+    if command -v tailscale > /dev/null 2>&1; then
+        while IFS= read -r candidate; do
+            if [ -n "$candidate" ] && curl -s "http://$candidate:$port/health" > /dev/null 2>&1; then
+                echo "http://$candidate:$port/health"
+                return 0
+            fi
+        done < <(tailscale ip -4 2>/dev/null || true)
+    fi
+
+    return 1
+}
 
 ensure_log_dir() {
     mkdir -p "$LOG_DIR"
@@ -63,6 +106,7 @@ install_plists() {
     # Generate plists with correct paths for this machine
     generate_plist "$PROD_LABEL" "" "$LAUNCH_AGENTS/$PROD_PLIST" "bridge.log"
     generate_plist "$DEV_LABEL" "--local" "$LAUNCH_AGENTS/$DEV_PLIST" "bridge-dev.log"
+    chmod 644 "$LAUNCH_AGENTS/$PROD_PLIST" "$LAUNCH_AGENTS/$DEV_PLIST"
 
     log_success "Installed to $LAUNCH_AGENTS"
     log_info "Paths configured for: $BRIDGE_DIR"
@@ -73,8 +117,15 @@ generate_plist() {
     local extra_args="$2"
     local output_path="$3"
     local log_name="$4"
+    local bun_path
+    if ! bun_path="$(resolve_bun_bin)"; then
+        log_error "Could not find bun. Install Bun or set TALKIE_BUN_BIN."
+        exit 1
+    fi
+    local bun_dir
+    bun_dir="$(dirname "$bun_path")"
 
-    local args="<string>/opt/homebrew/bin/bun</string>
+    local args="<string>$bun_path</string>
         <string>run</string>
         <string>src/server.ts</string>"
 
@@ -102,7 +153,7 @@ generate_plist() {
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <string>$bun_dir:/opt/homebrew/bin:/usr/local/bin:$HOME/.bun/bin:/usr/bin:/bin</string>
     </dict>
 
     <key>RunAtLoad</key>
@@ -148,8 +199,9 @@ start_prod() {
     launchctl start "$PROD_LABEL" 2>/dev/null || true
 
     sleep 1
-    if curl -s http://localhost:8765/health > /dev/null 2>&1; then
-        log_success "Production bridge running at http://dev.usetalkie.com:8765"
+    local health_url
+    if health_url="$(healthy_url_for_port 8765)"; then
+        log_success "Production bridge running at ${health_url%/health}"
     else
         log_warn "Started but health check failed - check logs: bridge logs"
     fi
@@ -196,8 +248,9 @@ show_status() {
     echo ""
 
     # apps/ios/Production (8765)
-    if curl -s http://localhost:8765/health > /dev/null 2>&1; then
-        local health=$(curl -s http://localhost:8765/health 2>/dev/null)
+    local health_url
+    if health_url="$(healthy_url_for_port 8765)"; then
+        local health=$(curl -s "$health_url" 2>/dev/null)
         echo -e "${GREEN}●${NC} :8765 apps/ios/Tailscale"
         echo "$health" | jq -r '"    Version: \(.version)  Host: \(.hostname)"' 2>/dev/null || echo "    Running"
     else
@@ -220,8 +273,14 @@ show_status() {
     # Dev (8767)
     if curl -s http://localhost:8767/health > /dev/null 2>&1; then
         local health=$(curl -s http://localhost:8767/health 2>/dev/null)
-        echo -e "${GREEN}●${NC} :8767 Dev (local mode)"
-        echo "$health" | jq -r '"    Version: \(.version)"' 2>/dev/null || echo "    Running"
+        local service=$(echo "$health" | jq -r '.service // empty' 2>/dev/null)
+        if [ "$service" = "TalkieAgent" ]; then
+            echo -e "${GREEN}●${NC} :8767 TalkieAgent"
+            echo "$health" | jq -r '"    Version: \(.version)"' 2>/dev/null || echo "    Running"
+        else
+            echo -e "${GREEN}●${NC} :8767 Dev (local mode)"
+            echo "$health" | jq -r '"    Version: \(.version)"' 2>/dev/null || echo "    Running"
+        fi
     else
         echo -e "${RED}○${NC} :8767 Dev - not running"
     fi

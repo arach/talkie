@@ -51,8 +51,21 @@ async function deviceKey(request: Request): Promise<CryptoKey | null> {
  * the route `body`, or `undefined` to leave Elysia's default parsing in place.
  */
 export async function decryptRequestBody(request: Request): Promise<unknown | undefined> {
-  if (!isEncryptedRequest(request)) return undefined;
   if (request.method === "GET" || request.method === "HEAD") return undefined;
+
+  if (!isEncryptedRequest(request)) {
+    const contentType = request.headers.get("content-type") ?? "";
+    if (!contentType.toLowerCase().includes("application/json")) return undefined;
+
+    // Read plaintext JSON from a clone so Elysia's parser does not exhaust the
+    // original stream before HMAC verification runs.
+    try {
+      const raw = await request.clone().text();
+      return raw.length ? JSON.parse(raw) : {};
+    } catch {
+      return undefined;
+    }
+  }
 
   const key = await deviceKey(request);
   if (!key) return undefined;

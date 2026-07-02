@@ -506,6 +506,14 @@ struct WidgetMemoRowView: View {
                     .font(.system(size: 6))
                 Text(" ")
                 Text(formatFileSize(memo.fileSize))
+                // Transcription state: a tiny hollow dot flags a memo that
+                // isn't transcribed yet; transcribed memos stay clean (no
+                // glyph) to keep the row quiet. Matches the mono metadata line.
+                if !memo.hasTranscription {
+                    Text("  ·  ").foregroundColor(colors.tertiaryForeground.opacity(0.6))
+                    Image(systemName: "circle")
+                        .font(.system(size: 6))
+                }
                 if memo.isSeenByMac {
                     Text("  ·  ").foregroundColor(colors.tertiaryForeground.opacity(0.6))
                     Image(systemName: "desktopcomputer")

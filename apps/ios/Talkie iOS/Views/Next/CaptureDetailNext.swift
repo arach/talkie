@@ -592,24 +592,29 @@ struct CaptureDetailNext: View {
     /// instead of starting stacked on top of the chrome tray.
     private var actionTray: some View {
         HStack(spacing: 8) {
-            trayChip(systemImage: "play.circle", label: "Listen") {
-                AppShellRouter.shared.openReadAloud(source: ReadAloudSource(
-                    title: store.capture.siteName ?? "Capture",
-                    text: store.capture.bodyText,
-                    meta: "CAPTURE · \(store.capture.wordCount) WORDS",
-                    sourceURL: store.capture.sourceURL.flatMap(URL.init(string:))
-                ))
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    trayChip(systemImage: "play.circle", label: "Listen") {
+                        AppShellRouter.shared.openReadAloud(source: ReadAloudSource(
+                            title: store.capture.siteName ?? "Capture",
+                            text: store.capture.bodyText,
+                            meta: "CAPTURE · \(store.capture.wordCount) WORDS",
+                            sourceURL: store.capture.sourceURL.flatMap(URL.init(string:))
+                        ))
+                    }
+                    trayChip(systemImage: "sparkles", label: "AI") {
+                        aiCommandsCapture = store.sourceCapture
+                    }
+                    trayChip(systemImage: "pencil", label: "Edit") {
+                        beginEditingCapture()
+                    }
+                    trayChip(systemImage: "trash", label: "Delete") {
+                        showingDeleteConfirmation = true
+                    }
+                }
             }
-            trayChip(systemImage: "sparkles", label: "AI") {
-                aiCommandsCapture = store.sourceCapture
-            }
-            trayChip(systemImage: "pencil", label: "Edit") {
-                beginEditingCapture()
-            }
-            trayChip(systemImage: "trash", label: "Delete") {
-                showingDeleteConfirmation = true
-            }
-            Spacer()
+            .frame(maxWidth: .infinity, alignment: .leading)
+
             primaryChip(label: "Compose ›") {
                 AppShellRouter.shared.openCompose(documentID: store.capture.id)
             }
@@ -620,10 +625,13 @@ struct CaptureDetailNext: View {
         Button(action: action) {
             HStack(spacing: 5) {
                 Image(systemName: systemImage).font(.system(size: 12))
-                Text(label).talkieType(.fieldLabel)
+                Text(label)
+                    .talkieType(.fieldLabel)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
             .foregroundStyle(theme.colors.textSecondary)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 10)
             .padding(.vertical, 9)
             .background(
                 Capsule().strokeBorder(theme.currentTheme.chrome.edgeFaint,
@@ -631,18 +639,22 @@ struct CaptureDetailNext: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 
     private func primaryChip(label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
                 .talkieType(.fieldLabel)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
                 .foregroundStyle(theme.colors.cardBackground)
-                .padding(.horizontal, 14)
+                .padding(.horizontal, 12)
                 .padding(.vertical, 9)
                 .background(Capsule().fill(theme.currentTheme.chrome.accent))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 
     // MARK: - Actions
@@ -1307,7 +1319,9 @@ private struct CaptureReadoutPulseBarNext: View {
                         .frame(width: geometry.size.width * 0.3, height: 3)
                         .offset(x: animate ? geometry.size.width * 0.7 : 0)
                         .animation(
-                            .easeInOut(duration: 1.5).repeatForever(autoreverses: true),
+                            TalkieMotion.isReduced
+                                ? nil
+                                : .easeInOut(duration: 1.5).repeatForever(autoreverses: true),
                             value: animate
                         )
                 }

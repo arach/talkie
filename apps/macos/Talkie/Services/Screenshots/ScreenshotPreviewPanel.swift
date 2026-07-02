@@ -105,7 +105,7 @@ final class ScreenshotPreviewPanel {
             },
             onAnnotate: { [weak self] url in
                 self?.dismiss()
-                CaptureMarkupCoordinator.shared.openSession(imageURL: url)
+                CaptureMarkupCoordinator.shared.openAgentOwnedSession(imageURL: url)
             },
             onInteractionChanged: { [weak self] isInteracting in
                 if isInteracting {
@@ -236,7 +236,10 @@ private final class PreviewView: NSView, NSDraggingSource {
     private var pendingAnnotate = false
     private var trackingArea: NSTrackingArea?
     private var dragOrigin: NSPoint?
-    private var annotateButton: NSButton?
+    private var markupButton: NSButton?
+    private var deleteButton: NSButton?
+
+    private let actionButtonSize: CGFloat = 18
 
     init(image: NSImage, thumbSize: NSSize, imageWidth: Int, imageHeight: Int,
          fileURL: URL?, onDismiss: @escaping () -> Void, onCopy: @escaping (URL?) -> Void,
@@ -251,7 +254,7 @@ private final class PreviewView: NSView, NSDraggingSource {
         self.onAnnotate = onAnnotate
         self.onInteractionChanged = onInteractionChanged
         super.init(frame: .zero)
-        configureAnnotateButton()
+        configureActionButtons()
     }
 
     @available(*, unavailable)
@@ -262,10 +265,18 @@ private final class PreviewView: NSView, NSDraggingSource {
 
         let padding: CGFloat = 8
         let stripHeight: CGFloat = 18
-        let size: CGFloat = 24
-        annotateButton?.frame = NSRect(
-            x: padding + thumbSize.width - size - 6,
-            y: padding + stripHeight + thumbSize.height - size - 6,
+        let size = actionButtonSize
+        let originY = padding + (stripHeight - size) / 2
+        let edgeInset: CGFloat = 1
+        deleteButton?.frame = NSRect(
+            x: padding + edgeInset,
+            y: originY,
+            width: size,
+            height: size
+        )
+        markupButton?.frame = NSRect(
+            x: padding + thumbSize.width - size - edgeInset,
+            y: originY,
             width: size,
             height: size
         )
@@ -368,7 +379,7 @@ private final class PreviewView: NSView, NSDraggingSource {
 
     func attachFileURL(_ fileURL: URL) {
         self.fileURL = fileURL
-        configureAnnotateButton()
+        configureActionButtons()
         window?.invalidateCursorRects(for: self)
         needsDisplay = true
         if pendingAnnotate {
@@ -388,33 +399,54 @@ private final class PreviewView: NSView, NSDraggingSource {
         onInteractionChanged(isHovered || isContextMenuOpen || pendingAnnotate)
     }
 
-    private func configureAnnotateButton() {
+    private func configureActionButtons() {
         guard fileURL != nil else {
-            annotateButton?.removeFromSuperview()
-            annotateButton = nil
+            markupButton?.removeFromSuperview()
+            deleteButton?.removeFromSuperview()
+            markupButton = nil
+            deleteButton = nil
             return
         }
 
-        if annotateButton == nil {
-            let button = NSButton()
-            button.image = NSImage(
-                systemSymbolName: "sparkles.rectangle.stack",
-                accessibilityDescription: "Annotate"
+        if markupButton == nil {
+            let button = makeActionButton(
+                symbol: "pencil.tip.crop.circle",
+                toolTip: "Markup",
+                action: #selector(annotateAction),
+                tint: NSColor.white.withAlphaComponent(0.82)
             )
-            button.bezelStyle = .regularSquare
-            button.isBordered = false
-            button.wantsLayer = true
-            button.layer?.cornerRadius = 7
-            button.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.58).cgColor
-            button.contentTintColor = NSColor.white.withAlphaComponent(0.86)
-            button.toolTip = "Annotate"
-            button.target = self
-            button.action = #selector(annotateAction)
             addSubview(button)
-            annotateButton = button
+            markupButton = button
+        }
+
+        if deleteButton == nil {
+            let button = makeActionButton(
+                symbol: "trash",
+                toolTip: "Delete",
+                action: #selector(dismissAction),
+                tint: NSColor.systemRed.withAlphaComponent(0.78)
+            )
+            addSubview(button)
+            deleteButton = button
         }
 
         needsLayout = true
+    }
+
+    private func makeActionButton(symbol: String, toolTip: String, action: Selector, tint: NSColor) -> NSButton {
+        let button = NSButton()
+        button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: toolTip)
+        button.imageScaling = .scaleProportionallyDown
+        button.bezelStyle = .regularSquare
+        button.isBordered = false
+        button.wantsLayer = true
+        button.layer?.cornerRadius = 4
+        button.layer?.backgroundColor = NSColor.clear.cgColor
+        button.contentTintColor = tint
+        button.toolTip = toolTip
+        button.target = self
+        button.action = action
+        return button
     }
 
     override func resetCursorRects() {
@@ -446,8 +478,23 @@ private final class PreviewView: NSView, NSDraggingSource {
         bgPath.fill()
         ctx.restoreGState()
 
-        // Image
+        // Image - soft halo so a fresh capture reads on dark UI behind it
         let imageCornerRadius: CGFloat = 5
+        ctx.saveGState()
+        ctx.setShadow(
+            offset: .zero,
+            blur: 5,
+            color: NSColor.white.withAlphaComponent(0.20).cgColor
+        )
+        let halo = NSBezierPath(
+            roundedRect: imageRect.insetBy(dx: -0.5, dy: -0.5),
+            xRadius: imageCornerRadius + 0.5,
+            yRadius: imageCornerRadius + 0.5
+        )
+        NSColor.white.withAlphaComponent(0.06).setFill()
+        halo.fill()
+        ctx.restoreGState()
+
         let imageClip = NSBezierPath(roundedRect: imageRect, xRadius: imageCornerRadius, yRadius: imageCornerRadius)
         ctx.saveGState()
         imageClip.addClip()
@@ -457,12 +504,12 @@ private final class PreviewView: NSView, NSDraggingSource {
         ctx.restoreGState()
 
         // Image border
-        NSColor.white.withAlphaComponent(0.12).setStroke()
+        NSColor.white.withAlphaComponent(0.22).setStroke()
         let imgBorder = NSBezierPath(roundedRect: imageRect, xRadius: imageCornerRadius, yRadius: imageCornerRadius)
-        imgBorder.lineWidth = 0.5
+        imgBorder.lineWidth = 0.75
         imgBorder.stroke()
 
-        // Data strip
+        // Bottom bezel
         NSColor(white: 0.06, alpha: 1).setFill()
         stripRect.fill()
 
@@ -473,25 +520,15 @@ private final class PreviewView: NSView, NSDraggingSource {
             .foregroundColor: NSColor.white.withAlphaComponent(0.35),
         ]
         let metaSize = meta.size(withAttributes: attrs)
-        meta.draw(
-            at: NSPoint(x: padding + 4, y: stripRect.minY + (stripHeight - metaSize.height) / 2),
-            withAttributes: attrs
-        )
-
-        // Drag hint on right side of strip
-        if fileURL != nil {
-            let hint = "drag"
-            let hintAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.monospacedSystemFont(ofSize: 7, weight: .medium),
-                .foregroundColor: NSColor.white.withAlphaComponent(0.2),
-            ]
-            let hintSize = hint.size(withAttributes: hintAttrs)
-            hint.draw(
+        let actionReserve = fileURL == nil ? CGFloat(4) : actionButtonSize + 7
+        let availableMetaWidth = stripRect.width - actionReserve * 2
+        if metaSize.width <= availableMetaWidth {
+            meta.draw(
                 at: NSPoint(
-                    x: stripRect.maxX - hintSize.width - 4,
-                    y: stripRect.minY + (stripHeight - hintSize.height) / 2
+                    x: stripRect.midX - metaSize.width / 2,
+                    y: stripRect.minY + (stripHeight - metaSize.height) / 2
                 ),
-                withAttributes: hintAttrs
+                withAttributes: attrs
             )
         }
 

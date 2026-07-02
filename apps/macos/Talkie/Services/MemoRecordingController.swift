@@ -756,7 +756,8 @@ final class MemoRecordingController {
 
         recorder.updateMeters()
         let db = recorder.averagePower(forChannel: 0)
-        audioLevel = max(0, (db + 60) / 60)
+        let normalized = max(0, min(1, (db + 60) / 60))
+        audioLevel = pow(normalized, 0.5)
     }
 
     private func recoverInterruptedAudioCapture(_ recorder: AVAudioRecorder) {

@@ -60,6 +60,7 @@ struct ComposeNextView: View {
                 revisionPath: compose.revisionPath,
                 modelOptions: compose.configuredModelOptions,
                 activeProviderId: compose.activeDirectProviderId,
+                activeModelId: compose.activeDirectModelId,
                 // Mac Bridge is a route, not a model — only offer it when the
                 // bridge is actually connected (a "known good state"). The
                 // picker is otherwise purely about the direct models you can run.
@@ -77,6 +78,7 @@ struct ComposeNextView: View {
                 voiceCommand: compose.lastCommandTranscript,
                 generatingETA: compose.generatingETA,
                 diff: compose.pendingDiff,
+                runningModelLabel: compose.runningModelLabel,
                 documentText: Binding(
                     get: { compose.documentBodyText },
                     set: { compose.updateDocumentBodyText($0) }
@@ -704,16 +706,16 @@ private struct ComposeNextDocumentEditor: UIViewRepresentable {
         }
 
         private static var bodyFont: UIFont {
-            // Comfortable reading size (18pt), Dynamic-Type aware. Clean sans —
+            // Comfortable reading size (17pt), Dynamic-Type aware. Clean sans —
             // a writing canvas, not a dense form field.
             UIFontMetrics(forTextStyle: .body)
-                .scaledFont(for: .systemFont(ofSize: 18, weight: .regular))
+                .scaledFont(for: .systemFont(ofSize: 17, weight: .regular))
         }
 
         private static func typingAttributes(textColor: UIColor, font: UIFont) -> [NSAttributedString.Key: Any] {
             let style = NSMutableParagraphStyle()
-            style.lineSpacing = 6          // ~1.4 line-height for readability
-            style.paragraphSpacing = 2
+            style.lineSpacing = 5          // ~1.35 line-height for readability
+            style.paragraphSpacing = 1.5
             return [
                 .font: font,
                 .foregroundColor: textColor,
@@ -731,6 +733,7 @@ private struct ComposeHeader: View {
     let revisionPath: ComposeStore.RevisionPath
     let modelOptions: [ComposeStore.ModelOption]
     let activeProviderId: String
+    let activeModelId: String
     let macBridgeConnected: Bool
     let state: ComposeState
     let onBack: () -> Void
@@ -739,10 +742,13 @@ private struct ComposeHeader: View {
     let onShowNotes: () -> Void
 
     private func isActiveModel(_ option: ComposeStore.ModelOption) -> Bool {
-        revisionPath == .direct && option.providerId == activeProviderId
+        revisionPath == .direct
+            && option.providerId == activeProviderId
+            && option.modelId == activeModelId
     }
 
     @ObservedObject private var theme = ThemeManager.shared
+    @ObservedObject private var onDeviceAI = OnDeviceAIService.shared
 
     private var accessibilityLabel: String {
         if let standalone = modelDisplay.standaloneLabel { return standalone }
@@ -780,7 +786,7 @@ private struct ComposeHeader: View {
                         // bridge/encryption config — it lists the models that
                         // should just work. With nothing configured it
                         // collapses to a single get-started CTA.
-                        if modelOptions.isEmpty && !macBridgeConnected {
+                        if modelOptions.isEmpty && !macBridgeConnected && !onDeviceAI.isAvailable {
                             Button {
                                 AppShellRouter.shared.openAICredentials()
                             } label: {
@@ -806,6 +812,17 @@ private struct ComposeHeader: View {
                                         Label(
                                             "Mac Bridge",
                                             systemImage: revisionPath == .mac ? "checkmark" : "desktopcomputer"
+                                        )
+                                    }
+                                }
+
+                                if onDeviceAI.isAvailable {
+                                    Button {
+                                        onSelectRevisionPath(.apple)
+                                    } label: {
+                                        Label(
+                                            "Apple Intelligence",
+                                            systemImage: revisionPath == .apple ? "checkmark" : "sparkles"
                                         )
                                     }
                                 }
@@ -1019,6 +1036,7 @@ private struct DocumentBody: View {
     let voiceCommand: String?
     let generatingETA: String?
     let diff: ComposeStore.Diff?
+    let runningModelLabel: String
     @Binding var documentText: String
     @Binding var isKeyboardFocused: Bool
     let keyboardController: ComposeKeyboardController
@@ -1035,8 +1053,16 @@ private struct DocumentBody: View {
                 if state == .diff, let diff {
                     if let voiceCommand {
                         RequestedStrip(commandText: voiceCommand)
+                            .padding(.horizontal, 14)
+                            .padding(.top, 12)
                     }
-                    DiffInline(diff: diff)
+                    ScrollView {
+                        DiffInline(diff: diff)
+                            .padding(.horizontal, 14)
+                            .padding(.bottom, 14)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .layoutPriority(1)
                 } else {
                     ComposeNextDocumentEditor(
                         text: $documentText,
@@ -1046,7 +1072,7 @@ private struct DocumentBody: View {
                         isEditable: state == .idle || state == .dictating,
                         textColor: UIColor(theme.colors.textPrimary),
                         accentColor: UIColor(theme.currentTheme.chrome.accent),
-                        contentBottomInset: 44
+                        contentBottomInset: 72
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     // Win the card's full height ahead of the trailing
@@ -1067,7 +1093,7 @@ private struct DocumentBody: View {
                             .padding(.horizontal, 16)
                     }
                     if state == .generating {
-                        GeneratingStrip(eta: generatingETA ?? "~3s")
+                        GeneratingStrip(modelLabel: runningModelLabel, eta: generatingETA ?? "~3s")
                             .padding(.horizontal, 16)
                     }
                 }
@@ -1081,6 +1107,10 @@ private struct DocumentBody: View {
             // out of the way while scrolling down so it stops covering
             // the text you're reading, glides back on scroll-up.
             if state == .idle || state == .dictating {
+                EditorBottomChromeFade()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .allowsHitTesting(false)
+
                 ComposeFloatingTools(state: state, onMic: onMic)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     .padding(.bottom, 14)
@@ -1102,6 +1132,29 @@ private struct DocumentBody: View {
                     .strokeBorder(theme.currentTheme.chrome.edgeFaint,
                                   lineWidth: theme.currentTheme.chrome.hairlineWidth)
             )
+    }
+}
+
+private struct EditorBottomChromeFade: View {
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        VStack(spacing: 0) {
+            LinearGradient(
+                colors: [
+                    theme.colors.cardBackground.opacity(0),
+                    theme.colors.cardBackground.opacity(0.14),
+                    theme.colors.cardBackground.opacity(0.24),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 50)
+
+            Rectangle()
+                .fill(theme.colors.cardBackground.opacity(0.18))
+                .frame(height: 18)
+        }
     }
 }
 
@@ -1172,19 +1225,29 @@ private struct ListeningStrip: View {
 }
 
 private struct GeneratingStrip: View {
+    let modelLabel: String
     let eta: String
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        HStack(spacing: 8) {
-            ProgressView().scaleEffect(0.6)
-            Text("Sonnet 4.6 · iterating")
-                .talkieType(.channelLabel)
-                .foregroundStyle(theme.colors.textSecondary)
-            Spacer()
-            Text(eta)
-                .talkieType(.timestamp)
-                .foregroundStyle(theme.colors.textTertiary)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                GeneratingActivityGlyph()
+                    .frame(width: 34, height: 16)
+
+                Text("\(modelLabel) · iterating")
+                    .talkieType(.channelLabel)
+                    .foregroundStyle(theme.colors.textSecondary)
+
+                Spacer()
+
+                Text(eta)
+                    .talkieType(.timestamp)
+                    .foregroundStyle(theme.colors.textTertiary)
+            }
+
+            GeneratingVelocityRail()
+                .frame(height: 3)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -1197,6 +1260,65 @@ private struct GeneratingStrip: View {
                                       lineWidth: theme.currentTheme.chrome.hairlineWidth)
                 )
         )
+    }
+}
+
+private struct GeneratingActivityGlyph: View {
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: TalkieMotion.isReduced)) { context in
+            let time = context.date.timeIntervalSinceReferenceDate
+            HStack(alignment: .center, spacing: 3) {
+                ForEach(0..<5, id: \.self) { index in
+                    let pulse = 0.5 + 0.5 * sin(time * 9.5 + Double(index) * 0.72)
+                    Capsule()
+                        .fill(index == 2 ? theme.currentTheme.chrome.accent : theme.currentTheme.chrome.accent.opacity(0.58))
+                        .frame(width: 3, height: CGFloat(5.5 + pulse * 9.5))
+                        .shadow(color: theme.currentTheme.chrome.accentGlow.opacity(0.35), radius: CGFloat(pulse * 4))
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+}
+
+private struct GeneratingVelocityRail: View {
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: TalkieMotion.isReduced)) { context in
+            let time = context.date.timeIntervalSinceReferenceDate
+
+            GeometryReader { proxy in
+                let width = proxy.size.width
+                let travel = max(width + 48, 1)
+                let phase = CGFloat(time * 210).truncatingRemainder(dividingBy: travel)
+
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(theme.currentTheme.chrome.edgeFaint.opacity(0.55))
+
+                    ForEach(0..<3, id: \.self) { index in
+                        let x = (phase + CGFloat(index) * 52).truncatingRemainder(dividingBy: travel) - 24
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        theme.currentTheme.chrome.accent.opacity(0.0),
+                                        theme.currentTheme.chrome.accent.opacity(0.95),
+                                        theme.currentTheme.chrome.accent.opacity(0.0),
+                                    ],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(width: 44, height: 3)
+                            .offset(x: x)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1251,32 +1373,31 @@ private struct InlineMicButton: View {
             action()
         }) {
             ZStack {
-                Circle()
-                    .fill(state == .dictating ? theme.currentTheme.chrome.accent : theme.chrome.actionTint)
-                    .overlay(Circle().strokeBorder(
-                        state == .dictating
-                            ? Color.clear
-                            : theme.chrome.action.opacity(0.5),
-                        lineWidth: theme.currentTheme.chrome.hairlineWidth
-                    ))
                 Image(systemName: state == .dictating ? "stop.fill" : "mic.fill")
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(
                         state == .dictating
-                            ? theme.colors.cardBackground
+                            ? theme.currentTheme.chrome.accent
                             : theme.chrome.action
                     )
             }
-            .frame(width: 38, height: 38)
-            .shadow(
-                color: state == .dictating
-                    ? theme.currentTheme.chrome.accentGlow
-                    : Color.black.opacity(0.14),
-                radius: state == .dictating ? 8 : 5,
-                y: 2
-            )
+            .frame(width: 31, height: 30)
+            .background(commandKeyBackground(isActive: state == .dictating))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(CardPressStyle())
+        .accessibilityLabel(state == .dictating ? "Stop dictation" : "Start dictation")
+    }
+
+    private func commandKeyBackground(isActive: Bool = false) -> some View {
+        RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous)
+            .fill(theme.chrome.panelAlt)
+            .overlay(
+                RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous)
+                    .strokeBorder(
+                        isActive ? theme.currentTheme.chrome.accent.opacity(0.42) : theme.chrome.edgeFaint,
+                        lineWidth: theme.currentTheme.chrome.hairlineWidth
+                    )
+            )
     }
 }
 
@@ -1292,16 +1413,11 @@ private struct ComposeFloatingTools: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        // Mic is pinned to the true horizontal center (ZStack) so it lines up
-        // with the cursor pad on the chrome row below. The flanking clipboard /
-        // insert clusters have unequal widths, so centering the mic *between*
-        // them (the old HStack + paired Spacers) pushed it left of true center.
+        // Deck-style rail: one dark bed with tight command groups. The mic is
+        // pinned to the true center so it lines up with the cursor pad below.
         ZStack {
-            InlineMicButton(state: state, action: onMic)
-
             HStack(spacing: 0) {
-                // Left cluster — take from the doc — flush to the left edge.
-                HStack(spacing: 7) {
+                HStack(spacing: 5) {
                     iconButton("selection.pin.in.out", "Select all") {
                         NotificationCenter.default.post(name: .composeNextEditorSelectAll, object: nil)
                     }
@@ -1313,10 +1429,9 @@ private struct ComposeFloatingTools: View {
                     }
                 }
 
-                Spacer(minLength: 16)
+                Spacer(minLength: 54)
 
-                // Right cluster — put into the doc — flush to the right edge.
-                HStack(spacing: 7) {
+                HStack(spacing: 5) {
                     spaceButton
                     iconButton("doc.on.clipboard", "Paste") {
                         NotificationCenter.default.post(name: .composeNextEditorPaste, object: nil)
@@ -1326,21 +1441,24 @@ private struct ComposeFloatingTools: View {
                     }
                 }
             }
+
+            InlineMicButton(state: state, action: onMic)
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 18)
+        .frame(height: 38)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(railBackground)
+        .padding(.horizontal, 30)
     }
 
-    // Deck-cockpit key: a hairline-bordered rounded-rect on the dark surface
-    // with the icon in the action accent. No capsule wrapping the row — each
-    // key stands on its own, matching the deck's command keys.
     private func iconButton(_ systemImage: String, _ label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(theme.chrome.action)
-                .frame(width: 32, height: 30)
-                .background(deckKeyBackground)
+                .frame(width: 31, height: 30)
+                .background(commandKeyBackground)
         }
         .buttonStyle(CardPressStyle())
         .accessibilityLabel(label)
@@ -1352,22 +1470,38 @@ private struct ComposeFloatingTools: View {
             NotificationCenter.default.post(name: .composeNextEditorInsertSpace, object: nil)
         } label: {
             Text("space")
-                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .font(.system(size: 10.5, weight: .medium, design: .rounded))
                 .foregroundStyle(theme.chrome.action)
-                .frame(width: 46, height: 30)
-                .background(deckKeyBackground)
+                .frame(width: 54, height: 30)
+                .background(commandKeyBackground)
         }
         .buttonStyle(CardPressStyle())
         .accessibilityLabel("Space")
     }
 
-    private var deckKeyBackground: some View {
+    private var commandKeyBackground: some View {
         RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous)
-            .fill(theme.chrome.actionTint)
+            .fill(theme.chrome.panelAlt)
             .overlay(
                 RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous)
-                    .strokeBorder(theme.chrome.edgeFaint, lineWidth: theme.chrome.hairlineWidth)
+                    .strokeBorder(theme.chrome.edgeFaint,
+                                  lineWidth: theme.currentTheme.chrome.hairlineWidth)
             )
+    }
+
+    private var railBackground: some View {
+        RoundedRectangle(cornerRadius: CornerRadius.sm + 4, style: .continuous)
+            .fill(.ultraThinMaterial)
+            .overlay(
+                RoundedRectangle(cornerRadius: CornerRadius.sm + 4, style: .continuous)
+                    .fill(theme.chrome.panel.opacity(0.48))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: CornerRadius.sm + 4, style: .continuous)
+                    .strokeBorder(theme.chrome.panelEdge,
+                                  lineWidth: theme.currentTheme.chrome.hairlineWidth)
+            )
+            .shadow(color: .black.opacity(0.22), radius: 10, x: 0, y: 5)
     }
 }
 
@@ -1378,46 +1512,338 @@ struct DiffInline: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // v1 — what's being replaced
-            VStack(alignment: .leading, spacing: 6) {
-                Text("v1")
+        let review = ComposeInlineDiff.review(
+            original: diff.original,
+            proposed: diff.proposed,
+            fallbackRemoved: diff.removedCount,
+            fallbackAdded: diff.addedCount,
+            fallbackUnchanged: diff.unchangedCount,
+            baseColor: theme.colors.textPrimary,
+            secondaryColor: theme.colors.textSecondary,
+            deleteColor: Color.red.opacity(0.82),
+            insertColor: theme.currentTheme.chrome.accent
+        )
+
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 8) {
+                Text(review.isBroadRewrite ? "FORMATTED REWRITE" : "WORD REVIEW")
                     .talkieType(.channelLabelTiny)
-                    .foregroundStyle(Color.red.opacity(0.75))
-                Text(diff.original)
-                    .talkieType(.listTitle)
-                    .lineSpacing(4)
                     .foregroundStyle(theme.colors.textTertiary)
-                    .strikethrough(true, color: Color.red.opacity(0.45))
+
+                Spacer(minLength: 12)
+
+                Text("\(review.unchangedCount) shared")
+                    .talkieType(.timestamp)
+                    .foregroundStyle(theme.colors.textTertiary)
             }
 
-            // v2 — proposed
-            VStack(alignment: .leading, spacing: 6) {
-                Text("v2 · just now")
-                    .talkieType(.channelLabelTiny)
-                    .foregroundStyle(theme.currentTheme.chrome.accent)
-                Text(diff.proposed)
-                    .talkieType(.listTitle)
-                    .lineSpacing(4)
-                    .foregroundStyle(theme.colors.textPrimary)
-                    .padding(8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(theme.currentTheme.chrome.accentTint)
-                    )
-            }
+            DiffTextPane(
+                title: "BEFORE",
+                subtitle: "v1",
+                systemImage: "minus.circle",
+                accent: Color.red.opacity(0.78),
+                background: Color.red.opacity(0.055),
+                content: review.original
+            )
 
-            HStack {
-                Text("− \(diff.removedCount)")
-                    .foregroundStyle(Color.red.opacity(0.85))
-                Text("+ \(diff.addedCount)")
-                    .foregroundStyle(theme.currentTheme.chrome.accent)
-                Spacer()
+            DiffTextPane(
+                title: "AFTER",
+                subtitle: "v2",
+                systemImage: "sparkles",
+                accent: theme.currentTheme.chrome.accent,
+                background: theme.currentTheme.chrome.accentTint,
+                content: review.proposed
+            )
+
+            HStack(spacing: 8) {
+                DiffCountPill(label: "removed", value: review.removedCount, color: Color.red.opacity(0.82))
+                DiffCountPill(label: "added", value: review.addedCount, color: theme.currentTheme.chrome.accent)
+                Spacer(minLength: 0)
             }
-            .talkieType(.channelLabel)
-            .padding(.top, 2)
         }
     }
+}
+
+private struct DiffTextPane: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let accent: Color
+    let background: Color
+    let content: AttributedString
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 7) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(accent)
+                Text(title)
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(accent)
+                Text(subtitle)
+                    .talkieType(.timestamp)
+                    .foregroundStyle(theme.colors.textTertiary)
+                Spacer(minLength: 0)
+            }
+
+            Text(content)
+                .font(.system(size: 16, weight: .regular, design: .default))
+                .lineSpacing(5)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(background)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .strokeBorder(accent.opacity(0.18), lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                )
+        )
+    }
+}
+
+private struct DiffCountPill: View {
+    let label: String
+    let value: Int
+    let color: Color
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(value.formatted())
+                .font(.system(size: 11, weight: .semibold, design: .monospaced).monospacedDigit())
+            Text(label)
+                .talkieType(.channelLabelTiny)
+        }
+        .foregroundStyle(color)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(color.opacity(0.09))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .strokeBorder(color.opacity(0.16), lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                )
+        )
+    }
+}
+
+private struct ComposeInlineDiffReview {
+    let original: AttributedString
+    let proposed: AttributedString
+    let removedCount: Int
+    let addedCount: Int
+    let unchangedCount: Int
+    let isBroadRewrite: Bool
+}
+
+private enum ComposeInlineDiff {
+    private struct WordToken {
+        let range: Range<String.Index>
+        let normalized: String
+    }
+
+    private struct Matches {
+        let original: Set<Int>
+        let proposed: Set<Int>
+    }
+
+    private static let maxMatrixCells = 1_500_000
+    private static let trimCharacters = CharacterSet.whitespacesAndNewlines
+        .union(.punctuationCharacters)
+        .union(.symbols)
+
+    static func review(
+        original: String,
+        proposed: String,
+        fallbackRemoved: Int,
+        fallbackAdded: Int,
+        fallbackUnchanged: Int,
+        baseColor: Color,
+        secondaryColor: Color,
+        deleteColor: Color,
+        insertColor: Color
+    ) -> ComposeInlineDiffReview {
+        let originalTokens = tokens(in: original)
+        let proposedTokens = tokens(in: proposed)
+        let matrixCells = originalTokens.count * proposedTokens.count
+        let matches = matrixCells <= maxMatrixCells
+            ? matchedTokenIndices(original: originalTokens, proposed: proposedTokens)
+            : nil
+
+        let unchangedCount = matches?.original.count ?? fallbackUnchanged
+        let removedCount = matches.map { max(0, originalTokens.count - $0.original.count) } ?? fallbackRemoved
+        let addedCount = matches.map { max(0, proposedTokens.count - $0.proposed.count) } ?? fallbackAdded
+        let largestSide = max(originalTokens.count, proposedTokens.count)
+        let overlap = largestSide == 0 ? 1 : Double(unchangedCount) / Double(largestSide)
+        let hasStructureChange = original.contains("\n") != proposed.contains("\n")
+            || proposed.contains("- ")
+            || proposed.contains("•")
+            || proposed.contains("#")
+        let isBroadRewrite = largestSide > 80 && overlap < 0.18 || matches == nil
+        let shouldMarkWords = !isBroadRewrite
+
+        return ComposeInlineDiffReview(
+            original: attributedText(
+                original,
+                tokens: originalTokens,
+                changedIndices: shouldMarkWords ? originalTokens.indicesSet.subtracting(matches?.original ?? Set<Int>()) : [],
+                baseColor: secondaryColor,
+                changedColor: deleteColor,
+                style: .removed
+            ),
+            proposed: attributedText(
+                proposed,
+                tokens: proposedTokens,
+                changedIndices: shouldMarkWords ? proposedTokens.indicesSet.subtracting(matches?.proposed ?? Set<Int>()) : [],
+                baseColor: baseColor,
+                changedColor: insertColor,
+                style: .added
+            ),
+            removedCount: removedCount,
+            addedCount: addedCount,
+            unchangedCount: unchangedCount,
+            isBroadRewrite: isBroadRewrite || hasStructureChange && overlap < 0.35
+        )
+    }
+
+    private static func tokens(in text: String) -> [WordToken] {
+        var result: [WordToken] = []
+        var index = text.startIndex
+
+        while index < text.endIndex {
+            if text[index].isWhitespace {
+                index = text.index(after: index)
+                continue
+            }
+
+            let start = index
+            while index < text.endIndex, !text[index].isWhitespace {
+                index = text.index(after: index)
+            }
+
+            let raw = String(text[start..<index])
+            let normalized = raw
+                .trimmingCharacters(in: trimCharacters)
+                .lowercased()
+            if !normalized.isEmpty {
+                result.append(WordToken(range: start..<index, normalized: normalized))
+            }
+        }
+
+        return result
+    }
+
+    private static func matchedTokenIndices(original: [WordToken], proposed: [WordToken]) -> Matches {
+        let originalCount = original.count
+        let proposedCount = proposed.count
+        guard originalCount > 0, proposedCount > 0 else {
+            return Matches(original: [], proposed: [])
+        }
+
+        var table = Array(
+            repeating: Array(repeating: 0, count: proposedCount + 1),
+            count: originalCount + 1
+        )
+
+        for originalIndex in 0..<originalCount {
+            for proposedIndex in 0..<proposedCount {
+                if original[originalIndex].normalized == proposed[proposedIndex].normalized {
+                    table[originalIndex + 1][proposedIndex + 1] = table[originalIndex][proposedIndex] + 1
+                } else {
+                    table[originalIndex + 1][proposedIndex + 1] = max(
+                        table[originalIndex][proposedIndex + 1],
+                        table[originalIndex + 1][proposedIndex]
+                    )
+                }
+            }
+        }
+
+        var matchedOriginal = Set<Int>()
+        var matchedProposed = Set<Int>()
+        var originalIndex = originalCount
+        var proposedIndex = proposedCount
+
+        while originalIndex > 0, proposedIndex > 0 {
+            if original[originalIndex - 1].normalized == proposed[proposedIndex - 1].normalized {
+                matchedOriginal.insert(originalIndex - 1)
+                matchedProposed.insert(proposedIndex - 1)
+                originalIndex -= 1
+                proposedIndex -= 1
+            } else if table[originalIndex - 1][proposedIndex] >= table[originalIndex][proposedIndex - 1] {
+                originalIndex -= 1
+            } else {
+                proposedIndex -= 1
+            }
+        }
+
+        return Matches(original: matchedOriginal, proposed: matchedProposed)
+    }
+
+    private enum ChangeStyle {
+        case added
+        case removed
+    }
+
+    private static func attributedText(
+        _ text: String,
+        tokens: [WordToken],
+        changedIndices: Set<Int>,
+        baseColor: Color,
+        changedColor: Color,
+        style: ChangeStyle
+    ) -> AttributedString {
+        var result = AttributedString()
+        var cursor = text.startIndex
+
+        for (tokenIndex, token) in tokens.enumerated() {
+            if cursor < token.range.lowerBound {
+                var separator = AttributedString(String(text[cursor..<token.range.lowerBound]))
+                separator.foregroundColor = baseColor
+                result.append(separator)
+            }
+
+            var fragment = AttributedString(String(text[token.range]))
+            if changedIndices.contains(tokenIndex) {
+                fragment.foregroundColor = changedColor
+                switch style {
+                case .added:
+                    fragment.underlineStyle = .single
+                case .removed:
+                    fragment.strikethroughStyle = .single
+                }
+            } else {
+                fragment.foregroundColor = baseColor
+            }
+            result.append(fragment)
+            cursor = token.range.upperBound
+        }
+
+        if cursor < text.endIndex {
+            var trailing = AttributedString(String(text[cursor..<text.endIndex]))
+            trailing.foregroundColor = baseColor
+            result.append(trailing)
+        }
+
+        if result.characters.isEmpty {
+            var empty = AttributedString("")
+            empty.foregroundColor = baseColor
+            return empty
+        }
+
+        return result
+    }
+}
+
+private extension Collection where Index == Int {
+    var indicesSet: Set<Int> { Set(indices) }
 }
 
 // MARK: - Quick transforms row (thin)
@@ -1504,17 +1930,49 @@ private struct QuickTransforms: View {
 
 // MARK: - Revision strip
 
+private enum RevisionPreviewMode: String, CaseIterable, Identifiable {
+    case minimized
+    case compact
+    case expanded
+
+    var id: String { rawValue }
+
+    var systemImage: String {
+        switch self {
+        case .minimized: return "minus"
+        case .compact: return "line.3.horizontal"
+        case .expanded: return "arrow.up.left.and.arrow.down.right"
+        }
+    }
+
+    var accessibilityLabel: String {
+        switch self {
+        case .minimized: return "Minimize revision preview"
+        case .compact: return "Compact revision preview"
+        case .expanded: return "Expand revision preview"
+        }
+    }
+
+    var lineLimit: Int {
+        switch self {
+        case .minimized: return 1
+        case .compact: return 2
+        case .expanded: return 8
+        }
+    }
+}
+
 private struct RevisionHistoryRollup: View {
     let revisions: [ComposeNoteStore.RevisionRecord]
     let onRestore: (ComposeNoteStore.RevisionRecord) -> Void
 
     @State private var selectedRevisionID: UUID?
+    @State private var previewMode: RevisionPreviewMode = .minimized
     @ObservedObject private var theme = ThemeManager.shared
 
     private var selectedIndex: Int? {
-        guard !revisions.isEmpty else { return nil }
-        guard let selectedRevisionID else { return 0 }
-        return revisions.firstIndex { $0.id == selectedRevisionID } ?? 0
+        guard let selectedRevisionID else { return nil }
+        return revisions.firstIndex { $0.id == selectedRevisionID }
     }
 
     private var selectedRevision: ComposeNoteStore.RevisionRecord? {
@@ -1532,15 +1990,27 @@ private struct RevisionHistoryRollup: View {
                 Text("CURRENT v\(revisions.count + 1)")
                     .talkieType(.channelLabelTiny)
                     .foregroundStyle(theme.colors.textTertiary)
+                if selectedRevision != nil {
+                    RevisionPreviewModeControl(mode: $previewMode)
+                        .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .trailing)))
+                }
             }
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(revisions.prefix(10).enumerated(), id: \.element.id) { index, revision in
                         let version = versionNumber(for: index)
-                        let isSelected = selectedRevisionID == revision.id || (selectedRevisionID == nil && index == 0)
+                        let isSelected = selectedRevisionID == revision.id
                         Button {
-                            selectedRevisionID = revision.id
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                                if selectedRevisionID == revision.id {
+                                    selectedRevisionID = nil
+                                    previewMode = .minimized
+                                } else {
+                                    selectedRevisionID = revision.id
+                                    previewMode = .compact
+                                }
+                            }
                         } label: {
                             HStack(spacing: 6) {
                                 Text("v\(version)")
@@ -1572,7 +2042,7 @@ private struct RevisionHistoryRollup: View {
                             )
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Show revision \(version), \(revision.instruction)")
+                        .accessibilityLabel("\(isSelected ? "Hide" : "Show") revision \(version), \(revision.instruction)")
                     }
                 }
                 .padding(.vertical, 2)
@@ -1580,16 +2050,29 @@ private struct RevisionHistoryRollup: View {
             .scrollClipDisabled()
 
             if let selectedIndex, let selectedRevision {
-                RevisionDiffPreview(
-                    revision: selectedRevision,
-                    version: versionNumber(for: selectedIndex),
-                    beforeText: beforeText(for: selectedIndex, revision: selectedRevision),
-                    onRestore: { onRestore(selectedRevision) }
-                )
+                if previewMode == .minimized {
+                    RevisionMiniPreview(
+                        revision: selectedRevision,
+                        version: versionNumber(for: selectedIndex),
+                        onRestore: { onRestore(selectedRevision) }
+                    )
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                } else {
+                    RevisionDiffPreview(
+                        revision: selectedRevision,
+                        version: versionNumber(for: selectedIndex),
+                        beforeText: beforeText(for: selectedIndex, revision: selectedRevision),
+                        mode: previewMode,
+                        onRestore: { onRestore(selectedRevision) }
+                    )
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
             }
         }
         .padding(.top, 4)
         .padding(.bottom, 2)
+        .animation(.spring(response: 0.28, dampingFraction: 0.86), value: previewMode)
+        .animation(.spring(response: 0.28, dampingFraction: 0.86), value: selectedRevisionID)
     }
 
     private func versionNumber(for index: Int) -> Int {
@@ -1613,10 +2096,99 @@ private struct RevisionHistoryRollup: View {
     }
 }
 
+private struct RevisionPreviewModeControl: View {
+    @Binding var mode: RevisionPreviewMode
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(RevisionPreviewMode.allCases) { option in
+                Button {
+                    mode = option
+                } label: {
+                    Image(systemName: option.systemImage)
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(mode == option ? theme.currentTheme.chrome.accent : theme.colors.textTertiary)
+                        .frame(width: 23, height: 20)
+                        .background(
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .fill(mode == option ? theme.currentTheme.chrome.accentTint : Color.clear)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(option.accessibilityLabel)
+            }
+        }
+        .padding(2)
+        .background(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(theme.colors.cardBackground.opacity(0.82))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                      lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                )
+        )
+    }
+}
+
+private struct RevisionMiniPreview: View {
+    let revision: ComposeNoteStore.RevisionRecord
+    let version: Int
+    let onRestore: () -> Void
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text("v\(max(1, version - 1)) → v\(version)")
+                .talkieType(.channelLabelTiny)
+                .foregroundStyle(theme.currentTheme.chrome.accent)
+
+            Text(revision.instruction)
+                .talkieType(.fieldLabel)
+                .foregroundStyle(theme.colors.textPrimary)
+                .lineLimit(1)
+
+            Spacer(minLength: 0)
+
+            Button(action: onRestore) {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(theme.chrome.action)
+                    .frame(width: 30, height: 28)
+                    .background(
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(theme.chrome.actionTint)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                    .strokeBorder(theme.chrome.action.opacity(0.34),
+                                                  lineWidth: theme.chrome.hairlineWidth)
+                            )
+                    )
+            }
+            .buttonStyle(CardPressStyle())
+            .accessibilityLabel("Restore revision")
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(theme.colors.cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                      lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                )
+        )
+    }
+}
+
 private struct RevisionDiffPreview: View {
     let revision: ComposeNoteStore.RevisionRecord
     let version: Int
     let beforeText: String?
+    let mode: RevisionPreviewMode
     let onRestore: () -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
@@ -1657,6 +2229,7 @@ private struct RevisionDiffPreview: View {
                 title: "BEFORE",
                 text: beforeText ?? "Earlier text was not stored for this revision.",
                 isMissing: beforeText == nil,
+                lineLimit: mode.lineLimit,
                 tint: Color.red.opacity(0.75)
             )
 
@@ -1664,6 +2237,7 @@ private struct RevisionDiffPreview: View {
                 title: "AFTER",
                 text: revision.revisedText,
                 isMissing: false,
+                lineLimit: mode.lineLimit,
                 tint: theme.currentTheme.chrome.accent
             )
 
@@ -1689,6 +2263,7 @@ private struct RevisionTextPane: View {
     let title: String
     let text: String
     let isMissing: Bool
+    let lineLimit: Int
     let tint: Color
 
     @ObservedObject private var theme = ThemeManager.shared
@@ -1703,7 +2278,7 @@ private struct RevisionTextPane: View {
                 .lineSpacing(3)
                 .foregroundStyle(isMissing ? theme.colors.textTertiary : theme.colors.textPrimary)
                 .italic(isMissing)
-                .lineLimit(5)
+                .lineLimit(lineLimit)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(8)
                 .background(

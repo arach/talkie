@@ -511,6 +511,11 @@ public enum ScopeType {
         /// 0.26em-equivalent — emphasis caps.
         public static let extraWide: CGFloat = 2.4
     }
+
+    /// Locale-aware thousands grouping for instrument-bay stat counts.
+    public static func statCount(_ value: Int) -> String {
+        value.formatted(.number.grouping(.automatic))
+    }
 }
 
 // MARK: - Motion

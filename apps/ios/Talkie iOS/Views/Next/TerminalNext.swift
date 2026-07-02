@@ -498,7 +498,10 @@ struct TerminalNext: View {
                 return "Pair this iPhone with your Mac first."
             case .connectionFailed:
                 return "Could not reach your paired Mac on this network."
-            case .httpError(let code):
+            case .httpError(let code, detail: let detail):
+                if let detail = detail?.trimmingCharacters(in: .whitespacesAndNewlines), !detail.isEmpty {
+                    return "Mac returned HTTP \(code) while preparing terminal access: \(detail)"
+                }
                 return "Mac returned HTTP \(code) while preparing terminal access."
             case .invalidResponse:
                 return "Mac returned an invalid terminal access payload."

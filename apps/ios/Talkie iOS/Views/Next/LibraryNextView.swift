@@ -58,6 +58,8 @@ struct LibraryNextView: View {
                         library.delete(item, in: activeTab)
                     } onPromote: { item in
                         library.promoteToMemo(item)
+                    } onLoadMore: {
+                        library.loadMore(for: activeTab)
                     }
                     .padding(.horizontal, 12)
 
@@ -131,7 +133,7 @@ private struct LibraryHeader: View {
                 HStack(spacing: 2) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14))
-                    Text("Done")
+                    Text("Home")
                         .talkieType(.preview)
                 }
                 .foregroundStyle(theme.colors.textSecondary)
@@ -187,6 +189,8 @@ private struct TabRow: View {
     private func tabButton(_ tab: LibraryTab) -> some View {
         let isActive = (active == tab)
         return Button(action: {
+            guard active != tab else { return }
+            Haptics.toggle.fire()  // selection tick — switching the Library filter tab
             withAnimation(.easeOut(duration: 0.18)) { active = tab }
         }) {
             VStack(spacing: 4) {
@@ -394,6 +398,7 @@ private struct LibraryListCard: View {
     let isSearching: Bool
     let onDelete: (LibraryFeed.Item) -> Void
     let onPromote: (LibraryFeed.Item) -> Void
+    let onLoadMore: () -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
 
@@ -420,6 +425,7 @@ private struct LibraryListCard: View {
                             .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                 if item.canPromoteToMemo {
                                     Button {
+                                        Haptics.success.fire()  // earned: a keyboard dictation becomes a kept memo
                                         onPromote(item)
                                     } label: {
                                         Label("Save as Memo", systemImage: "square.and.arrow.down.fill")
@@ -429,6 +435,7 @@ private struct LibraryListCard: View {
                             }
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button(role: .destructive) {
+                                    Haptics.transition.fire()  // firm thud — a row is gone
                                     onDelete(item)
                                 } label: {
                                     Label("Delete", systemImage: "trash")
@@ -444,28 +451,54 @@ private struct LibraryListCard: View {
                 .scrollDisabled(true)
                 .frame(height: CGFloat(items.count) * 56)
 
-                HStack(spacing: 6) {
-                    Text("· EARLIER · THIS WEEK")
-                        .talkieType(.channelLabelTiny)
+                if earlierCount > 0 {
+                    Button {
+                        Haptics.confirm.fire()  // light "got it" as the next page reveals
+                        withAnimation { onLoadMore() }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.down")
+                                .font(.system(size: 9, weight: .semibold))
+                            Text("LOAD \(min(10, earlierCount)) MORE")
+                                .talkieType(.channelLabelTiny)
+                            Spacer()
+                            Text("\(earlierCount) EARLIER")
+                                .talkieType(.channelLabelTiny)
+                                .foregroundStyle(theme.colors.textTertiary)
+                        }
                         .foregroundStyle(theme.currentTheme.chrome.accent)
-                        .textCase(.uppercase)
-                    Spacer()
-                    if earlierCount > 0 {
-                        Text("\(earlierCount) MORE")
-                            .talkieType(.channelLabelTiny)
-                            .foregroundStyle(theme.colors.textTertiary)
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Load \(min(10, earlierCount)) more, \(earlierCount) earlier items")
+                    .overlay(
+                        Rectangle()
+                            .fill(theme.currentTheme.chrome.edgeSubtle)
+                            .frame(height: theme.currentTheme.chrome.hairlineWidth)
+                            .padding(.leading, 36),
+                        alignment: .top
+                    )
+                } else {
+                    HStack(spacing: 6) {
+                        Text("· EARLIER")
+                            .talkieType(.channelLabelTiny)
+                            .foregroundStyle(theme.currentTheme.chrome.accent)
+                            .textCase(.uppercase)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.top, 12)
+                    .padding(.bottom, 8)
+                    .overlay(
+                        Rectangle()
+                            .fill(theme.currentTheme.chrome.edgeSubtle)
+                            .frame(height: theme.currentTheme.chrome.hairlineWidth)
+                            .padding(.leading, 36),
+                        alignment: .top
+                    )
                 }
-                .padding(.horizontal, 14)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
-                .overlay(
-                    Rectangle()
-                        .fill(theme.currentTheme.chrome.edgeSubtle)
-                        .frame(height: theme.currentTheme.chrome.hairlineWidth)
-                        .padding(.leading, 36),
-                    alignment: .top
-                )
 
                 Color.clear.frame(height: 12)
             }
@@ -514,7 +547,11 @@ private struct LibraryRow: View {
                         .foregroundStyle(theme.colors.textPrimary)
                         .lineLimit(1)
                         .truncationMode(.tail)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .layoutPriority(1)
+                    if item.isTranscribing {
+                        TranscribingBadge()
+                    }
+                    Spacer(minLength: 8)
                     Text(item.relativeTime)
                         .talkieType(.channelLabel)
                         .foregroundStyle(theme.colors.textTertiary)
@@ -564,6 +601,40 @@ private struct LibraryRow: View {
             Image(systemName: "link").font(.system(size: 12))
         case .scan:
             Image(systemName: "viewfinder").font(.system(size: 12))
+        }
+    }
+}
+
+// MARK: - Transcribing badge
+
+/// Tiny in-row marker shown only while a memo's background transcription pass
+/// is running (VoiceMemo.isTranscribing). A pulsing accent pip + smallcap
+/// label; the pip holds steady when Reduce Motion is on. Retry / empty-state
+/// affordances live in the memo detail view, not here — an idle empty
+/// transcript shows nothing.
+private struct TranscribingBadge: View {
+    @ObservedObject private var theme = ThemeManager.shared
+    @State private var pulse = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(theme.currentTheme.chrome.accent)
+                .frame(width: 5, height: 5)
+                .opacity(pulse ? 0.4 : 1)
+            Text("TRANSCRIBING")
+                .talkieType(.channelLabelTiny)
+                .foregroundStyle(theme.currentTheme.chrome.accent)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Transcribing")
+        .onAppear {
+            guard !TalkieMotion.isReduced else { return }
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                pulse = true
+            }
         }
     }
 }
@@ -638,7 +709,7 @@ private struct EmptyTabState: View {
     private var hint: String {
         if isSearching { return "Try a different search term." }
         switch tab {
-        case .memos:      return "Long-press the mic anywhere in Talkie to start a recording."
+        case .memos:      return "Tap the mic anywhere in Talkie to start a recording."
         case .dictations: return "Use the Talkie keyboard or Compose to capture text by voice."
         case .items:      return "Share links from Safari, or run a camera scan to add items here."
         }
@@ -655,8 +726,7 @@ private struct EmptyTabState: View {
         switch tab {
         case .memos:
             return CTA(label: "RECORD", icon: "mic.fill") {
-                // Mic is the global FAB; surface the tray.
-                // (No direct invoke API exposed; nudge user toward voice button.)
+                RecordingSheetController.shared.isPresented = true
             }
         case .dictations:
             return CTA(label: "ENABLE KEYBOARD", icon: "keyboard") {

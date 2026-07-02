@@ -173,7 +173,9 @@ final class DeckMirrorStore: ObservableObject {
             do {
                 let response = try await BridgeManager.shared.triggerCompanionShortcut(slotID)
                 if response.ok == false {
-                    let message = response.error ?? response.message ?? "Mac did not handle \(slotID)."
+                    let message = Self.userFacingDeckFailureMessage(
+                        response.error ?? response.message ?? "Mac did not handle \(slotID)."
+                    )
                     lastErrorMessage = message
                     setTriggerResult(
                         slotID: slotID,
@@ -197,7 +199,7 @@ final class DeckMirrorStore: ObservableObject {
                     )
                 }
             } catch {
-                let message = error.localizedDescription
+                let message = Self.userFacingDeckError(error)
                 lastErrorMessage = message
                 setTriggerResult(
                     slotID: slotID,
@@ -231,7 +233,9 @@ final class DeckMirrorStore: ObservableObject {
                     autoPaste: autoPaste
                 )
                 if response.ok == false {
-                    let message = response.error ?? response.message ?? "Mac did not accept the image."
+                    let message = Self.userFacingDeckFailureMessage(
+                        response.error ?? response.message ?? "Mac did not accept the image."
+                    )
                     lastErrorMessage = message
                     setTriggerResult(
                         slotID: slotID,
@@ -248,7 +252,7 @@ final class DeckMirrorStore: ObservableObject {
                     )
                 }
             } catch {
-                let message = error.localizedDescription
+                let message = Self.userFacingDeckError(error)
                 lastErrorMessage = message
                 setTriggerResult(
                     slotID: slotID,
@@ -284,6 +288,24 @@ final class DeckMirrorStore: ObservableObject {
             completedAt: completedAt
         )
         scheduleTriggerResultReset(after: delay)
+    }
+
+    private static func userFacingDeckError(_ error: Error) -> String {
+        userFacingDeckFailureMessage(error.localizedDescription)
+    }
+
+    private static func userFacingDeckFailureMessage(_ message: String) -> String {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = trimmed.lowercased()
+
+        if normalized.contains("http 503")
+            || normalized.contains("service unavailable")
+            || normalized.contains("talkie not running")
+            || normalized.contains("start talkie.app") {
+            return "Start or restart TalkieAgent on your Mac, then try again."
+        }
+
+        return trimmed.isEmpty ? "Mac did not accept that command." : trimmed
     }
 
     private func scheduleTriggerResultReset(after delay: Duration?) {

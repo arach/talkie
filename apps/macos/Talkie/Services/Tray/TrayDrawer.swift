@@ -8,6 +8,7 @@
 //
 
 import SwiftUI
+import TalkieKit
 
 struct NotchTrayDrawer: View {
     let isExpanded: Bool

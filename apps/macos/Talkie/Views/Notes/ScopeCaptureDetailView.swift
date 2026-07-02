@@ -47,9 +47,11 @@ struct ScopeCaptureDetailView: View {
     var onDelete: (() -> Void)? = nil
 
     private var viewModel: RecordingsViewModel { .shared }
+    private var workflowService: WorkflowService { .shared }
 
     // In-window markup takeover target (vs. the old floating panel).
     @State private var markupURL: URL?
+    @State private var runningWorkflowID: UUID?
 
     var body: some View {
         GeometryReader { proxy in
@@ -249,6 +251,36 @@ struct ScopeCaptureDetailView: View {
         [filename, dimensions, fileSize]
             .filter { $0 != "—" && !$0.isEmpty }
             .joined(separator: " · ")
+    }
+
+    private var workflowAssetKind: WorkflowAssetKind? {
+        if primaryShot != nil {
+            return .screenshot
+        }
+        if primaryClip != nil || primaryVisualContext != nil {
+            return .clip
+        }
+        if isTextCapture {
+            return .text
+        }
+        if let primaryAttachment {
+            switch primaryAttachment.kind {
+            case .image: return .image
+            case .video: return .clip
+            case .audio: return .audio
+            case .pdf, .document, .other: return nil
+            }
+        }
+        return nil
+    }
+
+    private var captureWorkflows: [Workflow] {
+        guard let workflowAssetKind else { return [] }
+        return workflowService.workflowsAccepting(
+            capture.type,
+            assetKind: workflowAssetKind,
+            surface: .captureContextMenu
+        )
     }
 
     // MARK: - Sections
@@ -451,16 +483,22 @@ struct ScopeCaptureDetailView: View {
                     // Drag the media file out to other apps (Slack /
                     // Messages / Finder). Pasteboard carries the on-disk URL
                     // so receivers treat it as a real file, not bitmap data.
-                    .onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider() }
+                    .onDrag {
+                        TalkieInternalDrag.mark(NSItemProvider(contentsOf: url) ?? NSItemProvider())
+                    }
             } else {
                 unavailableMediaHero
             }
         case .video(let url, let aspectRatio):
             CaptureVideoHero(url: url, aspectRatio: aspectRatio)
-                .onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider() }
+                .onDrag {
+                    TalkieInternalDrag.mark(NSItemProvider(contentsOf: url) ?? NSItemProvider())
+                }
         case .file(let url, let attachment):
             attachmentFileHero(url: url, attachment: attachment)
-                .onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider() }
+                .onDrag {
+                    TalkieInternalDrag.mark(NSItemProvider(contentsOf: url) ?? NSItemProvider())
+                }
         case .unavailable:
             unavailableMediaHero
         }
@@ -584,8 +622,9 @@ struct ScopeCaptureDetailView: View {
 
     @ViewBuilder
     private func marginColumn(width: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 22) {
+        VStack(alignment: .leading, spacing: 20) {
             actionsBlock
+            workflowsBlock
             metaBlock(
                 title: "Capture",
                 rows: [
@@ -605,7 +644,7 @@ struct ScopeCaptureDetailView: View {
         }
         .padding(.leading, 20)
         .padding(.trailing, 32)
-        .padding(.top, 44)
+        .padding(.top, 40)
         .padding(.bottom, 28)
         .frame(width: width, alignment: .topLeading)
         .overlay(alignment: .leading) {
@@ -615,12 +654,7 @@ struct ScopeCaptureDetailView: View {
 
     @ViewBuilder
     private var actionsBlock: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("· ACTIONS")
-                .font(ScopeType.mono(size: 8.5, weight: .semibold))
-                .tracking(2.8)
-                .foregroundStyle(ThemedScopeInk.faint)
-                .padding(.bottom, 4)
+        railSection(title: "Actions") {
             CapRailAction(label: "Copy",  icon: "doc.on.doc",            isPrimary: true, action: copyCapture)
             if case .image = primaryPreviewMedia {
                 CapRailAction(label: "Export", icon: "arrow.down.doc", action: exportCapture)
@@ -663,12 +697,61 @@ struct ScopeCaptureDetailView: View {
     }
 
     @ViewBuilder
+    private var workflowsBlock: some View {
+        let workflows = captureWorkflows
+        if !workflows.isEmpty {
+            railSection(title: "Workflows") {
+                ForEach(Array(workflows.prefix(4))) { workflow in
+                    CapWorkflowAction(
+                        workflow: workflow,
+                        isRunning: runningWorkflowID == workflow.id,
+                        action: { runWorkflow(workflow) }
+                    )
+                }
+
+                if workflows.count > 4 {
+                    Menu {
+                        ForEach(Array(workflows.dropFirst(4))) { workflow in
+                            Button {
+                                runWorkflow(workflow)
+                            } label: {
+                                Label(workflow.name, systemImage: workflow.icon)
+                            }
+                        }
+                    } label: {
+                        CapRailMoreLabel(label: "\(workflows.count - 4) more")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func railSection<Content: View>(
+        title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            railTitle(title)
+                .padding(.bottom, 4)
+            content()
+        }
+    }
+
+    private func railTitle(_ title: String) -> some View {
+        Text("· \(title.uppercased())")
+            .font(ScopeType.mono(size: 8.5, weight: .semibold))
+            .tracking(2.8)
+            .foregroundStyle(ThemedScopeInk.faint)
+    }
+
+    @ViewBuilder
     private func metaBlock(title: String, rows: [(String, String, Bool)]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("· \(title.uppercased())")
-                .font(ScopeType.mono(size: 8.5, weight: .semibold))
-                .tracking(2.8)
-                .foregroundStyle(ThemedScopeInk.faint)
+            railTitle(title)
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                     HStack(alignment: .firstTextBaseline) {
@@ -728,7 +811,7 @@ struct ScopeCaptureDetailView: View {
 
     private func openMarkup() {
         guard case .image(let url) = primaryPreviewMedia else { return }
-        markupURL = url
+        CaptureMarkupCoordinator.shared.openAgentOwnedSession(imageURL: url)
     }
 
     private func exportCapture() {
@@ -785,6 +868,47 @@ struct ScopeCaptureDetailView: View {
            let content = window.contentView {
             picker.show(relativeTo: .zero, of: content, preferredEdge: .minY)
         }
+    }
+
+    private func runWorkflow(_ workflow: Workflow) {
+        guard runningWorkflowID == nil else { return }
+        runningWorkflowID = workflow.id
+
+        Task { @MainActor in
+            do {
+                let outputs = try await WorkflowExecutor.shared.executeWorkflow(workflow.definition, for: capture)
+                let result = primaryOutput(from: outputs, workflow: workflow.definition)
+                runningWorkflowID = nil
+                ToastService.shared.showSuccess(
+                    workflowToastSummary(result, fallback: "\(workflow.name) completed")
+                )
+            } catch {
+                runningWorkflowID = nil
+                ToastService.shared.showError("\(workflow.name) failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func primaryOutput(from outputs: [String: String], workflow: WorkflowDefinition) -> String {
+        if let outputKey = workflow.steps.last?.outputKey,
+           let output = outputs[outputKey] {
+            return output
+        }
+
+        if let last = workflow.steps.reversed().compactMap({ step in
+            outputs[step.outputKey]
+        }).first {
+            return last
+        }
+
+        return outputs["result"] ?? outputs["summary"] ?? ""
+    }
+
+    private func workflowToastSummary(_ output: String, fallback: String) -> String {
+        let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return fallback }
+        if trimmed.count <= 140 { return trimmed }
+        return "\(trimmed.prefix(140))..."
     }
 
     private func deleteCapture() {
@@ -959,18 +1083,7 @@ private struct CapRailAction: View {
     /// Reusable label for the rail's "More" menu button so the visual
     /// rhythm matches the rest of the rail rows.
     static var menuLabel: some View {
-        HStack(spacing: 9) {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 12, weight: .regular))
-                .frame(width: 14, alignment: .center)
-            Text("More")
-                .font(.system(size: 12, weight: .regular))
-            Spacer(minLength: 0)
-        }
-        .foregroundStyle(ThemedScopeInk.faint)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .contentShape(Rectangle())
+        CapRailMoreLabel(label: "More")
     }
 
     private var foregroundColor: Color {
@@ -986,5 +1099,71 @@ private struct CapRailAction: View {
             return hovered ? ThemedScopeAccent.amber.opacity(0.14) : ThemedScopeAccent.amber.opacity(0.07)
         }
         return hovered ? ThemedScopeEdge.subtle : Color.clear
+    }
+}
+
+private struct CapRailMoreLabel: View {
+    let label: String
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 12, weight: .regular))
+                .frame(width: 14, alignment: .center)
+            Text(label)
+                .font(.system(size: 12, weight: .regular))
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(ThemedScopeInk.faint)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .contentShape(Rectangle())
+    }
+}
+
+private struct CapWorkflowAction: View {
+    let workflow: Workflow
+    let isRunning: Bool
+    let action: () -> Void
+
+    @State private var hovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 9) {
+                Image(systemName: isRunning ? "hourglass" : workflow.icon)
+                    .font(.system(size: 12, weight: .medium))
+                    .frame(width: 14, alignment: .center)
+                    .foregroundStyle(workflow.color.color)
+                Text(workflow.name)
+                    .font(.system(size: 12, weight: .medium))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 0)
+                if workflow.isPinned {
+                    Image(systemName: "pin.fill")
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(workflow.color.color.opacity(0.75))
+                }
+            }
+            .foregroundStyle(hovered || isRunning ? ThemedScopeInk.primary : ThemedScopeInk.faint)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(isRunning ? workflow.color.color.opacity(0.14) : (hovered ? workflow.color.color.opacity(0.10) : Color.clear))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 3)
+                    .stroke(workflow.color.color.opacity(isRunning || hovered ? 0.24 : 0), lineWidth: 0.5)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isRunning)
+        .onHover { hovered = $0 }
+        .help(workflow.description.isEmpty ? workflow.name : workflow.description)
+        .animation(.easeOut(duration: 0.12), value: hovered)
+        .animation(.easeOut(duration: 0.12), value: isRunning)
     }
 }

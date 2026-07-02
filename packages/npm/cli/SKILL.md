@@ -75,6 +75,16 @@ talkie screenshots 3 --paths
 talkie screencaps 3 --paths
 talkie screen-caps 3 --paths
 
+# Print the last 3 tray clip paths
+talkie clips 3 --paths
+
+# Include visual-context bundle + frame canvas metadata
+talkie captures --kind clip --limit 3 --context
+
+# Print decomposed frame canvas paths when FFmpeg processing finished
+talkie captures --kind clip --contact-sheet --paths
+talkie captures --kind clip --frames --paths
+
 # List only screen/video clips
 talkie captures --kind video
 
@@ -142,7 +152,7 @@ talkie search "meeting" --pretty
 
 - **Memos** have: id, title, text (transcript), duration, summary, tasks, source, createdAt
 - **Dictations** have: id, text, duration, source, metadata (target app), createdAt
-- **Captures** have: id, kind (screenshot/clip), source (recording/library/tray), absolute path, dimensions, app/window metadata, and recording link when attached
+- **Captures** have: id, kind (screenshot/clip), source (recording/library/tray), absolute path, dimensions, app/window metadata, recording link when attached, and optional `visualContext` bundle paths (summary, contact sheet, frames/)
 - **Workflow runs** have: id, workflowName, status, steps with outputs, durationMs
 - **Search** uses SQLite FTS5 — matches across title, text, and notes fields
 

@@ -284,7 +284,7 @@ struct LargeAttachmentView: View {
 @ViewBuilder
 private func screenshotAttachmentMenu(fileURL: URL) -> some View {
     Button {
-        CaptureMarkupCoordinator.shared.openSession(imageURL: fileURL)
+        CaptureMarkupCoordinator.shared.openAgentOwnedSession(imageURL: fileURL)
     } label: {
         Label("Annotate…", systemImage: "sparkles.rectangle.stack")
     }

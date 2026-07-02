@@ -178,6 +178,24 @@ public struct ConsoleView: View {
                 }
             }
 
+            if let onOpenLogs = onOpenLogs {
+                Button(action: onOpenLogs) {
+                    HStack(spacing: 4) {
+                        Text("Open Logs")
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 8, weight: .semibold))
+                    }
+                    .foregroundColor(theme.accentColor)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(theme.accentColor.opacity(0.12))
+                    .clipShape(.rect(cornerRadius: 3))
+                }
+                .buttonStyle(.plain)
+                .help("Open logs")
+            }
+
             // Copy-all button — grabs every visible (filtered) line at once.
             if !filteredEntries.isEmpty {
                 ConsoleIconButton(
@@ -296,16 +314,22 @@ public struct ConsoleView: View {
 
     private func levelFilterChip(_ level: ConsoleLogLevel?, label: String) -> some View {
         let isSelected = filterLevel == level
-        let chipColor = level?.color ?? .white
+        let chipColor = level?.color ?? theme.accentColor
 
         return Button(action: { filterLevel = level }) {
             Text(label)
                 .font(.system(size: 9, weight: .bold, design: .monospaced))
-                .foregroundColor(isSelected ? theme.background : chipColor.opacity(0.6))
+                .foregroundColor(chipColor.opacity(isSelected ? 0.95 : 0.65))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)
-                .background(isSelected ? chipColor : chipColor.opacity(0.1))
-                .cornerRadius(2)
+                .background(
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(chipColor.opacity(isSelected ? 0.18 : 0.08))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 2)
+                        .strokeBorder(isSelected ? chipColor.opacity(0.4) : Color.clear, lineWidth: 1)
+                )
         }
         .buttonStyle(.plain)
     }
@@ -343,26 +367,12 @@ public struct ConsoleView: View {
 
     private var statusBar: some View {
         HStack(spacing: 12) {
-            // Open logs folder
-            if let onOpenLogs = onOpenLogs {
-                Button(action: onOpenLogs) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "folder")
-                            .font(.system(size: 9))
-                        Text("Open Logs")
-                            .font(.system(size: 9, design: .monospaced))
-                    }
-                    .foregroundColor(theme.foregroundMuted)
-                }
-                .buttonStyle(.plain)
-            }
-
-            Spacer()
-
             // Entry count
             Text("\(entries.count) entries")
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundColor(theme.foregroundMuted)
+
+            Spacer()
 
             // Auto-scroll toggle
             Button(action: { autoScroll.toggle() }) {

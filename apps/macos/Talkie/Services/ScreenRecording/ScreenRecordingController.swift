@@ -37,15 +37,24 @@ final class ScreenRecordingController {
 
     private(set) var state: State = .idle
     private(set) var recordingStartTime: Date?
+    var isRecording: Bool {
+        state == .recording || ScreenRecordingService.shared.state == .recording
+    }
 
     @ObservationIgnored
     private var metadataSampleTask: Task<Void, Never>?
+    @ObservationIgnored
+    private var windowHealthTask: Task<Void, Never>?
+    @ObservationIgnored
+    private var monitoredWindowTarget: ScreenRecordingTarget?
     @ObservationIgnored
     private var metadataEvents: [RecordingVisualContextEvent] = []
     @ObservationIgnored
     private var activeWindowEventIndex: Int?
     @ObservationIgnored
     private var activeOverlayController: ScreenRecordingActiveOverlayController?
+    @ObservationIgnored
+    private var isStoppingRecording = false
 
     private init() {}
 
@@ -92,6 +101,14 @@ final class ScreenRecordingController {
             return .needsSelection
         }
 
+        guard await service.validateTargetForRecording(target) else {
+            log.warning(
+                "Reusable screen recording target is no longer valid — \(service.diagnosticSummary(for: target))"
+            )
+            state = .idle
+            return .needsSelection
+        }
+
         let countdown = ScreenRecordingCountdownController(target: target)
         switch await countdown.begin(seconds: Self.reusableCountdownSeconds) {
         case .start(let confirmedTarget):
@@ -124,8 +141,20 @@ final class ScreenRecordingController {
     // MARK: - Stop Recording
 
     /// Stop the current screen recording and add the clip to the tray.
-    func stopRecording() async {
-        guard state == .recording else { return }
+    @discardableResult
+    func stopRecording() async -> Bool {
+        guard !isStoppingRecording else {
+            log.debug("Screen recording stop ignored - stop already in progress")
+            return true
+        }
+        guard isRecording else { return false }
+
+        isStoppingRecording = true
+        defer { isStoppingRecording = false }
+
+        if state != .recording, ScreenRecordingService.shared.state == .recording {
+            log.warning("Screen recording controller state drifted; stopping active service recording")
+        }
 
         // Capture start time before stop clears it
         let startTime = ScreenRecordingService.shared.recordingStartTime ?? recordingStartTime
@@ -133,58 +162,121 @@ final class ScreenRecordingController {
 
         guard let result = await ScreenRecordingService.shared.stopRecording() else {
             log.error("Screen recording stop returned no result")
-            recordingStartTime = nil
-            state = .idle
-            hideActiveOverlay()
-            resetMetadataSampler()
-            return
+            resetAfterRecordingEnded()
+            return false
         }
 
-        // Calculate duration
-        let durationMs: Int
-        if let startTime {
-            durationMs = Int(Date().timeIntervalSince(startTime) * 1000)
-        } else {
-            durationMs = 0
-        }
-
-        let captureMode = Self.captureModeString(for: result.target)
-        let clipStartedAt = startTime ?? Date().addingTimeInterval(-Double(durationMs) / 1000.0)
-        var metadataEvents = finalizedMetadataEvents(durationMs: durationMs)
-        if let markupEvent = activeOverlayController?.captureMarkupEvent(
-            recordingStartTime: clipStartedAt,
-            durationMs: durationMs
-        ) {
-            metadataEvents.append(markupEvent)
-        }
-
-        // Add to clip tray
-        await ClipTray.shared.add(
-            tempURL: result.url,
-            capturedAt: clipStartedAt,
-            durationMs: durationMs,
+        let clipStartedAt = startTime ?? Date()
+        let durationMs = durationMs(since: clipStartedAt)
+        await persistFinishedClip(
+            url: result.url,
             width: result.width,
             height: result.height,
-            captureMode: captureMode,
-            windowTitle: result.target.windowTitle,
-            appName: result.target.appName,
-            displayName: result.target.displayName,
-            metadataEvents: metadataEvents
+            target: result.target,
+            startedAt: clipStartedAt,
+            durationMs: durationMs,
+            interrupted: false
         )
 
-        recordingStartTime = nil
-        state = .idle
-        hideActiveOverlay()
-        // NotchComposer observes our state change and deactivates .screenRecording automatically
-        log.info("Screen recording stopped, \(durationMs)ms → tray (\(ClipTray.shared.count) total)")
+        resetAfterRecordingEnded()
+        return true
     }
 
     // MARK: - Toggle (for stop via hotkey)
 
     /// If recording, stop. Otherwise do nothing (chord handles start).
-    func stopIfRecording() async {
-        if state == .recording {
-            await stopRecording()
+    @discardableResult
+    func stopIfRecording() async -> Bool {
+        if isRecording || isStoppingRecording {
+            return await stopRecording()
+        }
+        return false
+    }
+
+    /// Reset controller UI/state after ScreenCaptureKit ends the stream unexpectedly.
+    func handleServiceInterruption(reason: String, salvaged: ScreenRecordingFinishedClip? = nil) async {
+        guard !isStoppingRecording else {
+            log.debug("Screen recording stream interruption observed during stop: \(reason)")
+            return
+        }
+        guard state != .idle || recordingStartTime != nil || salvaged != nil else {
+            return
+        }
+
+        if let salvaged {
+            let durationMs = durationMs(since: salvaged.startedAt)
+            await persistFinishedClip(
+                url: salvaged.url,
+                width: salvaged.width,
+                height: salvaged.height,
+                target: salvaged.target,
+                startedAt: salvaged.startedAt,
+                durationMs: durationMs,
+                interrupted: true
+            )
+            log.warning(
+                "Screen recording interrupted by ScreenCaptureKit but partial clip saved (\(durationMs)ms): \(reason)"
+            )
+        } else {
+            ScreenRecordingService.shared.logCaptureFailure(reason: reason)
+        }
+
+        resetAfterRecordingEnded()
+    }
+
+    func dismissMarkupOverlaysForSafety(reason: String) {
+        log.warning("Dismissing screen recording markup overlay", detail: reason)
+        activeOverlayController?.dismissMarkupOverlay()
+    }
+
+    private func resetAfterRecordingEnded() {
+        stopWindowHealthMonitor()
+        stopMetadataSampler()
+        recordingStartTime = nil
+        state = .idle
+        hideActiveOverlay()
+        resetMetadataSampler()
+    }
+
+    private func durationMs(since startedAt: Date) -> Int {
+        max(0, Int(Date().timeIntervalSince(startedAt) * 1000))
+    }
+
+    private func persistFinishedClip(
+        url: URL,
+        width: Int,
+        height: Int,
+        target: ScreenRecordingTarget,
+        startedAt: Date,
+        durationMs: Int,
+        interrupted: Bool
+    ) async {
+        let captureMode = Self.captureModeString(for: target)
+        var metadataEvents = finalizedMetadataEvents(durationMs: durationMs)
+        if let markupEvent = activeOverlayController?.captureMarkupEvent(
+            recordingStartTime: startedAt,
+            durationMs: durationMs
+        ) {
+            metadataEvents.append(markupEvent)
+        }
+
+        await ClipTray.shared.add(
+            tempURL: url,
+            capturedAt: startedAt,
+            durationMs: durationMs,
+            width: width,
+            height: height,
+            captureMode: captureMode,
+            windowTitle: target.windowTitle,
+            appName: target.appName,
+            displayName: target.displayName,
+            metadataEvents: metadataEvents
+        )
+
+        if interrupted {
+            log.warning("Interrupted screen recording saved to tray (\(durationMs)ms, \(ClipTray.shared.count) total)")
+        } else {
+            log.info("Screen recording stopped, \(durationMs)ms → tray (\(ClipTray.shared.count) total)")
         }
     }
 
@@ -254,10 +346,44 @@ final class ScreenRecordingController {
         recordingStartTime = startTime
         state = .recording
         startMetadataSampler(for: target, captureMode: Self.captureModeString(for: target), startedAt: startTime)
+        startWindowHealthMonitor(for: target)
         showActiveOverlay(for: target, startedAt: startTime)
         // NotchComposer observes our state change and activates .screenRecording automatically
-        log.info("Screen recording in progress (mode: \(mode.rawValue))")
+        log.info(
+            "Screen recording in progress (mode: \(mode.rawValue), \(ScreenRecordingService.shared.diagnosticSummary(for: target)))"
+        )
         return true
+    }
+
+    private func startWindowHealthMonitor(for target: ScreenRecordingTarget) {
+        guard case .window = target.kind else { return }
+
+        stopWindowHealthMonitor()
+        monitoredWindowTarget = target
+        windowHealthTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else { break }
+                guard let self, self.state == .recording, let monitoredWindowTarget = self.monitoredWindowTarget else {
+                    break
+                }
+
+                let stillValid = await ScreenRecordingService.shared.isCaptureTargetStillValid(monitoredWindowTarget)
+                guard stillValid else {
+                    log.warning(
+                        "Screen recording window target lost — stopping gracefully (\(ScreenRecordingService.shared.diagnosticSummary(for: monitoredWindowTarget)))"
+                    )
+                    await self.stopRecording()
+                    break
+                }
+            }
+        }
+    }
+
+    private func stopWindowHealthMonitor() {
+        windowHealthTask?.cancel()
+        windowHealthTask = nil
+        monitoredWindowTarget = nil
     }
 
     private func showActiveOverlay(for target: ScreenRecordingTarget, startedAt: Date) {

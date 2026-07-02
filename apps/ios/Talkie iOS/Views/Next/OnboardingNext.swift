@@ -88,6 +88,18 @@ struct OnboardingNext: View {
         }
 
         var isReady: Bool { self == .ready }
+
+        // VoiceOver reads only the terse status word ("ENABLE"/"SETTINGS")
+        // otherwise, which is ambiguous across the identical-looking rows.
+        // Combine it with the row's subject so each pill is self-describing.
+        func accessibilityLabel(for subject: String) -> String {
+            switch self {
+            case .ready: return "\(subject) enabled"
+            case .needsAction: return "Enable \(subject.lowercased())"
+            case .denied, .needsSettings: return "Open Settings for \(subject.lowercased()) access"
+            case .restricted: return "\(subject) restricted"
+            }
+        }
     }
 
     var body: some View {
@@ -112,8 +124,12 @@ struct OnboardingNext: View {
         .onAppear {
             checkICloudStatus()
             refreshPermissionStatuses()
-            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-                heroPulse = true
+            // heroPulse drives every decorative loop on this surface; leaving
+            // it false under Reduce Motion stills them all.
+            if !TalkieMotion.isReduced {
+                withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                    heroPulse = true
+                }
             }
         }
     }
@@ -213,6 +229,39 @@ struct OnboardingNext: View {
     }
 
     private func tryRecord() {
+        // Gate on mic permission so TAP TO TRY never lands the user on a
+        // mid-recording system prompt or a silent dead first recording.
+        // Uses the same API as the Microphone ENABLE pill.
+        switch AVAudioApplication.shared.recordPermission {
+        case .granted:
+            // Happy path — identical to before.
+            microphonePermissionStatus = .ready
+            beginTrialRecording()
+        case .undetermined:
+            AVAudioApplication.requestRecordPermission { granted in
+                Task { @MainActor in
+                    if granted {
+                        microphonePermissionStatus = .ready
+                        beginTrialRecording()
+                    } else {
+                        // Denied at the prompt — keep them here and surface
+                        // the enable/settings affordance on the pill.
+                        microphonePermissionStatus = .denied
+                    }
+                }
+            }
+        case .denied:
+            // Previously denied — don't open a doomed recording sheet; point
+            // them at the row's SETTINGS affordance instead.
+            microphonePermissionStatus = .denied
+            openAppSettings()
+        @unknown default:
+            microphonePermissionStatus = .denied
+            openAppSettings()
+        }
+    }
+
+    private func beginTrialRecording() {
         complete()
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(300))
@@ -609,7 +658,7 @@ struct OnboardingNext: View {
             Spacer()
 
             if iCloudStatus != .available {
-                Button(action: openICloudSettings) {
+                Button(action: openAppSettings) {
                     HStack(spacing: 4) {
                         Image(systemName: "icloud.slash").font(.system(size: 10))
                         Text("Enable iCloud for sync")
@@ -649,6 +698,7 @@ struct OnboardingNext: View {
                 icon: "mic.fill",
                 title: "Microphone",
                 detail: "Record memos",
+                accessibilitySubject: "Microphone",
                 status: microphonePermissionStatus,
                 action: requestMicrophonePermission
             )
@@ -656,6 +706,7 @@ struct OnboardingNext: View {
                 icon: "waveform",
                 title: "Speech",
                 detail: "Transcribe live",
+                accessibilitySubject: "Speech recognition",
                 status: speechPermissionStatus,
                 action: requestSpeechPermission
             )
@@ -680,6 +731,9 @@ struct OnboardingNext: View {
         icon: String,
         title: String,
         detail: String,
+        // Spoken subject for VoiceOver — may differ from the terse visible
+        // title (e.g. "Speech" reads as "speech recognition").
+        accessibilitySubject: String,
         status: PermissionPromptStatus,
         action: @escaping () -> Void
     ) -> some View {
@@ -722,6 +776,7 @@ struct OnboardingNext: View {
             }
             .buttonStyle(.plain)
             .disabled(status == .ready || status == .restricted)
+            .accessibilityLabel(status.accessibilityLabel(for: accessibilitySubject))
         }
     }
 
@@ -745,7 +800,9 @@ struct OnboardingNext: View {
         }
     }
 
-    private func openICloudSettings() {
+    // Opens Talkie's own pane in the iOS Settings app (the row where
+    // Microphone / Speech Recognition toggles live) — not an iCloud pane.
+    private func openAppSettings() {
         if let url = URL(string: UIApplication.openSettingsURLString) {
             UIApplication.shared.open(url)
         }
@@ -789,9 +846,9 @@ struct OnboardingNext: View {
                 }
             }
         case .denied:
-            openICloudSettings()
+            openAppSettings()
         @unknown default:
-            openICloudSettings()
+            openAppSettings()
         }
     }
 
@@ -813,9 +870,9 @@ struct OnboardingNext: View {
                 }
             }
         case .denied, .restricted:
-            openICloudSettings()
+            openAppSettings()
         @unknown default:
-            openICloudSettings()
+            openAppSettings()
         }
     }
 

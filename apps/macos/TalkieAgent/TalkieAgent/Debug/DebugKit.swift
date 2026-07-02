@@ -1979,22 +1979,29 @@ struct ConsolePopover: View {
                 Text("CONSOLE")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .tracking(1)
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(TalkieTheme.textSecondary)
 
                 Spacer()
 
-                // Expand to full logs view (arrows icon)
                 Button(action: openFullLogs) {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.white.opacity(0.6))
+                    HStack(spacing: 4) {
+                        Text("Logs")
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 8, weight: .semibold))
+                    }
+                    .foregroundColor(TalkieTheme.accent)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(TalkieTheme.accent.opacity(0.12))
+                    .clipShape(.rect(cornerRadius: 3))
                 }
                 .buttonStyle(.plain)
-                .help("Open full logs")
+                .help("Open Logs page")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color(white: 0.1))
+            .background(TalkieTheme.surfaceCard)
 
             Divider()
 
@@ -2004,7 +2011,7 @@ struct ConsolePopover: View {
                     if recentEvents.isEmpty {
                         Text("No events")
                             .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.4))
+                            .foregroundColor(TalkieTheme.textMuted)
                             .padding(12)
                     } else {
                         ForEach(recentEvents) { event in
@@ -2021,7 +2028,7 @@ struct ConsolePopover: View {
             HStack {
                 Text("\(events.events.count) total events")
                     .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.3))
+                    .foregroundColor(TalkieTheme.textMuted)
 
                 Spacer()
 
@@ -2030,14 +2037,14 @@ struct ConsolePopover: View {
                 }
                 .font(.system(size: 9))
                 .buttonStyle(.plain)
-                .foregroundColor(.white.opacity(0.4))
+                .foregroundColor(TalkieTheme.textSecondary)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color(white: 0.1))
+            .background(TalkieTheme.surfaceCard)
         }
         .frame(width: 400)
-        .background(Color(white: 0.08))
+        .background(TalkieTheme.surfaceElevated)
     }
 
     private func openFullLogs() {
@@ -2069,7 +2076,7 @@ struct ConsolePopoverRow: View {
             // Timestamp
             Text(Self.timeFormatter.string(from: event.timestamp))
                 .font(.system(size: 9, design: .monospaced))
-                .foregroundColor(.white.opacity(0.3))
+                .foregroundColor(TalkieTheme.textMuted)
                 .frame(width: 50, alignment: .leading)
 
             // Type indicator
@@ -2082,13 +2089,13 @@ struct ConsolePopoverRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(event.message)
                     .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.85))
+                    .foregroundColor(TalkieTheme.textPrimary)
                     .lineLimit(2)
 
                 if let detail = event.detail {
                     Text(detail)
                         .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(TalkieTheme.textSecondary)
                         .lineLimit(1)
                 }
             }
@@ -2097,7 +2104,7 @@ struct ConsolePopoverRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(event.type == .error ? Color.red.opacity(0.1) : Color.clear)
+        .background(event.type == .error ? SemanticColor.error.opacity(0.08) : Color.clear)
     }
 }
 

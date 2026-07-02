@@ -34,9 +34,18 @@ html, body {
  *   --theme-ink-faint    metadata / channel labels
  *   --theme-ink-subtle   decorative glyphs
  *   --theme-amber        the accent (NOT always amber — themed)
+ *   --theme-accent       alias/new name for accent
+ *   --theme-action       common affordance ink (buttons/tools, not status)
+ *   --theme-action-faint translucent action fill
  *   --theme-amber-soft   translucent accent for borders
  *   --theme-amber-glow   text-shadow / drop-shadow halo color
  *   --theme-amber-faint  tint for chip backgrounds, etc.
+ *   --theme-panel        recessed/console surface
+ *   --theme-panel-alt    secondary recessed surface
+ *   --theme-metal-top    raised-metal top sheen
+ *   --theme-metal-bottom raised-metal lower shade
+ *   --theme-recess-lip   recessed-screen top lip shade/light
+ *   --theme-ambient      canvas ambient light
  *   --theme-edge         primary card border
  *   --theme-edge-dim     default tile border
  *   --theme-edge-faint   section dividers
@@ -52,7 +61,7 @@ html, body {
  *   --theme-display-weight
  *   --theme-display-tracking
  *
- * Adding a token: extend ALL four blocks below + document in
+ * Adding a token: extend every theme block below + document in
  * lib/themes.ts so its `preview` array reflects the truth.
  * ────────────────────────────────────────────────────────────────── */
 
@@ -75,9 +84,18 @@ html, body {
   --theme-ink-faint:    #5A5045;
   --theme-ink-subtle:   #A39989;
   --theme-amber:        #B5823A;
+  --theme-accent:       #B5823A;
+  --theme-action:       #756A5D;
+  --theme-action-faint: rgba(117, 106, 93, 0.10);
   --theme-amber-soft:   rgba(181, 130, 58, 0.34);
   --theme-amber-glow:   rgba(181, 130, 58, 0.14);
   --theme-amber-faint:  rgba(181, 130, 58, 0.08);
+  --theme-panel:        #ECE9E1;
+  --theme-panel-alt:    #F1EEE8;
+  --theme-metal-top:    rgba(255, 255, 255, 0.04);
+  --theme-metal-bottom: rgba(26, 22, 18, 0.09);
+  --theme-recess-lip:   rgba(26, 22, 18, 0.16);
+  --theme-ambient:      rgba(255, 255, 255, 0.04);
   --theme-edge:         rgba(26, 22, 18, 0.30);
   --theme-edge-dim:     rgba(26, 22, 18, 0.20);
   --theme-edge-faint:   rgba(26, 22, 18, 0.10);
@@ -119,9 +137,18 @@ html, body {
   --theme-ink-faint:    #9A9A9A;
   --theme-ink-subtle:   #6A6A6A;
   --theme-amber:        #0084FF;
+  --theme-accent:       #0084FF;
+  --theme-action:       #B8C7D8;
+  --theme-action-faint: rgba(184, 199, 216, 0.10);
   --theme-amber-soft:   rgba(0, 132, 255, 0.34);
   --theme-amber-glow:   rgba(0, 132, 255, 0.14);
   --theme-amber-faint:  rgba(0, 132, 255, 0.08);
+  --theme-panel:        #050505;
+  --theme-panel-alt:    #151515;
+  --theme-metal-top:    rgba(255, 255, 255, 0.10);
+  --theme-metal-bottom: rgba(0, 0, 0, 0.00);
+  --theme-recess-lip:   rgba(255, 255, 255, 0.08);
+  --theme-ambient:      rgba(255, 255, 255, 0.05);
   --theme-edge:         rgba(250, 250, 250, 0.30);
   --theme-edge-dim:     rgba(250, 250, 250, 0.18);
   --theme-edge-faint:   rgba(250, 250, 250, 0.10);
@@ -162,9 +189,18 @@ html, body {
   --theme-ink-faint:    #A0A0A0;
   --theme-ink-subtle:   #707070;
   --theme-amber:        #FF8800;
+  --theme-accent:       #FF8800;
+  --theme-action:       #D6D6D6;
+  --theme-action-faint: rgba(214, 214, 214, 0.10);
   --theme-amber-soft:   rgba(255, 136, 0, 0.50);
   --theme-amber-glow:   rgba(255, 136, 0, 0.18);
   --theme-amber-faint:  rgba(255, 136, 0, 0.12);
+  --theme-panel:        #050505;
+  --theme-panel-alt:    #151515;
+  --theme-metal-top:    rgba(255, 255, 255, 0.12);
+  --theme-metal-bottom: rgba(0, 0, 0, 0.00);
+  --theme-recess-lip:   rgba(255, 255, 255, 0.09);
+  --theme-ambient:      rgba(255, 136, 0, 0.035);
   --theme-edge:         rgba(240, 240, 240, 0.34);
   --theme-edge-dim:     rgba(240, 240, 240, 0.22);
   --theme-edge-faint:   rgba(240, 240, 240, 0.14);
@@ -206,9 +242,18 @@ html, body {
   --theme-ink-faint:    #7A7A7A;
   --theme-ink-subtle:   #A0A0A0;
   --theme-amber:        #6366F1;
+  --theme-accent:       #6366F1;
+  --theme-action:       #5C6072;
+  --theme-action-faint: rgba(92, 96, 114, 0.08);
   --theme-amber-soft:   rgba(99, 102, 241, 0.32);
   --theme-amber-glow:   rgba(99, 102, 241, 0.10);
   --theme-amber-faint:  rgba(99, 102, 241, 0.06);
+  --theme-panel:        #F5F5F5;
+  --theme-panel-alt:    #FAFAFA;
+  --theme-metal-top:    rgba(255, 255, 255, 0.00);
+  --theme-metal-bottom: rgba(0, 0, 0, 0.08);
+  --theme-recess-lip:   rgba(0, 0, 0, 0.12);
+  --theme-ambient:      rgba(0, 0, 0, 0.025);
   --theme-edge:         rgba(0, 0, 0, 0.10);
   --theme-edge-dim:     rgba(0, 0, 0, 0.06);
   --theme-edge-faint:   rgba(0, 0, 0, 0.04);
@@ -250,9 +295,18 @@ html, body {
   --theme-ink-faint:    #7A7A7A;
   --theme-ink-subtle:   #A0A0A0;
   --theme-amber:        #6366F1;
+  --theme-accent:       #6366F1;
+  --theme-action:       #5B5F73;
+  --theme-action-faint: rgba(91, 95, 115, 0.08);
   --theme-amber-soft:   rgba(99, 102, 241, 0.34);
   --theme-amber-glow:   rgba(99, 102, 241, 0.14);
   --theme-amber-faint:  rgba(99, 102, 241, 0.06);
+  --theme-panel:        #F0F0F4;
+  --theme-panel-alt:    #FAFAFC;
+  --theme-metal-top:    rgba(255, 255, 255, 0.035);
+  --theme-metal-bottom: rgba(42, 42, 42, 0.07);
+  --theme-recess-lip:   rgba(42, 42, 42, 0.13);
+  --theme-ambient:      rgba(99, 102, 241, 0.035);
   --theme-edge:         rgba(42, 42, 42, 0.24);
   --theme-edge-dim:     rgba(42, 42, 42, 0.16);
   --theme-edge-faint:   rgba(42, 42, 42, 0.10);
@@ -293,9 +347,18 @@ html, body {
   --theme-ink-faint:    #56565A;
   --theme-ink-subtle:   #3A3A3D;
   --theme-amber:        #7B8E9E;
+  --theme-accent:       #7B8E9E;
+  --theme-action:       #A8AEB5;
+  --theme-action-faint: rgba(168, 174, 181, 0.10);
   --theme-amber-soft:   rgba(123, 142, 158, 0.30);
   --theme-amber-glow:   rgba(123, 142, 158, 0.10);
   --theme-amber-faint:  rgba(123, 142, 158, 0.06);
+  --theme-panel:        #060607;
+  --theme-panel-alt:    #151517;
+  --theme-metal-top:    rgba(255, 255, 255, 0.11);
+  --theme-metal-bottom: rgba(0, 0, 0, 0.00);
+  --theme-recess-lip:   rgba(255, 255, 255, 0.08);
+  --theme-ambient:      rgba(255, 255, 255, 0.04);
   --theme-edge:         rgba(237, 237, 238, 0.22);
   --theme-edge-dim:     rgba(237, 237, 238, 0.14);
   --theme-edge-faint:   rgba(237, 237, 238, 0.07);
@@ -314,6 +377,57 @@ html, body {
   --theme-card-shadow-strong:
     inset 0 0.5px 0 rgba(255, 255, 255, 0.05),
     0 8px 24px -10px rgba(0, 0, 0, 0.65);
+  --theme-font-display: Newsreader, "Iowan Old Style", Georgia, serif;
+  --theme-font-body:    Inter, -apple-system, "SF Pro Text", sans-serif;
+  --theme-font-mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --theme-display-weight: 500;
+  --theme-display-tracking: -0.018em;
+}
+
+/* Carbon — true black default-dark stress test. Light carries depth because
+ * black shadows disappear on the canvas. Mirrors the Swift carbon family and
+ * is intentionally harsher than Graphite so Home material tokens can be judged
+ * against a pure-black floor. */
+[data-theme="carbon"] {
+  --theme-canvas:       #000000;
+  --theme-canvas-alt:   #080808;
+  --theme-paper:        #101010;
+  --theme-sheet:        #141414;
+  --theme-ink:          #F2F2F2;
+  --theme-ink-dim:      #C7C7C7;
+  --theme-ink-muted:    #A4A4A4;
+  --theme-ink-faint:    #777777;
+  --theme-ink-subtle:   #444444;
+  --theme-amber:        #A1A1AA;
+  --theme-accent:       #A1A1AA;
+  --theme-action:       #C8C8D0;
+  --theme-action-faint: rgba(200, 200, 208, 0.10);
+  --theme-amber-soft:   rgba(161, 161, 170, 0.30);
+  --theme-amber-glow:   rgba(161, 161, 170, 0.08);
+  --theme-amber-faint:  rgba(161, 161, 170, 0.06);
+  --theme-panel:        #030303;
+  --theme-panel-alt:    #111111;
+  --theme-metal-top:    rgba(255, 255, 255, 0.12);
+  --theme-metal-bottom: rgba(0, 0, 0, 0.00);
+  --theme-recess-lip:   rgba(255, 255, 255, 0.09);
+  --theme-ambient:      rgba(255, 255, 255, 0.05);
+  --theme-edge:         rgba(242, 242, 242, 0.22);
+  --theme-edge-dim:     rgba(242, 242, 242, 0.14);
+  --theme-edge-faint:   rgba(242, 242, 242, 0.08);
+  --theme-edge-subtle:  rgba(242, 242, 242, 0.04);
+  --theme-screen-bg:        #000000;
+  --theme-screen-trace:     #D4D4D8;
+  --theme-screen-trace-glow: rgba(212, 212, 216, 0.20);
+  --theme-rec:          #FF453A;
+  --theme-rec-glow:     rgba(255, 69, 58, 0.35);
+  --theme-eyebrow-leader: "\B7";
+  --theme-chrome-corner: 3px;
+  --theme-hairline-w:    0.5px;
+  --theme-glow-radius:   0px;
+  --theme-card-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.05);
+  --theme-card-shadow-strong:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.08);
   --theme-font-display: Newsreader, "Iowan Old Style", Georgia, serif;
   --theme-font-body:    Inter, -apple-system, "SF Pro Text", sans-serif;
   --theme-font-mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;

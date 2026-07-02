@@ -13,6 +13,71 @@ import PhotosUI
 import SwiftUI
 import UIKit
 
+private enum MemoTransferBuildError: LocalizedError {
+    case memoNotReady
+    case noTransferableContent
+
+    var errorDescription: String? {
+        switch self {
+        case .memoNotReady:
+            return "This memo is not ready to send yet."
+        case .noTransferableContent:
+            return "This memo does not have audio, transcript text, notes, or a summary to send yet."
+        }
+    }
+}
+
+private struct MemoSharePayload: Identifiable {
+    let id = UUID()
+    let items: [Any]
+    let cleanupURLs: [URL]
+}
+
+private struct MemoAirDropPackage {
+    let items: [Any]
+    let cleanupURLs: [URL]
+}
+
+private struct MemoAirDropManifest: Codable {
+    struct Audio: Codable {
+        let filename: String
+        let mimeType: String?
+        let fileSizeBytes: Int64
+    }
+
+    struct Attachment: Codable {
+        let id: String
+        let originalName: String
+        let addedAt: String
+        let fileSizeBytes: Int64
+        let pixelWidth: Int?
+        let pixelHeight: Int?
+        let recordingOffsetSeconds: Double?
+        let mimeType: String?
+    }
+
+    let schemaVersion: Int
+    let exportType: String
+    let exportedAt: String
+    let memoId: String
+    let title: String?
+    let transcript: String?
+    let notes: String?
+    let summary: String?
+    let durationSeconds: Double
+    let createdAt: String
+    let lastModified: String?
+    let originDeviceId: String?
+    let sourceDeviceName: String?
+    let audio: Audio?
+    let attachments: [Attachment]
+}
+
+private struct MemoAirDropAudioFile {
+    let url: URL
+    let manifest: MemoAirDropManifest.Audio
+}
+
 @MainActor
 final class VoiceMemoDetailStore: ObservableObject {
     @Published var memo: MemoDisplay
@@ -30,6 +95,9 @@ final class VoiceMemoDetailStore: ObservableObject {
         let levels: [Float]
         let isPlaying: Bool
         let playheadProgress: Double
+        // In-progress transcription pass on the underlying entity. Lets the
+        // reading body distinguish "still working" from "empty / failed".
+        var isTranscribing: Bool = false
     }
 
     struct TranscriptVersionDisplay: Identifiable, Equatable {
@@ -223,6 +291,20 @@ final class VoiceMemoDetailStore: ObservableObject {
             .joined(separator: "|")
     }
 
+    var memoTransferFingerprint: String {
+        [
+            memo.id,
+            memo.title,
+            memo.transcript,
+            memo.summary ?? "",
+            sourceMemo?.notes ?? "",
+            memo.durationLabel,
+            attachmentFingerprint,
+            sourceMemo?.lastModified?.timeIntervalSince1970.description ?? "",
+        ]
+        .joined(separator: "|")
+    }
+
     var hasPersistentMemo: Bool {
         !isMock && sourceMemo?.id != nil
     }
@@ -330,30 +412,99 @@ final class VoiceMemoDetailStore: ObservableObject {
     }
 
     func buildAttachmentUploadRequest() throws -> MemoAttachmentUploadRequest {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-        let items = try attachments.map { attachment in
-            let data = try Data(contentsOf: MemoAttachmentStore.shared.url(for: attachment))
-            return MemoAttachmentUploadItem(
-                id: attachment.id.uuidString,
-                originalName: attachment.originalName,
-                addedAt: formatter.string(from: attachment.addedAt),
-                fileSizeBytes: attachment.fileSizeBytes,
-                pixelWidth: attachment.pixelWidth,
-                pixelHeight: attachment.pixelHeight,
-                recordingOffsetSeconds: nil,
-                mimeType: Self.mimeType(for: attachment.originalName),
-                dataBase64: data.base64EncodedString()
-            )
-        }
-
         let createdAt = sourceMemo?.createdAt ?? Date()
         return MemoAttachmentUploadRequest(
             memoTitle: memo.title,
-            memoCreatedAt: formatter.string(from: createdAt),
-            attachments: items
+            memoCreatedAt: Self.isoString(from: createdAt),
+            attachments: try buildAttachmentUploadItems()
         )
+    }
+
+    func buildMemoTransferRequest() throws -> MemoTransferRequest {
+        guard let sourceMemo, let memoUUID else {
+            throw MemoTransferBuildError.memoNotReady
+        }
+
+        let transcript = Self.transferText(sourceMemo.currentTranscript)
+        let notes = Self.transferText(sourceMemo.notes)
+        let summary = Self.transferText(sourceMemo.summary)
+        let audio = try buildMemoTransferAudio()
+
+        guard audio != nil || transcript != nil || notes != nil || summary != nil else {
+            throw MemoTransferBuildError.noTransferableContent
+        }
+
+        return MemoTransferRequest(
+            schemaVersion: 1,
+            memoId: memoUUID.uuidString,
+            title: Self.transferText(sourceMemo.title) ?? memo.title,
+            transcript: transcript,
+            notes: notes,
+            summary: summary,
+            durationSeconds: durationSeconds,
+            createdAt: Self.isoString(from: sourceMemo.createdAt ?? Date()),
+            lastModified: sourceMemo.lastModified.map(Self.isoString(from:)),
+            originDeviceId: sourceMemo.originDeviceId,
+            sourceDeviceName: UIDevice.current.name,
+            audio: audio,
+            attachments: try buildAttachmentUploadItems()
+        )
+    }
+
+    fileprivate func buildAirDropPackage() throws -> MemoAirDropPackage {
+        guard let sourceMemo, let memoUUID else {
+            throw MemoTransferBuildError.memoNotReady
+        }
+
+        let transcript = Self.transferText(sourceMemo.currentTranscript)
+        let notes = Self.transferText(sourceMemo.notes)
+        let summary = Self.transferText(sourceMemo.summary)
+        let hasAudio = audioData?.isEmpty == false || audioURL != nil
+
+        guard hasAudio || transcript != nil || notes != nil || summary != nil else {
+            throw MemoTransferBuildError.noTransferableContent
+        }
+
+        let title = Self.transferText(sourceMemo.title) ?? memo.title
+        let baseName = Self.exportFilenameBase(title: title, memoID: memoUUID)
+        let directory = URL.temporaryDirectory
+            .appending(path: "TalkieMemo-\(memoUUID.uuidString)-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        do {
+            let audioFile = try copyAirDropAudio(to: directory, baseName: baseName)
+            let manifest = MemoAirDropManifest(
+                schemaVersion: 1,
+                exportType: "talkie.memo.airdrop",
+                exportedAt: Self.isoString(from: Date()),
+                memoId: memoUUID.uuidString,
+                title: title,
+                transcript: transcript,
+                notes: notes,
+                summary: summary,
+                durationSeconds: durationSeconds,
+                createdAt: Self.isoString(from: sourceMemo.createdAt ?? Date()),
+                lastModified: sourceMemo.lastModified.map(Self.isoString(from:)),
+                originDeviceId: sourceMemo.originDeviceId,
+                sourceDeviceName: UIDevice.current.name,
+                audio: audioFile?.manifest,
+                attachments: attachments.map(Self.airDropAttachmentManifest(from:))
+            )
+
+            let manifestURL = directory.appending(path: "\(baseName).json")
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            try encoder.encode(manifest).write(to: manifestURL, options: [.atomic])
+
+            var items: [Any] = [manifestURL]
+            if let audioFile {
+                items.append(audioFile.url)
+            }
+            return MemoAirDropPackage(items: items, cleanupURLs: [directory])
+        } catch {
+            try? FileManager.default.removeItem(at: directory)
+            throw error
+        }
     }
 
     func shareItems() -> [Any] {
@@ -367,6 +518,82 @@ final class VoiceMemoDetailStore: ObservableObject {
         ]
         items.append(contentsOf: attachments.compactMap { image(for: $0) })
         return items
+    }
+
+    private func copyAirDropAudio(to directory: URL, baseName: String) throws -> MemoAirDropAudioFile? {
+        let sourceFilename = sourceMemo?.fileURL ?? "\(memo.id).m4a"
+        let fileExtension = Self.audioFileExtension(for: sourceFilename)
+        let filename = "\(baseName).\(fileExtension)"
+        let outputURL = directory.appending(path: filename)
+
+        if let audioData, !audioData.isEmpty {
+            try audioData.write(to: outputURL, options: [.atomic])
+        } else if let audioURL {
+            try FileManager.default.copyItem(at: audioURL, to: outputURL)
+        } else {
+            return nil
+        }
+
+        let values = try outputURL.resourceValues(forKeys: [.fileSizeKey])
+        let fileSizeBytes = Int64(values.fileSize ?? 0)
+        return MemoAirDropAudioFile(
+            url: outputURL,
+            manifest: MemoAirDropManifest.Audio(
+                filename: filename,
+                mimeType: Self.audioMimeType(for: filename),
+                fileSizeBytes: fileSizeBytes
+            )
+        )
+    }
+
+    private func buildAttachmentUploadItems() throws -> [MemoAttachmentUploadItem] {
+        try attachments.map { attachment in
+            let data = try Data(contentsOf: MemoAttachmentStore.shared.url(for: attachment))
+            return MemoAttachmentUploadItem(
+                id: attachment.id.uuidString,
+                originalName: attachment.originalName,
+                addedAt: Self.isoString(from: attachment.addedAt),
+                fileSizeBytes: attachment.fileSizeBytes,
+                pixelWidth: attachment.pixelWidth,
+                pixelHeight: attachment.pixelHeight,
+                recordingOffsetSeconds: nil,
+                mimeType: Self.mimeType(for: attachment.originalName),
+                dataBase64: data.base64EncodedString()
+            )
+        }
+    }
+
+    private static func airDropAttachmentManifest(from attachment: MemoImageAttachment) -> MemoAirDropManifest.Attachment {
+        MemoAirDropManifest.Attachment(
+            id: attachment.id.uuidString,
+            originalName: attachment.originalName,
+            addedAt: isoString(from: attachment.addedAt),
+            fileSizeBytes: attachment.fileSizeBytes,
+            pixelWidth: attachment.pixelWidth,
+            pixelHeight: attachment.pixelHeight,
+            recordingOffsetSeconds: nil,
+            mimeType: mimeType(for: attachment.originalName)
+        )
+    }
+
+    private func buildMemoTransferAudio() throws -> MemoTransferAudio? {
+        let data: Data
+        if let audioData {
+            data = audioData
+        } else if let audioURL {
+            data = try Data(contentsOf: audioURL)
+        } else {
+            return nil
+        }
+
+        guard !data.isEmpty else { return nil }
+        let filename = sourceMemo?.fileURL ?? "\(memo.id).m4a"
+        return MemoTransferAudio(
+            filename: filename,
+            mimeType: Self.audioMimeType(for: filename),
+            fileSizeBytes: Int64(data.count),
+            dataBase64: data.base64EncodedString()
+        )
     }
 
     @discardableResult
@@ -389,6 +616,11 @@ final class VoiceMemoDetailStore: ObservableObject {
         let context = sourceMemo.managedObjectContext
             ?? PersistenceController.shared.container.viewContext
         TranscriptionService.shared.transcribeVoiceMemo(sourceMemo, context: context)
+        // TranscriptionService flips isTranscribing on its own context queue
+        // (async) and only publishes .voiceMemosDidChange when the pass
+        // *settles*, so reflect the in-progress state optimistically now —
+        // the completion reload reconciles to the real value.
+        memo.isTranscribing = true
         return true
     }
 
@@ -475,7 +707,8 @@ final class VoiceMemoDetailStore: ObservableObject {
             summary: firstNonEmpty([memo.summary]),
             levels: waveformLevels(from: memo.waveformData),
             isPlaying: isPlaying,
-            playheadProgress: progress
+            playheadProgress: progress,
+            isTranscribing: memo.isTranscribing
         )
     }
 
@@ -573,6 +806,63 @@ final class VoiceMemoDetailStore: ObservableObject {
         }
     }
 
+    private static func audioMimeType(for filename: String) -> String {
+        switch URL(fileURLWithPath: filename).pathExtension.lowercased() {
+        case "wav":
+            return "audio/wav"
+        case "aac":
+            return "audio/aac"
+        case "mp3":
+            return "audio/mpeg"
+        default:
+            return "audio/mp4"
+        }
+    }
+
+    private static func audioFileExtension(for filename: String?) -> String {
+        guard let filename else { return "m4a" }
+        let fileExtension = URL(fileURLWithPath: filename).pathExtension
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return fileExtension.isEmpty ? "m4a" : fileExtension
+    }
+
+    private static func exportFilenameBase(title: String, memoID: UUID) -> String {
+        let rawTitle = cleanTitle(title, fallback: "Talkie Memo")
+        var sanitized = ""
+        let filenamePunctuation = CharacterSet(charactersIn: "-_")
+        for scalar in rawTitle.unicodeScalars {
+            if CharacterSet.alphanumerics.contains(scalar) {
+                sanitized.unicodeScalars.append(scalar)
+            } else if filenamePunctuation.contains(scalar) {
+                sanitized.unicodeScalars.append(scalar)
+            } else {
+                sanitized.append("-")
+            }
+        }
+
+        let collapsed = sanitized
+            .split(separator: "-", omittingEmptySubsequences: true)
+            .joined(separator: "-")
+        let fallback = "Talkie-Memo-\(memoID.uuidString.prefix(8))"
+        let candidate = collapsed.isEmpty ? fallback : collapsed
+        return String(candidate.prefix(72))
+    }
+
+    private static func isoString(from date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: date)
+    }
+
+    private static func transferText(_ text: String?) -> String? {
+        guard let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty,
+              trimmed != "No transcript yet." else {
+            return nil
+        }
+        return trimmed
+    }
+
     static func formatDuration(_ duration: TimeInterval) -> String {
         let total = max(0, Int(duration.rounded()))
         return "\(total / 60):" + String(format: "%02d", total % 60)
@@ -603,15 +893,15 @@ final class VoiceMemoDetailStore: ObservableObject {
 
 private extension VoiceMemoDetailStore.MemoDisplay {
     func withPlayback(isPlaying: Bool, progress: Double) -> Self {
-        .init(id: id, title: title, createdAtLabel: createdAtLabel, durationLabel: durationLabel, transcript: transcript, summary: summary, levels: levels, isPlaying: isPlaying, playheadProgress: progress)
+        .init(id: id, title: title, createdAtLabel: createdAtLabel, durationLabel: durationLabel, transcript: transcript, summary: summary, levels: levels, isPlaying: isPlaying, playheadProgress: progress, isTranscribing: isTranscribing)
     }
 
     func withTitle(_ title: String) -> Self {
-        .init(id: id, title: title, createdAtLabel: createdAtLabel, durationLabel: durationLabel, transcript: transcript, summary: summary, levels: levels, isPlaying: isPlaying, playheadProgress: playheadProgress)
+        .init(id: id, title: title, createdAtLabel: createdAtLabel, durationLabel: durationLabel, transcript: transcript, summary: summary, levels: levels, isPlaying: isPlaying, playheadProgress: playheadProgress, isTranscribing: isTranscribing)
     }
 
     func withTranscript(_ transcript: String) -> Self {
-        .init(id: id, title: title, createdAtLabel: createdAtLabel, durationLabel: durationLabel, transcript: transcript, summary: summary, levels: levels, isPlaying: isPlaying, playheadProgress: playheadProgress)
+        .init(id: id, title: title, createdAtLabel: createdAtLabel, durationLabel: durationLabel, transcript: transcript, summary: summary, levels: levels, isPlaying: isPlaying, playheadProgress: playheadProgress, isTranscribing: isTranscribing)
     }
 }
 
@@ -636,6 +926,8 @@ struct VoiceMemoDetailNext: View {
     @State private var isRunningOCR: Bool = false
     @State private var ocrResultText: String?
     @State private var attachmentError: String?
+    @State private var isSendingMemoToMac: Bool = false
+    @State private var lastSentMemoFingerprint: String?
     @State private var isSendingAttachmentsToMac: Bool = false
     @State private var lastSentAttachmentFingerprint: String?
     @State private var showingSendToMacAlert: Bool = false
@@ -649,7 +941,8 @@ struct VoiceMemoDetailNext: View {
     @State private var editedTranscript: String = ""
     @State private var transcriptEditError: String?
     @State private var showingDeleteConfirmation: Bool = false
-    @State private var showingShareSheet: Bool = false
+    @State private var activeSharePayload: MemoSharePayload?
+    @State private var shareCleanupURLs: [URL] = []
     @State private var showingAgentSheet: Bool = false
     @State private var pendingAgentInstruction: String?
     @State private var showingCLISheet: Bool = false
@@ -771,8 +1064,8 @@ struct VoiceMemoDetailNext: View {
         .sheet(item: $previewAttachment) { attachment in
             attachmentPreview(attachment)
         }
-        .sheet(isPresented: $showingShareSheet) {
-            VoiceMemoShareSheet(items: store.shareItems())
+        .sheet(item: $activeSharePayload, onDismiss: cleanupSharePayload) { payload in
+            VoiceMemoShareSheet(items: payload.items)
         }
         .sheet(isPresented: $showingAgentSheet, onDismiss: {
             pendingAgentInstruction = nil
@@ -892,9 +1185,8 @@ struct VoiceMemoDetailNext: View {
 
             if !isEditingTranscript {
             Menu {
-                Button("Share", systemImage: "square.and.arrow.up") {
-                    showingShareSheet = true
-                }
+                memoSendMenuItems
+                Divider()
                 Button("Ask Agent", systemImage: "brain.head.profile") {
                     showingAgentSheet = true
                 }
@@ -938,17 +1230,112 @@ struct VoiceMemoDetailNext: View {
             if isEditingTitle {
                 titleEditor
             } else {
-                Text(store.memo.title)
-                    .talkieType(.headline)
-                    .foregroundStyle(theme.colors.textPrimary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                    .onTapGesture { beginTitleEdit() }
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(store.memo.title)
+                            .talkieType(.headline)
+                            .foregroundStyle(theme.colors.textPrimary)
+                            .lineLimit(2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                            .onTapGesture { beginTitleEdit() }
+
+                        topMetadataLine
+                    }
+
+                    memoSendControl
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
+    }
+
+    private var topMetadataLine: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "iphone")
+                .font(.system(size: 9, weight: .medium))
+            Text(store.memo.createdAtLabel)
+            Text("·")
+            Text("\(wordCount) WORDS")
+        }
+        .talkieType(.channelLabelTiny)
+        .foregroundStyle(theme.colors.textTertiary.opacity(0.85))
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+    }
+
+    private var memoSendControl: some View {
+        Menu {
+            memoSendMenuItems
+        } label: {
+            memoSendIcon
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(hasSentCurrentMemoToMac ? "Memo sent to Mac" : "Send or share memo")
+    }
+
+    @ViewBuilder
+    private var memoSendMenuItems: some View {
+        Button("iCloud Sync", systemImage: "icloud") {
+            sendMemoViaICloud()
+        }
+
+        if BridgeManager.shared.pairedMacs.count > 1 {
+            Menu {
+                ForEach(BridgeManager.shared.pairedMacs) { mac in
+                    Button("Send to \(displayName(for: mac))") {
+                        sendMemoToPairedMac(targetMacID: mac.id)
+                    }
+                }
+            } label: {
+                Label("Direct Pair", systemImage: "desktopcomputer")
+            }
+            .disabled(isSendingMemoToMac)
+        } else {
+            Button("Direct Pair", systemImage: "desktopcomputer") {
+                sendMemoToPairedMac()
+            }
+            .disabled(isSendingMemoToMac)
+        }
+
+        Button("AirDrop", systemImage: "airdrop") {
+            presentAirDropShareSheet()
+        }
+
+        Button("Share Sheet", systemImage: "square.and.arrow.up") {
+            presentNaturalShareSheet()
+        }
+    }
+
+    private var memoSendIcon: some View {
+        ZStack {
+            Circle()
+                .fill(hasSentCurrentMemoToMac
+                    ? theme.currentTheme.chrome.accent.opacity(0.12)
+                    : theme.colors.textSecondary.opacity(0.08))
+                .overlay(
+                    Circle().strokeBorder(
+                        hasSentCurrentMemoToMac
+                            ? theme.currentTheme.chrome.accent.opacity(0.5)
+                            : theme.colors.textSecondary.opacity(0.18),
+                        lineWidth: theme.currentTheme.chrome.hairlineWidth
+                    )
+                )
+                .frame(width: 34, height: 34)
+
+            if isSendingMemoToMac {
+                ProgressView()
+                    .scaleEffect(0.58)
+            } else {
+                Image(systemName: hasSentCurrentMemoToMac ? "checkmark.circle.fill" : "square.and.arrow.up")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(hasSentCurrentMemoToMac ? theme.currentTheme.chrome.accent : theme.colors.textSecondary)
+            }
+        }
+        .frame(width: 44, height: 44)
+        .contentShape(Circle())
     }
 
     private var titleEditor: some View {
@@ -1043,6 +1430,9 @@ struct VoiceMemoDetailNext: View {
                             : theme.currentTheme.chrome.accent)
                         .offset(x: store.memo.isPlaying ? 0 : 1)
                 }
+                // Glyph stays 30pt; hit area meets the 44pt minimum.
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
             }
             .buttonStyle(.plain)
 
@@ -1123,7 +1513,23 @@ struct VoiceMemoDetailNext: View {
     // Reading body — the transcript as the audio made readable. During
     // playback the played words take full ink, the rest dim, with an amber
     // playhead between; idle, it's full ink for plain reading. Tap to edit.
+    // When there's no transcript yet, the body speaks to *why*: a processing
+    // pulse while a pass runs, or a neutral empty state with inline retry.
+    @ViewBuilder
     private var readingBody: some View {
+        if normalizedTranscript.isEmpty {
+            if store.memo.isTranscribing {
+                transcribingState
+            } else {
+                emptyTranscriptState
+            }
+        } else {
+            transcriptText
+        }
+    }
+
+    // The words themselves, once we have them.
+    private var transcriptText: some View {
         VStack(alignment: .leading, spacing: 10) {
             TranscriptRolloutText(
                 text: store.memo.transcript,
@@ -1131,23 +1537,6 @@ struct VoiceMemoDetailNext: View {
                 canEdit: store.canEditTranscript,
                 onTap: beginInlineTranscriptEdit
             )
-
-            // Consolidated metadata footer — capture date/time + word count
-            // + source, all in one quiet technical line at the foot of the
-            // words (so the title stands alone up top).
-            HStack(spacing: 6) {
-                // Word count anchors left (it's about the words above it);
-                // capture date/time + source glyph ride the right edge.
-                Text("\(wordCount) WORDS")
-                Spacer(minLength: 8)
-                Image(systemName: "iphone")
-                    .font(.system(size: 9, weight: .medium))
-                Text(store.memo.createdAtLabel)
-            }
-            .talkieType(.channelLabelTiny)
-            .foregroundStyle(theme.colors.textTertiary.opacity(0.85))
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
@@ -1164,6 +1553,54 @@ struct VoiceMemoDetailNext: View {
                 Button("Edit", systemImage: "pencil") { beginInlineTranscriptEdit() }
             }
         }
+    }
+
+    // A pass is running — pulse + label, mirroring the Ask AI "Thinking…"
+    // treatment so "still working" reads as distinct from "failed".
+    private var transcribingState: some View {
+        HStack(spacing: 7) {
+            PulsingAccentDot()
+            Text("Transcribing…")
+                .talkieType(.preview)
+                .italic()
+                .foregroundStyle(theme.colors.textTertiary)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Transcribing")
+    }
+
+    // No transcript, no pass running. Neutral copy — an empty transcript may
+    // just be silent audio — with an inline retry so re-running the pass
+    // isn't buried in the overflow menu.
+    private var emptyTranscriptState: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("No transcript")
+                .talkieType(.listTitle)
+                .foregroundStyle(theme.colors.textTertiary)
+
+            if store.canEditTranscript {
+                Button(action: retryTranscription) {
+                    Text("RETRY TRANSCRIPTION")
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(theme.currentTheme.chrome.accent.opacity(0.45),
+                                              lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Retry transcription")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
     }
 
     private struct TranscriptRolloutText: View {
@@ -1372,7 +1809,7 @@ struct VoiceMemoDetailNext: View {
     private var toolRail: some View {
         HStack(spacing: 6) {
             toolRailButton(label: "Share", systemImage: "square.and.arrow.up") {
-                showingShareSheet = true
+                presentNaturalShareSheet()
             }
             toolRailButton(label: "Copy", systemImage: "doc.on.doc", action: copyTranscript)
             toolRailButton(label: "Attach", systemImage: "paperclip") {
@@ -1823,6 +2260,14 @@ struct VoiceMemoDetailNext: View {
         AppLogger.transcription.info("User-triggered retranscribe for memo \(store.memo.id)")
     }
 
+    /// Inline retry from the empty reading body. Same pass as the overflow
+    /// menu's "Retranscribe", with a light "go" tap — the transcribing pulse
+    /// takes over once `isTranscribing` flips on the entity.
+    private func retryTranscription() {
+        Haptics.confirm.fire()
+        retranscribe()
+    }
+
     private func runMemoWorkflow(_ template: WorkflowTemplate) {
         guard runningWorkflowID == nil else { return }
         runningWorkflowID = template.id
@@ -1972,6 +2417,10 @@ struct VoiceMemoDetailNext: View {
 
     private var hasSentCurrentAttachmentsToMac: Bool {
         !store.attachmentFingerprint.isEmpty && lastSentAttachmentFingerprint == store.attachmentFingerprint
+    }
+
+    private var hasSentCurrentMemoToMac: Bool {
+        !store.memoTransferFingerprint.isEmpty && lastSentMemoFingerprint == store.memoTransferFingerprint
     }
 
     private var shouldShowAttachmentsSection: Bool {
@@ -2238,6 +2687,16 @@ struct VoiceMemoDetailNext: View {
         return imageAssets.objects(at: IndexSet(integersIn: 0..<imageAssets.count))
     }
 
+    private func displayName(for mac: TalkieAppConfiguration.Bridge.PairedMac) -> String {
+        let name = mac.pairedMacName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !name.isEmpty {
+            return name
+        }
+
+        let host = mac.hostname.trimmingCharacters(in: .whitespacesAndNewlines)
+        return host.isEmpty ? "Mac" : host
+    }
+
     private func importRecentAttachmentAsset(_ asset: PHAsset) async {
         isImportingAttachments = true
         attachmentError = nil
@@ -2269,18 +2728,166 @@ struct VoiceMemoDetailNext: View {
         }
     }
 
+    private func presentNaturalShareSheet() {
+        presentSharePayload(MemoSharePayload(items: store.shareItems(), cleanupURLs: []))
+    }
+
+    private func presentAirDropShareSheet() {
+        do {
+            let package = try store.buildAirDropPackage()
+            presentSharePayload(MemoSharePayload(items: package.items, cleanupURLs: package.cleanupURLs))
+        } catch {
+            presentSendToMacAlert(title: "AirDrop", message: error.localizedDescription)
+        }
+    }
+
+    private func presentSharePayload(_ payload: MemoSharePayload) {
+        cleanupSharePayload()
+        shareCleanupURLs = payload.cleanupURLs
+        activeSharePayload = payload
+    }
+
+    private func cleanupSharePayload() {
+        let urls = shareCleanupURLs
+        shareCleanupURLs = []
+        for url in urls {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    private func sendMemoViaICloud() {
+        guard store.hasPersistentMemo else {
+            presentSendToMacAlert(title: "iCloud Sync", message: "This memo is still saving on this iPhone.")
+            return
+        }
+
+        guard TalkieAppSettings.shared.iCloudSyncEnabled else {
+            presentSendToMacAlert(
+                title: "iCloud Sync Off",
+                message: "Turn on iCloud Sync in Settings > Connections to sync this memo automatically."
+            )
+            return
+        }
+
+        Task { @MainActor in
+            iCloudStatusManager.shared.checkStatus()
+
+            let provider: any SyncProvider = ConnectionManager.shared.provider(for: .iCloud) ?? iCloudSyncProvider()
+            let connectionStatus = await provider.checkConnection()
+
+            switch connectionStatus {
+            case .available:
+                do {
+                    try await provider.fullSync()
+                    presentSendToMacAlert(
+                        title: "iCloud Sync",
+                        message: "Talkie asked iCloud to sync this memo. It will appear on signed-in Macs when CloudKit finishes."
+                    )
+                } catch {
+                    presentSendToMacAlert(title: "iCloud Sync", message: error.localizedDescription)
+                }
+            case .unavailable(let reason):
+                let status = iCloudStatusManager.shared.status
+                let details = reason.isEmpty ? status.message : "\(status.message)\n\n\(reason)"
+                presentSendToMacAlert(title: status.title, message: details)
+            case .connecting:
+                presentSendToMacAlert(
+                    title: "iCloud Sync",
+                    message: "Talkie is still checking iCloud. Try again in a moment."
+                )
+            case .syncing:
+                presentSendToMacAlert(
+                    title: "iCloud Sync",
+                    message: "iCloud sync is already running for this device."
+                )
+            }
+        }
+    }
+
+    private func sendMemoToPairedMac(targetMacID: String? = nil) {
+        guard !isSendingMemoToMac else { return }
+
+        DirectMacRegistry.shared.refresh()
+
+        guard store.hasPersistentMemo else {
+            presentSendToMacAlert(title: "Direct Pair", message: "This memo is not ready yet.")
+            return
+        }
+
+        guard BridgeManager.shared.hasPairedMacs else {
+            let knownMacs = DirectMacRegistry.shared.macs
+            let subtitle: String
+            if knownMacs.contains(where: \.hasTerminalAccess) {
+                subtitle = "This iPhone can reach your Mac for terminal access, but direct memo send needs Talkie Mac pairing."
+            } else if !knownMacs.isEmpty {
+                subtitle = "Direct memo send needs a Talkie Mac pairing on this iPhone."
+            } else {
+                subtitle = "Scan a Talkie Mac QR first to enable direct memo send."
+            }
+            presentSendToMacAlert(title: "Direct Pair", message: subtitle)
+            return
+        }
+
+        let fingerprint = store.memoTransferFingerprint
+        isSendingMemoToMac = true
+        attachmentError = nil
+
+        Task { @MainActor in
+            do {
+                if let targetMacID {
+                    await BridgeManager.shared.activatePairedMac(id: targetMacID)
+                } else if !BridgeManager.shared.isPaired, let firstMac = BridgeManager.shared.pairedMacs.first {
+                    await BridgeManager.shared.activatePairedMac(id: firstMac.id)
+                }
+
+                let request = try store.buildMemoTransferRequest()
+                let response = try await BridgeManager.shared.sendMemo(body: request)
+                isSendingMemoToMac = false
+                lastSentMemoFingerprint = fingerprint
+
+                let macName = BridgeManager.shared.pairedMacDisplayName ?? "your Mac"
+                presentSendToMacAlert(
+                    title: "Sent to Mac",
+                    message: "Sent \(memoTransferSummary(response)) directly to \(macName)."
+                )
+            } catch {
+                isSendingMemoToMac = false
+                presentSendToMacAlert(title: "Couldn't Send to Mac", message: directPairErrorMessage(for: error))
+            }
+        }
+    }
+
+    private func memoTransferSummary(_ response: MemoTransferResponse) -> String {
+        var parts: [String] = []
+
+        if response.hasAudio {
+            parts.append("audio")
+        }
+
+        if response.attachmentCount > 0 {
+            let noun = response.attachmentCount == 1 ? "attachment" : "attachments"
+            parts.append("\(response.attachmentCount) \(noun)")
+        }
+
+        if parts.isEmpty {
+            return "the memo"
+        }
+
+        return "the memo with " + parts.joined(separator: " and ")
+    }
+
     private func sendAttachmentsToPairedMac() {
         guard !isSendingAttachmentsToMac else { return }
 
         DirectMacRegistry.shared.refresh()
 
         guard let memoID = store.memoUUID?.uuidString, store.hasPersistentMemo else {
-            presentSendToMacAlert(title: "To Mac", message: "This memo is not ready yet.")
+            presentSendToMacAlert(title: "Direct Pair", message: "This memo is not ready yet.")
             return
         }
 
         guard !store.attachments.isEmpty else {
-            presentSendToMacAlert(title: "To Mac", message: "Add an attachment first.")
+            presentSendToMacAlert(title: "Direct Pair", message: "Add an attachment first.")
             return
         }
 
@@ -2294,7 +2901,7 @@ struct VoiceMemoDetailNext: View {
             } else {
                 subtitle = "Scan a Talkie Mac QR first to enable direct send."
             }
-            presentSendToMacAlert(title: "To Mac", message: subtitle)
+            presentSendToMacAlert(title: "Direct Pair", message: subtitle)
             return
         }
 
@@ -2318,9 +2925,35 @@ struct VoiceMemoDetailNext: View {
             } catch {
                 isSendingAttachmentsToMac = false
                 attachmentError = error.localizedDescription
-                presentSendToMacAlert(title: "To Mac", message: error.localizedDescription)
+                presentSendToMacAlert(title: "Couldn't Send to Mac", message: directPairErrorMessage(for: error))
             }
         }
+    }
+
+    private func directPairErrorMessage(for error: Error) -> String {
+        if case BridgeError.httpError(let code, detail: let detail) = error, code >= 500 {
+            return directPairServerErrorMessage(code: code, detail: detail)
+        }
+
+        let rawMessage = error.localizedDescription
+        if rawMessage.localizedCaseInsensitiveContains("HTTP error: 5") {
+            return directPairServerErrorMessage(code: nil, detail: rawMessage)
+        }
+
+        return rawMessage
+    }
+
+    private func directPairServerErrorMessage(code: Int?, detail: String?) -> String {
+        var message = "Your Mac answered, but it could not save this memo right now. AirDrop and iCloud Sync are still available, and Direct Pair can be tried again after Talkie on the Mac is restarted or updated."
+
+        let cleanedDetail = detail?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let cleanedDetail, !cleanedDetail.isEmpty {
+            message += "\n\nMac said: \(cleanedDetail)"
+        } else if let code {
+            message += "\n\nDetails: HTTP \(code)"
+        }
+
+        return message
     }
 
     private func presentSendToMacAlert(title: String, message: String) {
@@ -2520,5 +3153,30 @@ private struct TranscriptVersionRowNext: View {
                 UIPasteboard.general.string = version.content
             }
         }
+    }
+}
+
+// A single accent dot that breathes while work is in flight — mirrors the
+// Ask AI "Thinking…" pulse so the transcribing state reads the same way.
+// Statically lit under Reduce Motion.
+private struct PulsingAccentDot: View {
+    @State private var isLit = false
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        Circle()
+            .fill(theme.currentTheme.chrome.accent)
+            .frame(width: 6, height: 6)
+            .opacity(isLit ? 1 : 0.25)
+            .scaleEffect(isLit ? 1.15 : 0.72)
+            .onAppear {
+                if TalkieMotion.isReduced {
+                    isLit = true  // statically lit, no pulse
+                } else {
+                    withAnimation(.easeInOut(duration: 0.85).repeatForever(autoreverses: true)) {
+                        isLit = true
+                    }
+                }
+            }
     }
 }

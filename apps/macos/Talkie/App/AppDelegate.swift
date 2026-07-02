@@ -2308,9 +2308,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     @MainActor
     private func handleCaptureChord(initialMode: CaptureBarMode, previousApp: NSRunningApplication?) async {
         // If video mode and already recording, Hyper+R stops the recording
-        if initialMode == .video && ScreenRecordingController.shared.state == .recording {
-            await ScreenRecordingController.shared.stopRecording()
-            return
+        if initialMode == .video {
+            if await ScreenRecordingController.shared.stopIfRecording() {
+                return
+            }
         }
 
         guard !isCaptureChordActive else { return }
@@ -2742,7 +2743,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         )
         TrayActionService.shared.persistStandaloneScreenshotToLibrary(latestItem)
         if opensMarkup {
-            CaptureMarkupCoordinator.shared.openSession(imageURL: latestItem.tempURL)
+            CaptureMarkupCoordinator.shared.openAgentOwnedSession(imageURL: latestItem.tempURL)
         }
         return true
     }

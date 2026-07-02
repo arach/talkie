@@ -25,6 +25,7 @@
 //
 
 import AppKit
+import TalkieKit
 
 // MARK: - Delegate
 

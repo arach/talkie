@@ -677,7 +677,7 @@ public final class ServiceManager {
     /// Launch TalkieAgent
     ///
     /// For production: Uses launchctl kickstart to ensure MachServices are registered
-    /// For dev: Falls back to NSWorkspace.openApplication()
+    /// For dev: Uses launchctl with the stable user-local install.
     public func launchLive(forceRefreshInDev: Bool = false, resolvingConflicts: Bool = false) {
         let env = effectiveHelperEnvironment
         let shouldRefresh = env != .production && forceRefreshInDev
@@ -1250,6 +1250,8 @@ public final class ServiceManager {
     }
 
     private func findHelperAppURL(bundleId: String, appName: String) -> URL? {
+        let env = effectiveHelperEnvironment
+
         // 1. Check embedded location (Contents/Library/LoginItems/)
         if let mainBundle = Bundle.main.bundleURL as URL? {
             let embeddedURL = mainBundle
@@ -1260,11 +1262,16 @@ public final class ServiceManager {
             }
         }
 
-        // 2. Check local debug builds before LaunchServices, which can point at
-        // an older registered helper from another checkout or build folder.
+        // 2. Dev helpers are always launched from the stable user-local install.
+        // LaunchServices can point at an older registered helper from another
+        // checkout or build folder, so do not use it for dev helper routes.
         #if DEBUG
-        if let debugURL = findDebugBuild(appName: appName) {
-            return debugURL
+        if env == .dev {
+            if let debugURL = findDebugBuild(appName: appName, bundleId: bundleId) {
+                return debugURL
+            }
+            logger.error("[ServiceManager] Stable dev install not usable for \(appName)")
+            return nil
         }
         #endif
 
@@ -1312,71 +1319,58 @@ public final class ServiceManager {
         }
     }
 
-    private func findDebugBuild(appName: String) -> URL? {
+    private func findDebugBuild(appName: String, bundleId: String? = nil) -> URL? {
         let executableName = appName.hasSuffix(".app") ? String(appName.dropLast(4)) : appName
-        var candidates: [(url: URL, date: Date)] = []
-        var seen = Set<String>()
         let env = effectiveHelperEnvironment
 
-        func appendCandidate(_ appURL: URL) {
-            guard FileManager.default.fileExists(atPath: appURL.path),
-                  seen.insert(appURL.path).inserted else {
-                return
-            }
-
-            let executableURL = appURL
-                .appendingPathComponent("Contents/MacOS")
-                .appendingPathComponent(executableName)
-            let date = (try? executableURL.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
-                ?? (try? appURL.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
-                ?? .distantPast
-            candidates.append((appURL, date))
+        let appURL = env.userInstalledAppURL(named: appName)
+        let executableURL = appURL
+            .appendingPathComponent("Contents/MacOS")
+            .appendingPathComponent(executableName)
+        guard FileManager.default.fileExists(atPath: executableURL.path) else {
+            logger.warning("[ServiceManager] Stable dev install missing executable", detail: executableURL.path)
+            return nil
         }
 
-        appendCandidate(env.userInstalledAppURL(named: appName))
-
-        if let repoRoot = LocalCheckoutLocator.talkieRepositoryRootURL(compileTimeFilePath: #filePath) {
-            let repoBuildRoots = [
-                repoRoot
-                    .appendingPathComponent("build")
-                    .appendingPathComponent("macos"),
-                repoRoot.appendingPathComponent("build")
-            ]
-
-            for buildRoot in repoBuildRoots {
-                appendCandidate(
-                    buildRoot
-                        .appendingPathComponent(executableName)
-                        .appendingPathComponent("Build/Products/Debug")
-                        .appendingPathComponent(appName)
-                )
-            }
+        guard stableDevAppMatchesRunningTalkie(appURL, appName: appName, bundleId: bundleId) else {
+            return nil
         }
 
-        if !allowsDerivedDataFallback {
-            return candidates.max(by: { $0.date < $1.date })?.url
-        }
-
-        let derivedDataPath = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Developer/Xcode/DerivedData")
-
-        guard let enumerator = FileManager.default.enumerator(
-            at: derivedDataPath,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ) else { return nil }
-
-        for case let fileURL as URL in enumerator where
-            fileURL.lastPathComponent == appName && fileURL.path.contains("Build/Products/Debug") {
-            appendCandidate(fileURL)
-        }
-
-        return candidates.max(by: { $0.date < $1.date })?.url
+        return appURL
     }
 
-    private var allowsDerivedDataFallback: Bool {
-        ProcessInfo.processInfo.environment["TALKIE_ALLOW_DERIVEDDATA_FALLBACK"] == "1"
-            || UserDefaults.standard.bool(forKey: "ServiceManager.allowDerivedDataFallback")
+    private func stableDevAppMatchesRunningTalkie(_ appURL: URL, appName: String, bundleId: String?) -> Bool {
+        guard let identity = TalkieDevBuildManifestStore.bundleIdentity(for: appURL) else {
+            logger.warning("[ServiceManager] Stable dev install has no readable bundle identity", detail: appURL.path)
+            return false
+        }
+
+        if let bundleId,
+           let candidateBundleId = identity.bundleIdentifier,
+           candidateBundleId != bundleId {
+            logger.warning(
+                "[ServiceManager] Stable dev install bundle mismatch",
+                detail: "\(appName): \(candidateBundleId) != \(bundleId)"
+            )
+            return false
+        }
+
+        guard let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+              let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String,
+              !version.isEmpty,
+              !build.isEmpty else {
+            return true
+        }
+
+        if identity.version != version || identity.build != build {
+            logger.warning(
+                "[ServiceManager] Stable dev install build mismatch",
+                detail: "\(appName): \(identity.displayVersion) != Talkie \(version) (\(build))"
+            )
+            return false
+        }
+
+        return true
     }
 
     private func findProcesses(named processName: String) -> [ServiceProcessInfo] {
@@ -1544,6 +1538,33 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
                 logger.info("[Agent] Settings window opened")
             } else {
                 logger.warning("[Agent] Failed to open settings window")
+            }
+        }
+    }
+
+    /// Open the Agent-owned quick capture markup tool for an image file.
+    @discardableResult
+    public func openCaptureMarkup(fileURL: URL) async -> Bool {
+        startXPCMonitoring(autoConnect: true)
+        if !isXPCConnected {
+            await xpcManager?.connect()
+        }
+
+        guard let service = xpcManager?.remoteObjectProxy(errorHandler: { error in
+            logger.error("[Agent] openCaptureMarkup error: \(error.localizedDescription)")
+        }) else {
+            logger.warning("[Agent] Cannot open capture markup - not connected")
+            return false
+        }
+
+        return await withCheckedContinuation { continuation in
+            service.openCaptureMarkup(filePath: fileURL.path) { success, error in
+                if success {
+                    logger.info("[Agent] Capture markup opened")
+                } else {
+                    logger.warning("[Agent] Capture markup failed", detail: error ?? "unknown")
+                }
+                continuation.resume(returning: success)
             }
         }
     }

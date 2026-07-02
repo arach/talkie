@@ -148,6 +148,157 @@ class OnDeviceAIService: ObservableObject {
     Return ONLY the title. No quotes, no explanation, no prefixes like "Title:".
     """
 
+    // MARK: - Memo Formatting
+
+    /// Structure-preserving formatting of a voice memo transcript.
+    /// Fixes casing, punctuation, filler, and paragraph breaks without
+    /// summarizing or rewording the memo.
+    func formatMemo(_ text: String, instruction: String = "Format this memo") async throws -> String {
+        guard FeatureFlags.aiMemoFormattingEnabled else { throw OnDeviceAIError.notAvailable }
+        #if canImport(FoundationModels)
+        if !isAvailable {
+            await checkAvailability()
+        }
+
+        guard isAvailable else {
+            throw OnDeviceAIError.notAvailable
+        }
+
+        let trimmedInstruction = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
+        let chunks = Self.formatChunks(from: text)
+        guard !chunks.isEmpty else {
+            throw OnDeviceAIError.noTranscript
+        }
+
+        isProcessing = true
+        defer { isProcessing = false }
+
+        var formattedChunks: [String] = []
+        formattedChunks.reserveCapacity(chunks.count)
+
+        for (index, chunk) in chunks.enumerated() {
+            let session = LanguageModelSession(instructions: Self.memoFormatSystemPrompt)
+            let response = try await session.respond(
+                to: Self.memoFormatUserPrompt(
+                    chunk: chunk,
+                    instruction: trimmedInstruction.isEmpty ? "Format this memo" : trimmedInstruction,
+                    chunkIndex: index,
+                    chunkCount: chunks.count
+                ),
+                options: FoundationModels.GenerationOptions(temperature: 0.2)
+            )
+            let formatted = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !formatted.isEmpty else {
+                throw OnDeviceAIError.generationFailed("Formatter returned an empty chunk")
+            }
+            formattedChunks.append(formatted)
+        }
+
+        let result = formattedChunks.joined(separator: "\n\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !result.isEmpty else {
+            throw OnDeviceAIError.generationFailed("Formatter returned no text")
+        }
+
+        return result
+        #else
+        throw OnDeviceAIError.notAvailable
+        #endif
+    }
+
+    private static let memoFormatSystemPrompt = """
+    You clean up raw voice-transcribed memo text. Your only job is formatting:
+    - Fix capitalization, punctuation, spacing, and obvious transcript artifacts.
+    - Remove filler words such as um, uh, like, you know, I mean, kind of, sort of, and basically only where they add nothing.
+    - Insert paragraph breaks between distinct topics.
+    Do not summarize, reword, reorder, translate, or add content.
+    Preserve the speaker's wording, meaning, and sequence.
+    Return only the cleaned memo text. No preamble, notes, bullets, or markdown unless the source already uses them.
+    """
+
+    private static func memoFormatUserPrompt(
+        chunk: String,
+        instruction: String,
+        chunkIndex: Int,
+        chunkCount: Int
+    ) -> String {
+        [
+            "User instruction:",
+            instruction,
+            "",
+            "Memo chunk \(chunkIndex + 1) of \(chunkCount):",
+            chunk,
+            "",
+            "Return only this chunk after formatting.",
+        ].joined(separator: "\n")
+    }
+
+    private static func formatChunks(from text: String, maxCharacters: Int = 1500) -> [String] {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+
+        let paragraphs = trimmed
+            .components(separatedBy: "\n\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        guard !paragraphs.isEmpty else { return [trimmed] }
+
+        var chunks: [String] = []
+        var current = ""
+
+        func flushCurrent() {
+            let chunk = current.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !chunk.isEmpty {
+                chunks.append(chunk)
+            }
+            current = ""
+        }
+
+        for paragraph in paragraphs {
+            if paragraph.count > maxCharacters {
+                flushCurrent()
+                chunks.append(contentsOf: splitLongParagraph(paragraph, maxCharacters: maxCharacters))
+                continue
+            }
+
+            let candidate = current.isEmpty ? paragraph : "\(current)\n\n\(paragraph)"
+            if candidate.count > maxCharacters {
+                flushCurrent()
+                current = paragraph
+            } else {
+                current = candidate
+            }
+        }
+
+        flushCurrent()
+        return chunks
+    }
+
+    private static func splitLongParagraph(_ paragraph: String, maxCharacters: Int) -> [String] {
+        let words = paragraph.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard !words.isEmpty else { return [] }
+
+        var chunks: [String] = []
+        var current = ""
+
+        for word in words {
+            let candidate = current.isEmpty ? word : "\(current) \(word)"
+            if candidate.count > maxCharacters, !current.isEmpty {
+                chunks.append(current)
+                current = word
+            } else {
+                current = candidate
+            }
+        }
+
+        if !current.isEmpty {
+            chunks.append(current)
+        }
+
+        return chunks
+    }
+
     /// Generate a brief summary of a voice memo
     func generateSummary(for transcript: String) async throws -> String {
         guard FeatureFlags.aiMemoSummariesEnabled else { throw OnDeviceAIError.notAvailable }

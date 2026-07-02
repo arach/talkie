@@ -2789,11 +2789,13 @@ final class TalkieServer {
         return true
     }
 
+    private func companionMousePosition() -> CGPoint {
+        CGEvent(source: nil)?.location ?? NSEvent.mouseLocation
+    }
+
     private func performMouseMove(dx: Double, dy: Double) -> Bool {
-        let current = NSEvent.mouseLocation
-        let screenHeight = NSScreen.main?.frame.height ?? 0
-        let currentCG = CGPoint(x: current.x, y: screenHeight - current.y)
-        let next = CGPoint(x: currentCG.x + dx, y: currentCG.y - dy)
+        let current = companionMousePosition()
+        let next = CGPoint(x: current.x + dx, y: current.y - dy)
 
         guard let source = CGEventSource(stateID: .combinedSessionState),
               let event = CGEvent(mouseEventSource: source, mouseType: .mouseMoved,
@@ -2805,9 +2807,7 @@ final class TalkieServer {
     }
 
     private func performMouseClick(button: CGMouseButton) -> Bool {
-        let current = NSEvent.mouseLocation
-        let screenHeight = NSScreen.main?.frame.height ?? 0
-        let pos = CGPoint(x: current.x, y: screenHeight - current.y)
+        let pos = companionMousePosition()
 
         let downType: CGEventType = button == .left ? .leftMouseDown : .rightMouseDown
         let upType: CGEventType   = button == .left ? .leftMouseUp   : .rightMouseUp
@@ -2825,9 +2825,7 @@ final class TalkieServer {
     }
 
     private func performMouseButtonState(button: CGMouseButton, isDown: Bool) -> Bool {
-        let current = NSEvent.mouseLocation
-        let screenHeight = NSScreen.main?.frame.height ?? 0
-        let pos = CGPoint(x: current.x, y: screenHeight - current.y)
+        let pos = companionMousePosition()
 
         let eventType: CGEventType
         switch (button, isDown) {
@@ -2852,10 +2850,8 @@ final class TalkieServer {
     }
 
     private func performMouseDrag(dx: Double, dy: Double) -> Bool {
-        let current = NSEvent.mouseLocation
-        let screenHeight = NSScreen.main?.frame.height ?? 0
-        let currentCG = CGPoint(x: current.x, y: screenHeight - current.y)
-        let next = CGPoint(x: currentCG.x + dx, y: currentCG.y - dy)
+        let current = companionMousePosition()
+        let next = CGPoint(x: current.x + dx, y: current.y - dy)
 
         guard let source = CGEventSource(stateID: .combinedSessionState),
               let event = CGEvent(

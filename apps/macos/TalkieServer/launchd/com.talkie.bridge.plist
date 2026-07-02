@@ -9,13 +9,13 @@
     <array>
         <string>/bin/zsh</string>
         <string>-lc</string>
-        <string>cd "${TALKIE_BRIDGE_DIR:-$HOME/dev/talkie/apps/macos/TalkieServer}" &amp;&amp; exec /opt/homebrew/bin/bun run src/server.ts</string>
+        <string>cd "${TALKIE_BRIDGE_DIR:-$HOME/dev/talkie/apps/macos/TalkieServer}" &amp;&amp; { bun_bin="${TALKIE_BUN_BIN:-$(command -v bun)}"; [ -n "$bun_bin" ] || bun_bin="$HOME/.bun/bin/bun"; exec "$bun_bin" run src/server.ts; }</string>
     </array>
 
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <string>$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
     </dict>
 
     <key>RunAtLoad</key>

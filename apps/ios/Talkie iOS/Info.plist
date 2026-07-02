@@ -51,6 +51,8 @@
 		<string>audio</string>
 		<string>remote-notification</string>
 	</array>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Talkie uses the camera to scan QR codes, capture photos for memo attachments, and scan text for secure AI setup.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

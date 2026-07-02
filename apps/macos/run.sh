@@ -21,9 +21,11 @@ WORKSPACE="$ROOT_DIR/TalkieSuite.xcworkspace"
 BUILD_BASE="$ROOT_DIR/build/macos"
 DEV_APPS_DIR="${TALKIE_DEV_APPS_DIR:-$HOME/Applications/dev/Talkie}"
 LEGACY_DEV_APPS_DIR="$HOME/Applications/Talkie.dev"
-ALLOW_DERIVEDDATA_FALLBACK="${TALKIE_ALLOW_DERIVEDDATA_FALLBACK:-0}"
 RUN_ENV="${TALKIE_RUN_ENV:-dev}"
 SIGNING_ENV_FILE="${TALKIE_SIGNING_ENV_FILE:-$ROOT_DIR/Config/signing.env}"
+
+# Talkie owns voice capture/playback; consume Hudson's shared UI without its optional Vox-backed voice target.
+export HUDSONKIT_WITH_VOICE="${HUDSONKIT_WITH_VOICE:-0}"
 
 if [ -f "$SIGNING_ENV_FILE" ]; then
     set -a
@@ -88,7 +90,20 @@ AVAILABLE_APPS="TalkieAgent Talkie"
 get_scheme() {
     case $1 in
         TalkieAgent|live) echo "TalkieAgent" ;;
-        Talkie|core|code) echo "Talkie (Talkie project)" ;;
+        Talkie|core|code)
+            if [ -d "$WORKSPACE" ]; then
+                echo "Talkie (Talkie project)"
+            else
+                echo "Talkie"
+            fi
+            ;;
+    esac
+}
+
+get_project() {
+    case $1 in
+        TalkieAgent|live) echo "$SCRIPT_DIR/TalkieAgent/TalkieAgent.xcodeproj" ;;
+        Talkie|core|code) echo "$SCRIPT_DIR/Talkie/Talkie.xcodeproj" ;;
     esac
 }
 
@@ -112,23 +127,54 @@ get_bundle_id() {
     /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$app_path/Contents/Info.plist" 2>/dev/null || true
 }
 
-# Record the freshly-built .app in .talkie/last-build.json so the
-# `talkie-dev` CLI (which by default only scans DerivedData) can pick
-# up builds produced by this script and launch the newest artifact
-# regardless of which build path produced it.
+get_bundle_short_version() {
+    local app_path=$1
+    /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$app_path/Contents/Info.plist" 2>/dev/null || true
+}
+
+get_bundle_build_version() {
+    local app_path=$1
+    /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$app_path/Contents/Info.plist" 2>/dev/null || true
+}
+
+git_current_branch() {
+    git -C "$ROOT_DIR" branch --show-current 2>/dev/null || true
+}
+
+git_current_commit() {
+    git -C "$ROOT_DIR" rev-parse --short=12 HEAD 2>/dev/null || true
+}
+
+dev_app_manifest_path() {
+    local product=$1
+    echo "$DEV_APPS_DIR/.talkie-dev-builds/$product.json"
+}
+
+# Record the freshly-built .app in .talkie/last-build.json so local dev
+# tooling can inspect the build identity that was just produced.
 record_last_build() {
     local product=$1
     local app_path=$2
     local state_dir="$ROOT_DIR/.talkie"
     local state_file="$state_dir/last-build.json"
     local timestamp
+    local bundle_id
+    local version
+    local build
+    local git_branch
+    local git_commit
     timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    bundle_id=$(get_bundle_id "$app_path")
+    version=$(get_bundle_short_version "$app_path")
+    build=$(get_bundle_build_version "$app_path")
+    git_branch=$(git_current_branch)
+    git_commit=$(git_current_commit)
 
     mkdir -p "$state_dir" || return 0
 
-    /usr/bin/python3 - "$state_file" "$product" "$app_path" "$timestamp" <<'PYEOF' 2>/dev/null || true
+    /usr/bin/python3 - "$state_file" "$product" "$app_path" "$timestamp" "$bundle_id" "$version" "$build" "$git_branch" "$git_commit" "$ROOT_DIR" <<'PYEOF' 2>/dev/null || true
 import json, os, sys
-path, product, app_path, ts = sys.argv[1:5]
+path, product, app_path, ts, bundle_id, version, build, git_branch, git_commit, root = sys.argv[1:11]
 state = {}
 if os.path.exists(path):
     try:
@@ -138,11 +184,115 @@ if os.path.exists(path):
             state = {}
     except Exception:
         state = {}
-state[product] = {"path": app_path, "builtAt": ts, "source": "run.sh"}
+state[product] = {
+    "path": app_path,
+    "builtAt": ts,
+    "source": "run.sh",
+    "bundleIdentifier": bundle_id or None,
+    "version": version or None,
+    "build": build or None,
+    "gitBranch": git_branch or None,
+    "gitCommit": git_commit or None,
+    "workspaceRoot": root,
+}
 with open(path, "w") as f:
     json.dump(state, f, indent=2)
     f.write("\n")
 PYEOF
+}
+
+write_dev_build_manifest() {
+    local product=$1
+    local source_path=$2
+    local installed_path=$3
+    local bundle_id=$4
+    local manifest_dir="$DEV_APPS_DIR/.talkie-dev-builds"
+    local app_manifest
+    local runtime_manifest="$DEV_APPS_DIR/.talkie-dev-runtime.json"
+    local timestamp
+    local version
+    local build
+    local git_branch
+    local git_commit
+
+    is_nonprod_bundle_id "$bundle_id" || return 0
+
+    timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    version=$(get_bundle_short_version "$installed_path")
+    build=$(get_bundle_build_version "$installed_path")
+    git_branch=$(git_current_branch)
+    git_commit=$(git_current_commit)
+    app_manifest=$(dev_app_manifest_path "$product")
+
+    mkdir -p "$manifest_dir" || return 0
+
+    /usr/bin/python3 - "$app_manifest" "$runtime_manifest" "$product" "$bundle_id" "$version" "$build" "$source_path" "$installed_path" "$timestamp" "$git_branch" "$git_commit" "$ROOT_DIR" "$RUN_ENV" "$DEV_APPS_DIR" <<'PYEOF' 2>/dev/null || true
+import json, os, sys
+(
+    app_manifest_path,
+    runtime_manifest_path,
+    product,
+    bundle_id,
+    version,
+    build,
+    source_path,
+    installed_path,
+    timestamp,
+    git_branch,
+    git_commit,
+    root,
+    run_env,
+    apps_dir,
+) = sys.argv[1:15]
+
+manifest = {
+    "schemaVersion": 1,
+    "product": product,
+    "bundleIdentifier": bundle_id,
+    "version": version,
+    "build": build,
+    "sourcePath": source_path,
+    "installedPath": installed_path,
+    "builtAt": timestamp,
+    "installedAt": timestamp,
+    "gitBranch": git_branch or None,
+    "gitCommit": git_commit or None,
+    "workspaceRoot": root,
+}
+
+runtime = {}
+if os.path.exists(runtime_manifest_path):
+    try:
+        with open(runtime_manifest_path) as f:
+            runtime = json.load(f)
+        if not isinstance(runtime, dict):
+            runtime = {}
+    except Exception:
+        runtime = {}
+
+products = runtime.get("products")
+if not isinstance(products, dict):
+    products = {}
+products[product] = manifest
+
+runtime = {
+    "schemaVersion": 1,
+    "environment": run_env,
+    "appsDirectory": apps_dir,
+    "updatedAt": timestamp,
+    "products": products,
+}
+
+with open(app_manifest_path, "w") as f:
+    json.dump(manifest, f, indent=2)
+    f.write("\n")
+
+with open(runtime_manifest_path, "w") as f:
+    json.dump(runtime, f, indent=2)
+    f.write("\n")
+PYEOF
+
+    echo "  Dev manifest: ${runtime_manifest/#$HOME/~}"
 }
 
 get_entitlements() {
@@ -166,34 +316,6 @@ get_xpc_service_name() {
             echo "${bundle_id}.xpc"
             ;;
     esac
-}
-
-latest_derived_app() {
-    local product=$1
-    local derived_data="$HOME/Library/Developer/Xcode/DerivedData"
-    local latest_app=""
-    local latest_time=0
-
-    [ -d "$derived_data" ] || return 1
-
-    for project_dir in "$derived_data"/*; do
-        [ -d "$project_dir" ] || continue
-
-        local app_path="$project_dir/Build/Products/Debug/$product.app"
-        local executable_path="$app_path/Contents/MacOS/$product"
-        [ -f "$executable_path" ] || continue
-
-        local mod_time
-        mod_time=$(stat -f %m "$executable_path" 2>/dev/null || echo "0")
-
-        if [ "$mod_time" -gt "$latest_time" ]; then
-            latest_time=$mod_time
-            latest_app=$app_path
-        fi
-    done
-
-    [ -n "$latest_app" ] || return 1
-    echo "$latest_app"
 }
 
 stable_dev_app() {
@@ -225,10 +347,6 @@ resolve_app_path() {
 
     if $EXEC_ONLY; then
         [ -d "$dev_app" ] && echo "$dev_app" && return 0
-        [ -d "$local_app" ] && echo "$local_app" && return 0
-        if [ "$ALLOW_DERIVEDDATA_FALLBACK" = "1" ]; then
-            latest_derived_app "$product" && return 0
-        fi
         return 1
     fi
 
@@ -250,6 +368,7 @@ install_dev_app_if_needed() {
 
     if [ "$app_path" = "$dest" ]; then
         RUNNABLE_APP_PATH="$dest"
+        write_dev_build_manifest "$product" "$app_path" "$dest" "$bundle_id"
         return 0
     fi
 
@@ -262,6 +381,7 @@ install_dev_app_if_needed() {
     RUNNABLE_APP_PATH="$dest"
     echo -e "${GREEN}done${NC}"
     echo "  Path: $dest"
+    write_dev_build_manifest "$product" "$app_path" "$dest" "$bundle_id"
 }
 
 quit_bundle_id() {
@@ -379,40 +499,66 @@ launch_dev_agent_via_launchctl() {
     xpc_service=$(get_xpc_service_name "$bundle_id")
     local executable_path="$app_path/Contents/MacOS/$executable_name"
     local plist_path="$HOME/Library/LaunchAgents/$bundle_id.plist"
+    local app_manifest_path
+    local version
+    local build
+    app_manifest_path=$(dev_app_manifest_path "$executable_name")
+    version=$(get_bundle_short_version "$app_path")
+    build=$(get_bundle_build_version "$app_path")
 
     mkdir -p "$HOME/Library/LaunchAgents"
     bootout_label "$bundle_id"
     rm -f "$plist_path"
 
-    cat > "$plist_path" <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>$bundle_id</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>$executable_path</string>
-    </array>
-    <key>MachServices</key>
-    <dict>
-        <key>$xpc_service</key>
-        <true/>
-    </dict>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <false/>
-    <key>LimitLoadToSessionType</key>
-    <string>Aqua</string>
-    <key>StandardOutPath</key>
-    <string>/tmp/$bundle_id.stdout.log</string>
-    <key>StandardErrorPath</key>
-    <string>/tmp/$bundle_id.stderr.log</string>
-</dict>
-</plist>
-EOF
+    /usr/bin/python3 - "$plist_path" "$bundle_id" "$executable_path" "$xpc_service" "$app_manifest_path" "$executable_name" "$version" "$build" "$app_path" <<'PYEOF'
+import json, os, plistlib, sys
+(
+    plist_path,
+    bundle_id,
+    executable_path,
+    xpc_service,
+    app_manifest_path,
+    product,
+    version,
+    build,
+    app_path,
+) = sys.argv[1:10]
+
+manifest = {}
+if os.path.exists(app_manifest_path):
+    try:
+        with open(app_manifest_path) as f:
+            manifest = json.load(f)
+        if not isinstance(manifest, dict):
+            manifest = {}
+    except Exception:
+        manifest = {}
+
+if not manifest:
+    manifest = {
+        "schemaVersion": 1,
+        "product": product,
+        "bundleIdentifier": bundle_id,
+        "version": version,
+        "build": build,
+        "installedPath": app_path,
+    }
+
+plist = {
+    "Label": bundle_id,
+    "ProgramArguments": [executable_path],
+    "MachServices": {xpc_service: True},
+    "RunAtLoad": True,
+    "KeepAlive": False,
+    "LimitLoadToSessionType": "Aqua",
+    "StandardOutPath": f"/tmp/{bundle_id}.stdout.log",
+    "StandardErrorPath": f"/tmp/{bundle_id}.stderr.log",
+    "TalkieDevManifest": manifest,
+}
+
+with open(plist_path, "wb") as f:
+    plistlib.dump(plist, f, sort_keys=False)
+PYEOF
 
     /bin/launchctl bootstrap "gui/$(id -u)" "$plist_path" >/dev/null 2>&1 || true
     /bin/launchctl kickstart "gui/$(id -u)/$bundle_id" >/dev/null 2>&1 || true
@@ -477,7 +623,7 @@ for arg in "$@"; do
             echo "  ./run.sh all               Build all apps"
             echo ""
             echo "Options:"
-            echo "  -e            Just run (no build)"
+            echo "  -e            Run stable dev install (no build)"
             echo "  --no-launch   Build only"
             echo "  --clean       Clean build"
             echo "  --verbose     Full output"
@@ -495,7 +641,7 @@ for arg in "$@"; do
             echo "Apps: TalkieAgent, Talkie, all"
             echo ""
             echo "Options:"
-            echo "  -e            Just run latest build (no rebuild)"
+            echo "  -e            Run stable dev install (no rebuild)"
             echo "  --no-launch   Build only, don't launch"
             echo "  --clean       Clean before building"
             echo "  --verbose     Show full build output"
@@ -505,7 +651,6 @@ for arg in "$@"; do
             echo ""
             echo "Dev apps install to: ${DEV_APPS_DIR/#$HOME/~}"
             echo "Run environment: $RUN_ENV"
-            echo "Set TALKIE_ALLOW_DERIVEDDATA_FALLBACK=1 for one-off Xcode-only runs."
             exit 0
             ;;
         all)
@@ -547,6 +692,7 @@ build_filter() {
 build_app() {
     local app=$1
     local scheme=$(get_scheme "$app")
+    local project=$(get_project "$app")
     local product=$(get_product "$app")
     local build_dir="$BUILD_BASE/$product"
     local app_path
@@ -564,7 +710,7 @@ build_app() {
             echo "  Run without -e to build first."
             return 1
         fi
-        echo -e "  ${GREEN}Using freshest build${NC}"
+        echo -e "  ${GREEN}Using stable dev install${NC}"
         echo "  Path: $app_path"
     else
         # Clean if requested
@@ -579,8 +725,19 @@ build_app() {
         local build_result=0
         local development_team="${TALKIE_DEVELOPMENT_TEAM:-${TALKIE_TEAM_ID:-}}"
         local code_sign_identity="${TALKIE_CODE_SIGN_IDENTITY:-Apple Development}"
-        local xcodebuild_args=(
-            -workspace "$WORKSPACE"
+        local xcodebuild_args=()
+
+        if [ -d "$WORKSPACE" ]; then
+            xcodebuild_args+=(-workspace "$WORKSPACE")
+        else
+            if [ ! -d "$project" ]; then
+                echo -e "  ${RED}Build project not found for $product: $project${NC}"
+                return 1
+            fi
+            xcodebuild_args+=(-project "$project")
+        fi
+
+        xcodebuild_args+=(
             -scheme "$scheme"
             -configuration Debug
             -destination "platform=macOS"

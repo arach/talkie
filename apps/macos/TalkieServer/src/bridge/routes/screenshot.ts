@@ -14,6 +14,8 @@ import { talkieServerFetch } from "../talkie-local-client";
 // TalkieServer (Talkie main app) handles requests via XPC to TalkieAgent
 const TALKIESERVER_PORT = 8766;
 const TALKIESERVER_URL = `http://127.0.0.1:${TALKIESERVER_PORT}`;
+const TALKIEAGENT_PORT = 8767;
+const TALKIEAGENT_URL = `http://127.0.0.1:${TALKIEAGENT_PORT}/v1/agent`;
 
 /**
  * Check if TalkieServer is running
@@ -37,9 +39,14 @@ async function checkTalkieServer(): Promise<boolean> {
 export async function windowsRoute(req: Request): Promise<Response> {
   log.info("Windows metadata request");
 
+  const agentResponse = await tryAgentRoute("/windows/claude");
+  if (agentResponse) {
+    return agentResponse;
+  }
+
   if (!(await checkTalkieServer())) {
     return Response.json(
-      { error: "Talkie not running", hint: "Start Talkie to enable window listing" },
+      { error: "TalkieAgent not ready", hint: "Start or restart TalkieAgent to enable window listing" },
       { status: 503 }
     );
   }
@@ -62,9 +69,14 @@ export async function windowsRoute(req: Request): Promise<Response> {
 export async function windowsCapturesRoute(req: Request): Promise<Response> {
   log.info("Windows captures request (screenshots + AX)");
 
+  const agentResponse = await tryAgentRoute("/screenshot/terminals");
+  if (agentResponse) {
+    return agentResponse;
+  }
+
   if (!(await checkTalkieServer())) {
     return Response.json(
-      { error: "Talkie not running", hint: "Start Talkie to enable screenshots" },
+      { error: "TalkieAgent not ready", hint: "Start or restart TalkieAgent to enable screenshots" },
       { status: 503 }
     );
   }
@@ -86,9 +98,14 @@ export async function windowsCapturesRoute(req: Request): Promise<Response> {
 export async function windowScreenshotRoute(req: Request, windowId: string): Promise<Response> {
   log.info(`Window screenshot request: ${windowId}`);
 
+  const agentResponse = await tryAgentRoute(`/screenshot/window/${windowId}`);
+  if (agentResponse) {
+    return agentResponse;
+  }
+
   if (!(await checkTalkieServer())) {
     return Response.json(
-      { error: "Talkie not running", hint: "Start Talkie to enable screenshots" },
+      { error: "TalkieAgent not ready", hint: "Start or restart TalkieAgent to enable screenshots" },
       { status: 503 }
     );
   }
@@ -122,3 +139,20 @@ export async function windowScreenshotRoute(req: Request, windowId: string): Pro
 export const screenshotTerminalsRoute = windowsCapturesRoute;
 export const screenshotWindowRoute = windowScreenshotRoute;
 export const claudeWindowsRoute = windowsRoute;
+
+async function tryAgentRoute(path: string): Promise<Response | null> {
+  try {
+    const response = await fetch(`${TALKIEAGENT_URL}${path}`, {
+      signal: AbortSignal.timeout(5000),
+    });
+
+    if (response.status === 404) {
+      return null;
+    }
+
+    return response;
+  } catch (error) {
+    log.debug(`Agent screenshot route unavailable, falling back to Talkie.app: ${error}`);
+    return null;
+  }
+}

@@ -960,6 +960,23 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         }
     }
 
+    nonisolated func openCaptureMarkup(filePath: String, reply: @escaping (Bool, String?) -> Void) {
+        Task { @MainActor in
+            let expanded = (filePath as NSString).expandingTildeInPath
+            let fileURL = URL(fileURLWithPath: expanded)
+            guard FileManager.default.fileExists(atPath: fileURL.path) else {
+                let message = "Image file does not exist"
+                AgentConsole.critical("[TalkieAgentXPC] openCaptureMarkup failed: \(message) \(fileURL.path)")
+                reply(false, message)
+                return
+            }
+
+            let opened = AgentCaptureMarkupController.shared.open(fileURL: fileURL)
+            AgentConsole.critical("[TalkieAgentXPC] openCaptureMarkup: \(opened ? "opened" : "failed") \(fileURL.lastPathComponent)")
+            reply(opened, opened ? nil : "Agent quick markup could not open this image")
+        }
+    }
+
     nonisolated func simulatePaste(reply: @escaping (Bool) -> Void) {
         Task { @MainActor in
             let success = TextInserter.shared.simulatePaste()

@@ -1,12 +1,13 @@
 {
   "name": "@talkie/cli",
-  "version": "0.4.6",
+  "version": "0.4.8",
   "description": "Access Talkie voice memos, dictations, captures, and workflows from the command line",
   "type": "module",
   "bin": {
     "talkie": "./dist/index.js"
   },
   "files": [
+    "README.md",
     "src",
     "!src/dev.ts",
     "!src/commands/dev",

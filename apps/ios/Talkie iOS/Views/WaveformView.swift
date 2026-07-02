@@ -291,6 +291,68 @@ struct ParticlesWaveformView: View {
     }
 }
 
+// MARK: - Mag-Tape Live Waveform (VU bars + amber centerline + tape head)
+
+/// Live recording waveform in the app's magnetic-tape language: VU bars
+/// stream left from the tape head (the write position), the amber centerline
+/// carries the track, and the head marker shows where audio commits to tape.
+/// Motion comes from the data itself — new levels arriving — not a cosmetic
+/// animation loop, so the surface stills when the signal does.
+struct TapeWaveformView: View {
+    let levels: [Float]
+    let height: CGFloat
+    var color: Color = .red
+    var centerlineColor: Color = Color(red: 0.95, green: 0.65, blue: 0.25)
+
+    private let barWidth: CGFloat = 2.5
+    private let spacing: CGFloat = 2
+    /// The write head sits at 82% of the width; recorded bars trail left.
+    private let headPosition: CGFloat = 0.82
+
+    var body: some View {
+        Canvas { context, size in
+            let midY = size.height / 2
+            let headX = (size.width * headPosition).rounded()
+
+            // Amber centerline — the track itself, full width.
+            var track = Path()
+            track.move(to: CGPoint(x: 0, y: midY))
+            track.addLine(to: CGPoint(x: size.width, y: midY))
+            context.stroke(track, with: .color(centerlineColor.opacity(0.45)), lineWidth: 1)
+
+            // VU bars: newest level at the head, history trailing left,
+            // fading as it winds onto the reel.
+            let slot = barWidth + spacing
+            let maxBars = max(1, Int(headX / slot))
+            let recent = Array(levels.suffix(maxBars))
+            for (index, level) in recent.enumerated() {
+                let stepsBack = recent.count - 1 - index
+                let x = headX - CGFloat(stepsBack) * slot
+                let barHeight = max(3, CGFloat(level) * size.height * 0.9)
+                let rect = CGRect(
+                    x: x - barWidth,
+                    y: midY - barHeight / 2,
+                    width: barWidth,
+                    height: barHeight
+                )
+                let age = Double(stepsBack) / Double(maxBars)
+                context.fill(
+                    RoundedRectangle(cornerRadius: barWidth / 2).path(in: rect),
+                    with: .color(color.opacity(1.0 - age * 0.6))
+                )
+            }
+
+            // Tape-head marker at the write position.
+            var head = Path()
+            head.move(to: CGPoint(x: headX + 2, y: midY - size.height * 0.42))
+            head.addLine(to: CGPoint(x: headX + 2, y: midY + size.height * 0.42))
+            context.stroke(head, with: .color(centerlineColor), lineWidth: 1.5)
+        }
+        .frame(height: height)
+        .accessibilityLabel("Recording level")
+    }
+}
+
 // MARK: - Recording Pulse Indicator
 
 struct RecordingPulse: View {
@@ -311,6 +373,7 @@ struct RecordingPulse: View {
                 value: isPulsing
             )
             .onAppear {
+                guard !TalkieMotion.isReduced else { return }
                 isPulsing = true
             }
     }

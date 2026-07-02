@@ -227,59 +227,7 @@ private struct WaveOnlyContent: View {
     var body: some View {
         ZStack {
             waveAndTranscript
-
-            // Top-right: REC dot + label + timer + cancel (×).
-            // Rest near-invisible; full on hover.
-            VStack {
-                HStack {
-                    Spacer()
-                    HStack(spacing: 8) {
-                        DiscDetails(phase: phase, timeString: timeString)
-                        DiscClose(action: cancelRecording)
-                    }
-                    .padding(.trailing, 18)
-                    .padding(.top, 14)
-                }
-                Spacer()
-            }
-            .opacity(detailsOpacity)
-            .allowsHitTesting(phase == .recording && isHoveringCard)
-            .animation(.easeOut(duration: 0.20), value: isHoveringCard)
-            .animation(.easeOut(duration: 0.24), value: phase)
-
-            // Bottom-right: STOP pill. Same hover-reveal.
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    DiscStop(action: stopRecording)
-                        .padding(.trailing, 18)
-                        .padding(.bottom, 14)
-                }
-            }
-            .opacity(stopOpacity)
-            .allowsHitTesting(phase == .recording && isHoveringCard)
-            .animation(.easeOut(duration: 0.20), value: isHoveringCard)
-            .animation(.easeOut(duration: 0.24), value: phase)
-
-            // Bottom-left: quiet phase caption — survives across all
-            // phases at marginalia weight so the surface never reads
-            // as "is it still alive?".
-            VStack {
-                Spacer()
-                HStack {
-                    Text(captionText)
-                        .font(RecordingCompanionFonts.mono(size: 9))
-                        .tracking(2.8)
-                        .foregroundColor(RecordingCompanionTokens.inkFaint)
-                        .opacity(0.55)
-                        .padding(.leading, 18)
-                        .padding(.bottom, 14)
-                        .animation(.easeOut(duration: 0.24), value: captionText)
-                    Spacer()
-                }
-            }
-            .allowsHitTesting(false)
+            chromeLayer
         }
         .padding(.horizontal, 64)
         .padding(.vertical, 44)
@@ -338,6 +286,43 @@ private struct WaveOnlyContent: View {
     }
 
     // MARK: - Pieces
+
+    private var chromeLayer: some View {
+        VStack(spacing: 0) {
+            topChromeRow
+            Spacer(minLength: 0)
+            bottomChromeRow
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+    }
+
+    private var topChromeRow: some View {
+        HStack(spacing: 0) {
+            Spacer(minLength: 0)
+            HStack(spacing: 8) {
+                DiscDetails(phase: phase, timeString: timeString)
+                DiscClose(action: cancelRecording)
+            }
+            .opacity(detailsOpacity)
+            .allowsHitTesting(phase == .recording && isHoveringCard)
+        }
+        .animation(.easeOut(duration: 0.20), value: isHoveringCard)
+        .animation(.easeOut(duration: 0.24), value: phase)
+    }
+
+    private var bottomChromeRow: some View {
+        HStack(alignment: .center, spacing: 12) {
+            DiscCaption(text: captionText, active: phase == .recording)
+                .animation(.easeOut(duration: 0.24), value: captionText)
+            Spacer(minLength: 0)
+            DiscStop(action: stopRecording)
+                .opacity(stopOpacity)
+                .allowsHitTesting(phase == .recording && isHoveringCard)
+        }
+        .animation(.easeOut(duration: 0.20), value: isHoveringCard)
+        .animation(.easeOut(duration: 0.24), value: phase)
+    }
 
     /// The wave and the emerging transcript share the same vertical slot,
     /// so as the wave collapses into a baseline the text appears in the
@@ -536,17 +521,17 @@ private struct WaveOnlyContent: View {
         //  - release 0.08: tail decays slow so the wave breathes back
         //    to baseline instead of chattering
         //
-        // Range widened to 0.22 → 0.95 (was 0.30 → 0.80) so quiet voice
+        // Range widened to 0.18 → 1.00 (was 0.30 → 0.80) so quiet voice
         // reads as quiet and a strong "hey" punches the wave near the
-        // top of its visual range. Light gamma (0.85) compresses just
-        // enough to keep quiet input visible without flattening peaks.
+        // top of its visual range. Gamma 0.72 gives conversational voice
+        // more travel while still preserving loud/quiet contrast.
         while !Task.isCancelled {
             try? await Task.sleep(for: .milliseconds(16))
             guard phase == .recording else { continue }
             let raw = CGFloat(min(max(controller.audioLevel, 0), 1))
-            let shaped = pow(raw, 0.85)
-            let desired = 0.22 + shaped * 0.73
-            let blend: CGFloat = desired > amplitude ? 0.28 : 0.08
+            let shaped = pow(raw, 0.72)
+            let desired = 0.18 + shaped * 0.82
+            let blend: CGFloat = desired > amplitude ? 0.34 : 0.10
             amplitude = amplitude * (1 - blend) + desired * blend
         }
     }
@@ -668,9 +653,9 @@ private struct RecordingPipCapsule: View {
             try? await Task.sleep(for: .milliseconds(16))
             guard controller.state.isRecording else { continue }
             let raw = CGFloat(min(max(controller.audioLevel, 0), 1))
-            let shaped = pow(raw, 0.85)
-            let desired = 0.22 + shaped * 0.55
-            let blend: CGFloat = desired > amplitude ? 0.28 : 0.08
+            let shaped = pow(raw, 0.72)
+            let desired = 0.18 + shaped * 0.64
+            let blend: CGFloat = desired > amplitude ? 0.34 : 0.10
             amplitude = amplitude * (1 - blend) + desired * blend
         }
     }
@@ -854,6 +839,28 @@ private struct DiscDetails: View {
                 .monospacedDigit()
                 .foregroundColor(RecordingCompanionTokens.ink)
         }
+        .allowsHitTesting(false)
+    }
+}
+
+/// Bottom-left status caption. Mirrors the top-right details cluster's
+/// compact dot/text rhythm so the card has matching top and bottom chrome.
+private struct DiscCaption: View {
+    let text: String
+    let active: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(active ? RecordingCompanionTokens.amber : RecordingCompanionTokens.inkFainter)
+                .frame(width: 5, height: 5)
+            Text(text)
+                .font(RecordingCompanionFonts.mono(size: 9))
+                .tracking(2.8)
+                .foregroundColor(RecordingCompanionTokens.inkFaint)
+                .lineLimit(1)
+        }
+        .opacity(0.58)
         .allowsHitTesting(false)
     }
 }

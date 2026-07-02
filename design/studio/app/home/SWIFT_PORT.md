@@ -1,4 +1,12 @@
-# Home → SwiftUI port spec (M1)
+# Home → SwiftUI port spec (superseded M1)
+
+> Status note, 2026-07-01: this document describes the older
+> STATION/PICK UP/Action Bus Home direction. The current Studio route at
+> `http://localhost:3000/home` mirrors the newer iOS Home composition:
+> header complication, Today ticker, Quick deck, Recent screen, Explore rail,
+> bottom voice pivot, and central mic FAB. Treat `NOTES.md` and
+> `components/studies/Home.tsx` as the current design surface until this port
+> spec is rewritten.
 
 **Status:** drafted while Codex builds Phase 0
 **Branch:** kick off on a new branch `feat/ios-home-m1` once Phase 0 lands in master.

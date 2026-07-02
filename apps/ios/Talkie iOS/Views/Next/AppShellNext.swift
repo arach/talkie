@@ -17,6 +17,13 @@ struct AppShellNext<Content: View>: View {
     @StateObject private var recordingSheet = RecordingSheetController.shared
     @EnvironmentObject private var theme: ThemeManager
 
+    /// One-time discoverability: the walkie long-press has no visible hint
+    /// for sighted users (only VoicePivotButton's accessibilityHint). The
+    /// first time controls are summoned we surface a "HOLD TO TALK" caption
+    /// by the pivot, then never again.
+    @AppStorage("hasSeenWalkieHint") private var hasSeenWalkieHint = false
+    @State private var showWalkieHint = false
+
     private let content: () -> Content
 
     init(@ViewBuilder content: @escaping () -> Content) {
@@ -28,6 +35,17 @@ struct AppShellNext<Content: View>: View {
             // Theme-aware background, full bleed.
             theme.colors.background
                 .ignoresSafeArea()
+
+            // Ambient canvas light — a faint top-center lift near the wordmark,
+            // so every home shadow and highlight has something to be relative to
+            // (a uniform backdrop reads flat). plusLighter only lightens, so on
+            // paper themes it's a near-noop; on dark themes it lifts the canvas.
+            // Scoped to Home to leave other surfaces exactly as they were.
+            if router.surface == .home {
+                CanvasAmbientLight()
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+            }
 
             // Screen content — fills the shell at all times. The id
             // ties identity to the current surface so SwiftUI runs
@@ -57,6 +75,16 @@ struct AppShellNext<Content: View>: View {
                     )
             }
 
+            // Processing indicator — bridges the release-to-dispatch gap.
+            // The ListeningBubble is already gone; this compact "SENDING…"
+            // variant sits in the same slot until the command lands/errors.
+            if chrome.isProcessingCommand {
+                ProcessingBubble()
+                    .transition(
+                        .opacity.combined(with: .move(edge: .bottom))
+                    )
+            }
+
             // Persistent MicFAB lives on the home surface — recording
             // is the primary action there, so it's one tap regardless
             // of chrome state. On sub-surfaces the FAB is tucked back
@@ -80,6 +108,11 @@ struct AppShellNext<Content: View>: View {
                 EdgeSwipeBack()
             }
 
+            // Transient failure toast — the voice loop never fails
+            // silently. Top edge, clear of the bottom chrome.
+            FeedbackToastOverlay()
+                .padding(.top, 8)
+
             // Ambient voice button — always visible, bottom-left. Pure
             // summon affordance now (tap = chrome, long-press = voice
             // command); recording moved to the always-visible MicFAB.
@@ -87,6 +120,15 @@ struct AppShellNext<Content: View>: View {
             // sit on the keyboard's bottom-left keys. On Compose with the
             // keyboard down it stays put — the Compose tool row reserves a
             // matching bottom-left gap so the summon sits cleanly in it.
+            //
+            // One-time "HOLD TO TALK" caption — rides just above the pivot
+            // button's bottom-left slot the first time controls are summoned,
+            // then never again (persisted via hasSeenWalkieHint).
+            if showWalkieHint && !router.isEditorKeyboardUp {
+                WalkieHintCaption()
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+
             VoicePivotButton()
                 .opacity(router.isEditorKeyboardUp ? 0 : 1)
                 .allowsHitTesting(!router.isEditorKeyboardUp)
@@ -114,12 +156,21 @@ struct AppShellNext<Content: View>: View {
             // ParakeetModelManager has its own re-entry guards.
             ParakeetModelManager.shared.preheatForKeyboard()
             handleGlobalDeepLinkAction(deepLinkManager.pendingAction)
+            consumeControlCenterRecordFlag()
         }
         .onChange(of: router.pendingNewMemoText) { _, text in
             handlePendingNewMemoText(text)
         }
+        .onChange(of: chrome.state) { _, newState in
+            handleWalkieHintState(newState)
+        }
         .onChange(of: deepLinkManager.pendingAction) { _, action in
             handleGlobalDeepLinkAction(action)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            // Control Center launches the app fresh or foregrounds it —
+            // the intent already wrote the flag, so re-check on activation.
+            consumeControlCenterRecordFlag()
         }
         .onReceive(NotificationCenter.default.publisher(for: .companionShortcutSurfaceRequested)) { _ in
             openCompanionShortcutSurfaceIfAllowed()
@@ -158,9 +209,64 @@ struct AppShellNext<Content: View>: View {
             // keyboard already raised.
             router.openComposeWithKeyboard()
             deepLinkManager.clearAction()
+        case .record:
+            // talkie://record + Siri's StartRecordingIntent both funnel here.
+            // Present the recording sheet via the shared controller — the
+            // same path the MicFAB and Home use — so cold-launch and
+            // while-running deep links land on the modal.
+            recordingSheet.isPresented = true
+            deepLinkManager.clearAction()
         default:
             break
         }
+    }
+
+    /// Drives the one-time "HOLD TO TALK" hint off chrome transitions.
+    /// First time controls are summoned (→ .expanded) we surface it and
+    /// arm a ~4s auto-dismiss. The moment the user actually holds to talk
+    /// (→ .listening) we mark it seen and hide it — the affordance has been
+    /// discovered, so it never returns.
+    private func handleWalkieHintState(_ newState: ShellChrome.State) {
+        switch newState {
+        case .expanded:
+            guard !hasSeenWalkieHint, !showWalkieHint else { return }
+            // Persist immediately: the hint is a once-per-install nudge, so
+            // it shouldn't reappear on the next summon even if the user
+            // dismisses it by walking away rather than holding to talk.
+            hasSeenWalkieHint = true
+            withAnimation(.easeOut(duration: 0.24)) { showWalkieHint = true }
+            // Auto-dismiss after a few seconds if the user doesn't act.
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                guard showWalkieHint else { return }
+                withAnimation(.easeIn(duration: 0.2)) { showWalkieHint = false }
+            }
+        case .listening:
+            // First successful walkie use — retire the hint immediately.
+            if showWalkieHint {
+                withAnimation(.easeIn(duration: 0.2)) { showWalkieHint = false }
+            }
+        case .resting:
+            if showWalkieHint {
+                withAnimation(.easeIn(duration: 0.2)) { showWalkieHint = false }
+            }
+        }
+    }
+
+    /// Control Center's RecordVoiceMemoIntent can't reach `pendingAction`
+    /// from the widget process, so it writes a `shouldStartRecording` flag
+    /// into the shared App Group defaults and relies on the app opening.
+    /// We read+clear it at launch (onAppear) and every foreground
+    /// (didBecomeActive) so a Control Center tap opens the recording sheet
+    /// whether the app was cold or already running.
+    private func consumeControlCenterRecordFlag() {
+        guard
+            let defaults = UserDefaults(suiteName: TalkieMobileRuntimeIdentifiers.appGroupIdentifier),
+            defaults.bool(forKey: "shouldStartRecording")
+        else { return }
+
+        defaults.set(false, forKey: "shouldStartRecording")
+        recordingSheet.isPresented = true
     }
 
     private func openCompanionShortcutSurfaceIfAllowed() {
@@ -292,6 +398,65 @@ struct AppShellNext<Content: View>: View {
         case .deck:
             DeckMirrorNext()
         }
+    }
+}
+
+/// Faint radial lift painted into the Home canvas near the wordmark. The
+/// single highest-leverage depth cue: it gives the flat backdrop a light
+/// source, so the raised Quick chassis and recessed Recent screen read against
+/// a canvas that already has a gradient rather than a dead uniform field.
+/// plusLighter means it can only add light — invisible on paper themes.
+private struct CanvasAmbientLight: View {
+    var body: some View {
+        GeometryReader { proxy in
+            RadialGradient(
+                colors: [Color.white.opacity(0.05), .clear],
+                center: UnitPoint(x: 0.5, y: 0.16),
+                startRadius: 0,
+                endRadius: proxy.size.height * 0.5
+            )
+            .blendMode(.plusLighter)
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+/// One-time "HOLD TO TALK" nudge that rides just above the pivot button's
+/// bottom-left slot. Accent smallcap in the chrome vocabulary, with a small
+/// chevron pointing down at the button it describes. Non-interactive — it's a
+/// caption, not a control; taps fall through to whatever is beneath.
+private struct WalkieHintCaption: View {
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text("Hold to talk")
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .tracking(1.8)
+                .foregroundStyle(theme.currentTheme.chrome.accent)
+            Image(systemName: "chevron.compact.down")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(theme.currentTheme.chrome.accent.opacity(0.7))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(
+            ZStack {
+                let radius = theme.currentTheme.chrome.chromeCorner + 6
+                RoundedRectangle(cornerRadius: radius)
+                    .fill(theme.colors.cardBackground.opacity(0.88))
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius))
+                RoundedRectangle(cornerRadius: radius)
+                    .strokeBorder(theme.currentTheme.chrome.accentStrong, lineWidth: theme.currentTheme.chrome.hairlineWidth)
+            }
+        )
+        .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
+        .allowsHitTesting(false)
+        .padding(.leading, 20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+        // Pivot button top ≈ 16 (bottom pad) + 48 (button) = 64; float the
+        // caption ~8pt above that so the chevron points down at it.
+        .padding(.bottom, 72)
     }
 }
 
@@ -610,6 +775,13 @@ final class ShellChrome: ObservableObject {
 
     @Published private(set) var state: State = .resting
 
+    /// True from release-to-send until the walkie command lands (dispatched)
+    /// or errors. Bridges the gap where the ListeningBubble is already gone
+    /// but the transcription round-trip hasn't produced anything yet — the
+    /// shell paints a compact "SENDING…" indicator while this is set so the
+    /// user isn't staring at silence.
+    @Published private(set) var isProcessingCommand: Bool = false
+
     /// Which screen corners chrome currently owns. Screen-native UI
     /// in these zones should yield (fade out) so the complication
     /// can render without collision. Derived from `state`; reading
@@ -672,6 +844,11 @@ final class ShellChrome: ObservableObject {
     /// summon step and feel sudden.
     func longPressBegan() {
         guard state == .expanded else { return }
+        // A fresh listen supersedes any still-in-flight prior command, so
+        // the bubble slot only ever holds one thing at a time.
+        if isProcessingCommand {
+            withAnimation(.easeIn(duration: 0.12)) { isProcessingCommand = false }
+        }
         withAnimation(.easeOut(duration: 0.18)) { state = .listening }
 
         guard !screenshotMode else { return }
@@ -693,6 +870,10 @@ final class ShellChrome: ObservableObject {
             return
         }
 
+        // The bubble is gone the instant we leave .listening; show the
+        // transient "SENDING…" indicator until the round-trip resolves.
+        withAnimation(.easeOut(duration: 0.18)) { isProcessingCommand = true }
+
         commandTask?.cancel()
         commandTask = Task { @MainActor [weak self] in
             guard let self else { return }
@@ -710,10 +891,14 @@ final class ShellChrome: ObservableObject {
             else {
                 // Real-device transcription failed or returned empty —
                 // don't synthesize a fake command. Screenshot mode is
-                // handled by the early-return above.
+                // handled by the early-return above. Never fail silently:
+                // the user spoke and released, so tell them it didn't land.
+                withAnimation(.easeIn(duration: 0.18)) { self.isProcessingCommand = false }
+                FeedbackToastCenter.shared.showError("Didn't catch that — no words came through. Try again.")
                 return
             }
 
+            withAnimation(.easeIn(duration: 0.18)) { self.isProcessingCommand = false }
             self.voiceCommandHandler?(captured)
         }
     }

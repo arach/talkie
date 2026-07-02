@@ -18,6 +18,9 @@ final class LiveCaptureMarkupOverlayController: NSObject {
     /// host runs region selection and bakes the strokes in. Recording leaves
     /// this nil (it commits via Done instead).
     var onCapture: (() -> Void)?
+    /// Called for keyboard-level safety exits that need owner cleanup beyond
+    /// the web overlay itself, such as agent quick-markup chrome panels.
+    var onDismissRequest: (() -> Void)?
 
     /// Swaps the toolbar's commit cluster: `false` (default) shows Done for the
     /// recording-markup flow; `true` shows the screenshot button for desktop ink.
@@ -27,6 +30,18 @@ final class LiveCaptureMarkupOverlayController: NSObject {
 
     var showsDock = true {
         didSet { applyDockVisibility() }
+    }
+
+    var showsWindowChrome = true {
+        didSet { applyWindowChromeVisibility() }
+    }
+
+    var usesCompactDock = false {
+        didSet { applyCompactDockMode() }
+    }
+
+    var additionalMousePassthroughScreenRects: (() -> [CGRect])? {
+        didSet { applyMousePassthroughState() }
     }
 
     /// Most live markup overlays are intentionally invisible to ScreenCaptureKit
@@ -43,6 +58,7 @@ final class LiveCaptureMarkupOverlayController: NSObject {
     private var selectedTool = "ink"
     private var selectedColor = "#D03A1C"
     private var selectedStrokeWidth = 4.0
+    private var drawableRect: CGRect?
     private var localSafetyKeyMonitor: Any?
     private var globalSafetyKeyMonitor: Any?
     private var localSafeAreaMouseMonitor: Any?
@@ -201,6 +217,12 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         guard next.width >= 8, next.height >= 8 else { return }
         panel?.setFrame(next, display: true)
         webView?.frame = NSRect(origin: .zero, size: next.size)
+        applyDrawableRect()
+    }
+
+    func setDrawableRect(_ rect: CGRect?) {
+        drawableRect = rect
+        applyDrawableRect()
     }
 
     func setTool(_ tool: String) {
@@ -259,14 +281,14 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         removeSafetyMonitors()
 
         localSafetyKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard Self.isEmergencyDismissEvent(event) else { return event }
-            self?.dismiss(discardLayers: false)
+            guard Self.isKeyboardDismissEvent(event) else { return event }
+            self?.requestSafetyDismiss()
             return nil
         }
         globalSafetyKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard Self.isEmergencyDismissEvent(event) else { return }
+            guard Self.isKeyboardDismissEvent(event) else { return }
             Task { @MainActor in
-                self?.dismiss(discardLayers: false)
+                self?.requestSafetyDismiss()
             }
         }
 
@@ -311,7 +333,10 @@ final class LiveCaptureMarkupOverlayController: NSObject {
 
     private func applyMousePassthroughState() {
         guard let panel else { return }
-        panel.ignoresMouseEvents = passthrough || captureYieldActive || mouseIsInProtectedCorner(of: panel)
+        panel.ignoresMouseEvents = passthrough
+            || captureYieldActive
+            || mouseIsInProtectedCorner(of: panel)
+            || mouseIsInAdditionalPassthroughRect(of: panel)
     }
 
     private func mouseIsInProtectedCorner(of panel: NSPanel) -> Bool {
@@ -337,14 +362,29 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         return topLeft.contains(mouse) || topRight.contains(mouse)
     }
 
+    private func mouseIsInAdditionalPassthroughRect(of panel: NSPanel) -> Bool {
+        let mouse = NSEvent.mouseLocation
+        guard panel.frame.contains(mouse),
+              let passthroughRects = additionalMousePassthroughScreenRects?() else {
+            return false
+        }
+        return passthroughRects.contains { $0.standardized.contains(mouse) }
+    }
+
     private static func screen(for point: NSPoint) -> NSScreen? {
         NSScreen.screens.first { NSMouseInRect(point, $0.frame, false) }
     }
 
-    private static func isEmergencyDismissEvent(_ event: NSEvent) -> Bool {
-        guard event.keyCode == 53 else { return false }
-        let activeModifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
-        return activeModifiers.isSuperset(of: [.command, .option, .control, .shift])
+    private static func isKeyboardDismissEvent(_ event: NSEvent) -> Bool {
+        event.keyCode == 53
+    }
+
+    private func requestSafetyDismiss() {
+        if let onDismissRequest {
+            onDismissRequest()
+        } else {
+            dismiss(discardLayers: false)
+        }
     }
 
     private func setWebDockHidden(_ hidden: Bool) {
@@ -353,6 +393,26 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         (() => {
           const dock = document.getElementById("markup-dock");
           if (dock) dock.hidden = \(value);
+        })();
+        """)
+    }
+
+    private func setWebWindowChromeHidden(_ hidden: Bool) {
+        let value = hidden ? "true" : "false"
+        evaluate("""
+        (() => {
+          document.querySelectorAll(".window-close, .surface-actions").forEach((element) => {
+            element.hidden = \(value);
+          });
+        })();
+        """)
+    }
+
+    private func setWebCompactDockEnabled(_ enabled: Bool) {
+        let value = enabled ? "true" : "false"
+        evaluate("""
+        (() => {
+          document.body.dataset.agentCompactDock = \(Self.jsString(value));
         })();
         """)
     }
@@ -387,7 +447,7 @@ final class LiveCaptureMarkupOverlayController: NSObject {
                 self?.requestCapture()
             },
             onCancel: { [weak self] in
-                self?.cancel()
+                self?.requestSafetyDismiss()
             }
         )
         controlsPanel.orderFrontRegardless()
@@ -468,8 +528,27 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         setTool(selectedTool)
         setColor(selectedColor)
         setStrokeWidth(selectedStrokeWidth)
+        applyDrawableRect()
         applyToolbarContext()
         applyDockVisibility()
+        applyWindowChromeVisibility()
+        applyCompactDockMode()
+    }
+
+    private func applyDrawableRect() {
+        guard let drawableRect else {
+            evaluate("window.talkieLiveMarkup && window.talkieLiveMarkup.setDrawableRect(null);")
+            return
+        }
+        let rect = drawableRect.standardized
+        evaluate("""
+        window.talkieLiveMarkup && window.talkieLiveMarkup.setDrawableRect({
+          x: \(Double(rect.minX)),
+          y: \(Double(rect.minY)),
+          width: \(Double(rect.width)),
+          height: \(Double(rect.height))
+        });
+        """)
     }
 
     private func applyToolbarContext() {
@@ -483,6 +562,14 @@ final class LiveCaptureMarkupOverlayController: NSObject {
             return
         }
         setWebDockHidden(!showsDock)
+    }
+
+    private func applyWindowChromeVisibility() {
+        setWebWindowChromeHidden(!showsWindowChrome)
+    }
+
+    private func applyCompactDockMode() {
+        setWebCompactDockEnabled(usesCompactDock)
     }
 }
 

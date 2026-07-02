@@ -26,8 +26,12 @@ struct RecordingSheetNext: View {
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var controller = RecordingSheetController.shared
     @StateObject private var recorder = AudioRecorderManager()
+    // Live partial-transcript ticker. Rides a parallel AVAudioEngine
+    // tap beside the AVAudioRecorder — preview only; the saved
+    // transcript still comes from the full-file pass after save.
+    @StateObject private var liveTranscript = LiveTranscriptMonitor()
 
-    @State private var detent: PresentationDetent = .height(280)
+    @State private var detent: PresentationDetent = .height(330)
     @State private var phase: Phase = .starting
     @State private var title: String = ""
     @State private var startedAt: Date = Date()
@@ -39,6 +43,7 @@ struct RecordingSheetNext: View {
     @State private var pendingAttachments: [RecordingSheetPendingAttachment] = []
     @State private var pendingSidecarRequests: [RecordingSidecarRequest] = []
     @State private var attachmentError: String?
+    @State private var saveErrorMessage: String?
 
     // First-ever-save milestone. `didCelebrateFirstSave` swaps the saved
     // state for the celebratory variant; `firstSavePulse` drives the
@@ -73,7 +78,9 @@ struct RecordingSheetNext: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.horizontal, 20)
-        .presentationDetents([.height(280), .height(460), .height(560)], selection: $detent)
+        // 330 (was 280) — the recording screen gained a reserved
+        // two-line live-transcript slot beneath the waveform.
+        .presentationDetents([.height(330), .height(460), .height(560)], selection: $detent)
         .presentationDragIndicator(.hidden)
         // Theme-true sheet: the app's palette is fixed-dark per theme, but
         // `.regularMaterial` follows the SYSTEM appearance — on a light-mode
@@ -95,12 +102,32 @@ struct RecordingSheetNext: View {
             Haptics.confirm.fire()        // gentle "go" the frame capture engages
             Haptics.prepare(.transition)  // warm the stop thunk so it lands instantly
             phase = .recording
+            // Live preview + Live Activity ride along once the tape is
+            // actually rolling. startRecording() can defer ~300ms while
+            // the keyboard dictation service releases the mic, so poll
+            // briefly instead of assuming the session is live — starting
+            // the parallel AVAudioEngine tap before the recorder owns
+            // the session would race its category setup.
+            Task { @MainActor in
+                for _ in 0..<4 {
+                    try? await Task.sleep(for: .milliseconds(350))
+                    guard controller.isPresented, phase == .recording else { return }
+                    if recorder.isRecording {
+                        RecordingLiveActivityController.shared.start(startedAt: startedAt)
+                        liveTranscript.start()
+                        return
+                    }
+                }
+            }
         }
         .onDisappear {
+            liveTranscript.stop()
             if recorder.isRecording {
                 recorder.stopRecording()
                 recorder.finalizeRecording()
             }
+            // Catch-all (idempotent) — covers swipe-dismiss from any phase.
+            RecordingLiveActivityController.shared.end()
         }
         .onChange(of: selectedAttachmentItems) { _, newItems in
             guard !newItems.isEmpty else { return }
@@ -128,16 +155,18 @@ struct RecordingSheetNext: View {
 
     private var recordingBody: some View {
         VStack(spacing: 14) {
-            // Real particle waveform driven by AudioRecorderManager.
-            // Falls back to a flat field if mic permission isn't
-            // granted yet — particles fade in once levels arrive.
-            ParticlesWaveformView(
+            // Mag-tape waveform driven by AudioRecorderManager: VU bars
+            // stream from the tape head over the amber track. Shows a bare
+            // track until mic levels arrive.
+            TapeWaveformView(
                 levels: recorder.audioLevels,
                 height: 56,
                 color: theme.currentTheme.chrome.accent
             )
             .frame(height: 56)
             .padding(.horizontal, -20)
+
+            liveTranscriptPreview
 
             HStack(spacing: 10) {
                 RecordingPulse(color: theme.currentTheme.chrome.accent, size: 8)
@@ -171,12 +200,51 @@ struct RecordingSheetNext: View {
                     systemImage: "checkmark",
                     label: "Save",
                     isPrimary: false,
-                    action: { stopRecording() }
+                    // Save means save: stop the tape and persist in one tap
+                    // (auto-title; detail view is where naming/undo lives).
+                    action: {
+                        stopRecording()
+                        persistMemo()
+                    }
                 )
             }
             .padding(.bottom, 22)
         }
         .padding(.top, 4)
+    }
+
+    // Two-line live transcript ticker beneath the waveform. The slot
+    // height is RESERVED whether or not words ever arrive — degraded
+    // (no speech permission, recognizer down) is just quiet emptiness,
+    // never an error and never a layout jump. Tail-biased so the most
+    // recent words are always the visible ones.
+    private var liveTranscriptPreview: some View {
+        Text(liveTranscriptTail)
+            .talkieType(.fieldValue)
+            .foregroundStyle(theme.colors.textSecondary)
+            .lineLimit(2)
+            .truncationMode(.head)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: 34, alignment: .bottom)
+            .animation(
+                TalkieMotion.isReduced ? nil : .easeOut(duration: 0.18),
+                value: liveTranscript.transcript
+            )
+            .accessibilityLabel("Live transcript preview")
+    }
+
+    /// Last ~2 lines' worth of the running partial transcript, cut on
+    /// a word boundary with a leading ellipsis once it overflows.
+    private var liveTranscriptTail: String {
+        let text = liveTranscript.transcript
+        let maxTail = 96  // ≈ two lines of 12pt mono at sheet width
+        guard text.count > maxTail else { return text }
+        let tail = text.suffix(maxTail)
+        if let space = tail.firstIndex(of: " ") {
+            return "… " + tail[tail.index(after: space)...]
+        }
+        return "… " + tail
     }
 
     // MARK: - Stopped (save metadata)
@@ -217,6 +285,17 @@ struct RecordingSheetNext: View {
             contextDetailsPanel
 
             Spacer()
+
+            if let saveErrorMessage {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11, weight: .medium))
+                    Text(saveErrorMessage)
+                        .talkieType(.preview)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .foregroundStyle(Color(red: 0.85, green: 0.46, blue: 0.34))
+            }
 
             HStack(spacing: 10) {
                 Button(action: discardRecording) {
@@ -449,8 +528,13 @@ struct RecordingSheetNext: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(theme.colors.cardBackground)
                     .background(Circle().fill(Color.black.opacity(0.5)))
+                    // Negative-inset hit zone: ~45×45 touch target
+                    // around the 15pt glyph without moving or growing
+                    // the visual out of the tile corner.
+                    .contentShape(Rectangle().inset(by: -15))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Remove attachment")
             .padding(4)
         }
     }
@@ -475,8 +559,12 @@ struct RecordingSheetNext: View {
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(theme.colors.textTertiary)
                     .frame(width: 22, height: 22)
+                    // Negative-inset hit zone: 44×44 touch target
+                    // without growing the 22pt visual or the tile.
+                    .contentShape(Rectangle().inset(by: -11))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Remove \(request.kind.displayName)")
         }
         .padding(10)
         .background(
@@ -494,17 +582,24 @@ struct RecordingSheetNext: View {
 
     private func cancelRecording() {
         Haptics.toggle.fire()  // neutral dismiss — nothing kept
+        // Preview engine down BEFORE the recorder deactivates the
+        // shared session — reverse order races the teardown.
+        liveTranscript.stop()
         recorder.stopRecording()
         recorder.finalizeRecording()
         // Delete the temp file
         if let url = recorder.currentRecordingURL {
             try? FileManager.default.removeItem(at: url)
         }
+        RecordingLiveActivityController.shared.end()
         controller.isPresented = false
     }
 
     private func stopRecording() {
         Haptics.transition.fire()  // firm "caught it" the instant capture ends
+        // Preview engine down BEFORE the recorder deactivates the
+        // shared session — reverse order races the teardown.
+        liveTranscript.stop()
         // Snapshot duration + levels BEFORE finalizing — the recorder
         // resets isRecording and may clear state on finalize.
         savedDuration = recorder.recordingDuration
@@ -512,6 +607,9 @@ struct RecordingSheetNext: View {
         recorder.stopRecording()
         recorder.finalizeRecording()
         savedURL = recorder.currentRecordingURL
+        // Tape stopped: freeze the Live Activity readout. The activity
+        // itself ends on save / discard / dismiss.
+        RecordingLiveActivityController.shared.markStopped()
         phase = .stopped
         detent = .height(560)
     }
@@ -521,14 +619,17 @@ struct RecordingSheetNext: View {
         if let url = savedURL {
             try? FileManager.default.removeItem(at: url)
         }
+        RecordingLiveActivityController.shared.end()
         controller.isPresented = false
     }
 
     private func persistMemo() {
         guard let url = savedURL else {
+            RecordingLiveActivityController.shared.end()
             controller.isPresented = false
             return
         }
+        saveErrorMessage = nil
         phase = .saving
 
         let context = PersistenceController.shared.container.viewContext
@@ -588,6 +689,7 @@ struct RecordingSheetNext: View {
             }
 
             Haptics.success.fire()  // earned: you made something and it's safe
+            RecordingLiveActivityController.shared.end()
             didCelebrateFirstSave = isFirstMemo
             if isFirstMemo {
                 // Kerchunk — the sound of committing to tape. Safe here:
@@ -610,8 +712,17 @@ struct RecordingSheetNext: View {
                 }
             }
         } catch {
-            // Best-effort: dismiss; the recording file stays on disk.
-            controller.isPresented = false
+            // A failed save must never look like success: stay open, say so,
+            // and let the user retry from the metadata screen. Roll back the
+            // failed insert so a retry doesn't create a duplicate memo; the
+            // recording file stays on disk either way.
+            context.delete(memo)
+            Haptics.error.fire()
+            // Save failed: the recording is over either way — don't
+            // leave a stale island up while the user decides on retry.
+            RecordingLiveActivityController.shared.end()
+            saveErrorMessage = "Couldn’t save the memo — tap Save to try again. Your audio is safe on disk."
+            phase = .stopped
         }
     }
 

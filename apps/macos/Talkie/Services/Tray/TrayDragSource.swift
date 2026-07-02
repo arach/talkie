@@ -11,42 +11,7 @@
 
 import AppKit
 import SwiftUI
-import UniformTypeIdentifiers
-
-// MARK: - Internal Drag Marker
-
-enum TalkieInternalDrag {
-    static let typeIdentifier = "to.talkie.app.internal-drag"
-    static let utType = UTType(exportedAs: typeIdentifier)
-    static let pasteboardType = NSPasteboard.PasteboardType(typeIdentifier)
-
-    static func isInternal(_ providers: [NSItemProvider]) -> Bool {
-        providers.contains { provider in
-            provider.registeredTypeIdentifiers.contains(typeIdentifier)
-                || provider.hasItemConformingToTypeIdentifier(typeIdentifier)
-        }
-    }
-
-    @discardableResult
-    static func mark(_ provider: NSItemProvider) -> NSItemProvider {
-        provider.registerDataRepresentation(
-            forTypeIdentifier: typeIdentifier,
-            visibility: .all
-        ) { completion in
-            completion(Data("talkie-internal-drag".utf8), nil)
-            return nil
-        }
-        return provider
-    }
-
-    static func pasteboardItem(for url: URL) -> NSPasteboardItem {
-        let item = NSPasteboardItem()
-        item.setString(url.absoluteString, forType: NSPasteboard.PasteboardType(UTType.fileURL.identifier))
-        item.setString(url.absoluteString, forType: NSPasteboard.PasteboardType(UTType.url.identifier))
-        item.setString("1", forType: pasteboardType)
-        return item
-    }
-}
+import TalkieKit
 
 // MARK: - Multi-Drag View Modifier
 

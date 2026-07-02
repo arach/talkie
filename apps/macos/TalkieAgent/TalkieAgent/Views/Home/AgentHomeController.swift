@@ -16,6 +16,7 @@ private let agentHomeControllerLog = Log(.ui)
 enum AgentHomeRoute: String, Sendable {
     case home
     case history
+    case libraryCaptures
     case conversations
     case permissions
     case logs

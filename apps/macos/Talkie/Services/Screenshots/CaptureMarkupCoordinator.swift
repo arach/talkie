@@ -32,6 +32,8 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
         super.init()
     }
 
+    /// Legacy Talkie-owned markup surface. Prefer `openAgentOwnedSession(imageURL:)`
+    /// for user-facing annotation entry points.
     func openSession(
         imageURL: URL,
         document: CaptureMarkupDocument? = nil,
@@ -142,7 +144,7 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
                         openWebBay: true
                     )
                 } else {
-                    openSession(imageURL: imageURL)
+                    openAgentOwnedSession(imageURL: imageURL)
                 }
             } catch {
                 log.error("Failed to open markup session", detail: error.localizedDescription)
@@ -150,6 +152,15 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
                     presentAgentError(error)
                 }
             }
+        }
+    }
+
+    func openAgentOwnedSession(imageURL: URL, fallbackToLegacy: Bool = true) {
+        Task { @MainActor in
+            let opened = await ServiceManager.shared.live.openCaptureMarkup(fileURL: imageURL)
+            if opened { return }
+            guard fallbackToLegacy else { return }
+            openSession(imageURL: imageURL)
         }
     }
 

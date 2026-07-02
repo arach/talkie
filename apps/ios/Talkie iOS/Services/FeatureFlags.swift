@@ -52,6 +52,10 @@ enum FeatureFlags {
         launchArguments.contains("--enableAIMemoSummaries")
     }
 
+    /// User-triggered memo formatting in Compose. This is availability-gated
+    /// at call time and does not run in the background.
+    static var aiMemoFormattingEnabled: Bool { true }
+
     /// Task / action-item extraction from voice-memo transcripts.
     static var aiTaskExtractionEnabled: Bool {
         launchArguments.contains("--enableAITaskExtraction")

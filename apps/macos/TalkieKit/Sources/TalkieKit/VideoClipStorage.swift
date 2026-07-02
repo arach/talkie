@@ -33,7 +33,8 @@ public enum VideoClipStorage {
         height: Int? = nil,
         windowTitle: String? = nil,
         appName: String? = nil,
-        displayName: String? = nil
+        displayName: String? = nil,
+        moveSource: Bool = false
     ) -> URL? {
         let dir = videosDirectory
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -53,10 +54,17 @@ public enum VideoClipStorage {
         let url = dir.appendingPathComponent(filename)
 
         do {
+            if tempURL.standardizedFileURL == url.standardizedFileURL {
+                return url
+            }
             if FileManager.default.fileExists(atPath: url.path) {
                 try FileManager.default.removeItem(at: url)
             }
-            try FileManager.default.copyItem(at: tempURL, to: url)
+            if moveSource {
+                try FileManager.default.moveItem(at: tempURL, to: url)
+            } else {
+                try FileManager.default.copyItem(at: tempURL, to: url)
+            }
             return url
         } catch {
             Log(.system).error("Failed to save video clip: \(error)")

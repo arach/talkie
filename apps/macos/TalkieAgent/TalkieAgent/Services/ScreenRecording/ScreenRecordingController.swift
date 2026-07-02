@@ -37,9 +37,16 @@ final class ScreenRecordingController {
 
     private(set) var state: State = .idle
     private(set) var recordingStartTime: Date?
+    var isRecording: Bool {
+        state == .recording || ScreenRecordingService.shared.state == .recording
+    }
 
     @ObservationIgnored
     private var metadataSampleTask: Task<Void, Never>?
+    @ObservationIgnored
+    private var windowHealthTask: Task<Void, Never>?
+    @ObservationIgnored
+    private var monitoredWindowTarget: ScreenRecordingTarget?
     @ObservationIgnored
     private var metadataEvents: [RecordingVisualContextEvent] = []
     @ObservationIgnored
@@ -48,6 +55,8 @@ final class ScreenRecordingController {
     private var activeOverlayController: ScreenRecordingActiveOverlayController?
     @ObservationIgnored
     private var cameraBubbleShownForRecording = false
+    @ObservationIgnored
+    private var isStoppingRecording = false
 
     private init() {}
 
@@ -94,6 +103,14 @@ final class ScreenRecordingController {
             return .needsSelection
         }
 
+        guard await service.validateTargetForRecording(target) else {
+            log.warning(
+                "Reusable screen recording target is no longer valid — \(service.diagnosticSummary(for: target))"
+            )
+            state = .idle
+            return .needsSelection
+        }
+
         let countdown = ScreenRecordingCountdownController(target: target)
         switch await countdown.begin(seconds: Self.reusableCountdownSeconds) {
         case .start(let confirmedTarget):
@@ -126,8 +143,20 @@ final class ScreenRecordingController {
     // MARK: - Stop Recording
 
     /// Stop the current screen recording and add the clip to the tray.
-    func stopRecording() async {
-        guard state == .recording else { return }
+    @discardableResult
+    func stopRecording() async -> Bool {
+        guard !isStoppingRecording else {
+            log.debug("Screen recording stop ignored - stop already in progress")
+            return true
+        }
+        guard isRecording else { return false }
+
+        isStoppingRecording = true
+        defer { isStoppingRecording = false }
+
+        if state != .recording, ScreenRecordingService.shared.state == .recording {
+            log.warning("Screen recording controller state drifted; stopping active service recording")
+        }
 
         // Capture start time before stop clears it
         let startTime = ScreenRecordingService.shared.recordingStartTime ?? recordingStartTime
@@ -135,78 +164,198 @@ final class ScreenRecordingController {
 
         guard let result = await ScreenRecordingService.shared.stopRecording() else {
             log.error("Screen recording stop returned no result")
-            recordingStartTime = nil
-            state = .idle
-            NotchOverlayController.shared.deactivateScreenRecording()
-            hideActiveOverlay()
-            hideCameraBubbleIfNeeded()
-            resetMetadataSampler()
-            return
+            resetAfterRecordingEnded()
+            return false
         }
 
-        // Calculate duration
-        let durationMs: Int
-        if let startTime {
-            durationMs = Int(Date().timeIntervalSince(startTime) * 1000)
-        } else {
-            durationMs = 0
+        let clipStartedAt = startTime ?? Date()
+        let durationMs = durationMs(since: clipStartedAt)
+        let persisted = await persistFinishedClip(
+            url: result.url,
+            width: result.width,
+            height: result.height,
+            target: result.target,
+            startedAt: clipStartedAt,
+            durationMs: durationMs,
+            interrupted: false
+        )
+        if !persisted {
+            showSaveFailureToast(tempURL: result.url, interrupted: false)
         }
 
-        let captureMode = Self.captureModeString(for: result.target)
-        let clipStartedAt = startTime ?? Date().addingTimeInterval(-Double(durationMs) / 1000.0)
-        var metadataEvents = finalizedMetadataEvents(durationMs: durationMs)
-        if let markupEvent = activeOverlayController?.captureMarkupEvent(
-            recordingStartTime: clipStartedAt,
-            durationMs: durationMs
-        ) {
-            metadataEvents.append(markupEvent)
-        }
-
-        do {
-            let stored = try await AgentLiveTrayAssetStore.shared.storeClip(
-                tempURL: result.url,
-                capturedAt: clipStartedAt,
-                durationMs: durationMs,
-                width: result.width,
-                height: result.height,
-                captureMode: captureMode,
-                windowTitle: result.target.windowTitle,
-                appName: result.target.appName,
-                displayName: result.target.displayName,
-                metadataEvents: metadataEvents
-            )
-            AgentCaptureLibraryWriter.persistClip(
-                sourceURL: stored.fileURL,
-                id: stored.id,
-                capturedAt: clipStartedAt,
-                durationMs: durationMs,
-                captureMode: captureMode,
-                width: result.width,
-                height: result.height,
-                windowTitle: result.target.windowTitle,
-                appName: result.target.appName,
-                displayName: result.target.displayName,
-                metadataEvents: metadataEvents
-            )
-            log.info("Screen recording stopped, \(durationMs)ms → Agent tray (\(stored.filename))")
-        } catch {
-            log.error("Screen recording tray write failed: \(error.localizedDescription)")
-        }
-
-        recordingStartTime = nil
-        state = .idle
-        NotchOverlayController.shared.deactivateScreenRecording()
-        hideActiveOverlay()
-        hideCameraBubbleIfNeeded()
+        resetAfterRecordingEnded()
+        return persisted
     }
 
     // MARK: - Toggle (for stop via hotkey)
 
     /// If recording, stop. Otherwise do nothing (chord handles start).
-    func stopIfRecording() async {
-        if state == .recording {
-            await stopRecording()
+    @discardableResult
+    func stopIfRecording() async -> Bool {
+        if isRecording || isStoppingRecording {
+            return await stopRecording()
         }
+        return false
+    }
+
+    /// Reset controller UI/state after ScreenCaptureKit ends the stream unexpectedly.
+    func handleServiceInterruption(reason: String, salvaged: ScreenRecordingFinishedClip? = nil) async {
+        guard !isStoppingRecording else {
+            log.debug("Screen recording stream interruption observed during stop: \(reason)")
+            return
+        }
+        guard state != .idle || recordingStartTime != nil || salvaged != nil else {
+            return
+        }
+
+        if let salvaged {
+            let durationMs = durationMs(since: salvaged.startedAt)
+            let persisted = await persistFinishedClip(
+                url: salvaged.url,
+                width: salvaged.width,
+                height: salvaged.height,
+                target: salvaged.target,
+                startedAt: salvaged.startedAt,
+                durationMs: durationMs,
+                interrupted: true
+            )
+            if persisted {
+                log.warning(
+                    "Screen recording interrupted by ScreenCaptureKit but partial clip saved (\(durationMs)ms): \(reason)"
+                )
+                showInterruptionToast(salvaged: true, durationMs: durationMs)
+            } else {
+                log.error("Screen recording interrupted and partial clip could not be saved: \(reason)")
+                showSaveFailureToast(tempURL: salvaged.url, interrupted: true)
+            }
+        } else {
+            ScreenRecordingService.shared.logCaptureFailure(reason: reason)
+            showInterruptionToast(salvaged: false, durationMs: nil)
+        }
+
+        resetAfterRecordingEnded()
+    }
+
+    func dismissMarkupOverlaysForSafety(reason: String) {
+        log.warning("Dismissing screen recording markup overlay", detail: reason)
+        activeOverlayController?.dismissMarkupOverlay()
+    }
+
+    private func showInterruptionToast(salvaged: Bool, durationMs: Int?) {
+        if salvaged, let durationMs {
+            let seconds = max(1, Int((Double(durationMs) / 1000.0).rounded()))
+            ToastOverlayController.shared.show(
+                ToastMessage(
+                    icon: "⚠️",
+                    text: "Screen recording stopped",
+                    detail: "macOS interrupted capture — partial clip saved (\(seconds)s)",
+                    actionLabel: nil,
+                    action: nil
+                )
+            )
+        } else {
+            ToastOverlayController.shared.show(
+                ToastMessage(
+                    icon: "❌",
+                    text: "Screen recording stopped",
+                    detail: "macOS interrupted capture before a clip could be saved",
+                    actionLabel: nil,
+                    action: nil
+                )
+            )
+        }
+    }
+
+    private func showSaveFailureToast(tempURL: URL, interrupted: Bool) {
+        log.error("Screen recording save failed; temporary clip remains at \(tempURL.path)")
+        ToastOverlayController.shared.show(
+            ToastMessage(
+                icon: "❌",
+                text: interrupted ? "Screen recording interrupted" : "Screen recording not saved",
+                detail: "Temporary clip is still available.",
+                actionLabel: "Reveal",
+                action: {
+                    NSWorkspace.shared.activateFileViewerSelecting([tempURL])
+                }
+            ),
+            duration: 8
+        )
+    }
+
+    private func resetAfterRecordingEnded() {
+        stopWindowHealthMonitor()
+        stopMetadataSampler()
+        recordingStartTime = nil
+        state = .idle
+        NotchOverlayController.shared.deactivateScreenRecording()
+        hideActiveOverlay()
+        hideCameraBubbleIfNeeded()
+        resetMetadataSampler()
+    }
+
+    private func durationMs(since startedAt: Date) -> Int {
+        max(0, Int(Date().timeIntervalSince(startedAt) * 1000))
+    }
+
+    private func persistFinishedClip(
+        url: URL,
+        width: Int,
+        height: Int,
+        target: ScreenRecordingTarget,
+        startedAt: Date,
+        durationMs: Int,
+        interrupted: Bool
+    ) async -> Bool {
+        let captureMode = Self.captureModeString(for: target)
+        var metadataEvents = finalizedMetadataEvents(durationMs: durationMs)
+        if let markupEvent = activeOverlayController?.captureMarkupEvent(
+            recordingStartTime: startedAt,
+            durationMs: durationMs
+        ) {
+            metadataEvents.append(markupEvent)
+        }
+
+        let captureID = UUID()
+        guard let persisted = AgentCaptureLibraryWriter.persistClip(
+            sourceURL: url,
+            id: captureID,
+            capturedAt: startedAt,
+            durationMs: durationMs,
+            captureMode: captureMode,
+            width: width,
+            height: height,
+            windowTitle: target.windowTitle,
+            appName: target.appName,
+            displayName: target.displayName,
+            metadataEvents: metadataEvents
+        ) else {
+            log.error("Screen recording Library write failed; temp=\(url.path)")
+            return false
+        }
+
+        do {
+            let stored = try await AgentLiveTrayAssetStore.shared.registerClip(
+                fileURL: persisted.fileURL,
+                id: captureID,
+                capturedAt: startedAt,
+                durationMs: durationMs,
+                width: width,
+                height: height,
+                captureMode: captureMode,
+                windowTitle: target.windowTitle,
+                appName: target.appName,
+                displayName: target.displayName,
+                metadataEvents: metadataEvents
+            )
+            if interrupted {
+                log.warning("Interrupted screen recording saved to Agent tray (\(stored.filename), \(durationMs)ms)")
+            } else {
+                log.info("Screen recording stopped, \(durationMs)ms → Agent tray (\(stored.filename))")
+            }
+        } catch {
+            log.error("Screen recording tray write failed: \(error.localizedDescription)")
+        }
+        return true
     }
 
     func dismissMarkupOverlaysForSafety(reason: String) {
@@ -279,9 +428,55 @@ final class ScreenRecordingController {
         state = .recording
         NotchOverlayController.shared.activateScreenRecording(startedAt: startTime)
         startMetadataSampler(for: target, captureMode: Self.captureModeString(for: target), startedAt: startTime)
+        startWindowHealthMonitor(for: target)
         showActiveOverlay(for: target, startedAt: startTime)
-        log.info("Screen recording in progress (mode: \(mode.rawValue))")
+        log.info(
+            "Screen recording in progress (mode: \(mode.rawValue), \(ScreenRecordingService.shared.diagnosticSummary(for: target)))"
+        )
         return true
+    }
+
+    private func startWindowHealthMonitor(for target: ScreenRecordingTarget) {
+        guard case .window = target.kind else { return }
+
+        stopWindowHealthMonitor()
+        monitoredWindowTarget = target
+        windowHealthTask = Task { @MainActor [weak self] in
+            var missedChecks = 0
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else { break }
+                guard let self, self.state == .recording, let monitoredWindowTarget = self.monitoredWindowTarget else {
+                    break
+                }
+
+                let stillValid = await ScreenRecordingService.shared.isCaptureTargetStillValid(monitoredWindowTarget)
+                if stillValid {
+                    missedChecks = 0
+                    continue
+                }
+
+                missedChecks += 1
+                guard missedChecks >= 3 else {
+                    log.debug(
+                        "Screen recording window target missed liveness check \(missedChecks)/3 — \(ScreenRecordingService.shared.diagnosticSummary(for: monitoredWindowTarget))"
+                    )
+                    continue
+                }
+
+                log.warning(
+                    "Screen recording window target lost — stopping gracefully (\(ScreenRecordingService.shared.diagnosticSummary(for: monitoredWindowTarget)))"
+                )
+                await self.stopRecording()
+                break
+            }
+        }
+    }
+
+    private func stopWindowHealthMonitor() {
+        windowHealthTask?.cancel()
+        windowHealthTask = nil
+        monitoredWindowTarget = nil
     }
 
     private func showCameraBubbleIfNeeded() {
@@ -964,6 +1159,9 @@ private final class ScreenRecordingActiveOverlayController {
             }
             created.onCancel = { [weak self] in
                 self?.markupLayers.removeAll()
+            }
+            created.onDismissRequest = { [weak self] in
+                self?.dismissMarkupOverlay()
             }
             markupOverlayController = created
             controller = created

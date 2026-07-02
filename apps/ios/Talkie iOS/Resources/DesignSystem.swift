@@ -345,7 +345,7 @@ struct ScopeMobilePhosphorDot: View {
             .shadow(color: color.opacity(0.55), radius: pulse ? 6 : 4)
             .scaleEffect(pulses && pulse ? 1.08 : 1)
             .onAppear {
-                guard pulses else { return }
+                guard pulses, !TalkieMotion.isReduced else { return }
                 withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
                     pulse = true
                 }
@@ -693,6 +693,26 @@ extension AppTheme {
     }
 }
 
+extension ChromeTokens {
+    /// Raised-metal sheen — a vertical gradient layered over a chassis fill so a
+    /// panel reads as machined metal: a thin cool highlight at the top lip
+    /// falling to a soft shade at the base. Deltas kept ≤10% (machined, not
+    /// glossy). Layered by `bezelChassis(metal:)`; theme-agnostic on purpose —
+    /// white/black over the theme's own `cardBackground` so it reads correctly
+    /// on every canvas without per-theme tuning. Not inlined per view.
+    var metalFill: LinearGradient {
+        LinearGradient(
+            stops: [
+                .init(color: Color.white.opacity(0.045), location: 0.0),
+                .init(color: Color.clear,                location: 0.5),
+                .init(color: Color.black.opacity(0.09),  location: 1.0)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+}
+
 extension ThemeManager {
     var chrome: ChromeTokens { currentTheme.chrome }
 }
@@ -785,7 +805,7 @@ struct TalkieStatusDot: View {
             .shadow(color: dotColor.opacity(0.55), radius: pulse ? chrome.glowRadius + 2 : chrome.glowRadius)
             .scaleEffect(pulses && pulse ? 1.08 : 1)
             .onAppear {
-                guard pulses else { return }
+                guard pulses, !TalkieMotion.isReduced else { return }
                 withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
                     pulse = true
                 }
@@ -1074,9 +1094,10 @@ extension View {
         padding: CGFloat = Spacing.md,
         corner: CGFloat = CornerRadius.sm,
         accent: Bool = false,
+        metal: Bool = false,
         fill: Color? = nil
     ) -> some View {
-        modifier(BezelChassisModifier(padding: padding, corner: corner, accent: accent, fill: fill))
+        modifier(BezelChassisModifier(padding: padding, corner: corner, accent: accent, metal: metal, fill: fill))
     }
 
     /// Always-dark CRT bezel — recessed glass on the panel surface. Use only
@@ -1087,6 +1108,18 @@ extension View {
         corner: CGFloat = CornerRadius.sm
     ) -> some View {
         modifier(ScreenRecessModifier(padding: padding, corner: corner))
+    }
+
+    /// Recessed "screen" frame — the opposite pole from `bezelChassis`. Where the
+    /// chassis lifts a panel off the canvas, this sinks a surface below it: an
+    /// inner top shadow reads as the lip of a cutout catching light, over the
+    /// card fill. Unlike `screenRecess` it keeps the surface's own ink (no swap
+    /// to the always-dark instrument panel), so list text stays legible in every
+    /// theme. Use for content the eye should read as sitting behind glass — the
+    /// Recent list. The `padding: 0` default lets the framed content (e.g. a List)
+    /// run edge-to-edge inside the recess.
+    func recessedScreen(corner: CGFloat = CornerRadius.sm) -> some View {
+        modifier(RecessedScreenModifier(corner: corner))
     }
 
     /// Standard themed card chrome. Now routes through `bezelChassis` so every
@@ -1179,6 +1212,7 @@ private struct BezelChassisModifier: ViewModifier {
     let padding: CGFloat
     let corner: CGFloat
     let accent: Bool
+    let metal: Bool
     let fill: Color?
 
     @ObservedObject private var theme = ThemeManager.shared
@@ -1190,7 +1224,15 @@ private struct BezelChassisModifier: ViewModifier {
         let shape = RoundedRectangle(cornerRadius: corner, style: .continuous)
         return content
             .padding(padding)
-            .background(bg)
+            .background {
+                // Card fill, plus the machined-metal sheen when raised. The
+                // sheen tints the fill (drawn behind content), never the
+                // content itself, so labels keep their ink.
+                ZStack {
+                    bg
+                    if metal { chrome.metalFill }
+                }
+            }
             .overlay(alignment: .top) {
                 // Inner top highlight — fabricated-edge cue. Masked to the
                 // shape so the corners stay clean.
@@ -1210,6 +1252,36 @@ private struct BezelChassisModifier: ViewModifier {
             // read). Still a composite two-drop, just enough presence now.
             .shadow(color: Color.black.opacity(0.06), radius: 3, x: 0, y: 1)
             .shadow(color: Color.black.opacity(0.10), radius: 14, x: 0, y: 8)
+    }
+}
+
+private struct RecessedScreenModifier: ViewModifier {
+    let corner: CGFloat
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    func body(content: Content) -> some View {
+        let chrome = theme.chrome
+        let shape = RoundedRectangle(cornerRadius: corner, style: .continuous)
+        return content
+            .background(theme.colors.cardBackground)
+            .overlay(alignment: .top) {
+                // Inner top shadow — the sunken lip. Gentle (~10pt) so the
+                // recess suggests depth without shading the first row heavily.
+                // Applied before the clip so it inherits the rounded corners.
+                LinearGradient(
+                    colors: [Color.black.opacity(0.16), .clear],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 10)
+                .allowsHitTesting(false)
+            }
+            .clipShape(shape)
+            .overlay {
+                // Firmer than a plain card hairline — the frame of the screen.
+                shape.strokeBorder(chrome.edge, lineWidth: chrome.hairlineWidth)
+            }
     }
 }
 

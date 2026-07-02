@@ -127,6 +127,12 @@ public enum CaptureMediaFileResolver {
     }
 
     public static func visualContextSourceURL(for context: RecordingVisualContext) -> URL? {
+        if let sourceClipPath = context.sourceClipPath,
+           !sourceClipPath.isEmpty {
+            let url = URL(fileURLWithPath: sourceClipPath)
+            if FileManager.default.fileExists(atPath: url.path) { return url }
+        }
+
         let bundleURL = VisualContextStorage.bundleURL(for: context)
         let sourceURL = bundleURL.appendingPathComponent(context.sourceClipFilename)
         if FileManager.default.fileExists(atPath: sourceURL.path) { return sourceURL }

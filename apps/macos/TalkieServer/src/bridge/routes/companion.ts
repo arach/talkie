@@ -235,6 +235,13 @@ export async function companionTriggerRoute(
   }
 
   if (!(await checkTalkieServer())) {
+    if (isAgentOwnedDeckCommand(shortcutId)) {
+      return serviceUnavailable(
+        "TalkieAgent not ready",
+        "Start or update TalkieAgent to use deck keyboard controls from your phone"
+      );
+    }
+
     return serviceUnavailable(
       "Talkie not running",
       "Start Talkie.app to enable companion shortcuts, or try an agent-owned shortcut again after TalkieAgent is ready"
@@ -295,6 +302,21 @@ async function tryAgentTrigger(shortcutId: string): Promise<AgentTriggerOutcome>
   }
 }
 
+function isAgentOwnedDeckCommand(shortcutId: string): boolean {
+  return [
+    "deck-enter",
+    "deck-delete",
+    "deck-escape",
+    "deck-up",
+    "deck-down",
+    "deck-left",
+    "deck-right",
+    "deck-select-all",
+    "deck-copy",
+    "deck-paste",
+  ].includes(shortcutId);
+}
+
 export async function companionActivateAppRoute(
   body: CompanionActivateAppRequest
 ): Promise<CompanionTriggerResponse | Response> {
@@ -347,8 +369,16 @@ export async function companionTrackpadRoute(
     return badRequest("event is required");
   }
 
+  const agentResult = await tryAgentTrackpad(body);
+  if (agentResult) {
+    return agentResult;
+  }
+
   if (!(await checkTalkieServer())) {
-    return serviceUnavailable("Talkie not running", "Start Talkie.app to enable trackpad");
+    return serviceUnavailable(
+      "TalkieAgent not ready",
+      "Start or restart TalkieAgent to use the deck trackpad"
+    );
   }
 
   try {
@@ -370,6 +400,34 @@ export async function companionTrackpadRoute(
   }
 }
 
+async function tryAgentTrackpad(
+  body: CompanionTrackpadRequest
+): Promise<{ ok: boolean } | Response | null> {
+  try {
+    const response = await fetch(`${TALKIEAGENT_URL}/v1/agent/companion/trackpad`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(2000),
+    });
+
+    if (response.ok) {
+      return await response.json() as { ok: boolean };
+    }
+
+    if (response.status === 404) {
+      return null;
+    }
+
+    const errorText = await response.text().catch(() => "");
+    log.warn(`Agent companion trackpad returned ${response.status}: ${errorText}`);
+    return proxyError(response.status, "Agent trackpad event failed", errorText);
+  } catch (error) {
+    log.debug(`Agent companion trackpad unavailable, falling back to legacy companion route: ${error}`);
+    return null;
+  }
+}
+
 export async function companionPasteImageRoute(
   body: CompanionPasteImageRequest
 ): Promise<CompanionTriggerResponse | Response> {
@@ -378,8 +436,20 @@ export async function companionPasteImageRoute(
     return badRequest("imageBase64 is required");
   }
 
+  const agentResult = await tryAgentPasteImage({
+    imageBase64,
+    mimeType: body.mimeType,
+    autoPaste: body.autoPaste ?? true,
+  });
+  if (agentResult) {
+    return agentResult;
+  }
+
   if (!(await checkTalkieServer())) {
-    return serviceUnavailable("Talkie not running", "Start Talkie.app to paste images from your companion device");
+    return serviceUnavailable(
+      "TalkieAgent not ready",
+      "Start or restart TalkieAgent to paste images from your companion device"
+    );
   }
 
   try {
@@ -404,6 +474,35 @@ export async function companionPasteImageRoute(
   } catch (error) {
     log.error(`Companion paste image proxy failed: ${error}`);
     return serverError("Failed to paste image from companion device", String(error));
+  }
+}
+
+async function tryAgentPasteImage(
+  body: Required<Pick<CompanionPasteImageRequest, "imageBase64" | "autoPaste">> &
+    Pick<CompanionPasteImageRequest, "mimeType">
+): Promise<CompanionTriggerResponse | Response | null> {
+  try {
+    const response = await fetch(`${TALKIEAGENT_URL}/v1/agent/companion/paste-image`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (response.ok) {
+      return await response.json() as CompanionTriggerResponse;
+    }
+
+    if (response.status === 404) {
+      return null;
+    }
+
+    const errorText = await response.text().catch(() => "");
+    log.warn(`Agent companion paste image returned ${response.status}: ${errorText}`);
+    return proxyError(response.status, "Agent image paste failed", errorText);
+  } catch (error) {
+    log.debug(`Agent companion paste image unavailable, falling back to legacy companion route: ${error}`);
+    return null;
   }
 }
 

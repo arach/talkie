@@ -2,13 +2,12 @@ import { $ } from "bun";
 import { existsSync } from "fs";
 import { networkInterfaces } from "os";
 
-// Known Tailscale CLI locations (in priority order)
-// Prefer standalone CLI over app bundle (app bundle needs GUI session)
+// Known Tailscale CLI locations (in priority order).
+// Do not use the macOS app bundle binary here; it can wake GUI state.
 const TAILSCALE_PATHS = [
   "/opt/homebrew/bin/tailscale", // Homebrew Apple Silicon
   "/usr/local/bin/tailscale", // Homebrew Intel
   "/usr/bin/tailscale", // System install
-  "/Applications/Tailscale.app/Contents/MacOS/Tailscale", // macOS app bundle (last - needs GUI)
 ];
 
 /**

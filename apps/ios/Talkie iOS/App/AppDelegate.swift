@@ -361,8 +361,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     }
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-        let tokenString = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
-        AppLogger.app.info("Registered for remote notifications: \(tokenString.prefix(20))...")
+        AppLogger.app.info("Registered for remote notifications (\(deviceToken.count)-byte token)")
     }
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {

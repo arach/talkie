@@ -697,7 +697,7 @@ struct ScopeHomeView: View {
                 NSWorkspace.shared.open(url)
             },
             RecentMenuItem(label: "Annotate", systemImage: "pencil.tip.crop.circle", role: nil) {
-                markupURL = url
+                CaptureMarkupCoordinator.shared.openAgentOwnedSession(imageURL: url)
             },
             RecentMenuItem(label: "Quick Copy", systemImage: "doc.on.doc", role: nil) {
                 Self.copyImage(at: url)
@@ -1102,14 +1102,14 @@ struct ScopeHomeView: View {
     private func panelBody(scheme: BayScheme) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                statTile(scheme: scheme, seed: 0, value: "\(todayMemos)",    label: "MEMOS · TODAY")
+                statTile(scheme: scheme, seed: 0, value: ScopeType.statCount(todayMemos),    label: "MEMOS · TODAY")
                 tileDivider(scheme: scheme)
-                statTile(scheme: scheme, seed: 1, value: "\(todayDictations)", label: "DICTATIONS · TODAY")
+                statTile(scheme: scheme, seed: 1, value: ScopeType.statCount(todayDictations), label: "DICTATIONS · TODAY")
                 tileDivider(scheme: scheme)
                 statTile(
                     scheme: scheme,
                     seed: 2,
-                    value: "\(streak)",
+                    value: ScopeType.statCount(streak),
                     label: "DAY STREAK",
                     extra: (bayHeatmap && !bayCompact) ? AnyView(ActivityHeatmap(scheme: scheme)) : nil
                 )
