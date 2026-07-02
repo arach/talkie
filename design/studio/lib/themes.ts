@@ -1,5 +1,5 @@
 /**
- * The 4 iOS user-facing themes (+ Lift as an exploration variant).
+ * iOS user-facing themes plus Studio exploration variants.
  * Each is a coherent designed system — not just a color remap. Color,
  * behavior, material identity all bundle together.
  *
@@ -21,7 +21,7 @@
  */
 
 export interface IOSTheme {
-  key: "scope" | "midnight" | "tactical" | "ghost" | "lift" | "graphite";
+  key: "scope" | "midnight" | "tactical" | "ghost" | "lift" | "graphite" | "carbon";
   name: string;
   /** One-line identity. What does it FEEL like at a glance? */
   identity: string;
@@ -165,6 +165,25 @@ export const IOS_THEMES: IOSTheme[] = [
       { label: "slate", hex: "#7B8E9E" },
       { label: "screen", hex: "#040405" },
       { label: "edge", hex: "#EDEDEE@22" },
+    ],
+  },
+  {
+    key: "carbon",
+    name: "Carbon",
+    identity: "True black · light-carved chrome · monochrome accent",
+    blurb:
+      "Pure-black stress test for the material system. Shadows disappear by design, so depth must come from top light, hairlines, and tonal recesses. Useful for judging whether Home's metal/recess story survives on a black floor.",
+    canvasHex: "#000000",
+    accentHex: "#A1A1AA",
+    display: { weight: 500, tracking: "-0.018em", italicAccent: false },
+    behavior: { phosphorGlow: false, graticule: false, darkSurface: true },
+    preview: [
+      { label: "canvas", hex: "#000000" },
+      { label: "paper", hex: "#101010" },
+      { label: "ink", hex: "#F2F2F2" },
+      { label: "accent", hex: "#A1A1AA" },
+      { label: "panel", hex: "#030303" },
+      { label: "edge", hex: "#F2F2F2@22" },
     ],
   },
 ];

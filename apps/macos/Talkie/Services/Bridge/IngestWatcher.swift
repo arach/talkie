@@ -112,77 +112,204 @@ final class IngestWatcher {
                 return
             }
 
-            let objectId = UUID(uuidString: manifest.id) ?? UUID()
-
-            // Save image to ScreenshotStorage before cleanup
-            var assets = TalkieObjectAssets()
-            if let imageFilename = manifest.imageFilename {
-                let imageURL = Self.ingestDir.appendingPathComponent(imageFilename)
-                if let imageData = try? Data(contentsOf: imageURL) {
-                    let normalizedData = normalizedScreenshotData(from: imageData) ?? imageData
-                    if let savedURL = ScreenshotStorage.save(
-                        normalizedData,
-                        recordingId: objectId,
-                        timestampMs: 0,
-                        captureMode: "capture",
-                        windowTitle: manifest.title
-                    ) {
-                        let screenshot = RecordingScreenshot(
-                            filename: savedURL.lastPathComponent,
-                            timestampMs: 0,
-                            captureMode: "capture"
-                        )
-                        assets.screenshots = [screenshot]
-                        log.info("IngestWatcher: saved image → \(savedURL.lastPathComponent)")
-                    } else {
-                        log.warning("IngestWatcher: ScreenshotStorage.save failed for \(imageFilename)")
-                    }
-                } else {
-                    log.warning("IngestWatcher: image file not found: \(imageFilename)")
-                }
-            }
-
-            // Generate a title if one wasn't provided or is generic
-            let title: String? = if let t = manifest.title, !t.isEmpty, t.lowercased() != "screenshot" {
-                t
+            if manifest.type == "memo" || manifest.sourceType == "memo" {
+                try await importMemoManifest(manifest, id: id)
             } else {
-                await generateTitle(from: manifest.text)
+                try await importSelectionManifest(manifest, id: id)
             }
 
-            // Create TalkieObject
-            let object = TalkieObject(
-                id: objectId,
-                type: .selection,
-                text: manifest.text,
-                title: title,
-                duration: 0,
-                createdAt: ISO8601DateFormatter().date(from: manifest.createdAt) ?? Date(),
-                source: .iphone,
-                sourceDeviceId: manifest.sourceDeviceId,
-                transcriptionStatus: .success,
-                assetsJSON: assets.isEmpty ? nil : assets.toJSON(),
-                metadataJSON: encodeMetadata(manifest)
-            )
-
-            // Save to GRDB
-            let repo = TalkieObjectRepository()
-            try await repo.saveRecording(object)
-
-            log.info("IngestWatcher: imported \(manifest.sourceType) → \(id) (\(manifest.text.count) chars, title: \(title ?? "nil"))")
-
-            // Cleanup manifest + original image from ingest dir
             processedIDs.insert(id)
-            try? FileManager.default.removeItem(at: url)
-            if let imageFilename = manifest.imageFilename {
-                let imageURL = Self.ingestDir.appendingPathComponent(imageFilename)
-                try? FileManager.default.removeItem(at: imageURL)
-            }
+            cleanupManifestFiles(for: manifest, manifestURL: url)
         } catch {
             log.error("IngestWatcher: failed to process \(id): \(error)")
         }
     }
 
     // MARK: - Helpers
+
+    private func importSelectionManifest(_ manifest: IngestManifest, id: String) async throws {
+        let objectId = UUID(uuidString: manifest.id) ?? UUID()
+        let text = manifest.text ?? ""
+
+        // Save image to ScreenshotStorage before cleanup
+        var assets = TalkieObjectAssets()
+        if let imageFilename = manifest.imageFilename {
+            let imageURL = Self.ingestDir.appendingPathComponent(imageFilename)
+            if let imageData = try? Data(contentsOf: imageURL) {
+                let normalizedData = normalizedScreenshotData(from: imageData) ?? imageData
+                if let savedURL = ScreenshotStorage.save(
+                    normalizedData,
+                    recordingId: objectId,
+                    timestampMs: 0,
+                    captureMode: "capture",
+                    windowTitle: manifest.title
+                ) {
+                    let screenshot = RecordingScreenshot(
+                        filename: savedURL.lastPathComponent,
+                        timestampMs: 0,
+                        captureMode: "capture"
+                    )
+                    assets.screenshots = [screenshot]
+                    log.info("IngestWatcher: saved image → \(savedURL.lastPathComponent)")
+                } else {
+                    log.warning("IngestWatcher: ScreenshotStorage.save failed for \(imageFilename)")
+                }
+            } else {
+                log.warning("IngestWatcher: image file not found: \(imageFilename)")
+            }
+        }
+
+        // Generate a title if one wasn't provided or is generic
+        let title: String? = if let t = manifest.title, !t.isEmpty, t.lowercased() != "screenshot" {
+            t
+        } else {
+            await generateTitle(from: text)
+        }
+
+        let object = TalkieObject(
+            id: objectId,
+            type: .selection,
+            text: text,
+            title: title,
+            duration: 0,
+            createdAt: date(from: manifest.createdAt) ?? Date(),
+            source: .iphone,
+            sourceDeviceId: manifest.sourceDeviceId,
+            transcriptionStatus: .success,
+            assetsJSON: assets.isEmpty ? nil : assets.toJSON(),
+            metadataJSON: encodeMetadata(manifest)
+        )
+
+        let repo = TalkieObjectRepository()
+        try await repo.saveRecording(object)
+
+        log.info("IngestWatcher: imported \(manifest.sourceType) → \(id) (\(text.count) chars, title: \(title ?? "nil"))")
+    }
+
+    private func importMemoManifest(_ manifest: IngestManifest, id: String) async throws {
+        let objectId = UUID(uuidString: manifest.id) ?? UUID()
+        let transcript = (manifest.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let createdAt = date(from: manifest.createdAt) ?? Date()
+        let lastModified = date(from: manifest.lastModified) ?? createdAt
+
+        let savedAudioFilename = saveMemoAudio(from: manifest, objectId: objectId)
+        let attachments = importMemoAttachments(from: manifest, objectId: objectId)
+        let assets = TalkieObjectAssets(attachments: attachments.isEmpty ? nil : attachments)
+
+        let transcriptionStatus: RecordingTranscriptionStatus = if !transcript.isEmpty {
+            .success
+        } else if savedAudioFilename != nil {
+            .pending
+        } else {
+            .failed
+        }
+
+        let object = TalkieObject(
+            id: objectId,
+            type: .memo,
+            text: transcript.isEmpty ? nil : transcript,
+            title: manifest.title,
+            notes: manifest.notes,
+            duration: manifest.durationSeconds ?? 0,
+            audioFilename: savedAudioFilename,
+            createdAt: createdAt,
+            lastModified: lastModified,
+            source: .iphone,
+            sourceDeviceId: manifest.sourceDeviceId,
+            transcriptionStatus: transcriptionStatus,
+            summary: manifest.summary,
+            assetsJSON: assets.isEmpty ? nil : assets.toJSON(),
+            metadataJSON: encodeMetadata(manifest)
+        )
+
+        let repo = TalkieObjectRepository()
+        try await repo.saveRecording(object)
+        await MemosViewModel.shared.loadMemos()
+        await RecordingsViewModel.shared.loadRecordings()
+
+        log.info(
+            "IngestWatcher: imported direct memo → \(id) " +
+            "(audio: \(savedAudioFilename ?? "none"), attachments: \(attachments.count))"
+        )
+    }
+
+    private func saveMemoAudio(from manifest: IngestManifest, objectId: UUID) -> String? {
+        guard let audioFilename = manifest.audioFilename else { return nil }
+        let audioURL = Self.ingestDir.appendingPathComponent(audioFilename)
+        guard let audioData = try? Data(contentsOf: audioURL), !audioData.isEmpty else {
+            log.warning("IngestWatcher: memo audio file not found: \(audioFilename)")
+            return nil
+        }
+
+        guard AudioStorage.save(audioData, forRecordingID: objectId) else {
+            log.warning("IngestWatcher: failed to save memo audio for \(objectId.uuidString)")
+            return nil
+        }
+
+        return "\(objectId.uuidString).m4a"
+    }
+
+    private func importMemoAttachments(from manifest: IngestManifest, objectId: UUID) -> [RecordingAttachment] {
+        var imported: [RecordingAttachment] = []
+
+        for attachment in manifest.attachments ?? [] {
+            let fileURL = Self.ingestDir.appendingPathComponent(attachment.filename)
+            guard let data = try? Data(contentsOf: fileURL), !data.isEmpty else {
+                log.warning("IngestWatcher: memo attachment file not found: \(attachment.filename)")
+                continue
+            }
+
+            guard let saved = AttachmentStorage.save(
+                data: data,
+                originalName: attachment.originalName,
+                recordingId: objectId
+            ) else {
+                log.warning("IngestWatcher: failed to save memo attachment \(attachment.originalName)")
+                continue
+            }
+
+            let ext = attachment.originalName.pathExtensionFallback(attachment.filename)
+            imported.append(RecordingAttachment(
+                filename: saved.filename,
+                originalName: attachment.originalName,
+                kind: AttachmentKind.from(extension: ext),
+                fileSizeBytes: saved.size,
+                addedAt: date(from: attachment.addedAt) ?? Date(),
+                width: attachment.pixelWidth,
+                height: attachment.pixelHeight
+            ))
+        }
+
+        return imported
+    }
+
+    private func cleanupManifestFiles(for manifest: IngestManifest, manifestURL: URL) {
+        try? FileManager.default.removeItem(at: manifestURL)
+
+        if let imageFilename = manifest.imageFilename {
+            try? FileManager.default.removeItem(at: Self.ingestDir.appendingPathComponent(imageFilename))
+        }
+
+        if let audioFilename = manifest.audioFilename {
+            try? FileManager.default.removeItem(at: Self.ingestDir.appendingPathComponent(audioFilename))
+        }
+
+        for attachment in manifest.attachments ?? [] {
+            try? FileManager.default.removeItem(at: Self.ingestDir.appendingPathComponent(attachment.filename))
+        }
+    }
+
+    private func date(from value: String?) -> Date? {
+        guard let value else { return nil }
+
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: value) {
+            return date
+        }
+
+        return ISO8601DateFormatter().date(from: value)
+    }
 
     /// Generate a concise title from OCR text using Apple Intelligence (on-device).
     /// Falls back to extracting the first meaningful line if Apple Intelligence is unavailable.
@@ -231,11 +358,23 @@ final class IngestWatcher {
     private func encodeMetadata(_ manifest: IngestManifest) -> String? {
         var meta: [String: String] = [:]
         meta["ingestSourceType"] = manifest.sourceType
+        if manifest.sourceType == "memo" {
+            meta["ingestMethod"] = "direct-bridge"
+        }
         if let sourceURL = manifest.sourceURL {
             meta["sourceURL"] = sourceURL
         }
         if let imageFilename = manifest.imageFilename {
             meta["imageFilename"] = imageFilename
+        }
+        if let sourceDeviceName = manifest.sourceDeviceName {
+            meta["sourceDeviceName"] = sourceDeviceName
+        }
+        if let receivedAt = manifest.receivedAt {
+            meta["receivedAt"] = receivedAt
+        }
+        if let audioFileSizeBytes = manifest.audioFileSizeBytes {
+            meta["audioFileSizeBytes"] = "\(audioFileSizeBytes)"
         }
         guard let data = try? JSONEncoder().encode(meta) else { return nil }
         return String(data: data, encoding: .utf8)
@@ -281,11 +420,43 @@ private struct IngestManifest: Codable {
     let id: String
     let type: String
     let sourceType: String
-    let text: String
+    let text: String?
+    let notes: String?
+    let summary: String?
     let title: String?
     let sourceURL: String?
     let imageFilename: String?
     let source: String
     let sourceDeviceId: String?
+    let sourceDeviceName: String?
     let createdAt: String
+    let lastModified: String?
+    let durationSeconds: Double?
+    let audioFilename: String?
+    let audioFileSizeBytes: Int?
+    let attachments: [IngestAttachment]?
+    let receivedAt: String?
+    let schemaVersion: Int?
+}
+
+private struct IngestAttachment: Codable {
+    let id: String
+    let originalName: String
+    let filename: String
+    let fileSizeBytes: Int
+    let addedAt: String
+    let pixelWidth: Int?
+    let pixelHeight: Int?
+    let recordingOffsetSeconds: Double?
+    let mimeType: String?
+}
+
+private extension String {
+    func pathExtensionFallback(_ fallbackFilename: String) -> String {
+        let ownExtension = URL(fileURLWithPath: self).pathExtension
+        if !ownExtension.isEmpty {
+            return ownExtension
+        }
+        return URL(fileURLWithPath: fallbackFilename).pathExtension
+    }
 }

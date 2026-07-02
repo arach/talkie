@@ -178,14 +178,9 @@ struct BridgeDetailNext: View {
                 )
             } else {
                 ForEach(nearbyBrowser.macs) { mac in
-                    actionRow(
-                        mac.name,
-                        value: nearbyActionLabel(for: mac),
-                        tone: bridgeManager.pairedHostname == mac.connectionHost ? .neutral : .accent
-                    ) {
-                        pair(mac)
-                    }
-                    .disabled(pairingNearbyMacID != nil)
+                    nearbyMacRow(mac)
+                        .disabled(pairingNearbyMacID != nil)
+                        .padding(.vertical, 4)
                 }
             }
         }
@@ -308,6 +303,70 @@ struct BridgeDetailNext: View {
 
     private enum ActionTone { case neutral, accent, warn }
 
+    private func nearbyMacRow(_ mac: NearbyMacBrowser.NearbyMac) -> some View {
+        let isPaired = bridgeManager.pairedHostname == mac.connectionHost
+        let isPairing = pairingNearbyMacID == mac.id
+
+        return Button(action: { pair(mac) }) {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(isPaired ? actionColor(.neutral).opacity(0.14) : theme.chrome.actionTint)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .strokeBorder(isPaired ? theme.chrome.edgeFaint : theme.chrome.action.opacity(0.32),
+                                              lineWidth: theme.chrome.hairlineWidth)
+                        )
+
+                    Image(systemName: isPaired ? "desktopcomputer.and.macbook" : "desktopcomputer")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(isPaired ? theme.colors.textTertiary : theme.colors.textPrimary)
+                }
+                .frame(width: 40, height: 40)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(mac.name)
+                            .talkieType(.fieldLabel)
+                            .foregroundStyle(theme.colors.textPrimary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+
+                        Text(mac.routeLabel.uppercased())
+                            .talkieType(.channelLabelTiny)
+                            .foregroundStyle(theme.colors.textTertiary)
+                            .lineLimit(1)
+                    }
+
+                    Text("\(mac.connectionHost) · \(mac.port)")
+                        .talkieType(.hint)
+                        .foregroundStyle(theme.colors.textTertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+
+                Spacer(minLength: 8)
+
+                if isPairing {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(theme.chrome.action)
+                } else {
+                    actionValueChip(
+                        nearbyActionLabel(for: mac),
+                        tone: isPaired ? .neutral : .accent
+                    )
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 11)
+            .background(actionRowBackground(tone: isPaired ? .neutral : .accent))
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(CardPressStyle())
+        .accessibilityLabel("\(mac.name), \(mac.routeLabel), \(nearbyActionLabel(for: mac).lowercased())")
+    }
+
     private func actionRow(
         _ label: String,
         value: String,
@@ -333,17 +392,15 @@ struct BridgeDetailNext: View {
 
                 Spacer(minLength: 8)
 
-                Text(value)
-                    .talkieType(.chipLabel)
-                    .foregroundStyle(actionColor(tone))
+                actionValueChip(value, tone: tone)
             }
-            .frame(height: 44)
-            .contentShape(Rectangle())
-            .overlay(alignment: .bottom) {
-                hairline
-            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 11)
+            .background(actionRowBackground(tone: tone))
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(CardPressStyle())
+        .padding(.vertical, 4)
     }
 
     private func metricStrip(title: String, metrics: [(String, String)]) -> some View {
@@ -397,6 +454,60 @@ struct BridgeDetailNext: View {
         case .neutral: return theme.colors.textTertiary
         case .accent: return theme.currentTheme.chrome.accent
         case .warn: return Color(red: 0.85, green: 0.46, blue: 0.34)
+        }
+    }
+
+    private func actionRowBackground(tone: ActionTone) -> some View {
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill(actionBackgroundFill(tone))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(actionBorderColor(tone),
+                                  lineWidth: theme.chrome.hairlineWidth)
+            )
+            .shadow(color: Color.black.opacity(tone == .neutral ? 0.03 : 0.06),
+                    radius: tone == .neutral ? 4 : 8,
+                    x: 0,
+                    y: tone == .neutral ? 1 : 3)
+    }
+
+    private func actionValueChip(_ value: String, tone: ActionTone) -> some View {
+        Text(value)
+            .talkieType(.chipLabel)
+            .foregroundStyle(actionColor(tone))
+            .lineLimit(1)
+            .padding(.horizontal, 9)
+            .frame(height: 24)
+            .background(
+                Capsule()
+                    .fill(actionColor(tone).opacity(tone == .neutral ? 0.08 : 0.12))
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(actionColor(tone).opacity(tone == .neutral ? 0.18 : 0.38),
+                                          lineWidth: theme.chrome.hairlineWidth)
+                    )
+            )
+    }
+
+    private func actionBackgroundFill(_ tone: ActionTone) -> Color {
+        switch tone {
+        case .neutral:
+            return theme.colors.cardBackground.opacity(0.58)
+        case .accent:
+            return theme.chrome.actionTint
+        case .warn:
+            return Color(red: 0.85, green: 0.46, blue: 0.34).opacity(0.08)
+        }
+    }
+
+    private func actionBorderColor(_ tone: ActionTone) -> Color {
+        switch tone {
+        case .neutral:
+            return theme.chrome.edgeFaint
+        case .accent:
+            return theme.chrome.action.opacity(0.34)
+        case .warn:
+            return Color(red: 0.85, green: 0.46, blue: 0.34).opacity(0.30)
         }
     }
 

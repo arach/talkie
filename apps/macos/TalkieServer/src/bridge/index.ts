@@ -33,6 +33,7 @@ import {
   pairRejectRoute,
 } from "./routes/pair";
 import { sendMessageRoute } from "./routes/message";
+import { memoTransferRoute } from "./routes/memo-transfer";
 import { memoAttachmentsUploadRoute } from "./routes/memo-attachments";
 import { hyperScanUploadRoute } from "./routes/hyper-scan";
 import {
@@ -215,6 +216,18 @@ export const bridge = new Elysia({ name: "bridge" })
   }, {
     params: t.Object({
       id: t.String(),
+    }),
+  })
+  .post("/memos/:memoId", async ({ params, request }) => {
+    const body = await readJsonBody(request);
+    return memoTransferRoute(
+      params.memoId,
+      body,
+      request.headers.get("X-Device-ID")
+    );
+  }, {
+    params: t.Object({
+      memoId: t.String(),
     }),
   })
   .post("/memos/:memoId/attachments", async ({ params, request }) => {
@@ -442,9 +455,14 @@ export const bridge = new Elysia({ name: "bridge" })
     const body = await readJsonBody(request);
     return companionTrackpadRoute(body);
   })
-  .post("/companion/paste-image", async ({ request }) => {
-    const body = await readJsonBody(request);
+  .post("/companion/paste-image", async ({ body }) => {
     return companionPasteImageRoute(body);
+  }, {
+    body: t.Object({
+      imageBase64: t.String(),
+      mimeType: t.Optional(t.String()),
+      autoPaste: t.Optional(t.Boolean()),
+    }),
   })
   .ws("/companion/events", companionEventsSocket)
   .ws("/companion/screen", companionScreenStreamSocket)

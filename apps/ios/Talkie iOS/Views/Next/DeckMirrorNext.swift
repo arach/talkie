@@ -35,9 +35,8 @@ struct DeckMirrorNext: View {
     @ObservedObject private var reachability = NetworkReachability.shared
     @State private var bridgeManager = BridgeManager.shared
     @State private var selectedSpaceID: String?
-    @State private var showingAppSwitcher = false
-    @State private var activatingAppID: String?
-    @State private var appSwitcherErrorMessage: String?
+    @State private var showingPairedMacSwitcher = false
+    @State private var switchingPairedMacID: String?
     @State private var isTrackpadInteracting = false
     @State private var trackpadErrorMessage: String?
 
@@ -158,14 +157,17 @@ struct DeckMirrorNext: View {
             guard let item else { return }
             Task { await shareImagePickerItem(item) }
         }
-        .sheet(isPresented: $showingAppSwitcher) {
-            DeckAppSwitcherSheet(
-                apps: appSwitcherApps,
-                activeAppID: frontmostApp?.id,
-                activatingAppID: activatingAppID,
-                errorMessage: appSwitcherErrorMessage,
-                onRefresh: refreshAppSwitcher,
-                onActivate: activateApp
+        .sheet(isPresented: $showingPairedMacSwitcher) {
+            DeckPairedMacSwitcherSheet(
+                macs: bridgeManager.pairedMacs,
+                activeMacID: bridgeManager.activePairedMacID,
+                connectedMacID: bridgeManager.status == .connected ? bridgeManager.activePairedMacID : nil,
+                switchingMacID: switchingPairedMacID,
+                onSelect: selectPairedMac,
+                onPair: {
+                    showingPairedMacSwitcher = false
+                    AppShellRouter.shared.openBridgeDetail()
+                }
             )
         }
     }
@@ -406,7 +408,7 @@ struct DeckMirrorNext: View {
             dictationPhase: dictationRuntime?.phase,
             liveTranscript: transcriptForCard,
             lastTriggerResult: echoSuppress ? nil : deck.lastTriggerResult,
-            onIdentityTap: openAppSwitcher,
+            onIdentityTap: openPairedMacSwitcher,
             onTrackpadEvent: sendTrackpadEvent,
             onTrackpadInteractionChanged: { isTrackpadInteracting = $0 },
             onCommand: runDeckCommand
@@ -443,7 +445,7 @@ struct DeckMirrorNext: View {
     }
 
     private var cockpitStatusColor: Color {
-        if isDictating { return theme.currentTheme.chrome.accent }
+        if isDictating { return theme.chrome.panelInkFaint }
         if bridgeManager.status == .error {
             return Color(red: 0.85, green: 0.46, blue: 0.34)
         }
@@ -658,9 +660,10 @@ struct DeckMirrorNext: View {
     /// Top-left grid slot — state-aware dictation toggle. Tap when
     /// idle to start; tap again (in the same physical position) to
     /// commit. Visual matches the studio mock: mic glyph in idle,
-    /// amber-armed enter glyph while dictating.
+    /// theme-armed stop glyph while dictating.
     private func dictationTile(_ tile: DeckTile, index: Int) -> some View {
-        Button {
+        let activeColor = theme.currentTheme.chrome.accent
+        return Button {
             toggleDictation()
         } label: {
             VStack(spacing: 6) {
@@ -669,7 +672,7 @@ struct DeckMirrorNext: View {
                     .font(.system(size: 20, weight: .regular))
                     .foregroundStyle(
                         isDictating
-                            ? theme.currentTheme.chrome.accent
+                            ? activeColor
                             : theme.colors.textPrimary
                     )
                     .frame(height: 24)
@@ -678,7 +681,7 @@ struct DeckMirrorNext: View {
                     .talkieType(.fieldValue)
                     .foregroundStyle(
                         isDictating
-                            ? theme.currentTheme.chrome.accent
+                            ? activeColor
                             : theme.colors.textPrimary
                     )
                     .lineLimit(1)
@@ -688,7 +691,7 @@ struct DeckMirrorNext: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.vertical, 6)
             .background {
-                keycapSurface(active: isDictating, activeColor: theme.chrome.accent, isEmpty: false)
+                keycapSurface(active: isDictating, activeColor: activeColor, isEmpty: false)
             }
             .overlay(alignment: .topLeading) { keyIndexLabel(index) }
             .overlay(alignment: .topTrailing) {
@@ -818,51 +821,32 @@ struct DeckMirrorNext: View {
         return result
     }
 
-    // MARK: - App switcher
+    // MARK: - Paired Mac switcher
 
-    private var appSwitcherApps: [CompanionAppSwitcherApp] {
-        bridgeManager.companionState?.appSwitcherApps ?? []
-    }
-
-    private var frontmostApp: CompanionAppSwitcherApp? {
-        appSwitcherApps.first(where: { $0.isFrontmost })
-    }
-
-    private func openAppSwitcher() {
-        appSwitcherErrorMessage = nil
-        showingAppSwitcher = true
-        refreshAppSwitcher()
-    }
-
-    private func refreshAppSwitcher() {
-        Task {
-            if bridgeManager.status != .connected {
-                await bridgeManager.connect()
-            }
-            await bridgeManager.refreshCompanionState()
+    private func openPairedMacSwitcher() {
+        guard bridgeManager.hasPairedMacs else {
+            AppShellRouter.shared.openBridgeDetail()
+            return
         }
+
+        showingPairedMacSwitcher = true
     }
 
-    private func activateApp(_ app: CompanionAppSwitcherApp) {
-        guard activatingAppID == nil else { return }
-        appSwitcherErrorMessage = nil
-        activatingAppID = app.id
+    private func selectPairedMac(_ mac: BridgeManager.PairedMac) {
+        guard switchingPairedMacID == nil else { return }
+        guard bridgeManager.activePairedMacID != mac.id else {
+            showingPairedMacSwitcher = false
+            return
+        }
+
+        switchingPairedMacID = mac.id
+        selectedSpaceID = nil
 
         Task {
-            do {
-                let response = try await bridgeManager.activateCompanionApp(app)
-                if response.ok {
-                    showingAppSwitcher = false
-                } else {
-                    appSwitcherErrorMessage = response.error
-                        ?? response.message
-                        ?? "The Mac could not activate \(app.displayName)."
-                }
-            } catch {
-                appSwitcherErrorMessage = error.localizedDescription
-            }
-
-            activatingAppID = nil
+            await bridgeManager.activatePairedMac(id: mac.id)
+            await bridgeManager.refreshCompanionState()
+            switchingPairedMacID = nil
+            showingPairedMacSwitcher = false
         }
     }
 
@@ -1076,7 +1060,7 @@ private struct DeckCockpitSurface: View {
 
             HStack(spacing: 5) {
                 Circle()
-                    .fill(statusColor)
+                    .fill(statusDotColor)
                     .frame(width: 6, height: 6)
                 Text(statusTitle)
                     .talkieType(.chipLabel)
@@ -1094,6 +1078,12 @@ private struct DeckCockpitSurface: View {
                     )
             )
         }
+    }
+
+    private var statusDotColor: Color {
+        guard isDictating else { return statusColor }
+        if dictationPhase == .processing { return accent }
+        return Color.recording
     }
 
     // Elevated transcript card — sticky-note feel sitting on the
@@ -1785,6 +1775,190 @@ private struct DeckCommand: Identifiable, Equatable {
         icon: "square.stack.3d.up.fill",
         accessibilityLabel: "Next Mac app"
     )
+}
+
+private struct DeckPairedMacSwitcherSheet: View {
+    let macs: [BridgeManager.PairedMac]
+    let activeMacID: String?
+    let connectedMacID: String?
+    let switchingMacID: String?
+    let onSelect: (BridgeManager.PairedMac) -> Void
+    let onPair: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        VStack(spacing: 0) {
+            sheetHeader
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    if macs.isEmpty {
+                        emptyState
+                    } else {
+                        ForEach(macs) { mac in
+                            macRow(mac)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 18)
+            }
+            .background(theme.colors.background.ignoresSafeArea())
+        }
+        .background(theme.colors.background.ignoresSafeArea())
+        .presentationDetents([.medium])
+    }
+
+    private var sheetHeader: some View {
+        ZStack {
+            Text("Paired Macs")
+                .talkieType(.headlineSecondary)
+                .foregroundStyle(theme.colors.textPrimary)
+
+            HStack {
+                Button(action: { dismiss() }) {
+                    Text("Done")
+                        .talkieType(.fieldLabel)
+                        .foregroundStyle(theme.colors.textPrimary)
+                        .padding(.horizontal, 16)
+                        .frame(height: 40)
+                        .background(
+                            Capsule()
+                                .fill(theme.colors.cardBackground)
+                                .overlay(
+                                    Capsule()
+                                        .strokeBorder(theme.chrome.edgeFaint,
+                                                      lineWidth: theme.chrome.hairlineWidth)
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                Button(action: onPair) {
+                    Image(systemName: "qrcode.viewfinder")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(theme.colors.textPrimary)
+                        .frame(width: 40, height: 40)
+                        .background(
+                            Circle()
+                                .fill(theme.chrome.actionTint)
+                                .overlay(
+                                    Circle()
+                                        .strokeBorder(theme.chrome.edgeFaint,
+                                                      lineWidth: theme.chrome.hairlineWidth)
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Pair another Mac")
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 18)
+        .padding(.bottom, 8)
+    }
+
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("No paired Macs")
+                .talkieType(.headlineSecondary)
+                .foregroundStyle(theme.colors.textPrimary)
+            Text("Pair a Mac to use the deck from this phone.")
+                .talkieType(.preview)
+                .foregroundStyle(theme.colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(sheetRowBackground(isActive: false))
+    }
+
+    private func macRow(_ mac: BridgeManager.PairedMac) -> some View {
+        let isActive = mac.id == activeMacID
+        let isConnected = mac.id == connectedMacID
+        let isSwitching = mac.id == switchingMacID
+        let isBusy = switchingMacID != nil
+
+        return Button(action: { onSelect(mac) }) {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(isConnected ? Color(red: 0.36, green: 0.74, blue: 0.50).opacity(0.14) : theme.currentTheme.chrome.edgeFaint.opacity(0.35))
+
+                    if isSwitching {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: isActive ? "desktopcomputer.and.macbook" : "desktopcomputer")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(isActive ? theme.colors.textPrimary : theme.colors.textSecondary)
+                    }
+                }
+                .frame(width: 38, height: 38)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 7) {
+                        Text(displayName(for: mac))
+                            .talkieType(.listTitle)
+                            .foregroundStyle(theme.colors.textPrimary)
+                            .lineLimit(1)
+
+                        if isActive {
+                            Text(isConnected ? "LIVE" : "ACTIVE")
+                                .talkieType(.chipLabel)
+                                .foregroundStyle(isConnected ? Color(red: 0.36, green: 0.74, blue: 0.50) : theme.currentTheme.chrome.accent)
+                        }
+                    }
+
+                    Text(mac.hostname)
+                        .talkieType(.hint)
+                        .foregroundStyle(theme.colors.textTertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+
+                Spacer(minLength: 8)
+
+                if isSwitching {
+                    ProgressView()
+                        .controlSize(.small)
+                } else if isActive {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(isConnected ? Color(red: 0.36, green: 0.74, blue: 0.50) : theme.currentTheme.chrome.accent)
+                } else {
+                    Image(systemName: "arrow.left.arrow.right")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(theme.colors.textTertiary)
+                }
+            }
+            .padding(12)
+            .background(sheetRowBackground(isActive: isActive))
+        }
+        .buttonStyle(.plain)
+        .disabled(isBusy && !isSwitching)
+    }
+
+    private func sheetRowBackground(isActive: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill(theme.colors.cardBackground)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(
+                        isActive ? theme.currentTheme.chrome.accent.opacity(0.42) : theme.currentTheme.chrome.edgeFaint,
+                        lineWidth: theme.currentTheme.chrome.hairlineWidth
+                    )
+            )
+    }
+
+    private func displayName(for mac: BridgeManager.PairedMac) -> String {
+        let name = mac.pairedMacName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? mac.hostname : name
+    }
 }
 
 private struct DeckAppSwitcherSheet: View {
