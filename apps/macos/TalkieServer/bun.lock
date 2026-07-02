@@ -19,6 +19,10 @@
       "name": "@talkie/agent-kit",
       "version": "0.1.0",
     },
+    "packages/client": {
+      "name": "@talkie/client",
+      "version": "0.1.0",
+    },
     "packages/workflow-core": {
       "name": "@talkie/workflow-core",
       "version": "0.1.0",
@@ -68,6 +72,8 @@
     "@sinclair/typebox": ["@sinclair/typebox@0.34.46", "", {}, "sha512-kiW7CtS/NkdvTUjkjUJo7d5JsFfbJ14YjdhDk9KoEgK6nFjKNXZPrX0jfLA8ZlET4cFLHxOZ/0vFKOP+bOxIOQ=="],
 
     "@talkie/agent-kit": ["@talkie/agent-kit@workspace:packages/agent-kit"],
+
+    "@talkie/client": ["@talkie/client@workspace:packages/client"],
 
     "@talkie/workflow-core": ["@talkie/workflow-core@workspace:packages/workflow-core"],
 

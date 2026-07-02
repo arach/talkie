@@ -1,0 +1,13 @@
+{
+  "name": "@talkie/client",
+  "version": "0.1.0",
+  "description": "Typed Talkie client for code-mode agents and integrations",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./protocol": "./src/protocol.ts"
+  }
+}
