@@ -544,6 +544,19 @@ if not manifest:
         "installedPath": app_path,
     }
 
+def plist_safe(value):
+    if isinstance(value, dict):
+        return {
+            key: plist_safe(item)
+            for key, item in value.items()
+            if item is not None
+        }
+    if isinstance(value, list):
+        return [plist_safe(item) for item in value if item is not None]
+    return value
+
+manifest = plist_safe(manifest)
+
 plist = {
     "Label": bundle_id,
     "ProgramArguments": [executable_path],
