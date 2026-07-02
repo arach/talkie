@@ -104,12 +104,63 @@
     </div>
   </div>
 
-  <script src="js/state.js"></script>
-  <script src="js/geometry.js"></script>
-  <script src="js/layers.js"></script>
-  <script src="js/hitTesting.js"></script>
-  <script src="js/renderer.js"></script>
-  <script src="js/bridge.js"></script>
-  <script src="overlay.js"></script>
+  <script>
+    (() => {
+      const moduleFiles = [
+        "state.js",
+        "geometry.js",
+        "layers.js",
+        "hitTesting.js",
+        "renderer.js",
+        "bridge.js",
+      ];
+
+      function postLoadFailure(error) {
+        console.error(error);
+        const handler = window.webkit
+          && window.webkit.messageHandlers
+          && window.webkit.messageHandlers.talkie;
+        if (!handler) return;
+        handler.postMessage({
+          name: "liveMarkup.loadFailed",
+          error: String(error && error.message ? error.message : error),
+        });
+      }
+
+      function loadScript(path) {
+        return new Promise((resolve, reject) => {
+          const script = document.createElement("script");
+          script.src = path;
+          script.onload = resolve;
+          script.onerror = () => {
+            script.remove();
+            reject(new Error(`Failed to load ${path}`));
+          };
+          document.body.appendChild(script);
+        });
+      }
+
+      async function loadModule(file, preferredBase) {
+        try {
+          await loadScript(`${preferredBase}${file}`);
+          return preferredBase;
+        } catch (error) {
+          const fallbackBase = preferredBase === "js/" ? "" : "js/";
+          await loadScript(`${fallbackBase}${file}`);
+          return fallbackBase;
+        }
+      }
+
+      async function loadMarkup() {
+        let base = "js/";
+        for (const file of moduleFiles) {
+          base = await loadModule(file, base);
+        }
+        await loadScript("overlay.js");
+      }
+
+      loadMarkup().catch(postLoadFailure);
+    })();
+  </script>
 </body>
 </html>

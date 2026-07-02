@@ -10,7 +10,7 @@
       noteStyle: "sticky",
       lineStyle: "solid",
       arrowStyle: "straight",
-      styleOpen: true,
+      styleOpen: false,
       context: initialContext,
       layers: [],
       redoStack: [],

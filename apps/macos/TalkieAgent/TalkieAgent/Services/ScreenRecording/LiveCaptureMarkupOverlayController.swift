@@ -40,6 +40,10 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         didSet { applyCompactDockMode() }
     }
 
+    var additionalMousePassthroughScreenRects: (() -> [CGRect])? {
+        didSet { applyMousePassthroughState() }
+    }
+
     /// Most live markup overlays are intentionally invisible to ScreenCaptureKit
     /// and get baked into artifacts later. Agent quick-markup is an inspectable
     /// popup, so it opts in to being directly screenshottable.
@@ -329,7 +333,10 @@ final class LiveCaptureMarkupOverlayController: NSObject {
 
     private func applyMousePassthroughState() {
         guard let panel else { return }
-        panel.ignoresMouseEvents = passthrough || captureYieldActive || mouseIsInProtectedCorner(of: panel)
+        panel.ignoresMouseEvents = passthrough
+            || captureYieldActive
+            || mouseIsInProtectedCorner(of: panel)
+            || mouseIsInAdditionalPassthroughRect(of: panel)
     }
 
     private func mouseIsInProtectedCorner(of panel: NSPanel) -> Bool {
@@ -353,6 +360,15 @@ final class LiveCaptureMarkupOverlayController: NSObject {
             height: size.height
         )
         return topLeft.contains(mouse) || topRight.contains(mouse)
+    }
+
+    private func mouseIsInAdditionalPassthroughRect(of panel: NSPanel) -> Bool {
+        let mouse = NSEvent.mouseLocation
+        guard panel.frame.contains(mouse),
+              let passthroughRects = additionalMousePassthroughScreenRects?() else {
+            return false
+        }
+        return passthroughRects.contains { $0.standardized.contains(mouse) }
     }
 
     private static func screen(for point: NSPoint) -> NSScreen? {

@@ -891,7 +891,7 @@
     canvas.style.cursor = "";
     state.tool = tool;
     document.body.dataset.tool = tool;
-    setStyleOpen(optionTools.has(tool));
+    setStyleOpen(false);
     syncToolbarState();
   }
 
