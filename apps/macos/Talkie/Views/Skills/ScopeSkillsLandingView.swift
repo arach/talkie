@@ -536,15 +536,19 @@ struct ScopeSkillsLandingView: View {
     }
 
     private func startDictation() {
+        guard !DictationInput.shared.isPreparing else { return }
+
         // Optimistic: flip the visual immediately so the user gets feedback
         // before the AVAudioEngine spool-up completes. Revert on failure.
         isRecording = true
         dictationError = nil
-        do {
-            try EphemeralTranscriber.shared.startCapture(purpose: .skillsChatDictation)
-        } catch {
-            isRecording = false
-            dictationError = error.localizedDescription
+        Task {
+            do {
+                try await DictationInput.shared.startCapture(purpose: .skillsChatDictation)
+            } catch {
+                isRecording = false
+                dictationError = error.localizedDescription
+            }
         }
     }
 
@@ -553,7 +557,7 @@ struct ScopeSkillsLandingView: View {
         isRecording = false
         isTranscribing = true
         do {
-            let text = try await EphemeralTranscriber.shared.stopAndTranscribe()
+            let text = try await DictationInput.shared.stopAndTranscribe()
             isTranscribing = false
             let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !cleaned.isEmpty else { return }

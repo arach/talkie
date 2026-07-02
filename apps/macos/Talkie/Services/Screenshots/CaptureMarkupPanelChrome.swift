@@ -993,12 +993,16 @@ final class CaptureMarkupInputBarView: NSView {
     }
 
     private func startVoiceCapture() {
-        do {
-            try EphemeralTranscriber.shared.startCapture(purpose: .captureMarkupDictation)
-            isVoiceRecording = true
-            updateVoiceButtonAppearance()
-        } catch {
-            delegate?.captureMarkupPanelDidReportError(error.localizedDescription)
+        guard !DictationInput.shared.isPreparing else { return }
+
+        Task { @MainActor in
+            do {
+                try await DictationInput.shared.startCapture(purpose: .captureMarkupDictation)
+                isVoiceRecording = true
+                updateVoiceButtonAppearance()
+            } catch {
+                delegate?.captureMarkupPanelDidReportError(error.localizedDescription)
+            }
         }
     }
 
@@ -1014,7 +1018,7 @@ final class CaptureMarkupInputBarView: NSView {
                 updateVoiceButtonAppearance()
             }
             do {
-                let text = try await EphemeralTranscriber.shared.stopAndTranscribe()
+                let text = try await DictationInput.shared.stopAndTranscribe()
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !text.isEmpty else { return }
                 appendTranscriptToPrompt(text)

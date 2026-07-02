@@ -375,7 +375,7 @@ private final class LiteInterstitialViewModel {
         saveSuccess = false
     }
 
-    // MARK: - Voice Input (using EphemeralTranscriber - matches InterstitialManager)
+    // MARK: - Voice Input (using DictationInput - matches InterstitialManager)
 
     // Voice guidance state (exactly like InterstitialManager)
     var isRecordingInstruction: Bool = false
@@ -384,27 +384,27 @@ private final class LiteInterstitialViewModel {
     var audioLevel: Float = 0
 
     func startVoiceInstruction() {
-        guard !isRecordingInstruction else { return }
+        guard !isRecordingInstruction, !DictationInput.shared.isPreparing else { return }
 
         os_signpost(.event, log: liteInterstitialLog, name: "LiteInterstitial",
                     "voice_instruction_start")
 
-        do {
-            try EphemeralTranscriber.shared.startCapture(purpose: .interstitialCommand)
-            isRecordingInstruction = true
-            voiceInstruction = nil
-            TalkieConsole.critical("[LITE] Started voice instruction capture")
+        Task {
+            do {
+                try await DictationInput.shared.startCapture(purpose: .interstitialCommand)
+                isRecordingInstruction = true
+                voiceInstruction = nil
+                TalkieConsole.critical("[LITE] Started voice instruction capture")
 
-            // Monitor audio level
-            Task {
+                // Monitor audio level
                 while isRecordingInstruction {
-                    audioLevel = EphemeralTranscriber.shared.audioLevel
+                    audioLevel = DictationInput.shared.audioLevel
                     try? await Task.sleep(for: .milliseconds(50))
                 }
+            } catch {
+                polishError = error.localizedDescription
+                TalkieConsole.critical("[LITE] Failed to start voice capture: \(error)")
             }
-        } catch {
-            polishError = error.localizedDescription
-            TalkieConsole.critical("[LITE] Failed to start voice capture: \(error)")
         }
     }
 
@@ -421,7 +421,7 @@ private final class LiteInterstitialViewModel {
         audioLevel = 0
 
         do {
-            let instruction = try await EphemeralTranscriber.shared.stopAndTranscribe()
+            let instruction = try await DictationInput.shared.stopAndTranscribe()
             isTranscribingInstruction = false
 
             if !instruction.isEmpty {
@@ -447,7 +447,7 @@ private final class LiteInterstitialViewModel {
     }
 
     func cancelVoiceInstruction() {
-        EphemeralTranscriber.shared.cancel()
+        DictationInput.shared.cancel()
         isRecordingInstruction = false
         isTranscribingInstruction = false
         audioLevel = 0
@@ -642,7 +642,7 @@ private struct LiteInterstitialView: View {
     @FocusState private var isTextFocused: Bool
     @State private var copiedFeedback = false
 
-    // Dictation pill state (floating overlay for ephemeral dictation)
+    // Dictation pill state (floating overlay for dictation input)
     @State private var dictationPillState: DictationPillState = .idle
     @State private var dictationDuration: TimeInterval = 0
     @State private var dictationTimerRef: Task<Void, Never>?
@@ -1295,20 +1295,24 @@ private struct LiteInterstitialView: View {
     }
 
     private func startDictationRecording() {
-        do {
-            try EphemeralTranscriber.shared.startCapture(purpose: .interstitialDictation)
-            dictationPillState = .recording
-            dictationDuration = 0
+        guard !DictationInput.shared.isPreparing else { return }
 
-            // Start timer
-            dictationTimerRef = Task {
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .milliseconds(100))
-                    dictationDuration += 0.1
+        Task {
+            do {
+                try await DictationInput.shared.startCapture(purpose: .interstitialDictation)
+                dictationPillState = .recording
+                dictationDuration = 0
+
+                // Start timer
+                dictationTimerRef = Task {
+                    while !Task.isCancelled {
+                        try? await Task.sleep(for: .milliseconds(100))
+                        dictationDuration += 0.1
+                    }
                 }
+            } catch {
+                viewModel.polishError = error.localizedDescription
             }
-        } catch {
-            viewModel.polishError = error.localizedDescription
         }
     }
 
@@ -1320,7 +1324,7 @@ private struct LiteInterstitialView: View {
 
         Task {
             do {
-                let transcribedText = try await EphemeralTranscriber.shared.stopAndTranscribe()
+                let transcribedText = try await DictationInput.shared.stopAndTranscribe()
 
                 // Append to text with smart spacing
                 if !transcribedText.isEmpty {

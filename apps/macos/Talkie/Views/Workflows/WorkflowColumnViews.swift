@@ -1313,15 +1313,19 @@ private struct WorkflowAgentTurnsPanel: View {
     }
 
     private func startDictation() {
+        guard !DictationInput.shared.isPreparing else { return }
+
         // Optimistic: flip the visual immediately so the user sees feedback
         // before AVAudioEngine spin-up completes. Revert on failure.
         isDictating = true
         dictationError = nil
-        do {
-            try EphemeralTranscriber.shared.startCapture(purpose: .composeDictation)
-        } catch {
-            isDictating = false
-            dictationError = error.localizedDescription
+        Task {
+            do {
+                try await DictationInput.shared.startCapture(purpose: .composeDictation)
+            } catch {
+                isDictating = false
+                dictationError = error.localizedDescription
+            }
         }
     }
 
@@ -1331,7 +1335,7 @@ private struct WorkflowAgentTurnsPanel: View {
         isDictating = false
         isTranscribingDictation = true
         do {
-            let text = try await EphemeralTranscriber.shared.stopAndTranscribe()
+            let text = try await DictationInput.shared.stopAndTranscribe()
             isTranscribingDictation = false
             let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !cleaned.isEmpty else { return }
@@ -2388,13 +2392,17 @@ private struct ScopeWorkflowComposer: View {
     }
 
     private func startDictation() {
+        guard !DictationInput.shared.isPreparing else { return }
+
         isRecording = true
         dictationError = nil
-        do {
-            try EphemeralTranscriber.shared.startCapture(purpose: .skillsChatDictation)
-        } catch {
-            isRecording = false
-            dictationError = error.localizedDescription
+        Task {
+            do {
+                try await DictationInput.shared.startCapture(purpose: .skillsChatDictation)
+            } catch {
+                isRecording = false
+                dictationError = error.localizedDescription
+            }
         }
     }
 
@@ -2404,7 +2412,7 @@ private struct ScopeWorkflowComposer: View {
         isRecording = false
         isTranscribing = true
         do {
-            let text = try await EphemeralTranscriber.shared.stopAndTranscribe()
+            let text = try await DictationInput.shared.stopAndTranscribe()
             isTranscribing = false
             let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !cleaned.isEmpty else {

@@ -5,7 +5,7 @@
 //  Voice command capture and intent recognition.
 //  Captures audio → transcribes via Engine → recognizes intent → returns structured result.
 //
-//  Uses the same audio capture approach as EphemeralTranscriber but with intent recognition
+//  Uses the same audio capture approach as DictationInput but with intent recognition
 //  post-processing in the Engine.
 //
 
@@ -167,7 +167,7 @@ public final class VoiceCommandService {
             log.info("[VoiceCmd:Recognize] Calling EngineClient.transcribe()")
             let jsonResult = try await EngineClient.shared.transcribe(
                 audioPath: fileURL.path,
-                modelId: TalkieDefaults.ephemeralModelId,
+                modelId: TalkieDefaults.dictationInputModelId,
                 priority: .high,
                 postProcess: .intentRecognition
             )
