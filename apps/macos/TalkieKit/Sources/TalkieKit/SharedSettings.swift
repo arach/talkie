@@ -33,9 +33,9 @@ public enum TalkieDefaults {
     /// Fast, accurate, always preloaded by TalkieEngine
     public static let dictationModelId = "parakeet:v3"
 
-    /// Ephemeral/compose model - used for quick voice commands, scratch recordings
+    /// Dictation input model - used for quick voice commands and inline dictation
     /// Prioritizes speed over accuracy for short utterances
-    public static let ephemeralModelId = "parakeet:v3"
+    public static let dictationInputModelId = "parakeet:v3"
 
     /// Re-transcription model - used when user requests higher quality re-transcription
     /// Can be slower, prioritizes accuracy

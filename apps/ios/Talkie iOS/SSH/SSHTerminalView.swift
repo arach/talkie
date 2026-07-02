@@ -16,7 +16,12 @@ struct SSHTerminalView: View {
     private let initialSavedHost: SSHTerminalSavedHost?
     private let initialRoutePreference: TalkieNetworkRoute?
     private let initialOneShotStartupCommand: String?
+    private let externalSession: SSHTerminalSession?
+    private let disconnectOnDisappear: Bool
+    private let didConsumeInitialSavedHostBinding: Binding<Bool>?
     private let onClose: (() -> Void)?
+    private let onShowSessions: (() -> Void)?
+    private let onConnectionIDChange: ((String?) -> Void)?
 
     private static let startupCommandResetVersion = 8
     private static let legacyStartupCommand = "tmux new-session -A -s talkie"
@@ -41,7 +46,7 @@ struct SSHTerminalView: View {
     @State private var password = ""
     @State private var privateKeyPEM = SSHPrivateKeyStore().load() ?? ""
     @State private var savedHosts = SSHTerminalConnectionManager.shared.savedHosts
-    @State private var session = SSHTerminalSession()
+    @State private var ownedSession = SSHTerminalSession()
     @State private var showingRecordingView = false
     @State private var showingPrivateKey = false
     @State private var showingPrivateKeyScanner = false
@@ -71,6 +76,7 @@ struct SSHTerminalView: View {
     @State private var showingTroubleshootingLog = true
     @State private var copiedTroubleshootingReport = false
     @State private var didConsumeInitialSavedHost = false
+    @State private var activeConnectionID: String?
     @State private var pendingRoutePreference: TalkieNetworkRoute?
     @State private var suppressPrimaryActionTap = false
     @State private var suppressSlashTap = false
@@ -122,12 +128,26 @@ struct SSHTerminalView: View {
         initialSavedHost: SSHTerminalSavedHost? = nil,
         initialRoutePreference: TalkieNetworkRoute? = nil,
         initialOneShotStartupCommand: String? = nil,
-        onClose: (() -> Void)? = nil
+        externalSession: SSHTerminalSession? = nil,
+        disconnectOnDisappear: Bool = true,
+        didConsumeInitialSavedHost: Binding<Bool>? = nil,
+        onClose: (() -> Void)? = nil,
+        onShowSessions: (() -> Void)? = nil,
+        onConnectionIDChange: ((String?) -> Void)? = nil
     ) {
         self.initialSavedHost = initialSavedHost
         self.initialRoutePreference = initialRoutePreference
         self.initialOneShotStartupCommand = initialOneShotStartupCommand
+        self.externalSession = externalSession
+        self.disconnectOnDisappear = disconnectOnDisappear
+        self.didConsumeInitialSavedHostBinding = didConsumeInitialSavedHost
         self.onClose = onClose
+        self.onShowSessions = onShowSessions
+        self.onConnectionIDChange = onConnectionIDChange
+    }
+
+    private var session: SSHTerminalSession {
+        externalSession ?? ownedSession
     }
 
     var body: some View {
@@ -281,8 +301,11 @@ struct SSHTerminalView: View {
                 saveCurrentHost()
             }
             persistPrivateKey()
-            Task {
-                await session.disconnect()
+            if disconnectOnDisappear {
+                clearTrackedActiveConnection()
+                Task {
+                    await session.disconnect()
+                }
             }
         }
         .alert("Dictation Unavailable", isPresented: dockDictationErrorBinding) {
@@ -558,7 +581,7 @@ struct SSHTerminalView: View {
                 statusRow
 
                 terminalSecondaryActionButton("Done") {
-                    dismiss()
+                    closeTerminal()
                 }
             }
 
@@ -1452,15 +1475,15 @@ struct SSHTerminalView: View {
                     .lineLimit(1)
             }
             .font(.system(size: 13, weight: .semibold, design: .rounded))
-            .foregroundStyle(.white)
+            .foregroundStyle(Color.surfacePrimary)
             .frame(maxWidth: expands ? .infinity : nil)
             .padding(.horizontal, expands ? 16 : 14)
             .padding(.vertical, 11)
-            .background(Color.active)
+            .background(Color.textPrimary)
             .clipShape(.rect(cornerRadius: sshActionCornerRadius, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: sshActionCornerRadius, style: .continuous)
-                    .stroke(Color.activeGlow.opacity(0.35), lineWidth: 1)
+                    .stroke(Color.borderPrimary.opacity(0.35), lineWidth: 1)
             }
         }
         .buttonStyle(.plain)
@@ -1482,7 +1505,7 @@ struct SSHTerminalView: View {
                     .lineLimit(1)
             }
             .font(.system(size: 13, weight: .semibold, design: .rounded))
-            .foregroundStyle(Color.active)
+            .foregroundStyle(Color.textPrimary)
             .padding(.horizontal, 13)
             .padding(.vertical, 10)
             .background(Color.surfacePrimary)
@@ -1745,12 +1768,19 @@ struct SSHTerminalView: View {
     }
 
     private var sshBottomDock: some View {
-        HStack {
-            sshDockButton(systemImage: "slider.horizontal.3") {
+        HStack(spacing: 14) {
+            sshDockButton(systemImage: "slider.horizontal.3", accessibilityLabel: "Terminal settings") {
                 withAnimation(.easeInOut(duration: 0.18)) {
                     showingConnectionDetails.toggle()
                 }
                 scheduleTerminalRefit(after: .milliseconds(240))
+            }
+
+            if let onShowSessions {
+                sshDockButton(systemImage: "rectangle.stack", accessibilityLabel: "Terminal sessions") {
+                    requestTerminalDismiss()
+                    onShowSessions()
+                }
             }
 
             Spacer(minLength: 0)
@@ -1759,7 +1789,18 @@ struct SSHTerminalView: View {
 
             Spacer(minLength: 0)
 
-            sshDockButton(systemImage: isTerminalKeyboardPresented ? "keyboard.chevron.compact.down" : "keyboard") {
+            sshDockButton(
+                systemImage: terminalDictationDockIconName,
+                isActive: dockDictationState != .idle,
+                accessibilityLabel: terminalDictationDockAccessibilityLabel
+            ) {
+                handleTerminalDictationTap()
+            }
+
+            sshDockButton(
+                systemImage: isTerminalKeyboardPresented ? "keyboard.chevron.compact.down" : "keyboard",
+                accessibilityLabel: isTerminalKeyboardPresented ? "Hide terminal keyboard" : "Show terminal keyboard"
+            ) {
                 if isTerminalKeyboardPresented {
                     requestTerminalDismiss()
                 } else {
@@ -1783,7 +1824,7 @@ struct SSHTerminalView: View {
         } label: {
             Image(systemName: primaryDockActionIconName)
                 .font(.system(size: primaryDockActionIconSize, weight: .medium))
-                .foregroundStyle(.white)
+                .foregroundStyle(primaryDockActionForegroundColor)
                 .frame(width: 62, height: 62)
                 .background(primaryDockActionColor)
                 .clipShape(.circle)
@@ -2245,20 +2286,26 @@ struct SSHTerminalView: View {
         .buttonStyle(.plain)
     }
 
-    private func sshDockButton(systemImage: String, action: @escaping () -> Void) -> some View {
+    private func sshDockButton(
+        systemImage: String,
+        isActive: Bool = false,
+        accessibilityLabel: String,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 18, weight: .medium))
-                .foregroundStyle(Color.textPrimary)
+                .foregroundStyle(isActive ? Color.surfacePrimary : Color.textPrimary)
                 .frame(width: 46, height: 46)
-                .background(Color.surfacePrimary.opacity(0.82))
+                .background(isActive ? Color.textPrimary : Color.surfacePrimary.opacity(0.94))
                 .clipShape(.circle)
                 .overlay {
                     Circle()
-                        .stroke(Color.borderPrimary.opacity(0.7), lineWidth: 1)
+                        .stroke(isActive ? Color.textPrimary.opacity(0.2) : Color.borderPrimary.opacity(0.9), lineWidth: 1)
                 }
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
     }
 
     private var canConnect: Bool {
@@ -2345,6 +2392,32 @@ struct SSHTerminalView: View {
 
     private var primaryDockActionIconSize: CGFloat {
         primaryActionMode == .memo ? 24 : 22
+    }
+
+    private var primaryDockActionForegroundColor: Color {
+        primaryActionMode == .dictation && dockDictationState == .idle ? Color.surfacePrimary : .white
+    }
+
+    private var terminalDictationDockIconName: String {
+        switch dockDictationState {
+        case .idle:
+            return "text.bubble"
+        case .recording:
+            return "stop.fill"
+        case .transcribing:
+            return "waveform"
+        }
+    }
+
+    private var terminalDictationDockAccessibilityLabel: String {
+        switch dockDictationState {
+        case .idle:
+            return "Dictate into terminal"
+        case .recording:
+            return "Stop terminal dictation"
+        case .transcribing:
+            return "Terminal dictation transcribing"
+        }
     }
 
     private var primaryDockActionBorderOpacity: Double {
@@ -2703,13 +2776,14 @@ struct SSHTerminalView: View {
 
         persistPrivateKey()
         terminalRouter.showConnecting(savedHostID: savedHost?.id ?? currentSavedHost?.id)
-        connectionManager.markConnecting(
+        let activeConnection = connectionManager.markConnecting(
             host: connectionHost,
             port: portValue,
             username: username,
             startupProfile: startupProfile,
             startupCommandOverride: startupCommandOverride
         )
+        setActiveConnectionID(activeConnection.id)
 
         let result = await session.connect(configuration: configuration)
         if case .failed(let message) = result {
@@ -2999,21 +3073,25 @@ struct SSHTerminalView: View {
         case .memo:
             showingRecordingView = true
         case .dictation:
-            guard session.status == .connected else {
-                dockDictationError = "Connect to an SSH session before dictating into the terminal."
-                return
-            }
+            handleTerminalDictationTap()
+        }
+    }
 
-            switch dockDictationState {
-            case .idle:
-                Task { @MainActor in
-                    await dockDictationController.start()
-                }
-            case .recording:
-                dockDictationController.stop(insertTranscript: true)
-            case .transcribing:
-                break
+    private func handleTerminalDictationTap() {
+        guard session.status == .connected else {
+            dockDictationError = "Connect to an SSH session before dictating into the terminal."
+            return
+        }
+
+        switch dockDictationState {
+        case .idle:
+            Task { @MainActor in
+                await dockDictationController.start()
             }
+        case .recording:
+            dockDictationController.stop(insertTranscript: true)
+        case .transcribing:
+            break
         }
     }
 
@@ -3104,12 +3182,12 @@ struct SSHTerminalView: View {
                 showingTroubleshootingLog = true
                 copiedTroubleshootingReport = false
                 pendingOneShotStartupCommand = nil
-                connectionManager.clearActiveConnection()
+                clearTrackedActiveConnection()
             } else if case .disconnected = newValue {
                 terminalRouter.beginPresentation()
                 copiedTroubleshootingReport = false
                 pendingOneShotStartupCommand = nil
-                connectionManager.clearActiveConnection()
+                clearTrackedActiveConnection()
             } else if case .connecting = newValue {
                 terminalRouter.showConnecting(savedHostID: currentSavedHost?.id)
                 copiedTroubleshootingReport = false
@@ -3407,10 +3485,32 @@ struct SSHTerminalView: View {
         savedHosts = connectionManager.savedHosts
     }
 
+    private func setActiveConnectionID(_ id: String?) {
+        activeConnectionID = id
+        onConnectionIDChange?(id)
+    }
+
+    private func clearTrackedActiveConnection() {
+        connectionManager.clearActiveConnection(id: activeConnectionID)
+        setActiveConnectionID(nil)
+    }
+
+    private var hasConsumedInitialSavedHost: Bool {
+        didConsumeInitialSavedHostBinding?.wrappedValue ?? didConsumeInitialSavedHost
+    }
+
+    private func markInitialSavedHostConsumed() {
+        if let didConsumeInitialSavedHostBinding {
+            didConsumeInitialSavedHostBinding.wrappedValue = true
+        } else {
+            didConsumeInitialSavedHost = true
+        }
+    }
+
     private func consumeInitialSavedHostIfNeeded() {
         guard session.status == .disconnected else { return }
-        if !didConsumeInitialSavedHost, let initialSavedHost {
-            didConsumeInitialSavedHost = true
+        if !hasConsumedInitialSavedHost, let initialSavedHost {
+            markInitialSavedHostConsumed()
             AppLogger.ui.info(
                 "Consuming initial SSH saved host",
                 detail: "host=\(initialSavedHost.host) username=\(initialSavedHost.username) profile=\(initialSavedHost.startupProfile.rawValue) preferredRoute=\(initialRoutePreference?.displayName ?? "classic")"

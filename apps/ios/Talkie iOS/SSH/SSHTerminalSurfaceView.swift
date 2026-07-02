@@ -72,6 +72,9 @@ struct SSHTerminalSurfaceView: UIViewRepresentable {
         uiView.onBlurTerminal = { [weak coordinator = context.coordinator] in
             coordinator?.blurTerminal()
         }
+        uiView.onTerminalScrollLines = { [weak coordinator = context.coordinator] lines in
+            coordinator?.scrollTerminal(lines: lines)
+        }
         uiView.onTerminalTap = onTerminalTap
         uiView.isKeyboardInputEnabled = session.status == .connected
     }
@@ -194,6 +197,11 @@ extension SSHTerminalSurfaceView {
             evaluateJavaScript("window.talkieTerminal?.blur?.();")
         }
 
+        func scrollTerminal(lines: Int) {
+            guard lines != 0 else { return }
+            evaluateJavaScript("window.talkieTerminal?.scrollLines?.(\(lines));")
+        }
+
         func refitTerminal() {
             evaluateJavaScript("window.talkieTerminal?.refit?.();")
         }
@@ -286,11 +294,14 @@ private struct QueuedJavaScriptEvaluation {
     let completion: (() -> Void)?
 }
 
-final class TerminalContainerView: UIView {
+final class TerminalContainerView: UIView, UIGestureRecognizerDelegate {
     let webView: WKWebView
+    private static let scrollLineHeight: CGFloat = 18
+
     var lastAppliedFocusRequestID = 0
     var lastAppliedDismissRequestID = 0
     var lastAppliedRefitRequestID = 0
+    private var pendingScrollTranslationY: CGFloat = 0
 
     var onFocusTerminal: (() -> Void)? {
         didSet { }
@@ -301,6 +312,7 @@ final class TerminalContainerView: UIView {
     }
 
     var onTerminalTap: (() -> Void)?
+    var onTerminalScrollLines: ((Int) -> Void)?
 
     var isKeyboardInputEnabled = false {
         didSet {
@@ -344,7 +356,17 @@ final class TerminalContainerView: UIView {
 
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap))
         tapGesture.cancelsTouchesInView = true
+        tapGesture.delegate = self
         addGestureRecognizer(tapGesture)
+
+        let scrollPanGesture = UIPanGestureRecognizer(target: self, action: #selector(handleScrollPan(_:)))
+        scrollPanGesture.minimumNumberOfTouches = 1
+        scrollPanGesture.maximumNumberOfTouches = 1
+        scrollPanGesture.cancelsTouchesInView = false
+        scrollPanGesture.delaysTouchesBegan = false
+        scrollPanGesture.delaysTouchesEnded = false
+        scrollPanGesture.delegate = self
+        addGestureRecognizer(scrollPanGesture)
     }
 
     @available(*, unavailable)
@@ -357,6 +379,41 @@ final class TerminalContainerView: UIView {
         guard isKeyboardInputEnabled else { return }
         onTerminalTap?()
         onFocusTerminal?()
+    }
+
+    @objc
+    private func handleScrollPan(_ gesture: UIPanGestureRecognizer) {
+        guard isKeyboardInputEnabled else { return }
+
+        switch gesture.state {
+        case .began:
+            pendingScrollTranslationY = 0
+
+        case .changed:
+            let translation = gesture.translation(in: self)
+            pendingScrollTranslationY += translation.y
+            gesture.setTranslation(.zero, in: self)
+
+            let lines = Int(pendingScrollTranslationY / Self.scrollLineHeight)
+            guard lines != 0 else { return }
+
+            pendingScrollTranslationY -= CGFloat(lines) * Self.scrollLineHeight
+            onTerminalScrollLines?(-lines)
+
+        case .ended, .cancelled, .failed:
+            pendingScrollTranslationY = 0
+            gesture.setTranslation(.zero, in: self)
+
+        default:
+            break
+        }
+    }
+
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+    ) -> Bool {
+        true
     }
 
     func activateKeyboardInput() {

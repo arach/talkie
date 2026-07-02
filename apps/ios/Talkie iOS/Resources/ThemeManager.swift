@@ -201,11 +201,9 @@ private let cachedScopeColors = ThemeColors(
 )
 
 // EXPLORATION — "Vercel" approach (Graphite slot). Geist-style true
-// monochrome: pure-black canvas, neutral-gray elevated surfaces, and a WHITE
-// accent — so every accent-driven icon/control goes white automatically (no
-// hue anywhere, zero view refactor). Vercel's gray ramp: #EDEDED / #A1A1A1 /
-// #8F8F8F. Recording red stays the one permitted pop (it's a universal token,
-// not the theme accent).
+// monochrome: pure-black canvas, neutral-gray elevated surfaces, and a mode-aware
+// black/white accent. In light mode, white-on-white controls were invisible; the
+// accent now flips while staying hue-free.
 private let cachedGraphiteColors = ThemeColors(
     tableHeaderBackground: Color(hex: "0F0F0F"),
     tableCellBackground: Color(hex: "000000"),
@@ -220,7 +218,7 @@ private let cachedGraphiteColors = ThemeColors(
     textPrimary: Color(hex: "F4F4F4"),
     textSecondary: Color(hex: "DADADA"),
     textTertiary: Color(hex: "B0B0B0"),
-    accent: Color(hex: "FAFAFA"),
+    accent: Color(hex: "0A0A0A", darkHex: "FAFAFA"),
     success: Color(hex: "4CC38A")
 )
 

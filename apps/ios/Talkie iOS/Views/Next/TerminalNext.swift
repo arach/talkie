@@ -16,7 +16,8 @@ struct TerminalNext: View {
     @State private var bridgeManager = BridgeManager.shared
     @State private var connectionManager = SSHTerminalConnectionManager.shared
     @State private var savedHosts: [SSHTerminalSavedHost]
-    @State private var activeSession: TerminalNextSessionSelection?
+    @State private var liveSessions: [TerminalNextLiveSession] = []
+    @State private var selectedSessionID: UUID?
     @State private var showingKeyImporter = false
     @State private var isImportingFromMac = false
     @State private var importMessage: String?
@@ -28,19 +29,42 @@ struct TerminalNext: View {
         _savedHosts = State(initialValue: SSHTerminalSavedHostStore().load())
     }
 
+    private var selectedSession: TerminalNextLiveSession? {
+        guard let selectedSessionID else { return nil }
+        return liveSessions.first(where: { $0.id == selectedSessionID })
+    }
+
     var body: some View {
         ZStack {
             theme.colors.background.ignoresSafeArea()
 
-            if let activeSession {
-                TerminalNextSessionPane(selection: activeSession) {
-                    self.activeSession = nil
-                    refreshHosts()
+            if let selectedSession {
+                VStack(spacing: 0) {
+                    liveSessionStrip
+
+                    TerminalNextSessionPane(
+                        liveSession: selectedSession,
+                        didConsumeInitialHost: didConsumeInitialHostBinding(for: selectedSession),
+                        onClose: {
+                            closeLiveSession(selectedSession)
+                        },
+                        onShowSessions: {
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+                                selectedSessionID = nil
+                            }
+                            refreshHosts()
+                        },
+                        onConnectionIDChange: { connectionID in
+                            selectedSession.activeConnectionID = connectionID
+                        }
+                    )
                 }
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             } else {
                 VStack(spacing: 0) {
                     header
+
+                    liveSessionStrip
 
                     Rectangle()
                         .fill(theme.currentTheme.chrome.edgeFaint)
@@ -65,7 +89,8 @@ struct TerminalNext: View {
                 .transition(.move(edge: .leading).combined(with: .opacity))
             }
         }
-        .animation(.spring(response: 0.32, dampingFraction: 0.9), value: activeSession?.id)
+        .animation(.spring(response: 0.32, dampingFraction: 0.9), value: selectedSessionID)
+        .animation(.spring(response: 0.32, dampingFraction: 0.9), value: liveSessions.count)
         .onAppear {
             refreshHosts()
             consumePendingSSHImportIfNeeded()
@@ -92,7 +117,7 @@ struct TerminalNext: View {
 
             addHostControl
 
-            Button(action: { AppShellRouter.shared.openHome() }) {
+            Button(action: closeTerminalSurface) {
                 Image(systemName: "xmark")
                     .foregroundStyle(theme.colors.textTertiary)
                     .frame(width: 28, height: 28)
@@ -107,6 +132,109 @@ struct TerminalNext: View {
         .padding(.horizontal, 20)
         .padding(.top, 16)
         .padding(.bottom, 12)
+    }
+
+    @ViewBuilder
+    private var liveSessionStrip: some View {
+        if !liveSessions.isEmpty {
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(liveSessions) { liveSession in
+                        liveSessionChip(liveSession)
+                    }
+
+                    Button {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+                            selectedSessionID = nil
+                        }
+                        refreshHosts()
+                    } label: {
+                        Label("New", systemImage: "plus")
+                            .labelStyle(.titleAndIcon)
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(theme.colors.textPrimary)
+                            .padding(.horizontal, 11)
+                            .frame(height: 32)
+                            .background(theme.colors.cardBackground)
+                            .clipShape(.capsule)
+                            .overlay {
+                                Capsule()
+                                    .stroke(theme.currentTheme.chrome.edgeFaint, lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Create terminal session")
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+            }
+            .scrollIndicators(.hidden)
+            .background(theme.colors.background)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(theme.currentTheme.chrome.edgeFaint)
+                    .frame(height: theme.currentTheme.chrome.hairlineWidth)
+            }
+        }
+    }
+
+    private func liveSessionChip(_ liveSession: TerminalNextLiveSession) -> some View {
+        let isSelected = selectedSessionID == liveSession.id
+
+        return HStack(spacing: 4) {
+            Button {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+                    selectedSessionID = liveSession.id
+                }
+            } label: {
+                HStack(spacing: 7) {
+                    Circle()
+                        .fill(sessionStatusColor(liveSession.session.status))
+                        .frame(width: 6, height: 6)
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(liveSession.host.previewTitle)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+
+                        Text(sessionStatusLabel(liveSession.session.status))
+                            .font(.system(size: 9, weight: .medium, design: .rounded))
+                            .foregroundStyle(isSelected ? theme.colors.cardBackground.opacity(0.72) : theme.colors.textTertiary)
+                            .lineLimit(1)
+                    }
+                }
+                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(isSelected ? theme.colors.cardBackground : theme.colors.textPrimary)
+                .padding(.leading, 10)
+                .padding(.trailing, 7)
+                .frame(height: 36)
+                .background(isSelected ? theme.colors.textPrimary : theme.colors.cardBackground)
+                .clipShape(.capsule)
+                .overlay {
+                    Capsule()
+                        .stroke(
+                            isSelected ? theme.colors.textPrimary.opacity(0.18) : theme.currentTheme.chrome.edgeFaint,
+                            lineWidth: theme.currentTheme.chrome.hairlineWidth
+                        )
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Switch to \(liveSession.host.previewTitle)")
+
+            Button {
+                closeLiveSession(liveSession)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(isSelected ? theme.colors.cardBackground.opacity(0.8) : theme.colors.textTertiary)
+                    .frame(width: 22, height: 22)
+                    .background(isSelected ? theme.colors.textPrimary.opacity(0.14) : theme.currentTheme.chrome.edgeFaint.opacity(0.7))
+                    .clipShape(.circle)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close \(liveSession.host.previewTitle)")
+        }
+        .padding(.trailing, 2)
     }
 
     @ViewBuilder
@@ -356,8 +484,7 @@ struct TerminalNext: View {
     }
 
     private func statusDot(for host: SSHTerminalSavedHost) -> some View {
-        let activeConnection = connectionManager.activeConnection
-        let isActive = activeConnection?.deviceID == host.resolvedDeviceIdentifier || activeConnection?.hostTitle == host.title
+        let isActive = connectionManager.activeConnection(for: host) != nil
 
         return Circle()
             .fill(isActive ? theme.currentTheme.chrome.accent : theme.colors.textTertiary.opacity(0.35))
@@ -433,6 +560,76 @@ struct TerminalNext: View {
 
     private var bridgeLogHost: SSHTerminalSavedHost? {
         savedHosts.first(where: \.isTalkieManagedTerminalHost) ?? savedHosts.first
+    }
+
+    private func didConsumeInitialHostBinding(for liveSession: TerminalNextLiveSession) -> Binding<Bool> {
+        Binding(
+            get: { liveSession.didConsumeInitialHost },
+            set: { liveSession.didConsumeInitialHost = $0 }
+        )
+    }
+
+    private func sessionStatusColor(_ status: SSHTerminalSession.Status) -> Color {
+        switch status {
+        case .connected:
+            return theme.colors.success
+        case .connecting:
+            return .warning
+        case .failed:
+            return .recording
+        case .disconnected:
+            return theme.colors.textTertiary.opacity(0.58)
+        }
+    }
+
+    private func sessionStatusLabel(_ status: SSHTerminalSession.Status) -> String {
+        switch status {
+        case .connected:
+            return "Live"
+        case .connecting:
+            return "Opening"
+        case .failed:
+            return "Needs attention"
+        case .disconnected:
+            return "Idle"
+        }
+    }
+
+    private func closeLiveSession(_ liveSession: TerminalNextLiveSession) {
+        if let activeConnectionID = liveSession.activeConnectionID {
+            connectionManager.clearActiveConnection(id: activeConnectionID)
+        }
+
+        Task { @MainActor in
+            await liveSession.session.disconnect()
+        }
+
+        let wasSelected = selectedSessionID == liveSession.id
+        liveSessions.removeAll { $0.id == liveSession.id }
+
+        if wasSelected {
+            selectedSessionID = liveSessions.last?.id
+        }
+
+        refreshHosts()
+    }
+
+    private func closeAllLiveSessions() {
+        let sessions = liveSessions
+        liveSessions.removeAll()
+        selectedSessionID = nil
+        connectionManager.clearAllActiveConnections()
+
+        Task { @MainActor in
+            for liveSession in sessions {
+                await liveSession.session.disconnect()
+            }
+        }
+    }
+
+    private func closeTerminalSurface() {
+        closeAllLiveSessions()
+        AppShellRouter.shared.openHome()
     }
 
     // MARK: - Data
@@ -536,22 +733,26 @@ struct TerminalNext: View {
         _ host: SSHTerminalSavedHost,
         preferredRoute: TalkieNetworkRoute? = nil
     ) {
-        activeSession = TerminalNextSessionSelection(
+        let liveSession = TerminalNextLiveSession(
             host: host,
             preferredRoute: preferredRoute,
             oneShotStartupCommand: nil
         )
+        liveSessions.append(liveSession)
+        selectedSessionID = liveSession.id
     }
 
     private func openBridgeLog(
         for host: SSHTerminalSavedHost,
         preferredRoute: TalkieNetworkRoute? = nil
     ) {
-        activeSession = TerminalNextSessionSelection(
+        let liveSession = TerminalNextLiveSession(
             host: host,
             preferredRoute: preferredRoute,
             oneShotStartupCommand: SSHTerminalStartupProfile.bridgeLogTailCommand()
         )
+        liveSessions.append(liveSession)
+        selectedSessionID = liveSession.id
     }
 
     private func routeOptions(for host: SSHTerminalSavedHost) -> [TerminalNextRouteOption] {
@@ -606,11 +807,25 @@ struct TerminalNext: View {
     }
 }
 
-private struct TerminalNextSessionSelection: Identifiable, Equatable {
+@MainActor
+private final class TerminalNextLiveSession: Identifiable {
     let id = UUID()
     let host: SSHTerminalSavedHost
     let preferredRoute: TalkieNetworkRoute?
     let oneShotStartupCommand: String?
+    let session = SSHTerminalSession()
+    var didConsumeInitialHost = false
+    var activeConnectionID: String?
+
+    init(
+        host: SSHTerminalSavedHost,
+        preferredRoute: TalkieNetworkRoute?,
+        oneShotStartupCommand: String?
+    ) {
+        self.host = host
+        self.preferredRoute = preferredRoute
+        self.oneShotStartupCommand = oneShotStartupCommand
+    }
 }
 
 private struct TerminalNextRouteOption: Identifiable {
@@ -633,15 +848,23 @@ private struct TerminalNextRouteOption: Identifiable {
 }
 
 private struct TerminalNextSessionPane: View {
-    let selection: TerminalNextSessionSelection
+    let liveSession: TerminalNextLiveSession
+    let didConsumeInitialHost: Binding<Bool>
     let onClose: () -> Void
+    let onShowSessions: () -> Void
+    let onConnectionIDChange: (String?) -> Void
 
     var body: some View {
         SSHTerminalView(
-            initialSavedHost: selection.host,
-            initialRoutePreference: selection.preferredRoute,
-            initialOneShotStartupCommand: selection.oneShotStartupCommand,
-            onClose: onClose
+            initialSavedHost: liveSession.host,
+            initialRoutePreference: liveSession.preferredRoute,
+            initialOneShotStartupCommand: liveSession.oneShotStartupCommand,
+            externalSession: liveSession.session,
+            disconnectOnDisappear: false,
+            didConsumeInitialSavedHost: didConsumeInitialHost,
+            onClose: onClose,
+            onShowSessions: onShowSessions,
+            onConnectionIDChange: onConnectionIDChange
         )
     }
 }

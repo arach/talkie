@@ -13,6 +13,7 @@ import Observation
 @Observable
 final class SSHTerminalConnectionManager {
     struct ActiveConnection: Equatable, Sendable {
+        let id: String
         let deviceID: String
         let deviceTitle: String
         let sessionTitle: String
@@ -27,6 +28,7 @@ final class SSHTerminalConnectionManager {
 
     private(set) var savedHosts: [SSHTerminalSavedHost]
     private(set) var activeConnection: ActiveConnection?
+    private(set) var activeConnections: [ActiveConnection] = []
     private var pendingResumeHostID: UUID?
 
     init(savedHostStore: SSHTerminalSavedHostStore = SSHTerminalSavedHostStore()) {
@@ -93,23 +95,31 @@ final class SSHTerminalConnectionManager {
         if pendingResumeHostID == savedHost.id {
             pendingResumeHostID = nil
         }
+        activeConnections.removeAll { connection in
+            connection.hostTitle == savedHost.title ||
+                (
+                    connection.deviceID == savedHost.resolvedDeviceIdentifier &&
+                    savedHosts.contains(where: { $0.resolvedDeviceIdentifier == savedHost.resolvedDeviceIdentifier }) == false
+                )
+        }
         if activeConnection?.hostTitle == savedHost.title {
-            activeConnection = nil
+            activeConnection = activeConnections.first
         }
         if activeConnection?.deviceID == savedHost.resolvedDeviceIdentifier,
            savedHosts.contains(where: { $0.resolvedDeviceIdentifier == savedHost.resolvedDeviceIdentifier }) == false {
-            activeConnection = nil
+            activeConnection = activeConnections.first
         }
         return updatedHosts
     }
 
+    @discardableResult
     func markConnecting(
         host: String,
         port: Int,
         username: String,
         startupProfile: SSHTerminalStartupProfile,
         startupCommandOverride: String? = nil
-    ) {
+    ) -> ActiveConnection {
         let snapshot = connectionSnapshot(
             host: host,
             port: port,
@@ -117,11 +127,35 @@ final class SSHTerminalConnectionManager {
             startupProfile: startupProfile,
             startupCommandOverride: startupCommandOverride
         )
+        activeConnections.removeAll { $0.id == snapshot.id }
+        activeConnections.insert(snapshot, at: 0)
         activeConnection = snapshot
+        return snapshot
     }
 
     func clearActiveConnection() {
+        activeConnections = []
         activeConnection = nil
+    }
+
+    func clearActiveConnection(id: String?) {
+        guard let id else { return }
+
+        activeConnections.removeAll { $0.id == id }
+        if activeConnection?.id == id {
+            activeConnection = activeConnections.first
+        }
+    }
+
+    func clearAllActiveConnections() {
+        clearActiveConnection()
+    }
+
+    func activeConnection(for savedHost: SSHTerminalSavedHost) -> ActiveConnection? {
+        activeConnections.first { connection in
+            connection.deviceID == savedHost.resolvedDeviceIdentifier ||
+                connection.hostTitle == savedHost.title
+        }
     }
 
     func requestResume(for savedHost: SSHTerminalSavedHost?) {
@@ -143,13 +177,15 @@ final class SSHTerminalConnectionManager {
     ) -> ActiveConnection {
         let normalizedHost = host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let normalizedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let endpointID = "\(normalizedUsername)@\(normalizedHost):\(port)"
 
         if let savedHost = savedHosts.first(where: {
             $0.normalizedHostCandidates.contains(normalizedHost) &&
-            $0.normalizedUsername == normalizedUsername &&
-            $0.port == port
+                $0.normalizedUsername == normalizedUsername &&
+                $0.port == port
         }) {
             return ActiveConnection(
+                id: endpointID,
                 deviceID: savedHost.resolvedDeviceIdentifier,
                 deviceTitle: savedHost.resolvedDeviceTitle,
                 sessionTitle: startupProfile.title,
@@ -169,9 +205,9 @@ final class SSHTerminalConnectionManager {
         }
 
         let commandOverride = startupCommandOverride?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let deviceID = "\(normalizedUsername)@\(normalizedHost):\(port)"
         return ActiveConnection(
-            deviceID: deviceID,
+            id: endpointID,
+            deviceID: endpointID,
             deviceTitle: trimmedHost,
             sessionTitle: commandOverride?.isEmpty == false ? "Custom Shell" : startupProfile.title,
             hostTitle: fallbackTitle,

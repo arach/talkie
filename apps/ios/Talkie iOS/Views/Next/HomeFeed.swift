@@ -96,6 +96,11 @@ final class HomeFeed: ObservableObject {
         let items: Int
 
         static let empty = TodayStats(memos: 0, dictations: 0, items: 0)
+
+        /// Any activity at all today. Drives whether Home shows the
+        /// Today row — it drops out entirely on a quiet day rather than
+        /// printing three zeros.
+        var hasActivity: Bool { memos > 0 || dictations > 0 || items > 0 }
     }
 
     @Published private(set) var todayStats: TodayStats

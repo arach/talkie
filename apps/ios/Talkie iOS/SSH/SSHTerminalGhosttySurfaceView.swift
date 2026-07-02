@@ -10,6 +10,7 @@ import SwiftUI
 
 #if canImport(TermBridgeKit)
 import TermBridgeKit
+import UIKit
 
 struct SSHTerminalGhosttySurfaceView: View {
     let session: SSHTerminalSession
@@ -34,8 +35,12 @@ struct SSHTerminalGhosttySurfaceView: View {
             .background(.black)
             .accessibilityIdentifier("ssh.terminal")
             .accessibilityLabel("SSH terminal")
-            .accessibilityHint("Tap to open the keyboard and type into the remote shell.")
+            .accessibilityHint("Tap to open the keyboard. Drag vertically to scroll terminal history.")
             .contentShape(Rectangle())
+            .overlay {
+                GhosttyTerminalScrollConfigurator()
+                    .allowsHitTesting(false)
+            }
             .simultaneousGesture(
                 TapGesture()
                     .onEnded {
@@ -75,6 +80,100 @@ struct SSHTerminalGhosttySurfaceView: View {
         let raw = min(widthLimitedSize, heightLimitedSize)
         let clamped = min(max(raw, 7.5), 11.0)
         return (clamped * 2).rounded() / 2
+    }
+}
+
+private struct GhosttyTerminalScrollConfigurator: UIViewRepresentable {
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: .zero)
+        view.isUserInteractionEnabled = false
+        Task { @MainActor in
+            context.coordinator.configure(from: view)
+        }
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        Task { @MainActor in
+            context.coordinator.configure(from: uiView)
+        }
+    }
+
+    @MainActor
+    final class Coordinator {
+        private weak var configuredSurface: SurfaceContainerView?
+        private var pendingRetryCount = 0
+
+        func configure(from markerView: UIView) {
+            guard let surface = findSurface(from: markerView) else {
+                scheduleRetry(from: markerView)
+                return
+            }
+
+            guard configuredSurface !== surface else { return }
+            configuredSurface = surface
+            pendingRetryCount = 0
+
+            // TermBridgeKit owns the Ghostty scroll target/action. Talkie opts
+            // into the same recognizer for normal one-finger phone scrolling.
+            for recognizer in surface.gestureRecognizers ?? [] {
+                guard let panRecognizer = recognizer as? UIPanGestureRecognizer else { continue }
+                guard panRecognizer.minimumNumberOfTouches > 1 else { continue }
+
+                panRecognizer.minimumNumberOfTouches = 1
+                panRecognizer.maximumNumberOfTouches = max(1, panRecognizer.maximumNumberOfTouches)
+                panRecognizer.cancelsTouchesInView = false
+                panRecognizer.delaysTouchesBegan = false
+                panRecognizer.delaysTouchesEnded = false
+            }
+        }
+
+        private func scheduleRetry(from markerView: UIView) {
+            guard pendingRetryCount < 12 else { return }
+            pendingRetryCount += 1
+
+            Task { @MainActor [weak self, weak markerView] in
+                try? await Task.sleep(for: .milliseconds(50))
+                guard let self, let markerView else { return }
+                self.configure(from: markerView)
+            }
+        }
+
+        private func findSurface(from markerView: UIView) -> SurfaceContainerView? {
+            var searchRoot: UIView? = markerView
+            var inspectedDepth = 0
+
+            while let root = searchRoot, inspectedDepth < 8 {
+                if let surface = root.firstDescendant(of: SurfaceContainerView.self) {
+                    return surface
+                }
+
+                searchRoot = root.superview
+                inspectedDepth += 1
+            }
+
+            return markerView.window?.firstDescendant(of: SurfaceContainerView.self)
+        }
+    }
+}
+
+private extension UIView {
+    func firstDescendant<T: UIView>(of type: T.Type) -> T? {
+        if let match = self as? T {
+            return match
+        }
+
+        for subview in subviews {
+            if let match = subview.firstDescendant(of: type) {
+                return match
+            }
+        }
+
+        return nil
     }
 }
 

@@ -180,7 +180,7 @@ final class DirectMacRegistry {
 
     func refresh() {
         sshManager.reload()
-        let activeConnection = sshManager.activeConnection
+        let activeConnections = sshManager.activeConnections
 
         var entriesByKey: [String: MacEntry] = [:]
 
@@ -201,8 +201,8 @@ final class DirectMacRegistry {
                 lastBridgeContactAt: nil,
                 sshHosts: device.savedHosts,
                 lastTerminalUseAt: device.lastUsedAt,
-                terminalConnected: activeConnection?.deviceID == device.id,
-                activeTerminalProfile: activeConnection?.deviceID == device.id ? activeConnection?.startupProfile : nil
+                terminalConnected: activeConnections.contains { $0.deviceID == device.id },
+                activeTerminalProfile: activeConnections.first(where: { $0.deviceID == device.id })?.startupProfile
             )
 
             merge(baseEntry, into: &entriesByKey, matching: keys)

@@ -17,7 +17,7 @@ struct DraftsScreen: View {
     @State private var editorState = VoiceEditorState()
     @FocusState private var isTextFieldFocused: Bool
 
-    // Dictation state (uses EphemeralTranscriber → TalkieEngine directly)
+    // Dictation state (uses DictationInput → TalkieEngine directly)
     @State private var dictationPillState: DictationPillState = .idle
     @State private var dictationDuration: TimeInterval = 0
     @State private var dictationTimerRef: Task<Void, Never>?
@@ -1146,7 +1146,7 @@ struct DraftsScreen: View {
         }
     }
 
-    // MARK: - Dictation (Talkie → Engine via EphemeralTranscriber)
+    // MARK: - Dictation (Talkie → Engine via DictationInput)
     // Note: Extension callbacks (draft:*) are now handled by TalkieServer
     // See apps/macos/TalkieServer/src/extensions/handlers.ts
 
@@ -1163,20 +1163,24 @@ struct DraftsScreen: View {
     }
 
     private func startDictationRecording() {
-        do {
-            try EphemeralTranscriber.shared.startCapture(purpose: .draftsDictation)
-            dictationPillState = .recording
-            dictationDuration = 0
+        guard !DictationInput.shared.isPreparing else { return }
 
-            dictationTimerRef = Task {
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .milliseconds(100))
-                    dictationDuration += 0.1
+        Task {
+            do {
+                try await DictationInput.shared.startCapture(purpose: .draftsDictation)
+                dictationPillState = .recording
+                dictationDuration = 0
+
+                dictationTimerRef = Task {
+                    while !Task.isCancelled {
+                        try? await Task.sleep(for: .milliseconds(100))
+                        dictationDuration += 0.1
+                    }
                 }
+            } catch {
+                log.error("Dictation start failed: \(error)")
+                editorState.error = error.localizedDescription
             }
-        } catch {
-            log.error("Dictation start failed: \(error)")
-            editorState.error = error.localizedDescription
         }
     }
 
@@ -1187,7 +1191,7 @@ struct DraftsScreen: View {
 
         Task {
             do {
-                let result = try await EphemeralTranscriber.shared.stopAndTranscribePersistent()
+                let result = try await DictationInput.shared.stopAndTranscribePersistent()
 
                 if !result.text.isEmpty {
                     // Ensure the note exists (auto-save creates it, but ensure parentId)
@@ -1256,14 +1260,16 @@ struct DraftsScreen: View {
     }
 
     private func startVoicePrompt() {
-        guard !isRecordingInstruction else { return }
+        guard !isRecordingInstruction, !DictationInput.shared.isPreparing else { return }
 
-        do {
-            try EphemeralTranscriber.shared.startCapture(purpose: .draftsCommand)
-            isRecordingInstruction = true
-        } catch {
-            log.error("Voice prompt capture failed: \(error)")
-            editorState.error = error.localizedDescription
+        Task {
+            do {
+                try await DictationInput.shared.startCapture(purpose: .draftsCommand)
+                isRecordingInstruction = true
+            } catch {
+                log.error("Voice prompt capture failed: \(error)")
+                editorState.error = error.localizedDescription
+            }
         }
     }
 
@@ -1274,7 +1280,7 @@ struct DraftsScreen: View {
         isTranscribingInstruction = true
 
         do {
-            let instruction = try await EphemeralTranscriber.shared.stopAndTranscribe()
+            let instruction = try await DictationInput.shared.stopAndTranscribe()
             isTranscribingInstruction = false
 
             if !instruction.isEmpty {

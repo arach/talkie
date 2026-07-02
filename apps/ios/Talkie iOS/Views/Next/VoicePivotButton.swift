@@ -14,6 +14,7 @@ import SwiftUI
 struct VoicePivotButton: View {
     @EnvironmentObject private var chrome: ShellChrome
     @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var scheme
 
     /// 350ms matches iOS context-menu feel — long enough that a
     /// slow tap doesn't fire it, short enough to feel responsive.
@@ -86,16 +87,19 @@ struct VoicePivotButton: View {
             : theme.colors.cardBackground
     }
 
-    private var buttonBorder: Color {
+    // Resting picks up the shared relief bevel (brighter top edge) so the
+    // ambient button reads as raised, matching the cards + header
+    // complications. Expanded / listening keep their accent ring.
+    private var buttonBorder: AnyShapeStyle {
         switch chrome.state {
-        case .resting:   return theme.currentTheme.chrome.edgeFaint
-        case .expanded:  return theme.currentTheme.chrome.accentStrong
-        case .listening: return theme.currentTheme.chrome.accentStrong
+        case .resting:   return AnyShapeStyle(ChromeRelief.bevel(scheme))
+        case .expanded:  return AnyShapeStyle(theme.currentTheme.chrome.accentStrong)
+        case .listening: return AnyShapeStyle(theme.currentTheme.chrome.accentStrong)
         }
     }
 
     private var buttonBorderWidth: CGFloat {
-        chrome.state == .resting ? 0.5 : 1.0
+        chrome.state == .resting ? ChromeRelief.borderWidth(scheme, 0.5) : 1.0
     }
 
     private var glyphColor: Color {
@@ -108,7 +112,7 @@ struct VoicePivotButton: View {
 
     private var shadowColor: Color {
         switch chrome.state {
-        case .resting:   return Color.black.opacity(0.10)
+        case .resting:   return ChromeRelief.shadow(scheme)
         case .expanded:  return theme.currentTheme.chrome.accentGlow
         case .listening: return theme.currentTheme.chrome.accentGlow
         }

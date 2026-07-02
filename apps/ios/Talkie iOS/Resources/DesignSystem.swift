@@ -61,8 +61,8 @@ extension Color {
 
     // Text Colors
     static let textPrimary = Color(hex: "0A0A0A", darkHex: "FAFAFA")
-    static let textSecondary = Color(hex: "6A6A6A", darkHex: "9A9A9A")
-    static let textTertiary = Color(hex: "9A9A9A", darkHex: "6A6A6A")
+    static let textSecondary = Color(hex: "525252", darkHex: "DADADA")
+    static let textTertiary = Color(hex: "6E6E6E", darkHex: "B0B0B0")
 
     // Border Colors
     static let borderPrimary = Color(hex: "E5E5E5", darkHex: "2A2A2A")
@@ -458,6 +458,62 @@ struct ChromeTokens {
     let hairlineWidth: CGFloat    // divider stroke weight
 }
 
+// MARK: - Relief
+
+/// Raised-panel relief tones, derived per color scheme. One vocabulary
+/// shared by Home cards, the Quick deck, the Explore chips, and the
+/// circular complications (deck / settings / ambient) so the whole
+/// chrome reads as gently lifted off the canvas.
+///
+/// A black drop shadow is invisible on a near-black canvas, so on dark
+/// surfaces the relief comes from the beveled border (brighter at the
+/// top edge); the shadow does the lifting on light surfaces.
+enum ChromeRelief {
+    /// Full-perimeter border: brighter at the top, fading toward the
+    /// bottom — a beveled hairline. Use where there's no state color to
+    /// preserve (cards, chips, the settings gear).
+    static func bevel(_ scheme: ColorScheme) -> LinearGradient {
+        if scheme == .dark {
+            return LinearGradient(
+                colors: [Color.white.opacity(0.22), Color.white.opacity(0.07)],
+                startPoint: .top, endPoint: .bottom
+            )
+        }
+        return LinearGradient(
+            colors: [Color.black.opacity(0.08), Color.black.opacity(0.14)],
+            startPoint: .top, endPoint: .bottom
+        )
+    }
+
+    /// Top-only highlight that fades by center — layered OVER a
+    /// state-colored ring (the deck complication) to add the raised
+    /// sheen without discarding its connection-state color.
+    static func sheen(_ scheme: ColorScheme) -> LinearGradient {
+        LinearGradient(
+            colors: scheme == .dark
+                ? [Color.white.opacity(0.20), Color.clear]
+                : [Color.white.opacity(0.65), Color.clear],
+            startPoint: .top, endPoint: .center
+        )
+    }
+
+    static func borderWidth(_ scheme: ColorScheme, _ hairline: CGFloat) -> CGFloat {
+        scheme == .dark ? 1.0 : hairline
+    }
+
+    static func shadow(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? Color.black.opacity(0.55) : Color.black.opacity(0.10)
+    }
+
+    static func shadowRadius(_ scheme: ColorScheme) -> CGFloat {
+        scheme == .dark ? 9 : 6
+    }
+
+    static func divider(_ scheme: ColorScheme, _ chrome: ChromeTokens) -> Color {
+        scheme == .dark ? Color.white.opacity(0.10) : chrome.edge
+    }
+}
+
 // MARK: Per-theme chrome instances
 
 private let scopeChrome = ChromeTokens(
@@ -609,13 +665,13 @@ private let liftChrome: ChromeTokens = {
     )
 }()
 
-// "Vercel" approach — Geist monochrome. WHITE accent (so every accent-driven
-// icon/control renders white = no hue, no view refactor), neutral elevated
-// panels, flat, 6pt rounding. The one permitted pop is the universal
-// recording red, which isn't the theme accent.
+// "Vercel" approach — Geist monochrome. The accent flips black/white with the
+// mode so light-mode controls stay legible while preserving the no-hue rule.
+// The one permitted pop is the universal recording red, which isn't the theme
+// accent.
 private let graphiteChrome: ChromeTokens = {
-    let accent = Color(hex: "FAFAFA")   // white — the monochrome "signal"
-    let ink = Color(hex: "EDEDED")
+    let accent = Color(hex: "0A0A0A", darkHex: "FAFAFA")   // monochrome signal
+    let ink = Color(hex: "0A0A0A", darkHex: "EDEDED")
     return ChromeTokens(
         accent: accent,
         accentTint: accent.opacity(0.10),

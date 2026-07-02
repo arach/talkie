@@ -738,6 +738,17 @@
           terminal.refresh(0, terminal.rows - 1);
         },
 
+        scrollLines(lines = 0) {
+          const amount = Number(lines);
+          if (!Number.isFinite(amount) || amount === 0) {
+            return;
+          }
+
+          terminal.scrollLines(amount);
+          terminal.refresh(0, terminal.rows - 1);
+          scheduleCursorPresentationUpdate();
+        },
+
         refit() {
           forceFit();
           terminal.refresh(0, terminal.rows - 1);

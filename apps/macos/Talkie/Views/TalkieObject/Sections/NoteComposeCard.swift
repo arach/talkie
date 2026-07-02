@@ -505,6 +505,8 @@ struct NoteComposeCard: View {
     }
 
     private func startDictationRecording() {
+        guard !DictationInput.shared.isPreparing else { return }
+
         // Show recording UI immediately for instant feedback
         dictationPillState = .recording
         dictationDuration = 0
@@ -516,14 +518,16 @@ struct NoteComposeCard: View {
             }
         }
 
-        do {
-            try EphemeralTranscriber.shared.startCapture(purpose: .composeDictation)
-        } catch {
-            log.error("Dictation start failed: \(error)")
-            dictationTimerRef?.cancel()
-            dictationTimerRef = nil
-            dictationPillState = .idle
-            editorState.error = error.localizedDescription
+        Task {
+            do {
+                try await DictationInput.shared.startCapture(purpose: .composeDictation)
+            } catch {
+                log.error("Dictation start failed: \(error)")
+                dictationTimerRef?.cancel()
+                dictationTimerRef = nil
+                dictationPillState = .idle
+                editorState.error = error.localizedDescription
+            }
         }
     }
 
@@ -534,7 +538,7 @@ struct NoteComposeCard: View {
 
         Task {
             do {
-                let result = try await EphemeralTranscriber.shared.stopAndTranscribePersistent()
+                let result = try await DictationInput.shared.stopAndTranscribePersistent()
 
                 if !result.text.isEmpty {
                     let noteId = recording.id
@@ -612,13 +616,16 @@ struct NoteComposeCard: View {
     }
 
     private func startVoicePrompt() {
-        guard !isRecordingInstruction else { return }
-        do {
-            try EphemeralTranscriber.shared.startCapture(purpose: .composeCommand)
-            isRecordingInstruction = true
-        } catch {
-            log.error("Voice prompt capture failed: \(error)")
-            editorState.error = error.localizedDescription
+        guard !isRecordingInstruction, !DictationInput.shared.isPreparing else { return }
+
+        Task {
+            do {
+                try await DictationInput.shared.startCapture(purpose: .composeCommand)
+                isRecordingInstruction = true
+            } catch {
+                log.error("Voice prompt capture failed: \(error)")
+                editorState.error = error.localizedDescription
+            }
         }
     }
 
@@ -628,7 +635,7 @@ struct NoteComposeCard: View {
         isTranscribingInstruction = true
 
         do {
-            let instruction = try await EphemeralTranscriber.shared.stopAndTranscribe()
+            let instruction = try await DictationInput.shared.stopAndTranscribe()
             isTranscribingInstruction = false
 
             if !instruction.isEmpty {

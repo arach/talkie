@@ -159,6 +159,14 @@ const STUDIES: Study[] = [
       "Talkie's canonical iOS home — STATION card, Live Action Bus, Recent list, ambient voice button. The screen where the voice-pivot pattern lives at rest.",
   },
   {
+    slug: "ios-home-recents",
+    name: "Home · Recents",
+    kind: "Layout study",
+    platform: "iOS",
+    blurb:
+      "Stress case for the Home recent card: ten compact rows plus load-more footer. Compares the stretched-row failure against the fixed 44pt stack.",
+  },
+  {
     slug: "library",
     name: "Library",
     kind: "Theme study",

@@ -35,14 +35,18 @@ struct HomeNextView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 12) {
+            VStack(spacing: 18) {
                 HomeHeader()
 
-                HomeTodayStrip(stats: feed.todayStats)
-                    .padding(.horizontal, 12)
+                // Today drops out on a quiet day — it only earns space
+                // once there's something to count.
+                if feed.todayStats.hasActivity {
+                    HomeTodayStrip(stats: feed.todayStats)
+                        .padding(.horizontal, 16)
+                }
 
-                HomeFrequentActionsStrip()
-                    .padding(.horizontal, 12)
+                HomeFrequentActionsStrip(isEmptyHome: isEmptyHome)
+                    .padding(.horizontal, 16)
 
                 RecentSection(
                     items: feed.recentItems,
@@ -65,10 +69,10 @@ struct HomeNextView: View {
                         }
                     }
                 )
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 16)
 
                 HomeSuggestionsStrip()
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, 16)
 
                 Spacer(minLength: 80)   // breathing room for the shell voice button
             }
@@ -94,6 +98,13 @@ struct HomeNextView: View {
             feed.reload()
             handleDeepLinkAction(deepLinkManager.pendingAction)
         }
+    }
+
+    /// The genuinely-empty home: nothing in the feed and not mid-search.
+    /// Promotes the Quick deck to its 2×2 hero layout so the first-run
+    /// screen has a center of gravity instead of a dead bottom third.
+    private var isEmptyHome: Bool {
+        !feed.isSearching && feed.totalRecentCount == 0
     }
 
     private func handleDeepLinkAction(_ action: DeepLinkAction) {
@@ -134,15 +145,15 @@ enum SharedCaptureIngress {
                 ingestionMethod: ingestionMethod
             )
 
-            var capture = result.capture
+            let capture: Capture
             if let imageData = result.imageData {
-                let filename = CaptureStore.shared.saveImage(imageData, id: capture.id)
-                capture = capture.copyWithImage(filename: filename)
+                let filename = CaptureStore.shared.saveImage(imageData, id: result.capture.id)
+                capture = result.capture.copyWithImage(filename: filename)
+            } else {
+                capture = result.capture
             }
 
-            await MainActor.run {
-                onCapture(capture)
-            }
+            await onCapture(capture)
         }
     }
 
@@ -268,6 +279,7 @@ private extension Capture {
 
 private struct HomeHeader: View {
     @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         // Gear and Deck share a 40pt footprint so the wordmark stays
@@ -291,15 +303,15 @@ private struct HomeHeader: View {
                 ZStack {
                     Circle().fill(theme.colors.cardBackground)
                     Circle().strokeBorder(
-                        theme.currentTheme.chrome.edgeFaint,
-                        lineWidth: theme.currentTheme.chrome.hairlineWidth
+                        ChromeRelief.bevel(scheme),
+                        lineWidth: ChromeRelief.borderWidth(scheme, theme.currentTheme.chrome.hairlineWidth)
                     )
                     Image(systemName: "gearshape")
                         .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(theme.colors.textSecondary)
                 }
                 .frame(width: 40, height: 40)
-                .shadow(color: .black.opacity(0.10), radius: 4, y: 2)
+                .shadow(color: ChromeRelief.shadow(scheme), radius: 4, y: 2)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Settings")
@@ -322,6 +334,7 @@ private struct DeckComplication: View {
     @State private var bridgeManager = BridgeManager.shared
     @ObservedObject private var deck = DeckMirrorStore.shared
     @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         Button(action: openDeck) {
@@ -331,6 +344,12 @@ private struct DeckComplication: View {
                     Circle().strokeBorder(
                         borderColor,
                         lineWidth: theme.currentTheme.chrome.hairlineWidth
+                    )
+                    // Raised sheen over the state-colored ring — adds the
+                    // relief without discarding the connection-state color.
+                    Circle().strokeBorder(
+                        ChromeRelief.sheen(scheme),
+                        lineWidth: ChromeRelief.borderWidth(scheme, theme.currentTheme.chrome.hairlineWidth)
                     )
                     Image(systemName: "square.grid.3x3")
                         .font(.system(size: 15, weight: .regular))
@@ -351,7 +370,7 @@ private struct DeckComplication: View {
                 }
             }
             .frame(width: 40, height: 40)
-            .shadow(color: .black.opacity(0.10), radius: 4, y: 2)
+            .shadow(color: ChromeRelief.shadow(scheme), radius: 4, y: 2)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
@@ -573,47 +592,32 @@ private struct StatusPixel: View {
 
 // MARK: - Today rail
 
+/// One quiet line shown only on active days. The eyebrow names the
+/// window once; the numerals (icon + count) carry the value — no
+/// per-cell "TODAY", no full-bleed strip, no truncation. Each numeral
+/// stays tappable to its library tab.
 private struct HomeTodayStrip: View {
     let stats: HomeFeed.TodayStats
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        HStack(spacing: 0) {
-            statCell(
-                count: stats.memos,
-                singular: "memo",
-                plural: "memos",
-                icon: "waveform",
-                tab: .memos
-            )
-            divider
-            statCell(
-                count: stats.dictations,
-                singular: "dictation",
-                plural: "dictations",
-                icon: "keyboard",
-                tab: .dictations
-            )
-            divider
-            statCell(
-                count: stats.items,
-                singular: "item",
-                plural: "items",
-                icon: "tray.and.arrow.down",
-                tab: .items
-            )
+        HStack(spacing: 12) {
+            Text("· TODAY")
+                .talkieType(.channelLabelTiny)
+                .foregroundStyle(theme.colors.textTertiary)
+                .padding(.leading, 4)
+
+            Spacer(minLength: 8)
+
+            HStack(spacing: 16) {
+                numeral(count: stats.memos, singular: "memo", plural: "memos", icon: "waveform", tab: .memos)
+                numeral(count: stats.dictations, singular: "dictation", plural: "dictations", icon: "keyboard", tab: .dictations)
+                numeral(count: stats.items, singular: "item", plural: "items", icon: "tray.and.arrow.down", tab: .items)
+            }
         }
-        .frame(height: 42)
-        .background(theme.colors.cardBackground.opacity(0.74))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(theme.currentTheme.chrome.edgeFaint,
-                              lineWidth: theme.currentTheme.chrome.hairlineWidth)
-        )
     }
 
-    private func statCell(
+    private func numeral(
         count: Int,
         singular: String,
         plural: String,
@@ -623,34 +627,55 @@ private struct HomeTodayStrip: View {
         Button(action: { AppShellRouter.shared.openLibrary(tab: tab) }) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(theme.currentTheme.chrome.accent)
-                Text("\(count) \(count == 1 ? singular : plural) today")
-                    .talkieType(.channelLabelTiny)
-                    .foregroundStyle(theme.colors.textSecondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.78)
+                Text("\(count)")
+                    .talkieType(.instrumentReadoutSmall)
+                    .foregroundStyle(theme.colors.textPrimary)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(count) \(count == 1 ? singular : plural) today")
         .accessibilityHint("Opens \(plural)")
     }
-
-    private var divider: some View {
-        Rectangle()
-            .fill(theme.currentTheme.chrome.edgeFaint)
-            .frame(width: theme.currentTheme.chrome.hairlineWidth)
-            .padding(.vertical, 9)
-    }
 }
 
 // MARK: - Frequent actions (above recents)
 
 private struct HomeFrequentActionsStrip: View {
+    /// On a genuinely-empty home the deck becomes the hero: a 2×2 grid
+    /// with bigger glyphs that fills the mid-screen. Once there's a feed
+    /// to list, it collapses to the compact 1×4 row so the list owns the
+    /// screen.
+    let isEmptyHome: Bool
     @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var scheme
+
+    private struct QuickAction: Identifiable {
+        let id = UUID()
+        let label: String
+        let icon: String
+        let accessibilityID: String?
+        let action: () -> Void
+    }
+
+    private var actions: [QuickAction] {
+        [
+            QuickAction(label: "RECORD", icon: "waveform", accessibilityID: "dock.record") {
+                RecordingSheetController.shared.isPresented = true
+            },
+            QuickAction(label: "COMPOSE", icon: "square.and.pencil", accessibilityID: nil) {
+                AppShellRouter.shared.openCompose(documentID: "blank-\(UUID().uuidString.prefix(8))")
+            },
+            QuickAction(label: "SCAN", icon: "camera", accessibilityID: nil) {
+                AppShellRouter.shared.openCameraCapture()
+            },
+            QuickAction(label: "ASK AI", icon: "sparkles", accessibilityID: nil) {
+                AppShellRouter.shared.openAskAI()
+            },
+        ]
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -659,50 +684,56 @@ private struct HomeFrequentActionsStrip: View {
                 .foregroundStyle(theme.colors.textTertiary)
                 .padding(.leading, 4)
 
-            HStack(spacing: 0) {
-                actionCell(label: "RECORD", icon: "waveform", accessibilityID: "dock.record") {
-                    RecordingSheetController.shared.isPresented = true
-                }
-                divider
-                actionCell(label: "COMPOSE", icon: "square.and.pencil") {
-                    AppShellRouter.shared.openCompose(
-                        documentID: "blank-\(UUID().uuidString.prefix(8))"
-                    )
-                }
-                divider
-                actionCell(label: "SCAN", icon: "camera") {
-                    AppShellRouter.shared.openCameraCapture()
-                }
-                divider
-                actionCell(label: "ASK AI", icon: "sparkles") {
-                    AppShellRouter.shared.openAskAI()
-                }
+            if isEmptyHome {
+                grid
+            } else {
+                row
             }
-            .frame(height: 56)
-            .background(theme.colors.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(theme.currentTheme.chrome.edgeFaint,
-                                  lineWidth: theme.currentTheme.chrome.hairlineWidth)
-            )
-            .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
         }
     }
 
-    private func actionCell(
-        label: String,
-        icon: String,
-        accessibilityID: String? = nil,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                Image(systemName: icon)
+    // MARK: Layouts
+
+    private var row: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(actions.enumerated()), id: \.element.id) { idx, action in
+                actionCell(action, large: false)
+                if idx < actions.count - 1 { vDivider(inset: 10) }
+            }
+        }
+        .frame(height: 56)
+        .modifier(HomeReliefCard(cornerRadius: 12))
+    }
+
+    private var grid: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                actionCell(actions[0], large: true)
+                vDivider(inset: 0)
+                actionCell(actions[1], large: true)
+            }
+            .frame(height: 76)
+            hDivider
+            HStack(spacing: 0) {
+                actionCell(actions[2], large: true)
+                vDivider(inset: 0)
+                actionCell(actions[3], large: true)
+            }
+            .frame(height: 76)
+        }
+        .modifier(HomeReliefCard(cornerRadius: 12))
+    }
+
+    // MARK: Pieces
+
+    private func actionCell(_ action: QuickAction, large: Bool) -> some View {
+        Button(action: action.action) {
+            VStack(spacing: large ? 8 : 4) {
+                Image(systemName: action.icon)
                     // One notch lighter than the labels — a finer instrument glyph.
-                    .font(.system(size: 14, weight: .light))
+                    .font(.system(size: large ? 20 : 14, weight: .light))
                     .foregroundStyle(theme.currentTheme.chrome.accent)
-                Text(label)
+                Text(action.label)
                     .talkieType(.channelLabelTiny)
                     // One notch down from the style's .semibold → .medium, scoped
                     // to the deck so the shared channelLabelTiny stays unchanged.
@@ -716,15 +747,51 @@ private struct HomeFrequentActionsStrip: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(label.capitalized)
-        .accessibilityIdentifier(accessibilityID ?? "home.quick.\(label.lowercased().replacing(" ", with: "-"))")
+        .accessibilityLabel(action.label.capitalized)
+        .accessibilityIdentifier(action.accessibilityID ?? "home.quick.\(action.label.lowercased().replacing(" ", with: "-"))")
     }
 
-    private var divider: some View {
+    // Internal key separators read brighter than the shared faint edge so
+    // the deck divides into distinct buttons on a dark canvas.
+    private var dividerColor: Color { ChromeRelief.divider(scheme, theme.currentTheme.chrome) }
+
+    private func vDivider(inset: CGFloat) -> some View {
         Rectangle()
-            .fill(theme.currentTheme.chrome.edgeFaint)
+            .fill(dividerColor)
             .frame(width: theme.currentTheme.chrome.hairlineWidth)
-            .padding(.vertical, 10)
+            .padding(.vertical, inset)
+    }
+
+    private var hDivider: some View {
+        Rectangle()
+            .fill(dividerColor)
+            .frame(height: theme.currentTheme.chrome.hairlineWidth)
+    }
+}
+
+/// Subtle raised-panel relief for Home cards: a beveled hairline that
+/// catches "light" at the top, plus a soft drop shadow, so panels read as
+/// gently lifted off the canvas instead of melting into it. Tuned per
+/// color scheme — dark surfaces need a brighter top edge and a deeper
+/// shadow to register; light surfaces lean on a quiet bottom-weighted
+/// border and a soft shadow.
+private struct HomeReliefCard: ViewModifier {
+    var cornerRadius: CGFloat = 12
+    @Environment(\.colorScheme) private var scheme
+    @ObservedObject private var theme = ThemeManager.shared
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        content
+            .background(theme.colors.cardBackground)
+            .clipShape(shape)
+            .overlay(
+                shape.strokeBorder(
+                    ChromeRelief.bevel(scheme),
+                    lineWidth: ChromeRelief.borderWidth(scheme, theme.currentTheme.chrome.hairlineWidth)
+                )
+            )
+            .shadow(color: ChromeRelief.shadow(scheme), radius: ChromeRelief.shadowRadius(scheme), y: 3)
     }
 }
 
@@ -733,10 +800,13 @@ private struct HomeFrequentActionsStrip: View {
 private struct HomeSuggestionsStrip: View {
     @State private var bridgeManager = BridgeManager.shared
     @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var scheme
 
     private var suggestions: [HomeSuggestion] {
         var items: [HomeSuggestion] = []
 
+        // Slot 1 — the Mac bridge. Morphs Pair → Connections → Deck so a
+        // setup task graduates into a real destination once connected.
         if !bridgeManager.isPaired {
             items.append(HomeSuggestion(
                 title: "Pair Mac",
@@ -757,11 +827,9 @@ private struct HomeSuggestionsStrip: View {
             ))
         }
 
-        items.append(HomeSuggestion(
-            title: "Library",
-            icon: "books.vertical",
-            action: { AppShellRouter.shared.openLibrary() }
-        ))
+        // Steady destinations only. Library lives behind the Recent
+        // header's "ALL ›"; keyboard activation lives in Settings —
+        // neither is a peer in this wayfinding rail.
         items.append(HomeSuggestion(
             title: "Workflows",
             icon: "point.3.connected.trianglepath.dotted",
@@ -771,11 +839,6 @@ private struct HomeSuggestionsStrip: View {
             title: "Terminal",
             icon: "terminal",
             action: { AppShellRouter.shared.openTerminal() }
-        ))
-        items.append(HomeSuggestion(
-            title: "Keyboard",
-            icon: "keyboard",
-            action: { AppShellRouter.shared.openKeyboardActivation() }
         ))
 
         return items
@@ -810,9 +873,14 @@ private struct HomeSuggestionsStrip: View {
                                     .overlay(
                                         Capsule()
                                             .strokeBorder(
-                                                theme.currentTheme.chrome.edgeFaint,
-                                                lineWidth: theme.currentTheme.chrome.hairlineWidth
+                                                ChromeRelief.bevel(scheme),
+                                                lineWidth: ChromeRelief.borderWidth(scheme, theme.currentTheme.chrome.hairlineWidth)
                                             )
+                                    )
+                                    .shadow(
+                                        color: scheme == .dark ? .black.opacity(0.4) : .black.opacity(0.06),
+                                        radius: scheme == .dark ? 4 : 2,
+                                        y: 1
                                     )
                             )
                         }
@@ -837,6 +905,10 @@ private struct HomeSuggestion: Identifiable {
 }
 
 // MARK: - RECENT
+
+private enum RecentSectionLayout {
+    static let rowHeight: CGFloat = 44
+}
 
 private struct RecentSection: View {
     let items: [HomeFeed.RecentItem]
@@ -896,40 +968,26 @@ private struct RecentSection: View {
                         onDismissSyncPrompt: onDismissSyncPrompt
                     )
                 } else {
-                    List {
+                    VStack(spacing: 0) {
                         ForEach(items.enumerated(), id: \.element.id) { idx, item in
                             Button(action: { open(item) }) {
                                 RecentRow(item: item, showDivider: idx > 0)
                                     .contentShape(Rectangle())
                             }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier("memo.row")
-                                .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                    if item.canPromoteToMemo {
-                                        Button {
-                                            onPromote(item)
-                                        } label: {
-                                            Label("Save as Memo", systemImage: "square.and.arrow.down.fill")
-                                        }
-                                        .tint(theme.currentTheme.chrome.accent)
-                                    }
-                                }
-                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                    Button(role: .destructive) {
-                                        onDelete(item)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                }
-                                .listRowInsets(EdgeInsets())
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("memo.row")
+                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                promoteAction(for: item)
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                deleteAction(for: item)
+                            }
+                            .contextMenu {
+                                promoteAction(for: item)
+                                deleteAction(for: item)
+                            }
                         }
                     }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
-                    .scrollDisabled(true)
-                    .frame(height: CGFloat(items.count) * 44)
 
                     if hasMore {
                         Button(action: {
@@ -957,13 +1015,7 @@ private struct RecentSection: View {
                     }
                 }
             }
-            .background(theme.colors.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(theme.currentTheme.chrome.edgeFaint,
-                                  lineWidth: theme.currentTheme.chrome.hairlineWidth)
-            )
+            .modifier(HomeReliefCard(cornerRadius: 10))
         }
     }
 
@@ -1019,6 +1071,26 @@ private struct RecentSection: View {
         case .link, .scan:      AppShellRouter.shared.openCaptureDetail(captureID: item.id)
         }
     }
+
+    @ViewBuilder
+    private func promoteAction(for item: HomeFeed.RecentItem) -> some View {
+        if item.canPromoteToMemo {
+            Button {
+                onPromote(item)
+            } label: {
+                Label("Save as Memo", systemImage: "square.and.arrow.down.fill")
+            }
+            .tint(theme.currentTheme.chrome.accent)
+        }
+    }
+
+    private func deleteAction(for item: HomeFeed.RecentItem) -> some View {
+        Button(role: .destructive) {
+            onDelete(item)
+        } label: {
+            Label("Delete", systemImage: "trash")
+        }
+    }
 }
 
 private struct RecentRow: View {
@@ -1057,6 +1129,8 @@ private struct RecentRow: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 9)
         }
+        .frame(height: RecentSectionLayout.rowHeight)
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder

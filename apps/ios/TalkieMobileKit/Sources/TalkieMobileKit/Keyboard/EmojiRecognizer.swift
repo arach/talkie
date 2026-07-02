@@ -391,7 +391,7 @@ private struct EmojiPhraseMapping {
             "no", "prohibited", "forbidden", "not allowed", "stop"
         ]),
         EmojiPhraseMapping(emoji: "❓", phrases: [
-            "question", "what", "huh", "why"
+            "what", "huh", "why"
         ]),
         EmojiPhraseMapping(emoji: "❗", phrases: [
             "exclamation", "important", "attention", "alert"

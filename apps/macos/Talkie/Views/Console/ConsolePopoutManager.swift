@@ -212,7 +212,7 @@ private struct ConsolePopoutContent: View {
 @MainActor
 @Observable
 final class ConsoleTerminalCaptureController {
-    let dictation = EphemeralTranscriber.shared
+    let dictation = DictationInput.shared
 
     var copyStatus: TerminalCopyStatus?
     var dictationError: String?
@@ -243,6 +243,10 @@ final class ConsoleTerminalCaptureController {
     func toggleDictation(sendTo session: ManagedAgentConsoleSession) {
         dictationError = nil
 
+        if dictation.isPreparing && dictation.activePurpose == .terminalDictation {
+            return
+        }
+
         if dictation.isRecording && dictation.activePurpose == .terminalDictation {
             Task {
                 do {
@@ -266,15 +270,18 @@ final class ConsoleTerminalCaptureController {
             return
         }
 
-        do {
-            hasPendingDictation = false
-            dictationStartedAt = Date()
-            dictationBaselineScreenshotIDs = Set(ScreenshotTray.shared.items.map(\.id))
-            dictationBaselineClipIDs = Set(ClipTray.shared.items.map(\.id))
-            try dictation.startCapture(purpose: .terminalDictation)
-        } catch {
-            resetDictationContext()
-            dictationError = error.localizedDescription
+        hasPendingDictation = false
+        dictationStartedAt = Date()
+        dictationBaselineScreenshotIDs = Set(ScreenshotTray.shared.items.map(\.id))
+        dictationBaselineClipIDs = Set(ClipTray.shared.items.map(\.id))
+
+        Task {
+            do {
+                try await dictation.startCapture(purpose: .terminalDictation)
+            } catch {
+                resetDictationContext()
+                dictationError = error.localizedDescription
+            }
         }
     }
 
@@ -373,7 +380,8 @@ final class ConsoleTerminalCaptureController {
     }
 
     private var isTerminalDictationActive: Bool {
-        dictation.activePurpose == .terminalDictation && (dictation.isRecording || dictation.isTranscribing)
+        dictation.activePurpose == .terminalDictation
+            && (dictation.isPreparing || dictation.isRecording || dictation.isTranscribing)
     }
 
     private func resetDictationContext() {
@@ -475,17 +483,22 @@ struct ConsoleTerminalDictationDock: View {
         controller.dictation.isRecording && controller.dictation.activePurpose == .terminalDictation
     }
 
+    private var isStarting: Bool {
+        controller.dictation.isPreparing && controller.dictation.activePurpose == .terminalDictation
+    }
+
     private var isTranscribing: Bool {
         controller.dictation.isTranscribing && controller.dictation.activePurpose == .terminalDictation
     }
 
     private var showsSubmit: Bool {
-        controller.hasPendingDictation && !isRecording && !isTranscribing
+        controller.hasPendingDictation && !isStarting && !isRecording && !isTranscribing
     }
 
     var body: some View {
         HStack(spacing: 10) {
             ConsoleTerminalMicButton(
+                isStarting: isStarting,
                 isRecording: isRecording,
                 isTranscribing: isTranscribing,
                 error: controller.dictationError,
@@ -500,12 +513,14 @@ struct ConsoleTerminalDictationDock: View {
             }
         }
         .animation(.spring(response: 0.32, dampingFraction: 0.82), value: showsSubmit)
+        .animation(.easeInOut(duration: 0.18), value: isStarting)
         .animation(.easeInOut(duration: 0.18), value: isRecording)
         .animation(.easeInOut(duration: 0.18), value: isTranscribing)
     }
 }
 
 private struct ConsoleTerminalMicButton: View {
+    let isStarting: Bool
     let isRecording: Bool
     let isTranscribing: Bool
     let error: String?
@@ -525,7 +540,7 @@ private struct ConsoleTerminalMicButton: View {
                 Image(systemName: iconName)
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(foregroundStyle)
-                    .symbolEffect(.pulse, options: .repeating, isActive: isRecording || isTranscribing)
+                    .symbolEffect(.pulse, options: .repeating, isActive: isStarting || isRecording || isTranscribing)
             }
             .shadow(color: shadowColor, radius: 12, y: 6)
         }
@@ -535,12 +550,14 @@ private struct ConsoleTerminalMicButton: View {
     }
 
     private var iconName: String {
+        if isStarting { return "mic.badge.plus" }
         if isTranscribing { return "waveform" }
         return isRecording ? "stop.fill" : "mic.fill"
     }
 
     private var helpText: String {
         if let error { return error }
+        if isStarting { return "Starting terminal dictation" }
         if isTranscribing { return "Transcribing terminal dictation" }
         if isRecording { return "Stop and insert dictation" }
         return "Dictate into terminal"
@@ -549,21 +566,21 @@ private struct ConsoleTerminalMicButton: View {
     private var foregroundStyle: Color {
         if error != nil { return .orange }
         if isRecording { return .white }
-        if isTranscribing { return Theme.current.accent }
+        if isStarting || isTranscribing { return Theme.current.accent }
         return isHovered ? Theme.current.foreground : Theme.current.foregroundSecondary
     }
 
     private var backgroundStyle: Color {
         if error != nil { return .orange.opacity(0.18) }
         if isRecording { return .red.opacity(0.9) }
-        if isTranscribing { return Theme.current.accent.opacity(0.16) }
+        if isStarting || isTranscribing { return Theme.current.accent.opacity(0.16) }
         return isHovered ? Theme.current.surfaceHover : Theme.current.surface1.opacity(0.95)
     }
 
     private var borderStyle: Color {
         if error != nil { return .orange.opacity(0.35) }
         if isRecording { return .white.opacity(0.28) }
-        if isTranscribing { return Theme.current.accent.opacity(0.35) }
+        if isStarting || isTranscribing { return Theme.current.accent.opacity(0.35) }
         return Theme.current.border.opacity(0.78)
     }
 
