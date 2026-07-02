@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     // Hotkey signatures derived from TalkieEnvironment (see TalkieEnvironment.swift for philosophy)
     private static var sig: String { TalkieEnvironment.current.hotkeySignaturePrefix }
+    private static let markupEmergencyDismissNotification = Notification.Name("to.talkie.shared.markupEmergencyDismiss")
 
     private let hotKeyManager = HotKeyManager(signature: "\(sig)IV", hotkeyID: 1)  // Toggle mode
     private let pttHotKeyManager = HotKeyManager(signature: "\(sig)PT", hotkeyID: 3)  // Push-to-talk
@@ -1458,6 +1459,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             name: NSNotification.Name("to.talkie.app.agentHotkeysDidChange"),
             object: nil
         )
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(markupEmergencyDismissReceived(_:)),
+            name: Self.markupEmergencyDismissNotification,
+            object: nil
+        )
 
         // Listen for toggle recording from status bar button
         NotificationCenter.default.addObserver(
@@ -1666,6 +1673,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         ) { [weak self] _ in
             Task { @MainActor in
                 self?.forceDismissCaptureSurfaces(reason: "Hyper+Escape")
+                self?.broadcastMarkupEmergencyDismiss(reason: "Hyper+Escape")
             }
         }
         log.info("Capture markup emergency hotkey registered: Hyper+Escape")
@@ -1680,6 +1688,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         DesktopMagnifierController.shared.dismissForSafety()
         CaptureIslandController.shared.dismiss(animated: false)
         CaptureFreezeStore.shared.clear()
+    }
+
+    @objc private func markupEmergencyDismissReceived(_ notification: Notification) {
+        let reason = notification.object as? String ?? "shared emergency dismiss"
+        forceDismissCaptureSurfaces(reason: reason)
+    }
+
+    private func broadcastMarkupEmergencyDismiss(reason: String) {
+        DistributedNotificationCenter.default().postNotificationName(
+            Self.markupEmergencyDismissNotification,
+            object: reason,
+            userInfo: nil,
+            deliverImmediately: true
+        )
     }
 
     @MainActor

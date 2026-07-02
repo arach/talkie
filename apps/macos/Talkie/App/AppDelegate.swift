@@ -8,11 +8,47 @@
 import AppKit
 import UserNotifications
 import OSLog
+import Carbon.HIToolbox
 import DebugKit
 import TalkieKit
 
 private let logger = Log(.system)
 private let signposter = OSSignposter(subsystem: "to.talkie.app.performance", category: "Startup")
+
+private func talkieMarkupEmergencyHotKeyHandler(
+    nextHandler: EventHandlerCallRef?,
+    event: EventRef?,
+    userData: UnsafeMutableRawPointer?
+) -> OSStatus {
+    guard let event,
+          GetEventKind(event) == UInt32(kEventHotKeyPressed),
+          let userData else {
+        return noErr
+    }
+
+    var hotKeyID = EventHotKeyID()
+    let status = GetEventParameter(
+        event,
+        EventParamName(kEventParamDirectObject),
+        EventParamType(typeEventHotKeyID),
+        nil,
+        MemoryLayout<EventHotKeyID>.size,
+        nil,
+        &hotKeyID
+    )
+    guard status == noErr,
+          hotKeyID.signature == AppDelegate.markupEmergencyHotKeySignature,
+          hotKeyID.id == AppDelegate.markupEmergencyHotKeyID else {
+        return status
+    }
+
+    let delegate = Unmanaged<AppDelegate>.fromOpaque(userData).takeUnretainedValue()
+    Task { @MainActor in
+        delegate.forceDismissCaptureSurfaces(reason: "Hyper+Escape")
+        delegate.broadcastMarkupEmergencyDismiss(reason: "Hyper+Escape")
+    }
+    return noErr
+}
 
 // Free function to capture settings screenshots using subprocess
 @MainActor
@@ -43,6 +79,14 @@ private extension String {
         let value = trimmingCharacters(in: .whitespacesAndNewlines)
         return value.isEmpty ? nil : value
     }
+
+    var fourCharCode: OSType {
+        var result: UInt32 = 0
+        for scalar in unicodeScalars.prefix(4) {
+            result = (result << 8) + UInt32(scalar.value)
+        }
+        return OSType(result)
+    }
 }
 
 @MainActor
@@ -56,6 +100,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     private var captureChordLocalMonitor: Any?
     // Direct screenshot shortcuts local monitor
     private var screenshotDirectLocalMonitor: Any?
+    private var markupEmergencyHotKeyRef: EventHotKeyRef?
+    private var markupEmergencyHotKeyHandlerRef: EventHandlerRef?
     // App-wide keyboard shortcuts
     private var singleKeyShortcutLocalMonitor: Any?
     #if DEBUG
@@ -121,6 +167,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     private static let shortcutModifierMask: NSEvent.ModifierFlags = [
         .command, .option, .control, .shift
     ]
+    nonisolated fileprivate static let markupEmergencyHotKeySignature: OSType = "TMXE".fourCharCode
+    nonisolated fileprivate static let markupEmergencyHotKeyID: UInt32 = 1
+    private static var hyperCarbonModifiers: UInt32 {
+        UInt32(cmdKey | optionKey | controlKey | shiftKey)
+    }
+    private static let markupEmergencyDismissNotification = Notification.Name("to.talkie.shared.markupEmergencyDismiss")
 
     private static func keyEvent(
         _ event: NSEvent,
@@ -286,6 +338,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
 
         // Setup single-key shortcuts (C=compose, R=record) when not in text field
         setupSingleKeyShortcuts()
+        setupMarkupEmergencyEscape()
 
         // Sync feature flags to shared defaults so Agent can read them
         FeatureFlags.shared.syncAllToSharedDefaults()
@@ -1510,6 +1563,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             NSEvent.removeMonitor(screenshotDirectLocalMonitor)
             self.screenshotDirectLocalMonitor = nil
         }
+        unregisterMarkupEmergencyHotkey()
         if let cameraLocalMonitor {
             NSEvent.removeMonitor(cameraLocalMonitor)
             self.cameraLocalMonitor = nil
@@ -1520,6 +1574,88 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             self.designModeLocalMonitor = nil
         }
         #endif
+    }
+
+    private func setupMarkupEmergencyEscape() {
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(markupEmergencyDismissReceived(_:)),
+            name: Self.markupEmergencyDismissNotification,
+            object: nil
+        )
+        registerMarkupEmergencyHotkey()
+    }
+
+    private func registerMarkupEmergencyHotkey() {
+        unregisterMarkupEmergencyHotkey()
+
+        var eventSpec = EventTypeSpec(
+            eventClass: OSType(kEventClassKeyboard),
+            eventKind: UInt32(kEventHotKeyPressed)
+        )
+        let handlerStatus = InstallEventHandler(
+            GetApplicationEventTarget(),
+            talkieMarkupEmergencyHotKeyHandler,
+            1,
+            &eventSpec,
+            Unmanaged.passUnretained(self).toOpaque(),
+            &markupEmergencyHotKeyHandlerRef
+        )
+        guard handlerStatus == noErr else {
+            logger.error("Markup emergency hotkey handler registration failed: status=\(handlerStatus)")
+            return
+        }
+
+        let hotKeyID = EventHotKeyID(
+            signature: Self.markupEmergencyHotKeySignature,
+            id: Self.markupEmergencyHotKeyID
+        )
+        let registerStatus = RegisterEventHotKey(
+            53,
+            Self.hyperCarbonModifiers,
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &markupEmergencyHotKeyRef
+        )
+
+        if registerStatus == noErr {
+            logger.info("Markup emergency hotkey registered: Hyper+Escape")
+        } else {
+            logger.warning("Markup emergency hotkey registration skipped: status=\(registerStatus)")
+            unregisterMarkupEmergencyHotkey()
+        }
+    }
+
+    private func unregisterMarkupEmergencyHotkey() {
+        if let markupEmergencyHotKeyRef {
+            UnregisterEventHotKey(markupEmergencyHotKeyRef)
+            self.markupEmergencyHotKeyRef = nil
+        }
+        if let markupEmergencyHotKeyHandlerRef {
+            RemoveEventHandler(markupEmergencyHotKeyHandlerRef)
+            self.markupEmergencyHotKeyHandlerRef = nil
+        }
+    }
+
+    @objc private func markupEmergencyDismissReceived(_ notification: Notification) {
+        let reason = notification.object as? String ?? "shared emergency dismiss"
+        forceDismissCaptureSurfaces(reason: reason)
+    }
+
+    @MainActor
+    fileprivate func forceDismissCaptureSurfaces(reason: String) {
+        logger.warning("Force dismissing capture surfaces", detail: reason)
+        ScreenRecordingController.shared.dismissMarkupOverlaysForSafety(reason: reason)
+    }
+
+    fileprivate func broadcastMarkupEmergencyDismiss(reason: String) {
+        DistributedNotificationCenter.default().postNotificationName(
+            Self.markupEmergencyDismissNotification,
+            object: reason,
+            userInfo: nil,
+            deliverImmediately: true
+        )
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
