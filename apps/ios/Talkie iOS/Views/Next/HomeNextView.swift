@@ -5,8 +5,9 @@
 //  M1 — Talkie's canonical iPhone home, painted to match the
 //  studio mock at http://localhost:3000/home.
 //
-//  Composition: TALKIE wordmark · frequent-action strip · Recent
-//  list (2-line iOS-Notes style) · contextual suggestions strip.
+//  Composition: TALKIE wordmark · communication cockpit · frequent-action strip ·
+//  command/search bar · Recent list (2-line iOS-Notes style) ·
+//  contextual suggestions strip.
 //  The ambient voice button lives in AppShellNext, not here.
 //
 //  Spec: design/studio/app/home/SWIFT_PORT.md
@@ -27,7 +28,7 @@ struct HomeNextView: View {
     @ObservedObject private var iCloudStatus = iCloudStatusManager.shared
     @ObservedObject private var recordingSheet = RecordingSheetController.shared
     @StateObject private var feed: HomeFeed
-    @State private var isSearchPresented = false
+    @FocusState private var isCommandFocused: Bool
 
     init(feed: HomeFeed? = nil) {
         _feed = StateObject(wrappedValue: feed ?? HomeFeed())
@@ -38,10 +39,16 @@ struct HomeNextView: View {
             VStack(spacing: 12) {
                 HomeHeader()
 
-                HomeTodayStrip(stats: feed.todayStats)
+                HomeCockpit()
                     .padding(.horizontal, 12)
 
                 HomeFrequentActionsStrip()
+                    .padding(.horizontal, 12)
+
+                HomeCommandBar(
+                    query: $feed.searchText,
+                    isFocused: $isCommandFocused
+                )
                     .padding(.horizontal, 12)
 
                 RecentSection(
@@ -75,11 +82,6 @@ struct HomeNextView: View {
         }
         .scrollIndicators(.hidden)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .searchable(
-            text: $feed.searchText,
-            isPresented: $isSearchPresented,
-            prompt: "Search memos, dictations, and captures"
-        )
         .onReceive(NotificationCenter.default.publisher(for: .voiceMemosDidChange)) { _ in feed.reload() }
         .onReceive(NotificationCenter.default.publisher(for: .capturesDidChange)) { _ in feed.reload() }
         .onReceive(NotificationCenter.default.publisher(for: .composeNotesDidChange)) { _ in feed.reload() }
@@ -100,10 +102,10 @@ struct HomeNextView: View {
         switch action {
         case .search(let query):
             feed.searchText = query
-            isSearchPresented = true
+            isCommandFocused = true
             deepLinkManager.clearAction()
         case .openSearch:
-            isSearchPresented = true
+            isCommandFocused = true
             deepLinkManager.clearAction()
         default:
             break
@@ -270,36 +272,15 @@ private struct HomeHeader: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        // Gear and Deck share a 40pt footprint so the wordmark stays
-        // centered while the chrome carries the two persistent home
-        // destinations: remote control on the left, settings on the
-        // right.
         HStack {
-            // Command Deck rests in the top-left slot. It keeps the
-            // same 40pt footprint as the settings gear so the wordmark
-            // stays centered while the remote remains discoverable.
-            ZStack {
-                DeckComplication()
-            }
-            .frame(width: 40, height: 40)
+            DeckComplication()
             Spacer()
             Text("TALKIE")
                 .talkieType(.wordmark)
                 .foregroundStyle(theme.colors.textPrimary)
             Spacer()
             Button(action: { AppShellRouter.shared.openSettings() }) {
-                ZStack {
-                    Circle().fill(theme.colors.cardBackground)
-                    Circle().strokeBorder(
-                        theme.currentTheme.chrome.edgeFaint,
-                        lineWidth: theme.currentTheme.chrome.hairlineWidth
-                    )
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 15, weight: .regular))
-                        .foregroundStyle(theme.colors.textSecondary)
-                }
-                .frame(width: 40, height: 40)
-                .shadow(color: .black.opacity(0.10), radius: 4, y: 2)
+                HomeHeaderButtonGlyph(systemName: "gearshape")
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Settings")
@@ -313,45 +294,37 @@ private struct HomeHeader: View {
 
 // MARK: - Deck complication
 
-/// Resting Command Deck complication at the top-left of Home.
-/// It opens the remote even before pairing so the empty state can
-/// explain what is needed, while color and the tiny status bead carry
-/// the Mac bridge/deck state without turning the header into a status
-/// dashboard.
-private struct DeckComplication: View {
-    @State private var bridgeManager = BridgeManager.shared
-    @ObservedObject private var deck = DeckMirrorStore.shared
+private struct HomeHeaderButtonGlyph: View {
+    let systemName: String
+    var isEnabled: Bool = true
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        Button(action: openDeck) {
-            ZStack(alignment: .bottomTrailing) {
-                ZStack {
-                    Circle().fill(theme.colors.cardBackground)
-                    Circle().strokeBorder(
-                        borderColor,
-                        lineWidth: theme.currentTheme.chrome.hairlineWidth
-                    )
-                    Image(systemName: "square.grid.3x3")
-                        .font(.system(size: 15, weight: .regular))
-                        .foregroundStyle(iconColor)
-                }
-                .frame(width: 40, height: 40)
+        ZStack {
+            Circle().fill(theme.colors.cardBackground)
+            Circle().strokeBorder(
+                theme.currentTheme.chrome.edgeFaint,
+                lineWidth: theme.currentTheme.chrome.hairlineWidth
+            )
+            Image(systemName: systemName)
+                .font(.system(size: 15, weight: .regular))
+                .foregroundStyle(isEnabled ? theme.colors.textSecondary : theme.colors.textTertiary)
+        }
+        .frame(width: 40, height: 40)
+        .shadow(color: .black.opacity(0.10), radius: 4, y: 2)
+    }
+}
 
-                if let statusColor {
-                    Circle()
-                        .fill(statusColor)
-                        .frame(width: 8, height: 8)
-                        .overlay(
-                            Circle()
-                                .stroke(theme.colors.background, lineWidth: 2)
-                        )
-                        .offset(x: -6, y: -6)
-                        .accessibilityHidden(true)
-                }
-            }
-            .frame(width: 40, height: 40)
-            .shadow(color: .black.opacity(0.10), radius: 4, y: 2)
+/// Resting Command Deck complication at the top-left of Home. It shares the
+/// settings button treatment; bridge state is exposed through accessibility and
+/// the Deck surface itself instead of a separate status bead.
+private struct DeckComplication: View {
+    @State private var bridgeManager = BridgeManager.shared
+    @ObservedObject private var deck = DeckMirrorStore.shared
+
+    var body: some View {
+        Button(action: openDeck) {
+            HomeHeaderButtonGlyph(systemName: "square.grid.3x3")
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
@@ -365,58 +338,8 @@ private struct DeckComplication: View {
         return !board.spaces.isEmpty
     }
 
-    private var isConnected: Bool {
-        bridgeManager.status == .connected
-    }
-
     private func openDeck() {
         AppShellRouter.shared.openDeck()
-    }
-
-    // MARK: - Visual treatment per state
-
-    private var iconColor: Color {
-        if bridgeManager.status == .error {
-            return Color(red: 0.85, green: 0.46, blue: 0.34)
-        }
-        if isConnected {
-            return hasDeckBoard
-                ? theme.currentTheme.chrome.accent
-                : Color(red: 0.36, green: 0.74, blue: 0.50)
-        }
-        return theme.colors.textTertiary
-    }
-
-    private var borderColor: Color {
-        if bridgeManager.status == .error {
-            return Color(red: 0.85, green: 0.46, blue: 0.34).opacity(0.5)
-        }
-        if isConnected && hasDeckBoard {
-            return theme.currentTheme.chrome.accent.opacity(0.55)
-        }
-        if isConnected {
-            return Color(red: 0.36, green: 0.74, blue: 0.50).opacity(0.45)
-        }
-        return theme.currentTheme.chrome.edgeFaint
-    }
-
-    private var statusColor: Color? {
-        if !bridgeManager.isPaired {
-            return nil
-        }
-        if bridgeManager.status == .error {
-            return Color(red: 0.85, green: 0.46, blue: 0.34)
-        }
-        if hasDeckBoard {
-            return theme.currentTheme.chrome.accent
-        }
-        if isConnected {
-            return Color(red: 0.36, green: 0.74, blue: 0.50)
-        }
-        if bridgeManager.awaitingPairingApproval || bridgeManager.status == .connecting {
-            return theme.currentTheme.chrome.accent.opacity(0.75)
-        }
-        return theme.colors.textTertiary.opacity(0.7)
     }
 
     private var accessibilityLabel: String {
@@ -437,213 +360,433 @@ private struct DeckComplication: View {
     }
 }
 
-/// Legacy ambient row primitives below this point are no longer
-/// used in HomeNextView's header. Kept as private types so any
-/// downstream/per-test reference doesn't break — to be removed once
-/// the new chip is verified.
-private struct AmbientStatusRow_legacy: View {
-    @State private var bridgeManager = BridgeManager.shared
-    @ObservedObject private var iCloudStatus = iCloudStatusManager.shared
+// MARK: - Home tactical palette
 
-    @ObservedObject private var deck = DeckMirrorStore.shared
-
-    var body: some View {
-        HStack(spacing: 0) {
-            StatusPixel(state: macPixelState, label: "Mac bridge", value: macPixelLabel) {
-                AppShellRouter.shared.openConnectionCenter()
-            }
-            StatusPixel(state: iCloudPixelState, label: "iCloud sync", value: iCloudPixelLabel) {
-                AppShellRouter.shared.openConnectionCenter()
-            }
-            StatusPixel(state: signInPixelState, label: "Account", value: isSignedIn ? "signed in" : "signed out") {
-                if isSignedIn {
-                    AppShellRouter.shared.openConnectionCenter()
-                } else {
-                    AppShellRouter.shared.openSignIn()
-                }
-            }
-            if bridgeManager.isPaired {
-                StatusPixel(state: deckPixelState, label: "Mac deck", value: deckPixelLabel) {
-                    AppShellRouter.shared.openDeck()
-                }
-            }
-        }
-    }
-
-    private var deckPixelState: StatusPixel.State {
-        if bridgeManager.status == .error { return .error }
-        if let board = deck.board, !board.spaces.isEmpty { return .good }
-        return .transient
-    }
-
-    private var deckPixelLabel: String {
-        if bridgeManager.status == .error { return "error" }
-        if let board = deck.board, !board.spaces.isEmpty {
-            return "\(board.spaces.count) space\(board.spaces.count == 1 ? "" : "s")"
-        }
-        return "waiting"
-    }
-
-    private var macPixelLabel: String {
-        switch macPixelState {
-        case .good: return "connected"
-        case .transient: return bridgeManager.isPaired ? "reconnecting" : "connecting"
-        case .dim: return "not paired"
-        case .error: return "connection failed"
-        }
-    }
-
-    private var iCloudPixelLabel: String {
-        switch iCloudPixelState {
-        case .good: return "available"
-        case .transient: return "syncing"
-        case .dim: return "no iCloud account"
-        case .error: return "error"
-        }
-    }
-
-    private var macPixelState: StatusPixel.State {
-        switch bridgeManager.status {
-        case .connected:    return .good
-        case .connecting:   return .transient
-        case .error:        return .error
-        case .disconnected: return bridgeManager.isPaired ? .transient : .dim
-        }
-    }
-
-    private var iCloudPixelState: StatusPixel.State {
-        switch iCloudStatus.status {
-        case .available:                                        return .good
-        case .checking, .temporarilyUnavailable,
-             .couldNotDetermine:                                return .transient
-        case .noAccount, .restricted:                           return .dim
-        case .error:                                            return .error
-        }
-    }
-
-    private var signInPixelState: StatusPixel.State {
-        isSignedIn ? .good : .dim
-    }
-
-    private var isSignedIn: Bool {
-        UserDefaults.standard.bool(forKey: SignInStore.signedInDefaultsKey)
-    }
+private enum HomeTacticalPalette {
+    static let accent = Color(hex: "FF8800")
+    static let accentSoft = Color(hex: "FF8800").opacity(0.14)
+    static let accentEdge = Color(hex: "FF8800").opacity(0.34)
+    static let matte = Color(hex: "303030", darkHex: "181818")
+    static let matteLow = Color(hex: "242424", darkHex: "101010")
+    static let screen = Color(hex: "050505")
+    static let screenAlt = Color(hex: "121212")
+    static let screenInk = Color(hex: "F3F1EA")
+    static let screenInkFaint = Color(hex: "A6A29A")
 }
 
-private struct StatusPixel: View {
-    enum State { case good, transient, dim, error }
+// MARK: - Command center
 
-    let state: State
-    let label: String
-    let value: String
-    let action: () -> Void
-
+private struct HomeCommandBar: View {
+    @Binding var query: String
+    @FocusState.Binding var isFocused: Bool
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        Button(action: action) {
-            ZStack {
-                Color.clear
-                Circle()
-                    .fill(fillColor)
-                    .frame(width: 6, height: 6)
-                    .overlay(
+        HStack(spacing: 10) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(HomeTacticalPalette.accent)
+                .frame(width: 22, height: 22)
+
+            TextField("Ask, find, send, or route...", text: $query)
+                .talkieType(.fieldLabel)
+                .foregroundStyle(theme.colors.textPrimary)
+                .submitLabel(.go)
+                .focused($isFocused)
+                .onSubmit(submit)
+
+            Button(action: startRecording) {
+                Image(systemName: "mic")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(theme.colors.textSecondary)
+                    .frame(width: 30, height: 30)
+                    .background {
                         Circle()
-                            .strokeBorder(theme.currentTheme.chrome.edgeFaint,
-                                          lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                            .fill(theme.colors.cardBackground.opacity(0.72))
+                            .overlay {
+                                Circle().strokeBorder(
+                                    theme.currentTheme.chrome.edgeFaint,
+                                    lineWidth: theme.currentTheme.chrome.hairlineWidth
+                                )
+                            }
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Start recording")
+        }
+        .padding(.leading, 12)
+        .padding(.trailing, 7)
+        .padding(.vertical, 7)
+        .background {
+            Capsule()
+                .fill(theme.colors.cardBackground.opacity(0.82))
+                .overlay {
+                    Capsule()
+                        .fill(HomeTacticalPalette.accentSoft.opacity(isFocused ? 1 : 0.46))
+                }
+                .overlay {
+                    Capsule()
+                        .strokeBorder(
+                            isFocused ? HomeTacticalPalette.accentEdge : theme.currentTheme.chrome.edgeFaint,
+                            lineWidth: isFocused ? 1 : theme.currentTheme.chrome.hairlineWidth
+                        )
+                }
+        }
+        .shadow(color: Color.black.opacity(0.08), radius: 9, x: 0, y: 5)
+        .accessibilityIdentifier("home.command-bar")
+    }
+
+    private func submit() {
+        let command = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !command.isEmpty else {
+            isFocused = false
+            return
+        }
+        AppShellRouter.shared.openAskAISeeded(prompt: command)
+    }
+
+    private func startRecording() {
+        RecordingSheetController.shared.isPresented = true
+    }
+}
+
+// MARK: - Communication cockpit
+//
+// Replaces the Today ticker. One compact retrofuturist comms instrument — a
+// raised metal chassis around an always-dark instrument screen — summarizing
+// live communication state: the Mac bridge lane plus shares/replies lanes,
+// with a Life-in-Dots module on the right and a single truncated detail line
+// under the screen. Tapping routes to Deck when the bridge is live, Bridge
+// detail otherwise.
+//
+// Spec: design/studio/app/home/COCKPIT_IMPLEMENTATION_BRIEF.md
+// Visual donor: design/studio/components/studies/Home.tsx (`communication-cockpit`).
+
+private struct CockpitLaneModel {
+    let label: String
+    let shortLabel: String
+    let value: String
+    let meta: String
+    let level: Double
+}
+
+private struct HomeCockpit: View {
+    @State private var bridgeManager = BridgeManager.shared
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("· COCKPIT")
+                .talkieType(.channelLabelTiny)
+                .foregroundStyle(theme.colors.textSecondary)
+                .padding(.leading, 4)
+
+            Button(action: open) {
+                VStack(spacing: 8) {
+                    CockpitScreen(
+                        statusLabel: statusLabel,
+                        statusIsLive: isConnected,
+                        lanes: lanes
+                    )
+
+                    Text(detailLine)
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(theme.colors.textTertiary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .frame(maxWidth: .infinity)
+                .bezelChassis(padding: 10, corner: 14, metal: true, fill: HomeTacticalPalette.matte)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(accessibilitySummary)
+            .accessibilityHint(isConnected ? "Opens Deck remote" : "Opens Bridge detail")
+        }
+    }
+
+    // MARK: - Routing
+
+    private var isConnected: Bool {
+        bridgeManager.isPaired && bridgeManager.status == .connected
+    }
+
+    private func open() {
+        if isConnected {
+            AppShellRouter.shared.openDeck()
+        } else {
+            AppShellRouter.shared.openBridgeDetail()
+        }
+    }
+
+    // MARK: - State derivation
+
+    private var statusLabel: String {
+        guard bridgeManager.isPaired else { return "STANDBY" }
+        switch bridgeManager.status {
+        case .connected: return "LIVE"
+        case .connecting: return "LINKING"
+        case .disconnected: return "OFFLINE"
+        case .error: return "ERROR"
+        }
+    }
+
+    private var lanes: [CockpitLaneModel] {
+        [bridgeLane, sharesLane, repliesLane]
+    }
+
+    private var bridgeLane: CockpitLaneModel {
+        let mac = bridgeManager.pairedMacDisplayName ?? "Mac"
+        guard bridgeManager.isPaired else {
+            return CockpitLaneModel(label: "BRIDGE", shortLabel: "BRDG", value: "Not paired", meta: "PAIR", level: 0.12)
+        }
+        if bridgeManager.awaitingPairingApproval {
+            return CockpitLaneModel(label: "BRIDGE", shortLabel: "BRDG", value: mac, meta: "APPROVE", level: 0.30)
+        }
+        switch bridgeManager.status {
+        case .connected:
+            return CockpitLaneModel(label: "BRIDGE", shortLabel: "BRDG", value: mac, meta: "READY", level: 0.92)
+        case .connecting:
+            return CockpitLaneModel(label: "BRIDGE", shortLabel: "BRDG", value: mac, meta: "LINKING", level: 0.50)
+        case .disconnected:
+            return CockpitLaneModel(label: "BRIDGE", shortLabel: "BRDG", value: mac, meta: "OFFLINE", level: 0.24)
+        case .error:
+            return CockpitLaneModel(label: "BRIDGE", shortLabel: "BRDG", value: mac, meta: "ERROR", level: 0.24)
+        }
+    }
+
+    // Shares/replies have no HomeFeed source yet — static instrument content
+    // until the share queue / reply prompts get a real publisher.
+    private var sharesLane: CockpitLaneModel {
+        CockpitLaneModel(label: "SHARES", shortLabel: "SEND", value: "2 drafts", meta: "QUEUED", level: 0.54)
+    }
+
+    private var repliesLane: CockpitLaneModel {
+        CockpitLaneModel(label: "REPLIES", shortLabel: "WAIT", value: "1 prompt", meta: "WAITING", level: 0.36)
+    }
+
+    private var detailLine: String {
+        let bridgePart: String
+        if isConnected {
+            bridgePart = "Bridge live on \(bridgeManager.pairedMacDisplayName ?? "Mac")"
+        } else if bridgeManager.isPaired {
+            bridgePart = "Bridge \(statusLabel.lowercased())"
+        } else {
+            bridgePart = "Pair your Mac"
+        }
+        return "\(bridgePart) / 2 shares / 1 reply"
+    }
+
+    private var accessibilitySummary: String {
+        let bridge: String
+        if isConnected {
+            bridge = "bridge ready on \(bridgeManager.pairedMacDisplayName ?? "Mac")"
+        } else if bridgeManager.isPaired {
+            bridge = "bridge \(statusLabel.lowercased()) for \(bridgeManager.pairedMacDisplayName ?? "Mac")"
+        } else {
+            bridge = "no Mac paired"
+        }
+        return "Communication cockpit, \(bridge), 2 shares queued, 1 reply waiting"
+    }
+}
+
+/// The always-dark instrument screen inside the cockpit chassis: TALKIE /
+/// status / clock header, three comms lanes, and the dots module. Panel ink
+/// only — the screen ignores light/dark so it reads as lit glass everywhere.
+private struct CockpitScreen: View {
+    let statusLabel: String
+    let statusIsLive: Bool
+    let lanes: [CockpitLaneModel]
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        let hairline = max(theme.currentTheme.chrome.hairlineWidth, 0.8)
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+
+        VStack(spacing: 8) {
+            HStack {
+                Text("TALKIE")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(HomeTacticalPalette.screenInkFaint)
+                Spacer()
+                Text(statusLabel)
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(statusIsLive ? HomeTacticalPalette.accent : HomeTacticalPalette.screenInkFaint)
+                Spacer()
+                TimelineView(.periodic(from: .now, by: 60)) { context in
+                    Text(context.date, format: .dateTime.hour().minute())
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(HomeTacticalPalette.screenInkFaint)
+                }
+            }
+
+            HStack(alignment: .center, spacing: 12) {
+                VStack(spacing: 6) {
+                    ForEach(lanes, id: \.label) { lane in
+                        CockpitLaneRow(lane: lane)
+                    }
+                }
+                CockpitDotsModule(lanes: lanes)
+                    .frame(width: 84)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .background {
+            ZStack {
+                HomeTacticalPalette.screen
+                LinearGradient(
+                    stops: [
+                        .init(color: Color.white.opacity(0.08), location: 0),
+                        .init(color: Color.white.opacity(0.02), location: 0.45),
+                        .init(color: Color.black.opacity(0.24), location: 1),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                RadialGradient(
+                    colors: [HomeTacticalPalette.accent.opacity(0.22), .clear],
+                    center: UnitPoint(x: 0.5, y: 0.44),
+                    startRadius: 0,
+                    endRadius: 110
+                )
+                LinearGradient(
+                    colors: [
+                        HomeTacticalPalette.screenAlt.opacity(0.00),
+                        HomeTacticalPalette.screenAlt.opacity(0.45),
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            }
+        }
+        .clipShape(shape)
+        .overlay {
+            shape.strokeBorder(HomeTacticalPalette.accentEdge, lineWidth: hairline)
+        }
+    }
+}
+
+/// One comms lane: LABEL · value · META over a 12-segment level bar. Raw
+/// white opacities are deliberate — the screen is always dark, so lane
+/// surfaces don't theme.
+private struct CockpitLaneRow: View {
+    let lane: CockpitLaneModel
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(lane.label)
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(HomeTacticalPalette.screenInkFaint)
+                    .lineLimit(1)
+                    .frame(width: 56, alignment: .leading)
+                Text(lane.value)
+                    .talkieType(.fieldLabel)
+                    .foregroundStyle(HomeTacticalPalette.screenInk)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text(lane.meta)
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(HomeTacticalPalette.accent)
+                    .lineLimit(1)
+            }
+
+            levelBar()
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(Color.white.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .strokeBorder(HomeTacticalPalette.accent.opacity(0.12), lineWidth: 1)
+        }
+    }
+
+    private func levelBar() -> some View {
+        let filled = Int((lane.level * 12).rounded())
+        return HStack(spacing: 3) {
+            ForEach(0..<12, id: \.self) { index in
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(index < filled ? HomeTacticalPalette.accent : Color.white.opacity(0.12))
+                    .frame(height: 3)
+                    .frame(maxWidth: .infinity)
+                    .shadow(
+                        color: index == filled - 1 ? HomeTacticalPalette.accent.opacity(0.50) : .clear,
+                        radius: index == filled - 1 ? 3 : 0
                     )
             }
-            .frame(width: 13, height: 40)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(label) · \(value)")
-        .accessibilityHint("Opens connection center")
-    }
-
-    private var fillColor: Color {
-        switch state {
-        case .good:      return Color(red: 0.36, green: 0.74, blue: 0.50)
-        case .transient: return theme.currentTheme.chrome.accent
-        case .dim:       return theme.colors.textTertiary.opacity(0.45)
-        case .error:     return Color(red: 0.85, green: 0.46, blue: 0.34)
-        }
+        .accessibilityHidden(true)
     }
 }
 
-// MARK: - Today rail
-
-private struct HomeTodayStrip: View {
-    let stats: HomeFeed.TodayStats
-    @ObservedObject private var theme = ThemeManager.shared
+/// Compact Life-in-Dots module: BRDG / SEND / WAIT rows, each a 6x2 dot grid
+/// whose fill mirrors the lane level. The leading-edge marker uses the
+/// homepage tactical accent, keeping the cockpit vocabulary coherent.
+private struct CockpitDotsModule: View {
+    let lanes: [CockpitLaneModel]
 
     var body: some View {
-        HStack(spacing: 0) {
-            statCell(
-                count: stats.memos,
-                singular: "memo",
-                plural: "memos",
-                icon: "waveform",
-                tab: .memos
-            )
-            divider
-            statCell(
-                count: stats.dictations,
-                singular: "dictation",
-                plural: "dictations",
-                icon: "keyboard",
-                tab: .dictations
-            )
-            divider
-            statCell(
-                count: stats.items,
-                singular: "item",
-                plural: "items",
-                icon: "tray.and.arrow.down",
-                tab: .items
-            )
-        }
-        .frame(height: 42)
-        .background(theme.colors.cardBackground.opacity(0.74))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(theme.currentTheme.chrome.edgeFaint,
-                              lineWidth: theme.currentTheme.chrome.hairlineWidth)
-        )
-    }
-
-    private func statCell(
-        count: Int,
-        singular: String,
-        plural: String,
-        icon: String,
-        tab: LibraryTab
-    ) -> some View {
-        Button(action: { AppShellRouter.shared.openLibrary(tab: tab) }) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(theme.currentTheme.chrome.accent)
-                Text("\(count) \(count == 1 ? singular : plural) today")
-                    .talkieType(.channelLabelTiny)
-                    .foregroundStyle(theme.colors.textSecondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.78)
+        VStack(spacing: 8) {
+            ForEach(lanes, id: \.shortLabel) { lane in
+                dotRow(for: lane)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(count) \(count == 1 ? singular : plural) today")
-        .accessibilityHint("Opens \(plural)")
+        .padding(8)
+        .background(Color.white.opacity(0.035))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+        }
+        .accessibilityHidden(true)
     }
 
-    private var divider: some View {
-        Rectangle()
-            .fill(theme.currentTheme.chrome.edgeFaint)
-            .frame(width: theme.currentTheme.chrome.hairlineWidth)
-            .padding(.vertical, 9)
+    private func dotRow(for lane: CockpitLaneModel) -> some View {
+        let filled = Int((lane.level * 12).rounded())
+        let marker = filled - 1
+        return VStack(spacing: 3) {
+            HStack {
+                Text(lane.shortLabel)
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(HomeTacticalPalette.screenInkFaint)
+                Spacer(minLength: 4)
+                Text("\(Int((lane.level * 100).rounded()))%")
+                    .talkieType(.timestamp)
+                    .foregroundStyle(HomeTacticalPalette.screenInkFaint)
+            }
+            .lineLimit(1)
+
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: 6),
+                spacing: 3
+            ) {
+                ForEach(0..<12, id: \.self) { index in
+                    Circle()
+                        .fill(dotFill(index: index, filled: filled, marker: marker))
+                        .overlay {
+                            if index >= filled && index != marker {
+                                Circle().strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5)
+                            }
+                        }
+                        .frame(width: 5, height: 5)
+                        .shadow(
+                            color: index == marker ? HomeTacticalPalette.accent.opacity(0.75) : .clear,
+                            radius: index == marker ? 3 : 0
+                        )
+                }
+            }
+        }
+    }
+
+    private func dotFill(index: Int, filled: Int, marker: Int) -> Color {
+        if index == marker { return HomeTacticalPalette.accent }
+        if index < filled { return Color.white.opacity(0.92) }
+        return .clear
     }
 }
 
@@ -656,7 +799,7 @@ private struct HomeFrequentActionsStrip: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("· QUICK")
                 .talkieType(.channelLabelTiny)
-                .foregroundStyle(theme.colors.textTertiary)
+                .foregroundStyle(theme.colors.textSecondary)
                 .padding(.leading, 4)
 
             HStack(spacing: 0) {
@@ -679,14 +822,10 @@ private struct HomeFrequentActionsStrip: View {
                 }
             }
             .frame(height: 56)
-            .background(theme.colors.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(theme.currentTheme.chrome.edgeFaint,
-                                  lineWidth: theme.currentTheme.chrome.hairlineWidth)
-            )
-            .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+            // Chrome tier — raised metal chassis. Machined sheen + composite
+            // bezel shadow read as "lifted metal" above the recessed Recent
+            // screen below it. Replaces the flat fill/stroke/whisper-shadow.
+            .bezelChassis(padding: 0, corner: 12, metal: true)
         }
     }
 
@@ -699,15 +838,11 @@ private struct HomeFrequentActionsStrip: View {
         Button(action: action) {
             VStack(spacing: 4) {
                 Image(systemName: icon)
-                    // One notch lighter than the labels — a finer instrument glyph.
                     .font(.system(size: 14, weight: .light))
-                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                    .foregroundStyle(iconColor(label: label))
                 Text(label)
                     .talkieType(.channelLabelTiny)
-                    // One notch down from the style's .semibold → .medium, scoped
-                    // to the deck so the shared channelLabelTiny stays unchanged.
                     .fontWeight(.medium)
-                    // Primary action labels — secondary ink, not the quietest tier.
                     .foregroundStyle(theme.colors.textSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
@@ -718,6 +853,15 @@ private struct HomeFrequentActionsStrip: View {
         .buttonStyle(.plain)
         .accessibilityLabel(label.capitalized)
         .accessibilityIdentifier(accessibilityID ?? "home.quick.\(label.lowercased().replacing(" ", with: "-"))")
+    }
+
+    private func iconColor(label: String) -> Color {
+        switch label {
+        case "RECORD", "ASK AI":
+            return HomeTacticalPalette.accent
+        default:
+            return theme.currentTheme.chrome.action
+        }
     }
 
     private var divider: some View {
@@ -758,11 +902,6 @@ private struct HomeSuggestionsStrip: View {
         }
 
         items.append(HomeSuggestion(
-            title: "Library",
-            icon: "books.vertical",
-            action: { AppShellRouter.shared.openLibrary() }
-        ))
-        items.append(HomeSuggestion(
             title: "Workflows",
             icon: "point.3.connected.trianglepath.dotted",
             action: { AppShellRouter.shared.openWorkflows() }
@@ -785,7 +924,7 @@ private struct HomeSuggestionsStrip: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("· EXPLORE")
                 .talkieType(.channelLabelTiny)
-                .foregroundStyle(theme.colors.textTertiary)
+                .foregroundStyle(theme.colors.textSecondary)
                 .padding(.leading, 4)
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -795,7 +934,7 @@ private struct HomeSuggestionsStrip: View {
                             HStack(spacing: 6) {
                                 Image(systemName: suggestion.icon)
                                     .font(.system(size: 12, weight: .medium))
-                                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                                    .foregroundStyle(HomeTacticalPalette.accent)
                                 Text(suggestion.title)
                                     .talkieType(.fieldLabel)
                                     .foregroundStyle(theme.colors.textSecondary)
@@ -807,6 +946,10 @@ private struct HomeSuggestionsStrip: View {
                             .background(
                                 Capsule()
                                     .fill(theme.colors.cardBackground)
+                                    .overlay(
+                                        Capsule()
+                                            .fill(HomeTacticalPalette.accent.opacity(0.035))
+                                    )
                                     .overlay(
                                         Capsule()
                                             .strokeBorder(
@@ -838,6 +981,10 @@ private struct HomeSuggestion: Identifiable {
 
 // MARK: - RECENT
 
+private enum HomeRecentMetrics {
+    static let rowHeight: CGFloat = 38
+}
+
 private struct RecentSection: View {
     let items: [HomeFeed.RecentItem]
     let totalCount: Int
@@ -859,9 +1006,16 @@ private struct RecentSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Text("· RECENT · \(totalCount)")
-                    .talkieType(.channelLabel)
-                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("· RECENT")
+                        .talkieType(.channelLabel)
+                        .foregroundStyle(theme.colors.textSecondary)
+                    Text(totalCountLabel)
+                        .talkieType(.timestamp)
+                        .foregroundStyle(theme.colors.textTertiary)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Recent, \(totalCountLabel)")
 
                 Spacer()
 
@@ -927,43 +1081,41 @@ private struct RecentSection: View {
                         }
                     }
                     .listStyle(.plain)
+                    .listRowSpacing(0)
                     .scrollContentBackground(.hidden)
                     .scrollDisabled(true)
-                    .frame(height: CGFloat(items.count) * 44)
+                    .environment(\.defaultMinListRowHeight, HomeRecentMetrics.rowHeight)
+                    .frame(height: CGFloat(items.count) * HomeRecentMetrics.rowHeight)
 
                     if hasMore {
-                        Button(action: {
-                            withAnimation { onLoadMore() }
-                        }) {
-                            HStack(spacing: 6) {
-                                Spacer()
-                                Image(systemName: "arrow.down")
-                                    .font(.system(size: 10, weight: .semibold))
-                                Text("Load \(min(10, remainingCount)) more")
-                                    .talkieType(.preview)
-                                Spacer()
-                            }
-                            .foregroundStyle(theme.colors.textSecondary)
-                            .padding(.vertical, 14)
-                        }
-                        .buttonStyle(.plain)
-                        .overlay(
+                        VStack(spacing: 0) {
                             Rectangle()
-                                .fill(theme.currentTheme.chrome.edgeSubtle)
+                                .fill(theme.currentTheme.chrome.edgeSubtle.opacity(0.75))
                                 .frame(height: theme.currentTheme.chrome.hairlineWidth)
-                                .padding(.leading, 36),
-                            alignment: .top
-                        )
+
+                            Button(action: {
+                                withAnimation { onLoadMore() }
+                            }) {
+                                HStack(spacing: 6) {
+                                    Spacer()
+                                    Image(systemName: "arrow.down")
+                                        .font(.system(size: 10, weight: .semibold))
+                                    Text("Load \(min(10, remainingCount)) more")
+                                        .talkieType(.preview)
+                                    Spacer()
+                                }
+                                .foregroundStyle(theme.colors.textSecondary)
+                                .frame(height: HomeRecentMetrics.rowHeight)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                 }
             }
-            .background(theme.colors.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(theme.currentTheme.chrome.edgeFaint,
-                                  lineWidth: theme.currentTheme.chrome.hairlineWidth)
-            )
+            // Screen tier — recessed glass. Sinks below the raised Quick deck
+            // above it; the inner top shadow + firmer frame read as content
+            // sitting behind the panel face. Keeps card ink so rows stay legible.
+            .recessedScreen(corner: 10)
         }
     }
 
@@ -1003,6 +1155,10 @@ private struct RecentSection: View {
         .accessibilityValue(sortOption.label)
     }
 
+    private var totalCountLabel: String {
+        totalCount == 1 ? "1 item" : "\(totalCount) items"
+    }
+
     private var libraryTabForCurrentFilter: LibraryTab? {
         switch contentFilter {
         case .all: return nil
@@ -1027,14 +1183,7 @@ private struct RecentRow: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        VStack(spacing: 0) {
-            if showDivider {
-                Rectangle()
-                    .fill(theme.currentTheme.chrome.edgeSubtle)
-                    .frame(height: theme.currentTheme.chrome.hairlineWidth)
-                    .padding(.leading, 36)
-            }
-
+        ZStack(alignment: .top) {
             HStack(alignment: .center, spacing: 8) {
                 sourceGlyph
                     .foregroundStyle(theme.colors.textTertiary)
@@ -1052,10 +1201,47 @@ private struct RecentRow: View {
                         .talkieType(.timestamp)
                         .foregroundStyle(theme.colors.textTertiary)
                         .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+
+                    if let syncStatus = item.syncStatus {
+                        Image(systemName: syncIcon(for: syncStatus))
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(syncColor(for: syncStatus))
+                            .accessibilityLabel(syncAccessibilityLabel(for: syncStatus))
+                    }
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
+            .padding(.horizontal, 12)
+            .frame(height: HomeRecentMetrics.rowHeight)
+
+            if showDivider {
+                Rectangle()
+                    .fill(theme.currentTheme.chrome.edgeSubtle.opacity(0.75))
+                    .frame(height: theme.currentTheme.chrome.hairlineWidth)
+            }
+        }
+        .frame(height: HomeRecentMetrics.rowHeight)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func syncIcon(for status: HomeFeed.SyncStatus) -> String {
+        switch status {
+        case .synced: return "checkmark.icloud.fill"
+        case .pending: return "icloud.and.arrow.up"
+        }
+    }
+
+    private func syncColor(for status: HomeFeed.SyncStatus) -> Color {
+        switch status {
+        case .synced: return theme.currentTheme.chrome.accent
+        case .pending: return theme.colors.textTertiary
+        }
+    }
+
+    private func syncAccessibilityLabel(for status: HomeFeed.SyncStatus) -> String {
+        switch status {
+        case .synced: return "Synced"
+        case .pending: return "Sync pending"
         }
     }
 
