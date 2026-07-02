@@ -1061,6 +1061,7 @@ private struct RecentSection: View {
                                 .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                     if item.canPromoteToMemo {
                                         Button {
+                                            Haptics.success.fire()  // earned: a keyboard dictation becomes a kept memo
                                             onPromote(item)
                                         } label: {
                                             Label("Save as Memo", systemImage: "square.and.arrow.down.fill")
@@ -1070,6 +1071,7 @@ private struct RecentSection: View {
                                 }
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                     Button(role: .destructive) {
+                                        Haptics.transition.fire()  // firm thud — a row is gone
                                         onDelete(item)
                                     } label: {
                                         Label("Delete", systemImage: "trash")
@@ -1094,6 +1096,7 @@ private struct RecentSection: View {
                                 .frame(height: theme.currentTheme.chrome.hairlineWidth)
 
                             Button(action: {
+                                Haptics.confirm.fire()  // light "got it" as the next page reveals
                                 withAnimation { onLoadMore() }
                             }) {
                                 HStack(spacing: 6) {
@@ -1195,7 +1198,13 @@ private struct RecentRow: View {
                         .foregroundStyle(theme.colors.textPrimary)
                         .lineLimit(1)
                         .truncationMode(.tail)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .layoutPriority(1)
+
+                    if item.isTranscribing {
+                        RecentTranscribingBadge()
+                    }
+
+                    Spacer(minLength: 8)
 
                     Text(item.relativeTime)
                         .talkieType(.timestamp)
@@ -1256,6 +1265,39 @@ private struct RecentRow: View {
             Image(systemName: "link").font(.system(size: 12))
         case .scan:
             Image(systemName: "viewfinder").font(.system(size: 12))
+        }
+    }
+}
+
+// MARK: - Transcribing badge
+
+/// Tiny in-row marker shown only while a memo's background transcription pass
+/// is running (VoiceMemo.isTranscribing). A pulsing accent pip + smallcap
+/// label; the pip holds steady when Reduce Motion is on. Retry / empty-state
+/// affordances live in the memo detail view, not here.
+private struct RecentTranscribingBadge: View {
+    @ObservedObject private var theme = ThemeManager.shared
+    @State private var pulse = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(theme.currentTheme.chrome.accent)
+                .frame(width: 5, height: 5)
+                .opacity(pulse ? 0.4 : 1)
+            Text("TRANSCRIBING")
+                .talkieType(.channelLabelTiny)
+                .foregroundStyle(theme.currentTheme.chrome.accent)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Transcribing")
+        .onAppear {
+            guard !TalkieMotion.isReduced else { return }
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                pulse = true
+            }
         }
     }
 }

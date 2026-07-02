@@ -693,8 +693,12 @@ private struct PulsingAccentDot: View {
             .opacity(isLit ? 1 : 0.25)
             .scaleEffect(isLit ? 1.15 : 0.72)
             .onAppear {
-                withAnimation(.easeInOut(duration: 0.85).repeatForever(autoreverses: true)) {
-                    isLit = true
+                if TalkieMotion.isReduced {
+                    isLit = true  // statically lit, no pulse
+                } else {
+                    withAnimation(.easeInOut(duration: 0.85).repeatForever(autoreverses: true)) {
+                        isLit = true
+                    }
                 }
             }
     }

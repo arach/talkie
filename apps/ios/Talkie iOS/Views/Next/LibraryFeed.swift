@@ -23,6 +23,10 @@ final class LibraryFeed: ObservableObject {
         let relativeTime: String
         let syncStatus: SyncStatus?
         let canPromoteToMemo: Bool
+        // True only while the background transcription pass is running for
+        // this memo (VoiceMemo.isTranscribing). Non-memo sources are never
+        // transcribing.
+        var isTranscribing: Bool = false
     }
 
     @Published private(set) var memos: [Item]
@@ -57,9 +61,7 @@ final class LibraryFeed: ObservableObject {
             self.memoEntries = Self.memoEntries(from: memos)
             self.dictationEntries = Self.noteEntries(from: notes) + Self.keyboardEntries(from: keyboardDictations)
             self.itemEntries = Self.captureItemEntries(from: captures)
-            self.memos = Self.bucket(self.memoEntries, limit: Self.visibleLimit).visible
-            self.dictations = Self.bucket(self.dictationEntries, limit: Self.visibleLimit).visible
-            self.items = Self.bucket(self.itemEntries, limit: Self.visibleLimit).visible
+            rebuildVisible()
             self.errorMessage = nil
         } catch {
             self.memoEntries = []
@@ -105,20 +107,39 @@ final class LibraryFeed: ObservableObject {
     }
 
     func items(for tab: LibraryTab, matching query: String = "") -> [Item] {
-        Self.bucket(filteredEntries(for: tab, matching: query), limit: Self.visibleLimit).visible
+        Self.bucket(filteredEntries(for: tab, matching: query), limit: visibleLimit(for: tab)).visible
     }
 
     func totalCount(for tab: LibraryTab, matching query: String = "") -> Int {
-        Self.bucket(filteredEntries(for: tab, matching: query), limit: Self.visibleLimit).total
+        Self.bucket(filteredEntries(for: tab, matching: query), limit: visibleLimit(for: tab)).total
     }
 
     func earlierCount(for tab: LibraryTab, matching query: String = "") -> Int {
-        Self.bucket(filteredEntries(for: tab, matching: query), limit: Self.visibleLimit).earlier
+        Self.bucket(filteredEntries(for: tab, matching: query), limit: visibleLimit(for: tab)).earlier
+    }
+
+    /// Reveal the next page of a tab's items (everything stays reachable, Home-style).
+    func loadMore(for tab: LibraryTab) {
+        visibleLimits[tab] = visibleLimit(for: tab) + Self.loadMoreStep
+        rebuildVisible()
     }
 
     // MARK: - Persistence-backed feed
 
-    private static let visibleLimit = 8
+    private static let initialVisibleLimit = 8
+    private static let loadMoreStep = 10
+
+    private var visibleLimits: [LibraryTab: Int] = [:]
+
+    private func visibleLimit(for tab: LibraryTab) -> Int {
+        visibleLimits[tab] ?? Self.initialVisibleLimit
+    }
+
+    private func rebuildVisible() {
+        memos = Self.bucket(memoEntries, limit: visibleLimit(for: .memos)).visible
+        dictations = Self.bucket(dictationEntries, limit: visibleLimit(for: .dictations)).visible
+        items = Self.bucket(itemEntries, limit: visibleLimit(for: .items)).visible
+    }
     private static let recentWindow: TimeInterval = 7 * 24 * 60 * 60
 
     private struct Entry {
@@ -186,7 +207,8 @@ final class LibraryFeed: ObservableObject {
                 preview: preview(body),
                 relativeTime: relativeListTime(from: updatedAt),
                 syncStatus: nil,
-                canPromoteToMemo: false
+                canPromoteToMemo: false,
+                isTranscribing: memo.isTranscribing
             )
             return Entry(
                 item: item,

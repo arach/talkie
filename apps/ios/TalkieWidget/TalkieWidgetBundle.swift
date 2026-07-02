@@ -13,5 +13,6 @@ struct TalkieWidgetBundle: WidgetBundle {
     var body: some Widget {
         TalkieWidget()
         TalkieWidgetControl()
+        TalkieWidgetLiveActivity()
     }
 }

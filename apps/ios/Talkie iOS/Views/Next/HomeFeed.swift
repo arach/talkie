@@ -85,10 +85,16 @@ final class HomeFeed: ObservableObject {
         let preview: String?
         let meta: String?
         let relativeTime: String   // "9:34 AM", "Yesterday", "Mon"
+        let syncStatus: SyncStatus?
         let canPromoteToMemo: Bool
+        // True only while the background transcription pass is running for
+        // this memo (VoiceMemo.isTranscribing). Non-memo sources never are.
+        var isTranscribing: Bool = false
 
         enum Source { case dictation, typed, link, scan }
     }
+
+    enum SyncStatus { case synced, pending }
 
     struct TodayStats: Equatable {
         let memos: Int
@@ -103,7 +109,7 @@ final class HomeFeed: ObservableObject {
     var remainingRecentItems: Int { max(0, totalRecentCount - displayLimit) }
     var isSearching: Bool { !normalizedSearchText.isEmpty }
 
-    private static let defaultDisplayLimit = 5
+    private static let defaultDisplayLimit = 10
     private static let pageSize = 10
 
     private var entries: [Entry] = []
@@ -214,7 +220,9 @@ final class HomeFeed: ObservableObject {
                     preview: entry.preview,
                     meta: entry.meta,
                     relativeTime: Self.relativeListTime(from: entry.updatedAt),
-                    canPromoteToMemo: entry.origin == .keyboardDictation
+                    syncStatus: entry.syncStatus,
+                    canPromoteToMemo: entry.origin == .keyboardDictation,
+                    isTranscribing: entry.isTranscribing
                 )
             }
     }
@@ -265,9 +273,11 @@ private extension HomeFeed {
         let title: String
         let preview: String?
         let meta: String?
+        let syncStatus: SyncStatus?
         let wordCount: Int
         let durationSeconds: Double
         let updatedAt: Date
+        var isTranscribing: Bool = false
     }
 
     static func fetchVoiceMemos(
@@ -329,9 +339,11 @@ private extension HomeFeed {
                 title: title,
                 preview: preview(body),
                 meta: memoMeta(for: memo),
+                syncStatus: memo.cloudSyncedAt == nil ? .pending : .synced,
                 wordCount: wordCount(body ?? title),
                 durationSeconds: memo.duration,
-                updatedAt: memo.lastModified ?? memo.createdAt ?? .distantPast
+                updatedAt: memo.lastModified ?? memo.createdAt ?? .distantPast,
+                isTranscribing: memo.isTranscribing
             )
         }
 
@@ -345,6 +357,7 @@ private extension HomeFeed {
                 title: title,
                 preview: preview(note.content),
                 meta: nil,
+                syncStatus: nil,
                 wordCount: wordCount(note.content ?? title),
                 durationSeconds: 0,
                 updatedAt: note.lastModified ?? note.createdAt ?? .distantPast
@@ -360,6 +373,7 @@ private extension HomeFeed {
                 title: title(from: dictation.text, fallback: "Keyboard dictation"),
                 preview: preview(dictation.text),
                 meta: dictationMeta(for: dictation),
+                syncStatus: nil,
                 wordCount: dictation.wordCount,
                 durationSeconds: dictation.durationSeconds ?? 0,
                 updatedAt: dictation.timestamp
@@ -376,6 +390,7 @@ private extension HomeFeed {
                 title: cleanTitle(capture.title, fallback: title(from: capture.text, fallback: fallbackTitle(for: capture))),
                 preview: capture.sourceURL?.isEmpty == false ? capture.sourceURL : preview(capture.text),
                 meta: capture.syncedToMac ? "Synced to Mac" : "Not synced",
+                syncStatus: capture.syncedToMac ? .synced : .pending,
                 wordCount: capture.wordCount,
                 durationSeconds: 0,
                 updatedAt: capture.timestamp
