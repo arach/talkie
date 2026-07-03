@@ -48,6 +48,7 @@ enum SettingsSection: String, Hashable {
 
     // SYSTEM (meta/admin - technical settings)
     case helpers             // Background services + Server + Performance
+    case featureFlags        // Runtime rollout state
     case about               // App info, version, permissions
     case feedback            // User feedback submission
     case devControl          // Dev control panel (DEBUG only)
@@ -120,6 +121,7 @@ enum SettingsSection: String, Hashable {
         case "home", "dashboard", "widgets": return .home
         case "feedback": return .feedback
         case "helpers", "server", "performance", "trace", "profiling": return .helpers
+        case "feature-flags", "flags", "rollout": return .featureFlags
         case "about", "permissions", "debug", "debug-info", "version": return .about
         case "connections": return .about
         case "onboarding", "progress": return .about
@@ -159,6 +161,7 @@ enum SettingsSection: String, Hashable {
         case .home: return "appearance"
         case .feedback: return "feedback"
         case .helpers: return "helpers"
+        case .featureFlags: return "feature-flags"
         case .about: return "about"
         case .devControl: return "dev-control"
         // Legacy redirects
@@ -585,8 +588,9 @@ struct SettingsSidebarColumn: View {
 
                     // SYSTEM (meta/admin - technical settings).
                     // Apps is now a tab inside Helpers; no standalone entry.
-                    SettingsSidebarSection(title: "SYSTEM", isActive: activeSection == .helpers || activeSection == .feedback || activeSection == .devControl, iconsOnly: compact) {
+                    SettingsSidebarSection(title: "SYSTEM", isActive: activeSection == .helpers || activeSection == .featureFlags || activeSection == .feedback || activeSection == .devControl, iconsOnly: compact) {
                         sidebarItem(.helpers, icon: "app.connected.to.app.below.fill", title: "Helpers")
+                        sidebarItem(.featureFlags, icon: "flag.fill", title: "Feature Flags")
                         sidebarItem(.feedback, icon: "bubble.left.and.text.bubble.right", title: "Feedback")
                         #if DEBUG
                         sidebarItem(.devControl, icon: "hammer.fill", title: "Dev Control")
@@ -721,6 +725,8 @@ struct SettingsContentColumn: View {
             sectionWithAudienceNotice { FeedbackSettingsView() }
         case .helpers:
             sectionWithAudienceNotice { HelperAppsSettingsView() }
+        case .featureFlags:
+            sectionWithAudienceNotice { FeatureFlagsSettingsView() }
         case .about:
             sectionWithAudienceNotice { AboutSettingsView() }
         case .devControl:

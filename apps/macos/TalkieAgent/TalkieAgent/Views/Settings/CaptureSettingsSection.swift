@@ -17,7 +17,7 @@ import TalkieKit
 
 // MARK: - Capture action catalog
 
-private struct CaptureShortcut: Identifiable {
+struct CaptureShortcut: Identifiable {
     /// The shared-settings key AppDelegate loads this hotkey from.
     let id: String
     let title: String
@@ -25,7 +25,7 @@ private struct CaptureShortcut: Identifiable {
     let defaultConfig: HotkeyConfig
 }
 
-private enum CaptureShortcuts {
+enum CaptureShortcuts {
     /// The Hyper layer (⌃⌥⇧⌘) — the default modifier for every capture action.
     static let hyper = UInt32(cmdKey | optionKey | controlKey | shiftKey)
 
@@ -121,12 +121,17 @@ final class CaptureShortcutsModel: ObservableObject {
     func reload() {
         var loaded: [String: HotkeyConfig] = [:]
         for shortcut in CaptureShortcuts.all {
-            loaded[shortcut.id] = Self.load(key: shortcut.id) ?? shortcut.defaultConfig
+            let rawConfig = Self.load(key: shortcut.id) ?? shortcut.defaultConfig
+            let config = Self.sanitized(rawConfig, for: shortcut)
+            loaded[shortcut.id] = config
+            if config != rawConfig {
+                Self.persist(config, key: shortcut.id)
+            }
         }
         configs = loaded
     }
 
-    fileprivate func binding(for shortcut: CaptureShortcut) -> Binding<HotkeyConfig> {
+    func binding(for shortcut: CaptureShortcut) -> Binding<HotkeyConfig> {
         Binding(
             get: { [weak self] in self?.configs[shortcut.id] ?? shortcut.defaultConfig },
             set: { [weak self] newValue in self?.set(newValue, for: shortcut.id) }
@@ -153,8 +158,15 @@ final class CaptureShortcutsModel: ObservableObject {
     /// HotkeyRecorderButton posts .hotkeyDidChange immediately after this
     /// returns, so AppDelegate re-registers from the freshly-written value.
     private func set(_ config: HotkeyConfig, for key: String) {
-        configs[key] = config
-        Self.persist(config, key: key)
+        guard let shortcut = CaptureShortcuts.all.first(where: { $0.id == key }) else {
+            configs[key] = config
+            Self.persist(config, key: key)
+            return
+        }
+
+        let sanitized = Self.sanitized(config, for: shortcut)
+        configs[key] = sanitized
+        Self.persist(sanitized, key: key)
     }
 
     private static func load(key: String) -> HotkeyConfig? {
@@ -166,6 +178,21 @@ final class CaptureShortcutsModel: ObservableObject {
         guard let data = try? JSONEncoder().encode(config) else { return }
         TalkieSharedSettings.set(data, forKey: key)
     }
+
+    private static func sanitized(_ config: HotkeyConfig, for shortcut: CaptureShortcut) -> HotkeyConfig {
+        guard SystemReservedHotkeys.isAppleScreenshotShortcut(
+            keyCode: config.keyCode,
+            modifiers: config.modifiers
+        ) else {
+            return config
+        }
+
+        Log(.system).warning(
+            "Rejected Apple-reserved capture shortcut",
+            detail: "key=\(shortcut.id) keyCode=\(config.keyCode) modifiers=\(config.modifiers)"
+        )
+        return shortcut.defaultConfig
+    }
 }
 
 // MARK: - Section
@@ -176,7 +203,10 @@ struct CaptureSettingsSection: View {
     @State private var recordingKey: String?
 
     private var captureEnabled: Bool {
-        TalkieSharedSettings.bool(forKey: AgentSettingsKey.featureCaptureEnabled)
+        if TalkieEnvironment.current == .production {
+            return true
+        }
+        return TalkieSharedSettings.bool(forKey: AgentSettingsKey.featureCaptureEnabled)
     }
 
     var body: some View {

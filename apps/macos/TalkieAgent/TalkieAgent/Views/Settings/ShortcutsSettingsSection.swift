@@ -12,13 +12,24 @@ import TalkieKit
 
 struct ShortcutsSettingsSection: View {
     @ObservedObject private var settings = LiveSettings.shared
+    @StateObject private var captureShortcuts = CaptureShortcutsModel()
     @State private var isRecordingHotkey = false
     @State private var isRecordingPTTHotkey = false
+    @State private var recordingCaptureKey: String?
     @State private var isRestoreHovered = false
 
     /// Check if any shortcuts have been modified from defaults
     private var hasModifiedShortcuts: Bool {
-        settings.hotkey != .default || settings.pttHotkey != .defaultPTT
+        settings.hotkey != .default ||
+        settings.pttHotkey != .defaultPTT ||
+        captureShortcuts.hasModifiedShortcuts
+    }
+
+    private var captureEnabled: Bool {
+        if TalkieEnvironment.current == .production {
+            return true
+        }
+        return TalkieSharedSettings.bool(forKey: AgentSettingsKey.featureCaptureEnabled)
     }
 
     var body: some View {
@@ -145,6 +156,26 @@ struct ShortcutsSettingsSection: View {
                 }
             }
 
+            SettingsCard(title: "CAPTURE") {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    if !captureEnabled {
+                        HStack(alignment: .top, spacing: Spacing.sm) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                                .font(.system(size: 11))
+                            Text("Capture is disabled in this environment. Shortcuts are saved here, but Agent will not register them until Capture is enabled.")
+                                .font(.system(size: 10))
+                                .foregroundColor(TalkieTheme.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer()
+                        }
+                        .padding(.bottom, Spacing.xs)
+                    }
+
+                    captureShortcutRows(CaptureShortcuts.all)
+                }
+            }
+
             // Hotkey Registration Status
             SettingsCard(title: "HOTKEY STATUS") {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -206,6 +237,7 @@ struct ShortcutsSettingsSection: View {
                     Button(action: {
                         settings.hotkey = .default
                         settings.pttHotkey = .defaultPTT
+                        captureShortcuts.restoreDefaults()
                         NotificationCenter.default.post(name: .hotkeyDidChange, object: nil)
                     }) {
                         HStack(spacing: 4) {
@@ -229,6 +261,47 @@ struct ShortcutsSettingsSection: View {
                 }
                 .padding(.top, Spacing.sm)
             }
+        }
+        .onAppear {
+            captureShortcuts.reload()
+        }
+    }
+
+    @ViewBuilder
+    private func captureShortcutRows(_ shortcuts: [CaptureShortcut]) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            ForEach(Array(shortcuts.enumerated()), id: \.element.id) { index, shortcut in
+                if index > 0 {
+                    Rectangle()
+                        .fill(Design.divider)
+                        .frame(height: 0.5)
+                }
+                captureShortcutRow(shortcut)
+            }
+        }
+    }
+
+    private func captureShortcutRow(_ shortcut: CaptureShortcut) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(shortcut.title)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(TalkieTheme.textPrimary)
+                Text(shortcut.subtitle)
+                    .font(.system(size: 9))
+                    .foregroundColor(TalkieTheme.textTertiary)
+            }
+
+            Spacer()
+
+            HotkeyRecorderButton(
+                hotkey: captureShortcuts.binding(for: shortcut),
+                isRecording: Binding(
+                    get: { recordingCaptureKey == shortcut.id },
+                    set: { recordingCaptureKey = $0 ? shortcut.id : nil }
+                ),
+                showReset: false
+            )
         }
     }
 }

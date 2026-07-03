@@ -227,6 +227,10 @@ public enum AgentSettingsKey {
     public static let featureCaptureEnabled = "feature_capture_enabled"
     public static let featureNotchComposerEnabled = "feature_notch_composer_enabled"
     public static let featureVoiceForegroundingEnabled = "feature_voice_foregrounding_enabled"
+    public static let featureFlagsRemotePayload = "feature_flags_remote_payload"
+    public static let featureFlagsLastFetch = "feature_flags_last_fetch"
+    public static let featureFlagsLastError = "feature_flags_last_error"
+    public static let featureFlagsRemoteCount = "feature_flags_remote_count"
 
     // MARK: Remote Engine
     public static let remoteEngineEnabled = "engine.remoteAccessEnabled"

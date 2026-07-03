@@ -51,6 +51,7 @@ enum SettingsSection: String, Hashable, CaseIterable {
     case engine  // Now "Transcription" - AI models
     case storage
     case permissions  // Permission Center
+    case featureFlags
     case about
     #if DEBUG
     case debug  // Debug settings dump
@@ -68,6 +69,7 @@ enum SettingsSection: String, Hashable, CaseIterable {
         case .engine: return "TRANSCRIPTION"
         case .storage: return "STORAGE"
         case .permissions: return "PERMISSIONS"
+        case .featureFlags: return "FEATURE FLAGS"
         case .about: return "ABOUT"
         #if DEBUG
         case .debug: return "DEBUG"
@@ -87,6 +89,7 @@ enum SettingsSection: String, Hashable, CaseIterable {
         case .engine: return "waveform"
         case .storage: return "folder"
         case .permissions: return "lock.shield"
+        case .featureFlags: return "flag.fill"
         case .about: return "info.circle"
         #if DEBUG
         case .debug: return "ladybug"
@@ -231,7 +234,7 @@ struct SettingsView: View {
                         // SYSTEM
                         SettingsSidebarSection(
                             title: "SYSTEM",
-                            isActive: selectedSection == .engine || selectedSection == .storage || selectedSection == .permissions || selectedSection == .about
+                            isActive: selectedSection == .engine || selectedSection == .storage || selectedSection == .permissions || selectedSection == .featureFlags || selectedSection == .about
                         ) {
                             SettingsSidebarItem(
                                 icon: "waveform",
@@ -253,6 +256,13 @@ struct SettingsView: View {
                                 isSelected: selectedSection == .permissions
                             ) {
                                 selectedSection = .permissions
+                            }
+                            SettingsSidebarItem(
+                                icon: "flag.fill",
+                                title: "FEATURE FLAGS",
+                                isSelected: selectedSection == .featureFlags
+                            ) {
+                                selectedSection = .featureFlags
                             }
                             SettingsSidebarItem(
                                 icon: "info.circle",
@@ -313,6 +323,8 @@ struct SettingsView: View {
                         StorageSettingsSection()
                     case .permissions:
                         PermissionsSettingsSection()
+                    case .featureFlags:
+                        FeatureFlagsSettingsSection()
                     case .about:
                         AboutSettingsSection()
                     #if DEBUG
@@ -709,6 +721,7 @@ enum QuickSettingsTab: String, CaseIterable {
     case permissions
     case connections
     case performance
+    case featureFlags
     case about
     #if DEBUG
     case accessibility  // Developer-only: AX element scanner
@@ -727,6 +740,7 @@ enum QuickSettingsTab: String, CaseIterable {
         case .permissions: return "Permissions"
         case .connections: return "Connections"
         case .performance: return "Performance"
+        case .featureFlags: return "Feature Flags"
         case .about: return "About"
         #if DEBUG
         case .accessibility: return "AX Scan"
@@ -747,6 +761,7 @@ enum QuickSettingsTab: String, CaseIterable {
         case .permissions: return "lock.shield.fill"
         case .connections: return "network"
         case .performance: return "gauge.with.needle"
+        case .featureFlags: return "flag.fill"
         case .about: return "info.circle"
         #if DEBUG
         case .accessibility: return "accessibility"
@@ -795,7 +810,7 @@ struct QuickSettingsView: View {
                 }
 
                 Section("System") {
-                    ForEach([QuickSettingsTab.permissions, .connections, .performance, .about], id: \.self) { tab in
+                    ForEach([QuickSettingsTab.permissions, .connections, .performance, .featureFlags, .about], id: \.self) { tab in
                         HStack {
                             Label(tab.title, systemImage: tab.icon)
                             if tab == .permissions && !permissionManager.allRequiredGranted {
@@ -849,6 +864,8 @@ struct QuickSettingsView: View {
                             ConnectionsSettingsSection()
                         case .performance:
                             PerformanceSettingsSection()
+                        case .featureFlags:
+                            FeatureFlagsSettingsSection()
                         case .about:
                             AboutSettingsSection()
                         #if DEBUG
