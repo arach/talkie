@@ -62,6 +62,7 @@ enum HelperAppsTab: String, CaseIterable {
 
 struct HelperAppsSettingsView: View {
     private let serviceManager = ServiceManager.shared
+    private let permissionsManager = PermissionsManager.shared
     @State private var isRefreshing = false
     @State private var detailLevel: HelperDetailLevel = .standard
     @State private var selectedTab: HelperAppsTab = .services
@@ -93,6 +94,7 @@ struct HelperAppsSettingsView: View {
                 Button(action: {
                     isRefreshing = true
                     serviceManager.refreshStatus()
+                    refreshAgentDiagnostics()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                         isRefreshing = false
                     }
@@ -149,6 +151,7 @@ struct HelperAppsSettingsView: View {
         }
         .onAppear {
             serviceManager.live.startMonitoring()
+            refreshAgentDiagnostics()
             // Check for hotkey registration issues
             Task {
                 let statuses = await serviceManager.live.getHotkeyStatus()
@@ -293,8 +296,8 @@ struct HelperAppsSettingsView: View {
 
     private var settingsContent: some View {
         Group {
-            // Remote Engine
-            RemoteEngineSettingsSection()
+            // Agent permissions belong beside helper lifecycle state.
+            agentPermissionsSection
 
             // Helper lifecycle modes — per-helper control over how launchd manages them
             HelperLifecycleSection()
@@ -333,6 +336,9 @@ struct HelperAppsSettingsView: View {
             // Launch Agents
             LaunchAgentsSection(serviceManager: serviceManager)
 
+            // Remote Agent — advanced/niche remote transcription routing.
+            RemoteEngineSettingsSection()
+
             // About
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 HStack(spacing: Spacing.sm) {
@@ -360,6 +366,171 @@ struct HelperAppsSettingsView: View {
                 .cornerRadius(CornerRadius.sm)
             }
             .settingsSectionCard(padding: Spacing.md)
+        }
+    }
+
+    // MARK: - Agent Permissions
+
+    private var agentState: AgentServiceState {
+        serviceManager.live
+    }
+
+    private var agentHasPermissionSnapshot: Bool {
+        agentState.hasMicrophonePermission != nil ||
+            agentState.hasAccessibilityPermission != nil ||
+            agentState.hasScreenRecordingPermission != nil
+    }
+
+    private var agentPermissionStatus: (mic: PermissionStatus, ax: PermissionStatus, screen: PermissionStatus) {
+        let mic: PermissionStatus = agentState.hasMicrophonePermission.map { $0 ? .granted : .denied } ?? .unknown
+        let ax: PermissionStatus = agentState.hasAccessibilityPermission.map { $0 ? .granted : .denied } ?? .unknown
+        let screen: PermissionStatus = agentState.hasScreenRecordingPermission.map { $0 ? .granted : .denied } ?? .unknown
+        return (mic, ax, screen)
+    }
+
+    private var agentRequiredGrantedCount: Int {
+        let status = agentPermissionStatus
+        return (status.mic == .granted ? 1 : 0) + (status.ax == .granted ? 1 : 0)
+    }
+
+    private var agentAccentColor: Color {
+        if agentState.isXPCConnected {
+            return agentRequiredGrantedCount == 2 ? .green : .orange
+        }
+        if agentHasPermissionSnapshot {
+            return Theme.current.foregroundMuted
+        }
+        return .gray
+    }
+
+    private var agentStatusLabel: String {
+        if agentState.isXPCConnected {
+            return "\(agentRequiredGrantedCount)/2 REQUIRED"
+        }
+        if agentHasPermissionSnapshot {
+            return "LAST KNOWN"
+        }
+        return agentState.isRunning ? "STARTING" : "UNAVAILABLE"
+    }
+
+    private var agentSnapshotDetail: String {
+        if let lastCheck = agentState.lastPermissionCheck {
+            return "Showing the last known Agent permission snapshot from \(TalkieDate.relativeCompact(lastCheck))."
+        }
+        return "Showing the last known Agent permission snapshot."
+    }
+
+    private var agentPermissionsSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            HStack(spacing: Spacing.sm) {
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(agentAccentColor)
+                    .frame(width: 3, height: 14)
+
+                Text("AGENT PERMISSIONS")
+                    .font(Theme.current.fontXSBold)
+                    .foregroundColor(Theme.current.foregroundSecondary)
+
+                Spacer()
+
+                HStack(spacing: Spacing.xxs) {
+                    Circle()
+                        .fill(agentAccentColor)
+                        .frame(width: 6, height: 6)
+                    Text(agentStatusLabel)
+                        .font(.techLabelSmall)
+                        .foregroundColor(agentAccentColor)
+                }
+            }
+
+            if agentState.isXPCConnected || agentHasPermissionSnapshot {
+                let status = agentPermissionStatus
+                VStack(spacing: Spacing.sm) {
+                    SettingsPermissionRow(
+                        icon: "mic.fill",
+                        name: "Microphone",
+                        description: "Hotkey recording and live dictation",
+                        status: status.mic,
+                        onRequest: { permissionsManager.requestAgentMicrophonePermission() }
+                    )
+
+                    SettingsPermissionRow(
+                        icon: "accessibility",
+                        name: "Accessibility",
+                        description: "Direct text insertion after transcription",
+                        status: status.ax,
+                        onRequest: { permissionsManager.requestAgentAccessibilityPermission() }
+                    )
+
+                    SettingsPermissionRow(
+                        icon: "rectangle.dashed.badge.record",
+                        name: "Screen Recording",
+                        description: "Capture tools and on-screen dictation context",
+                        status: status.screen,
+                        statusOverride: status.screen == .denied ? "Optional Denied" : nil,
+                        onRequest: {
+                            if status.screen == .granted {
+                                permissionsManager.openScreenRecordingSettings()
+                            } else {
+                                Task {
+                                    _ = await serviceManager.requestAgentScreenRecordingPermission()
+                                }
+                            }
+                        }
+                    )
+
+                    if !agentState.isXPCConnected {
+                        HStack(spacing: Spacing.sm) {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(Theme.current.foregroundMuted)
+                            Text(agentSnapshotDetail)
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                            Spacer()
+                            if !agentState.isRunning {
+                                Button("Launch Agent") {
+                                    serviceManager.launchLive(resolvingConflicts: true)
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                            }
+                        }
+                        .padding(Spacing.sm)
+                        .background(Theme.current.surface1)
+                        .cornerRadius(CornerRadius.xs)
+                    }
+                }
+            } else {
+                HStack(spacing: Spacing.sm) {
+                    Image(systemName: "info.circle")
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundMuted)
+                    Text("Agent permission status appears here after Talkie connects to the helper.")
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                    Spacer()
+                    Button(agentState.isRunning ? "Reconnect" : "Launch Agent") {
+                        if agentState.isRunning {
+                            serviceManager.live.reconnect()
+                        } else {
+                            serviceManager.launchLive(resolvingConflicts: true)
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+                .padding(Spacing.sm)
+                .background(Theme.current.surface1)
+                .cornerRadius(CornerRadius.xs)
+            }
+        }
+        .settingsSectionCard(padding: Spacing.md)
+    }
+
+    private func refreshAgentDiagnostics() {
+        Task {
+            _ = await serviceManager.live.refreshPermissionsNow()
         }
     }
 }
@@ -1335,7 +1506,7 @@ private struct RemoteEngineSettingsSection: View {
                     .fill(Color.teal)
                     .frame(width: 3, height: 14)
 
-                Text("REMOTE TRANSCRIPTION")
+                Text("REMOTE AGENT (ADVANCED)")
                     .font(Theme.current.fontXSBold)
                     .foregroundColor(Theme.current.foregroundSecondary)
 
@@ -1353,7 +1524,7 @@ private struct RemoteEngineSettingsSection: View {
                     .font(Theme.current.fontXS)
                     .foregroundColor(Theme.current.foregroundSecondary)
 
-                Text("Offload transcription to a remote TalkieAgent instance over the network (e.g., Mac Mini via Tailscale).")
+                Text("Route transcription through another Mac running TalkieAgent on your private network. Most local setups should leave this off.")
                     .font(Theme.current.fontXS)
                     .foregroundColor(Theme.current.foregroundSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1369,7 +1540,7 @@ private struct RemoteEngineSettingsSection: View {
                         Text("Use Remote Agent")
                             .font(Theme.current.fontSMMedium)
                             .foregroundColor(Theme.current.foreground)
-                        Text("When enabled, transcription routes through a remote TalkieAgent instance instead of the local embedded transcription service.")
+                        Text("Use a remote helper instead of the local Agent for transcription.")
                             .font(Theme.current.fontXS)
                             .foregroundColor(Theme.current.foregroundSecondary)
                     }
@@ -1453,7 +1624,7 @@ private struct RemoteEngineSettingsSection: View {
                         .font(.system(size: 9))
                         .foregroundColor(.orange.opacity(0.7))
 
-                    Text("The remote TalkieAgent must have remote access enabled and be restarted for changes to take effect.")
+                    Text("The remote Agent must have remote access enabled and be restarted for changes to take effect.")
                         .font(.system(size: 9))
                         .foregroundColor(Theme.current.foregroundSecondary.opacity(0.7))
                 }

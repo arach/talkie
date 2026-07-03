@@ -7,7 +7,7 @@
 #   bridge uninstall   - Remove launchd services
 #   bridge start       - Start production bridge (port 8765)
 #   bridge stop        - Stop production bridge
-#   bridge dev         - Start dev bridge (port 8766, --local mode)
+#   bridge dev         - Start dev bridge (port 8767, --local mode)
 #   bridge dev:stop    - Stop dev bridge
 #   bridge status      - Show status of both services
 #   bridge logs        - Tail production logs
@@ -105,7 +105,7 @@ install_plists() {
 
     # Generate plists with correct paths for this machine
     generate_plist "$PROD_LABEL" "" "$LAUNCH_AGENTS/$PROD_PLIST" "bridge.log"
-    generate_plist "$DEV_LABEL" "--local" "$LAUNCH_AGENTS/$DEV_PLIST" "bridge-dev.log"
+    generate_plist "$DEV_LABEL" "--local --port 8767" "$LAUNCH_AGENTS/$DEV_PLIST" "bridge-dev.log"
     chmod 644 "$LAUNCH_AGENTS/$PROD_PLIST" "$LAUNCH_AGENTS/$DEV_PLIST"
 
     log_success "Installed to $LAUNCH_AGENTS"
@@ -130,8 +130,11 @@ generate_plist() {
         <string>src/server.ts</string>"
 
     if [ -n "$extra_args" ]; then
-        args="$args
-        <string>$extra_args</string>"
+        local arg
+        for arg in $extra_args; do
+            args="$args
+        <string>$arg</string>"
+        done
     fi
 
     cat > "$output_path" << EOF

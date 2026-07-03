@@ -841,6 +841,54 @@ public final class ServiceManager {
         return .waitingForUserAction
     }
 
+    /// Launch and connect to the targeted TalkieAgent, then ask that process for Screen Recording permission.
+    public func requestAgentScreenRecordingPermission() async -> Bool? {
+        let env = effectiveHelperEnvironment
+        let bundleId = TalkieHelper.agent.bundleId(for: env)
+        let xpcService = TalkieHelper.agent.xpcServiceName(for: env)
+
+        logger.info(
+            "[Permissions] Preparing Agent screen recording permission request",
+            detail: "env=\(env.displayName), bundle=\(bundleId), xpc=\(xpcService)"
+        )
+
+        refreshStatus()
+        live.startXPCMonitoring(autoConnect: false)
+
+        if !live.isXPCConnected {
+            launchLive(resolvingConflicts: true)
+
+            for attempt in 1...8 {
+                await live.xpcManager?.connect()
+                if live.isXPCConnected {
+                    logger.info("[Permissions] Agent XPC connected for screen recording request", detail: "attempt=\(attempt)")
+                    break
+                }
+
+                try? await Task.sleep(for: .milliseconds(500))
+            }
+        }
+
+        guard live.isXPCConnected else {
+            logger.warning(
+                "[Permissions] Agent screen recording request could not connect to target",
+                detail: "env=\(env.displayName), bundle=\(bundleId), xpc=\(xpcService)"
+            )
+            return nil
+        }
+
+        let granted = await live.requestScreenRecordingPermission()
+        live.refreshPermissions()
+
+        if let granted {
+            logger.info("[Permissions] Agent screen recording request completed", detail: "granted=\(granted), bundle=\(bundleId)")
+        } else {
+            logger.warning("[Permissions] Agent screen recording request returned no result", detail: "bundle=\(bundleId)")
+        }
+
+        return granted
+    }
+
     /// Launch TalkieEngine
     public func launchEngine() {
         logger.info("[ServiceManager] Launching embedded engine by starting TalkieAgent")
@@ -1907,6 +1955,18 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
 
         return await withCheckedContinuation { continuation in
             service.requestAccessibilityPermission { granted in
+                continuation.resume(returning: granted)
+            }
+        }
+    }
+
+    public func requestScreenRecordingPermission() async -> Bool? {
+        guard let service = xpcManager?.remoteObjectProxy(errorHandler: { _ in }) else {
+            return nil
+        }
+
+        return await withCheckedContinuation { continuation in
+            service.requestScreenRecordingPermission { granted in
                 continuation.resume(returning: granted)
             }
         }

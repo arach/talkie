@@ -137,12 +137,14 @@ final class AccessibilityInstallAssistant {
     }
 
     private static func quitAndRelaunch() {
-        let appURL = Bundle.main.bundleURL
+        let env = TalkieEnvironment.current
+        let label = TalkieHelper.agent.launchdLabel(for: env)
+        let uid = getuid()
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
         process.arguments = [
             "-c",
-            "/bin/sleep 1; /usr/bin/open -n \"\(appURL.path)\""
+            "/bin/sleep 1; /bin/launchctl kickstart -k gui/\(uid)/\(label)"
         ]
         try? process.run()
         NSApp.terminate(nil)
