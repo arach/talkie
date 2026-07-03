@@ -1159,6 +1159,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
 
     // MARK: - URL Handling
 
+    @MainActor
+    private func showMainWindowForExternalRoute() {
+        NSApp.activate(ignoringOtherApps: true)
+
+        if let window = NSApp.windows.first(where: { $0.canBecomeMain && $0.isVisible })
+            ?? NSApp.windows.first(where: { $0.canBecomeMain }) {
+            window.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        if let newWindowItem = NSApp.mainMenu?
+            .item(withTitle: "File")?
+            .submenu?
+            .items
+            .first(where: { $0.title == "New Window" }),
+           let action = newWindowItem.action {
+            NSApp.sendAction(action, to: newWindowItem.target, from: newWindowItem)
+        }
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(120))
+            NSApp.activate(ignoringOtherApps: true)
+            NSApp.windows
+                .first(where: { $0.canBecomeMain && $0.isVisible })?
+                .makeKeyAndOrderFront(nil)
+        }
+    }
+
     @objc func handleGetURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent replyEvent: NSAppleEventDescriptor) {
         guard let urlString = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
               let url = URL(string: urlString) else {
@@ -1277,17 +1305,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             // — opens the Library view, optionally selecting a specific record.
             // Useful as a launch-arg target (see scripts/run.sh --view library).
             else if url.host == "library" {
-                NSApp.activate(ignoringOtherApps: true)
-                if let mainWindow = NSApp.windows.first(where: { $0.canBecomeMain }) {
-                    mainWindow.makeKeyAndOrderFront(nil)
-                }
+                self.showMainWindowForExternalRoute()
                 let path = url.pathComponents.dropFirst().first ?? ""
-                let idString = URLComponents(url: url, resolvingAgainstBaseURL: false)?
-                    .queryItems?.first(where: { $0.name == "id" })?.value
+                let queryItems = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+                let idString = queryItems.first(where: { $0.name == "id" })?.value
+                    ?? queryItems.first(where: { $0.name == "recordingId" })?.value
                 if path == "memo", let idString, let id = UUID(uuidString: idString) {
                     NavigationState.shared.navigateToMemo(id)
                 } else if path == "dictation", let idString, let id = UUID(uuidString: idString) {
                     NavigationState.shared.navigateToDictation(id)
+                } else if let idString, UUID(uuidString: idString) != nil {
+                    NavigationState.shared.navigate(to: .recordings, params: ["recordingId": idString])
                 } else {
                     NavigationState.shared.navigate(to: .recordings)
                 }

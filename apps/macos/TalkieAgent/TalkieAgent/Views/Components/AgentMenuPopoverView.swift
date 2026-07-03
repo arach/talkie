@@ -246,7 +246,6 @@ struct AgentMenuPopoverView: View {
     private static let emptyRowHeight: CGFloat = 32
     private static let toolGridHeight: CGFloat = 90
     private static let bareSectionTitleSpacing: CGFloat = 5
-    private static let recoveryRowHeight: CGFloat = 30
     private static let maxPopoverHeight: CGFloat = 535
 
     let model: AgentMenuModel
@@ -281,10 +280,6 @@ struct AgentMenuPopoverView: View {
             toolsHeight,
         ]
 
-        if model.failedQueueCount > 0 {
-            sectionHeights.append(sectionHeader + recoveryRowHeight)
-        }
-
         let sectionSpacingHeight = CGFloat(max(0, sectionHeights.count - 1)) * sectionSpacing
         let height = headerHeight
             + sectionHeights.reduce(0, +)
@@ -304,8 +299,6 @@ struct AgentMenuPopoverView: View {
                     recentGrabsSection
                     recentSection
                     toolsSection
-
-                    recoverySection
                 }
                 .padding(.horizontal, 8)
                 .padding(.bottom, 8)
@@ -510,30 +503,8 @@ struct AgentMenuPopoverView: View {
         }
     }
 
-    private var recoverySection: some View {
-        Group {
-            if model.failedQueueCount > 0 {
-                AgentMenuSection(title: "Recovery") {
-                    AgentMenuCompactSplitRow(
-                        title: "Queue",
-                        value: failedQueueSubtitle,
-                        systemImage: "tray.full.fill",
-                        tint: skin.accent,
-                        primaryAction: actions.openQueue,
-                        secondaryTitle: "Clear",
-                        secondaryAction: actions.clearQueue
-                    )
-                }
-            }
-        }
-    }
-
     private func recentTimestampLabel(_ timestamp: String) -> String {
         timestamp == "now" ? "now" : "\(timestamp) ago"
-    }
-
-    private var failedQueueSubtitle: String {
-        "\(model.failedQueueCount) \(model.failedQueueCount == 1 ? "item" : "items") waiting"
     }
 
     private var errorBadgeTitle: String? {

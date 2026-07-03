@@ -1308,21 +1308,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         key: String,
         fallbackKeyCode: UInt32,
         fallbackModifiers: UInt32,
-        avoidsAppleScreenshotShortcuts: Bool = false
+        warnsAboutAppleScreenshotShortcuts: Bool = false
     ) -> (keyCode: UInt32, modifiers: UInt32) {
         if let data = TalkieSharedSettings.data(forKey: key) {
             if let config = try? JSONDecoder().decode(HotkeyConfigDTO.self, from: data) {
-                if avoidsAppleScreenshotShortcuts,
+                if warnsAboutAppleScreenshotShortcuts,
                    SystemReservedHotkeys.isAppleScreenshotShortcut(keyCode: config.keyCode, modifiers: config.modifiers) {
-                    let fallback = HotkeyConfigDTO(keyCode: fallbackKeyCode, modifiers: fallbackModifiers)
-                    if let fallbackData = try? JSONEncoder().encode(fallback) {
-                        TalkieSharedSettings.set(fallbackData, forKey: key)
-                    }
                     log.warning(
-                        "Reset Apple-reserved capture hotkey to default",
+                        "Using Apple screenshot shortcut for capture hotkey; registration may fail if macOS still owns it",
                         detail: "key=\(key) keyCode=\(config.keyCode) modifiers=\(config.modifiers)"
                     )
-                    return (fallback.keyCode, fallback.modifiers)
                 }
                 return (config.keyCode, config.modifiers)
             }
@@ -1525,13 +1520,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             key: AgentSettingsKey.captureChordHotkey,
             fallbackKeyCode: 1,
             fallbackModifiers: UInt32(cmdKey | optionKey | controlKey | shiftKey),
-            avoidsAppleScreenshotShortcuts: true
+            warnsAboutAppleScreenshotShortcuts: true
         )
         let screenRecordChord = Self.loadHotkeyConfig(
             key: AgentSettingsKey.screenRecordChordHotkey,
             fallbackKeyCode: 15,
             fallbackModifiers: UInt32(cmdKey | optionKey | controlKey | shiftKey),
-            avoidsAppleScreenshotShortcuts: true
+            warnsAboutAppleScreenshotShortcuts: true
         )
 
         screenshotHotKeyManager.registerHotKey(
@@ -1548,7 +1543,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             key: AgentSettingsKey.markupCaptureChordHotkey,
             fallbackKeyCode: 46,
             fallbackModifiers: Self.hyperModifiers,
-            avoidsAppleScreenshotShortcuts: true
+            warnsAboutAppleScreenshotShortcuts: true
         )
         markupScreenshotHotKeyManager.registerHotKey(
             modifiers: markupCaptureChord.modifiers,
@@ -1621,7 +1616,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             key: "hotkeyCapture.desktopMagnifier",
             fallbackKeyCode: 6,                   // Z - freeze a source region into a movable magnifier
             fallbackModifiers: Self.hyperModifiers,
-            avoidsAppleScreenshotShortcuts: true
+            warnsAboutAppleScreenshotShortcuts: true
         )
         if magnifier.keyCode == markupCaptureChord.keyCode,
            magnifier.modifiers == markupCaptureChord.modifiers {
@@ -1637,7 +1632,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             key: AgentSettingsKey.pasteChordHotkey,
             fallbackKeyCode: 9,
             fallbackModifiers: UInt32(cmdKey | optionKey | controlKey | shiftKey),
-            avoidsAppleScreenshotShortcuts: true
+            warnsAboutAppleScreenshotShortcuts: true
         )
         pasteChordHotKeyManager.registerHotKey(
             modifiers: pasteChord.modifiers,
@@ -1662,7 +1657,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 key: settingsKey,
                 fallbackKeyCode: defaultKeyCode,
                 fallbackModifiers: defaultModifiers,
-                avoidsAppleScreenshotShortcuts: true
+                warnsAboutAppleScreenshotShortcuts: true
             )
             if config.keyCode == captureChord.keyCode && config.modifiers == captureChord.modifiers {
                 log.info("Direct screenshot hotkey skipped because it matches the capture chord: \(settingsKey)")
@@ -1689,7 +1684,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             key: AgentSettingsKey.pasteLastScreenshotHotkey,
             fallbackKeyCode: 35,
             fallbackModifiers: Self.hyperModifiers,
-            avoidsAppleScreenshotShortcuts: true
+            warnsAboutAppleScreenshotShortcuts: true
         )
         pasteLastScreenshotHotKey.registerHotKey(
             modifiers: pasteLastScreenshot.modifiers,
@@ -2332,15 +2327,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             managers.append(("Markup Screenshot Chord", markupScreenshotHotKeyManager))
             managers.append(("Screen Record", screenRecordHotKeyManager))
             managers.append(("Paste Chord", pasteChordHotKeyManager))
-            managers.append(("Hyper+3 Fullscreen", ssFullscreenHotKey))
-            managers.append(("Hyper+4 Region", ssRegionHotKey))
-            managers.append(("Hyper+5 Tray", ssBufferHotKey))
-            managers.append(("Hyper+6 Window", ssWindowHotKey))
-            managers.append(("Hyper+T Shelf", ssShelfHotKey))
-            managers.append(("Hyper+P Paste Last Screenshot", pasteLastScreenshotHotKey))
-            managers.append(("Hyper+Z Desktop Magnifier", desktopMagnifierHotKey))
+            managers.append(("Fullscreen Capture", ssFullscreenHotKey))
+            managers.append(("Region Capture", ssRegionHotKey))
+            managers.append(("Open Tray Viewer", ssBufferHotKey))
+            managers.append(("Window Capture", ssWindowHotKey))
+            managers.append(("Open Tray Shelf", ssShelfHotKey))
+            managers.append(("Paste Last Screenshot", pasteLastScreenshotHotKey))
+            managers.append(("Desktop Magnifier", desktopMagnifierHotKey))
         }
-        managers.append(("Hyper+Esc Markup Safety", markupEmergencyHotKey))
+        managers.append(("Markup Safety", markupEmergencyHotKey))
 
         if pttEnabled {
             managers.append(("Push-to-Talk", pttHotKeyManager))

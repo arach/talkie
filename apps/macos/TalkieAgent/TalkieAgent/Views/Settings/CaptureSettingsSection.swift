@@ -188,10 +188,10 @@ final class CaptureShortcutsModel: ObservableObject {
         }
 
         Log(.system).warning(
-            "Rejected Apple-reserved capture shortcut",
+            "Saved Apple screenshot shortcut for capture; registration may fail if macOS still owns it",
             detail: "key=\(shortcut.id) keyCode=\(config.keyCode) modifiers=\(config.modifiers)"
         )
-        return shortcut.defaultConfig
+        return config
     }
 }
 

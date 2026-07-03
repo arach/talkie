@@ -64,13 +64,6 @@ struct ScopeLibraryView: View {
     @AppStorage("scopeLibrary.listColumnWidth")
     private var listColumnWidth: Double = 520
 
-    /// Last picked type filter. Survives relaunch so coming back to
-    /// the library lands on whatever the user was last looking at.
-    /// `initialTypeFilter` (set by deep-link navigation) overrides
-    /// this on appearance, since the caller is asking for a specific tab.
-    @AppStorage("scopeLibrary.lastTypeFilter")
-    private var persistedTypeFilterRaw: String = RecordingTypeFilter.all.rawValue
-
     // MARK: Cmd-hold shortcut overlay
     //
     // Holding ⌘ while the library is on screen fades in glyph badges on
@@ -159,17 +152,16 @@ struct ScopeLibraryView: View {
         .background(ScopeCanvas.canvas)
         .animation(.easeInOut(duration: 0.2), value: showingRecordingView)
         .task {
-            // Pick the initial filter:
-            //   1. Explicit deep-link (`initialTypeFilter != .all`) wins
-            //   2. Otherwise restore the user's last picked filter
-            //   3. Otherwise `.all`
-            let restored = RecordingTypeFilter(rawValue: persistedTypeFilterRaw) ?? .all
-            let desired = initialTypeFilter != .all ? initialTypeFilter : restored
-            if desired != .all {
+            // Plain Library routes should always open the unified ALL view.
+            // Specific sidebars/deep links still pass an explicit filter.
+            let desired = initialTypeFilter
+            if typeFilter != desired {
                 suppressFilterReload = true
                 typeFilter = desired
-                viewModel.filterState.select(desired.semanticFilter)
+            } else {
+                suppressFilterReload = false
             }
+            viewModel.filterState.select(desired.semanticFilter)
             await viewModel.loadWithSemanticFilters()
             // Consume pending navigation params — when the home (or
             // anywhere else) navigates to .recordings with a target
@@ -185,7 +177,6 @@ struct ScopeLibraryView: View {
             consumePendingNavigationParams()
         }
         .onChange(of: typeFilter) { _, newValue in
-            persistedTypeFilterRaw = newValue.rawValue
             if suppressFilterReload {
                 suppressFilterReload = false
                 return

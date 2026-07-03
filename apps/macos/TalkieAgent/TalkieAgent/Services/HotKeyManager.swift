@@ -210,6 +210,9 @@ final class HotKeyManager {
     /// Last registered key configuration (for diagnostics)
     private(set) var registeredKeyCode: UInt32?
     private(set) var registeredModifiers: UInt32?
+    private(set) var configuredKeyCode: UInt32?
+    private(set) var configuredModifiers: UInt32?
+    private(set) var lastRegistrationStatus: OSStatus?
 
     /// Whether a Carbon hotkey is currently registered
     var isRegistered: Bool { hotKeyRef != nil }
@@ -238,6 +241,8 @@ final class HotKeyManager {
 
         registeredKeyCode = keyCode
         registeredModifiers = modifiers
+        configuredKeyCode = keyCode
+        configuredModifiers = modifiers
 
         let sig = signature.fourCharCode
 
@@ -257,6 +262,7 @@ final class HotKeyManager {
             0,
             &hotKeyRef
         )
+        lastRegistrationStatus = registerStatus
 
         if registerStatus == noErr {
             log.info("RegisterEventHotKey succeeded: keyCode=\(keyCode) modifiers=\(modifiers)")
@@ -275,6 +281,9 @@ final class HotKeyManager {
         }
         registeredKeyCode = nil
         registeredModifiers = nil
+        configuredKeyCode = nil
+        configuredModifiers = nil
+        lastRegistrationStatus = nil
         HotKeyRegistry.shared.unregister(signature: signature.fourCharCode, id: hotkeyID)
     }
 
