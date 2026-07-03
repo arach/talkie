@@ -885,7 +885,6 @@ struct ManagedAgentWorkspaceStore: Sendable {
         - `capture-markup-apply.sh <image-path> <plan-json-path>`
         - `capture-markup-render.sh <image-path> [output-path]`
 
-        The shared runtime uses `sqlite3 -readonly` for inspection against `\(displayPath(memoDatabaseURL))`.
         The retranscription helper launches the current Talkie executable in headless debug mode so memo recovery goes through the app's own repositories instead of direct SQL writes.
 
         Recommended memo recovery flow:

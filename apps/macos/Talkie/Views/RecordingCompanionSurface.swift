@@ -232,26 +232,26 @@ private struct WaveOnlyContent: View {
         .padding(.horizontal, 64)
         .padding(.vertical, 44)
         .frame(maxWidth: 980, minHeight: 220)
-        // Glass card: ultraThinMaterial blur underneath, paper tint on
-        // top at low opacity so the recording surface sits on the
-        // canvas with depth, instead of floating as a transparent
-        // band between two hairlines.
+        // Glass card: material blur underneath, then an adaptive tint.
+        // Light themes keep the editorial paper tone; dark themes shift
+        // to a graphite instrument surface so the companion belongs on
+        // the Pro canvas instead of glowing like a light sheet.
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .overlay(
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(RecordingCompanionTokens.paper.opacity(0.55))
+                        .fill(RecordingCompanionTokens.paper.opacity(0.58))
                 )
-                .shadow(color: .black.opacity(0.10), radius: 22, y: 6)
+                .shadow(color: RecordingCompanionTokens.cardShadow, radius: 24, y: 8)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .strokeBorder(
                     LinearGradient(
                         colors: [
-                            Color.white.opacity(0.35),
-                            RecordingCompanionTokens.ink.opacity(0.05),
+                            RecordingCompanionTokens.edgeHighlight.opacity(0.32),
+                            RecordingCompanionTokens.edgeLowlight.opacity(0.16),
                         ],
                         startPoint: .top,
                         endPoint: .bottom
@@ -628,13 +628,13 @@ private struct RecordingPipCapsule: View {
                 .fill(.ultraThinMaterial)
                 .overlay(
                     Capsule(style: .continuous)
-                        .fill(Color.white.opacity(0.45))
+                        .fill(RecordingCompanionTokens.pillTint.opacity(0.45))
                 )
                 .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
         )
         .overlay(
             Capsule(style: .continuous)
-                .strokeBorder(Color.white.opacity(0.30), lineWidth: 0.5)
+                .strokeBorder(RecordingCompanionTokens.edgeHighlight.opacity(0.28), lineWidth: 0.5)
         )
         .onHover { hovered = $0 }
         .task { await runSmoothing() }
@@ -1023,13 +1023,70 @@ private struct RecDot: View {
 // MARK: - Tokens
 
 private enum RecordingCompanionTokens {
-    static let ink         = Color(red: 0.165, green: 0.149, blue: 0.125)  // #2A2620
-    static let inkFaint    = Color(red: 0.165, green: 0.149, blue: 0.125).opacity(0.55)
-    static let inkFainter  = Color(red: 0.165, green: 0.149, blue: 0.125).opacity(0.32)
-    static let paper       = Color(red: 0.957, green: 0.945, blue: 0.918)  // #F4F1EA
-    static let cream       = Color(red: 0.984, green: 0.984, blue: 0.980)  // #FBFBFA
-    static let amber       = Color(red: 0.769, green: 0.490, blue: 0.110)  // #C47D1C
-    static let amberGlow   = Color(red: 0.910, green: 0.604, blue: 0.235)  // #E89A3C
+    static let ink = adaptive(
+        light: RGB(0.165, 0.149, 0.125),     // #2A2620
+        dark: RGB(0.914, 0.878, 0.812)       // warm phosphor
+    )
+    static let inkFaint = ink.opacity(0.55)
+    static let inkFainter = ink.opacity(0.32)
+    static let paper = adaptive(
+        light: RGB(0.957, 0.945, 0.918),     // #F4F1EA
+        dark: RGB(0.055, 0.058, 0.060)       // graphite glass tint
+    )
+    static let cream = adaptive(
+        light: RGB(0.984, 0.984, 0.980),     // #FBFBFA
+        dark: RGB(0.035, 0.037, 0.039)
+    )
+    static let amber = adaptive(
+        light: RGB(0.769, 0.490, 0.110),     // #C47D1C
+        dark: RGB(0.874, 0.561, 0.157)       // #DF8F28
+    )
+    static let amberGlow = adaptive(
+        light: RGB(0.910, 0.604, 0.235),     // #E89A3C
+        dark: RGB(1.000, 0.690, 0.337)       // #FFB056
+    )
+    static let edgeHighlight = adaptive(
+        light: RGB(1.000, 1.000, 1.000),
+        dark: RGB(1.000, 0.949, 0.835)
+    )
+    static let edgeLowlight = adaptive(
+        light: RGB(0.165, 0.149, 0.125),
+        dark: RGB(0.000, 0.000, 0.000)
+    )
+    static let pillTint = adaptive(
+        light: RGB(1.000, 1.000, 1.000),
+        dark: RGB(0.090, 0.087, 0.078)
+    )
+    static let cardShadow = adaptive(
+        light: RGB(0.000, 0.000, 0.000, alpha: 0.10),
+        dark: RGB(0.000, 0.000, 0.000, alpha: 0.34)
+    )
+
+    private struct RGB {
+        let red: Double
+        let green: Double
+        let blue: Double
+        let alpha: Double
+
+        init(_ red: Double, _ green: Double, _ blue: Double, alpha: Double = 1) {
+            self.red = red
+            self.green = green
+            self.blue = blue
+            self.alpha = alpha
+        }
+    }
+
+    private static func adaptive(light: RGB, dark: RGB) -> Color {
+        #if os(macOS)
+        Color(NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            let rgb = isDark ? dark : light
+            return NSColor(srgbRed: rgb.red, green: rgb.green, blue: rgb.blue, alpha: rgb.alpha)
+        })
+        #else
+        Color(red: light.red, green: light.green, blue: light.blue, opacity: light.alpha)
+        #endif
+    }
 }
 
 // MARK: - Fonts
