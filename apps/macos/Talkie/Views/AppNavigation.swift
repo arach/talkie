@@ -159,6 +159,10 @@ struct AppNavigation: View {
         )
     }
 
+    private var sidebarAccent: Color {
+        settings.isScopeTheme ? ScopeAmber.solid : Theme.current.accent
+    }
+
     // Responsive 3-column layout - when window is too narrow, middle column becomes a sheet
     @State private var isNarrowForThreeColumns = false
     @State private var showContentSheet = false
@@ -849,7 +853,7 @@ struct AppNavigation: View {
             selection: sidebarSelectionBinding,
             entries: sidebarEntries,
             progress: sidebarTransition.progress,
-            accent: Theme.current.accent,
+            accent: sidebarAccent,
             allCaps: settings.uiAllCaps,
             isScopeTheme: SettingsManager.shared.isScopeTheme,
             handleTint: Theme.current.foreground,
@@ -877,7 +881,7 @@ struct AppNavigation: View {
             footer: {
                 Image(systemName: selectedSection == .settings ? "gearshape.fill" : "gear")
                     .font(.system(size: SidebarLayout.iconSize))
-                    .foregroundColor(selectedSection == .settings ? Theme.current.accent : Color.secondary)
+                    .foregroundColor(selectedSection == .settings ? sidebarAccent : Color.secondary)
                     .frame(width: SidebarLayout.railWidth, height: SidebarLayout.rowHeight)
                     .contentShape(Rectangle())
                     .onTapGesture {

@@ -10,11 +10,11 @@ import TalkieKit
 //
 // Each scheme swaps the phosphor / accent family inside the agent bay
 // - the gunmetal bg + rails stay constant, so the bay always reads as
-// "instrument bay sunk into cream desk" regardless of which tube color
-// is fitted.
+// "instrument bay sunk into the app chassis" regardless of which tube
+// color is fitted.
 
 enum BayScheme: String, CaseIterable {
-    // Aligned with `design/studio/lib/schemes.ts` as of 2026-05-17.
+    // Aligned with `design/studio/lib/schemes.ts`.
     // The intermediate gray gradient (graphite/pewter/ash/stone) was
     // dropped after the studio review - read as "filtered" rather
     // than designed. New light-mode canonicals from the studio's
@@ -27,6 +27,7 @@ enum BayScheme: String, CaseIterable {
     // AMBER kept as the reference for the original lit-electronics
     // identity. See design/studio/app/mac-home/NOTES.md for rationale.
     case amber       // Reference dark (original electronics bay)
+    case carbon      // Scope dark canonical - carbon chassis, warm trace
     case pearl       // Modern canonical - cool lightest
     case porcelain   // Cool mid
     case aluminum    // Cool saturated
@@ -37,6 +38,7 @@ enum BayScheme: String, CaseIterable {
     var displayName: String {
         switch self {
         case .amber:     return "AMBER"
+        case .carbon:    return "CARBON"
         case .pearl:     return "PEARL"
         case .porcelain: return "PORCELAIN"
         case .aluminum:  return "ALUMINUM"
@@ -48,8 +50,13 @@ enum BayScheme: String, CaseIterable {
 
     /// True when the surface is light enough to need dark text on it.
     /// Toggles glow off, switches stat numbers to graphite ink, and
-    /// bumps edge contrast. All current non-AMBER schemes are light.
-    var isLight: Bool { self != .amber }
+    /// bumps edge contrast.
+    var isLight: Bool {
+        switch self {
+        case .amber, .carbon: return false
+        default:              return true
+        }
+    }
 
     /// Canonical accent. Dark schemes use it as the phosphor for stat
     /// numbers + dot + sparkline; light schemes use it as the edge /
@@ -60,6 +67,7 @@ enum BayScheme: String, CaseIterable {
     var trace: Color {
         switch self {
         case .amber:                              return ScopeKind.dict
+        case .carbon:                             return Color.hex("FF9D33")
         case .pearl, .porcelain, .aluminum:       return Color.hex("D49236")
         case .chiffon, .vellum, .paper:           return ScopeBrass.solid
         }
@@ -77,6 +85,7 @@ enum BayScheme: String, CaseIterable {
     var edge: Color {
         switch self {
         case .amber:                 return trace.opacity(0.10)
+        case .carbon:                return Color.white.opacity(0.06)
         case .pearl, .chiffon:       return trace.opacity(0.10)   // lightest - kept restrained
         case .porcelain, .vellum:    return trace.opacity(0.12)
         case .aluminum, .paper:      return trace.opacity(0.18)   // most saturated of the light family
@@ -87,6 +96,7 @@ enum BayScheme: String, CaseIterable {
     var edgeStrong: Color {
         switch self {
         case .amber:                 return trace.opacity(0.28)
+        case .carbon:                return trace.opacity(0.32)
         case .pearl, .chiffon:       return trace.opacity(0.28)
         case .porcelain, .vellum:    return trace.opacity(0.34)
         case .aluminum, .paper:      return trace.opacity(0.40)
@@ -106,6 +116,7 @@ enum BayScheme: String, CaseIterable {
     var panelBg: Color {
         switch self {
         case .amber:      return Color.hex("14181A")
+        case .carbon:     return Color.hex("0E0F10")
         case .pearl:      return Color.hex("F5F8FA")
         case .porcelain:  return Color.hex("EAEEF1")
         case .aluminum:   return Color.hex("D6DBE0")
@@ -120,6 +131,7 @@ enum BayScheme: String, CaseIterable {
     var statInk: Color {
         switch self {
         case .amber:                                    return trace
+        case .carbon:                                   return Color.hex("F0EDE6")
         case .pearl, .porcelain, .aluminum:             return Color.hex("2A2E32")   // cool charcoal
         case .chiffon, .vellum, .paper:                 return Color.hex("2A2520")   // warm espresso
         }
@@ -129,6 +141,7 @@ enum BayScheme: String, CaseIterable {
     var inkFaint: Color {
         switch self {
         case .amber:      return Color.hex("7A8B85")
+        case .carbon:     return Color.hex("B8B2A4")
         case .pearl:      return Color.hex("6E737B")
         case .porcelain:  return Color.hex("5C6168")
         case .aluminum:   return Color.hex("5C6168")
@@ -142,6 +155,7 @@ enum BayScheme: String, CaseIterable {
     var inkSubtle: Color {
         switch self {
         case .amber:      return Color.hex("6B7A75")
+        case .carbon:     return Color.hex("8A8478")
         case .pearl:      return Color.hex("8A8F96")
         case .porcelain:  return Color.hex("787D84")
         case .aluminum:   return Color.hex("4F545B")
@@ -159,6 +173,8 @@ enum BayScheme: String, CaseIterable {
             switch self {
             case .amber:
                 return [("1F2426", 0.0), ("1A1F22", 0.35), ("0F1416", 1.0)]
+            case .carbon:
+                return [("1A1B1C", 0.0), ("141516", 0.45), ("08090A", 1.0)]
             case .pearl:
                 return [("FBFCFE", 0.0), ("F2F5F7", 0.60), ("E5E9ED", 1.0)]
             case .porcelain:
@@ -185,6 +201,8 @@ enum BayScheme: String, CaseIterable {
             switch self {
             case .amber:
                 return [("0D1113", 0.0), ("161B1E", 0.55), ("1E2528", 1.0)]
+            case .carbon:
+                return [("060708", 0.0), ("131415", 0.55), ("1C1D1E", 1.0)]
             case .pearl:
                 return [("ECEFF2", 0.0), ("F5F8FA", 0.55), ("FBFDFE", 1.0)]
             case .porcelain:
@@ -211,7 +229,7 @@ enum BayScheme: String, CaseIterable {
     /// default state when no user-set value is stored.
     static func canonical(for theme: ThemePreset?) -> BayScheme {
         switch theme {
-        case .scope:       return .chiffon
+        case .scope:       return .carbon
         // case .modern:   return .pearl     // future - when modern theme lands
         default:           return .amber
         }
