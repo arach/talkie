@@ -163,11 +163,18 @@ final class HotkeyRegistry {
 
         // Load all configs from storage, falling back to defaults
         for action in HotkeyAction.allCases {
+            let loadedConfig: HotkeyConfig
             if let data = storage.data(forKey: action.storageKey),
                let config = try? JSONDecoder().decode(HotkeyConfig.self, from: data) {
-                configs[action] = config
+                loadedConfig = config
             } else {
-                configs[action] = action.defaultConfig
+                loadedConfig = action.defaultConfig
+            }
+
+            let config = Self.sanitizedConfig(loadedConfig, for: action)
+            configs[action] = config
+            if config != loadedConfig {
+                persist(config, for: action)
             }
         }
     }
@@ -191,12 +198,11 @@ final class HotkeyRegistry {
     // MARK: - Write
 
     func setConfig(_ action: HotkeyAction, _ config: HotkeyConfig) {
-        configs[action] = config
-        if let data = try? JSONEncoder().encode(config) {
-            storage.set(data, forKey: action.storageKey)
-        }
+        let sanitized = Self.sanitizedConfig(config, for: action)
+        configs[action] = sanitized
+        persist(sanitized, for: action)
         // Sync back to AgentSettings for actions it manages
-        syncToAgentSettings(action, config)
+        syncToAgentSettings(action, sanitized)
         NotificationCenter.default.post(name: .hotkeyDidChange, object: action.rawValue)
         DistributedNotificationCenter.default().postNotificationName(
             NSNotification.Name("to.talkie.app.agentHotkeysDidChange"),
@@ -235,6 +241,24 @@ final class HotkeyRegistry {
     }
 
     // MARK: - Private
+
+    private func persist(_ config: HotkeyConfig, for action: HotkeyAction) {
+        guard let data = try? JSONEncoder().encode(config) else { return }
+        storage.set(data, forKey: action.storageKey)
+    }
+
+    private static func sanitizedConfig(_ config: HotkeyConfig, for action: HotkeyAction) -> HotkeyConfig {
+        guard action.group == .capture,
+              SystemReservedHotkeys.isAppleScreenshotShortcut(keyCode: config.keyCode, modifiers: config.modifiers) else {
+            return config
+        }
+
+        Log(.system).warning(
+            "Rejected Apple-reserved screenshot shortcut",
+            detail: "action=\(action.rawValue) keyCode=\(config.keyCode) modifiers=\(config.modifiers)"
+        )
+        return action.defaultConfig
+    }
 
     private func migrateReservedCaptureDefaultsIfNeeded() {
         let legacyMigrationKey = "hotkeyCapture.safeDefaultsMigration.v1"

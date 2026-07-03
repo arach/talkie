@@ -3,7 +3,7 @@
 //  Talkie macOS
 //
 //  Runtime feature flags with local defaults and remote override capability.
-//  Flags default to safe values (features OFF) and can be enabled remotely.
+//  Product defaults ship in the binary; remote flags can override post-release.
 //
 
 import Foundation
@@ -19,14 +19,8 @@ final class FeatureFlags {
 
     // MARK: - Configuration
 
-    /// Base URL for feature flags API
-    private let flagsURL = "https://api.usetalkie.com/api/flags"
-
-    /// Timeout for remote flag fetch (seconds)
-    private let fetchTimeout: TimeInterval = 5.0
-
     /// Cache duration for remote flags (seconds)
-    private let cacheDuration: TimeInterval = 86400 // 24 hours
+    private let cacheDuration: TimeInterval = RuntimeFeatureFlags.cacheDuration
 
     /// Max retries on transient failure
     private let maxRetries = 2
@@ -50,23 +44,9 @@ final class FeatureFlags {
 
     // MARK: - Local Defaults (compile-time fallbacks)
 
-    /// Safe defaults used when remote flags unavailable
-    /// All defaults should be conservative (features OFF)
-    private let defaults: [String: Bool] = [
-        "showConnectionCenter": false,
-        "showExtensionAPI": false,
-        "paywallEnabled": false,
-        "showProFeatures": false,
-        "enableCloudSync": false,
-        "enableAutoUpdates": true,  // Updates should be ON by default
-        "showDebugInfo": false,
-        "enableCapture": false,      // Master: tray, drain-to-recording, capture system
-        "enableCameraBubble": false, // Sub: floating camera preview, clip recording
-        "enableScreenshots": false,  // Sub: Hyper+S chord, screenshot capture
-        "enableCaptureRichUI": false, // Sub: richer screenshot overlay/preview visuals
-        "enableNotchComposer": false, // TLK-027: Agent owns live notch/island rendering
-        "enableVoiceForegrounding": false, // Experimental mic processing for voice over background audio
-    ]
+    /// Product defaults used when remote flags are unavailable.
+    /// Experimental or paid surfaces stay off; shipped local features can default on.
+    private let defaults = RuntimeFeatureFlags.defaults
 
     // MARK: - Remote Overrides
 
@@ -178,15 +158,11 @@ final class FeatureFlags {
     }
 
     /// Parent → children relationships for hierarchical display
-    private let childFlags: [String: [String]] = [
-        "enableCapture": ["enableCameraBubble", "enableScreenshots"],
-        "enableScreenshots": ["enableCaptureRichUI"],
-    ]
+    private let childFlags = RuntimeFeatureFlags.childFlags
 
     /// All top-level flag keys (excludes children), sorted alphabetically
     var allFlagKeys: [String] {
-        let children = Set(childFlags.values.flatMap { $0 })
-        return defaults.keys.filter { !children.contains($0) }.sorted()
+        RuntimeFeatureFlags.topLevelKeys
     }
 
     /// Children of a given flag key (empty if none)
@@ -204,6 +180,14 @@ final class FeatureFlags {
             result[key] = value
         }
         return result
+    }
+
+    var remoteFlagCount: Int {
+        remoteFlags.count
+    }
+
+    var localOverrideCount: Int {
+        localOverrides.count
     }
 
     /// Check if a flag has a local override set
@@ -227,14 +211,15 @@ final class FeatureFlags {
 
     /// Fetch latest flags from remote server
     /// Non-blocking, fires notification on completion
-    func refresh() async {
+    func refresh(force: Bool = false) async {
         guard !isFetching else {
             log.debug("Flag refresh already in progress, skipping")
             return
         }
 
         // Check cache validity
-        if let lastFetch = lastFetchDate,
+        if !force,
+           let lastFetch = lastFetchDate,
            Date().timeIntervalSince(lastFetch) < cacheDuration {
             log.debug("Using cached flags (fetched \(Int(Date().timeIntervalSince(lastFetch)))s ago)")
             return
@@ -255,10 +240,12 @@ final class FeatureFlags {
 
             // Re-sync to Agent so it sees the fresh values
             syncAllToSharedDefaults()
+            persistSharedSnapshot()
 
             log.info("Feature flags refreshed: \(flags.count) flags")
         } catch {
             lastError = error
+            persistSharedError(error.localizedDescription)
             log.warning("Failed to fetch feature flags: \(error.localizedDescription)")
             // Keep using cached/persisted flags on failure
 
@@ -272,7 +259,7 @@ final class FeatureFlags {
                     guard let self else { return }
                     // Clear cache gate so refresh() doesn't short-circuit
                     self.lastFetchDate = nil
-                    await self.refresh()
+                    await self.refresh(force: true)
                 }
             }
         }
@@ -280,36 +267,7 @@ final class FeatureFlags {
 
     /// Fetch flags from API with timeout
     private func fetchFlags() async throws -> [String: Bool] {
-        guard let url = URL(string: flagsURL) else {
-            throw FeatureFlagError.invalidURL
-        }
-
-        // Add app version for targeting
-        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
-        components.queryItems = [
-            URLQueryItem(name: "version", value: version),
-            URLQueryItem(name: "build", value: build),
-            URLQueryItem(name: "platform", value: "macos"),
-        ]
-
-        var request = URLRequest(url: components.url!)
-        request.timeoutInterval = fetchTimeout
-        request.cachePolicy = .reloadIgnoringLocalCacheData
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
-            throw FeatureFlagError.serverError
-        }
-
-        // Parse response
-        let decoder = JSONDecoder()
-        let flagsResponse = try decoder.decode(FlagsResponse.self, from: data)
-
-        return flagsResponse.flags
+        return try await RuntimeFeatureFlags.fetchRemoteFlags()
     }
 
     // MARK: - Persistence
@@ -331,6 +289,21 @@ final class FeatureFlags {
             UserDefaults.standard.set(data, forKey: persistedFlagsKey)
         }
         UserDefaults.standard.set(lastFetchDate, forKey: lastFetchKey)
+    }
+
+    private func persistSharedSnapshot() {
+        if let data = try? JSONEncoder().encode(remoteFlags) {
+            TalkieSharedSettings.set(data, forKey: AgentSettingsKey.featureFlagsRemotePayload)
+        }
+        if let lastFetchDate {
+            TalkieSharedSettings.set(lastFetchDate, forKey: AgentSettingsKey.featureFlagsLastFetch)
+        }
+        TalkieSharedSettings.set(remoteFlags.count, forKey: AgentSettingsKey.featureFlagsRemoteCount)
+        TalkieSharedSettings.removeObject(forKey: AgentSettingsKey.featureFlagsLastError)
+    }
+
+    private func persistSharedError(_ message: String) {
+        TalkieSharedSettings.set(message, forKey: AgentSettingsKey.featureFlagsLastError)
     }
 
     // MARK: - Local Overrides
@@ -369,22 +342,32 @@ final class FeatureFlags {
 
     /// Map of feature flag keys to their shared defaults keys.
     /// Only flags that other processes need to read go here.
-    private let sharedFlagKeys: [String: String] = [
-        "enableCapture": AgentSettingsKey.featureCaptureEnabled,
-        "enableNotchComposer": AgentSettingsKey.featureNotchComposerEnabled,
-        "enableVoiceForegrounding": AgentSettingsKey.featureVoiceForegroundingEnabled,
-    ]
+    private let sharedFlagKeys = RuntimeFeatureFlags.sharedSettingsKeys
 
     /// Write resolved flag value to TalkieSharedSettings so Agent can read it.
     private func syncToSharedDefaults(_ key: String) {
         guard let sharedKey = sharedFlagKeys[key] else { return }
-        TalkieSharedSettings.set(flag(key), forKey: sharedKey)
+        let resolvedValue = flag(key)
+        let previousObject = TalkieSharedSettings.object(forKey: sharedKey)
+        let previousValue = (previousObject as? Bool) ?? (previousObject as? NSNumber)?.boolValue
+        TalkieSharedSettings.set(resolvedValue, forKey: sharedKey)
+
+        guard previousValue != resolvedValue else { return }
+
+        if sharedKey == AgentSettingsKey.featureCaptureEnabled {
+            DistributedNotificationCenter.default().postNotificationName(
+                NSNotification.Name("to.talkie.app.agentHotkeysDidChange"),
+                object: "featureCaptureEnabled",
+                userInfo: nil,
+                deliverImmediately: true
+            )
+        }
     }
 
     /// Sync all cross-process flags on startup.
     func syncAllToSharedDefaults() {
-        for (key, sharedKey) in sharedFlagKeys {
-            TalkieSharedSettings.set(flag(key), forKey: sharedKey)
+        for key in sharedFlagKeys.keys {
+            syncToSharedDefaults(key)
         }
     }
 
@@ -396,29 +379,11 @@ final class FeatureFlags {
         UserDefaults.standard.removeObject(forKey: persistedFlagsKey)
         UserDefaults.standard.removeObject(forKey: lastFetchKey)
         UserDefaults.standard.removeObject(forKey: localOverridesKey)
+        TalkieSharedSettings.removeObject(forKey: AgentSettingsKey.featureFlagsRemotePayload)
+        TalkieSharedSettings.removeObject(forKey: AgentSettingsKey.featureFlagsLastFetch)
+        TalkieSharedSettings.removeObject(forKey: AgentSettingsKey.featureFlagsLastError)
+        TalkieSharedSettings.removeObject(forKey: AgentSettingsKey.featureFlagsRemoteCount)
         syncAllToSharedDefaults()
         log.info("Feature flags cache cleared")
-    }
-}
-
-// MARK: - Response Models
-
-private struct FlagsResponse: Decodable {
-    let flags: [String: Bool]
-}
-
-// MARK: - Errors
-
-enum FeatureFlagError: LocalizedError {
-    case invalidURL
-    case serverError
-    case decodingError
-
-    var errorDescription: String? {
-        switch self {
-        case .invalidURL: return "Invalid flags URL"
-        case .serverError: return "Server returned an error"
-        case .decodingError: return "Failed to decode flags response"
-        }
     }
 }

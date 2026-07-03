@@ -225,108 +225,182 @@ struct CameraSettingsView: View {
                 Spacer()
             }
 
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                // Master capture toggle
-                Toggle(isOn: Binding(
-                    get: { flags.enableCapture },
-                    set: { enabled in
-                        FeatureFlags.shared.setLocalOverride("enableCapture", value: enabled)
-                        guard enabled else { return }
-                        Task { @MainActor in
-                            _ = await screenCapturePermissions.requestForCaptureEnablement()
+            #if DEBUG
+            debugFeatureOverrideControls
+            #else
+            productionFeatureStatus
+            #endif
+        }
+        .settingsSectionCard(padding: Spacing.md)
+    }
+
+    private var productionFeatureStatus: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            readOnlyFeatureRow(title: "Capture", key: "enableCapture", value: flags.enableCapture)
+
+            if flags.enableCapture {
+                HStack(spacing: Spacing.xs) {
+                    Circle()
+                        .fill(screenCapturePermissions.isReadyForCapture ? Color.green : Color.orange)
+                        .frame(width: 6, height: 6)
+
+                    Text(screenCapturePermissions.isReadyForCapture ? "Screen capture access ready" : "Screen capture access needed for screenshots and screen recording.")
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundMuted)
+
+                    Spacer()
+
+                    if !screenCapturePermissions.isReadyForCapture {
+                        Button(screenCapturePermissions.isRequesting ? "Requesting..." : "Grant Access") {
+                            Task { @MainActor in
+                                _ = await screenCapturePermissions.requestForCaptureEnablement()
+                            }
                         }
+                        .font(Theme.current.fontXS)
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                    }
+                }
+
+                readOnlyFeatureRow(title: "Screenshots", key: "enableScreenshots", value: flags.enableScreenshots)
+                    .padding(.leading, Spacing.sm)
+                readOnlyFeatureRow(title: "Camera Bubble", key: "enableCameraBubble", value: flags.enableCameraBubble)
+                    .padding(.leading, Spacing.sm)
+            }
+        }
+    }
+
+    private var debugFeatureOverrideControls: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Toggle(isOn: Binding(
+                get: { flags.enableCapture },
+                set: { enabled in
+                    FeatureFlags.shared.setLocalOverride("enableCapture", value: enabled)
+                    guard enabled else { return }
+                    Task { @MainActor in
+                        _ = await screenCapturePermissions.requestForCaptureEnablement()
+                    }
+                }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Enable Capture")
+                        .font(Theme.current.fontSMBold)
+                        .foregroundColor(Theme.current.foreground)
+
+                    Text("Capture tray, tray-to-memo attachments, and global shortcuts.")
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundMuted)
+                }
+            }
+            .toggleStyle(.switch)
+            .tint(.accentColor)
+
+            if flags.enableCapture {
+                HStack(spacing: Spacing.xs) {
+                    Circle()
+                        .fill(screenCapturePermissions.isReadyForCapture ? Color.green : Color.orange)
+                        .frame(width: 6, height: 6)
+
+                    Text(screenCapturePermissions.isReadyForCapture ? "Screen capture access ready" : "Screen capture access needed for screenshots and screen recording.")
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundMuted)
+
+                    Spacer()
+
+                    if !screenCapturePermissions.isReadyForCapture {
+                        Button(screenCapturePermissions.isRequesting ? "Requesting..." : "Grant Access") {
+                            Task { @MainActor in
+                                _ = await screenCapturePermissions.requestForCaptureEnablement()
+                            }
+                        }
+                        .font(Theme.current.fontXS)
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                    }
+                }
+
+                Toggle(isOn: Binding(
+                    get: { flags.enableScreenshots },
+                    set: { enabled in
+                        FeatureFlags.shared.setLocalOverride("enableScreenshots", value: enabled)
                     }
                 )) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Enable Capture")
-                            .font(Theme.current.fontSMBold)
+                    HStack(spacing: Spacing.sm) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Theme.current.divider)
+                            .frame(width: 2, height: 14)
+                        Text("Screenshots")
+                            .font(Theme.current.fontSM)
                             .foregroundColor(Theme.current.foreground)
-
-                        Text("Capture tray, tray-to-memo attachments, and global shortcuts.")
-                            .font(Theme.current.fontXS)
-                            .foregroundColor(Theme.current.foregroundMuted)
                     }
+                    .padding(.leading, Spacing.sm)
                 }
                 .toggleStyle(.switch)
                 .tint(.accentColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-                if flags.enableCapture {
-                    HStack(spacing: Spacing.xs) {
-                        Circle()
-                            .fill(screenCapturePermissions.isReadyForCapture ? Color.green : Color.orange)
-                            .frame(width: 6, height: 6)
-
-                        Text(screenCapturePermissions.isReadyForCapture ? "Screen capture access ready" : "Screen capture access needed for screenshots and screen recording.")
-                            .font(Theme.current.fontXS)
-                            .foregroundColor(Theme.current.foregroundMuted)
-
-                        Spacer()
-
-                        if !screenCapturePermissions.isReadyForCapture {
-                            Button(screenCapturePermissions.isRequesting ? "Requesting..." : "Grant Access") {
-                                Task { @MainActor in
-                                    _ = await screenCapturePermissions.requestForCaptureEnablement()
-                                }
-                            }
-                            .font(Theme.current.fontXS)
-                            .buttonStyle(.bordered)
-                            .controlSize(.mini)
-                        }
+                Toggle(isOn: Binding(
+                    get: { flags.enableCameraBubble },
+                    set: { enabled in
+                        FeatureFlags.shared.setLocalOverride("enableCameraBubble", value: enabled)
                     }
-
-                    // Sub-toggles — indent in label keeps switches aligned with parent
-                    Toggle(isOn: Binding(
-                        get: { flags.enableScreenshots },
-                        set: { enabled in
-                            FeatureFlags.shared.setLocalOverride("enableScreenshots", value: enabled)
-                        }
-                    )) {
-                        HStack(spacing: Spacing.sm) {
-                            RoundedRectangle(cornerRadius: 1)
-                                .fill(Theme.current.divider)
-                                .frame(width: 2, height: 14)
-                            Text("Screenshots")
-                                .font(Theme.current.fontSM)
-                                .foregroundColor(Theme.current.foreground)
-                        }
-                        .padding(.leading, Spacing.sm)
+                )) {
+                    HStack(spacing: Spacing.sm) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Theme.current.divider)
+                            .frame(width: 2, height: 14)
+                        Text("Camera Bubble")
+                            .font(Theme.current.fontSM)
+                            .foregroundColor(Theme.current.foreground)
                     }
-                    .toggleStyle(.switch)
-                    .tint(.accentColor)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    Toggle(isOn: Binding(
-                        get: { flags.enableCameraBubble },
-                        set: { enabled in
-                            FeatureFlags.shared.setLocalOverride("enableCameraBubble", value: enabled)
-                        }
-                    )) {
-                        HStack(spacing: Spacing.sm) {
-                            RoundedRectangle(cornerRadius: 1)
-                                .fill(Theme.current.divider)
-                                .frame(width: 2, height: 14)
-                            Text("Camera Bubble")
-                                .font(Theme.current.fontSM)
-                                .foregroundColor(Theme.current.foreground)
-                        }
-                        .padding(.leading, Spacing.sm)
-                    }
-                    .toggleStyle(.switch)
-                    .tint(.accentColor)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    HStack(spacing: Spacing.xs) {
-                        Image(systemName: "info.circle")
-                            .font(.system(size: 10))
-                            .foregroundColor(.secondary)
-                        Text("Enables capture tray, tray-to-memo attachments, and global shortcuts. Screen Recording is only requested when you turn this on. Restart required for shortcut changes.")
-                            .font(Theme.current.fontXS)
-                            .foregroundColor(Theme.current.foregroundMuted)
-                    }
+                    .padding(.leading, Spacing.sm)
+                }
+                .toggleStyle(.switch)
+                .tint(.accentColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                HStack(spacing: Spacing.xs) {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                    Text("Enables capture tray, tray-to-memo attachments, and global shortcuts. Screen Recording is only requested when you turn this on. Restart required for shortcut changes.")
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundMuted)
                 }
             }
         }
-        .settingsSectionCard(padding: Spacing.md)
+    }
+
+    private func readOnlyFeatureRow(title: String, key: String, value: Bool) -> some View {
+        HStack(spacing: Spacing.sm) {
+            RoundedRectangle(cornerRadius: 1)
+                .fill(Theme.current.divider)
+                .frame(width: 2, height: 14)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(Theme.current.fontSM)
+                    .foregroundColor(Theme.current.foreground)
+                Text(key)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(Theme.current.foregroundMuted)
+            }
+
+            Spacer()
+
+            Text(FeatureFlags.shared.flagSource(key).uppercased())
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .foregroundColor(Theme.current.foregroundMuted)
+                .padding(.horizontal, Spacing.xs)
+                .padding(.vertical, 2)
+                .background(Theme.current.foregroundMuted.opacity(0.14))
+                .cornerRadius(CornerRadius.xs)
+
+            Text(value ? "ON" : "OFF")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundColor(value ? .green : Theme.current.foregroundMuted)
+                .frame(width: 30, alignment: .trailing)
+        }
     }
 
     // MARK: - Camera Device

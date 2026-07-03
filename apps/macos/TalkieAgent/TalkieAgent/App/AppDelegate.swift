@@ -1304,9 +1304,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     // MARK: - Hotkeys
 
     /// Load a HotkeyConfig from shared settings, falling back to hardcoded defaults.
-    private static func loadHotkeyConfig(key: String, fallbackKeyCode: UInt32, fallbackModifiers: UInt32) -> (keyCode: UInt32, modifiers: UInt32) {
+    private static func loadHotkeyConfig(
+        key: String,
+        fallbackKeyCode: UInt32,
+        fallbackModifiers: UInt32,
+        avoidsAppleScreenshotShortcuts: Bool = false
+    ) -> (keyCode: UInt32, modifiers: UInt32) {
         if let data = TalkieSharedSettings.data(forKey: key) {
             if let config = try? JSONDecoder().decode(HotkeyConfigDTO.self, from: data) {
+                if avoidsAppleScreenshotShortcuts,
+                   SystemReservedHotkeys.isAppleScreenshotShortcut(keyCode: config.keyCode, modifiers: config.modifiers) {
+                    let fallback = HotkeyConfigDTO(keyCode: fallbackKeyCode, modifiers: fallbackModifiers)
+                    if let fallbackData = try? JSONEncoder().encode(fallback) {
+                        TalkieSharedSettings.set(fallbackData, forKey: key)
+                    }
+                    log.warning(
+                        "Reset Apple-reserved capture hotkey to default",
+                        detail: "key=\(key) keyCode=\(config.keyCode) modifiers=\(config.modifiers)"
+                    )
+                    return (fallback.keyCode, fallback.modifiers)
+                }
                 return (config.keyCode, config.modifiers)
             }
         }
@@ -1320,6 +1337,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     private static var hyperModifiers: UInt32 {
         UInt32(cmdKey | optionKey | controlKey | shiftKey)
+    }
+
+    private static var captureFeatureEnabled: Bool {
+        if TalkieEnvironment.current == .production {
+            return true
+        }
+        return TalkieSharedSettings.bool(forKey: AgentSettingsKey.featureCaptureEnabled)
+    }
+
+    private static func syncProductionCaptureDefaultIfNeeded() {
+        guard TalkieEnvironment.current == .production else { return }
+        TalkieSharedSettings.set(true, forKey: AgentSettingsKey.featureCaptureEnabled)
     }
 
     private static func migrateReservedCaptureDefaultsIfNeeded() {
@@ -1366,6 +1395,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     private func setupHotkeys() {
         Self.migrateReservedCaptureDefaultsIfNeeded()
+        Self.syncProductionCaptureDefaultIfNeeded()
 
         let settings = LiveSettings.shared
 
@@ -1486,7 +1516,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private func registerCaptureHotkeys() {
         unregisterCaptureHotkeys()
 
-        guard TalkieSharedSettings.bool(forKey: AgentSettingsKey.featureCaptureEnabled) else {
+        guard Self.captureFeatureEnabled else {
             log.info("Capture hotkeys skipped — feature disabled in shared settings")
             return
         }
@@ -1494,12 +1524,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         let captureChord = Self.loadHotkeyConfig(
             key: AgentSettingsKey.captureChordHotkey,
             fallbackKeyCode: 1,
-            fallbackModifiers: UInt32(cmdKey | optionKey | controlKey | shiftKey)
+            fallbackModifiers: UInt32(cmdKey | optionKey | controlKey | shiftKey),
+            avoidsAppleScreenshotShortcuts: true
         )
         let screenRecordChord = Self.loadHotkeyConfig(
             key: AgentSettingsKey.screenRecordChordHotkey,
             fallbackKeyCode: 15,
-            fallbackModifiers: UInt32(cmdKey | optionKey | controlKey | shiftKey)
+            fallbackModifiers: UInt32(cmdKey | optionKey | controlKey | shiftKey),
+            avoidsAppleScreenshotShortcuts: true
         )
 
         screenshotHotKeyManager.registerHotKey(
@@ -1515,7 +1547,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         let markupCaptureChord = Self.loadHotkeyConfig(
             key: AgentSettingsKey.markupCaptureChordHotkey,
             fallbackKeyCode: 46,
-            fallbackModifiers: Self.hyperModifiers
+            fallbackModifiers: Self.hyperModifiers,
+            avoidsAppleScreenshotShortcuts: true
         )
         markupScreenshotHotKeyManager.registerHotKey(
             modifiers: markupCaptureChord.modifiers,
@@ -1587,7 +1620,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         let magnifier = Self.loadHotkeyConfig(
             key: "hotkeyCapture.desktopMagnifier",
             fallbackKeyCode: 6,                   // Z - freeze a source region into a movable magnifier
-            fallbackModifiers: Self.hyperModifiers
+            fallbackModifiers: Self.hyperModifiers,
+            avoidsAppleScreenshotShortcuts: true
         )
         if magnifier.keyCode == markupCaptureChord.keyCode,
            magnifier.modifiers == markupCaptureChord.modifiers {
@@ -1602,7 +1636,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         let pasteChord = Self.loadHotkeyConfig(
             key: AgentSettingsKey.pasteChordHotkey,
             fallbackKeyCode: 9,
-            fallbackModifiers: UInt32(cmdKey | optionKey | controlKey | shiftKey)
+            fallbackModifiers: UInt32(cmdKey | optionKey | controlKey | shiftKey),
+            avoidsAppleScreenshotShortcuts: true
         )
         pasteChordHotKeyManager.registerHotKey(
             modifiers: pasteChord.modifiers,
@@ -1626,7 +1661,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             let config = Self.loadHotkeyConfig(
                 key: settingsKey,
                 fallbackKeyCode: defaultKeyCode,
-                fallbackModifiers: defaultModifiers
+                fallbackModifiers: defaultModifiers,
+                avoidsAppleScreenshotShortcuts: true
             )
             if config.keyCode == captureChord.keyCode && config.modifiers == captureChord.modifiers {
                 log.info("Direct screenshot hotkey skipped because it matches the capture chord: \(settingsKey)")
@@ -1652,7 +1688,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         let pasteLastScreenshot = Self.loadHotkeyConfig(
             key: AgentSettingsKey.pasteLastScreenshotHotkey,
             fallbackKeyCode: 35,
-            fallbackModifiers: Self.hyperModifiers
+            fallbackModifiers: Self.hyperModifiers,
+            avoidsAppleScreenshotShortcuts: true
         )
         pasteLastScreenshotHotKey.registerHotKey(
             modifiers: pasteLastScreenshot.modifiers,
@@ -2290,7 +2327,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             ("Talk to Agents", agentVoiceHotKeyManager),
         ]
 
-        if TalkieSharedSettings.bool(forKey: AgentSettingsKey.featureCaptureEnabled) {
+        if Self.captureFeatureEnabled {
             managers.append(("Screenshot Chord", screenshotHotKeyManager))
             managers.append(("Markup Screenshot Chord", markupScreenshotHotKeyManager))
             managers.append(("Screen Record", screenRecordHotKeyManager))

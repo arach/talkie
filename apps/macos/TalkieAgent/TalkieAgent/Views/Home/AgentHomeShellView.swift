@@ -966,7 +966,10 @@ private struct AgentHomeCapturePage: View {
     }
 
     private var captureEnabled: Bool {
-        TalkieSharedSettings.bool(forKey: AgentSettingsKey.featureCaptureEnabled)
+        if TalkieEnvironment.current == .production {
+            return true
+        }
+        return TalkieSharedSettings.bool(forKey: AgentSettingsKey.featureCaptureEnabled)
     }
 }
 
