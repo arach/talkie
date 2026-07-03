@@ -82,6 +82,12 @@ public enum ScopeCanvas {
     /// from canvas so it reads as a distinct surface, no yellow.
     /// Mapped to `tacticalBackgroundSecondary` in SettingsManager.
     public static let canvasAlt = Color.scopeAdaptive(light: "ECECEB", dark: "17191B")
+    /// Raised Home panel — mirrors Studio's `SCOPE.pane` in light mode
+    /// and uses an opaque gunmetal pane in dark mode. This avoids
+    /// translucent white overlays flattening into gray on dark canvas.
+    public static let pane = Color.scopeAdaptive(light: "F1F1F0", dark: "171C1E")
+    /// Hover lift for pane-backed rows and cards.
+    public static let paneHover = Color.scopeAdaptive(light: "EFEFEE", dark: "1F272A")
     /// Card surface — cool neutral pane lift / mild emphasis.
     public static let surface = Color.scopeAdaptive(light: "EFEFEE", dark: "14181A")
     /// 85% canvas — for floating overlays / pill chrome.

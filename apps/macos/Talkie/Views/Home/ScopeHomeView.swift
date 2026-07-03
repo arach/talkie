@@ -41,14 +41,14 @@ struct ScopeHomeView: View {
     @AppStorage("scopeAgentBay.heatmap")   private var bayHeatmap: Bool = false
     @AppStorage("scopeAgentBay.timeline")  private var bayTimeline: Bool = false
     @AppStorage("scopeAgentBay.brackets")  private var bayBrackets: Bool = false
-    // Default to CHIFFON — the Scope theme's canonical bay per the
-    // studio decision (2026-05-17). See BayScheme.canonical(for:) and
-    // design/studio/app/mac-home/NOTES.md.
-    @AppStorage("scopeAgentBay.scheme")    private var bayScheme: String = BayScheme.chiffon.rawValue
+    // Default to CARBON so the top instrument continues the dark Scope
+    // chassis instead of reverting to a light insert.
+    @AppStorage("scopeAgentBay.scheme")    private var bayScheme: String = BayScheme.carbon.rawValue
+    @AppStorage("scopeAgentBay.migratedDefaultCarbon") private var didMigrateBayDefaultToCarbon: Bool = false
     // Migration fallback: users with deprecated stored values
     // (graphite/pewter/ash/stone — dropped 2026-05-17) decode to nil
     // and should land on the Scope canonical, not the original amber.
-    private var currentScheme: BayScheme { BayScheme(rawValue: bayScheme) ?? .chiffon }
+    private var currentScheme: BayScheme { BayScheme(rawValue: bayScheme) ?? .carbon }
 
     @State private var memosStore = MemosViewModel.shared
     @State private var dictationStore = DictationStore.shared
@@ -103,7 +103,10 @@ struct ScopeHomeView: View {
         .background(ScopeCanvas.canvas)
         .environment(\.cmdHeld, cmdHeld)
         .background(cmdShortcutBindings)
-        .onAppear { startCmdMonitor() }
+        .onAppear {
+            migrateDefaultBaySchemeIfNeeded()
+            startCmdMonitor()
+        }
         .onDisappear { stopCmdMonitor() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
             resetCmdHeld()
@@ -147,6 +150,14 @@ struct ScopeHomeView: View {
         if todayTotal == 0 { return "No captures yet" }
         if todayTotal == 1 { return "1 capture" }
         return "\(todayTotal) captures"
+    }
+
+    private func migrateDefaultBaySchemeIfNeeded() {
+        guard !didMigrateBayDefaultToCarbon else { return }
+        if bayScheme == BayScheme.chiffon.rawValue {
+            bayScheme = BayScheme.carbon.rawValue
+        }
+        didMigrateBayDefaultToCarbon = true
     }
 
     /// Streak + word count promoted to inline chrome — the longer
@@ -824,7 +835,7 @@ struct ScopeHomeView: View {
             .background(
                 ZStack {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.white.opacity(0.30))
+                        .fill(ScopeCanvas.pane)
                     LinearGradient(
                         colors: [
                             ScopeAmber.tintSubtle,
@@ -961,7 +972,7 @@ struct ScopeHomeView: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color.white.opacity(0.30))
+                    .fill(ScopeCanvas.pane)
             )
             .scopeCardBorder(cornerRadius: 6, emphasis: .muted)
         }
@@ -1231,7 +1242,7 @@ struct ScopeHomeView: View {
                         bayHeatmap = false
                         bayTimeline = false
                         bayBrackets = false
-                        bayScheme = BayScheme.chiffon.rawValue
+                        bayScheme = BayScheme.carbon.rawValue
                     } label: {
                         Text("RESET")
                             .font(.system(size: 9, weight: .semibold, design: .monospaced))

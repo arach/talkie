@@ -169,8 +169,8 @@ struct RecentSection: Identifiable {
 private enum RecentPaneTokens {
     static let voiceTint   = ScopeBrass.solid
     static let contentTint = ScopeKind.note
-    static let cardBg      = Color.white.opacity(0.40)
-    static let hoverBg     = Color(red: 0.95, green: 0.95, blue: 0.94).opacity(0.5)
+    static let cardBg      = ScopeCanvas.pane
+    static let hoverBg     = ScopeCanvas.paneHover
 }
 
 private extension HomeHoverChromeStyle {
@@ -456,22 +456,8 @@ private struct EmptyCTARow: View {
                     .font(.system(size: 11))
                     .foregroundStyle(ScopeInk.faint)
                 Spacer()
-                HStack(spacing: 3) {
-                    ForEach(cta.kbd, id: \.self) { k in
-                        Text(k)
-                            .font(RecentFont.mono(size: 9, weight: .semibold))
-                            .frame(minWidth: 14, minHeight: 14)
-                            .padding(.horizontal, 3)
-                            .background(
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(Color.white.opacity(0.7))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 2)
-                                            .stroke(ScopeEdge.subtle, lineWidth: 0.5)
-                                    )
-                            )
-                            .foregroundStyle(ScopeInk.faint)
-                    }
+                if !cta.kbd.isEmpty {
+                    ShortcutChordBadge(keys: cta.kbd)
                 }
             }
             .padding(.horizontal, 14)
@@ -483,5 +469,27 @@ private struct EmptyCTARow: View {
             ScopeRule(.row),
             alignment: .top
         )
+    }
+}
+
+private struct ShortcutChordBadge: View {
+    let keys: [String]
+
+    var body: some View {
+        Text(keys.joined(separator: " "))
+            .font(RecentFont.mono(size: 8.5, weight: .semibold))
+            .tracking(0.7)
+            .foregroundStyle(ScopeInk.subtle)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(ScopeInk.primary.opacity(0.04))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .stroke(ScopeAmber.solid.opacity(0.16), lineWidth: 0.5)
+            )
+            .fixedSize()
     }
 }
