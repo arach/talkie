@@ -135,7 +135,7 @@ final class PasteChordController {
     }
 
     func beginChord() async -> PasteBarResult? {
-        let allItems = await AgentLiveTrayAssetStore.shared.recentItems(limit: 5)
+        let allItems: [AgentLiveTrayItem] = []
         log.info("Quick Paste HUD shown", detail: "items=\(allItems.count)")
 
         return await withCheckedContinuation { continuation in
@@ -200,16 +200,11 @@ final class PasteChordController {
                     return true
                 }
 
-                // W or Tab — dismiss and open tray viewer
+                // W or Tab used to open the tray viewer. The tray viewer is retired,
+                // so this now just dismisses the empty picker.
                 if input.isTrayShortcut {
                     timeout.cancel()
                     resume(nil)
-                    DistributedNotificationCenter.default().postNotificationName(
-                        NSNotification.Name("to.talkie.app.screenshotDirect"),
-                        object: "viewTray",
-                        userInfo: nil,
-                        deliverImmediately: true
-                    )
                     return true
                 }
 

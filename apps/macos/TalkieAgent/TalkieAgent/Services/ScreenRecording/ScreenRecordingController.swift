@@ -3,8 +3,9 @@
 //  TalkieAgent
 //
 //  Orchestrator for screen video recording.
-//  Flow: Hyper+R → chord HUD → select target → record → stop pill → tray.
-//  Coordinates ScreenRecordingService and Agent-owned live tray storage.
+//  Flow: Hyper+R → chord HUD → select target → record → stop pill → Library.
+//  Coordinates ScreenRecordingService, durable capture storage, and live
+//  dictation attachment.
 //
 
 import AppKit
@@ -142,7 +143,7 @@ final class ScreenRecordingController {
 
     // MARK: - Stop Recording
 
-    /// Stop the current screen recording and add the clip to the tray.
+    /// Stop the current screen recording and save the clip to the Library.
     @discardableResult
     func stopRecording() async -> Bool {
         guard !isStoppingRecording else {
@@ -333,27 +334,38 @@ final class ScreenRecordingController {
             return false
         }
 
-        do {
-            let stored = try await AgentLiveTrayAssetStore.shared.registerClip(
-                fileURL: persisted.fileURL,
-                id: captureID,
-                capturedAt: startedAt,
-                durationMs: durationMs,
-                width: width,
-                height: height,
-                captureMode: captureMode,
-                windowTitle: target.windowTitle,
-                appName: target.appName,
-                displayName: target.displayName,
-                metadataEvents: metadataEvents
-            )
-            if interrupted {
-                log.warning("Interrupted screen recording saved to Agent tray (\(stored.filename), \(durationMs)ms)")
-            } else {
-                log.info("Screen recording stopped, \(durationMs)ms → Agent tray (\(stored.filename))")
-            }
-        } catch {
-            log.error("Screen recording tray write failed: \(error.localizedDescription)")
+        let recordedLive = AgentController.current?.recordLiveClip(
+            fileURL: persisted.fileURL,
+            capturedAt: startedAt,
+            durationMs: durationMs,
+            captureMode: captureMode,
+            width: width,
+            height: height,
+            windowTitle: target.windowTitle,
+            appName: target.appName,
+            displayName: target.displayName
+        ) ?? false
+
+        let item = AgentLiveTrayItem(
+            id: captureID,
+            kind: .clip,
+            capturedAt: startedAt,
+            durationMs: durationMs,
+            filename: persisted.filename,
+            width: width,
+            height: height,
+            captureMode: captureMode,
+            windowTitle: target.windowTitle,
+            appName: target.appName,
+            displayName: target.displayName,
+            fileURL: persisted.fileURL
+        )
+        CaptureIslandController.shared.presentImmediate(item, near: nil)
+
+        if interrupted {
+            log.warning("Interrupted screen recording saved to Library (\(persisted.filename), \(durationMs)ms, live=\(recordedLive))")
+        } else {
+            log.info("Screen recording stopped, \(durationMs)ms -> Library (\(persisted.filename), live=\(recordedLive))")
         }
         return true
     }

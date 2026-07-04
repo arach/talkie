@@ -1356,10 +1356,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         let migrations: [(key: String, old: HotkeyConfigDTO, new: HotkeyConfigDTO)] = [
             ("hotkeyCapture.fullscreen", .init(keyCode: 20, modifiers: oldCmdShift), .init(keyCode: 20, modifiers: hyperModifiers)),
             ("hotkeyCapture.region", .init(keyCode: 21, modifiers: oldCmdShift), .init(keyCode: 21, modifiers: hyperModifiers)),
-            ("hotkeyCapture.trayViewer", .init(keyCode: 23, modifiers: oldCmdShift), .init(keyCode: 23, modifiers: hyperModifiers)),
             ("hotkeyCapture.window", .init(keyCode: 22, modifiers: oldCmdShift), .init(keyCode: 22, modifiers: hyperModifiers)),
-            ("hotkeyCapture.trayShelf", .init(keyCode: 17, modifiers: oldCmdShift), .init(keyCode: 17, modifiers: hyperModifiers)),
-            (AgentSettingsKey.pasteLastScreenshotHotkey, .init(keyCode: 9, modifiers: oldCmdShift), .init(keyCode: 35, modifiers: hyperModifiers)),
             ("hotkeyCapture.desktopMagnifier", .init(keyCode: 46, modifiers: hyperModifiers), .init(keyCode: 6, modifiers: hyperModifiers)),
         ]
 
@@ -1628,28 +1625,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             log.info("Desktop magnifier hotkey registered: keyCode=\(magnifier.keyCode) modifiers=\(magnifier.modifiers)")
         }
 
-        let pasteChord = Self.loadHotkeyConfig(
-            key: AgentSettingsKey.pasteChordHotkey,
-            fallbackKeyCode: 9,
-            fallbackModifiers: UInt32(cmdKey | optionKey | controlKey | shiftKey),
-            warnsAboutAppleScreenshotShortcuts: true
-        )
-        pasteChordHotKeyManager.registerHotKey(
-            modifiers: pasteChord.modifiers,
-            keyCode: pasteChord.keyCode
-        ) { [weak self] _ in
-            Task { @MainActor in
-                await self?.handleAgentPasteChord()
-            }
-        }
-        log.info("Paste chord hotkey registered: keyCode=\(pasteChord.keyCode) modifiers=\(pasteChord.modifiers)")
+        log.info("Paste chord hotkey skipped; tray-based paste picker is retired")
 
         let directShortcuts: [(HotKeyManager, String, UInt32, UInt32, String)] = [
             (ssFullscreenHotKey, "hotkeyCapture.fullscreen", 20, Self.hyperModifiers, "fullscreen"),
             (ssRegionHotKey,     "hotkeyCapture.region",     21, Self.hyperModifiers, "region"),
-            (ssBufferHotKey,     "hotkeyCapture.trayViewer", 23, Self.hyperModifiers, "viewTray"),
             (ssWindowHotKey,     "hotkeyCapture.window",     22, Self.hyperModifiers, "window"),
-            (ssShelfHotKey,      "hotkeyCapture.trayShelf",  17, Self.hyperModifiers, "viewShelf"),
         ]
 
         for (manager, settingsKey, defaultKeyCode, defaultModifiers, mode) in directShortcuts {
@@ -1678,23 +1659,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             }
         }
 
-        log.info("Direct screenshot hotkeys registered from shared settings (defaults: Hyper+3/4/5/6, Hyper+T shelf)")
-
-        let pasteLastScreenshot = Self.loadHotkeyConfig(
-            key: AgentSettingsKey.pasteLastScreenshotHotkey,
-            fallbackKeyCode: 35,
-            fallbackModifiers: Self.hyperModifiers,
-            warnsAboutAppleScreenshotShortcuts: true
-        )
-        pasteLastScreenshotHotKey.registerHotKey(
-            modifiers: pasteLastScreenshot.modifiers,
-            keyCode: pasteLastScreenshot.keyCode
-        ) { [weak self] _ in
-            Task { @MainActor in
-                await self?.pasteLatestAgentScreenshot()
-            }
-        }
-        log.info("Paste last screenshot hotkey registered: keyCode=\(pasteLastScreenshot.keyCode) modifiers=\(pasteLastScreenshot.modifiers)")
+        log.info("Direct screenshot hotkeys registered from shared settings (defaults: Hyper+3/4/6)")
+        log.info("Paste-last screenshot hotkey skipped; tray-based latest capture is retired")
     }
 
     private func registerMarkupSafetyHotkey() {
@@ -1808,9 +1774,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         case .saveSelection:
             log.info("Selection note action ignored in Agent screenshot HUD")
         case .viewTray:
-            forwardScreenshotDirectAction(mode: "viewTray")
+            log.info("Tray action ignored; tray is retired")
         case .pasteLastTray:
-            await pasteLatestAgentScreenshot(previousApp: previousApp)
+            log.info("Paste-last action ignored; tray is retired")
         }
 
         if result.isBackground,
@@ -1845,8 +1811,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             _ = await executeAgentScreenshotCapture(mode: .region)
         case "window":
             _ = await executeAgentScreenshotCapture(mode: .window)
-        case "viewTray", "viewShelf":
-            forwardScreenshotDirectAction(mode: mode)
         default:
             log.warning("Unknown Agent screenshot shortcut mode", detail: mode)
         }
@@ -1914,61 +1878,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             return recordedLive
         }
 
-        do {
-            let stored = try await AgentLiveTrayAssetStore.shared.registerScreenshot(
-                fileURL: persisted.fileURL,
-                id: captureID,
-                capturedAt: result.capturedAt,
-                mode: mode.rawValue,
-                width: result.width,
-                height: result.height,
-                windowTitle: result.windowTitle,
-                appName: result.appName,
-                appBundleID: result.appBundleID,
-                displayName: result.displayName
+        ScreenRecordingController.shared.recordScreenshotHighlight(
+            capturedAt: result.capturedAt,
+            filename: persisted.filename,
+            captureMode: mode.rawValue,
+            width: result.width,
+            height: result.height,
+            windowTitle: result.windowTitle,
+            appName: result.appName,
+            appBundleID: result.appBundleID,
+            displayName: result.displayName
+        )
+        log.info(
+            "Agent screenshot captured",
+            detail: "mode=\(mode.rawValue) file=\(persisted.filename) live=\(recordedLive)"
+        )
+        let item = AgentLiveTrayItem(
+            id: captureID,
+            kind: .screenshot,
+            capturedAt: result.capturedAt,
+            filename: persisted.filename,
+            width: result.width,
+            height: result.height,
+            captureMode: mode.rawValue,
+            windowTitle: result.windowTitle,
+            appName: result.appName,
+            appBundleID: result.appBundleID,
+            displayName: result.displayName,
+            fileURL: persisted.fileURL
+        )
+        if opensMarkup {
+            openMarkupForAgentCapture(item, captureRect: result.captureRect)
+        } else {
+            CaptureIslandController.shared.presentImmediate(
+                item,
+                near: screenshotPreviewAnchor(for: result)
             )
-            ScreenRecordingController.shared.recordScreenshotHighlight(
-                capturedAt: result.capturedAt,
-                filename: stored.filename,
-                captureMode: mode.rawValue,
-                width: result.width,
-                height: result.height,
-                windowTitle: result.windowTitle,
-                appName: result.appName,
-                appBundleID: result.appBundleID,
-                displayName: result.displayName
-            )
-            log.info(
-                "Agent screenshot captured",
-                detail: "mode=\(mode.rawValue) file=\(stored.filename) live=\(recordedLive)"
-            )
-            let item = AgentLiveTrayItem(
-                id: stored.id,
-                kind: .screenshot,
-                capturedAt: stored.capturedAt,
-                filename: stored.filename,
-                width: result.width,
-                height: result.height,
-                captureMode: mode.rawValue,
-                windowTitle: result.windowTitle,
-                appName: result.appName,
-                appBundleID: result.appBundleID,
-                displayName: result.displayName,
-                fileURL: stored.fileURL
-            )
-            if opensMarkup {
-                openMarkupForAgentCapture(item, captureRect: result.captureRect)
-            } else {
-                CaptureIslandController.shared.presentImmediate(
-                    item,
-                    near: screenshotPreviewAnchor(for: result)
-                )
-            }
-            return true
-        } catch {
-            log.error("Agent screenshot tray write failed: \(error.localizedDescription)")
-            return recordedLive
         }
+        return true
     }
 
     private func openMarkupForAgentCapture(_ item: AgentLiveTrayItem, captureRect: CGRect?) {
@@ -2109,28 +2056,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     @MainActor
     private func pasteLatestAgentScreenshot(previousApp: NSRunningApplication? = nil) async {
-        guard !isAgentPasteChordSuppressingShortcutTriggers else {
-            log.debug("Ignoring paste-last screenshot shortcut while Quick Paste HUD is active")
-            return
-        }
-
-        let targetApp = previousApp ?? NSWorkspace.shared.frontmostApplication
-        guard let latest = await AgentLiveTrayAssetStore.shared
-            .recentItems(limit: 20)
-            .first(where: \.isScreenshot) else {
-            log.info("Paste latest screenshot: no Agent tray screenshot available")
-            return
-        }
-
-        guard await executeAgentPaste(item: latest, format: .image, targetApp: targetApp) else {
-            return
-        }
-
-        if let targetApp, targetApp.bundleIdentifier != Bundle.main.bundleIdentifier {
-            targetApp.activate()
-        }
-        try? await Task.sleep(for: .milliseconds(80))
-        simulateCmdV()
+        log.info("Paste latest screenshot ignored; tray-based latest capture is retired")
     }
 
     private var isAgentPasteChordSuppressingShortcutTriggers: Bool {
@@ -2326,13 +2252,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             managers.append(("Screenshot Chord", screenshotHotKeyManager))
             managers.append(("Markup Screenshot Chord", markupScreenshotHotKeyManager))
             managers.append(("Screen Record", screenRecordHotKeyManager))
-            managers.append(("Paste Chord", pasteChordHotKeyManager))
             managers.append(("Fullscreen Capture", ssFullscreenHotKey))
             managers.append(("Region Capture", ssRegionHotKey))
-            managers.append(("Open Tray Viewer", ssBufferHotKey))
             managers.append(("Window Capture", ssWindowHotKey))
-            managers.append(("Open Tray Shelf", ssShelfHotKey))
-            managers.append(("Paste Last Screenshot", pasteLastScreenshotHotKey))
             managers.append(("Desktop Magnifier", desktopMagnifierHotKey))
         }
         managers.append(("Markup Safety", markupEmergencyHotKey))

@@ -20,12 +20,11 @@ final class CaptureHUDController: CaptureChordController {
     private let timeoutSeconds: TimeInterval = 30
 
     func beginChord(initialMode: CaptureBarMode, options: CaptureChordOptions = .captureOnly) async -> CaptureBarResult? {
-        let traySnapshot = await AgentLiveTrayAssetStore.shared.snapshot()
         let showCameraOption = false
-        let hasTrayItems = options.showTrayOption && traySnapshot.totalCount > 0
+        let hasTrayItems = false
         let hasSelectionItems = false
         let showMarkupOption = options.showMarkupOption
-        let trayCount = traySnapshot.totalCount
+        let trayCount = 0
 
         let expectedFrame = CaptureHUDPanel.expectedFrame(
             for: NSEvent.mouseLocation,

@@ -279,7 +279,7 @@ final class ScreenRecordingService: NSObject {
     }
 
     var hasReusableTarget: Bool {
-        ScreenRecordingPresetStore.shared.hasPreset || inferredPresetFromTray() != nil
+        ScreenRecordingPresetStore.shared.hasPreset
     }
 
     func diagnosticSummary(for target: ScreenRecordingTarget) -> String {
@@ -417,74 +417,7 @@ final class ScreenRecordingService: NSObject {
     }
 
     private func reusablePreset() -> ScreenRecordingPreset? {
-        if let preset = ScreenRecordingPresetStore.shared.load() {
-            return preset
-        }
-        guard let preset = inferredPresetFromTray() else {
-            return nil
-        }
-        ScreenRecordingPresetStore.shared.save(preset: preset)
-        log.info("Seeded screen recording preset from recent tray clip (\(preset.mode.rawValue))")
-        return preset
-    }
-
-    private func inferredPresetFromTray() -> ScreenRecordingPreset? {
-        for item in ClipTray.shared.items.sorted(by: { $0.capturedAt > $1.capturedAt }) {
-            guard let mode = CaptureMode(rawValue: item.captureMode) else { continue }
-            guard RecordingVisualContext.isScreenCaptureMode(item.captureMode) else { continue }
-
-            let targetEvent = item.metadataEvents.first { $0.type == .captureTarget }
-            let rect = targetEvent?.bounds.map { bounds in
-                CGRect(
-                    x: CGFloat(bounds.x),
-                    y: CGFloat(bounds.y),
-                    width: CGFloat(bounds.width),
-                    height: CGFloat(bounds.height)
-                )
-            }
-
-            switch mode {
-            case .region:
-                guard let rect else { continue }
-                return ScreenRecordingPreset(
-                    mode: mode,
-                    displayID: targetEvent?.displayID,
-                    rect: rect,
-                    windowID: nil,
-                    windowTitle: nil,
-                    appName: nil,
-                    displayName: item.displayName,
-                    capturedAt: item.capturedAt
-                )
-
-            case .fullscreen:
-                guard targetEvent?.displayID != nil || rect != nil else { continue }
-                return ScreenRecordingPreset(
-                    mode: mode,
-                    displayID: targetEvent?.displayID,
-                    rect: rect,
-                    windowID: nil,
-                    windowTitle: nil,
-                    appName: nil,
-                    displayName: item.displayName,
-                    capturedAt: item.capturedAt
-                )
-
-            case .window:
-                return ScreenRecordingPreset(
-                    mode: mode,
-                    displayID: targetEvent?.displayID,
-                    rect: rect,
-                    windowID: nil,
-                    windowTitle: item.windowTitle,
-                    appName: item.appName,
-                    displayName: item.displayName,
-                    capturedAt: item.capturedAt
-                )
-            }
-        }
-
-        return nil
+        ScreenRecordingPresetStore.shared.load()
     }
 
     private func selectFullscreen() async -> ScreenRecordingTarget? {

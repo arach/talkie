@@ -27,7 +27,7 @@ final class PasteChordController {
     private let timeoutSeconds: TimeInterval = 30
 
     func beginChord() async -> PasteBarResult? {
-        let allItems = Array(TrayItem.allItems().prefix(5))
+        let allItems: [TrayItem] = []
 
         return await withCheckedContinuation { continuation in
             var resumed = false
@@ -93,11 +93,11 @@ final class PasteChordController {
                     return
                 }
 
-                // W or Tab — dismiss and open tray viewer
+                // W or Tab used to open the tray viewer. The tray is retired,
+                // so this now behaves like a plain dismissal.
                 if key == "w" || event.keyCode == 48 /* Tab */ {
                     timeout.cancel()
                     resume(nil)
-                    TrayViewer.shared.show()
                     return
                 }
 

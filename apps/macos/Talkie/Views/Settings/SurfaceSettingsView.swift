@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import TalkieKit
 
 struct SurfaceSettingsView: View {
 
@@ -21,9 +22,6 @@ struct SurfaceSettingsView: View {
     @Bindable private var notchSettings = NotchSettings.shared
     @Bindable private var traySettings = TraySettings.shared
     @Bindable private var tuning = NotchTuning.shared
-    @Bindable private var screenshotTray = ScreenshotTray.shared
-    @Bindable private var clipTray = ClipTray.shared
-    @Bindable private var selectionTray = SelectionTray.shared
 
     @State private var notchInfo = NotchInfo.effective()
     @State private var selectedTab: SurfaceTab = .overlay
@@ -32,15 +30,15 @@ struct SurfaceSettingsView: View {
     @State private var simulatedTrayCount: Double = 0
 
     private var trayItemCount: Int {
-        screenshotTray.count + clipTray.count + selectionTray.count
+        0
     }
 
     private var unpinnedTrayCount: Int {
-        screenshotTray.unpinnedCount + clipTray.unpinnedCount + selectionTray.unpinnedCount
+        0
     }
 
     private var pinnedTrayCount: Int {
-        screenshotTray.pinnedCount + clipTray.pinnedCount + selectionTray.pinnedCount
+        0
     }
 
     private var hasTrayContent: Bool {
@@ -136,7 +134,6 @@ struct SurfaceSettingsView: View {
         }
         .onChange(of: notchSettings.enabled) { _, _ in
             NotchComposer.shared.refreshVisibilityFromSettings()
-            TrayBadge.shared.refreshVisibility()
         }
         .onChange(of: notchSettings.externalEnabled) { _, _ in
             NotchComposer.shared.refreshVisibilityFromSettings()
@@ -146,14 +143,9 @@ struct SurfaceSettingsView: View {
         }
         .onChange(of: notchSettings.trayStripEnabled) { _, _ in
             NotchComposer.shared.refreshVisibilityFromSettings()
-            TrayBadge.shared.refreshVisibility()
         }
         .onChange(of: notchSettings.trayStripPlacement) { _, _ in
             NotchComposer.shared.refreshVisibilityFromSettings()
-            TrayBadge.shared.refreshVisibility()
-        }
-        .onChange(of: traySettings.externalBadgeEnabled) { _, _ in
-            TrayBadge.shared.refreshVisibility()
         }
     }
 
@@ -625,24 +617,25 @@ struct SurfaceSettingsView: View {
 
             HStack(spacing: Spacing.sm) {
                 Button("Open Shelf") {
-                    TrayShelf.shared.show()
+                    Log(.ui).info("Surface settings shelf action ignored; tray is retired")
                 }
                 .buttonStyle(.bordered)
-                .disabled(!hasTrayContent)
+                .disabled(true)
 
                 Button("Open Viewer") {
-                    TrayViewer.shared.show()
+                    Log(.ui).info("Surface settings viewer action ignored; tray is retired")
                 }
                 .buttonStyle(.bordered)
+                .disabled(true)
 
                 Menu {
                     Button("Clear Unpinned (\(unpinnedTrayCount))") {
-                        _ = TrayActionService.shared.clearUnpinned()
+                        Log(.ui).info("Surface settings clear-unpinned ignored; tray is retired")
                     }
                     .disabled(unpinnedTrayCount == 0)
 
                     Button(role: .destructive) {
-                        _ = TrayActionService.shared.clearAll()
+                        Log(.ui).info("Surface settings clear-all ignored; tray is retired")
                     } label: {
                         Text("Clear Everything (\(trayItemCount))")
                     }
