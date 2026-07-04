@@ -420,6 +420,7 @@
 		C221860C80FFE2D1C90B5A53 /* AuditRunsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C923CAEAF098A3684EBB7FE /* AuditRunsListView.swift */; };
 		C274CD58C3BEABE5C134A5A8 /* TalkieDetailLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D4C15CF9E7715818FE71800 /* TalkieDetailLayout.swift */; };
 		C35BC038DC646E4776EC1B49 /* TrayDrawer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39BB1FE8D9D661EFD8B21A55 /* TrayDrawer.swift */; };
+		C4D9F33B9F9D4969B1258D57 /* TextFormattingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F1A22C8CB64F8E8C915B2A /* TextFormattingService.swift */; };
 		C4666A439C1568000A062211 /* CaptureBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B27EC0A9FBD864EDFD2C8450 /* CaptureBarController.swift */; };
 		C52DAE29F30A28D2812F0A36 /* ModelInstallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55ED3C1ECEB6EE9A165E043E /* ModelInstallView.swift */; };
 		C5826CAEBAE82372A3718C25 /* RecordingPowerInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0B8BE47E02467A58670B273 /* RecordingPowerInspector.swift */; };
@@ -878,6 +879,7 @@
 		9C9D3D339A16005123611D0B /* TalkieExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieExtension.swift; sourceTree = "<group>"; };
 		9D4C15CF9E7715818FE71800 /* TalkieDetailLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieDetailLayout.swift; sourceTree = "<group>"; };
 		9EA786926E966C9A55A42B04 /* ServerProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerProvider.swift; sourceTree = "<group>"; };
+		E5F1A22C8CB64F8E8C915B2A /* TextFormattingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFormattingService.swift; sourceTree = "<group>"; };
 		9F35E7B448C6B5C8FFFE7A83 /* TOSharedComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TOSharedComponents.swift; sourceTree = "<group>"; };
 		A0A7F28290FD6E23A24DA5DA /* ContentSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentSearchView.swift; sourceTree = "<group>"; };
 		A0DB12E53E73DFD4E74AA50B /* TranscriptVersionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptVersionModel.swift; sourceTree = "<group>"; };
@@ -1573,6 +1575,7 @@
 				31777395717FAEC0695EF5AC /* LLMProvider.swift */,
 				03E564DDD2727813BD2F80F4 /* OpenAIProvider.swift */,
 				9EA786926E966C9A55A42B04 /* ServerProvider.swift */,
+				E5F1A22C8CB64F8E8C915B2A /* TextFormattingService.swift */,
 			);
 			path = LLM;
 			sourceTree = "<group>";
@@ -2403,6 +2406,7 @@
 				E53F8AF247ABE5D564B03022 /* AppRoutes.swift in Sources */,
 				2C894B7C30919117AF8B77C5 /* AppearanceSettings.swift in Sources */,
 				B103018064E992E4CC8280F3 /* AppleLocalProvider.swift in Sources */,
+				C4D9F33B9F9D4969B1258D57 /* TextFormattingService.swift in Sources */,
 				8FED1C4B243431C4FBF841C1 /* AppleSpeechService.swift in Sources */,
 				72B8390C785994EF1D63D32D /* AppsRuntime.swift in Sources */,
 				256CE24D09411B8339C3C806 /* AppsSettingsView.swift in Sources */,
