@@ -54,9 +54,6 @@ struct ScopeHomeView: View {
     @State private var dictationStore = DictationStore.shared
     @State private var recordingsVM = RecordingsViewModel.shared
     @State private var workflowExecutor = WorkflowExecutor.shared
-    @State private var screenshotTray = ScreenshotTray.shared
-    @State private var clipTray = ClipTray.shared
-    @State private var selectionTray = SelectionTray.shared
     // In-window markup takeover target (vs. the old floating panel).
     @State private var markupURL: URL?
 
@@ -70,10 +67,7 @@ struct ScopeHomeView: View {
     private var todayDictations: Int { dictationStore.todayCount }
     private var todayTotal: Int { todayMemos + todayDictations }
     private var trayItemCount: Int {
-        _ = screenshotTray.items
-        _ = clipTray.items
-        _ = selectionTray.items
-        return TrayItem.allItems().count
+        0
     }
 
     var body: some View {
@@ -312,8 +306,8 @@ struct ScopeHomeView: View {
                         count: countLabel(todayCount(recentCaptures), "today"),
                         libraryLabel: "ALL CAPTURES",
                         onLibrary: { NavigationState.shared.navigate(to: .screenshots) },
-                        secondaryLabel: "OPEN TRAY",
-                        onSecondary: { TrayViewer.shared.show() },
+                        secondaryLabel: nil,
+                        onSecondary: nil,
                         rows: recentCaptures.prefix(3).enumerated().map { idx, item in
                             RecentRow(
                                 id: item.id,
@@ -569,20 +563,6 @@ struct ScopeHomeView: View {
     private var recentCaptures: [RecentCapture] {
         var out: [RecentCapture] = []
 
-        // Screenshot tray items still in flight. Clips and selected text
-        // stay available in TrayViewer, but Home's Captures list stays
-        // screenshot-specific.
-        for item in screenshotTray.items {
-            out.append(RecentCapture(
-                id: item.id,
-                line: trayLine(for: item),
-                meta: screenshotMeta(width: item.width, height: item.height),
-                date: item.capturedAt,
-                source: .tray,
-                fileURL: item.tempURL
-            ))
-        }
-
         // Saved capture objects created from screenshots. Do not pull
         // screenshots attached to notes/memos or imports from synced
         // phone/watch content into the Home Captures rail.
@@ -608,7 +588,7 @@ struct ScopeHomeView: View {
     private func openRecentCapture(_ item: RecentCapture) {
         switch item.source {
         case .tray:
-            TrayViewer.shared.show()
+            NavigationState.shared.navigate(to: .screenshots)
         case .savedCapture:
             NavigationState.shared.navigate(to: .screenshots)
         }

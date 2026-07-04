@@ -3,8 +3,8 @@
 //  Talkie
 //
 //  Orchestrator for screen video recording.
-//  Flow: Hyper+R → chord HUD → select target → record → stop pill → tray.
-//  Coordinates ScreenRecordingService, NotchComposer, and ClipTray (capture tray).
+//  Flow: Hyper+R → chord HUD → select target → record → stop pill → Library.
+//  Coordinates ScreenRecordingService, NotchComposer, and Library capture storage.
 //
 
 import AppKit
@@ -260,23 +260,88 @@ final class ScreenRecordingController {
             metadataEvents.append(markupEvent)
         }
 
-        await ClipTray.shared.add(
-            tempURL: url,
+        let captureId = UUID()
+        guard let savedURL = VideoClipStorage.save(
+            url,
+            recordingId: captureId,
+            timestampMs: 0,
+            index: 0,
             capturedAt: startedAt,
+            captureMode: captureMode,
+            width: width,
+            height: height,
+            windowTitle: target.windowTitle,
+            appName: target.appName,
+            displayName: target.displayName,
+            moveSource: true
+        ) else {
+            log.error("Screen recording stopped, but failed to save clip to Library")
+            return
+        }
+
+        let clip = RecordingClip(
+            filename: savedURL.lastPathComponent,
+            timestampMs: 0,
             durationMs: durationMs,
             width: width,
             height: height,
             captureMode: captureMode,
             windowTitle: target.windowTitle,
             appName: target.appName,
-            displayName: target.displayName,
-            metadataEvents: metadataEvents
+            displayName: target.displayName
         )
 
-        if interrupted {
-            log.warning("Interrupted screen recording saved to tray (\(durationMs)ms, \(ClipTray.shared.count) total)")
-        } else {
-            log.info("Screen recording stopped, \(durationMs)ms → tray (\(ClipTray.shared.count) total)")
+        let visualContext = VisualContextStorage.createBundle(
+            sourceClipURL: savedURL,
+            recordingId: captureId,
+            timestampMs: 0,
+            capturedAt: startedAt,
+            durationMs: durationMs,
+            captureMode: captureMode,
+            width: width,
+            height: height,
+            windowTitle: target.windowTitle,
+            appName: target.appName,
+            displayName: target.displayName,
+            metadataEvents: metadataEvents,
+            copiesSourceClip: false
+        )
+
+        var capture = TalkieObject.newCapture(
+            id: captureId,
+            title: Self.captureTitle(
+                captureMode: captureMode,
+                appName: target.appName,
+                windowTitle: target.windowTitle,
+                displayName: target.displayName
+            )
+        )
+        capture.createdAt = startedAt
+        capture.lastModified = Date()
+        capture.assetsJSON = TalkieObjectAssets(
+            clips: [clip],
+            visualContexts: visualContext.map { [$0] }
+        ).toJSON()
+        if target.appName != nil || target.windowTitle != nil {
+            capture.metadataJSON = RecordingMetadata(
+                app: AppContext(
+                    bundleId: nil,
+                    name: target.appName,
+                    windowTitle: target.windowTitle
+                )
+            ).toJSON()
+        }
+
+        do {
+            try await TalkieObjectRepository().saveRecording(capture)
+            await RecordingsViewModel.shared.loadRecordings()
+            if interrupted {
+                log.warning("Interrupted screen recording saved to Library (\(durationMs)ms)")
+            } else {
+                log.info("Screen recording stopped, \(durationMs)ms → Library")
+            }
+        } catch {
+            log.error("Screen recording Library write failed: \(error.localizedDescription)")
         }
     }
 
@@ -409,6 +474,32 @@ final class ScreenRecordingController {
         case .region: return "region"
         case .window: return "window"
         }
+    }
+
+    private static func captureTitle(
+        captureMode: String,
+        appName: String?,
+        windowTitle: String?,
+        displayName: String?
+    ) -> String {
+        if let appName = normalized(appName) {
+            return "\(appName) capture"
+        }
+        if let windowTitle = normalized(windowTitle) {
+            return "\(windowTitle) capture"
+        }
+        if let displayName = normalized(displayName) {
+            return "\(displayName) capture"
+        }
+        return "\(captureMode.capitalized) capture"
+    }
+
+    private static func normalized(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else {
+            return nil
+        }
+        return trimmed
     }
 
     private static var reusableCountdownSeconds: Int {
@@ -636,11 +727,10 @@ private final class ScreenRecordingCountdownController {
     }
 
     private func showHUD(for target: ScreenRecordingTarget) {
-        let allItems = TrayItem.allItems()
         let showCameraOption = false
-        let hasTrayItems = !allItems.isEmpty
-        let hasSelectionItems = SelectionTray.shared.isNotEmpty
-        let trayCount = allItems.count
+        let hasTrayItems = false
+        let hasSelectionItems = false
+        let trayCount = 0
         let expectedFrame = CaptureHUDPanel.expectedFrame(
             for: NSEvent.mouseLocation,
             position: SettingsManager.shared.captureHUDPosition

@@ -106,7 +106,7 @@ struct NotchSettingsView: View {
     }
 
     private var hasTrayContent: Bool {
-        ScreenshotTray.shared.isNotEmpty || ClipTray.shared.isNotEmpty
+        false
     }
 
     private var trayStripPlacementDescription: String {
@@ -170,7 +170,6 @@ struct NotchSettingsView: View {
         }
         .onChange(of: notchSettings.enabled) { _, _ in
             NotchComposer.shared.refreshVisibilityFromSettings()
-            TrayBadge.shared.refreshVisibility()
         }
         .onChange(of: notchSettings.externalEnabled) { _, _ in
             NotchComposer.shared.refreshVisibilityFromSettings()
@@ -180,10 +179,6 @@ struct NotchSettingsView: View {
         }
         .onChange(of: notchSettings.trayStripEnabled) { _, _ in
             NotchComposer.shared.refreshVisibilityFromSettings()
-            TrayBadge.shared.refreshVisibility()
-        }
-        .onChange(of: traySettings.externalBadgeEnabled) { _, _ in
-            TrayBadge.shared.refreshVisibility()
         }
     }
 

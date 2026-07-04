@@ -1477,9 +1477,6 @@ struct CapturesFeatureCard: HomeCard {
 
 @MainActor
 private struct CapturesFeatureCardView: View {
-    private let screenshotTray = ScreenshotTray.shared
-    private let clipTray = ClipTray.shared
-    private let selectionTray = SelectionTray.shared
     private let settings = SettingsManager.shared
 
     @State private var showingURLImport = false
@@ -1491,7 +1488,7 @@ private struct CapturesFeatureCardView: View {
     }
 
     private var unattachedCount: Int {
-        screenshotTray.count + clipTray.count + selectionTray.count
+        0
     }
 
     private var totalCount: Int {
@@ -1607,15 +1604,7 @@ private struct CapturesFeatureCardView: View {
         let pngs = files.filter { $0.pathExtension.lowercased() == "png" }
         totalAttached = pngs.count
 
-        // Top contexts from the tray (where we have app metadata).
-        var tally: [String: Int] = [:]
-        for item in screenshotTray.items {
-            let name = item.appName ?? item.windowTitle ?? "Unknown"
-            tally[name, default: 0] += 1
-        }
-        topContexts = tally
-            .map { (name: $0.key, count: $0.value) }
-            .sorted { $0.count > $1.count }
+        topContexts = []
     }
 }
 

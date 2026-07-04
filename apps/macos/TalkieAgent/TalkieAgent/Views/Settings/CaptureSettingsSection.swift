@@ -3,8 +3,8 @@
 //  TalkieAgent
 //
 //  Capture shortcuts: a configurable hotkey for each individual capture
-//  action — the screenshot/recording HUD chords, quick paste, and the
-//  direct (no-HUD) capture tools.
+//  action — the screenshot/recording HUD chords and the direct (no-HUD)
+//  capture tools.
 //
 //  Each row writes its HotkeyConfig to the shared AgentSettingsKey that
 //  AppDelegate.registerCaptureHotkeys reads, then HotkeyRecorderButton posts
@@ -51,22 +51,6 @@ enum CaptureShortcuts {
         ),
     ]
 
-    /// Pasting from the tray.
-    static let paste: [CaptureShortcut] = [
-        CaptureShortcut(
-            id: AgentSettingsKey.pasteChordHotkey,
-            title: "Quick paste",
-            subtitle: "Pick a tray item and paste it",
-            defaultConfig: HotkeyConfig(keyCode: 9, modifiers: hyper)   // Hyper+V
-        ),
-        CaptureShortcut(
-            id: AgentSettingsKey.pasteLastScreenshotHotkey,
-            title: "Paste last screenshot",
-            subtitle: "Paste the most recent capture without the picker",
-            defaultConfig: HotkeyConfig(keyCode: 35, modifiers: hyper)  // Hyper+P
-        ),
-    ]
-
     /// Direct, no-HUD shortcuts that fire a capture tool without opening the HUD.
     static let direct: [CaptureShortcut] = [
         CaptureShortcut(
@@ -88,18 +72,6 @@ enum CaptureShortcuts {
             defaultConfig: HotkeyConfig(keyCode: 22, modifiers: hyper)  // Hyper+6
         ),
         CaptureShortcut(
-            id: "hotkeyCapture.trayViewer",
-            title: "View tray",
-            subtitle: "Open the capture tray viewer",
-            defaultConfig: HotkeyConfig(keyCode: 23, modifiers: hyper)  // Hyper+5
-        ),
-        CaptureShortcut(
-            id: "hotkeyCapture.trayShelf",
-            title: "View shelf",
-            subtitle: "Open the capture shelf",
-            defaultConfig: HotkeyConfig(keyCode: 17, modifiers: hyper)  // Hyper+T
-        ),
-        CaptureShortcut(
             id: "hotkeyCapture.desktopMagnifier",
             title: "Desktop magnifier",
             subtitle: "Freeze a region and place a magnified copy on the desktop",
@@ -107,7 +79,7 @@ enum CaptureShortcuts {
         ),
     ]
 
-    static var all: [CaptureShortcut] { chords + paste + direct }
+    static var all: [CaptureShortcut] { chords + direct }
 }
 
 // MARK: - Model
@@ -188,10 +160,10 @@ final class CaptureShortcutsModel: ObservableObject {
         }
 
         Log(.system).warning(
-            "Rejected Apple-reserved capture shortcut",
+            "Saved Apple screenshot shortcut for capture; registration may fail if macOS still owns it",
             detail: "key=\(shortcut.id) keyCode=\(config.keyCode) modifiers=\(config.modifiers)"
         )
-        return shortcut.defaultConfig
+        return config
     }
 }
 
@@ -214,7 +186,7 @@ struct CaptureSettingsSection: View {
             SettingsPageHeader(
                 icon: "viewfinder",
                 title: "CAPTURE",
-                subtitle: "A shortcut for each capture action — the HUD chords, paste, and the direct capture tools."
+                subtitle: "A shortcut for each capture action — the HUD chords and direct capture tools."
             )
         } content: {
             if !captureEnabled {
@@ -227,10 +199,6 @@ struct CaptureSettingsSection: View {
 
             SettingsCard(title: "CAPTURE HUD") {
                 shortcutRows(CaptureShortcuts.chords)
-            }
-
-            SettingsCard(title: "PASTE") {
-                shortcutRows(CaptureShortcuts.paste)
             }
 
             SettingsCard(title: "DIRECT CAPTURE TOOLS") {

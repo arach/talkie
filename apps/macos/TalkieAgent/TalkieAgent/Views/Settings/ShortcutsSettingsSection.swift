@@ -179,6 +179,11 @@ struct ShortcutsSettingsSection: View {
             // Hotkey Registration Status
             SettingsCard(title: "HOTKEY STATUS") {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
+                    Text("Registration status only. Edit shortcuts in the sections above.")
+                        .font(.system(size: 10))
+                        .foregroundColor(TalkieTheme.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+
                     let managers = AppDelegate.hotkeyManagers
 
                     if managers.isEmpty {
@@ -198,15 +203,18 @@ struct ShortcutsSettingsSection: View {
 
                                 Spacer()
 
-                                if entry.manager.isRegistered,
-                                   let keyCode = entry.manager.registeredKeyCode {
-                                    Text("key \(keyCode)")
-                                        .font(.system(size: 10, design: .monospaced))
-                                        .foregroundColor(TalkieTheme.textTertiary)
-                                } else if !entry.manager.isRegistered {
-                                    Text("not registered")
-                                        .font(.system(size: 10, weight: .medium))
-                                        .foregroundColor(.red.opacity(0.8))
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    if let display = hotkeyDisplay(for: entry.manager) {
+                                        Text(display)
+                                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                            .foregroundColor(entry.manager.isRegistered ? TalkieTheme.textTertiary : .orange)
+                                    }
+
+                                    if !entry.manager.isRegistered {
+                                        Text(registrationIssueText(for: entry.manager))
+                                            .font(.system(size: 9, weight: .medium))
+                                            .foregroundColor(.red.opacity(0.8))
+                                    }
                                 }
                             }
                         }
@@ -265,6 +273,30 @@ struct ShortcutsSettingsSection: View {
         .onAppear {
             captureShortcuts.reload()
         }
+    }
+
+    private func hotkeyDisplay(for manager: HotKeyManager) -> String? {
+        let keyCode = manager.configuredKeyCode ?? manager.registeredKeyCode
+        let modifiers = manager.configuredModifiers ?? manager.registeredModifiers
+        guard let keyCode, let modifiers else { return nil }
+        return HotkeyConfig(keyCode: keyCode, modifiers: modifiers).displayString
+    }
+
+    private func registrationIssueText(for manager: HotKeyManager) -> String {
+        let keyCode = manager.configuredKeyCode ?? manager.registeredKeyCode
+        let modifiers = manager.configuredModifiers ?? manager.registeredModifiers
+
+        if let keyCode,
+           let modifiers,
+           SystemReservedHotkeys.isAppleScreenshotShortcut(keyCode: keyCode, modifiers: modifiers) {
+            return "macOS may own this"
+        }
+
+        if let status = manager.lastRegistrationStatus {
+            return "not registered (\(status))"
+        }
+
+        return "not registered"
     }
 
     @ViewBuilder

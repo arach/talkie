@@ -33,12 +33,11 @@ final class CaptureBarController {
     /// Returns the chosen result, or nil if cancelled/timed out.
     func beginChord(initialMode: CaptureBarMode, options: CaptureChordOptions = .captureOnly) async -> CaptureBarResult? {
         CaptureChord.isActive = true
-        let allItems = TrayItem.allItems()
         let showCameraOption = options.showCameraOption && FeatureFlags.shared.enableCameraBubble
-        let hasTrayItems = options.showTrayOption && !allItems.isEmpty
-        let hasSelectionItems = options.showSelectionOption && SelectionTray.shared.isNotEmpty
+        let hasTrayItems = false
+        let hasSelectionItems = false
         let showMarkupOption = options.showMarkupOption
-        let trayCount = allItems.count
+        let trayCount = 0
 
         return await withCheckedContinuation { continuation in
             var resumed = false

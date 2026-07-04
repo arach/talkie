@@ -14,10 +14,6 @@ import AVFoundation
 struct CameraBubbleView: View {
     private let controller = CameraBubbleController.shared
     private let captureService = CameraCaptureService.shared
-    private let clipTray = ClipTray.shared
-
-    @State private var showSavedFlash = false
-    @State private var lastClipCount = 0
 
     private var size: CGFloat { captureService.bubbleSize.points }
 
@@ -28,43 +24,10 @@ struct CameraBubbleView: View {
                 .frame(width: size, height: size)
                 .clipShape(Circle())
 
-            // "Saved" flash overlay
-            if showSavedFlash {
-                Circle()
-                    .fill(Color.green.opacity(0.3))
-                    .frame(width: size, height: size)
-                    .transition(.opacity)
-            }
-
-            // Border ring — glows red when recording, green flash on save
+            // Border ring — glows red when recording
             Circle()
                 .stroke(borderColor, lineWidth: borderWidth)
                 .frame(width: size, height: size)
-
-            // Clip count badge (top-right) — tap to open buffer viewer
-            if clipTray.count > 0 && controller.state != .recording {
-                VStack {
-                    HStack {
-                        Spacer()
-                        Button(action: {
-                            TrayViewer.shared.show()
-                        }) {
-                            Text("\(clipTray.count)")
-                                .font(.system(size: 11, weight: .bold, design: .rounded))
-                                .foregroundColor(.white)
-                                .frame(minWidth: 20, minHeight: 20)
-                                .background(
-                                    Capsule()
-                                        .fill(Color.accentColor)
-                                        .shadow(color: Color.accentColor.opacity(0.5), radius: 3, y: 1)
-                                )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    Spacer()
-                }
-                .padding(2)
-            }
 
             // Close button (top-left) — always visible
             VStack {
@@ -109,25 +72,6 @@ struct CameraBubbleView: View {
                     controller.startClip()
                 }
             }
-            if clipTray.count > 0 {
-                Divider()
-                Button("Open Tray (\(clipTray.count))") {
-                    TrayViewer.shared.show()
-                }
-            }
-        }
-        .onChange(of: clipTray.count) { oldCount, newCount in
-            if newCount > oldCount {
-                // New clip added — flash
-                withAnimation(.easeOut(duration: 0.15)) {
-                    showSavedFlash = true
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                    withAnimation(.easeIn(duration: 0.2)) {
-                        showSavedFlash = false
-                    }
-                }
-            }
         }
     }
 
@@ -166,12 +110,10 @@ struct CameraBubbleView: View {
     // MARK: - Appearance
 
     private var borderColor: Color {
-        if showSavedFlash { return .green }
         return controller.state == .recording ? .red : .white.opacity(0.4)
     }
 
     private var borderWidth: CGFloat {
-        if showSavedFlash { return 3 }
         return controller.state == .recording ? 3 : 2
     }
 }

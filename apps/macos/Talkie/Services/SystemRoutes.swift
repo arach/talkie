@@ -101,17 +101,16 @@ final class SystemRoutes: RouteGroup {
             let path = url.pathComponents.dropFirst().first
             let idString = params["id"] ?? params["recordingId"]
             let id = idString.flatMap(UUID.init(uuidString:))
+            let prefersNewWindow = Self.boolParam(params["newWindow"])
 
-            if path == "memo", let id {
-                NavigationState.shared.navigateToMemo(id)
-            } else if path == "dictation", let id {
-                NavigationState.shared.navigateToDictation(id)
-            } else if let id {
-                NavigationState.shared.navigate(to: .recordings, params: [
-                    "recordingId": id.uuidString
-                ])
+            Self.presentMainWindow(prefersNewWindow: prefersNewWindow)
+            if prefersNewWindow {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(180))
+                    Self.navigateToLibrary(path: path, id: id)
+                }
             } else {
-                NavigationState.shared.navigate(to: .recordings)
+                Self.navigateToLibrary(path: path, id: id)
             }
         },
 
@@ -438,6 +437,71 @@ final class SystemRoutes: RouteGroup {
 
         return routes
     }()
+
+    private static func boolParam(_ value: String?) -> Bool {
+        guard let normalized = value?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() else {
+            return false
+        }
+        return ["1", "true", "yes", "y"].contains(normalized)
+    }
+
+    private static func navigateToLibrary(path: String?, id: UUID?) {
+        if path == "memo", let id {
+            NavigationState.shared.navigateToMemo(id)
+        } else if path == "dictation", let id {
+            NavigationState.shared.navigateToDictation(id)
+        } else if let id {
+            NavigationState.shared.navigate(to: .recordings, params: [
+                "recordingId": id.uuidString
+            ])
+        } else {
+            NavigationState.shared.navigate(to: .recordings)
+        }
+    }
+
+    private static func presentMainWindow(prefersNewWindow: Bool) {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+
+        if prefersNewWindow, performNewWindowCommand() {
+            return
+        }
+
+        if let window = NSApp.windows.first(where: { $0.canBecomeMain }) {
+            if window.isMiniaturized {
+                window.deminiaturize(nil)
+            }
+            window.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        _ = performNewWindowCommand()
+    }
+
+    private static func performNewWindowCommand() -> Bool {
+        if NSApp.sendAction(Selector(("newWindow:")), to: nil, from: nil) {
+            return true
+        }
+
+        guard let item = menuItem(titled: "New Window", in: NSApp.mainMenu), item.isEnabled else {
+            return false
+        }
+        guard let action = item.action else { return false }
+        return NSApp.sendAction(action, to: item.target, from: item)
+    }
+
+    private static func menuItem(titled title: String, in menu: NSMenu?) -> NSMenuItem? {
+        guard let menu else { return nil }
+        for item in menu.items {
+            if item.title == title {
+                return item
+            }
+            if let nested = menuItem(titled: title, in: item.submenu) {
+                return nested
+            }
+        }
+        return nil
+    }
 
     private static func openLatestSystemScreenshotForMarkup() {
         guard let latest = SystemScreenshotLocator.latestScreenshot() else {

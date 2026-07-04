@@ -451,7 +451,7 @@ struct AgentHomeShellView: View {
     @MainActor
     private func refreshOperationalSnapshots() async {
         serverStatus = TalkieAgentServerSupervisor.shared.currentStatus
-        traySnapshot = await AgentLiveTrayAssetStore.shared.snapshot()
+        traySnapshot = .empty
         storageSize = await AudioStorage.formattedStorageSizeAsync()
         lastOperationalRefresh = Date()
     }
@@ -499,7 +499,7 @@ private enum AgentHomeShellSection: String, CaseIterable, Hashable {
         case .library: return "History + media"
         case .conversations: return "Talk to the agent"
         case .permissions: return "macOS access"
-        case .more: return "Capture · Tray · Server…"
+        case .more: return "Capture · Dictation · Server..."
         case .capture: return "Context + screen"
         case .tray: return "Live asset ownership"
         case .dictation: return "Mic, model, routing"
@@ -547,7 +547,7 @@ private enum AgentHomeShellSection: String, CaseIterable, Hashable {
     /// Sections that hang off the "…" overflow. Kept reachable as a stop-gap;
     /// these pages were never carefully designed and are slated to retire.
     static var overflowSections: [AgentHomeShellSection] {
-        [.capture, .tray, .dictation, .overlays, .server]
+        [.capture, .dictation, .overlays, .server]
     }
 
     /// The simplified primary rail: Home · History · Conversations ·
@@ -2365,30 +2365,31 @@ private struct AgentHomeLibraryDetailPane: View {
 
     @ViewBuilder
     private func detailContent(for item: TalkieObject, availableWidth: CGFloat) -> some View {
-        let usesWideReadout = availableWidth >= 680 && item.agentHomeHasVisualPreview
-        let mediaHeight = min(320, max(220, availableWidth * 0.36))
+        let usesVisualReadout = item.agentHomeHasVisualPreview
+        let mediaHeight = if usesVisualReadout {
+            min(430, max(280, availableWidth * 0.52))
+        } else {
+            min(300, max(200, availableWidth * 0.34))
+        }
 
-        if usesWideReadout {
+        if usesVisualReadout {
             VStack(alignment: .leading, spacing: OpsSpacing.xxl) {
                 header(for: item)
 
-                HStack(alignment: .top, spacing: OpsSpacing.xxl) {
-                    mediaPreview(for: item, height: mediaHeight)
-                        .frame(maxWidth: .infinity)
+                mediaPreview(for: item, height: mediaHeight)
 
-                    VStack(alignment: .leading, spacing: OpsSpacing.xl) {
-                        facts(for: item)
-                        media(for: item)
-                    }
-                    .frame(width: min(280, max(230, availableWidth * 0.30)), alignment: .topLeading)
+                metadataGrid(for: item)
+
+                if item.agentHomeTextPreview != nil {
+                    textPreview(for: item)
                 }
-
-                textPreview(for: item)
             }
         } else {
             VStack(alignment: .leading, spacing: OpsSpacing.xxl) {
                 header(for: item)
-                mediaPreview(for: item, height: mediaHeight)
+                if item.agentHomeHasVisualPreview {
+                    mediaPreview(for: item, height: mediaHeight)
+                }
                 facts(for: item)
                 media(for: item)
                 textPreview(for: item)
@@ -2475,6 +2476,22 @@ private struct AgentHomeLibraryDetailPane: View {
         if item.agentHomeHasVisualPreview {
             AgentHomeMediaPreview(media: CaptureMediaFileResolver.primaryMedia(for: item), maxPixelSize: 760)
                 .frame(height: height)
+        }
+    }
+
+    private func metadataGrid(for item: TalkieObject) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: OpsSpacing.xl) {
+                facts(for: item)
+                    .frame(maxWidth: .infinity)
+                media(for: item)
+                    .frame(maxWidth: .infinity)
+            }
+
+            VStack(alignment: .leading, spacing: OpsSpacing.xl) {
+                facts(for: item)
+                media(for: item)
+            }
         }
     }
 
@@ -2670,9 +2687,8 @@ private struct AgentHomeMediaPreview: View {
                 Image(nsImage: image)
                     .interpolation(.medium)
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
+                    .aspectRatio(contentMode: .fit)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
             } else {
                 AgentHomeMediaPlaceholder(isVideo: media?.isVideo == true)
             }
@@ -2849,7 +2865,9 @@ private enum AgentHomeTalkieLibraryOpener {
         components.scheme = TalkieEnvironment.current.talkieURLScheme
         components.host = "library"
         components.queryItems = [
-            URLQueryItem(name: "recordingId", value: item.id.uuidString)
+            URLQueryItem(name: "id", value: item.id.uuidString),
+            URLQueryItem(name: "recordingId", value: item.id.uuidString),
+            URLQueryItem(name: "newWindow", value: "1")
         ]
 
         guard let url = components.url else { return }

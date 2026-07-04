@@ -254,10 +254,10 @@ final class HotkeyRegistry {
         }
 
         Log(.system).warning(
-            "Rejected Apple-reserved screenshot shortcut",
+            "Saved Apple screenshot shortcut for capture; registration may fail if macOS still owns it",
             detail: "action=\(action.rawValue) keyCode=\(config.keyCode) modifiers=\(config.modifiers)"
         )
-        return action.defaultConfig
+        return config
     }
 
     private func migrateReservedCaptureDefaultsIfNeeded() {

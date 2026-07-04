@@ -40,7 +40,7 @@ struct TrayScreenshot: Identifiable, Codable {
     let displayName: String?
     /// Whether this item is pinned to the tray (won't drain into the next recording)
     var pinned: Bool
-    /// Background OCR result (nil = not yet attempted, empty = no text found)
+    /// Cached OCR result from an explicit user action (nil = not attempted, empty = no text found).
     var ocrText: String?
     /// Scaled-down thumbnail for display, generated async from disk
     var thumbnail: NSImage?
@@ -303,12 +303,10 @@ final class ScreenshotTray {
             }
         }
 
-        // Background OCR: fast scan → accurate upgrade
-        runBackgroundOCR(for: itemId)
-
         // Fire-and-forget augmentation pipeline. Writes a TKSidecar to
         // `<dir>/.tk/<basename>.json` once registered augmenters
         // complete. Never blocks the drag-handle / tray-publish path.
+        // OCR is intentionally not scheduled here; tray text extraction is on-demand.
         MediaAugmentationService.shared.enqueue(
             AugmentationTask(
                 assetURL: fileURL,
@@ -318,46 +316,6 @@ final class ScreenshotTray {
         )
 
         return item
-    }
-
-    /// Two-pass background OCR: fast scan to detect text, then accurate pass if text found.
-    private func runBackgroundOCR(for itemId: UUID) {
-        Task {
-            guard let idx = items.firstIndex(where: { $0.id == itemId }),
-                  items[idx].ocrText == nil else { return }
-            let url = items[idx].tempURL
-
-            // Pass 1: fast scan
-            let fastText: String? = await Task.detached(priority: .utility) {
-                try? await VisionOCRService.shared.recognizeText(atURL: url, quality: .fast)
-            }.value
-
-            guard let fastText, !fastText.isEmpty else {
-                // No text detected — mark as scanned (empty string = no text)
-                if let idx = self.items.firstIndex(where: { $0.id == itemId }) {
-                    self.items[idx].ocrText = ""
-                    self.saveManifest()
-                }
-                return
-            }
-
-            // Store fast result immediately so it's available if the user acts now
-            if let idx = self.items.firstIndex(where: { $0.id == itemId }) {
-                self.items[idx].ocrText = fastText
-                self.saveManifest()
-            }
-
-            // Pass 2: accurate upgrade at background priority
-            let accurateText: String? = await Task.detached(priority: .background) {
-                try? await VisionOCRService.shared.recognizeText(atURL: url, quality: .accurate)
-            }.value
-
-            if let accurateText, !accurateText.isEmpty,
-               let idx = self.items.firstIndex(where: { $0.id == itemId }) {
-                self.items[idx].ocrText = accurateText
-                self.saveManifest()
-            }
-        }
     }
 
     /// Scale down an image from disk for display. Thread-safe (no lockFocus).
@@ -620,7 +578,8 @@ final class ScreenshotTray {
             if !items.isEmpty {
                 Log(.system).info("Restored \(items.count) tray screenshot(s) from disk")
 
-                // Regenerate thumbnails async + backfill OCR for items not yet scanned
+                // Regenerate thumbnails async. OCR stays on-demand so restoring
+                // a large tray cannot become a launch-time Vision backlog.
                 for item in items {
                     Task {
                         let thumb = await Task.detached(priority: .utility) {
@@ -629,9 +588,6 @@ final class ScreenshotTray {
                         if let idx = self.items.firstIndex(where: { $0.id == item.id }) {
                             self.items[idx].thumbnail = thumb
                         }
-                    }
-                    if item.ocrText == nil {
-                        runBackgroundOCR(for: item.id)
                     }
                 }
             }

@@ -3,8 +3,8 @@
 //  TalkieAgent
 //
 //  Agent-owned "island" at the top of the active display: when a capture
-//  (screenshot or clip) lands in the live tray, it surfaces a draggable
-//  preview you can drag straight into any app. Works on external displays
+//  (screenshot or clip) is saved, it surfaces a draggable preview you can
+//  drag straight into any app. Works on external displays
 //  (no physical notch required) since it positions itself at top-center.
 //
 //  This is the minimal recreation that replaces the legacy Talkie notch
@@ -19,7 +19,6 @@ final class CaptureIslandController {
     static let shared = CaptureIslandController()
 
     private var panel: NSPanel?
-    private var assetsObserver: NSObjectProtocol?
     private var dismissTimer: Timer?
     private var shownItemID: UUID?
 
@@ -43,32 +42,8 @@ final class CaptureIslandController {
     }
 
     func initialize() {
-        guard assetsObserver == nil else { return }
-        // The store posts assetsDidChange (distributed) on every tray mutation,
-        // including the agent's own writes — so we receive our own captures here.
-        assetsObserver = DistributedNotificationCenter.default().addObserver(
-            forName: Notification.Name(LiveTrayNotifications.assetsDidChange),
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                self?.handleAssetsChanged()
-            }
-        }
-    }
-
-    private func handleAssetsChanged() {
-        guard isEnabled else { return }
-        Task { @MainActor in
-            let items = await AgentLiveTrayAssetStore.shared.recentItems(limit: 1)
-            guard let latest = items.first else { return }
-            // Only react to a genuinely fresh capture, not unrelated tray edits
-            // (pin toggles, deletions). assetsDidChange carries no payload, so
-            // gate on recency + de-dupe by id.
-            guard latest.id != shownItemID else { return }
-            guard isFreshForPresentation(latest) else { return }
-            present(latest, near: nil)
-        }
+        // Tray-backed notifications are retired. Fresh captures call
+        // `presentImmediate` directly with the durable Library file.
     }
 
     private func isFreshForPresentation(_ item: AgentLiveTrayItem) -> Bool {
@@ -215,15 +190,7 @@ final class CaptureIslandController {
 
     private func delete(_ item: AgentLiveTrayItem) {
         cancelDismissTimer()
-        Task { [weak self] in
-            guard let self else { return }
-            let deleted = await AgentLiveTrayAssetStore.shared.deleteItem(item)
-            if deleted {
-                self.dismiss()
-            } else {
-                self.scheduleDismiss()
-            }
-        }
+        dismiss()
     }
 
     private func open(_ item: AgentLiveTrayItem) {
