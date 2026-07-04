@@ -451,7 +451,7 @@ struct AgentHomeShellView: View {
     @MainActor
     private func refreshOperationalSnapshots() async {
         serverStatus = TalkieAgentServerSupervisor.shared.currentStatus
-        traySnapshot = await AgentLiveTrayAssetStore.shared.snapshot()
+        traySnapshot = .empty
         storageSize = await AudioStorage.formattedStorageSizeAsync()
         lastOperationalRefresh = Date()
     }
@@ -499,7 +499,7 @@ private enum AgentHomeShellSection: String, CaseIterable, Hashable {
         case .library: return "History + media"
         case .conversations: return "Talk to the agent"
         case .permissions: return "macOS access"
-        case .more: return "Capture · Tray · Server…"
+        case .more: return "Capture · Dictation · Server..."
         case .capture: return "Context + screen"
         case .tray: return "Live asset ownership"
         case .dictation: return "Mic, model, routing"
@@ -547,7 +547,7 @@ private enum AgentHomeShellSection: String, CaseIterable, Hashable {
     /// Sections that hang off the "…" overflow. Kept reachable as a stop-gap;
     /// these pages were never carefully designed and are slated to retire.
     static var overflowSections: [AgentHomeShellSection] {
-        [.capture, .tray, .dictation, .overlays, .server]
+        [.capture, .dictation, .overlays, .server]
     }
 
     /// The simplified primary rail: Home · History · Conversations ·

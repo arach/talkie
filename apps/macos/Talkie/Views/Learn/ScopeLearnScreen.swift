@@ -109,11 +109,7 @@ struct ScopeLearnScreen: View {
                 learnLog.warning("Unhandled Learn settings bridge: \(url.absoluteString)")
             }
         case "tray":
-            if path == "shelf" {
-                TrayShelf.shared.toggle()
-            } else {
-                TrayViewer.shared.show()
-            }
+            learnLog.info("Ignoring Learn tray bridge; tray is retired", detail: path)
         case "home":
             open(.section(.home))
         case "compose":

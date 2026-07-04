@@ -225,10 +225,6 @@ final class ConsoleTerminalCaptureController {
     /// new dictation begins.
     var hasPendingDictation = false
 
-    @ObservationIgnored private var dictationStartedAt: Date?
-    @ObservationIgnored private var dictationBaselineScreenshotIDs: Set<UUID> = []
-    @ObservationIgnored private var dictationBaselineClipIDs: Set<UUID> = []
-
     func copyTerminalOutput(from session: ManagedAgentConsoleSession) {
         let status: TerminalCopyStatus = session.copyTranscriptToClipboard() ? .copied : .empty
         copyStatus = status
@@ -251,11 +247,7 @@ final class ConsoleTerminalCaptureController {
             Task {
                 do {
                     let transcript = try await dictation.stopAndTranscribe()
-                    let prompt = terminalPrompt(
-                        transcript: transcript,
-                        screenshots: screenshotsCapturedDuringDictation(),
-                        clips: clipsCapturedDuringDictation()
-                    )
+                    let prompt = terminalPrompt(transcript: transcript)
                     resetDictationContext()
                     guard !prompt.isEmpty else { return }
                     // Type the transcript into the input line without submitting
@@ -271,9 +263,6 @@ final class ConsoleTerminalCaptureController {
         }
 
         hasPendingDictation = false
-        dictationStartedAt = Date()
-        dictationBaselineScreenshotIDs = Set(ScreenshotTray.shared.items.map(\.id))
-        dictationBaselineClipIDs = Set(ClipTray.shared.items.map(\.id))
 
         Task {
             do {
@@ -319,23 +308,18 @@ final class ConsoleTerminalCaptureController {
                 guard FeatureFlags.shared.enableCameraBubble else { return }
                 CameraBubbleController.shared.toggle()
             case .saveSelection:
-                await TrayViewer.saveLatestSelectionToNote()
+                logRetiredTrayAction("save selection")
             case .viewTray:
-                TrayViewer.shared.show()
+                logRetiredTrayAction("view tray")
             case .pasteLastTray:
-                pasteLatestScreenshot(sendTo: session)
+                logRetiredTrayAction("paste last")
             }
         }
     }
 
     private func pasteLatestScreenshot(sendTo session: ManagedAgentConsoleSession) {
-        guard let item = ScreenshotTray.shared.items.max(by: { $0.capturedAt < $1.capturedAt }) else {
-            screenshotError = "No screenshot in tray"
-            return
-        }
-
-        guard !isTerminalDictationActive else { return }
-        session.send(screenshotPrompt(for: item))
+        _ = session
+        screenshotError = "Tray capture paste is retired"
     }
 
     private func captureSelectedScreenshot(
@@ -357,26 +341,15 @@ final class ConsoleTerminalCaptureController {
             sourceHeight: capture.height
         )
 
-        guard let item = await ScreenshotTray.shared.addReturningItem(
-            data: capture.data,
-            width: capture.width,
-            height: capture.height,
-            mode: mode,
-            windowTitle: capture.windowTitle,
-            appName: capture.appName,
-            displayName: capture.displayName,
-            initialThumbnail: capture.previewImage
-        ) else {
+        guard let savedURL = await persistConsoleCapture(capture, mode: mode) else {
             screenshotError = "Could not save screenshot"
             return
         }
 
-        ScreenshotPreviewPanel.shared.attachFileURL(item.tempURL, to: previewID)
+        ScreenshotPreviewPanel.shared.attachFileURL(savedURL, to: previewID)
 
         guard !isTerminalDictationActive else { return }
-        session.send(screenshotPrompt(for: item))
-
-        TrayActionService.shared.persistStandaloneScreenshotToLibrary(item)
+        session.send(screenshotPrompt(for: savedURL))
     }
 
     private var isTerminalDictationActive: Bool {
@@ -385,65 +358,86 @@ final class ConsoleTerminalCaptureController {
     }
 
     private func resetDictationContext() {
-        dictationStartedAt = nil
-        dictationBaselineScreenshotIDs = []
-        dictationBaselineClipIDs = []
     }
 
-    private func screenshotPrompt(for item: TrayScreenshot) -> String {
-        "Use this screenshot: \(item.tempURL.path)"
+    private func screenshotPrompt(for url: URL) -> String {
+        "Use this screenshot: \(url.path)"
     }
 
-    private func terminalPrompt(transcript: String, screenshots: [TrayScreenshot], clips: [TrayClip]) -> String {
-        let text = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-        var sections: [String] = []
-
-        if !screenshots.isEmpty {
-            let screenshotLines = screenshots.map { "- \($0.tempURL.path)" }
-            sections.append("""
-            Use these screenshots:
-            \(screenshotLines.joined(separator: "\n"))
-            """)
-        }
-
-        if !clips.isEmpty {
-            let clipLines = clips.map { clip in
-                "- \(clip.tempURL.path) (\(clipDurationLabel(clip.durationMs)))"
-            }
-            sections.append("""
-            Use these screen recordings:
-            \(clipLines.joined(separator: "\n"))
-            """)
-        }
-
-        guard !sections.isEmpty else { return text }
-        guard !text.isEmpty else { return sections.joined(separator: "\n\n") }
-
-        return ([text] + sections).joined(separator: "\n\n")
-    }
-
-    private func screenshotsCapturedDuringDictation() -> [TrayScreenshot] {
-        let startedAt = dictationStartedAt ?? .distantFuture
-        return ScreenshotTray.shared.items
-            .filter { item in
-                item.capturedAt >= startedAt && !dictationBaselineScreenshotIDs.contains(item.id)
-            }
-            .sorted { $0.capturedAt < $1.capturedAt }
-    }
-
-    private func clipsCapturedDuringDictation() -> [TrayClip] {
-        let startedAt = dictationStartedAt ?? .distantFuture
-        return ClipTray.shared.items
-            .filter { item in
-                item.capturedAt >= startedAt && !dictationBaselineClipIDs.contains(item.id)
-            }
-            .sorted { $0.capturedAt < $1.capturedAt }
+    private func terminalPrompt(transcript: String) -> String {
+        transcript.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func clipDurationLabel(_ durationMs: Int) -> String {
         let totalSeconds = max(durationMs, 0) / 1000
         guard totalSeconds >= 60 else { return "\(totalSeconds)s" }
         return "\(totalSeconds / 60)m \(totalSeconds % 60)s"
+    }
+
+    private func logRetiredTrayAction(_ action: String) {
+        Log(.ui).info("Console tray action ignored; tray is retired", detail: action)
+    }
+
+    private func persistConsoleCapture(_ result: CaptureResult, mode: CaptureMode) async -> URL? {
+        let captureId = UUID()
+        guard let savedURL = ScreenshotStorage.save(
+            result.data,
+            recordingId: captureId,
+            timestampMs: 0,
+            index: 0,
+            capturedAt: result.capturedAt,
+            captureMode: mode.rawValue,
+            width: result.width,
+            height: result.height,
+            windowTitle: result.windowTitle,
+            appName: result.appName,
+            displayName: result.displayName
+        ) else {
+            return nil
+        }
+
+        let screenshot = RecordingScreenshot(
+            filename: savedURL.lastPathComponent,
+            timestampMs: 0,
+            captureMode: mode.rawValue,
+            width: result.width,
+            height: result.height,
+            windowTitle: result.windowTitle,
+            appName: result.appName,
+            appBundleID: result.appBundleID,
+            displayName: result.displayName
+        )
+        let titleSource = [result.appName, result.windowTitle, result.displayName]
+            .compactMap { value -> String? in
+                guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !trimmed.isEmpty else { return nil }
+                return trimmed
+            }
+            .first
+
+        var capture = TalkieObject.newCapture(
+            id: captureId,
+            title: titleSource.map { "\($0) capture" }
+        )
+        if titleSource != nil || result.appBundleID != nil {
+            capture.metadataJSON = RecordingMetadata(
+                app: AppContext(
+                    bundleId: result.appBundleID,
+                    name: result.appName,
+                    windowTitle: result.windowTitle
+                )
+            ).toJSON()
+        }
+        capture.assetsJSON = TalkieObjectAssets(screenshots: [screenshot]).toJSON()
+
+        do {
+            try await TalkieObjectRepository().saveRecording(capture)
+            await RecordingsViewModel.shared.loadRecordings()
+            return savedURL
+        } catch {
+            Log(.ui).error("Console screenshot Library write failed: \(error.localizedDescription)")
+            return nil
+        }
     }
 }
 

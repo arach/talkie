@@ -176,17 +176,8 @@ final class CameraBubbleController {
             }
 
             let durationMs = Int(Date().timeIntervalSince(startTime) * 1000)
-            let capture = CameraCaptureService.shared
-
-            // Add to buffer with actual recorded dimensions
-            await ClipTray.shared.add(
-                tempURL: url,
-                durationMs: durationMs,
-                width: capture.cameraWidth > 0 ? capture.cameraWidth : 1280,
-                height: capture.cameraHeight > 0 ? capture.cameraHeight : 720
-            )
-
-            log.info("Clip recording stopped, \(durationMs)ms → tray (\(ClipTray.shared.count) total)")
+            try? FileManager.default.removeItem(at: url)
+            log.info("Clip recording stopped, \(durationMs)ms; camera clip tray is retired")
 
             if shouldHide { hide() }
         }
@@ -196,10 +187,8 @@ final class CameraBubbleController {
 
     /// Drain all buffered clips to a recording.
     func drainClipsToRecording(recordingId: UUID, recordingStartTime: Date) -> [RecordingClip] {
-        ClipTray.shared.drainToRecording(
-            recordingId: recordingId,
-            recordingStartTime: recordingStartTime
-        )
+        _ = (recordingId, recordingStartTime)
+        return []
     }
 }
 

@@ -976,17 +976,7 @@ private struct AgentMenuGrabTile: View {
 
 private enum AgentMenuGrabPreviewLoader {
     static func previews(limit: Int) async -> [AgentMenuGrabPreview] {
-        let items = await AgentLiveTrayAssetStore.shared.recentItems(limit: limit)
-        var previews: [AgentMenuGrabPreview] = []
-        previews.reserveCapacity(items.count)
-
-        for item in items {
-            guard !Task.isCancelled else { return previews }
-            let thumbnail = await AgentMenuGrabThumbnailLoader.thumbnail(for: item)
-            previews.append(AgentMenuGrabPreview(item: item, thumbnail: thumbnail))
-        }
-
-        return previews
+        []
     }
 }
 

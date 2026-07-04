@@ -352,9 +352,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
 
         // Capture system (gated)
         if FeatureFlags.shared.enableCapture {
-            // Start tray badge (auto-shows when tray non-empty)
-            _ = TrayBadge.shared
-
             // Screenshot shortcuts (sub-gated)
             if FeatureFlags.shared.enableScreenshots {
                 setupCaptureChord()
@@ -373,13 +370,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                 setupCameraBubbleShortcut()
             }
 
-            setupShelfShortcut()
+            // Tray viewer/shelf are retired. Capture remains available, but
+            // standalone captures now go directly to the durable Library.
         }
 
         // TLK-022 — Media Augmentation Pipeline
-        // Register augmenters + kick off a background catch-up sweep
-        // so captures from before this shipped get backfilled. All
-        // work is fire-and-forget; never blocks launch.
+        // Keep cheap metadata augmentation for fresh captures only. OCR and
+        // historical catch-up sweeps are intentionally disabled; launch should
+        // never turn old capture files into a background processing queue.
         setupMediaAugmentation()
 
         #if DEBUG
@@ -388,64 +386,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         #endif
     }
 
-    /// TLK-022 — register augmenters with `MediaAugmentationService`
-    /// and trigger the catch-up sweep over existing on-disk assets.
-    /// Spawns a single `Task` so registration awaits cleanly, then
-    /// fires the sweep at `.background` priority.
+    /// TLK-022 — register cheap augmenters with `MediaAugmentationService`.
     private func setupMediaAugmentation() {
         Task {
-            await MediaAugmentationService.shared.register(OCRAugmenter())
             await MediaAugmentationService.shared.register(WindowMetaAugmenter())
-
-            // Catch-up: enumerate every primary asset we own and
-            // enqueue it. The service skips augmenter (kind, version)
-            // pairs already present in the sidecar, so this is cheap
-            // when everything's up to date and gradual when it's not.
-            // No MainActor — pure FileManager + nonisolated enqueue.
-            Task.detached(priority: .background) {
-                Self.runMediaAugmentationCatchUpSweep()
-            }
         }
     }
-
-    /// Walks `Audio/`, `Screenshots/`, and `Tray/screenshots/` and
-    /// enqueues each primary asset for augmentation. Idempotent —
-    /// already-augmented assets at current versions are skipped by
-    /// the service. `nonisolated` so it runs off the main actor on
-    /// the detached background task that calls it; only touches
-    /// FileManager + the nonisolated `enqueue` entry.
-    nonisolated private static func runMediaAugmentationCatchUpSweep() {
-        let fm = FileManager.default
-
-        // Audio
-        let audioDir = AudioStorage.audioDirectory
-        if let files = try? fm.contentsOfDirectory(at: audioDir, includingPropertiesForKeys: nil) {
-            for url in files where Self.audioExts.contains(url.pathExtension.lowercased()) {
-                MediaAugmentationService.shared.enqueue(
-                    AugmentationTask(assetURL: url, assetKind: .audio)
-                )
-            }
-        }
-
-        // Screenshots — both the saved-capture dir and the tray buffer
-        let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let imageDirs: [URL] = [
-            ScreenshotStorage.screenshotsDirectory,
-            appSupport.appendingPathComponent("Talkie/Tray/screenshots", isDirectory: true),
-        ]
-        for dir in imageDirs {
-            guard let files = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else {
-                continue
-            }
-            for url in files where url.pathExtension.lowercased() == "png" {
-                MediaAugmentationService.shared.enqueue(
-                    AugmentationTask(assetURL: url, assetKind: .image)
-                )
-            }
-        }
-    }
-
-    private static let audioExts: Set<String> = ["wav", "m4a", "mp3", "aiff", "caf"]
 
     // MARK: - Debug Commands
 
@@ -2167,20 +2113,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             object: nil
         )
 
-        // Listen for TalkieAgent forwarding Hyper+V (paste)
-        DistributedNotificationCenter.default().addObserver(
-            self,
-            selector: #selector(pasteChordReceived),
-            name: NSNotification.Name("to.talkie.app.pasteChord"),
-            object: nil
-        )
-        DistributedNotificationCenter.default().addObserver(
-            self,
-            selector: #selector(pasteLastScreenshotReceived),
-            name: NSNotification.Name("to.talkie.app.pasteLastScreenshot"),
-            object: nil
-        )
-
         // Local: fires when Talkie is focused (Agent's hotkey may not forward in this case)
         // Read chord config directly from shared settings (avoids @MainActor isolation)
         let captureChord = HotkeyConfig.fromSharedSettings(
@@ -2189,15 +2121,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         let screenRecordChord = HotkeyConfig.fromSharedSettings(
             key: AgentSettingsKey.screenRecordChordHotkey, default: .defaultScreenRecordChord
         )
-        let pasteChord = HotkeyConfig.fromSharedSettings(
-            key: AgentSettingsKey.pasteChordHotkey, default: .defaultPasteChord
-        )
         let captureKeyCode = captureChord.keyCode
         let captureMods = captureChord.nsModifierFlags
         let recordKeyCode = screenRecordChord.keyCode
         let recordMods = screenRecordChord.nsModifierFlags
-        let pasteKeyCode = pasteChord.keyCode
-        let pasteMods = pasteChord.nsModifierFlags
         captureChordLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             if HotkeyRecordingCoordinator.shared.isRecording {
                 return event
@@ -2233,24 +2160,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                 return nil
             }
 
-            // Check paste chord
-            if Self.keyEvent(event, matches: pasteKeyCode, modifiers: pasteMods) {
-                guard !Self.agentOwnsGlobalHotkeys() else {
-                    return nil
-                }
-                if self?.capturePerfLoggingEnabled == true {
-                    Log(.system).info("Paste chord detected (local) — entering paste bar")
-                }
-                let frontApp = NSWorkspace.shared.frontmostApplication
-                Task { @MainActor in
-                    await self?.handlePasteChord(previousApp: frontApp)
-                }
-                return nil
-            }
             return event
         }
 
-        logger.info("Capture chord registered: Hyper+S (screenshot) + Hyper+R (video) + Hyper+V (paste)")
+        logger.info("Capture chord registered: Hyper+S (screenshot) + Hyper+R (video)")
     }
 
     @MainActor @objc private func screenshotChordReceived(_ notification: Notification) {
@@ -2304,19 +2217,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
 
     @MainActor
     private func stageSelectionFromCaptureNotification(_ notification: Notification) {
-        guard let userInfo = notification.userInfo,
-              let text = userInfo["selectionText"] as? String,
-              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return
-        }
-
-        SelectionTray.shared.add(
-            text: text,
-            appName: emptyToNil(userInfo["selectionAppName"] as? String),
-            bundleID: emptyToNil(userInfo["selectionBundleID"] as? String),
-            windowTitle: emptyToNil(userInfo["selectionWindowTitle"] as? String),
-            displayName: "Selection"
-        )
+        // Selection tray staging is retired. Dictation/capture flows should
+        // route selected text directly through their active command context.
     }
 
     private func emptyToNil(_ value: String?) -> String? {
@@ -2445,19 +2347,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                 CapturePerformanceMonitor.shared.endSession(outcome: "toggle_camera_selected")
             }
         case .saveSelection:
-            await TrayViewer.saveLatestSelectionToNote()
             if trackCapturePerf {
-                CapturePerformanceMonitor.shared.endSession(outcome: "save_selection_selected")
+                CapturePerformanceMonitor.shared.endSession(outcome: "selection_tray_retired")
             }
         case .viewTray:
-            TrayViewer.shared.show()
             if trackCapturePerf {
-                CapturePerformanceMonitor.shared.endSession(outcome: "view_tray_selected")
+                CapturePerformanceMonitor.shared.endSession(outcome: "tray_retired")
             }
         case .pasteLastTray:
-            await pasteLatestScreenshot(previousApp: previousApp)
             if trackCapturePerf {
-                CapturePerformanceMonitor.shared.endSession(outcome: "paste_last_selected")
+                CapturePerformanceMonitor.shared.endSession(outcome: "tray_paste_retired")
             }
         }
 
@@ -2495,26 +2394,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
 
     @MainActor
     private func pasteLatestScreenshot(previousApp: NSRunningApplication?) async {
-        guard let latest = ScreenshotTray.shared.items.max(by: { $0.capturedAt < $1.capturedAt }),
-              let data = latest.loadData() else {
-            Log(.system).info("Paste latest screenshot: no screenshot available")
-            return
-        }
-
-        guard let durableURL = durablePasteURL(for: latest, data: data) else {
-            Log(.system).error("Paste latest screenshot: failed to create durable screenshot copy")
-            return
-        }
-
-        writeScreenshotPasteboard(data: data, fileURL: durableURL)
-
-        if let prev = previousApp, prev.bundleIdentifier != Bundle.main.bundleIdentifier {
-            prev.activate()
-        }
-
-        try? await Task.sleep(for: .milliseconds(80))
-        simulateCmdV()
-        Log(.system).info("Pasted latest screenshot: \(durableURL.lastPathComponent)")
+        Log(.system).info("Paste latest screenshot ignored; tray-based latest capture is retired")
     }
 
     // MARK: - Quick Paste Chord (Hyper+V)
@@ -2739,28 +2619,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         }
         recordLiveScreenshotForActiveDictationIfNeeded(result, mode: mode)
 
-        CapturePerformanceMonitor.shared.mark("tray.add.begin")
-        guard let latestItem = await ScreenshotTray.shared.addReturningItem(
-            data: result.data,
-            width: result.width,
-            height: result.height,
-            mode: mode,
-            windowTitle: result.windowTitle,
-            appName: result.appName,
-            appBundleID: result.appBundleID,
-            displayName: result.displayName,
-            initialThumbnail: result.previewImage
-        ) else {
-            CapturePerformanceMonitor.shared.mark("tray.add.complete")
+        CapturePerformanceMonitor.shared.mark("library.save.begin")
+        guard let savedURL = await persistStandaloneCapture(result, mode: mode) else {
+            CapturePerformanceMonitor.shared.mark("library.save.complete")
             return false
         }
-        CapturePerformanceMonitor.shared.mark("tray.add.complete")
+        CapturePerformanceMonitor.shared.mark("library.save.complete")
         if let previewID {
-            ScreenshotPreviewPanel.shared.attachFileURL(latestItem.tempURL, to: previewID)
+            ScreenshotPreviewPanel.shared.attachFileURL(savedURL, to: previewID)
         }
         ScreenRecordingController.shared.recordScreenshotHighlight(
             capturedAt: result.capturedAt,
-            filename: latestItem.filename,
+            filename: savedURL.lastPathComponent,
             captureMode: mode.rawValue,
             width: result.width,
             height: result.height,
@@ -2769,11 +2639,88 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             appBundleID: result.appBundleID,
             displayName: result.displayName
         )
-        TrayActionService.shared.persistStandaloneScreenshotToLibrary(latestItem)
         if opensMarkup {
-            CaptureMarkupCoordinator.shared.openAgentOwnedSession(imageURL: latestItem.tempURL)
+            CaptureMarkupCoordinator.shared.openAgentOwnedSession(imageURL: savedURL)
         }
         return true
+    }
+
+    @MainActor
+    private func persistStandaloneCapture(_ result: CaptureResult, mode: CaptureMode) async -> URL? {
+        let captureId = UUID()
+        guard let savedURL = ScreenshotStorage.save(
+            result.data,
+            recordingId: captureId,
+            timestampMs: 0,
+            index: 0,
+            capturedAt: result.capturedAt,
+            captureMode: mode.rawValue,
+            width: result.width,
+            height: result.height,
+            windowTitle: result.windowTitle,
+            appName: result.appName,
+            displayName: result.displayName
+        ) else {
+            Log(.system).error("Standalone capture Library write failed")
+            return nil
+        }
+
+        let screenshot = RecordingScreenshot(
+            filename: savedURL.lastPathComponent,
+            timestampMs: 0,
+            captureMode: mode.rawValue,
+            width: result.width,
+            height: result.height,
+            windowTitle: result.windowTitle,
+            appName: result.appName,
+            appBundleID: result.appBundleID,
+            displayName: result.displayName
+        )
+        let titleSource = [result.appName, result.windowTitle, result.displayName]
+            .compactMap { value -> String? in
+                guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !trimmed.isEmpty else { return nil }
+                return trimmed
+            }
+            .first
+
+        var capture = TalkieObject.newCapture(
+            id: captureId,
+            title: titleSource.map { "\($0) capture" }
+        )
+        if titleSource != nil || result.appBundleID != nil {
+            capture.metadataJSON = RecordingMetadata(
+                app: AppContext(
+                    bundleId: result.appBundleID,
+                    name: result.appName,
+                    windowTitle: result.windowTitle
+                )
+            ).toJSON()
+        }
+        capture.assetsJSON = TalkieObjectAssets(screenshots: [screenshot]).toJSON()
+
+        do {
+            try await TalkieObjectRepository().saveRecording(capture)
+            await RecordingsViewModel.shared.loadRecordings()
+        } catch {
+            Log(.system).error("Standalone capture database write failed: \(error.localizedDescription)")
+            return nil
+        }
+
+        MediaAugmentationService.shared.enqueue(
+            AugmentationTask(
+                assetURL: savedURL,
+                assetKind: .image,
+                context: TKAugmentationContext([
+                    "captureMode": mode.rawValue,
+                    "windowTitle": result.windowTitle ?? "",
+                    "appName": result.appName ?? "",
+                    "appBundleID": result.appBundleID ?? "",
+                    "displayName": result.displayName ?? "",
+                ])
+            )
+        )
+        return savedURL
     }
 
     @MainActor
@@ -2840,10 +2787,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             let actionMap: [HotkeyAction: String] = [
                 .captureFullscreen: "fullscreen",
                 .captureRegion:     "region",
-                .openTrayViewer:    "viewTray",
-                .openTrayShelf:     "viewShelf",
                 .captureWindow:     "window",
-                .pasteLastScreenshot: "pasteLastScreenshot",
             ]
 
             for (action, mode) in actionMap {
@@ -2896,9 +2840,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         defer { isDirectScreenshotCaptureActive = false }
 
         let trackCapturePerfSession = capturePerfLoggingEnabled
-            && mode != "viewTray"
-            && mode != "viewShelf"
-            && mode != "pasteLastScreenshot"
         if trackCapturePerfSession {
             CapturePerformanceMonitor.shared.beginSession(trigger: "direct-shortcut", mode: mode)
             CapturePerformanceMonitor.shared.mark("direct.dispatch.begin")
@@ -2912,15 +2853,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             outcome = await executeCapture(mode: .region) ? "success" : "cancelled_or_failed"
         case "window":
             outcome = await executeCapture(mode: .window) ? "success" : "cancelled_or_failed"
-        case "viewTray":
-            await handleCaptureChord(initialMode: .screenshot, previousApp: NSWorkspace.shared.frontmostApplication)
-            outcome = "view_tray"
-        case "viewShelf":
-            TrayShelf.shared.toggle()
-            outcome = "view_shelf"
-        case "pasteLastScreenshot":
-            await pasteLatestScreenshot(previousApp: NSWorkspace.shared.frontmostApplication)
-            outcome = "paste_last_screenshot"
         default: break
         }
         if trackCapturePerfSession {
@@ -2972,42 +2904,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         Task { @MainActor in
             guard FeatureFlags.shared.enableCameraBubble else { return }
             CameraBubbleController.shared.toggle()
-        }
-    }
-
-    // MARK: - Tray Shortcuts (Viewer + Shelf)
-
-    private func setupShelfShortcut() {
-        // Listen for TalkieAgent forwarding shelf/viewer toggles
-        DistributedNotificationCenter.default().addObserver(
-            self,
-            selector: #selector(shelfToggleReceived),
-            name: NSNotification.Name("to.talkie.app.shelfToggle"),
-            object: nil
-        )
-        DistributedNotificationCenter.default().addObserver(
-            self,
-            selector: #selector(trayViewerToggleReceived),
-            name: NSNotification.Name("to.talkie.app.trayViewerToggle"),
-            object: nil
-        )
-
-        logger.info("Tray shelf/viewer notification observers registered; hotkeys are handled via HotkeyRegistry")
-    }
-
-    @objc private func shelfToggleReceived(_ notification: Notification) {
-        Task { @MainActor in
-            TrayShelf.shared.toggle()
-        }
-    }
-
-    @objc private func trayViewerToggleReceived(_ notification: Notification) {
-        Task { @MainActor in
-            if TrayViewer.shared.isVisible {
-                TrayViewer.shared.dismiss()
-            } else {
-                TrayViewer.shared.show()
-            }
         }
     }
 

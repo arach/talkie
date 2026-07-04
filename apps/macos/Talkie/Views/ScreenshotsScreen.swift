@@ -188,9 +188,6 @@ struct ScreenshotsScreen: View {
     private let repository = TalkieObjectRepository()
     private let actionRepository = LocalRepository()
     private let workflowService = WorkflowService.shared
-    @Bindable private var screenshotTray = ScreenshotTray.shared
-    @Bindable private var clipTray = ClipTray.shared
-    @Bindable private var selectionTray = SelectionTray.shared
 
     @State private var objectsWithScreenshots: [TalkieObject] = []
     @State private var libraryItems: [ScreenshotItem] = []
@@ -247,26 +244,7 @@ struct ScreenshotsScreen: View {
     // MARK: - Derived
 
     private var trayScreenshotItems: [ScreenshotItem] {
-        let screenshots: [TrayItem] = screenshotTray.items.map { .screenshot($0) }
-        let clips: [TrayItem] = clipTray.items.map { .clip($0) }
-        let selections: [TrayItem] = selectionTray.items.map { .selection($0) }
-
-        return (screenshots + clips + selections)
-            .sorted { $0.capturedAt > $1.capturedAt }
-            .map { item in
-                ScreenshotItem(
-                    id: "tray-\(item.id.uuidString)",
-                    fileURL: item.tempURL,
-                    date: item.capturedAt,
-                    label: item.contextLabel,
-                    pinned: item.pinned,
-                    trayItem: item,
-                    parent: nil,
-                    screenshot: nil,
-                    clip: nil,
-                    visualContext: nil
-                )
-            }
+        []
     }
 
     private var allItems: [ScreenshotItem] {
@@ -509,7 +487,7 @@ struct ScreenshotsScreen: View {
 
             if !trayScreenshotItems.isEmpty {
                 Button {
-                    TrayViewer.shared.show()
+                    Log(.ui).info("Screenshots tray viewer action ignored; tray is retired")
                 } label: {
                     if compact {
                         Image(systemName: "tray.full")
@@ -2094,7 +2072,7 @@ private struct ScreenshotListHeader: View {
     @ViewBuilder
     private func headerCell(_ label: String, width: CGFloat?, alignment: Alignment) -> some View {
         Text(label)
-            .font(ScopeType.mono(size: 8.5))
+            .font(ScopeType.chrome)
             .tracking(ScopeType.Tracking.wide)
             .foregroundStyle(ScopePalette.inkFainter)
             .lineLimit(1)
@@ -2119,7 +2097,7 @@ private struct MediaKindPill: View {
             Image(systemName: kind.icon)
                 .font(.system(size: 8, weight: .semibold))
             Text(kind.badgeText)
-                .font(ScopeType.mono(size: 8, weight: .semibold))
+                .font(ScopeType.chrome)
                 .tracking(ScopeType.Tracking.normal)
         }
         .foregroundStyle(tint)
@@ -2372,7 +2350,7 @@ private struct ScreenshotInspector: View {
                 Spacer()
                 if multiCount > 1 {
                     Text("\(multiCount) selected")
-                        .font(ScopeType.mono(size: 8.5, weight: .semibold))
+                        .font(ScopeType.chrome)
                         .tracking(ScopeType.Tracking.normal)
                         .foregroundStyle(ScopePalette.amberDeep)
                 }
@@ -2470,7 +2448,7 @@ private struct ScreenshotInspector: View {
                                     Image(systemName: showDetectedText ? "chevron.down" : "chevron.right")
                                         .font(.system(size: 8, weight: .semibold))
                                     Text("detected text")
-                                        .font(ScopeType.mono(size: 8.5))
+                                        .font(ScopeType.chrome)
                                         .tracking(ScopeType.Tracking.wide)
                                         .textCase(.uppercase)
                                     Spacer()
@@ -2493,7 +2471,7 @@ private struct ScreenshotInspector: View {
                     // Open destinations
                     VStack(alignment: .leading, spacing: 8) {
                         Text("open")
-                            .font(ScopeType.mono(size: 8.5))
+                            .font(ScopeType.chrome)
                             .tracking(ScopeType.Tracking.wide)
                             .foregroundStyle(ScopePalette.inkFainter)
                         HStack(spacing: 6) {
@@ -2570,7 +2548,7 @@ private struct MetaGroup<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(ScopeType.mono(size: 8.5))
+                .font(ScopeType.chrome)
                 .tracking(ScopeType.Tracking.wide)
                 .textCase(.uppercase)
                 .foregroundStyle(ScopePalette.inkFainter)
@@ -2825,7 +2803,7 @@ private struct ScreenshotPreviewOverlay: View {
                             HStack(spacing: 6) {
                                 Image(systemName: "pencil.tip.crop.circle").font(.system(size: 12, weight: .semibold))
                                 Text("markup")
-                                    .font(ScopeType.mono(size: 9.5, weight: .semibold))
+                                    .font(ScopeType.channel)
                                     .tracking(ScopeType.Tracking.normal)
                                     .textCase(.uppercase)
                             }
@@ -2934,7 +2912,7 @@ private struct ZoomCluster: View {
         HStack(spacing: 1) {
             stepButton("minus", action: onZoomOut)
             Text("\(Int((zoom * 100).rounded()))%")
-                .font(ScopeType.mono(size: 9.5))
+                .font(ScopeType.mono(size: 9))
                 .foregroundStyle(ScopePalette.inkFaint)
                 .frame(minWidth: 38)
                 .monospacedDigit()
@@ -2942,7 +2920,7 @@ private struct ZoomCluster: View {
             ScopeRule(.subtle, axis: .vertical).frame(height: 14).padding(.horizontal, 2)
             Button(action: onFit) {
                 Text("FIT")
-                    .font(ScopeType.mono(size: 8.5, weight: .semibold))
+                    .font(ScopeType.chrome)
                     .tracking(ScopeType.Tracking.normal)
                     .foregroundStyle(ScopePalette.inkFaint)
                     .padding(.horizontal, 7)
@@ -3043,7 +3021,7 @@ private struct VideoMarkupHostView: View {
                 Spacer()
                 if layerCount > 0 {
                     Text("\(layerCount) mark\(layerCount == 1 ? "" : "s")")
-                        .font(ScopeType.mono(size: 8.5, weight: .semibold))
+                        .font(ScopeType.chrome)
                         .tracking(ScopeType.Tracking.normal)
                         .foregroundStyle(ScopePalette.amberDeep)
                 }
@@ -3157,12 +3135,12 @@ private struct VideoLayerRow: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(layer.kind.rawValue.uppercased())
-                    .font(ScopeType.mono(size: 8.5, weight: .semibold))
+                    .font(ScopeType.chrome)
                     .tracking(ScopeType.Tracking.normal)
                     .foregroundStyle(ScopePalette.amberDeep)
                 Spacer()
                 Text(layerTimeLabel(layer))
-                    .font(ScopeType.mono(size: 8.5))
+                    .font(ScopeType.chrome)
                     .foregroundStyle(ScopePalette.inkFainter)
             }
             if let text = layer.text ?? layer.label {

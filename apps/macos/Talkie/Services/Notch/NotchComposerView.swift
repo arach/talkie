@@ -1399,14 +1399,14 @@ struct NotchComposerView: View {
         if isHovered {
             IdleNotchButton(icon: "camera.viewfinder") {
                 Task {
-                    await captureRegionToTrayFromNotch()
+                    await captureRegionToLibraryFromNotch()
                 }
             }
             .transition(.opacity)
         }
     }
 
-    private func captureRegionToTrayFromNotch() async {
+    private func captureRegionToLibraryFromNotch() async {
         guard let result = await ScreenshotCaptureService.shared.captureStandalone(mode: .region) else {
             return
         }
@@ -1417,21 +1417,84 @@ struct NotchComposerView: View {
             sourceHeight: result.height
         )
 
-        guard let item = await ScreenshotTray.shared.addReturningItem(
-            data: result.data,
-            width: result.width,
-            height: result.height,
-            mode: .region,
-            windowTitle: result.windowTitle,
-            appName: result.appName,
-            displayName: result.displayName,
-            initialThumbnail: result.previewImage
-        ) else {
+        guard let savedURL = await persistNotchCapture(result, mode: .region) else {
             return
         }
 
-        ScreenshotPreviewPanel.shared.attachFileURL(item.tempURL, to: previewID)
-        TrayActionService.shared.persistStandaloneScreenshotToLibrary(item)
+        ScreenshotPreviewPanel.shared.attachFileURL(savedURL, to: previewID)
+        ScreenRecordingController.shared.recordScreenshotHighlight(
+            capturedAt: result.capturedAt,
+            filename: savedURL.lastPathComponent,
+            captureMode: CaptureMode.region.rawValue,
+            width: result.width,
+            height: result.height,
+            windowTitle: result.windowTitle,
+            appName: result.appName,
+            appBundleID: result.appBundleID,
+            displayName: result.displayName
+        )
+    }
+
+    private func persistNotchCapture(_ result: CaptureResult, mode: CaptureMode) async -> URL? {
+        let captureId = UUID()
+        guard let savedURL = ScreenshotStorage.save(
+            result.data,
+            recordingId: captureId,
+            timestampMs: 0,
+            index: 0,
+            capturedAt: result.capturedAt,
+            captureMode: mode.rawValue,
+            width: result.width,
+            height: result.height,
+            windowTitle: result.windowTitle,
+            appName: result.appName,
+            displayName: result.displayName
+        ) else {
+            return nil
+        }
+
+        let screenshot = RecordingScreenshot(
+            filename: savedURL.lastPathComponent,
+            timestampMs: 0,
+            captureMode: mode.rawValue,
+            width: result.width,
+            height: result.height,
+            windowTitle: result.windowTitle,
+            appName: result.appName,
+            appBundleID: result.appBundleID,
+            displayName: result.displayName
+        )
+        let titleSource = [result.appName, result.windowTitle, result.displayName]
+            .compactMap { value -> String? in
+                guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !trimmed.isEmpty else { return nil }
+                return trimmed
+            }
+            .first
+
+        var capture = TalkieObject.newCapture(
+            id: captureId,
+            title: titleSource.map { "\($0) capture" }
+        )
+        if titleSource != nil || result.appBundleID != nil {
+            capture.metadataJSON = RecordingMetadata(
+                app: AppContext(
+                    bundleId: result.appBundleID,
+                    name: result.appName,
+                    windowTitle: result.windowTitle
+                )
+            ).toJSON()
+        }
+        capture.assetsJSON = TalkieObjectAssets(screenshots: [screenshot]).toJSON()
+
+        do {
+            try await TalkieObjectRepository().saveRecording(capture)
+            await RecordingsViewModel.shared.loadRecordings()
+            return savedURL
+        } catch {
+            Log(.ui).error("Notch capture Library write failed: \(error.localizedDescription)")
+            return nil
+        }
     }
 
     private var idleLayout: some View {
@@ -1579,24 +1642,15 @@ struct NotchComposerView: View {
         isTrayWingHovered = false
         isHovered = false
         SurfaceCoordinator.shared.exitHover()
-        TrayViewer.shared.show()
+        Log(.ui).info("Notch tray action ignored; tray is retired")
     }
 
     private func observeTrayChanges() {
-        withObservationTracking {
-            _ = ScreenshotTray.shared.items.count
-            _ = ClipTray.shared.items.count
-            _ = SelectionTray.shared.items.count
-        } onChange: {
-            Task { @MainActor in
-                refreshTrayItemsSnapshot()
-                observeTrayChanges()
-            }
-        }
+        refreshTrayItemsSnapshot()
     }
 
     private func refreshTrayItemsSnapshot() {
-        trayItemsSnapshot = TrayItem.allItems()
+        trayItemsSnapshot = []
     }
 
     private func dismissNotchByGesture() {

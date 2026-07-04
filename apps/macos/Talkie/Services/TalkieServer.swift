@@ -885,7 +885,7 @@ final class TalkieServer {
                 sendResponse(connection, statusCode: 400, body: "Invalid window ID")
             }
         } else if path.hasPrefix("/tray/") && method == "GET" {
-            await handleTrayImage(connection, path: path)
+            sendResponse(connection, statusCode: 410, body: "Tray endpoints are retired")
         } else {
             log.warning("TalkieServer 404: method='\(method)' path='\(path)'")
             sendResponse(connection, statusCode: 404, body: "Not found")
@@ -3336,21 +3336,8 @@ final class TalkieServer {
     }
 
     private func handleTrayImage(_ connection: NWConnection, path: String) async {
-        // Extract UUID from /tray/<uuid>.png
-        let filename = String(path.dropFirst("/tray/".count))
-        let uuidString = filename.replacingOccurrences(of: ".png", with: "")
-        guard let uuid = UUID(uuidString: uuidString) else {
-            sendResponse(connection, statusCode: 400, body: "Invalid UUID")
-            return
-        }
-
-        guard let item = ScreenshotTray.shared.items.first(where: { $0.id == uuid }),
-              let data = item.loadData() else {
-            sendResponse(connection, statusCode: 404, body: "Tray item not found")
-            return
-        }
-
-        sendImageResponse(connection, data: data, contentType: "image/png")
+        _ = path
+        sendResponse(connection, statusCode: 410, body: "Tray endpoints are retired")
     }
 
     private func handleCaptureTerminals(_ connection: NWConnection) async {

@@ -63,6 +63,8 @@ private final class LiveSidecarSegmentTracker: @unchecked Sendable {
 
 @MainActor
 final class AgentController: ObservableObject {
+    @MainActor static weak var current: AgentController?
+
     // State machine - centralized state management with validation
     private let stateMachine = LiveStateMachine()
 
@@ -91,8 +93,9 @@ final class AgentController: ObservableObject {
     private var transcriptionTask: Task<Void, Never>?
     private var pendingAudioFilename: String?  // For saving on cancel
 
-    // Screenshots captured during this recording
+    // Visual assets captured during this recording
     private var capturedScreenshots: [RecordingScreenshot] = []
+    private var capturedClips: [RecordingClip] = []
     private var recordingId: UUID?
     private let liveSidecarSegmentTracker = LiveSidecarSegmentTracker()
 
@@ -181,6 +184,7 @@ final class AgentController: ObservableObject {
         self.audio = audio
         self.transcription = transcription
         self.router = router
+        Self.current = self
 
         // Configure state machine callbacks
         stateMachine.onStateChange = { [weak self] oldState, newState in
@@ -303,6 +307,7 @@ final class AgentController: ObservableObject {
         originalSelectedText = nil
         createdInTalkieView = false
         capturedScreenshots = []
+        capturedClips = []
         recordingId = nil
     }
 
@@ -382,6 +387,50 @@ final class AgentController: ObservableObject {
         return true
     }
 
+    /// Capture-time side channel for screen clips recorded while this dictation is
+    /// listening. Clips are already persisted to durable Library storage by the
+    /// screen recorder; the active dictation only records a timestamped reference.
+    func recordLiveClip(
+        fileURL: URL,
+        capturedAt: Date,
+        durationMs: Int,
+        captureMode: String,
+        width: Int,
+        height: Int,
+        windowTitle: String?,
+        appName: String?,
+        displayName: String?
+    ) -> Bool {
+        guard let recordingStartTime else { return false }
+
+        let clipEnd = capturedAt.addingTimeInterval(Double(max(0, durationMs)) / 1000.0)
+        if let recordingEndTime {
+            guard capturedAt <= recordingEndTime, clipEnd >= recordingStartTime else { return false }
+        } else {
+            guard clipEnd >= recordingStartTime else { return false }
+        }
+
+        guard state == .listening || state == .transcribing || state == .routing else {
+            return false
+        }
+
+        let timestampMs = max(0, Int(capturedAt.timeIntervalSince(recordingStartTime) * 1000))
+        let clip = RecordingClip(
+            filename: fileURL.lastPathComponent,
+            timestampMs: timestampMs,
+            durationMs: durationMs,
+            width: width,
+            height: height,
+            captureMode: captureMode,
+            windowTitle: windowTitle,
+            appName: appName,
+            displayName: displayName
+        )
+        capturedClips.append(clip)
+        log.info("Recorded live clip \(capturedClips.count) at \(timestampMs)ms")
+        return true
+    }
+
     private nonisolated static func currentLiveSidecarProvenance(
         for captureSessionId: UUID?
     ) async -> [ProvenanceSegment]? {
@@ -413,9 +462,14 @@ final class AgentController: ObservableObject {
     struct PreparedDictation: Sendable {
         let text: String
         let screenshots: [RecordingScreenshot]
+        let clips: [RecordingClip]
 
         var screenshotsJSON: String? {
             RecordingScreenshot.toJSON(screenshots)
+        }
+
+        var clipsJSON: String? {
+            RecordingClip.toJSON(clips)
         }
     }
 
@@ -424,11 +478,13 @@ final class AgentController: ObservableObject {
     /// is stored, so delivery never depends on Talkie.app being available.
     private nonisolated static func prepareDictation(
         plainText: String,
-        localScreenshots: [RecordingScreenshot]
+        localScreenshots: [RecordingScreenshot],
+        localClips: [RecordingClip]
     ) -> PreparedDictation {
         return PreparedDictation(
             text: plainText,
-            screenshots: localScreenshots
+            screenshots: localScreenshots,
+            clips: localClips
         )
     }
 
@@ -443,7 +499,7 @@ final class AgentController: ObservableObject {
         captureSessionId: UUID?,
         recordingStartedAt: Date?,
         recordingEndedAt: Date?,
-        attachTrayAssetsInBackground: Bool = true
+        attachTrayAssetsInBackground: Bool = false
     ) async -> UUID? {
         var recording = LiveRecording(from: utterance)
         let includedProvenanceIDs = await applyRecordingAssets(
@@ -462,73 +518,9 @@ final class AgentController: ObservableObject {
         }
 
         if attachTrayAssetsInBackground {
-            scheduleTrayAssetAttachment(
-                recordingId: id,
-                captureSessionId: captureSessionId,
-                recordingStartedAt: recordingStartedAt,
-                recordingEndedAt: recordingEndedAt,
-                includeScreenshots: RecordingScreenshot.fromArray(json: screenshotsJSON).isEmpty
-            )
+            log.debug("Tray asset attachment skipped; tray capture staging is retired")
         }
         return id
-    }
-
-    private nonisolated static func scheduleTrayAssetAttachment(
-        recordingId: UUID,
-        captureSessionId: UUID?,
-        recordingStartedAt: Date?,
-        recordingEndedAt: Date?,
-        includeScreenshots: Bool
-    ) {
-        guard let captureSessionId else { return }
-
-        Task.detached {
-            _ = await attachTrayAssets(
-                recordingId: recordingId,
-                captureSessionId: captureSessionId,
-                recordingStartedAt: recordingStartedAt,
-                recordingEndedAt: recordingEndedAt,
-                includeScreenshots: includeScreenshots
-            )
-        }
-    }
-
-    private nonisolated static func attachTrayAssets(
-        recordingId: UUID,
-        captureSessionId: UUID?,
-        recordingStartedAt: Date?,
-        recordingEndedAt: Date?,
-        includeScreenshots: Bool
-    ) async -> TalkieObjectAssets? {
-        guard captureSessionId != nil,
-              let promotion = await AgentLiveTrayAssetStore.shared.promoteAssetsForRecording(
-                recordingId: recordingId,
-                recordingStartedAt: recordingStartedAt,
-                recordingEndedAt: recordingEndedAt,
-                includeScreenshots: includeScreenshots
-              ),
-              !promotion.isEmpty,
-              let json = promotion.assets.toJSON(),
-              UnifiedDatabase.mergeAssets(id: recordingId, assetsJSON: json) else {
-            return nil
-        }
-
-        await AgentLiveTrayAssetStore.shared.drainPromotedAssets(promotion)
-        await TalkieAgentXPCService.shared.notifyDictationAdded()
-        notifyLiveTrayAssetsDidChange()
-        await MainActor.run {
-            DictationStore.shared.refresh()
-        }
-        return promotion.assets
-    }
-
-    private nonisolated static func notifyLiveTrayAssetsDidChange() {
-        DistributedNotificationCenter.default().postNotificationName(
-            Notification.Name(LiveTrayNotifications.assetsDidChange),
-            object: Bundle.main.bundleIdentifier ?? "TalkieAgent",
-            userInfo: ["source": "TalkieAgent"],
-            deliverImmediately: true
-        )
     }
 
     private nonisolated static func renderDictationDeliveryText(
@@ -988,6 +980,7 @@ final class AgentController: ObservableObject {
             let metadata = capturedContext.flatMap { buildMetadataDict(from: $0) }
             let selectedModelId = LiveSettings.shared.selectedModelId
             let screenshotsJSON = RecordingScreenshot.toJSON(capturedScreenshots)
+            let clipsJSON = RecordingClip.toJSON(capturedClips)
             let createdInTalkieView = createdInTalkieView
 
             Task {
@@ -1009,6 +1002,7 @@ final class AgentController: ObservableObject {
                 let includedProvenanceIDs = await Self.applyRecordingAssets(
                     to: &recording,
                     screenshotsJSON: screenshotsJSON,
+                    clipsJSON: clipsJSON,
                     captureSessionId: captureSessionId
                 )
                 if await Self.storeRecording(
@@ -1345,6 +1339,7 @@ final class AgentController: ObservableObject {
         intent = .paste
         originalSelectedText = nil
         capturedScreenshots = []
+        capturedClips = []
         recordingId = UUID()
         let captureSessionId = recordingId
         let liveSidecarSegmentTracker = self.liveSidecarSegmentTracker
@@ -1557,6 +1552,7 @@ final class AgentController: ObservableObject {
             let metadata = capturedContext.flatMap { buildMetadataDict(from: $0) }
             let selectedModelId = LiveSettings.shared.selectedModelId
             let screenshotsJSON = RecordingScreenshot.toJSON(capturedScreenshots)
+            let clipsJSON = RecordingClip.toJSON(capturedClips)
             let createdInTalkieView = createdInTalkieView
 
             Task {
@@ -1579,6 +1575,7 @@ final class AgentController: ObservableObject {
                 let includedProvenanceIDs = await Self.applyRecordingAssets(
                     to: &recording,
                     screenshotsJSON: screenshotsJSON,
+                    clipsJSON: clipsJSON,
                     captureSessionId: captureSessionId
                 )
                 if await Self.storeRecording(
@@ -1993,11 +1990,12 @@ final class AgentController: ObservableObject {
             // Track milestone
             ProcessingMilestones.shared.markRouting()
 
-            // Prepare only local state needed for delivery. Agent-owned live
-            // tray assets attach later, after the recording row is stored.
+            // Prepare only local state needed for delivery. Capture assets are
+            // attached directly to this active dictation; there is no tray scan.
             let prepared = Self.prepareDictation(
                 plainText: result.text,
-                localScreenshots: capturedScreenshots
+                localScreenshots: capturedScreenshots,
+                localClips: capturedClips
             )
             let textToPaste = prepared.text
 
@@ -2044,6 +2042,7 @@ final class AgentController: ObservableObject {
                     utterance: dictation,
                     segmentsJSON: segmentsJSON,
                     screenshotsJSON: prepared.screenshotsJSON,
+                    clipsJSON: prepared.clipsJSON,
                     captureSessionId: captureSessionId,
                     recordingStartedAt: recordingStartTime,
                     recordingEndedAt: recordingEndedAt
@@ -2143,6 +2142,7 @@ final class AgentController: ObservableObject {
                     utterance: utterance,
                     segmentsJSON: segmentsJSON,
                     screenshotsJSON: prepared.screenshotsJSON,
+                    clipsJSON: prepared.clipsJSON,
                     captureSessionId: captureSessionId,
                     recordingStartedAt: recordingStartTime,
                     recordingEndedAt: recordingEndedAt
@@ -2272,31 +2272,22 @@ final class AgentController: ObservableObject {
                         utterance: utterance,
                         segmentsJSON: segmentsJSON,
                         screenshotsJSON: prepared.screenshotsJSON,
+                        clipsJSON: prepared.clipsJSON,
                         captureSessionId: capturedRecordingId,
                         recordingStartedAt: capturedRecordingStartedAt,
                         recordingEndedAt: capturedRecordingEndedAt,
                         attachTrayAssetsInBackground: false
                     )
 
-                    let trayAssets: TalkieObjectAssets?
-                    if let storedRecordingId {
+                    if storedRecordingId != nil {
                         logTiming("Database stored (context rule: auto-refine)")
-                        trayAssets = await Self.attachTrayAssets(
-                            recordingId: storedRecordingId,
-                            captureSessionId: capturedRecordingId,
-                            recordingStartedAt: capturedRecordingStartedAt,
-                            recordingEndedAt: capturedRecordingEndedAt,
-                            includeScreenshots: prepared.screenshots.isEmpty
-                        )
-                    } else {
-                        trayAssets = nil
                     }
 
                     let deliveryText = Self.renderDictationDeliveryText(
                         text: finalText,
                         timedTranscription: timedTranscription,
                         localScreenshots: prepared.screenshots,
-                        trayAssets: trayAssets
+                        trayAssets: nil
                     )
 
                     trace?.begin("paste")
@@ -2407,6 +2398,7 @@ final class AgentController: ObservableObject {
                         utterance: utterance,
                         segmentsJSON: segmentsJSON,
                         screenshotsJSON: prepared.screenshotsJSON,
+                        clipsJSON: prepared.clipsJSON,
                         captureSessionId: captureSessionId,
                         recordingStartedAt: recordingStartTime,
                         recordingEndedAt: recordingEndedAt
@@ -2488,31 +2480,22 @@ final class AgentController: ObservableObject {
                         utterance: utterance,
                         segmentsJSON: segmentsJSON,
                         screenshotsJSON: prepared.screenshotsJSON,
+                        clipsJSON: prepared.clipsJSON,
                         captureSessionId: capturedRecordingId,
                         recordingStartedAt: capturedRecordingStartedAt,
                         recordingEndedAt: capturedRecordingEndedAt,
                         attachTrayAssetsInBackground: false
                     )
 
-                    let trayAssets: TalkieObjectAssets?
-                    if let storedRecordingId {
+                    if storedRecordingId != nil {
                         logTiming("Database stored (context rule: protocol-processor)")
-                        trayAssets = await Self.attachTrayAssets(
-                            recordingId: storedRecordingId,
-                            captureSessionId: capturedRecordingId,
-                            recordingStartedAt: capturedRecordingStartedAt,
-                            recordingEndedAt: capturedRecordingEndedAt,
-                            includeScreenshots: prepared.screenshots.isEmpty
-                        )
-                    } else {
-                        trayAssets = nil
                     }
 
                     let deliveryText = Self.renderDictationDeliveryText(
                         text: processedText,
                         timedTranscription: timedTranscription,
                         localScreenshots: prepared.screenshots,
-                        trayAssets: trayAssets
+                        trayAssets: nil
                     )
 
                     trace?.begin("paste")
@@ -2635,6 +2618,7 @@ final class AgentController: ObservableObject {
                     utterance: utterance,
                     segmentsJSON: segmentsJSON,
                     screenshotsJSON: prepared.screenshotsJSON,
+                    clipsJSON: prepared.clipsJSON,
                     captureSessionId: captureSessionId,
                     recordingStartedAt: recordingStartTime,
                     recordingEndedAt: recordingEndedAt
@@ -2699,31 +2683,22 @@ final class AgentController: ObservableObject {
                     utterance: utterance,
                     segmentsJSON: segmentsJSON,
                     screenshotsJSON: prepared.screenshotsJSON,
+                    clipsJSON: prepared.clipsJSON,
                     captureSessionId: capturedRecordingId,
                     recordingStartedAt: capturedRecordingStartedAt,
                     recordingEndedAt: capturedRecordingEndedAt,
                     attachTrayAssetsInBackground: false
                 )
 
-                let trayAssets: TalkieObjectAssets?
-                if let storedRecordingId {
+                if storedRecordingId != nil {
                     logTiming("Database stored")
-                    trayAssets = await Self.attachTrayAssets(
-                        recordingId: storedRecordingId,
-                        captureSessionId: capturedRecordingId,
-                        recordingStartedAt: capturedRecordingStartedAt,
-                        recordingEndedAt: capturedRecordingEndedAt,
-                        includeScreenshots: prepared.screenshots.isEmpty
-                    )
-                } else {
-                    trayAssets = nil
                 }
 
                 let deliveryText = Self.renderDictationDeliveryText(
                     text: textToPaste,
                     timedTranscription: timedTranscription,
                     localScreenshots: prepared.screenshots,
-                    trayAssets: trayAssets
+                    trayAssets: nil
                 )
 
                 // Trace ONLY the actual paste operation
@@ -2831,6 +2806,7 @@ final class AgentController: ObservableObject {
             let includedProvenanceIDs = await Self.applyRecordingAssets(
                 to: &recording,
                 screenshotsJSON: RecordingScreenshot.toJSON(capturedScreenshots),
+                clipsJSON: RecordingClip.toJSON(capturedClips),
                 captureSessionId: captureSessionId
             )
             if await Self.storeRecording(
