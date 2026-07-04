@@ -427,6 +427,7 @@ final class MemoRecordingController {
             ProcessingStep(id: "recorded", title: "Recorded", subtitle: durationText, status: .completed),
             ProcessingStep(id: "saved", title: "File saved", subtitle: nil, status: .pending),
             ProcessingStep(id: "transcribing", title: "Transcribing", subtitle: nil, status: .pending),
+            ProcessingStep(id: "formatting", title: "Formatting", subtitle: nil, status: .pending),
             ProcessingStep(id: "complete", title: completeTitle, subtitle: nil, status: .pending)
         ]
 
@@ -477,6 +478,69 @@ final class MemoRecordingController {
                 processingSteps[index].subtitle = subtitle
             }
         }
+    }
+
+    private func prepareTranscriptForPersistence(
+        _ rawTranscript: String,
+        recordingId: UUID,
+        modelId: String
+    ) async -> String {
+        updateStep("formatting", status: .inProgress)
+
+        let engine = transcriptEngineName(from: modelId)
+        let rawVersionSaved = await saveTranscriptVersionIfPossible(
+            recordingId: recordingId,
+            content: rawTranscript,
+            engine: engine
+        )
+
+        guard rawVersionSaved else {
+            updateStep("formatting", status: .completed, subtitle: "Raw transcript kept")
+            return rawTranscript
+        }
+
+        let formattingResult = await TextFormattingService.shared.formatTranscriptIfUseful(rawTranscript)
+        guard formattingResult.didFormat else {
+            updateStep("formatting", status: .completed, subtitle: formattingResult.stepSubtitle)
+            return rawTranscript
+        }
+
+        let formattedVersionSaved = await saveTranscriptVersionIfPossible(
+            recordingId: recordingId,
+            content: formattingResult.activeText,
+            engine: "\(engine)+apple_formatting"
+        )
+
+        guard formattedVersionSaved else {
+            updateStep("formatting", status: .completed, subtitle: "Raw transcript kept")
+            return rawTranscript
+        }
+
+        updateStep("formatting", status: .completed, subtitle: formattingResult.stepSubtitle)
+        return formattingResult.activeText
+    }
+
+    private func saveTranscriptVersionIfPossible(
+        recordingId: UUID,
+        content: String,
+        engine: String
+    ) async -> Bool {
+        do {
+            try await recordingRepository.saveTranscriptVersion(
+                for: recordingId,
+                content: content,
+                sourceType: .systemMacOS,
+                engine: engine
+            )
+            return true
+        } catch {
+            Log(.database).error("Failed to save transcript version for \(recordingId.uuidString.prefix(8)): \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    private func transcriptEngineName(from modelId: String) -> String {
+        modelId.split(separator: ":", maxSplits: 1).last.map(String.init) ?? modelId
     }
 
     /// Cancel recording without saving
@@ -1010,14 +1074,20 @@ final class MemoRecordingController {
             let wordCount = transcript.split(separator: " ").count
             await MainActor.run { updateStep("transcribing", status: .completed, subtitle: "\(wordCount) words") }
 
+            let activeTranscript = await prepareTranscriptForPersistence(
+                transcript,
+                recordingId: memoId,
+                modelId: modelId
+            )
+
             // Step 3: Complete memo
             await MainActor.run { updateStep("complete", status: .inProgress) }
 
-            memo.transcription = transcript
+            memo.transcription = activeTranscript
             memo.isTranscribing = false
             memo.lastModified = Date()
 
-            if let firstLine = transcript.components(separatedBy: .newlines).first,
+            if let firstLine = activeTranscript.components(separatedBy: .newlines).first,
                !firstLine.isEmpty {
                 let title = String(firstLine.prefix(50))
                 memo.title = title.count < firstLine.count ? title + "..." : title
@@ -1214,6 +1284,12 @@ final class MemoRecordingController {
             let wordCount = transcript.split(separator: " ").count
             await MainActor.run { updateStep("transcribing", status: .completed, subtitle: "\(wordCount) words") }
 
+            let activeTranscript = await prepareTranscriptForPersistence(
+                transcript,
+                recordingId: noteId,
+                modelId: modelId
+            )
+
             // Step 3: Update existing recording, or create it if not yet persisted
             // (auto-save from DraftsScreen has a 2s debounce, so the note may not be in GRDB yet)
             await MainActor.run { updateStep("complete", status: .inProgress) }
@@ -1224,9 +1300,9 @@ final class MemoRecordingController {
                 existing.duration = duration
                 // Append transcript to existing text rather than replacing it
                 if let existingText = existing.text, !existingText.isEmpty {
-                    existing.text = existingText + "\n\n" + transcript
+                    existing.text = existingText + "\n\n" + activeTranscript
                 } else {
-                    existing.text = transcript
+                    existing.text = activeTranscript
                 }
                 var existingAssets = existing.assets ?? TalkieObjectAssets()
                 existingAssets.segments = timedTranscription
@@ -1238,7 +1314,7 @@ final class MemoRecordingController {
             } else {
                 // Note wasn't persisted yet — create it as a new recording
                 Log(.database).info("Note \(noteId) not in GRDB yet, creating new recording")
-                recording = TalkieObject.newNote(id: noteId, text: transcript, title: nil)
+                recording = TalkieObject.newNote(id: noteId, text: activeTranscript, title: nil)
                 recording.audioFilename = audioPath
                 recording.duration = duration
                 var newAssets = recording.assets ?? TalkieObjectAssets()
@@ -1386,13 +1462,19 @@ final class MemoRecordingController {
             let wordCount = transcript.split(separator: " ").count
             await MainActor.run { updateStep("transcribing", status: .completed, subtitle: "\(wordCount) words") }
 
+            let activeTranscript = await prepareTranscriptForPersistence(
+                transcript,
+                recordingId: segmentId,
+                modelId: modelId
+            )
+
             // Step 3: Add segment to parent memo
             await MainActor.run { updateStep("complete", status: .inProgress) }
 
             var assets = TalkieObjectAssets()
             assets.segments = timedTranscription
 
-            segment.text = transcript
+            segment.text = activeTranscript
             segment.transcriptionStatus = .success
             segment.transcriptionError = nil
             segment.transcriptionModel = modelId
@@ -1425,10 +1507,10 @@ final class MemoRecordingController {
                 processingSteps = []
             }
 
-            Log(.database).info("✅ Continuation complete: segment \(segment.segmentIndex ?? 0) added to memo \(parentId.uuidString.prefix(8)), segmentCount=\(segmentCount), transcript=\(transcript.prefix(60))")
+            Log(.database).info("Continuation complete: segment \(segment.segmentIndex ?? 0) added to memo \(parentId.uuidString.prefix(8)), segmentCount=\(segmentCount), transcript=\(activeTranscript.prefix(60))")
 
         } catch {
-            Log(.audio).error("❌ Failed to process continuation: \(error)")
+            Log(.audio).error("Failed to process continuation: \(error)")
             if var failedSegment = pendingSegment {
                 failedSegment.transcriptionStatus = .failed
                 failedSegment.transcriptionError = error.localizedDescription
