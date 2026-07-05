@@ -217,6 +217,34 @@ enum AgentCaptureLibraryWriter {
     }
 
     @discardableResult
+    static func deleteCaptureReference(id: UUID, fileURL: URL) -> Bool {
+        let existedOnDisk = FileManager.default.fileExists(atPath: fileURL.path)
+
+        do {
+            let deletedRows = try UnifiedDatabase.shared.write { db in
+                try TalkieObject
+                    .filter(TalkieObject.Columns.id == id)
+                    .deleteAll(db)
+            }
+
+            ScreenshotStorage.delete(for: id)
+            CaptureMarkupStorage.deleteSidecar(forImageURL: fileURL)
+            TKSidecarStore.delete(forAsset: fileURL)
+            try? FileManager.default.removeItem(at: fileURL)
+
+            postLibraryDidChange()
+            agentCaptureLibraryLog.info(
+                "Agent capture deleted from Library",
+                detail: "id=\(id.uuidString.prefix(8)) rows=\(deletedRows)"
+            )
+            return deletedRows > 0 || existedOnDisk
+        } catch {
+            agentCaptureLibraryLog.error("Agent capture Library delete failed: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    @discardableResult
     private static func persistCapture(
         id: UUID,
         createdAt: Date,
