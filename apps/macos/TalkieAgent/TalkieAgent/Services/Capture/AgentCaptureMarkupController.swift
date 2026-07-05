@@ -87,6 +87,9 @@ final class AgentCaptureMarkupController {
             },
             onCancel: { [weak self] in
                 self?.cancel(item: item)
+            },
+            onDelete: { [weak self] in
+                self?.delete(item: item, updatesLibrary: updatesLibrary)
             }
         )
 
@@ -170,6 +173,25 @@ final class AgentCaptureMarkupController {
         log.info("Agent quick markup cancelled", detail: item.fileURL.lastPathComponent)
     }
 
+    private func delete(item: AgentLiveTrayItem, updatesLibrary: Bool) {
+        overlay?.dismiss(discardLayers: true)
+        hideBackground()
+        hideDragHandle()
+        overlay = nil
+        currentPlacement = nil
+        activeImageSize = nil
+
+        Task {
+            let removedTrayItem = await AgentLiveTrayAssetStore.shared.deleteItem(item)
+            if updatesLibrary {
+                AgentCaptureLibraryWriter.deleteCaptureReference(id: item.id, fileURL: item.fileURL)
+            } else if !removedTrayItem {
+                Self.deleteLooseFile(item.fileURL)
+            }
+        }
+        log.info("Agent quick markup deleted", detail: item.fileURL.lastPathComponent)
+    }
+
     private func bakeIfNeeded(
         item: AgentLiveTrayItem,
         sourceImage: CGImage,
@@ -234,7 +256,8 @@ final class AgentCaptureMarkupController {
         image: CGImage,
         placement: AgentCaptureMarkupPlacement,
         onDone: @escaping () -> Void,
-        onCancel: @escaping () -> Void
+        onCancel: @escaping () -> Void,
+        onDelete: @escaping () -> Void
     ) {
         let view = AgentCaptureMarkupBackgroundView(
             title: title,
@@ -250,7 +273,8 @@ final class AgentCaptureMarkupController {
                 self?.zoomSurface(by: factor)
             },
             onDone: onDone,
-            onCancel: onCancel
+            onCancel: onCancel,
+            onDelete: onDelete
         )
         view.frame = NSRect(origin: .zero, size: placement.surfaceRect.size)
 
@@ -605,7 +629,20 @@ final class AgentCaptureMarkupController {
                 width: surface.width,
                 height: thickness
             ),
-        ]
+        ] + bottomControlPassthroughRects(for: placement)
+    }
+
+    private static func bottomControlPassthroughRects(for placement: AgentCaptureMarkupPlacement) -> [CGRect] {
+        let surface = placement.surfaceRect.standardized
+        let toolbarHeight = AgentCaptureMarkupLayout.bottomToolbarHeight
+        let buttonY = surface.minY + (toolbarHeight / 2) - 11
+        let deleteRect = CGRect(
+            x: surface.minX + 12,
+            y: buttonY,
+            width: 64,
+            height: 22
+        )
+        return [deleteRect]
     }
 
     private static func relativeImageRect(for placement: AgentCaptureMarkupPlacement) -> NSRect {
@@ -770,6 +807,13 @@ final class AgentCaptureMarkupController {
             deliverImmediately: true
         )
     }
+
+    private static func deleteLooseFile(_ fileURL: URL) {
+        CaptureMarkupStorage.deleteSidecar(forImageURL: fileURL)
+        TKSidecarStore.delete(forAsset: fileURL)
+        try? FileManager.default.removeItem(at: fileURL)
+        postAssetsDidChange()
+    }
 }
 
 private final class AgentCaptureMarkupBackgroundPanel: NSPanel {
@@ -835,6 +879,7 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
     private let onZoom: (CGFloat) -> Void
     private let onDone: () -> Void
     private let onCancel: () -> Void
+    private let onDelete: () -> Void
     private var lastDragScreenPoint: NSPoint?
     private var activeDragMode: DragMode?
 
@@ -846,7 +891,8 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         onResizeDelta: @escaping (AgentCaptureMarkupResizeEdges, CGSize) -> Void,
         onZoom: @escaping (CGFloat) -> Void,
         onDone: @escaping () -> Void,
-        onCancel: @escaping () -> Void
+        onCancel: @escaping () -> Void,
+        onDelete: @escaping () -> Void
     ) {
         self.title = title
         self.image = image
@@ -856,6 +902,7 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         self.onZoom = onZoom
         self.onDone = onDone
         self.onCancel = onCancel
+        self.onDelete = onDelete
         super.init(frame: .zero)
         wantsLayer = true
     }
@@ -871,12 +918,17 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         addCursorRect(rightResizeRect, cursor: .resizeLeftRight)
         addCursorRect(dragRegion, cursor: .openHand)
         addCursorRect(cancelButtonRect, cursor: .pointingHand)
+        addCursorRect(deleteButtonRect, cursor: .pointingHand)
     }
 
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         if cancelButtonRect.contains(point) {
             onCancel()
+            return
+        }
+        if deleteButtonRect.contains(point) {
+            onDelete()
             return
         }
         if let edges = resizeEdges(at: point) {
@@ -964,6 +1016,7 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
 
         drawTitle(in: titleRect)
         drawChromeButtons()
+        drawDeleteControl()
         drawResizeGrip()
 
         let imageClip = NSBezierPath(
@@ -1058,14 +1111,13 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         )
     }
 
-    private func drawBottomControls() {
-        drawZoomControl()
+    private func drawDeleteControl() {
         drawButton(
-            rect: doneButtonRect,
-            title: "Done",
-            foreground: NSColor.white.withAlphaComponent(0.92),
-            fill: NSColor(calibratedRed: 0.38, green: 0.47, blue: 1.0, alpha: 0.84),
-            border: NSColor.white.withAlphaComponent(0.20)
+            rect: deleteButtonRect,
+            title: "Delete",
+            foreground: NSColor.systemRed.withAlphaComponent(0.92),
+            fill: NSColor.systemRed.withAlphaComponent(0.12),
+            border: NSColor.systemRed.withAlphaComponent(0.42)
         )
     }
 
@@ -1261,6 +1313,15 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
             x: 8,
             y: title.midY - 11,
             width: 22,
+            height: 22
+        )
+    }
+
+    private var deleteButtonRect: NSRect {
+        NSRect(
+            x: bottomToolbarRect.minX + 12,
+            y: bottomToolbarRect.midY - 11,
+            width: 64,
             height: 22
         )
     }
