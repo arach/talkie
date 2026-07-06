@@ -54,6 +54,7 @@ jobs:
       - name: Prepare local package checkouts
         if: ${{ github.event_name == 'push' || inputs.component == 'all' }}
         env:
+          HUDSON_DEPLOY_KEY: ${{ secrets.HUDSON_DEPLOY_KEY }}
           HUDSON_REPO_TOKEN: ${{ secrets.HUDSON_REPO_TOKEN }}
           HUDSON_REF: main
           OPENSCOUT_REF: main
