@@ -27,6 +27,7 @@ struct AgentHomeShellView: View {
     @State private var selectedSection: AgentHomeShellSection = .home
     @State private var libraryFilter: AgentHomeLibraryFilter = .all
     @State private var overflowMenu = AgentRailOverflowMenu()
+    @State private var sidebarTooltipState = SidebarTooltipState()
     @AppStorage("talkie.agentHome.sidebar.compact") private var railCompact = true
     @AppStorage("talkie.agentHome.sidebar.labelWidth") private var navigationSidebarLabelWidth = 120.0
     @AppStorage("talkie.agentHome.inspector.collapsed") private var inspectorCollapsed = true
@@ -63,11 +64,15 @@ struct AgentHomeShellView: View {
         }
                 .opsManifest(manifest)
                 // Compact-rail hover tooltip — the same TalkieKit overlay the
-                // Talkie app mounts, reading the shared SidebarTooltipState that
-                // the Sidebar writes on hover. Spans the shell so the label
+                // Talkie app mounts, reading the per-shell SidebarTooltipState
+                // that the Sidebar writes on hover. Spans the shell so the label
                 // isn't clipped by the 40pt rail.
                 .overlay(alignment: .topLeading) {
-                    SidebarTooltipOverlay(surface: OpsInk.surface, foreground: OpsInk.ink)
+                    SidebarTooltipOverlay(
+                        surface: OpsInk.surface,
+                        foreground: OpsInk.ink,
+                        tooltipState: sidebarTooltipState
+                    )
                 }
                 .background {
                     GeometryReader { proxy in
@@ -132,6 +137,7 @@ struct AgentHomeShellView: View {
             ),
             entries: AgentHomeShellSection.sidebarEntries,
             accent: .accentColor,
+            tooltipState: sidebarTooltipState,
             handleTint: OpsInk.ink,
             railHeader: { brandMark },
             labelHeader: { brandWordmark },
@@ -1901,7 +1907,7 @@ private struct AgentHomeBay: View {
                     .shadow(color: AgentBayPalette.accent.opacity(0.4), radius: 2)
             }
             Text(leading.uppercased())
-                .font(OpsType.mono(8.5, weight: .semibold))
+                .font(OpsType.mono(8, weight: .semibold))
                 .tracking(1.3)
                 .foregroundStyle(AgentBayPalette.inkFaint)
                 .lineLimit(1)
@@ -1909,7 +1915,7 @@ private struct AgentHomeBay: View {
             Spacer(minLength: OpsSpacing.md)
 
             Text(trailing.uppercased())
-                .font(OpsType.mono(8.5, weight: .semibold))
+                .font(OpsType.mono(8, weight: .semibold))
                 .tracking(1.3)
                 .foregroundStyle(AgentBayPalette.inkSubtle)
                 .lineLimit(1)
@@ -1942,7 +1948,7 @@ private struct AgentHomeBay: View {
                 .minimumScaleFactor(0.6)
 
             Text(stat.label.uppercased())
-                .font(OpsType.mono(8.5, weight: .bold))
+                .font(OpsType.mono(8, weight: .bold))
                 .tracking(1.1)
                 .foregroundStyle(AgentBayPalette.inkFaint)
                 .lineLimit(1)

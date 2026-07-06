@@ -33,12 +33,41 @@ private struct PasteChordKeyInput: Sendable {
         modifierFlagsRawValue = Self.modifierFlags(from: event.flags).rawValue
     }
 
+    init(modifierFlags: NSEvent.ModifierFlags) {
+        keyCode = 0
+        charactersIgnoringModifiers = nil
+        modifierFlagsRawValue = modifierFlags.rawValue
+    }
+
     var modifierFlags: NSEvent.ModifierFlags {
         NSEvent.ModifierFlags(rawValue: modifierFlagsRawValue)
     }
 
     var isEscape: Bool { keyCode == 53 }
     var isTrayShortcut: Bool { keyCode == 13 || keyCode == 48 || charactersIgnoringModifiers == "w" }
+    var isSystemScreenshotShortcut: Bool {
+        guard let digit, [3, 4, 5].contains(digit) else { return false }
+        let flags = normalizedModifierFlags
+        return flags.contains(.command) && flags.contains(.shift) && !flags.contains(.option)
+    }
+
+    var pasteFormat: PasteFormat? {
+        let flags = normalizedModifierFlags
+        if flags.isEmpty { return .image }
+        if flags == .shift { return .filePath }
+        if flags == .option { return .url }
+        if flags == .control { return .base64 }
+        if flags == [.shift, .option] { return .visionDescription }
+        if flags == .command { return .dragFile }
+        if flags == [.command, .option, .control, .shift] { return .image }
+        return nil
+    }
+
+    private var normalizedModifierFlags: NSEvent.ModifierFlags {
+        modifierFlags
+            .intersection(.deviceIndependentFlagsMask)
+            .subtracting([.capsLock, .numericPad, .function])
+    }
 
     var digit: Int? {
         switch keyCode {
@@ -61,7 +90,8 @@ private struct PasteChordKeyInput: Sendable {
     }
 
     func shouldConsumeForPasteChord(consumeAllKeys: Bool) -> Bool {
-        consumeAllKeys || isEscape || isTrayShortcut || digit != nil
+        if isSystemScreenshotShortcut { return false }
+        return consumeAllKeys || isEscape || isTrayShortcut || (digit != nil && pasteFormat != nil)
     }
 
     private static func modifierFlags(from flags: CGEventFlags) -> NSEvent.ModifierFlags {
@@ -135,7 +165,7 @@ final class PasteChordController {
     }
 
     func beginChord() async -> PasteBarResult? {
-        let allItems: [AgentLiveTrayItem] = []
+        let allItems = Self.recentLibraryCaptureItems(limit: 5)
         log.info("Quick Paste HUD shown", detail: "items=\(allItems.count)")
 
         return await withCheckedContinuation { continuation in
@@ -176,19 +206,7 @@ final class PasteChordController {
 
             // Determine format from modifier flags
             let formatFromMods: (NSEvent.ModifierFlags) -> PasteFormat = { mods in
-                let cleaned = mods.intersection(.deviceIndependentFlagsMask)
-                if cleaned.contains(.command) && !cleaned.contains(.shift) && !cleaned.contains(.option) && !cleaned.contains(.control) {
-                    return .dragFile
-                } else if cleaned.contains(.shift) && cleaned.contains(.option) && !cleaned.contains(.control) && !cleaned.contains(.command) {
-                    return .visionDescription
-                } else if cleaned.contains(.shift) && !cleaned.contains(.option) && !cleaned.contains(.control) && !cleaned.contains(.command) {
-                    return .filePath
-                } else if cleaned.contains(.option) && !cleaned.contains(.shift) && !cleaned.contains(.control) && !cleaned.contains(.command) {
-                    return .url
-                } else if cleaned.contains(.control) && !cleaned.contains(.shift) && !cleaned.contains(.option) && !cleaned.contains(.command) {
-                    return .base64
-                }
-                return .image
+                PasteChordKeyInput(modifierFlags: mods).pasteFormat ?? .image
             }
 
             // Key handler
@@ -198,6 +216,10 @@ final class PasteChordController {
                     timeout.cancel()
                     resume(nil)
                     return true
+                }
+
+                if input.isSystemScreenshotShortcut {
+                    return false
                 }
 
                 // W or Tab used to open the tray viewer. The tray viewer is retired,
@@ -219,8 +241,10 @@ final class PasteChordController {
                 // selection numbers do not leak into the focused app.
                 if let digit = input.digit {
                     if digit >= 1, digit <= min(5, allItems.count) {
+                        guard let format = input.pasteFormat else {
+                            return false
+                        }
                         let index = digit - 1
-                        let format = formatFromMods(input.modifierFlags)
                         log.info("Quick Paste slot selected", detail: "slot=\(digit) format=\(format.rawValue)")
                         timeout.cancel()
                         resume(PasteBarResult(item: allItems[index], format: format))
@@ -284,6 +308,83 @@ final class PasteChordController {
     }
 
     // MARK: - Private
+
+    private static func recentLibraryCaptureItems(limit: Int) -> [AgentLiveTrayItem] {
+        let records = UnifiedDatabase.recentCaptures(limit: max(limit * 3, limit))
+        let items = records.compactMap { libraryPasteItem(from: $0) }
+        return Array(items.prefix(limit))
+    }
+
+    private static func libraryPasteItem(from record: LiveRecording) -> AgentLiveTrayItem? {
+        guard let assets = TalkieObjectAssets.from(json: record.assetsJSON) else {
+            return nil
+        }
+
+        if let screenshot = assets.screenshots?.first,
+           let fileURL = CaptureMediaFileResolver.screenshotURL(filename: screenshot.filename) {
+            return AgentLiveTrayItem(
+                id: record.id,
+                kind: .screenshot,
+                capturedAt: record.createdAt,
+                filename: screenshot.filename,
+                width: screenshot.width ?? 0,
+                height: screenshot.height ?? 0,
+                captureMode: screenshot.captureMode,
+                windowTitle: screenshot.windowTitle,
+                appName: screenshot.appName,
+                appBundleID: screenshot.appBundleID,
+                displayName: screenshot.displayName,
+                ocrText: ocrText(for: screenshot.filename, in: assets),
+                fileURL: fileURL
+            )
+        }
+
+        if let clip = assets.clips?.first,
+           let fileURL = CaptureMediaFileResolver.clipURL(filename: clip.filename) {
+            return AgentLiveTrayItem(
+                id: record.id,
+                kind: .clip,
+                capturedAt: record.createdAt,
+                durationMs: clip.durationMs,
+                filename: clip.filename,
+                width: clip.width ?? 0,
+                height: clip.height ?? 0,
+                captureMode: clip.captureMode ?? "clip",
+                windowTitle: clip.windowTitle,
+                appName: clip.appName,
+                appBundleID: nil,
+                displayName: clip.displayName,
+                fileURL: fileURL
+            )
+        }
+
+        if let context = assets.visualContexts?.first,
+           let fileURL = CaptureMediaFileResolver.visualContextSourceURL(for: context) {
+            return AgentLiveTrayItem(
+                id: record.id,
+                kind: .clip,
+                capturedAt: record.createdAt,
+                durationMs: context.durationMs,
+                filename: fileURL.lastPathComponent,
+                width: context.width ?? 0,
+                height: context.height ?? 0,
+                captureMode: context.captureMode,
+                windowTitle: context.windowTitle,
+                appName: context.appName,
+                appBundleID: nil,
+                displayName: context.displayName,
+                fileURL: fileURL
+            )
+        }
+
+        return nil
+    }
+
+    private static func ocrText(for filename: String, in assets: TalkieObjectAssets) -> String? {
+        assets.textProvenance?.first {
+            $0.source == .ocr && ($0.sourceAssetId == nil || $0.sourceAssetId == filename)
+        }?.originalText
+    }
 
     private func startKeyEventTap(
         consumeAllKeys: Bool,

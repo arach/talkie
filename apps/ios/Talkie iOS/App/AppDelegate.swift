@@ -140,7 +140,9 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         newMemo.duration = duration.isNaN ? 0 : duration
         // Store relative path including WatchAudio subdirectory
         newMemo.fileURL = "WatchAudio/\(audioURL.lastPathComponent)"
-        newMemo.isTranscribing = false
+        // Watch imports appear in the library before the delayed transcription
+        // task starts. Keep that first frame honest.
+        newMemo.isTranscribing = true
         newMemo.sortOrder = Int32(recordedAt.timeIntervalSince1970 * -1)
         newMemo.originDeviceId = "watch-\(PersistenceController.deviceId)"
         newMemo.autoProcessed = false  // Mark for macOS auto-run processing

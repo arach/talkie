@@ -20,6 +20,11 @@ export default function IOSMemoConnectedStudy() {
               <IOSMemoConnected mode="reading" />
             </PhoneFrame>
           </Labeled>
+          <Labeled tone="accent" label="Transcribing" caption="captured signal · travelling head">
+            <PhoneFrame theme={scope}>
+              <IOSMemoConnected mode="transcribing" />
+            </PhoneFrame>
+          </Labeled>
           <Labeled tone="accent" label="Editing" caption="tap the words — caret, keyboard, Done">
             <PhoneFrame theme={scope}>
               <IOSMemoConnected mode="editing" />
@@ -73,6 +78,7 @@ function NamesMarginalia() {
   const parts: [string, string][] = [
     ["Source line", "Humane capture provenance — device · date · time. Replaces the cramped · MEMO · …· meta-string."],
     ["Tape strip", "Play + mag-tape waveform fused to the top of the reading body, same paper, no gap."],
+    ["Transcribing pass", "Captured tape stays fixed; the amber head scans left-to-right over the signal, with a tiny Braille pulse in the empty transcript row."],
     ["Tape head", "Amber needle on the waveform at the playback position — the fixed head from the Tape Transport study."],
     ["Playhead caret", "The same head, living IN the text: played words full-ink, unplayed dim, amber caret between."],
     ["Reading body", "The transcript as the audio made readable. Tap anywhere to edit. Word count annotates the end."],

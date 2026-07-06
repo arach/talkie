@@ -136,6 +136,7 @@ final class TalkieAppConfigurationStore {
         if defaults.object(forKey: "recording.echoCancellation") != nil {
             configuration.recording.echoCancellationEnabled = defaults.bool(forKey: "recording.echoCancellation")
         }
+        configuration.recording.waveformStyle = defaults.string(forKey: "recording.waveformStyle") ?? configuration.recording.waveformStyle
 
         if defaults.object(forKey: "keyboard.ledIndicators") != nil {
             configuration.keyboard.ledIndicatorsEnabled = defaults.bool(forKey: "keyboard.ledIndicators")

@@ -346,7 +346,7 @@ function PaletteWindow({ children }: { children: React.ReactNode }) {
         >
           · PALETTE · cmd ⇧ K
         </span>
-        <span className="ml-auto font-mono uppercase tracking-[0.18em]" style={{ fontSize: 8.5, color: P.inkFainter }}>
+        <span className="ml-auto font-mono uppercase tracking-[0.18em]" style={{ fontSize: 8, color: P.inkFainter }}>
           v2 · concept
         </span>
       </div>
@@ -424,7 +424,7 @@ function InputBar({
           ) : (
             <span
               className="font-display italic"
-              style={{ fontSize: 13.5, color: P.inkFainter, fontWeight: 300 }}
+              style={{ fontSize: 13, color: P.inkFainter, fontWeight: 300 }}
             >
               {placeholder}
             </span>
@@ -491,16 +491,16 @@ function ScopeChip({ kind, label }: { kind: string; label: string }) {
         color: P.amberDeep,
       }}
     >
-      <span className="font-mono" style={{ fontSize: 9.5 }}>↳</span>
+      <span className="font-mono" style={{ fontSize: 10 }}>↳</span>
       <span
         className="font-mono font-semibold uppercase tracking-[0.16em]"
-        style={{ fontSize: 8.5 }}
+        style={{ fontSize: 8 }}
       >
         {kind}
       </span>
       <span
         className="font-display italic"
-        style={{ fontSize: 10.5, color: P.amberDeep, opacity: 0.85, fontWeight: 300 }}
+        style={{ fontSize: 10, color: P.amberDeep, opacity: 0.85, fontWeight: 300 }}
       >
         {label}
       </span>
@@ -644,7 +644,7 @@ function VoiceIntentBanner({
     >
       <span
         className="font-mono font-semibold uppercase tracking-[0.22em]"
-        style={{ fontSize: 8.5, color: P.amberDeep }}
+        style={{ fontSize: 8, color: P.amberDeep }}
       >
         · INTENT
       </span>
@@ -667,7 +667,7 @@ function VoiceIntentBanner({
       <span className="flex items-center gap-2">
         <span
           className="font-mono uppercase tracking-[0.16em]"
-          style={{ fontSize: 8.5, color: P.inkFainter }}
+          style={{ fontSize: 8, color: P.inkFainter }}
         >
           confidence
         </span>
@@ -692,7 +692,7 @@ function VoiceIntentBanner({
         </span>
         <span
           className="font-mono"
-          style={{ fontSize: 9.5, color: P.amberDeep, fontWeight: 600 }}
+          style={{ fontSize: 10, color: P.amberDeep, fontWeight: 600 }}
         >
           {pct}%
         </span>
@@ -870,7 +870,7 @@ function Row({
         <span
           className="font-mono"
           style={{
-            fontSize: 9.5,
+            fontSize: 10,
             fontWeight: 500,
             color: selected ? P.amberDeep : P.inkFainter,
             padding: "2px 6px",
@@ -909,14 +909,14 @@ function ScopedHereGroup() {
       >
         <span
           className="font-mono font-semibold uppercase tracking-[0.20em]"
-          style={{ fontSize: 9.5, color: P.amberDeep }}
+          style={{ fontSize: 9, color: P.amberDeep }}
         >
           · HERE · Q1 plan
         </span>
         <span className="ml-2 flex-1" style={{ height: 1, background: P.amberSoft }} />
         <span
           className="font-mono uppercase tracking-[0.18em]"
-          style={{ fontSize: 8.5, color: P.inkFainter }}
+          style={{ fontSize: 8, color: P.inkFainter }}
         >
           context · 4
         </span>
@@ -971,7 +971,7 @@ function KeyHint({ keys, label }: { keys: string; label: string }) {
       <span
         className="font-mono"
         style={{
-          fontSize: 9.5,
+          fontSize: 10,
           fontWeight: 500,
           color: P.inkFaint,
           padding: "2px 6px",
@@ -1150,9 +1150,9 @@ function DonorPalette() {
           >
             {r.icon}
           </span>
-          <span style={{ fontSize: 11.5, color: "rgba(255,255,255,0.92)" }}>{r.title}</span>
+          <span style={{ fontSize: 11, color: "rgba(255,255,255,0.92)" }}>{r.title}</span>
           <span className="flex-1" />
-          <span style={{ fontSize: 9.5, color: "rgba(255,255,255,0.4)" }}>{r.sub}</span>
+          <span style={{ fontSize: 9, color: "rgba(255,255,255,0.4)" }}>{r.sub}</span>
         </div>
       ))}
       {/* footer */}

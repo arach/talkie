@@ -61,6 +61,7 @@ struct TalkieAppConfiguration: Codable {
         var inputDevice = "system"
         var sampleRate = "system"
         var echoCancellationEnabled = true
+        var waveformStyle = "tape"
 
         private enum CodingKeys: String, CodingKey {
             case tagLocationEnabled
@@ -68,6 +69,7 @@ struct TalkieAppConfiguration: Codable {
             case inputDevice
             case sampleRate
             case echoCancellationEnabled
+            case waveformStyle
         }
 
         init() {}
@@ -79,6 +81,7 @@ struct TalkieAppConfiguration: Codable {
             inputDevice = try container.decodeIfPresent(String.self, forKey: .inputDevice) ?? "system"
             sampleRate = try container.decodeIfPresent(String.self, forKey: .sampleRate) ?? "system"
             echoCancellationEnabled = try container.decodeIfPresent(Bool.self, forKey: .echoCancellationEnabled) ?? true
+            waveformStyle = try container.decodeIfPresent(String.self, forKey: .waveformStyle) ?? "tape"
         }
 
         func encode(to encoder: Encoder) throws {
@@ -88,6 +91,7 @@ struct TalkieAppConfiguration: Codable {
             try container.encode(inputDevice, forKey: .inputDevice)
             try container.encode(sampleRate, forKey: .sampleRate)
             try container.encode(echoCancellationEnabled, forKey: .echoCancellationEnabled)
+            try container.encode(waveformStyle, forKey: .waveformStyle)
         }
     }
 

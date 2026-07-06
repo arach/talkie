@@ -800,6 +800,22 @@ extension UnifiedDatabase {
         }
     }
 
+    /// Fetch recent durable visual captures for Quick Paste and Agent surfaces.
+    static func recentCaptures(limit: Int = 100) -> [LiveRecording] {
+        do {
+            return try shared.read { db in
+                try LiveRecording
+                    .filter(Column("type") == "capture")
+                    .order(Column("createdAt").desc)
+                    .limit(limit)
+                    .fetchAll(db)
+            }
+        } catch {
+            log.error("[UnifiedDatabase] recentCaptures failed: \(error)")
+            return []
+        }
+    }
+
     /// Count dictations
     static func countDictations() -> Int {
         (try? shared.read { db in

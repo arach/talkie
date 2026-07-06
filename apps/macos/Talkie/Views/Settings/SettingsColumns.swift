@@ -289,6 +289,7 @@ struct SettingsSidebarItem: View {
     let title: String
     let isSelected: Bool
     var iconsOnly: Bool = false
+    var tooltipState: SidebarTooltipState = .shared
     let action: () -> Void
 
     @State private var isHovered = false
@@ -424,17 +425,16 @@ struct SettingsSidebarItem: View {
         }
         .onContinuousHover { phase in
             guard iconsOnly else { return }
-            let tooltip = SidebarTooltipState.shared
             switch phase {
             case .active:
                 let anchor = CGPoint(x: rowFrame.maxX, y: rowFrame.midY)
-                if tooltip.label == title {
-                    tooltip.updateAnchor(anchor)
+                if tooltipState.label == title {
+                    tooltipState.updateAnchor(anchor)
                 } else {
-                    tooltip.show(label: title, anchor: anchor)
+                    tooltipState.show(label: title, anchor: anchor)
                 }
             case .ended:
-                tooltip.dismiss(matching: title)
+                tooltipState.dismiss(matching: title)
             }
         }
     }
@@ -444,6 +444,7 @@ struct SettingsSidebarItem: View {
 
 struct SettingsSidebarColumn: View {
     @Binding var selectedSection: SettingsSection
+    var tooltipState: SidebarTooltipState = .shared
     @Environment(SettingsManager.self) private var settingsManager
     @State private var edgeHandleHovered = false
 
@@ -465,7 +466,8 @@ struct SettingsSidebarColumn: View {
                 icon: icon,
                 title: title,
                 isSelected: activeSection == section,
-                iconsOnly: compact
+                iconsOnly: compact,
+                tooltipState: tooltipState
             ) {
                 selectedSection = section
             }

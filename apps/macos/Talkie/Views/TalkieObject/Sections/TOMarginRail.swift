@@ -24,7 +24,7 @@ import TalkieKit
 
 struct TOMarginRail: View {
     let recording: TalkieObject
-    @State private var showFiles = false
+    @State private var showFiles = true
 
     /// Standard rail width. 220pt mirrors the existing `metadataAside`
     /// fixed-width column.
@@ -51,6 +51,9 @@ struct TOMarginRail: View {
             }
         }
         .padding(.top, Self.eyebrowAlignmentInset)
+        .onChange(of: recording.id) { _, _ in
+            showFiles = true
+        }
     }
 
     /// Drop the rail so its first `· SOURCE` kicker lines up with the

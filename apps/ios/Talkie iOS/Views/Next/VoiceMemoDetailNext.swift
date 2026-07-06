@@ -1481,7 +1481,13 @@ struct VoiceMemoDetailNext: View {
 
             cardDivider
 
-            if isEditingTranscript { tapeChip } else { tapeStrip }
+            if isEditingTranscript {
+                tapeChip
+            } else if store.memo.isTranscribing {
+                transcribingTapeStrip
+            } else {
+                tapeStrip
+            }
 
             cardDivider
 
@@ -1520,11 +1526,14 @@ struct VoiceMemoDetailNext: View {
         if normalizedTranscript.isEmpty {
             if store.memo.isTranscribing {
                 transcribingState
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
             } else {
                 emptyTranscriptState
+                    .transition(.opacity)
             }
         } else {
             transcriptText
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
         }
     }
 
@@ -1555,19 +1564,83 @@ struct VoiceMemoDetailNext: View {
         }
     }
 
-    // A pass is running — pulse + label, mirroring the Ask AI "Thinking…"
-    // treatment so "still working" reads as distinct from "failed".
-    private var transcribingState: some View {
-        HStack(spacing: 7) {
-            PulsingAccentDot()
-            Text("Transcribing…")
-                .talkieType(.preview)
-                .italic()
+    // A pass is running — the machine reads back across the captured
+    // signal instead of showing a generic spinner.
+    private var transcribingTapeStrip: some View {
+        HStack(spacing: 10) {
+            Button(action: { store.togglePlayback() }) {
+                ZStack {
+                    Circle()
+                        .fill(theme.colors.background.opacity(0.45))
+                        .frame(width: 30, height: 30)
+                        .overlay(
+                            Circle().strokeBorder(
+                                theme.currentTheme.chrome.edgeFaint,
+                                lineWidth: theme.currentTheme.chrome.hairlineWidth
+                            )
+                        )
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(theme.colors.textTertiary)
+                        .offset(x: 1)
+                }
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+
+            TranscribingSignalWaveform(
+                levels: store.memo.levels,
+                height: 30,
+                accent: theme.currentTheme.chrome.accent,
+                glow: theme.currentTheme.chrome.accentGlow,
+                barColor: theme.colors.textTertiary,
+                background: theme.colors.background.opacity(0.38),
+                rule: theme.currentTheme.chrome.edgeFaint
+            )
+
+            Text("0:00 / \(store.memo.durationLabel)")
+                .talkieType(.channelLabel)
                 .foregroundStyle(theme.colors.textTertiary)
+                .monospacedDigit()
+                .lineLimit(1)
+                .fixedSize()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    // A pass is running — Braille pulse + label, with a tiny read-head
+    // repeating the same analyzing-signal gesture from the strip above.
+    private var transcribingState: some View {
+        HStack(spacing: 12) {
+            TranscribingBrailleGlyph(
+                accent: theme.currentTheme.chrome.accent,
+                glow: theme.currentTheme.chrome.accentGlow
+            )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Transcribing…")
+                    .talkieType(.preview)
+                    .italic()
+                    .foregroundStyle(theme.colors.textTertiary)
+
+                Text("0 WORDS")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textTertiary.opacity(0.65))
+            }
+
             Spacer(minLength: 0)
+
+            MiniTranscribingPass(
+                accent: theme.currentTheme.chrome.accent,
+                glow: theme.currentTheme.chrome.accentGlow,
+                barColor: theme.colors.textTertiary
+            )
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
+        .animation(.easeOut(duration: 0.2), value: store.memo.isTranscribing)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Transcribing")
     }
@@ -2272,7 +2345,7 @@ struct VoiceMemoDetailNext: View {
         guard runningWorkflowID == nil else { return }
         runningWorkflowID = template.id
         Task { @MainActor in
-            await workflows.run(template: template, on: store.memo.title)
+            await workflows.run(template: template, on: primaryMemoText)
             runningWorkflowID = nil
         }
     }
@@ -3156,27 +3229,195 @@ private struct TranscriptVersionRowNext: View {
     }
 }
 
-// A single accent dot that breathes while work is in flight — mirrors the
-// Ask AI "Thinking…" pulse so the transcribing state reads the same way.
-// Statically lit under Reduce Motion.
-private struct PulsingAccentDot: View {
-    @State private var isLit = false
-    @ObservedObject private var theme = ThemeManager.shared
+// Fixed captured waveform with a travelling read head. This is the inverse
+// of recording: the signal holds still while Talkie scans across it.
+private struct TranscribingSignalWaveform: View {
+    let levels: [Float]
+    let height: CGFloat
+    let accent: Color
+    let glow: Color
+    let barColor: Color
+    let background: Color
+    let rule: Color
+
+    private let barWidth: CGFloat = 2
+    private let spacing: CGFloat = 2.5
+    private let period: TimeInterval = 2.15
 
     var body: some View {
-        Circle()
-            .fill(theme.currentTheme.chrome.accent)
-            .frame(width: 6, height: 6)
-            .opacity(isLit ? 1 : 0.25)
-            .scaleEffect(isLit ? 1.15 : 0.72)
-            .onAppear {
-                if TalkieMotion.isReduced {
-                    isLit = true  // statically lit, no pulse
-                } else {
-                    withAnimation(.easeInOut(duration: 0.85).repeatForever(autoreverses: true)) {
-                        isLit = true
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: TalkieMotion.isReduced)) { context in
+            GeometryReader { proxy in
+                let width = proxy.size.width
+                let targetCount = max(12, Int(width / (barWidth + spacing)))
+                let bars = sampleLevels(levels, targetCount: targetCount)
+                let phase = scanPhase(at: context.date)
+                let scanWidth = max(width * 0.34, 32)
+                let scanX = -scanWidth + phase * (width + scanWidth * 2)
+                let needleX = phase * width
+
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 9)
+                        .fill(background)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 9)
+                                .strokeBorder(rule, lineWidth: 0.5)
+                        )
+
+                    Rectangle()
+                        .fill(accent.opacity(0.42))
+                        .frame(height: 1)
+                        .padding(.horizontal, 8)
+
+                    HStack(alignment: .center, spacing: spacing) {
+                        ForEach(bars.indices, id: \.self) { index in
+                            let barHeight = max(4, CGFloat(bars[index]) * height * 0.78)
+                            Capsule()
+                                .fill(barColor.opacity(index.isMultiple(of: 5) ? 0.62 : 0.38))
+                                .frame(width: barWidth, height: barHeight)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .padding(.horizontal, 8)
+
+                    LinearGradient(
+                        colors: [
+                            accent.opacity(0),
+                            accent.opacity(0.20),
+                            accent.opacity(0.68),
+                            accent.opacity(0)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: scanWidth)
+                    .offset(x: scanX)
+                    .blendMode(.plusLighter)
+
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(accent)
+                        .frame(width: 1.5, height: max(8, height - 4))
+                        .shadow(color: glow.opacity(0.85), radius: 7)
+                        .offset(x: needleX)
+                }
+                .clipped()
+            }
+        }
+        .frame(height: height)
+        .accessibilityHidden(true)
+    }
+
+    private func scanPhase(at date: Date) -> CGFloat {
+        guard !TalkieMotion.isReduced else { return 0.5 }
+        let raw = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: period) / period
+        return CGFloat(raw)
+    }
+
+    private func sampleLevels(_ source: [Float], targetCount: Int) -> [Float] {
+        let fallback: [Float] = [
+            0.20, 0.34, 0.25, 0.48, 0.62, 0.38, 0.72, 0.50,
+            0.34, 0.25, 0.66, 0.80, 0.54, 0.38, 0.30, 0.50,
+            0.68, 0.42, 0.30, 0.22, 0.38, 0.55, 0.76, 0.58,
+            0.42, 0.25, 0.34, 0.50, 0.30, 0.22, 0.38, 0.25
+        ]
+        let levels = source.isEmpty ? fallback : source
+        guard targetCount > 0 else { return [] }
+        guard levels.count != targetCount else { return levels }
+
+        let step = Double(levels.count) / Double(targetCount)
+        return (0..<targetCount).map { index in
+            let sourceIndex = min(levels.count - 1, Int(Double(index) * step))
+            return max(0.08, min(1, levels[sourceIndex]))
+        }
+    }
+}
+
+// A six-dot Braille-style activity glyph. It gives the empty transcript row
+// a readable "working" anchor when the waveform is visually peripheral.
+private struct TranscribingBrailleGlyph: View {
+    let accent: Color
+    let glow: Color
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: TalkieMotion.isReduced)) { context in
+            let time = context.date.timeIntervalSinceReferenceDate
+
+            VStack(spacing: 3) {
+                ForEach(0..<3, id: \.self) { row in
+                    HStack(spacing: 4) {
+                        ForEach(0..<2, id: \.self) { column in
+                            let index = row + column * 3
+                            let pulse = pulseValue(time: time, index: index)
+                            Circle()
+                                .fill(accent)
+                                .frame(width: 5, height: 5)
+                                .opacity(0.24 + pulse * 0.76)
+                                .scaleEffect(0.72 + pulse * 0.28)
+                                .shadow(color: glow.opacity(0.45 * pulse), radius: 5)
+                        }
                     }
                 }
             }
+            .frame(width: 20, height: 28)
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func pulseValue(time: TimeInterval, index: Int) -> CGFloat {
+        guard !TalkieMotion.isReduced else { return 0.85 }
+        let phase = sin(time * 2 * .pi / 0.95 - Double(index) * 0.62)
+        return CGFloat((phase + 1) / 2)
+    }
+}
+
+// The compact echo of the transcribing strip that sits to the right of the
+// status text, matching the Studio pass without adding another full control.
+private struct MiniTranscribingPass: View {
+    let accent: Color
+    let glow: Color
+    let barColor: Color
+
+    private let bars: [CGFloat] = [0.24, 0.42, 0.62, 0.32, 0.76, 0.48, 0.28, 0.56, 0.36, 0.68, 0.30, 0.48]
+    private let period: TimeInterval = 1.65
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: TalkieMotion.isReduced)) { context in
+            let phase = scanPhase(at: context.date)
+
+            GeometryReader { proxy in
+                let width = proxy.size.width
+                let needleX = phase * width
+
+                ZStack(alignment: .leading) {
+                    Rectangle()
+                        .fill(accent.opacity(0.28))
+                        .frame(height: 1)
+                        .frame(maxHeight: .infinity, alignment: .center)
+
+                    HStack(spacing: 4) {
+                        ForEach(bars.indices, id: \.self) { index in
+                            Capsule()
+                                .fill(barColor.opacity(0.42))
+                                .frame(width: 2, height: max(4, bars[index] * 24))
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(accent)
+                        .frame(width: 1.5, height: 24)
+                        .shadow(color: glow.opacity(0.75), radius: 6)
+                        .offset(x: needleX)
+                }
+                .clipped()
+            }
+        }
+        .frame(width: 80, height: 28)
+        .accessibilityHidden(true)
+    }
+
+    private func scanPhase(at date: Date) -> CGFloat {
+        guard !TalkieMotion.isReduced else { return 0.5 }
+        let raw = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: period) / period
+        return CGFloat(raw)
     }
 }

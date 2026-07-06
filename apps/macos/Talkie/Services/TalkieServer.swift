@@ -97,6 +97,26 @@ private struct WorkflowHostStepRequest: Codable {
     let context: WorkflowHostContextPayload
 }
 
+private extension WorkflowHostStepRequest {
+    var hasResolvedScreenshotContext: Bool {
+        if let count = Int(context.outputs["SCREENSHOT_COUNT"] ?? ""), count > 0 {
+            return true
+        }
+
+        let screenshotValues = [
+            context.outputs["SCREENSHOT_CONTEXT"],
+            context.outputs["SCREENSHOT_VISION"],
+            context.outputs["SCREENSHOT_OCR"],
+        ]
+
+        return screenshotValues.contains { value in
+            guard let value else { return false }
+            return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && value != "No screenshots are attached to this memo or capture."
+        }
+    }
+}
+
 private struct WorkflowHostStepResultPayload: Codable {
     let status: String
     let output: String?
@@ -113,6 +133,11 @@ private struct WorkflowHostStepResponse: Codable {
         self.result = result
         self.error = error
     }
+}
+
+private struct WorkflowHostRecordResolution {
+    let memo: MemoModel
+    let assets: TalkieObjectAssets?
 }
 
 private struct CompanionShortcutTriggerRequest: Codable {
@@ -1353,6 +1378,66 @@ final class TalkieServer {
         }
     }
 
+    private func resolveWorkflowHostRecord(
+        for request: WorkflowHostStepRequest,
+        date: Date
+    ) async throws -> WorkflowHostRecordResolution? {
+        let retryDelaysMs = [75, 150, 300]
+
+        for attempt in 0...retryDelaysMs.count {
+            if let resolved = try await fetchWorkflowHostRecord(id: request.memoId) {
+                return resolved
+            }
+
+            if attempt < retryDelaysMs.count {
+                try await Task.sleep(for: .milliseconds(retryDelaysMs[attempt]))
+            }
+        }
+
+        return fallbackWorkflowHostRecord(for: request, date: date)
+    }
+
+    private func fetchWorkflowHostRecord(id: UUID) async throws -> WorkflowHostRecordResolution? {
+        let repository = LocalRepository()
+        if let memoData = try await repository.fetchMemo(id: id) {
+            return WorkflowHostRecordResolution(memo: memoData.memo, assets: nil)
+        }
+
+        if let recording = try await recordingRepository.fetchRecording(id: id) {
+            return WorkflowHostRecordResolution(memo: recording.toMemoModel(), assets: recording.assets)
+        }
+
+        return nil
+    }
+
+    private func fallbackWorkflowHostRecord(
+        for request: WorkflowHostStepRequest,
+        date: Date
+    ) -> WorkflowHostRecordResolution? {
+        guard request.stepType == WorkflowStep.StepType.llm.rawValue,
+              request.hasResolvedScreenshotContext else {
+            return nil
+        }
+
+        let trimmedTitle = request.context.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedTranscript = request.context.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = trimmedTitle.isEmpty ? nil : request.context.title
+        let transcript = trimmedTranscript.isEmpty ? nil : request.context.transcript
+
+        log.warning("Workflow host using context snapshot for missing screenshot record \(request.memoId.uuidString.prefix(8))")
+
+        return WorkflowHostRecordResolution(
+            memo: MemoModel(
+                id: request.memoId,
+                createdAt: date,
+                lastModified: date,
+                title: title,
+                transcription: transcript
+            ),
+            assets: nil
+        )
+    }
+
     private func handleWorkflowHostExecuteStep(_ connection: NWConnection, body: Data?) async {
         guard let body else {
             sendJSONResponse(connection, statusCode: 400, body: WorkflowHostStepResponse(ok: false, error: "No body"))
@@ -1383,21 +1468,7 @@ final class TalkieServer {
         }
 
         do {
-            let repository = LocalRepository()
-            let memo: MemoModel?
-            let assets: TalkieObjectAssets?
-            if let memoData = try await repository.fetchMemo(id: request.memoId) {
-                memo = memoData.memo
-                assets = nil
-            } else if let recording = try await TalkieObjectRepository().fetchRecording(id: request.memoId) {
-                memo = recording.toMemoModel()
-                assets = recording.assets
-            } else {
-                memo = nil
-                assets = nil
-            }
-
-            guard let memo else {
+            guard let resolvedRecord = try await resolveWorkflowHostRecord(for: request, date: date) else {
                 sendJSONResponse(connection, statusCode: 404, body: WorkflowHostStepResponse(ok: false, error: "Memo not found"))
                 return
             }
@@ -1406,8 +1477,8 @@ final class TalkieServer {
                 transcript: request.context.transcript,
                 title: request.context.title,
                 date: date,
-                assets: assets,
-                memo: memo
+                assets: resolvedRecord.assets,
+                memo: resolvedRecord.memo
             )
             workflowContext.outputs = request.context.outputs
             workflowContext.outputOrder = request.context.outputOrder

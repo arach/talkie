@@ -1625,7 +1625,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             log.info("Desktop magnifier hotkey registered: keyCode=\(magnifier.keyCode) modifiers=\(magnifier.modifiers)")
         }
 
-        log.info("Paste chord hotkey skipped; tray-based paste picker is retired")
+        let pasteChord = Self.loadHotkeyConfig(
+            key: AgentSettingsKey.pasteChordHotkey,
+            fallbackKeyCode: 9,
+            fallbackModifiers: Self.hyperModifiers,
+            warnsAboutAppleScreenshotShortcuts: true
+        )
+        pasteChordHotKeyManager.registerHotKey(
+            modifiers: pasteChord.modifiers,
+            keyCode: pasteChord.keyCode
+        ) { [weak self] _ in
+            Task { @MainActor in
+                await self?.handleAgentPasteChord()
+            }
+        }
+        log.info("Paste chord hotkey registered: keyCode=\(pasteChord.keyCode) modifiers=\(pasteChord.modifiers)")
 
         let directShortcuts: [(HotKeyManager, String, UInt32, UInt32, String)] = [
             (ssFullscreenHotKey, "hotkeyCapture.fullscreen", 20, Self.hyperModifiers, "fullscreen"),
@@ -2079,7 +2093,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                   let durableURL = durablePasteURL(for: item, data: data) else {
                 return false
             }
-            writeScreenshotPasteboard(data: data, fileURL: durableURL)
+            writeScreenshotPasteboard(data: data, fileURL: durableURL, targetApp: targetApp)
             log.info("Quick Paste: Agent screenshot image + markdown → clipboard")
             return true
 
@@ -2157,12 +2171,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         )
     }
 
-    private func writeScreenshotPasteboard(data: Data, fileURL: URL) {
-        let markdown = "[Talkie Capture](<\(fileURL.path)>)"
+    private func writeScreenshotPasteboard(
+        data: Data,
+        fileURL: URL,
+        targetApp: NSRunningApplication?
+    ) {
+        let markdown = screenshotMarkdown(for: fileURL, targetApp: targetApp)
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(markdown, forType: .string)
         pasteboard.setData(data, forType: .png)
+    }
+
+    private func screenshotMarkdown(for fileURL: URL, targetApp: NSRunningApplication?) -> String {
+        let path = fileURL.path
+        if prefersInlineImageMarkdown(targetApp: targetApp) {
+            return "![Talkie Capture](<\(path)>)"
+        }
+        return "[Talkie Capture](<\(path)>)"
+    }
+
+    private func prefersInlineImageMarkdown(targetApp: NSRunningApplication?) -> Bool {
+        let haystack = [
+            targetApp?.localizedName,
+            targetApp?.bundleIdentifier
+        ]
+            .compactMap { $0?.lowercased() }
+            .joined(separator: " ")
+
+        return haystack.contains("codex")
     }
 
     private func simulateCmdV() {
@@ -2252,6 +2289,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             managers.append(("Screenshot Chord", screenshotHotKeyManager))
             managers.append(("Markup Screenshot Chord", markupScreenshotHotKeyManager))
             managers.append(("Screen Record", screenRecordHotKeyManager))
+            managers.append(("Quick Paste", pasteChordHotKeyManager))
             managers.append(("Fullscreen Capture", ssFullscreenHotKey))
             managers.append(("Region Capture", ssRegionHotKey))
             managers.append(("Window Capture", ssWindowHotKey))

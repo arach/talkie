@@ -2,7 +2,7 @@
 //  ListeningBubble.swift
 //  Talkie iOS
 //
-//  Floats above the voice button during the listening state.
+//  Floats above the center Talkie pivot during the listening state.
 //  Live waveform · "HOLD · LISTENING" smallcap · captured-command
 //  snippet (M2 wires the real transcription; Phase 0 shows a
 //  placeholder snippet).
@@ -36,7 +36,7 @@ struct ListeningBubble: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .frame(minWidth: 168, alignment: .leading)
+        .frame(width: 184, alignment: .leading)
         .background(
             // Theme-aware corner radius — Tactical's chromeCorner:0
             // gives sharp square edges; Lift's :8 gives soft cards.
@@ -52,17 +52,16 @@ struct ListeningBubble: View {
             }
         )
         .shadow(color: .black.opacity(0.18), radius: 12, y: 6)
-        .padding(.horizontal, 20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-        // Sits above the voice button. Button bottom = 22, height = 48,
-        // gap = 14, so bubble bottom = 22 + 48 + 14 = 84.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        // Sits above the center pivot. Button bottom = 12, height = 56,
+        // gap = 16, so bubble bottom = 12 + 56 + 16 = 84.
         .padding(.bottom, 84)
     }
 }
 
 /// Compact "SENDING…" variant shown between release-to-send and command
 /// dispatch. Reuses ListeningBubble's chassis (material card, theme corner,
-/// accent hairline, bottom-left anchor) so it reads as the same object
+/// accent hairline, center anchor) so it reads as the same object
 /// settling into a processing beat rather than a new element. The waveform
 /// gives way to a single travelling dot — motion that means "in flight",
 /// stilled under Reduce Motion.
@@ -83,7 +82,7 @@ struct ProcessingBubble: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .frame(minWidth: 168, alignment: .leading)
+        .frame(width: 184, alignment: .leading)
         .background(
             ZStack {
                 let radius = theme.currentTheme.chrome.chromeCorner + 6
@@ -95,8 +94,7 @@ struct ProcessingBubble: View {
             }
         )
         .shadow(color: .black.opacity(0.18), radius: 12, y: 6)
-        .padding(.horizontal, 20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         // Same slot the ListeningBubble occupied (see its padding note).
         .padding(.bottom, 84)
     }

@@ -7,15 +7,15 @@
 //
 //  Composition top-to-bottom:
 //    1. Header           — "Skills" + state line
-//    2. Editor bay       — chat (placeholder) + markup (placeholder)
-//    3. Console strip    — last run output (static for Phase 1)
+//    2. Editor bay       — chat + generated skill markup
+//    3. Console strip    — last local action / run output
 //    4. Starters row     — 3 Talkie-shipped templates
 //    5. Your skills row  — driven by WorkflowService.workflows
 //    6. Where it fires   — Compose / Voice / Library invocation previews
 //    7. Footer           — italic byline
 //
-//  Phase 1 is visual + data-driven from WorkflowService for "your skills."
-//  Editor bay + chat + run wiring are stubs that come in later phases.
+//  The editor bay stays in-place: prompts produce a generated draft in the
+//  markup pane, SAVE persists it, and RUN remains scoped to runnable starters.
 //
 
 import SwiftUI
@@ -98,10 +98,33 @@ private struct Starter: Identifiable {
     var skillFileName: String? = nil
 }
 
-private enum SkillMarkupLine {
+private enum SkillMarkupLine: Equatable {
     case keyword(kw: String, rest: String)
     case sub(text: String)
     case blank
+}
+
+private struct GeneratedSkillDraft: Equatable {
+    let slug: String
+    let name: String
+    let byline: String
+    let code: String
+    let category: String
+    let icon: String
+    let color: WorkflowColor
+    let markupBody: [SkillMarkupLine]
+    let definition: WorkflowDefinition
+}
+
+private struct SkillAgentTurn: Identifiable, Equatable {
+    enum Role: Equatable {
+        case user
+        case agent
+    }
+
+    let id = UUID()
+    let role: Role
+    let text: String
 }
 
 private let SHIPPED_STARTERS: [Starter] = [
@@ -239,6 +262,9 @@ struct ScopeSkillsLandingView: View {
     @State private var isSaving: Bool = false
     @State private var consoleState: ConsoleState = .idle
     @State private var draftMessage: String = ""
+    @State private var agentTurns: [SkillAgentTurn] = []
+    @State private var generatedDraft: GeneratedSkillDraft?
+    @State private var isGeneratingDraft: Bool = false
     @State private var selectedAgentID: String = AGENT_CHOICES[0].id
     @State private var isHoveringMic: Bool = false
     @State private var isHoveringSubmit: Bool = false
@@ -259,6 +285,8 @@ struct ScopeSkillsLandingView: View {
 
     private enum ConsoleState: Equatable {
         case idle
+        case drafting(line: String, at: Date)
+        case draftReady(name: String, line: String, at: Date)
         case savedSkill(name: String, at: Date)
         case saveError(message: String)
         case running(name: String, line: String, at: Date)
@@ -329,13 +357,16 @@ struct ScopeSkillsLandingView: View {
     }
 
     private var editorStatusChipLabel: String {
+        if let draft = generatedDraft {
+            return "\(draft.name.uppercased()) · DRAFT"
+        }
         if let s = selectedStarter {
             return "\(s.name.uppercased()) · EDITING"
         }
         return "DRAFT · NEW SKILL"
     }
 
-    // MARK: - Editor bay (placeholder)
+    // MARK: - Editor bay
 
     @ViewBuilder
     private var editorBay: some View {
@@ -355,11 +386,18 @@ struct ScopeSkillsLandingView: View {
         VStack(alignment: .leading, spacing: 8) {
             chatHeader
             VStack(spacing: 0) {
-                // Message history — currently just the agent's initial greeting.
-                // Becomes scrollable history once chat turns are wired.
                 ScrollView {
                     VStack(alignment: .leading, spacing: 10) {
-                        agentMessageRow(text: chatGreeting)
+                        if agentTurns.isEmpty {
+                            agentMessageRow(text: chatGreeting)
+                        } else {
+                            ForEach(agentTurns) { turn in
+                                skillAgentTurnRow(turn)
+                            }
+                        }
+                        if isGeneratingDraft {
+                            agentMessageRow(text: "Drafting the markup and workflow definition…")
+                        }
                         Spacer(minLength: 0)
                     }
                     .padding(.horizontal, 14)
@@ -370,12 +408,11 @@ struct ScopeSkillsLandingView: View {
 
                 ScopeRule(.subtle)
 
-                // Input row — mic, text field, paper plane. Bottom of the pane.
                 HStack(spacing: 8) {
                     inlineMic
                     TextField("describe what to make · or tap the mic", text: $draftMessage)
                         .textFieldStyle(.plain)
-                        .font(ScopeType.displayItalic(size: 12.5))
+                        .font(ScopeType.displayItalic(size: 12))
                         .foregroundStyle(ScopeInk.primary)
                         .onSubmit { submitDraftMessage() }
                     submitButton
@@ -396,6 +433,23 @@ struct ScopeSkillsLandingView: View {
     }
 
     @ViewBuilder
+    private func skillAgentTurnRow(_ turn: SkillAgentTurn) -> some View {
+        let label = turn.role == .user ? "· YOU" : "· AGENT"
+        let labelColor = turn.role == .user ? ScopeAmber.solid : ScopeInk.muted
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(ScopeType.mono(size: 9, weight: .semibold))
+                .tracking(2.2)
+                .foregroundStyle(labelColor)
+            Text(turn.text)
+                .font(ScopeType.displayItalic(size: 12))
+                .foregroundStyle(ScopeInk.primary)
+                .lineSpacing(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    @ViewBuilder
     private func agentMessageRow(text: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("· AGENT")
@@ -403,7 +457,7 @@ struct ScopeSkillsLandingView: View {
                 .tracking(2.2)
                 .foregroundStyle(ScopeInk.muted)
             Text(text)
-                .font(ScopeType.displayItalic(size: 12.5))
+                .font(ScopeType.displayItalic(size: 12))
                 .foregroundStyle(ScopeInk.primary)
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -463,9 +517,185 @@ struct ScopeSkillsLandingView: View {
     }
 
     private func submitDraftMessage() {
-        guard !draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        // Phase 1: no-op stub — chat runtime arrives in a later phase.
+        let request = draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !request.isEmpty, !isGeneratingDraft else { return }
+        let baseStarter = selectedStarter
         draftMessage = ""
+        agentTurns.append(.init(role: .user, text: request))
+        consoleState = .drafting(line: "reading request · planning workflow markup", at: Date())
+        isGeneratingDraft = true
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(220))
+            let draft = generatedSkillDraft(from: request, baseStarter: baseStarter)
+            generatedDraft = draft
+            selectedStarterID = nil
+            agentTurns.append(.init(
+                role: .agent,
+                text: "I drafted \(draft.name). The markup is in the editor and it is ready to save."
+            ))
+            consoleState = .draftReady(name: draft.name, line: "markup generated · workflow definition ready", at: Date())
+            isGeneratingDraft = false
+        }
+    }
+
+    private func generatedSkillDraft(from request: String, baseStarter: Starter?) -> GeneratedSkillDraft {
+        let name = skillTitle(from: request, baseStarter: baseStarter)
+        let slug = workflowSlug(from: name)
+        let shortRequest = shortened(normalizedWhitespace(request), limit: 128)
+        let trigger = slug.replacing("-", with: " ")
+        let bylinePrefix = baseStarter.map { "Based on \($0.name.lowercased()): " } ?? "Generated from: "
+        let byline = shortened(bylinePrefix + shortRequest, limit: 150)
+        var lines: [SkillMarkupLine] = [
+            .keyword(kw: "WHEN", rest: "voice \"\(trigger)\""),
+            .blank,
+            .keyword(kw: "WITH", rest: "dictation"),
+            .sub(text: "request: \(shortRequest)"),
+            .blank,
+            .keyword(kw: "DO", rest: "llm.generate"),
+            .sub(text: "model: auto"),
+            .sub(text: "intent: \(shortRequest)"),
+            .blank,
+            .keyword(kw: "THEN", rest: "output"),
+        ]
+        if let baseStarter {
+            lines.insert(.sub(text: "base: \(baseStarter.name)"), at: 7)
+        }
+
+        let definition = WorkflowDefinition(
+            name: name,
+            description: byline,
+            icon: baseStarter?.icon ?? "wand.and.stars",
+            color: baseStarter?.color ?? .blue,
+            inputs: .memoTranscript,
+            steps: [
+                WorkflowStep(
+                    type: .trigger,
+                    config: .trigger(TriggerStepConfig(
+                        phrases: [trigger],
+                        caseSensitive: false,
+                        searchLocation: .anywhere,
+                        contextWindowSize: 200,
+                        stopIfNoMatch: true
+                    )),
+                    outputKey: "trigger"
+                ),
+                WorkflowStep(
+                    type: .llm,
+                    config: .llm(LLMStepConfig(
+                        costTier: .balanced,
+                        autoRoute: true,
+                        prompt: workflowPrompt(name: name, request: request, baseStarter: baseStarter),
+                        systemPrompt: "You are a Talkie workflow step. Convert the user's memo transcript into the requested output with concise, structured, action-oriented writing.",
+                        temperature: 0.5,
+                        maxTokens: 1200
+                    )),
+                    outputKey: "output"
+                )
+            ]
+        )
+
+        return GeneratedSkillDraft(
+            slug: slug,
+            name: name,
+            byline: byline,
+            code: "DRAFT",
+            category: "Generated",
+            icon: definition.icon,
+            color: definition.color,
+            markupBody: lines,
+            definition: definition
+        )
+    }
+
+    private func skillTitle(from request: String, baseStarter: Starter?) -> String {
+        let cleaned = normalizedWhitespace(request)
+        if let baseStarter, looksLikeStarterEdit(cleaned) {
+            return "\(baseStarter.name) Draft"
+        }
+
+        let stopWords: Set<String> = [
+            "a", "an", "and", "are", "as", "for", "from", "i", "it", "make", "me",
+            "of", "on", "or", "please", "skill", "that", "the", "this", "to", "with",
+            "workflow", "would", "you"
+        ]
+        let tokens = cleaned
+            .split { character in
+                !(character.isLetter || character.isNumber)
+            }
+            .map(String.init)
+            .filter { token in
+                let lower = token.lowercased()
+                return lower.count > 2 && !stopWords.contains(lower)
+            }
+        let chosen = tokens.prefix(4).map(capitalizedWord)
+        if !chosen.isEmpty {
+            return shortened(chosen.joined(separator: " "), limit: 34)
+        }
+        if let baseStarter {
+            return "\(baseStarter.name) Draft"
+        }
+        return "Custom Skill"
+    }
+
+    private func looksLikeStarterEdit(_ request: String) -> Bool {
+        let lower = request.lowercased()
+        return lower.localizedStandardContains("change")
+            || lower.localizedStandardContains("edit")
+            || lower.localizedStandardContains("make it")
+            || lower.localizedStandardContains("base")
+            || lower.localizedStandardContains("instead")
+    }
+
+    private func workflowSlug(from name: String) -> String {
+        var slug = ""
+        var previousWasDash = false
+        for character in name.lowercased() {
+            if character.isLetter || character.isNumber {
+                slug.append(character)
+                previousWasDash = false
+            } else if !previousWasDash {
+                slug.append("-")
+                previousWasDash = true
+            }
+        }
+
+        let trimmed = slug.trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        let limited = String(trimmed.prefix(48)).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        return limited.isEmpty ? "custom-skill" : limited
+    }
+
+    private func workflowPrompt(name: String, request: String, baseStarter: Starter?) -> String {
+        let starterLine = baseStarter.map { "Starter inspiration: \($0.name) — \($0.byline)" } ?? "Starter inspiration: none"
+        return """
+        You are running the Talkie workflow "\(name)".
+
+        User intent:
+        \(request)
+
+        \(starterLine)
+
+        Input transcript:
+        {{TRANSCRIPT}}
+
+        Produce the workflow output that best satisfies the intent. Be concise, structured, and action-oriented.
+        """
+    }
+
+    private func normalizedWhitespace(_ value: String) -> String {
+        value
+            .split { $0.isWhitespace || $0.isNewline }
+            .joined(separator: " ")
+    }
+
+    private func shortened(_ value: String, limit: Int) -> String {
+        guard value.count > limit else { return value }
+        return String(value.prefix(limit - 1)) + "…"
+    }
+
+    private func capitalizedWord(_ value: String) -> String {
+        guard let first = value.first else { return value }
+        return first.uppercased() + value.dropFirst().lowercased()
     }
 
     @ViewBuilder
@@ -575,7 +805,7 @@ struct ScopeSkillsLandingView: View {
 
     @ViewBuilder
     private var submitButton: some View {
-        let hasContent = !draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasContent = !draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isGeneratingDraft
         let active = hasContent || isHoveringSubmit
         Button {
             submitDraftMessage()
@@ -607,11 +837,14 @@ struct ScopeSkillsLandingView: View {
                 NSCursor.arrow.set()
             }
         }
-        .help(hasContent ? "Send" : "Type a message first")
+        .help(isGeneratingDraft ? "Generating…" : (hasContent ? "Send" : "Type a message first"))
         .accessibilityLabel(hasContent ? "Send message" : "Send message disabled")
     }
 
     private var chatGreeting: String {
+        if let draft = generatedDraft {
+            return "\(draft.name) is ready. Save it, or tell me what to change."
+        }
         if let s = selectedStarter {
             return "\(s.name) loaded. \(s.byline) Save to add it to your skills, or tell me to change something."
         }
@@ -635,18 +868,23 @@ struct ScopeSkillsLandingView: View {
                 .buttonStyle(.plain)
                 .disabled(!canRunSelectedStarter)
                 .help(runTooltip)
-                Button(action: saveSelectedStarter) {
+                Button(action: saveActiveDraft) {
                     chip(label: isSaving ? "SAVING…" : "⌘S SAVE",
-                         tone: (selectedStarter == nil || isSaving) ? .ink : .amber)
+                         tone: canSaveActiveDraft ? .amber : .ink)
                 }
                 .buttonStyle(.plain)
-                .disabled(selectedStarter == nil || isSaving)
+                .disabled(!canSaveActiveDraft)
             }
             markupBody
         }
     }
 
+    private var canSaveActiveDraft: Bool {
+        !isSaving && !isGeneratingDraft && (generatedDraft != nil || selectedStarter != nil)
+    }
+
     private var canRunSelectedStarter: Bool {
+        if generatedDraft != nil { return false }
         guard let starter = selectedStarter, !isRunning else { return false }
         // Only starters with a parsed .skill.md (real composition) are runnable.
         guard bundledStarter(for: starter) != nil else { return false }
@@ -662,6 +900,9 @@ struct ScopeSkillsLandingView: View {
     }
 
     private var runTooltip: String {
+        if generatedDraft != nil {
+            return "Save the generated draft first, then run it from Your Skills"
+        }
         guard let starter = selectedStarter else { return "Select a starter to run" }
         if bundledStarter(for: starter) == nil {
             return "This starter doesn't have a runnable composition yet"
@@ -674,6 +915,9 @@ struct ScopeSkillsLandingView: View {
     }
 
     private var markupFilename: String {
+        if let draft = generatedDraft {
+            return "\(draft.slug).skill.md"
+        }
         if let s = selectedStarter {
             return "\(s.name.lowercased().replacingOccurrences(of: " ", with: "-")).skill.md"
         }
@@ -682,7 +926,9 @@ struct ScopeSkillsLandingView: View {
 
     @ViewBuilder
     private var markupBody: some View {
-        if let starter = selectedStarter {
+        if let draft = generatedDraft {
+            markupEditor(lines: draft.markupBody, headerName: draft.name, headerDescription: draft.byline)
+        } else if let starter = selectedStarter {
             // When a .skill.md ships with this starter, render the actual
             // file body — keeps the editor honest with what SAVE persists.
             // Falls back to the inline markup array for starters without
@@ -723,7 +969,11 @@ struct ScopeSkillsLandingView: View {
     }
 
     @ViewBuilder
-    private func markupEditor(lines: [SkillMarkupLine]) -> some View {
+    private func markupEditor(
+        lines: [SkillMarkupLine],
+        headerName: String? = nil,
+        headerDescription: String? = nil
+    ) -> some View {
         ZStack(alignment: .topLeading) {
             ScopeCanvas.surface
                 .overlay(
@@ -732,7 +982,9 @@ struct ScopeSkillsLandingView: View {
                 )
             VStack(alignment: .leading, spacing: 0) {
                 // Description header — the frontmatter rendered as a spec written by the agent.
-                if let starter = selectedStarter {
+                if let headerName, let headerDescription {
+                    descriptionHeader(name: headerName, description: headerDescription)
+                } else if let starter = selectedStarter {
                     descriptionHeader(name: starter.name, description: starter.byline)
                 }
                 // Body — WHEN/WITH/DO/THEN with gutter.
@@ -779,7 +1031,7 @@ struct ScopeSkillsLandingView: View {
                 .tracking(-0.2)
                 .foregroundStyle(ScopeInk.primary)
             Text(description)
-                .font(ScopeType.displayItalic(size: 11.5))
+                .font(ScopeType.displayItalic(size: 11))
                 .foregroundStyle(ScopeInk.faint)
                 .lineSpacing(1.5)
                 .fixedSize(horizontal: false, vertical: true)
@@ -823,6 +1075,29 @@ struct ScopeSkillsLandingView: View {
     }
 
     // MARK: - Save action
+
+    private func saveActiveDraft() {
+        if let draft = generatedDraft {
+            saveGeneratedDraft(draft)
+            return
+        }
+        saveSelectedStarter()
+    }
+
+    private func saveGeneratedDraft(_ draft: GeneratedSkillDraft) {
+        guard !isSaving else { return }
+        isSaving = true
+        Task { @MainActor in
+            do {
+                try await workflowService.save(draft.definition, slug: draft.slug)
+                consoleState = .savedSkill(name: draft.name, at: Date())
+                agentTurns.append(.init(role: .agent, text: "\(draft.name) saved to your skills."))
+            } catch {
+                consoleState = .saveError(message: error.localizedDescription)
+            }
+            isSaving = false
+        }
+    }
 
     private func saveSelectedStarter() {
         guard let starter = selectedStarter, !isSaving else { return }
@@ -1051,7 +1326,9 @@ struct ScopeSkillsLandingView: View {
 
     private var consoleHeaderLabel: String {
         switch consoleState {
-        case .idle: return "awaiting first run"
+        case .idle: return "awaiting first draft"
+        case .drafting: return "drafting skill"
+        case .draftReady: return "draft ready"
         case .savedSkill: return "just saved"
         case .saveError: return "save failed"
         case .running(let name, _, _): return "running \(name.lowercased())"
@@ -1063,7 +1340,11 @@ struct ScopeSkillsLandingView: View {
     private var consoleHeaderRight: String {
         switch consoleState {
         case .idle: return "ready"
-        case .savedSkill(_, let at), .running(_, _, let at), .ranSkill(_, _, let at):
+        case .drafting(_, let at),
+             .draftReady(_, _, let at),
+             .savedSkill(_, let at),
+             .running(_, _, let at),
+             .ranSkill(_, _, let at):
             let f = DateFormatter()
             f.dateFormat = "HH:mm:ss"
             return f.string(from: at)
@@ -1077,32 +1358,76 @@ struct ScopeSkillsLandingView: View {
         case .idle:
             HStack(spacing: 8) {
                 Text("›")
-                    .font(ScopeType.mono(size: 11.5, weight: .regular))
+                    .font(ScopeType.mono(size: 11, weight: .regular))
                     .foregroundStyle(ScopeInk.muted)
                 Text(selectedStarter == nil
                      ? "pick a starter below to load it into the editor"
                      : "press ⌘S to save \"\(selectedStarter!.name)\" as a skill")
-                    .font(ScopeType.mono(size: 11.5, weight: .regular))
+                    .font(ScopeType.mono(size: 11, weight: .regular))
                     .foregroundStyle(ScopeInk.faint)
                 Spacer()
             }
-        case .savedSkill(let name, _):
+        case .drafting(let line, _):
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
                     Text("›")
-                        .font(ScopeType.mono(size: 11.5, weight: .regular))
+                        .font(ScopeType.mono(size: 11, weight: .regular))
                         .foregroundStyle(ScopeInk.muted)
-                    Text("save skill \"\(name.lowercased())\"")
-                        .font(ScopeType.mono(size: 11.5, weight: .regular))
+                    Text("generate skill draft")
+                        .font(ScopeType.mono(size: 11, weight: .regular))
+                        .foregroundStyle(ScopeBrass.solid)
+                    Spacer()
+                }
+                HStack(spacing: 8) {
+                    Text("·")
+                        .font(ScopeType.mono(size: 11, weight: .regular))
+                        .foregroundStyle(ScopeBrass.solid)
+                    Text(line)
+                        .font(ScopeType.mono(size: 11, weight: .regular))
+                        .foregroundStyle(ScopeInk.primary)
+                        .lineLimit(2)
+                    Spacer()
+                }
+            }
+        case .draftReady(let name, let line, _):
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 8) {
+                    Text("›")
+                        .font(ScopeType.mono(size: 11, weight: .regular))
+                        .foregroundStyle(ScopeInk.muted)
+                    Text("generate \(name.lowercased())")
+                        .font(ScopeType.mono(size: 11, weight: .regular))
                         .foregroundStyle(ScopeBrass.solid)
                     Spacer()
                 }
                 HStack(spacing: 8) {
                     Text("✓")
-                        .font(ScopeType.mono(size: 11.5, weight: .regular))
+                        .font(ScopeType.mono(size: 11, weight: .regular))
+                        .foregroundStyle(ScopeBrass.solid)
+                    Text(line)
+                        .font(ScopeType.mono(size: 11, weight: .regular))
+                        .foregroundStyle(ScopeInk.primary)
+                        .lineLimit(2)
+                    Spacer()
+                }
+            }
+        case .savedSkill(let name, _):
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 8) {
+                    Text("›")
+                        .font(ScopeType.mono(size: 11, weight: .regular))
+                        .foregroundStyle(ScopeInk.muted)
+                    Text("save skill \"\(name.lowercased())\"")
+                        .font(ScopeType.mono(size: 11, weight: .regular))
+                        .foregroundStyle(ScopeBrass.solid)
+                    Spacer()
+                }
+                HStack(spacing: 8) {
+                    Text("✓")
+                        .font(ScopeType.mono(size: 11, weight: .regular))
                         .foregroundStyle(ScopeBrass.solid)
                     Text("\(name) saved to your skills · scroll down to see the card")
-                        .font(ScopeType.mono(size: 11.5, weight: .regular))
+                        .font(ScopeType.mono(size: 11, weight: .regular))
                         .foregroundStyle(ScopeInk.primary)
                     Spacer()
                 }
@@ -1110,10 +1435,10 @@ struct ScopeSkillsLandingView: View {
         case .saveError(let message):
             HStack(spacing: 8) {
                 Text("✗")
-                    .font(ScopeType.mono(size: 11.5, weight: .regular))
+                    .font(ScopeType.mono(size: 11, weight: .regular))
                     .foregroundStyle(Color.red.opacity(0.7))
                 Text(message)
-                    .font(ScopeType.mono(size: 11.5, weight: .regular))
+                    .font(ScopeType.mono(size: 11, weight: .regular))
                     .foregroundStyle(ScopeInk.primary)
                 Spacer()
             }
@@ -1121,19 +1446,19 @@ struct ScopeSkillsLandingView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
                     Text("›")
-                        .font(ScopeType.mono(size: 11.5, weight: .regular))
+                        .font(ScopeType.mono(size: 11, weight: .regular))
                         .foregroundStyle(ScopeInk.muted)
                     Text("run \(name.lowercased())")
-                        .font(ScopeType.mono(size: 11.5, weight: .regular))
+                        .font(ScopeType.mono(size: 11, weight: .regular))
                         .foregroundStyle(ScopeBrass.solid)
                     Spacer()
                 }
                 HStack(spacing: 8) {
                     Text("·")
-                        .font(ScopeType.mono(size: 11.5, weight: .regular))
+                        .font(ScopeType.mono(size: 11, weight: .regular))
                         .foregroundStyle(ScopeBrass.solid)
                     Text(line)
-                        .font(ScopeType.mono(size: 11.5, weight: .regular))
+                        .font(ScopeType.mono(size: 11, weight: .regular))
                         .foregroundStyle(ScopeInk.primary)
                     Spacer()
                 }
@@ -1142,19 +1467,19 @@ struct ScopeSkillsLandingView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
                     Text("›")
-                        .font(ScopeType.mono(size: 11.5, weight: .regular))
+                        .font(ScopeType.mono(size: 11, weight: .regular))
                         .foregroundStyle(ScopeInk.muted)
                     Text("run \(name.lowercased())")
-                        .font(ScopeType.mono(size: 11.5, weight: .regular))
+                        .font(ScopeType.mono(size: 11, weight: .regular))
                         .foregroundStyle(ScopeBrass.solid)
                     Spacer()
                 }
                 HStack(spacing: 8) {
                     Text("✓")
-                        .font(ScopeType.mono(size: 11.5, weight: .regular))
+                        .font(ScopeType.mono(size: 11, weight: .regular))
                         .foregroundStyle(ScopeBrass.solid)
                     Text(summary)
-                        .font(ScopeType.mono(size: 11.5, weight: .regular))
+                        .font(ScopeType.mono(size: 11, weight: .regular))
                         .foregroundStyle(ScopeInk.primary)
                     Spacer()
                 }
@@ -1163,19 +1488,19 @@ struct ScopeSkillsLandingView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
                     Text("›")
-                        .font(ScopeType.mono(size: 11.5, weight: .regular))
+                        .font(ScopeType.mono(size: 11, weight: .regular))
                         .foregroundStyle(ScopeInk.muted)
                     Text("run \(name.lowercased())")
-                        .font(ScopeType.mono(size: 11.5, weight: .regular))
+                        .font(ScopeType.mono(size: 11, weight: .regular))
                         .foregroundStyle(ScopeBrass.solid)
                     Spacer()
                 }
                 HStack(spacing: 8) {
                     Text("✗")
-                        .font(ScopeType.mono(size: 11.5, weight: .regular))
+                        .font(ScopeType.mono(size: 11, weight: .regular))
                         .foregroundStyle(Color.red.opacity(0.7))
                     Text(message)
-                        .font(ScopeType.mono(size: 11.5, weight: .regular))
+                        .font(ScopeType.mono(size: 11, weight: .regular))
                         .foregroundStyle(ScopeInk.primary)
                     Spacer()
                 }
@@ -1250,6 +1575,7 @@ struct ScopeSkillsLandingView: View {
     }
 
     private func toggleStarterSelection(_ starter: Starter) {
+        generatedDraft = nil
         if selectedStarterID == starter.id {
             selectedStarterID = nil
         } else {
@@ -1303,7 +1629,7 @@ struct ScopeSkillsLandingView: View {
                 .padding(.bottom, 4)
 
             Text(starter.byline)
-                .font(ScopeType.displayItalic(size: 11.5))
+                .font(ScopeType.displayItalic(size: 11))
                 .foregroundStyle(ScopeInk.faint)
                 .lineSpacing(1.5)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1512,7 +1838,7 @@ struct ScopeSkillsLandingView: View {
             content()
                 .frame(maxWidth: .infinity)
             Text(caption)
-                .font(ScopeType.displayItalic(size: 11.5))
+                .font(ScopeType.displayItalic(size: 11))
                 .foregroundStyle(ScopeInk.faint)
                 .lineSpacing(1.4)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1619,10 +1945,10 @@ struct ScopeSkillsLandingView: View {
                     .foregroundStyle(ScopeInk.subtle)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Worker layer notes")
-                        .font(.system(size: 12.5, design: .serif))
+                        .font(.system(size: 12, design: .serif))
                         .foregroundStyle(ScopeInk.primary)
                     Text("4:12 · today")
-                        .font(ScopeType.displayItalic(size: 10.5))
+                        .font(ScopeType.displayItalic(size: 10))
                         .foregroundStyle(ScopeInk.faint)
                 }
                 Spacer()
@@ -1641,7 +1967,7 @@ struct ScopeSkillsLandingView: View {
                     .foregroundStyle(ScopeInk.faint)
                 HStack {
                     Text("Daily Standup")
-                        .font(.system(size: 11.5, design: .serif))
+                        .font(.system(size: 12, design: .serif))
                         .foregroundStyle(ScopeInk.primary)
                     Spacer()
                     Text("APPLY →")
@@ -1657,7 +1983,7 @@ struct ScopeSkillsLandingView: View {
                 )
                 HStack {
                     Text("Log Bug")
-                        .font(.system(size: 11.5, design: .serif))
+                        .font(.system(size: 12, design: .serif))
                         .foregroundStyle(ScopeInk.faint)
                     Spacer()
                     Text("READY")

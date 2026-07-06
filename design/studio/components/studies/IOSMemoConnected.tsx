@@ -45,7 +45,7 @@
 
 import { StatusBar } from "./primitives/StatusBar";
 
-type Mode = "reading" | "editing";
+type Mode = "reading" | "editing" | "transcribing";
 
 const TITLE = "Notes on cockpit chassis depth";
 const SOURCE = { device: "iPhone", date: "May 26", time: "1:24 PM" };
@@ -64,12 +64,13 @@ export function IOSMemoConnected({ mode = "reading" }: { mode?: Mode }) {
   const editing = mode === "editing";
   return (
     <div className="flex h-full flex-col" style={{ background: "var(--theme-canvas)" }}>
+      <MemoAnimationStyles />
       <StatusBar />
       <Header editing={editing} />
 
       <div className="flex-1 overflow-y-auto px-5 pb-6 pt-1">
         <SourceBlock />
-        <Document editing={editing} />
+        <Document mode={mode} />
         {!editing && (
           <>
             <ToolRail />
@@ -80,6 +81,49 @@ export function IOSMemoConnected({ mode = "reading" }: { mode?: Mode }) {
 
       {editing && <KeyboardDock />}
     </div>
+  );
+}
+
+function MemoAnimationStyles() {
+  return (
+    <style>{`
+      @keyframes memo-transcribe-scan {
+        0% { transform: translateX(-115%); opacity: 0; }
+        12% { opacity: 0.75; }
+        84% { opacity: 0.75; }
+        100% { transform: translateX(320%); opacity: 0; }
+      }
+
+      @keyframes memo-transcribe-needle {
+        0% { left: 0%; opacity: 0; }
+        10% { opacity: 1; }
+        88% { opacity: 1; }
+        100% { left: 100%; opacity: 0; }
+      }
+
+      @keyframes memo-braille-dot {
+        0%, 100% { opacity: 0.24; transform: scale(0.72); }
+        34% { opacity: 1; transform: scale(1); }
+      }
+
+      .memo-transcribe-scan {
+        animation: memo-transcribe-scan 2.15s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+      }
+
+      .memo-transcribe-needle,
+      .memo-mini-scan {
+        animation: memo-transcribe-needle 2.15s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+      }
+
+      .memo-mini-scan {
+        animation-duration: 1.65s;
+      }
+
+      .memo-braille-dot {
+        animation: memo-braille-dot 0.95s ease-in-out infinite;
+        box-shadow: 0 0 5px var(--theme-amber-glow, var(--theme-amber));
+      }
+    `}</style>
   );
 }
 
@@ -165,7 +209,9 @@ function SourceBlock() {
 // slims the transport (you're working on the words, not the audio) and
 // turns the body into a live text field.
 
-function Document({ editing }: { editing: boolean }) {
+function Document({ mode }: { mode: Mode }) {
+  const editing = mode === "editing";
+  const transcribing = mode === "transcribing";
   return (
     <div
       className="mb-6 overflow-hidden rounded-2xl"
@@ -176,9 +222,9 @@ function Document({ editing }: { editing: boolean }) {
           : "inset 0 0 0 1px var(--theme-edge-faint), 0 10px 26px -16px var(--theme-card-shadow, rgba(20,16,12,0.28))",
       }}
     >
-      {editing ? <TapeChip /> : <TapeStrip />}
+      {editing ? <TapeChip /> : transcribing ? <TranscribingTapeStrip /> : <TapeStrip />}
       <div style={{ height: 1, background: "var(--theme-edge-faint)" }} aria-hidden />
-      {editing ? <EditingField /> : <ReadingBody />}
+      {editing ? <EditingField /> : transcribing ? <TranscribingBody /> : <ReadingBody />}
     </div>
   );
 }
@@ -269,6 +315,172 @@ function TapeWaveform() {
         />
       </div>
     </div>
+  );
+}
+
+// ── Tape strip (transcribing) ───────────────────────────────────────
+// Inverse of recording: the captured tape is fixed, and the head travels
+// left-to-right over it as if the machine is re-reading the signal.
+
+function TranscribingTapeStrip() {
+  return (
+    <div className="flex items-center gap-3 px-4 py-3.5">
+      <button
+        className="grid h-9 w-9 flex-none place-items-center rounded-full"
+        style={{
+          background: "var(--theme-canvas-alt, var(--theme-amber-faint))",
+          color: "var(--theme-ink-muted)",
+          boxShadow: "inset 0 0 0 1px var(--theme-edge-faint)",
+        }}
+        aria-label="Play recording"
+      >
+        <PlayIcon />
+      </button>
+      <TranscribingSignalWaveform />
+      <span
+        className="flex-none text-[10.5px] tabular-nums tracking-[0.02em]"
+        style={{ color: "var(--theme-ink-muted)", fontFamily: "var(--theme-font-mono)" }}
+      >
+        <span style={{ color: "var(--theme-ink)" }}>0:00</span>
+        <span style={{ color: "var(--theme-ink-faint)" }}> / {DURATION}</span>
+      </span>
+    </div>
+  );
+}
+
+function TranscribingSignalWaveform() {
+  const bars = [
+    5, 8, 6, 11, 14, 9, 17, 12, 8, 6, 15, 19, 13, 9, 7, 12, 16, 10, 7, 5,
+    9, 13, 18, 14, 10, 6, 8, 12, 7, 5, 9, 6,
+  ];
+  return (
+    <div
+      className="relative flex h-8 flex-1 items-center overflow-hidden rounded-[9px] px-1.5"
+      style={{
+        background: "var(--theme-canvas-alt, transparent)",
+        boxShadow: "inset 0 0 0 1px var(--theme-edge-faint)",
+      }}
+      aria-hidden
+    >
+      <div
+        className="absolute left-2 right-2 top-1/2"
+        style={{
+          height: 1,
+          background: "var(--theme-amber-soft, var(--theme-amber))",
+          opacity: 0.45,
+        }}
+      />
+      <div className="relative flex flex-1 items-center justify-between">
+        {bars.map((h, i) => (
+          <span
+            key={i}
+            style={{
+              width: 2,
+              height: `${h}px`,
+              borderRadius: 1,
+              background: "var(--theme-ink-muted)",
+              opacity: i % 5 === 0 ? 0.62 : 0.38,
+            }}
+          />
+        ))}
+      </div>
+      <div className="memo-transcribe-scan absolute inset-y-1 left-0 w-[34%]">
+        <div
+          className="h-full w-full"
+          style={{
+            background:
+              "linear-gradient(90deg, transparent 0%, var(--theme-amber-faint) 38%, var(--theme-amber) 52%, transparent 100%)",
+            opacity: 0.72,
+            mixBlendMode: "plus-lighter",
+          }}
+        />
+      </div>
+      <div
+        className="memo-transcribe-needle absolute top-1/2 h-7 w-[1.5px] -translate-y-1/2"
+        style={{
+          background: "var(--theme-amber)",
+          boxShadow: "0 0 7px var(--theme-amber-glow, var(--theme-amber))",
+        }}
+      />
+    </div>
+  );
+}
+
+function TranscribingBody() {
+  return (
+    <div className="px-4 py-4">
+      <div className="flex items-center gap-3">
+        <BrailleSignal />
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <span
+            className="text-[13px] italic"
+            style={{ color: "var(--theme-ink-muted)", fontFamily: "var(--theme-font-body)" }}
+          >
+            Transcribing…
+          </span>
+          <span
+            className="text-[9.5px] tracking-[0.14em]"
+            style={{ color: "var(--theme-ink-faint)", fontFamily: "var(--theme-font-mono)" }}
+          >
+            0 WORDS
+          </span>
+        </div>
+        <MiniSignalPass />
+      </div>
+    </div>
+  );
+}
+
+function BrailleSignal() {
+  return (
+    <span
+      className="grid h-7 w-5 flex-none grid-cols-2 place-items-center gap-x-1 gap-y-[3px]"
+      aria-hidden
+    >
+      {Array.from({ length: 6 }).map((_, i) => (
+        <span
+          key={i}
+          className="memo-braille-dot h-[5px] w-[5px] rounded-full"
+          style={{
+            background: "var(--theme-amber)",
+            animationDelay: `${i * 95}ms`,
+          }}
+        />
+      ))}
+    </span>
+  );
+}
+
+function MiniSignalPass() {
+  const bars = [5, 9, 13, 7, 16, 10, 6, 12, 8, 14, 6, 10];
+  return (
+    <span className="relative flex h-7 w-20 flex-none items-center overflow-hidden" aria-hidden>
+      <span
+        className="absolute left-0 right-0 top-1/2"
+        style={{ height: 1, background: "var(--theme-amber)", opacity: 0.28 }}
+      />
+      <span className="relative flex w-full items-center justify-between">
+        {bars.map((h, i) => (
+          <span
+            key={i}
+            style={{
+              width: 2,
+              height: `${h}px`,
+              borderRadius: 1,
+              background: "var(--theme-ink-muted)",
+              opacity: 0.42,
+            }}
+          />
+        ))}
+      </span>
+      <span
+        className="memo-mini-scan absolute top-1/2 h-6 w-[1.5px] -translate-y-1/2"
+        style={{
+          background: "var(--theme-amber)",
+          boxShadow: "0 0 6px var(--theme-amber-glow, var(--theme-amber))",
+        }}
+      />
+    </span>
   );
 }
 

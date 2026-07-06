@@ -3,7 +3,7 @@
 //  TalkieAgent
 //
 //  Floating panel for Quick Paste (Hyper+V).
-//  Shows 1-5 most recent tray items as thumbnails with format legend.
+//  Shows 1-5 most recent captures as thumbnails with format legend.
 //  Modifier keys (Shift/Option/Control) change the paste format.
 //
 
@@ -19,6 +19,123 @@ final class PasteBarState {
     var items: [AgentLiveTrayItem] = []
     var activeFormat: PasteFormat = .image
     var onAction: ((PasteBarResult?) -> Void)?
+}
+
+private enum PasteBarStyle {
+    static let rowHeight: CGFloat = 48
+    static let keySize: CGFloat = 18
+}
+
+private struct PasteBarPalette {
+    let theme: VisualTheme
+    let accent: Color
+    let surfaceTint: Color
+    let elevatedTint: Color
+    let textPrimary: Color
+    let textSecondary: Color
+    let textMuted: Color
+    let edge: Color
+    let subtleEdge: Color
+    let hairline: Color
+    let shadow: Color
+
+    var panelRadius: CGFloat {
+        switch theme {
+        case .terminal: 7
+        case .light: 12
+        case .live, .midnight, .darkMatte: 13
+        }
+    }
+
+    var cellRadius: CGFloat {
+        switch theme {
+        case .terminal: 4
+        case .light: 6
+        case .live, .midnight, .darkMatte: 7
+        }
+    }
+
+    @MainActor
+    static func resolved(settings: LiveSettings) -> PasteBarPalette {
+        let accent = settings.effectiveAccentColor
+        let preview = settings.visualTheme.previewColors
+
+        switch settings.visualTheme {
+        case .light:
+            return PasteBarPalette(
+                theme: .light,
+                accent: accent,
+                surfaceTint: preview.bg.opacity(0.97),
+                elevatedTint: Color.white.opacity(0.38),
+                textPrimary: preview.fg.opacity(0.92),
+                textSecondary: preview.fg.opacity(0.66),
+                textMuted: preview.fg.opacity(0.44),
+                edge: preview.fg.opacity(0.14),
+                subtleEdge: preview.fg.opacity(0.08),
+                hairline: preview.fg.opacity(0.10),
+                shadow: Color.black.opacity(0.18)
+            )
+        case .terminal:
+            return PasteBarPalette(
+                theme: .terminal,
+                accent: accent,
+                surfaceTint: Color.black.opacity(0.96),
+                elevatedTint: Color.white.opacity(0.045),
+                textPrimary: preview.fg.opacity(0.90),
+                textSecondary: preview.fg.opacity(0.64),
+                textMuted: preview.fg.opacity(0.42),
+                edge: preview.fg.opacity(0.18),
+                subtleEdge: preview.fg.opacity(0.10),
+                hairline: preview.fg.opacity(0.12),
+                shadow: Color.black.opacity(0.38)
+            )
+        case .darkMatte:
+            return PasteBarPalette(
+                theme: .darkMatte,
+                accent: accent,
+                surfaceTint: preview.bg.opacity(0.96),
+                elevatedTint: Color(red: 0.20, green: 0.15, blue: 0.10).opacity(0.34),
+                textPrimary: preview.fg.opacity(0.92),
+                textSecondary: preview.fg.opacity(0.66),
+                textMuted: preview.fg.opacity(0.42),
+                edge: preview.fg.opacity(0.15),
+                subtleEdge: preview.fg.opacity(0.08),
+                hairline: preview.fg.opacity(0.10),
+                shadow: Color.black.opacity(0.40)
+            )
+        case .live, .midnight:
+            return PasteBarPalette(
+                theme: settings.visualTheme,
+                accent: accent,
+                surfaceTint: preview.bg.opacity(0.96),
+                elevatedTint: Color.white.opacity(0.06),
+                textPrimary: preview.fg.opacity(0.92),
+                textSecondary: preview.fg.opacity(0.64),
+                textMuted: preview.fg.opacity(0.40),
+                edge: preview.fg.opacity(0.15),
+                subtleEdge: preview.fg.opacity(0.08),
+                hairline: preview.fg.opacity(0.10),
+                shadow: Color.black.opacity(0.38)
+            )
+        }
+    }
+
+    func tint(for format: PasteFormat) -> Color {
+        switch format {
+        case .image:
+            accent
+        case .filePath:
+            theme == .terminal ? textSecondary : OpsTint.amber.color
+        case .url:
+            theme == .terminal ? textSecondary : OpsTint.cyan.color
+        case .base64:
+            theme == .terminal ? textSecondary : OpsTint.violet.color
+        case .visionDescription:
+            theme == .terminal ? textSecondary : OpsTint.green.color
+        case .dragFile:
+            theme == .terminal ? textSecondary : OpsTint.red.color
+        }
+    }
 }
 
 // MARK: - Panel
@@ -38,7 +155,9 @@ final class PasteBarPanel {
         state.activeFormat = .image
 
         let hostingView = NSHostingView(rootView: PasteBarView(state: state))
+        hostingView.wantsLayer = true
         hostingView.layer?.isOpaque = false
+        hostingView.layer?.backgroundColor = NSColor.clear.cgColor
 
         let isEmpty = items.isEmpty
         let width: CGFloat = isEmpty ? 260 : max(390, CGFloat(min(items.count, 5)) * 100 + 40)
@@ -56,7 +175,7 @@ final class PasteBarPanel {
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         p.isOpaque = false
         p.backgroundColor = .clear
-        p.hasShadow = true
+        p.hasShadow = false
         p.isMovableByWindowBackground = false
         p.sharingType = .readOnly
         p.hidesOnDeactivate = false
@@ -117,15 +236,16 @@ final class PasteBarPanel {
 private struct PasteBarView: View {
     @Bindable var state: PasteBarState
 
+    @ObservedObject private var settings = LiveSettings.shared
     @State private var appeared = false
     @State private var hoveredIndex: Int?
 
-    private var borderGradient: LinearGradient {
-        LinearGradient(
-            colors: [Color.white.opacity(0.32), Color.white.opacity(0.09)],
-            startPoint: .top,
-            endPoint: .bottom
-        )
+    private var palette: PasteBarPalette {
+        PasteBarPalette.resolved(settings: settings)
+    }
+
+    private var activeTint: Color {
+        palette.tint(for: state.activeFormat)
     }
 
     var body: some View {
@@ -138,60 +258,30 @@ private struct PasteBarView: View {
                     .padding(.top, 10)
                     .padding(.bottom, 6)
 
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.white.opacity(0.16), Color.white.opacity(0.05)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .frame(height: 1)
-                    .padding(.horizontal, 12)
+                separatorLine
 
                 HStack {
                     formatLegend
-
-                    Spacer()
-
-                    browseHint
                 }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 12)
                     .padding(.top, 7)
                     .padding(.bottom, 10)
             }
         }
+        .foregroundStyle(palette.textPrimary)
         .background(
-            ZStack {
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(Color.black.opacity(0.78))
-
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(.ultraThinMaterial)
-                    .opacity(0.62)
-
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.16),
-                                Color.white.opacity(0.05),
-                                Color.black.opacity(0.10)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-            }
-            .shadow(color: .black.opacity(0.34), radius: 18, y: 7)
+            panelBackground
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(borderGradient, lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: palette.panelRadius, style: .continuous)
+                .strokeBorder(palette.edge, lineWidth: 0.65)
         )
         .scaleEffect(appeared ? 1 : 0.9)
         .opacity(appeared ? 1 : 0)
         .animation(.spring(response: 0.2, dampingFraction: 0.7), value: hoveredIndex)
+        .animation(.easeInOut(duration: 0.16), value: state.activeFormat)
+        .tint(palette.accent)
         .onAppear {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.75)) {
                 appeared = true
@@ -199,16 +289,46 @@ private struct PasteBarView: View {
         }
     }
 
+    private var panelBackground: some View {
+        RoundedRectangle(cornerRadius: palette.panelRadius, style: .continuous)
+            .fill(palette.surfaceTint)
+            .shadow(color: palette.shadow, radius: 14, y: 7)
+    }
+
+    private var separatorLine: some View {
+        Capsule()
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color.clear,
+                        palette.hairline,
+                        activeTint.opacity(0.18),
+                        palette.hairline,
+                        Color.clear
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .frame(height: 1)
+            .padding(.horizontal, 12)
+    }
+
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 7) {
+            Image(systemName: "photo.on.rectangle.angled")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(activeTint.opacity(0.86))
+
             Text("No captures yet")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.white.opacity(0.76))
+                .foregroundStyle(palette.textPrimary)
+
             Text("Hyper+S to start")
                 .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundColor(.white.opacity(0.42))
+                .foregroundStyle(palette.textMuted)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(16)
@@ -227,12 +347,12 @@ private struct PasteBarView: View {
     private func thumbnailCell(item: AgentLiveTrayItem, index: Int) -> some View {
         let isHovered = hoveredIndex == index
         let number = index + 1
+        let tint = activeTint
 
         return Button(action: { state.onAction?(PasteBarResult(item: item, format: state.activeFormat)) }) {
             VStack(spacing: 4) {
-                // Thumbnail
                 ZStack {
-                    Color.black.opacity(0.28)
+                    palette.elevatedTint
 
                     if let nsImage = item.image {
                         Image(nsImage: nsImage)
@@ -242,36 +362,41 @@ private struct PasteBarView: View {
                     } else if let previewText = item.previewText {
                         Text(previewText)
                             .font(.system(size: 7, weight: .medium, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.7))
+                            .foregroundStyle(palette.textSecondary)
                             .lineLimit(3)
                             .padding(3)
                     } else {
                         Image(systemName: item.isClip ? "video.fill" : "photo")
                             .font(.system(size: 12, weight: .light))
-                            .foregroundStyle(.white.opacity(0.38))
+                            .foregroundStyle(palette.textMuted)
                     }
                 }
-                .frame(width: 72, height: 48)
-                .clipShape(RoundedRectangle(cornerRadius: 5))
+                .frame(width: 72, height: PasteBarStyle.rowHeight)
+                .clipShape(RoundedRectangle(cornerRadius: palette.cellRadius, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 5)
+                    RoundedRectangle(cornerRadius: palette.cellRadius, style: .continuous)
                         .strokeBorder(
-                            isHovered ? Color.white.opacity(0.48) : Color.white.opacity(0.16),
+                            isHovered ? tint.opacity(0.72) : palette.subtleEdge,
                             lineWidth: isHovered ? 1 : 0.5
                         )
                 )
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(isHovered ? tint.opacity(0.20) : palette.hairline)
+                        .frame(height: 1)
+                        .clipShape(RoundedRectangle(cornerRadius: palette.cellRadius, style: .continuous))
+                }
 
-                // Number key
                 Text("\(number)")
                     .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white.opacity(isHovered ? 0.98 : 0.82))
-                    .frame(width: 18, height: 18)
+                    .foregroundStyle(isHovered ? tint : palette.textPrimary)
+                    .frame(width: PasteBarStyle.keySize, height: PasteBarStyle.keySize)
                     .background(
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.white.opacity(isHovered ? 0.16 : 0.08))
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(isHovered ? tint.opacity(0.16) : palette.elevatedTint)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 4)
-                                    .strokeBorder(Color.white.opacity(isHovered ? 0.28 : 0.13), lineWidth: 0.5)
+                                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                    .strokeBorder(isHovered ? tint.opacity(0.36) : palette.subtleEdge, lineWidth: 0.5)
                             )
                     )
             }
@@ -297,46 +422,39 @@ private struct PasteBarView: View {
         }
     }
 
-    private var browseHint: some View {
-        HStack(spacing: 4) {
-            keyBadge("W", active: false)
-            Text("browse")
-                .font(.system(size: 9, weight: .medium))
-                .foregroundColor(.white.opacity(0.42))
-        }
-    }
-
     private func formatPill(_ key: String, label: String, active: Bool) -> some View {
-        HStack(spacing: 5) {
+        let tint = active ? activeTint : palette.edge
+
+        return HStack(spacing: 5) {
             keyBadge(key, active: active)
             Text(label)
                 .font(.system(size: 9, weight: .medium))
-                .foregroundColor(active ? .white.opacity(0.84) : .white.opacity(0.42))
+                .foregroundStyle(active ? palette.textPrimary : palette.textMuted)
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
         .background(
             Capsule()
-                .fill(active ? Color.white.opacity(0.10) : Color.clear)
+                .fill(active ? activeTint.opacity(0.12) : Color.clear)
         )
         .overlay(
             Capsule()
-                .strokeBorder(active ? Color.white.opacity(0.16) : Color.clear, lineWidth: 0.5)
+                .strokeBorder(active ? tint.opacity(0.32) : Color.clear, lineWidth: 0.5)
         )
     }
 
     private func keyBadge(_ key: String, active: Bool) -> some View {
         Text(key)
             .font(.system(size: 9, weight: .bold, design: .monospaced))
-            .foregroundColor(active ? .white.opacity(0.95) : .white.opacity(0.56))
+            .foregroundStyle(active ? activeTint : palette.textSecondary)
             .frame(minWidth: key.count > 1 ? 34 : 18, minHeight: 18)
             .padding(.horizontal, key.count > 1 ? 2 : 0)
             .background(
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(Color.white.opacity(active ? 0.13 : 0.06))
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(active ? activeTint.opacity(0.16) : palette.elevatedTint)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 4)
-                            .strokeBorder(Color.white.opacity(active ? 0.22 : 0.10), lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .strokeBorder(active ? activeTint.opacity(0.36) : palette.subtleEdge, lineWidth: 0.5)
                     )
             )
     }

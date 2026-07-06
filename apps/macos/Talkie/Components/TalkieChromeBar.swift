@@ -297,10 +297,10 @@ private struct TalkieChromePill: View {
                     .frame(width: 70, height: 16)
                 } else {
                     Text("TALKIE")
-                        // 9.5pt / 0.24em tracking / #F3EEE6 — the studio
+                        // 9pt / ~0.26em tracking / #F3EEE6 — the studio
                         // TopBandSystem pill spec. A touch smaller + warmer
                         // than before so it sits quietly at band center.
-                        .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
                         .tracking(2.3)
                         .foregroundStyle(ChromeTone.pillForeground)
                     // No shortcut hint in the idle label — the brand
@@ -397,7 +397,7 @@ private struct ChromeNavInlineChip: View {
                     .frame(width: 12)
 
                 Text(slot.label.uppercased())
-                    .font(.system(size: 8.5, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
                     .tracking(1.4)
                     .foregroundStyle(isActive ? ChromeTone.label : ChromeTone.labelMuted)
                     .lineLimit(1)

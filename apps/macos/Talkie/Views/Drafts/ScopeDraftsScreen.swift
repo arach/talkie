@@ -810,7 +810,7 @@ struct ScopeDraftsScreen: View {
                 }
 
                 Text(isRecordingInstruction ? "STOP" : "COMMAND")
-                    .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
                     .tracking(ScopeType.Tracking.wide)
 
                 Text("⌃⇧⌘C")
@@ -1381,7 +1381,7 @@ private struct ActionListRow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 Text(disabled ? "OFFLINE" : "APPLY →")
-                    .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
                     .tracking(ScopeType.Tracking.wide)
                     .foregroundStyle(disabled ? ScopeInk.subtle : ScopeAmber.solid)
                     .opacity(hovered || disabled ? 1 : 0)

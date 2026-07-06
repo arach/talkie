@@ -2,9 +2,9 @@
 //  SidebarTooltipOverlay.swift
 //  TalkieKit
 //
-//  Renders the sidebar's compact (rail-only) hover tooltip. The shared `Sidebar`
-//  writes hover state into `SidebarTooltipState.shared`; the host mounts this
-//  view (as an overlay spanning the window) to draw the label beside the rail.
+//  Renders the sidebar's compact (rail-only) hover tooltip. The `Sidebar`
+//  writes hover state into the host-provided `SidebarTooltipState`; the host
+//  mounts this view (as an overlay spanning the window) to draw the label beside the rail.
 //  Colors are host-supplied so it matches each app's theme — the Talkie app
 //  passes its `Theme` colors, TalkieAgent passes Ops tokens.
 //
@@ -14,13 +14,19 @@ import SwiftUI
 public struct SidebarTooltipOverlay: View {
     private let surface: Color
     private let foreground: Color
-    private var tooltip: SidebarTooltipState { SidebarTooltipState.shared }
+    private let tooltip: SidebarTooltipState
     /// Measured height of the tooltip pill for vertical centering.
     @State private var tooltipHeight: CGFloat = 0
 
-    public init(surface: Color, foreground: Color) {
+    @MainActor
+    public init(
+        surface: Color,
+        foreground: Color,
+        tooltipState: SidebarTooltipState? = nil
+    ) {
         self.surface = surface
         self.foreground = foreground
+        self.tooltip = tooltipState ?? .shared
     }
 
     public var body: some View {

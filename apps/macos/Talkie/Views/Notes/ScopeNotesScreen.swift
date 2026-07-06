@@ -195,7 +195,7 @@ struct ScopeNotesScreen: View {
                 .frame(width: 160, alignment: .leading)
 
             Text(detail)
-                .font(.system(size: 12.5))
+                .font(.system(size: 12))
                 .foregroundStyle(ScopeInk.faint)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -296,7 +296,7 @@ private struct PlaceholderSheafCard: View {
 
             // Body
             Text(note.body)
-                .font(.system(size: 12.5))
+                .font(.system(size: 12))
                 .foregroundStyle(ScopeInk.faint)
                 .lineSpacing(2)
                 .lineLimit(2)
@@ -345,7 +345,7 @@ private struct PlaceholderSheafCard: View {
                     .foregroundStyle(accent ? ScopeAmber.solid : ScopeInk.subtle)
             }
             Text(label)
-                .font(.system(size: 8.5, weight: .regular, design: .monospaced))
+                .font(.system(size: 8, weight: .regular, design: .monospaced))
                 .tracking(1.4)
                 .foregroundStyle(ScopeInk.faint.opacity(0.75))
                 .monospacedDigit()
@@ -453,7 +453,7 @@ private struct SheafCard: View {
         Group {
             if let excerpt = bodyText, !excerpt.isEmpty {
                 Text(excerpt)
-                    .font(.system(size: 12.5))
+                    .font(.system(size: 12))
                     .foregroundStyle(ScopeInk.faint)
                     .lineSpacing(2)
                     .lineLimit(2)
@@ -462,7 +462,7 @@ private struct SheafCard: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 Text("Empty note.")
-                    .font(.system(size: 12.5).italic())
+                    .font(.system(size: 12).italic())
                     .foregroundStyle(ScopeInk.faint.opacity(0.55))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -499,7 +499,7 @@ private struct SheafCard: View {
                     .foregroundStyle(accent ? ScopeAmber.solid : ScopeInk.subtle)
             }
             Text(label)
-                .font(.system(size: 8.5, weight: .regular, design: .monospaced))
+                .font(.system(size: 8, weight: .regular, design: .monospaced))
                 .tracking(1.4)
                 .foregroundStyle(ScopeInk.faint.opacity(0.75))
                 .monospacedDigit()

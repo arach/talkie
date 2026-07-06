@@ -105,7 +105,7 @@ struct AgentHomeView: View {
             // you into the main area; the agent is picked there, in the input.
             HStack(spacing: 8) {
                 Text("CONVERSATIONS")
-                    .font(.system(size: 9.5, weight: .semibold))
+                    .font(.system(size: 9, weight: .semibold))
                     .tracking(1.4)
                     .foregroundStyle(ScopeInk.subtle)
 
@@ -190,7 +190,7 @@ struct AgentHomeView: View {
             Button(action: onOpenSettings) {
                 HStack(spacing: 6) {
                     Label("Settings", systemImage: "gearshape")
-                        .font(.system(size: 11.5, weight: .medium))
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(ScopeInk.faint)
                     Spacer(minLength: 0)
                 }
@@ -288,7 +288,7 @@ struct AgentHomeView: View {
                     .truncationMode(.tail)
 
                 Text(headerSubtitle)
-                    .font(.system(size: 11.5))
+                    .font(.system(size: 11))
                     .foregroundStyle(ScopeInk.faint)
                     .lineLimit(1)
             }
@@ -817,7 +817,7 @@ private struct AgentHomeConversationRow: View {
                 }
 
                 Text(topic.subtitle)
-                    .font(.system(size: 10.5, weight: .medium))
+                    .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(ScopeInk.subtle)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -850,7 +850,7 @@ private struct AgentHomeConversationRow: View {
         if topic.activeCount > 0 {
             HStack(spacing: 6) {
                 Text("working")
-                    .font(.system(size: 10.5, weight: .semibold))
+                    .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(ScopeBrass.solid)
                 Circle()
                     .fill(ScopeAmber.solid)
@@ -867,7 +867,7 @@ private struct AgentHomeConversationRow: View {
                 .frame(width: 20, alignment: .trailing)
         } else {
             Text(AgentHomeActivityStore.sidebarStamp(for: topic.lastActivityAt))
-                .font(.system(size: 10.5, weight: .medium))
+                .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(ScopeInk.subtle)
         }
     }
@@ -1130,7 +1130,7 @@ private struct AgentHomeLiveTurnRow: View {
                 .frame(width: 14, height: 14)
 
             Text(turn.liveHeadline)
-                .font(.system(size: 11.5, weight: .semibold))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(ScopeBrass.solid)
 
             if let detail = detailText {
@@ -1171,7 +1171,7 @@ private struct AgentHomeWireTrace: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(trace.primary)
-                .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
                 .foregroundStyle(primaryColor)
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -1313,7 +1313,7 @@ private struct AgentHomeSpeech: View {
                         Image(systemName: "arrow.turn.down.right")
                             .font(.system(size: 9, weight: .semibold))
                         Text("Continue")
-                            .font(.system(size: 10.5, weight: .semibold))
+                            .font(.system(size: 10, weight: .semibold))
                     }
                     .foregroundStyle(ScopeBrass.solid)
                 }
@@ -1349,7 +1349,7 @@ private struct AgentHomeAttachmentStrip: View {
                             .foregroundStyle(ScopeBrass.solid)
 
                         Text(attachment.name)
-                            .font(.system(size: 10.5, weight: .medium))
+                            .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(ScopeInk.muted)
                             .lineLimit(1)
                             .truncationMode(.middle)
@@ -1384,7 +1384,7 @@ private struct AgentHomeAvatar: View {
             .frame(width: 22, height: 22)
             .overlay(
                 Text(speaker.initial)
-                    .font(.system(size: 10.5, weight: .semibold))
+                    .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(fg)
             )
     }
@@ -1409,7 +1409,7 @@ private struct AgentHomeWorkBlock: View {
 
             HStack(spacing: 8) {
                 Text(identityLine)
-                    .font(.system(size: 10.5, design: .monospaced))
+                    .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(ScopeInk.subtle)
 
                 Spacer(minLength: 8)
@@ -1444,12 +1444,12 @@ private struct AgentHomeActionRow: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: glyphName)
-                .font(.system(size: 10.5, weight: .semibold))
+                .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(thread.status == .failed ? .red : ScopeInk.subtle)
                 .frame(width: 12, alignment: .center)
 
             Text(thread.label)
-                .font(.system(size: 11.5, weight: .medium))
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(thread.status == .waiting ? ScopeInk.subtle : ScopeInk.primary)
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -1551,7 +1551,7 @@ private struct AgentHomeIdleHero: View {
                     AgentHomeKbd(label: "⌃⌥⌘T")
                     Text("anywhere")
                 }
-                .font(.system(size: 11.5))
+                .font(.system(size: 11))
                 .foregroundStyle(ScopeInk.faint)
             }
 
@@ -1640,7 +1640,7 @@ private struct AgentHomeKbd: View {
 
     var body: some View {
         Text(label)
-            .font(.system(size: 10.5, design: .monospaced))
+            .font(.system(size: 10, design: .monospaced))
             .foregroundStyle(ScopeInk.muted)
             .padding(.horizontal, 5)
             .padding(.vertical, 1)
@@ -1695,7 +1695,7 @@ private struct AgentHomeStarterChip: View {
         Button(action: onTap) {
             HStack(spacing: 8) {
                 Text(starter.label)
-                    .font(.system(size: 11.5, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(ScopeInk.muted)
 
                 Text(starter.hint.uppercased())
@@ -1879,14 +1879,14 @@ private struct AgentHomeContinuationPill: View {
                 .font(.system(size: 9, weight: .semibold))
 
             Text(mode.title)
-                .font(.system(size: 10.5, weight: .semibold))
+                .font(.system(size: 10, weight: .semibold))
 
             Text("·")
-                .font(.system(size: 10.5, weight: .semibold))
+                .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(ScopeBrass.solid.opacity(0.65))
 
             Text(continuation.label)
-                .font(.system(size: 10.5, weight: .medium))
+                .font(.system(size: 10, weight: .medium))
                 .lineLimit(1)
                 .truncationMode(.tail)
 
@@ -1921,11 +1921,11 @@ private struct AgentHomeVoiceCaptureStatus: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 10.5, weight: .semibold))
+                    .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(titleColor)
                 if let detail {
                     Text(detail)
-                        .font(.system(size: 10.5))
+                        .font(.system(size: 10))
                         .foregroundStyle(ScopeInk.subtle)
                         .lineLimit(2)
                 }

@@ -2,9 +2,10 @@
 //  VoicePivotButton.swift
 //  Talkie iOS
 //
-//  Bottom-left ambient button. Three visual states tied to
-//  ShellChrome. Tap toggles resting ↔ expanded; long-press from
-//  expanded enters listening (walkie-talkie); release returns.
+//  Bottom-center ambient Talkie pivot. At rest it is the Talkie T
+//  summon control; after the menu unfolds it turns into the mic.
+//  Tap summons from resting, tap records from expanded, long-press
+//  from expanded enters listening (walkie-talkie); release returns.
 //  Design ref: design/studio/app/complications/ (variants
 //  voice-resting / voice-expanded / voice-listening).
 //
@@ -15,26 +16,26 @@ struct VoicePivotButton: View {
     @EnvironmentObject private var chrome: ShellChrome
     @ObservedObject private var theme = ThemeManager.shared
 
-    /// 350ms matches iOS context-menu feel — long enough that a
+    /// 350ms matches iOS context-menu feel - long enough that a
     /// slow tap doesn't fire it, short enough to feel responsive.
     private let longPressThreshold: Double = 0.35
 
     var body: some View {
-        Button(action: { chrome.tapVoiceButton() }) {
+        Button(action: handleTap) {
             ZStack {
                 Circle()
                     .fill(buttonFill)
                     .overlay(
                         Circle().strokeBorder(buttonBorder, lineWidth: buttonBorderWidth)
                     )
-                    // Brass halo ring — expanded + listening only.
+                    // Brass halo ring - expanded + listening only.
                     .overlay(
                         Circle()
                             .strokeBorder(theme.currentTheme.chrome.accentStrong, lineWidth: 3)
                             .blur(radius: 0.5)
                             .opacity(chrome.state != .resting ? 1 : 0)
-                            .scaleEffect(chrome.state != .resting ? 1.18 : 1.0)
-                            .animation(.easeOut(duration: 0.25), value: chrome.state)
+                            .scaleEffect(haloScale)
+                            .animation(.spring(response: 0.42, dampingFraction: 0.72), value: chrome.state)
                     )
                     .shadow(
                         color: shadowColor,
@@ -42,12 +43,12 @@ struct VoicePivotButton: View {
                         x: 0, y: 2
                     )
 
-                VoiceCmdGlyph()
+                TalkiePivotGlyph(isResting: chrome.state == .resting)
                     .foregroundStyle(glyphColor)
             }
-            .frame(width: 48, height: 48)
-            .scaleEffect(chrome.state == .listening ? 1.06 : 1.0)
-            .animation(.easeOut(duration: 0.18), value: chrome.state)
+            .frame(width: 56, height: 56)
+            .scaleEffect(buttonScale)
+            .animation(.spring(response: 0.34, dampingFraction: 0.72), value: chrome.state)
         }
         .buttonStyle(.plain)
         .contentShape(Circle())
@@ -67,23 +68,26 @@ struct VoicePivotButton: View {
                     chrome.longPressEnded()
                 }
         )
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-        .padding(.leading, 20)
-        // 16pt bottom inset puts this 48pt button's vertical center at
-        // ~40pt above the bottom edge — same Y as the LiquidGlassTray
-        // center and the bottom-right Keyboard CornerSlot. The three
-        // read as one horizontal chrome band, not a staircase.
-        .padding(.bottom, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        // 12pt bottom inset puts this 56pt button's vertical center at
+        // ~40pt above the bottom edge, matching the LiquidGlassTray and
+        // both bottom complication circles.
+        .padding(.bottom, 12)
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityHint("Tap to summon controls. Long-press to talk.")
+        .accessibilityHint(accessibilityHint)
     }
 
     // MARK: - State-derived styling
 
     private var buttonFill: Color {
-        chrome.state == .listening
-            ? theme.currentTheme.chrome.accent
-            : theme.colors.cardBackground
+        switch chrome.state {
+        case .resting:
+            return theme.colors.cardBackground
+        case .expanded:
+            return theme.colors.textPrimary
+        case .listening:
+            return theme.currentTheme.chrome.accent
+        }
     }
 
     private var buttonBorder: Color {
@@ -100,8 +104,8 @@ struct VoicePivotButton: View {
 
     private var glyphColor: Color {
         switch chrome.state {
-        case .resting:   return theme.colors.textSecondary
-        case .expanded:  return theme.currentTheme.chrome.accent
+        case .resting:   return theme.currentTheme.chrome.accent
+        case .expanded:  return theme.colors.background
         case .listening: return theme.colors.cardBackground
         }
     }
@@ -116,9 +120,7 @@ struct VoicePivotButton: View {
 
     private var shadowRadius: CGFloat {
         // Resting uses a small static drop-shadow; expanded + listening
-        // scale directly from theme.chrome.glowRadius with NO floor —
-        // Tactical's glowRadius:1 → matte 2pt halo; Ghost's :7 → diffuse
-        // 14pt halo; Scope's :2 → soft 4pt. Each theme's character shows.
+        // scale directly from theme.chrome.glowRadius with no floor.
         let glow = theme.currentTheme.chrome.glowRadius
         switch chrome.state {
         case .resting:   return 4
@@ -127,22 +129,77 @@ struct VoicePivotButton: View {
         }
     }
 
+    private var buttonScale: CGFloat {
+        switch chrome.state {
+        case .resting: return 1.0
+        case .expanded: return 1.04
+        case .listening: return 1.08
+        }
+    }
+
+    private var haloScale: CGFloat {
+        switch chrome.state {
+        case .resting: return 1.0
+        case .expanded: return 1.18
+        case .listening: return 1.28
+        }
+    }
+
     private var accessibilityLabel: String {
         switch chrome.state {
         case .resting:   return "Summon Talkie controls"
-        case .expanded:  return "Hold to talk"
-        case .listening: return "Listening — release to send"
+        case .expanded:  return "Record memo"
+        case .listening: return "Listening, release to send"
+        }
+    }
+
+    private var accessibilityHint: String {
+        switch chrome.state {
+        case .resting:
+            return "Tap to summon controls."
+        case .expanded:
+            return "Tap to record. Long-press to talk."
+        case .listening:
+            return "Release to send the voice command."
+        }
+    }
+
+    private func handleTap() {
+        switch chrome.state {
+        case .resting:
+            chrome.tapPivotButton()
+        case .expanded:
+            RecordingSheetController.shared.isPresented = true
+            chrome.dismissChrome()
+        case .listening:
+            break
         }
     }
 }
 
-/// Voice-command glyph — bracket-wave with center dot. Uses SF
-/// Symbol `dot.radiowaves.left.and.right` which renders the exact
-/// "((·))" shape we want, scales cleanly across button sizes, and
-/// inherits the foreground color from the parent.
-private struct VoiceCmdGlyph: View {
+/// Crossfades the brand mark into the mic as chrome unfolds. The offset and
+/// scale changes are intentionally small so it reads as a friendly handoff,
+/// not a jump cut.
+private struct TalkiePivotGlyph: View {
+    let isResting: Bool
+
     var body: some View {
-        Image(systemName: "dot.radiowaves.left.and.right")
-            .font(.system(size: 18, weight: .medium))
+        ZStack {
+            Image("TalkieT")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 27, height: 27)
+                .opacity(isResting ? 1 : 0)
+                .scaleEffect(isResting ? 1 : 0.64)
+                .rotationEffect(.degrees(isResting ? 0 : -8))
+
+            Image(systemName: "mic.fill")
+                .font(.system(size: 25, weight: .medium))
+                .opacity(isResting ? 0 : 1)
+                .scaleEffect(isResting ? 0.62 : 1)
+                .offset(y: isResting ? 7 : 0)
+        }
+        .animation(.spring(response: 0.34, dampingFraction: 0.72), value: isResting)
     }
 }

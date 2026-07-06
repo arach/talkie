@@ -17,10 +17,10 @@ struct AppShellNext<Content: View>: View {
     @StateObject private var recordingSheet = RecordingSheetController.shared
     @EnvironmentObject private var theme: ThemeManager
 
-    /// One-time discoverability: the walkie long-press has no visible hint
-    /// for sighted users (only VoicePivotButton's accessibilityHint). The
+    /// One-time discoverability: the Talkie pivot's long-press has no visible
+    /// hint for sighted users (only VoicePivotButton's accessibilityHint). The
     /// first time controls are summoned we surface a "HOLD TO TALK" caption
-    /// by the pivot, then never again.
+    /// by the center pivot, then never again.
     @AppStorage("hasSeenWalkieHint") private var hasSeenWalkieHint = false
     @State private var showWalkieHint = false
 
@@ -65,9 +65,9 @@ struct AppShellNext<Content: View>: View {
                 .allowsHitTesting(chrome.state != .resting)
                 .animation(.easeOut(duration: 0.28), value: chrome.state)
 
-            // Listening bubble — only while listening; transitions in
+            // Listening bubble - only while listening; transitions in
             // from the bottom edge to feel like it grew from the
-            // voice button.
+            // center Talkie pivot.
             if chrome.state == .listening {
                 ListeningBubble()
                     .transition(
@@ -83,17 +83,6 @@ struct AppShellNext<Content: View>: View {
                     .transition(
                         .opacity.combined(with: .move(edge: .bottom))
                     )
-            }
-
-            // Persistent MicFAB lives on the home surface — recording
-            // is the primary action there, so it's one tap regardless
-            // of chrome state. On sub-surfaces the FAB is tucked back
-            // inside the summoned tray (see LiquidGlassTray), keeping
-            // those screens focused on their own content.
-            if router.surface == .home {
-                MicFAB(size: 56)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .padding(.bottom, 12)
             }
 
             // Left-edge swipe-back: on any sub-surface, a horizontal
@@ -113,16 +102,14 @@ struct AppShellNext<Content: View>: View {
             FeedbackToastOverlay()
                 .padding(.top, 8)
 
-            // Ambient voice button — always visible, bottom-left. Pure
-            // summon affordance now (tap = chrome, long-press = voice
-            // command); recording moved to the always-visible MicFAB.
+            // Ambient Talkie pivot - always visible at bottom-center. At rest
+            // it is the Talkie T that summons chrome; as the menu unfolds it
+            // becomes the mic. Recording is no longer a persistent bottom FAB.
             // Tucks away while the Compose keyboard is raised so it doesn't
-            // sit on the keyboard's bottom-left keys. On Compose with the
-            // keyboard down it stays put — the Compose tool row reserves a
-            // matching bottom-left gap so the summon sits cleanly in it.
+            // sit on the keyboard's bottom row.
             //
-            // One-time "HOLD TO TALK" caption — rides just above the pivot
-            // button's bottom-left slot the first time controls are summoned,
+            // One-time "HOLD TO TALK" caption - rides just above the pivot
+            // button's bottom-center slot the first time controls are summoned,
             // then never again (persisted via hasSeenWalkieHint).
             if showWalkieHint && !router.isEditorKeyboardUp {
                 WalkieHintCaption()
@@ -211,8 +198,8 @@ struct AppShellNext<Content: View>: View {
             deepLinkManager.clearAction()
         case .record:
             // talkie://record + Siri's StartRecordingIntent both funnel here.
-            // Present the recording sheet via the shared controller — the
-            // same path the MicFAB and Home use — so cold-launch and
+            // Present the recording sheet via the shared controller - the
+            // same path the Home command bar uses - so cold-launch and
             // while-running deep links land on the modal.
             recordingSheet.isPresented = true
             deepLinkManager.clearAction()
@@ -237,7 +224,7 @@ struct AppShellNext<Content: View>: View {
             withAnimation(.easeOut(duration: 0.24)) { showWalkieHint = true }
             // Auto-dismiss after a few seconds if the user doesn't act.
             Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                try? await Task.sleep(for: .seconds(4))
                 guard showWalkieHint else { return }
                 withAnimation(.easeIn(duration: 0.2)) { showWalkieHint = false }
             }
@@ -422,8 +409,8 @@ private struct CanvasAmbientLight: View {
 }
 
 /// One-time "HOLD TO TALK" nudge that rides just above the pivot button's
-/// bottom-left slot. Accent smallcap in the chrome vocabulary, with a small
-/// chevron pointing down at the button it describes. Non-interactive — it's a
+/// bottom-center slot. Accent smallcap in the chrome vocabulary, with a small
+/// chevron pointing down at the button it describes. Non-interactive: it's a
 /// caption, not a control; taps fall through to whatever is beneath.
 private struct WalkieHintCaption: View {
     @ObservedObject private var theme = ThemeManager.shared
@@ -452,11 +439,10 @@ private struct WalkieHintCaption: View {
         )
         .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
         .allowsHitTesting(false)
-        .padding(.leading, 20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-        // Pivot button top ≈ 16 (bottom pad) + 48 (button) = 64; float the
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        // Pivot button top is 12 (bottom pad) + 56 (button) = 68; float the
         // caption ~8pt above that so the chevron points down at it.
-        .padding(.bottom, 72)
+        .padding(.bottom, 76)
     }
 }
 
@@ -579,8 +565,8 @@ final class AppShellRouter: ObservableObject {
     /// landing page.
     @Published var pendingLibraryTab: LibraryTab?
     /// True while Compose has the Talkie keyboard raised. The global
-    /// bottom-left summon hides itself when this is set so it doesn't
-    /// collide with the keyboard's bottom-left keys.
+    /// bottom-center pivot hides itself when this is set so it doesn't
+    /// collide with the keyboard's bottom row.
     @Published var isEditorKeyboardUp: Bool = false
     @Published var transitionDirection: TransitionDirection = .forward
 
@@ -698,6 +684,11 @@ final class AppShellRouter: ObservableObject {
     func openThemeContrast() { push(.themeContrast) }
     func openDeck() { push(.deck) }
 
+    var isComposeSurface: Bool {
+        if case .compose = surface { return true }
+        return false
+    }
+
     /// Open a new Compose document seeded with `text`. Caller doesn't
     /// pick the document ID — this generates one and stashes the seed
     /// on the router for ComposeStore to consume.
@@ -768,9 +759,9 @@ struct ReadAloudSource: Equatable {
 @MainActor
 final class ShellChrome: ObservableObject {
     enum State: Equatable {
-        case resting        // content full-bleed; only voice button visible
+        case resting        // content full-bleed; only Talkie pivot visible
         case expanded       // chrome (corners + tray) faded in
-        case listening      // voice button pulsing; listening bubble above
+        case listening      // pivot pulsing; listening bubble above
     }
 
     @Published private(set) var state: State = .resting
@@ -790,12 +781,17 @@ final class ShellChrome: ObservableObject {
         switch state {
         case .resting: return []
         case .expanded, .listening:
-            // Settings owns .topTrailing; Keyboard owns .bottomTrailing.
+            // Settings owns .topTrailing. The create tray owns both bottom
+            // corners on every non-Compose surface: Capture on the left,
+            // Keyboard on the right.
             // .topLeading is claimed by the Home pill on every sub-
             // surface (so screen back chevrons yield to make room);
             // on home itself chrome shows no top-left pill, so the
             // slot stays free for whatever the home view wants there.
-            var zones: Set<ScreenZone> = [.topTrailing, .bottomTrailing]
+            var zones: Set<ScreenZone> = [.topTrailing]
+            if !AppShellRouter.shared.isComposeSurface {
+                zones.formUnion([.bottomLeading, .bottomTrailing])
+            }
             if AppShellRouter.shared.surface != .home {
                 zones.insert(.topLeading)
             }
@@ -826,21 +822,20 @@ final class ShellChrome: ObservableObject {
         }
     }
 
-    /// Single-tap on the voice button. Toggles resting ↔ expanded.
-    /// During listening, no-op (release-from-long-press handles return).
-    func tapVoiceButton() {
+    /// Single-tap on the center pivot. From rest it unfolds chrome; once
+    /// expanded, the button itself becomes the record mic and the view handles
+    /// that tap directly.
+    func tapPivotButton() {
         switch state {
         case .resting:
             withAnimation(.easeOut(duration: 0.28)) { state = .expanded }
-        case .expanded:
-            withAnimation(.easeIn(duration: 0.20)) { state = .resting }
-        case .listening:
+        case .expanded, .listening:
             break
         }
     }
 
-    /// Long-press began on the voice button. Only valid while
-    /// expanded — long-pressing from resting would skip the visual
+    /// Long-press began on the center pivot. Only valid while
+    /// expanded - long-pressing from resting would skip the visual
     /// summon step and feel sudden.
     func longPressBegan() {
         guard state == .expanded else { return }
@@ -859,7 +854,7 @@ final class ShellChrome: ObservableObject {
         }
     }
 
-    /// Long-press ended — release-to-send. If Compose is current, the
+    /// Long-press ended - release-to-send. If Compose is current, the
     /// captured command transcript is sent into ComposeStore.
     func longPressEnded() {
         guard state == .listening else { return }

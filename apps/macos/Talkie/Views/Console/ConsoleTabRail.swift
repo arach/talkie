@@ -14,6 +14,7 @@ struct ConsoleTabRail: View {
     let errors: [String: String]
     @Binding var activeTabId: String
     let sessionPool: ConsoleSessionPool
+    var tooltipState: SidebarTooltipState = .shared
     let onNewTab: () -> Void
     let onEdit: (TabDefinition) -> Void
     let onDuplicate: (TabDefinition) -> Void
@@ -32,6 +33,7 @@ struct ConsoleTabRail: View {
                             isStale: sessionPool.isStale(tab.id),
                             hasSession: sessionPool.hasSession(tab.id),
                             sessionRunning: sessionPool.session(for: tab.id)?.isRunning ?? false,
+                            tooltipState: tooltipState,
                             onSelect: { activeTabId = tab.id },
                             onEdit: { onEdit(tab) },
                             onDuplicate: { onDuplicate(tab) },
@@ -47,7 +49,10 @@ struct ConsoleTabRail: View {
                         )
                     }
 
-                    ConsoleTabRailNewItem(action: onNewTab)
+                    ConsoleTabRailNewItem(
+                        action: onNewTab,
+                        tooltipState: tooltipState
+                    )
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 8)
@@ -86,6 +91,7 @@ enum ConsoleRailLayout {
 
 private struct ConsoleTabRailNewItem: View {
     let action: () -> Void
+    let tooltipState: SidebarTooltipState
     @State private var isHovered = false
     @State private var rowFrame: CGRect = .zero
 
@@ -126,21 +132,20 @@ private struct ConsoleTabRailNewItem: View {
             }
         }
         .onContinuousHover { phase in
-            let tooltip = SidebarTooltipState.shared
             switch phase {
             case .active:
                 isHovered = true
                 NSCursor.pointingHand.push()
                 let anchor = CGPoint(x: rowFrame.maxX, y: rowFrame.midY)
-                if tooltip.label == "New tab" {
-                    tooltip.updateAnchor(anchor)
+                if tooltipState.label == "New tab" {
+                    tooltipState.updateAnchor(anchor)
                 } else {
-                    tooltip.show(label: "New tab", anchor: anchor)
+                    tooltipState.show(label: "New tab", anchor: anchor)
                 }
             case .ended:
                 isHovered = false
                 NSCursor.pop()
-                tooltip.dismiss(matching: "New tab")
+                tooltipState.dismiss(matching: "New tab")
             }
         }
     }
@@ -153,6 +158,7 @@ private struct ConsoleTabRailItem: View {
     let isStale: Bool
     let hasSession: Bool
     let sessionRunning: Bool
+    let tooltipState: SidebarTooltipState
     let onSelect: () -> Void
     let onEdit: () -> Void
     let onDuplicate: () -> Void
@@ -208,19 +214,18 @@ private struct ConsoleTabRailItem: View {
             }
         }
         .onContinuousHover { phase in
-            let tooltip = SidebarTooltipState.shared
             switch phase {
             case .active:
                 isHovered = true
                 let anchor = CGPoint(x: rowFrame.maxX, y: rowFrame.midY)
-                if tooltip.label == tooltipLabel {
-                    tooltip.updateAnchor(anchor)
+                if tooltipState.label == tooltipLabel {
+                    tooltipState.updateAnchor(anchor)
                 } else {
-                    tooltip.show(label: tooltipLabel, anchor: anchor)
+                    tooltipState.show(label: tooltipLabel, anchor: anchor)
                 }
             case .ended:
                 isHovered = false
-                tooltip.dismiss(matching: tooltipLabel)
+                tooltipState.dismiss(matching: tooltipLabel)
             }
         }
         .contextMenu {

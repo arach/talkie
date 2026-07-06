@@ -124,6 +124,26 @@ enum WaveformStyle: Hashable {
     case particles
 }
 
+/// User-facing recording-sheet waveform. Persisted via TalkieAppSettings.
+enum RecordingWaveformPreference: String, CaseIterable, Codable, Hashable {
+    case tape
+    case particles
+
+    var displayTitle: String {
+        switch self {
+        case .tape: return "Tape"
+        case .particles: return "Particles"
+        }
+    }
+
+    var settingsHint: String {
+        switch self {
+        case .tape: return "Mag-tape head · amber track"
+        case .particles: return "Flowing red particle cloud"
+        }
+    }
+}
+
 // MARK: - Wave Style (Faked waveform using noise + amplitude)
 
 struct WaveWaveformView: View {

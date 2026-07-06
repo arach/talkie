@@ -82,6 +82,10 @@ struct SettingsNext: View {
         SettingsChoice(id: "48000", title: "48 kHz")
     ]
 
+    private static let recordingWaveformChoices: [SettingsChoice] = RecordingWaveformPreference.allCases.map {
+        SettingsChoice(id: $0.rawValue, title: $0.displayTitle)
+    }
+
     private static let appearanceModeChoices: [SettingsChoice] = [
         SettingsChoice(id: "light", title: "Light"),
         SettingsChoice(id: "dark", title: "Dark"),
@@ -491,6 +495,19 @@ struct SettingsNext: View {
                 ),
                 choices: Self.recordingSampleRateChoices,
                 hint: "Recorder preference"
+            )
+            cycleRow(
+                "Waveform",
+                selection: Binding(
+                    get: { appSettings.recordingWaveformStyle.rawValue },
+                    set: { raw in
+                        if let style = RecordingWaveformPreference(rawValue: raw) {
+                            appSettings.recordingWaveformStyle = style
+                        }
+                    }
+                ),
+                choices: Self.recordingWaveformChoices,
+                hint: appSettings.recordingWaveformStyle.settingsHint
             )
             toggleRow(
                 "Echo cancellation",

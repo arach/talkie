@@ -353,7 +353,7 @@ private struct CaptureHUDView: View {
             smallKeyCap("←")
             smallKeyCap("→")
             Text("Mode")
-                .font(.system(size: 8.5, weight: .semibold))
+                .font(.system(size: 8, weight: .semibold))
                 .tracking(1.3)
                 .foregroundColor(Color(hex: tokens.inkFaintHex))
                 .textCase(.uppercase)
@@ -414,7 +414,7 @@ private struct CaptureHUDView: View {
                 icon.view(color: iconColor, size: 18)
                 keyChip(key, isActive: isActive)
                 Text(label)
-                    .font(.system(size: 9.5, weight: .medium))
+                    .font(.system(size: 9, weight: .medium))
                     .tracking(1.2)
                     .foregroundColor(isActive ? accent : Color(hex: tokens.inkFaintHex))
                     .textCase(.uppercase)
@@ -471,7 +471,7 @@ private struct CaptureHUDView: View {
 
     private func keyChip(_ key: String, isActive: Bool = false) -> some View {
         Text(key)
-            .font(.system(size: 10.5, weight: .bold, design: .monospaced))
+            .font(.system(size: 10, weight: .bold, design: .monospaced))
             .foregroundColor(isActive ? accent : Color(hex: tokens.inkHex))
             .frame(minWidth: 18, minHeight: 16)
             .padding(.horizontal, 4)
@@ -627,11 +627,11 @@ private struct CaptureHUDView: View {
                 smallKeyCap(key, color: keyColor)
 
                 Image(systemName: systemImage)
-                    .font(.system(size: 9.5, weight: .semibold))
+                    .font(.system(size: 9, weight: .semibold))
                     .foregroundColor(keyColor.opacity(0.9))
 
                 Text(label)
-                    .font(.system(size: 8.5, weight: .medium))
+                    .font(.system(size: 8, weight: .medium))
                     .tracking(0.7)
                     .foregroundColor(foregroundColor)
                     .textCase(.uppercase)
@@ -674,7 +674,7 @@ private struct CaptureHUDView: View {
 
     private func smallKeyCap(_ key: String, color: Color? = nil) -> some View {
         Text(key)
-            .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+            .font(.system(size: 9, weight: .bold, design: .monospaced))
             .foregroundColor(color ?? Color(hex: tokens.inkHex))
             .frame(minWidth: key.count > 1 ? 24 : 14, minHeight: 14)
             .padding(.horizontal, key.count > 1 ? 3 : 0)

@@ -300,7 +300,7 @@ struct TalkieView: View {
                     Image(systemName: "trash")
                         .font(.system(size: 11, weight: .regular))
                     Text("DELETE")
-                        .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
                         .tracking(1.6)
                 }
                 .foregroundColor(deleteHovered ? Color.red : Color.red.opacity(0.70))
@@ -350,6 +350,10 @@ struct TalkieView: View {
             onShare: shareTranscript,
             onExport: exportTranscriptAsMarkdown,
             onContinueMemo: continueMemoAction,
+            pinnedWorkflows: pinnedWorkflows,
+            processingWorkflowIDs: processingWorkflowIDs,
+            onExecuteWorkflow: executeWorkflow,
+            onShowWorkflowPicker: { showingWorkflowPicker = true },
             isDirty: isDirty,
             showSavedBadge: showSavedBadge,
             onTitleChange: titleChangeAction
@@ -1121,7 +1125,13 @@ struct TalkieView: View {
     private func fetchPinnedWorkflows() async {
         do {
             let pinnedIDs = try workflowPrefsRepository.fetchPinnedIDs()
-            let workflows = pinnedIDs.compactMap { workflowService.workflow(byID: $0) }
+            let workflows = pinnedIDs
+                .compactMap { workflowService.workflow(byID: $0) }
+                .filter { workflow in
+                    workflow.isEnabled
+                        && workflow.definition.inputs.accepts(recording.type)
+                        && workflow.definition.inputs.surfaces.contains(.memoDetail)
+                }
             pinnedWorkflows = workflows
         } catch {
             log.error("Failed to fetch pinned workflows: \(error.localizedDescription)")
@@ -1313,7 +1323,7 @@ private struct ContinueMemoCTA: View {
                     .fill(Color.red)
                     .frame(width: 8, height: 8)
                 Text("CONTINUE")
-                    .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
                     .tracking(2.0)
             }
             .foregroundColor(hovered ? Color.red : Color.red.opacity(0.88))

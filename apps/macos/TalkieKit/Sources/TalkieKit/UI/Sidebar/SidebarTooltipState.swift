@@ -2,9 +2,9 @@
 //  SidebarTooltipState.swift
 //  TalkieKit
 //
-//  Window-level tooltip state for the sidebar's compact (rail-only) mode.
+//  Tooltip state for one sidebar host/window in compact (rail-only) mode.
 //  Rows emit hover events here; the host renders the tooltip above the sidebar
-//  column boundary so it's never clipped. Lives in TalkieKit so the shared
+//  column boundary so it's never clipped. Lives in TalkieKit so the reusable
 //  `Sidebar`/`SidebarRow` primitives can drive it without an app dependency.
 //
 
@@ -13,12 +13,15 @@ import SwiftUI
 @MainActor
 @Observable
 public final class SidebarTooltipState {
+    /// Compatibility fallback for standalone sidebar users. App/window hosts
+    /// should inject their own instance so hover state does not cross windows.
     public static let shared = SidebarTooltipState()
     public var label: String?
     public var anchor: CGPoint = .zero // In the host's layout coordinate space
     private var dismissTask: Task<Void, Never>?
     private var autoDismissTask: Task<Void, Never>?
-    private init() {}
+
+    public init() {}
 
     public func show(label: String, anchor: CGPoint) {
         dismissTask?.cancel()

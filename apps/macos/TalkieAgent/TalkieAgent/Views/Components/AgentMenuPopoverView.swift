@@ -566,7 +566,7 @@ private struct AgentMenuSection<Content: View>: View {
                     .shadow(color: skin.accentGlow, radius: 3)
 
                 Text(title.uppercased())
-                    .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
                     .tracking(0.5)
                     .foregroundStyle(skin.inkFaint)
 
@@ -579,7 +579,7 @@ private struct AgentMenuSection<Content: View>: View {
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 7, weight: .bold))
                         }
-                        .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
                         .foregroundStyle(skin.accent)
                         .contentShape(.rect)
                     }
@@ -619,7 +619,7 @@ private struct AgentMenuBareSection<Content: View>: View {
                     .shadow(color: skin.accentGlow, radius: 3)
 
                 Text(title.uppercased())
-                    .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
                     .tracking(0.5)
                     .foregroundStyle(skin.inkFaint)
             }
@@ -749,7 +749,7 @@ private struct AgentMenuRecentRow: View {
                 Spacer(minLength: 8)
 
                 Text(timestamp)
-                    .font(.system(size: 9.5, weight: .regular, design: .monospaced))
+                    .font(.system(size: 9, weight: .regular, design: .monospaced))
                     .foregroundStyle(skin.inkSubtle)
                     .lineLimit(1)
             }
