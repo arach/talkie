@@ -51,6 +51,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6.0.2
 
+      - name: Prepare local package checkouts
+        if: ${{ github.event_name == 'push' || inputs.component == 'all' }}
+        env:
+          HUDSON_REPO_TOKEN: ${{ secrets.HUDSON_REPO_TOKEN }}
+          HUDSON_REF: main
+          OPENSCOUT_REF: main
+        shell: bash
+        run: ./scripts/prepare-local-package-checkouts.sh
+
       - name: Select Xcode
         shell: bash
         run: |
