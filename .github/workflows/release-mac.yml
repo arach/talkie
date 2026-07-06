@@ -1,9 +1,7 @@
 name: Release Mac DMG
 
 on:
-  push:
-    tags:
-      - 'app-macos-v*'
+  # Tag-driven macOS releases run through release-app-macos.yml.
   workflow_dispatch:
     inputs:
       version:
