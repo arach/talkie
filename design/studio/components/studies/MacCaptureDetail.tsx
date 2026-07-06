@@ -13,10 +13,9 @@
  * neutral mat than warm cream.
  *
  * Composition:
- *   - Toolbar: id, source (Hyper+S region/window/fullscreen), tools.
- *   - Hero column: filename + derived caption + the screenshot itself,
+ *   - Hero column: channel/date eyebrow, filename, derived caption, and screenshot,
  *     filling the available width up to a reasonable cap.
- *   - Margin column: capture metadata + Tray status.
+ *   - Margin column: actions, workflows, capture metadata, and Tray status.
  *   - Foot rail: dimensions + filesize + Reveal-in-Finder / Delete.
  *
  * Width-aware. At 1180 the image fills the body column; at 1440+ the
@@ -60,20 +59,31 @@ const CAPTURE = {
   dimensions: "1840 × 1124",
   fileSize: "284 KB",
   derived: "Bay variant comparison · 9 schemes ladder · chiffon → porcelain",
+  actions: [
+    { label: "Copy", icon: "⧉", primary: true },
+    { label: "Export", icon: "⇩" },
+    { label: "Markup", icon: "✎" },
+    { label: "Open", icon: "↗" },
+    { label: "Pin", icon: "⌖" },
+    { label: "Share", icon: "⇧" },
+  ],
+  workflows: [
+    { label: "Describe UI", icon: "▣", color: "#5B5BFF" },
+  ],
   meta: [
     {
       title: "Capture",
       rows: [
-        { label: "source", value: "Hyper+S · region", accent: true },
-        { label: "captured", value: "Today · 9:51 AM" },
-        { label: "size", value: "284 KB · 1840×1124" },
+        { label: "source", value: "Hyper+S\nregion", accent: true },
+        { label: "captured", value: "Today\n9:51 AM" },
+        { label: "size", value: "284 KB\n1840×1124" },
       ],
     },
     {
       title: "Tray",
       rows: [
         { label: "pinned", value: "no" },
-        { label: "draining", value: "next recording" },
+        { label: "draining", value: "next\nrecording" },
       ],
     },
   ] as { title: string; rows: { label: string; value: string; accent?: boolean }[] }[],
@@ -251,7 +261,6 @@ function CaptureDetailPane({
     <>
       <LibraryListGutter width={gutterWidth} />
       <div className="flex flex-1 flex-col" style={{ background: T.pane }}>
-        <Toolbar bodyPad={bodyPad} />
         <div className="flex flex-1">
           <HeroColumn bodyPad={bodyPad} />
           <MarginColumn width={marginWidth} />
@@ -259,46 +268,6 @@ function CaptureDetailPane({
         <CaptureFootRail bodyPad={bodyPad} />
       </div>
     </>
-  );
-}
-
-function Toolbar({ bodyPad }: { bodyPad: number }) {
-  return (
-    <div
-      className="flex items-center gap-3 py-3"
-      style={{
-        borderBottom: `0.5px solid ${T.inkRuleS}`,
-        paddingLeft: bodyPad,
-        paddingRight: bodyPad,
-        background: T.pane,
-      }}
-    >
-      <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.22em]" style={{ color: T.captureTint }}>
-        {CAPTURE.sequence}
-      </span>
-      <span className="font-mono text-[9px] uppercase tracking-[0.18em]" style={{ color: T.inkFaint }}>
-        · {CAPTURE.channel}
-      </span>
-      <span className="font-mono text-[9px] uppercase tracking-[0.18em]" style={{ color: T.inkFaint }}>
-        · {CAPTURE.source}
-      </span>
-      <div className="ml-auto flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-[0.16em]" style={{ color: T.inkFaint }}>
-        <ToolButton label="Copy" />
-        <ToolButton label="Open in" />
-        <ToolButton label="Pin" />
-        <ToolButton label="Share" />
-        <span className="mx-1 h-3 w-px" style={{ background: T.inkRule }} />
-        <ToolButton label="⋯" />
-      </div>
-    </div>
-  );
-}
-
-function ToolButton({ label }: { label: string }) {
-  return (
-    <button className="rounded-[2px] px-1.5 py-0.5" style={{ color: T.inkFainter }}>
-      {label}
-    </button>
   );
 }
 
@@ -420,37 +389,114 @@ function MarginColumn({ width }: { width: number }) {
     <aside
       style={{
         width,
-        paddingLeft: 20,
-        paddingRight: 32,
+        paddingLeft: 18,
+        paddingRight: 24,
         paddingTop: 36,
         paddingBottom: 32,
         borderLeft: `0.5px solid ${T.inkRuleS}`,
         background: T.pane,
       }}
+      className="flex flex-col gap-[22px]"
     >
-      {CAPTURE.meta.map((block, i) => (
-        <div key={block.title} className={i === 0 ? "" : "mt-6"}>
-          <div className="font-mono text-[8.5px] font-semibold uppercase tracking-[0.28em]" style={{ color: T.inkFaint }}>
-            · {block.title}
-          </div>
-          <div className="mt-2 flex flex-col gap-1.5">
-            {block.rows.map((row) => (
-              <div key={row.label} className="flex items-baseline justify-between gap-3">
-                <span className="font-mono text-[9px] uppercase tracking-[0.14em]" style={{ color: T.inkFaint }}>
-                  {row.label}
-                </span>
-                <span
-                  className="font-mono text-[10px] tracking-[0.06em]"
-                  style={{ color: row.accent ? T.captureTint : T.ink }}
-                >
-                  {row.value}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+      <RailSection title="Actions">
+        {CAPTURE.actions.map((action) => (
+          <RailActionRow key={action.label} action={action} />
+        ))}
+        <div className="my-1 h-px w-full" style={{ background: T.inkRuleS }} />
+        <RailMoreRow label="More" />
+      </RailSection>
+
+      <RailSection title="Workflows">
+        {CAPTURE.workflows.map((workflow) => (
+          <WorkflowRow key={workflow.label} workflow={workflow} />
+        ))}
+      </RailSection>
+
+      {CAPTURE.meta.map((block) => (
+        <MetaBlock key={block.title} block={block} />
       ))}
     </aside>
+  );
+}
+
+function RailSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-[5px]">
+      <RailTitle>{title}</RailTitle>
+      {children}
+    </div>
+  );
+}
+
+function RailTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="pb-[3px] font-mono text-[8.5px] font-semibold uppercase tracking-[0.28em]" style={{ color: T.inkFaint }}>
+      · {children}
+    </div>
+  );
+}
+
+function RailActionRow({ action }: { action: (typeof CAPTURE.actions)[number] }) {
+  return (
+    <button
+      className="flex min-h-7 w-full items-center gap-[9px] rounded px-2 py-[5px] text-left"
+      style={{
+        color: action.primary ? T.brass : T.inkFaint,
+        background: action.primary ? "rgba(196,125,28,0.07)" : "transparent",
+      }}
+    >
+      <span className="w-4 text-center text-[12px]">{action.icon}</span>
+      <span className="truncate text-[12px]" style={{ fontWeight: action.primary ? 500 : 400 }}>
+        {action.label}
+      </span>
+    </button>
+  );
+}
+
+function RailMoreRow({ label }: { label: string }) {
+  return (
+    <button className="flex min-h-7 w-full items-center gap-[9px] rounded px-2 py-[5px] text-left" style={{ color: T.inkFaint }}>
+      <span className="w-4 text-center text-[12px]">…</span>
+      <span className="truncate text-[12px]">{label}</span>
+    </button>
+  );
+}
+
+function WorkflowRow({ workflow }: { workflow: (typeof CAPTURE.workflows)[number] }) {
+  return (
+    <button className="flex min-h-7 w-full items-center gap-[9px] rounded px-2 py-[5px] text-left" style={{ color: T.inkFaint }}>
+      <span className="w-4 text-center text-[12px]" style={{ color: workflow.color }}>{workflow.icon}</span>
+      <span className="truncate text-[12px] font-medium">{workflow.label}</span>
+    </button>
+  );
+}
+
+function MetaBlock({ block }: { block: (typeof CAPTURE.meta)[number] }) {
+  return (
+    <div>
+      <RailTitle>{block.title}</RailTitle>
+      <div className="mt-1 flex flex-col gap-2">
+        {block.rows.map((row) => (
+          <div key={row.label} className="grid items-start gap-2" style={{ gridTemplateColumns: "58px minmax(0, 1fr)" }}>
+            <span className="font-mono text-[9px] uppercase tracking-[0.14em]" style={{ color: T.inkFaint }}>
+              {row.label}
+            </span>
+            <span
+              className="whitespace-pre-line text-right font-mono text-[10px] tracking-[0.06em]"
+              style={{ color: row.accent ? T.captureTint : T.ink }}
+            >
+              {row.value}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

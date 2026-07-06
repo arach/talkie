@@ -15,9 +15,8 @@
 //  Generic over `Selection: Hashable` so the same row works for any
 //  enum-based or id-based navigation model.
 //
-//  TODO(donation): currently emits hover events to `SidebarTooltipState.shared`
-//  for the compact-mode tooltip overlay. For HudsonKit, replace that with a
-//  callback closure passed in by the host.
+//  Standalone rows default to `SidebarTooltipState.shared` for compatibility.
+//  Window hosts should pass a per-window state instance.
 //
 
 import SwiftUI
@@ -26,6 +25,7 @@ public struct SidebarRow<Selection: Hashable, Content: View>: View {
     let section: Selection
     @Binding var selectedSection: Selection?
     var tooltipLabel: String? = nil
+    var tooltipState: SidebarTooltipState
     @ViewBuilder let content: (_ isSelected: Bool) -> Content
 
     @Environment(\.sidebarTransition) private var transition
@@ -33,15 +33,18 @@ public struct SidebarRow<Selection: Hashable, Content: View>: View {
 
     @State private var isHovering = false
 
+    @MainActor
     public init(
         section: Selection,
         selectedSection: Binding<Selection?>,
         tooltipLabel: String? = nil,
+        tooltipState: SidebarTooltipState? = nil,
         @ViewBuilder content: @escaping (_ isSelected: Bool) -> Content
     ) {
         self.section = section
         self._selectedSection = selectedSection
         self.tooltipLabel = tooltipLabel
+        self.tooltipState = tooltipState ?? .shared
         self.content = content
     }
 
@@ -95,18 +98,17 @@ public struct SidebarRow<Selection: Hashable, Content: View>: View {
             case .active(let location):
                 isHovering = true
                 if transition.isCompact, let label = tooltipLabel {
-                    let tooltip = SidebarTooltipState.shared
                     let anchor = CGPoint(x: location.x + SidebarLayout.railWidth / 2, y: location.y)
-                    if tooltip.label == label {
-                        tooltip.updateAnchor(anchor)
+                    if tooltipState.label == label {
+                        tooltipState.updateAnchor(anchor)
                     } else {
-                        tooltip.show(label: label, anchor: anchor)
+                        tooltipState.show(label: label, anchor: anchor)
                     }
                 }
             case .ended:
                 isHovering = false
                 if transition.isCompact, let label = tooltipLabel {
-                    SidebarTooltipState.shared.dismiss(matching: label)
+                    tooltipState.dismiss(matching: label)
                 }
             }
         }
@@ -168,16 +170,19 @@ public struct SidebarRow<Selection: Hashable, Content: View>: View {
 public extension SidebarRow where Content == SidebarLabel {
     /// Convenience init that wires up a `SidebarLabel` as the row content
     /// and uses the title as the compact-mode tooltip.
+    @MainActor
     init(
         section: Selection,
         selectedSection: Binding<Selection?>,
         title: String,
         icon: String,
-        tooltipLabel: String? = nil
+        tooltipLabel: String? = nil,
+        tooltipState: SidebarTooltipState? = nil
     ) {
         self.section = section
         self._selectedSection = selectedSection
         self.tooltipLabel = tooltipLabel ?? title
+        self.tooltipState = tooltipState ?? .shared
         self.content = { isSelected in
             SidebarLabel(title: title, icon: icon, isSelected: isSelected)
         }

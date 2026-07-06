@@ -603,7 +603,10 @@ struct RecordingView: View {
         newMemo.lastModified = Date()
         newMemo.duration = recorder.recordingDuration
         newMemo.fileURL = url.lastPathComponent
-        newMemo.isTranscribing = false
+        // The memo is visible immediately after save, before the delayed
+        // transcription task starts. Mark it as in progress from the first
+        // save so list/detail surfaces do not flash an empty transcript.
+        newMemo.isTranscribing = true
         newMemo.sortOrder = Int32(Date().timeIntervalSince1970 * -1)
         newMemo.originDeviceId = PersistenceController.deviceId
         newMemo.autoProcessed = false  // Mark for macOS auto-run processing

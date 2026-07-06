@@ -107,6 +107,21 @@ export const STUDIO_PAGES: StudioPage[] = [
     swift: ["apps/ios/Talkie iOS/Views/WaveformView.swift"],
     blurb: "Signature voice-waveform gesture — amber centerline + travelling tape-head needle across record / transcribe / playback, with crossing ticks. Tune before the iOS waveform port (replaces the particle cloud).",
   },
+  {
+    href: "/recording-animations",
+    label: "Recording Animations",
+    bucket: "foundations",
+    platform: "cross",
+    family: "recording",
+    status: "wip",
+    swift: [
+      "apps/ios/Talkie iOS/Views/Next/RecordingSheetNext.swift",
+      "apps/ios/Talkie iOS/Views/Next/VoiceMemoDetailNext.swift",
+      "apps/macos/Talkie/Views/MacRecordingView.swift",
+      "apps/macos/Talkie/Views/RecordingCompanionSurface.swift",
+    ],
+    blurb: "Cross-platform animation canon — recording + transcribing on iPhone and Mac. iPhone waveform toggle: tape (Next) vs particles (donor).",
+  },
 
   // ── Surfaces · Mac ──────────────────────────────────────────────
   {

@@ -443,7 +443,7 @@ private struct HighlightCard: View {
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 7) {
                         Text(eyebrow)
-                            .font(.system(size: 8.5, weight: .semibold, design: .monospaced))
+                            .font(.system(size: 8, weight: .semibold, design: .monospaced))
                             .tracking(1.4)
                             .foregroundStyle(ScopeBrass.deep)
                             .lineLimit(1)
@@ -759,7 +759,7 @@ private struct StartChip: View {
                 .font(ScopeType.display(size: 15))
                 .foregroundStyle(Color.primary)
             Text(hint)
-                .font(.system(size: 9.5, weight: .regular, design: .monospaced))
+                .font(.system(size: 9, weight: .regular, design: .monospaced))
                 .foregroundStyle(ScopeInk.subtle)
         }
         .padding(.horizontal, 16)

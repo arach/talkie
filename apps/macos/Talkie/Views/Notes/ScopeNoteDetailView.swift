@@ -177,7 +177,7 @@ struct ScopeNoteDetailView: View {
             Group {
                 if isEditing {
                     TextEditor(text: $editedText)
-                        .font(.system(size: 13.5, weight: .regular, design: .default))
+                        .font(.system(size: 13, weight: .regular, design: .default))
                         .foregroundStyle(ThemedScopeInk.primary)
                         .lineSpacing(7)
                         .scrollContentBackground(.hidden)
@@ -189,7 +189,7 @@ struct ScopeNoteDetailView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         ForEach(Array(bodyParagraphs.enumerated()), id: \.offset) { _, paragraph in
                             Text(paragraph)
-                                .font(.system(size: 13.5, weight: .regular, design: .default))
+                                .font(.system(size: 13, weight: .regular, design: .default))
                                 .foregroundStyle(ThemedScopeInk.dim)
                                 .lineSpacing(7)
                                 .multilineTextAlignment(.leading)
@@ -253,7 +253,7 @@ struct ScopeNoteDetailView: View {
     private var actionsBlock: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("· ACTIONS")
-                .font(ScopeType.mono(size: 8.5, weight: .semibold))
+                .font(ScopeType.chrome)
                 .tracking(2.8)
                 .foregroundStyle(ThemedScopeInk.faint)
                 .padding(.bottom, 4)
@@ -405,7 +405,7 @@ struct ScopeNoteDetailView: View {
     private func metaBlock(title: String, rows: [(String, String, Bool)]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("· \(title.uppercased())")
-                .font(ScopeType.mono(size: 8.5, weight: .semibold))
+                .font(ScopeType.chrome)
                 .tracking(2.8)
                 .foregroundStyle(ThemedScopeInk.faint)
             VStack(alignment: .leading, spacing: 6) {
@@ -540,7 +540,7 @@ struct ScopeNoteDetailView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Text(meta.uppercased())
-                    .font(ScopeType.mono(size: 8.5, weight: .regular))
+                    .font(ScopeType.mono(size: 8, weight: .regular))
                     .tracking(1.4)
                     .foregroundStyle(ThemedScopeInk.faint)
             }

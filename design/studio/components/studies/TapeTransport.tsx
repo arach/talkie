@@ -187,6 +187,112 @@ const DEFAULTS: Tune = {
 const DECK_W = 720;
 const DECK_H = 220;
 
+/** Recording-phase embed — center head, flowing tape, crossing ticks. */
+export const TAPE_TRANSPORT_RECORDING_DEFAULTS: Tune = DEFAULTS;
+
+/**
+ * Compact tape transport for embedding (e.g. /recording-animations).
+ * Uses the same Deck + rAF loop as the full study — center head, sprocket
+ * rail, peak flashes — without the tuning rack.
+ */
+export function TapeTransportDeckEmbed({
+  className,
+  traceHeight = 112,
+  tune = DEFAULTS,
+}: {
+  className?: string;
+  traceHeight?: number;
+  tune?: Tune;
+}) {
+  const [head, setHead] = useState(0);
+  const [flashes, setFlashes] = useState<Record<number, number>>({});
+  const tuneRef = useRef(tune);
+  tuneRef.current = tune;
+  const headRef = useRef(0);
+  const lastTickRef = useRef(0);
+  const lastCrossedRef = useRef(-1);
+  const tickIdRef = useRef(0);
+
+  const fireTick = useCallback((bar: number, nowMs: number) => {
+    const tn = tuneRef.current;
+    if (nowMs - lastTickRef.current < tn.tickCadence) return;
+    lastTickRef.current = nowMs;
+    ++tickIdRef.current;
+    setFlashes((prev) => ({ ...prev, [bar]: nowMs }));
+  }, []);
+
+  useEffect(() => {
+    let raf = 0;
+    let prev = performance.now();
+    const tick = (nowMs: number) => {
+      const dt = Math.min(64, nowMs - prev) / 1000;
+      prev = nowMs;
+      const tn = tuneRef.current;
+
+      let h = headRef.current;
+      if (tn.phase === "recording") {
+        if (tn.playing) {
+          h += dt * 0.22 * tn.speed;
+          if (h >= 1) h = 0;
+        }
+      } else if (tn.phase === "transcribing") {
+        if (tn.playing) {
+          h += dt * 0.3 * tn.speed;
+          if (h >= 1) h = 0;
+        }
+      } else if (tn.playing) {
+        h += dt * 0.16 * tn.speed;
+        if (h >= 1) h = 1;
+      } else {
+        h = tn.position;
+      }
+
+      const barF = h * (BAR_COUNT - 1);
+      const curBar = Math.round(barF);
+      const lastBar = lastCrossedRef.current;
+      if (curBar !== lastBar) {
+        const lo = Math.min(lastBar, curBar);
+        const hi = Math.max(lastBar, curBar);
+        for (let b = lo; b <= hi; b++) {
+          if (b >= 0 && PEAK_SET.has(b)) {
+            fireTick(b, nowMs);
+            break;
+          }
+        }
+        lastCrossedRef.current = curBar;
+      }
+
+      headRef.current = h;
+      setHead(h);
+
+      setFlashes((prev) => {
+        let changed = false;
+        const next: Record<number, number> = {};
+        for (const k in prev) {
+          if (nowMs - prev[k] < 260) next[k] = prev[k];
+          else changed = true;
+        }
+        return changed ? next : prev;
+      });
+
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [fireTick]);
+
+  return (
+    <Deck
+      tune={tune}
+      head={head}
+      flashes={flashes}
+      deckH={traceHeight}
+      variant="embed"
+      className={className}
+    />
+  );
+}
+
 export function TapeTransport() {
   const [t, setT] = useState<Tune>(DEFAULTS);
   // Needle head position, 0..1, owned by the rAF loop.
@@ -381,15 +487,24 @@ function Deck({
   tune,
   head,
   flashes,
+  deckW = DECK_W,
+  deckH = DECK_H,
+  variant = "deck",
+  className,
 }: {
   tune: Tune;
   head: number;
   flashes: Record<number, number>;
+  deckW?: number;
+  deckH?: number;
+  variant?: "deck" | "embed";
+  className?: string;
 }) {
-  const barW = DECK_W / BAR_COUNT;
-  const cy = DECK_H / 2;
+  const barW = deckW / BAR_COUNT;
+  const cy = deckH / 2;
   const model = modelForPhase(tune.phase);
   const fixedHead = model === "fixed-head";
+  const embed = variant === "embed";
 
   // The bar currently aligned with the head (the "now" sample).
   const headBar = head * (BAR_COUNT - 1);
@@ -397,7 +512,7 @@ function Deck({
   // Needle x.
   //  · fixed-head (Recording): bolted at the tuned Head position.
   //  · travelling-head (Transcribe/Playback): tracks the head 0→1.
-  const headX = fixedHead ? headFrac(tune.headPos) * DECK_W : head * DECK_W;
+  const headX = fixedHead ? headFrac(tune.headPos) * deckW : head * deckW;
 
   // Tape flow offset (fixed-head only): translate the whole trace so the
   // bar at `headBar` lands under the bolted needle. Newest sample sits at
@@ -407,54 +522,62 @@ function Deck({
 
   return (
     <div
-      className="relative shrink-0 overflow-hidden rounded-[14px] font-mono"
+      className={cn(
+        "relative overflow-hidden font-mono",
+        embed ? "w-full shrink" : "shrink-0 rounded-[14px]",
+        className
+      )}
       style={{
-        width: DECK_W,
+        width: embed ? undefined : deckW,
         background: A.bg,
-        border: `0.5px solid ${A.edgeStrong}`,
-        boxShadow: "0 6px 22px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04)",
+        border: embed ? undefined : `0.5px solid ${A.edgeStrong}`,
+        boxShadow: embed
+          ? undefined
+          : "0 6px 22px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04)",
       }}
     >
       {/* Top strip — channel + phase + REC */}
-      <div
-        className="flex items-center justify-between px-4 py-2.5 text-[8px] font-semibold uppercase tracking-[0.22em]"
-        style={{ background: A.stripTop, color: A.inkFaint }}
-      >
-        <span>CH-01 · TAPE</span>
-        <span style={{ color: A.accent }}>{tune.phase.toUpperCase()}</span>
-        {tune.phase === "recording" ? (
-          <span className="inline-flex items-center gap-1.5" style={{ color: A.rec }}>
-            <span
-              className="inline-block h-[5px] w-[5px] rounded-full"
-              style={{ background: A.rec, boxShadow: `0 0 5px ${A.recGlow}` }}
-            />
-            REC
-          </span>
-        ) : (
-          <span style={{ color: A.inkSubtle }}>
-            {(head * 100).toFixed(0).padStart(2, "0")} %
-          </span>
-        )}
-      </div>
+      {!embed ? (
+        <div
+          className="flex items-center justify-between px-4 py-2.5 text-[8px] font-semibold uppercase tracking-[0.22em]"
+          style={{ background: A.stripTop, color: A.inkFaint }}
+        >
+          <span>CH-01 · TAPE</span>
+          <span style={{ color: A.accent }}>{tune.phase.toUpperCase()}</span>
+          {tune.phase === "recording" ? (
+            <span className="inline-flex items-center gap-1.5" style={{ color: A.rec }}>
+              <span
+                className="inline-block h-[5px] w-[5px] rounded-full"
+                style={{ background: A.rec, boxShadow: `0 0 5px ${A.recGlow}` }}
+              />
+              REC
+            </span>
+          ) : (
+            <span style={{ color: A.inkSubtle }}>
+              {(head * 100).toFixed(0).padStart(2, "0")} %
+            </span>
+          )}
+        </div>
+      ) : null}
 
       {/* Trace bay */}
-      <div className="relative" style={{ height: DECK_H }}>
+      <div className="relative" style={{ height: deckH }}>
         {/* Sprocket rail — perforated edge texture top + bottom */}
         {tune.sprocketRail ? <SprocketRail /> : null}
 
         <svg
           className="absolute inset-0 h-full w-full"
-          viewBox={`0 0 ${DECK_W} ${DECK_H}`}
+          viewBox={`0 0 ${deckW} ${deckH}`}
           preserveAspectRatio="none"
         >
           {/* faint graticule verticals */}
           {[0.25, 0.5, 0.75].map((g) => (
             <line
               key={g}
-              x1={g * DECK_W}
+              x1={g * deckW}
               y1={14}
-              x2={g * DECK_W}
-              y2={DECK_H - 14}
+              x2={g * deckW}
+              y2={deckH - 14}
               stroke={A.graticule}
               strokeWidth={0.5}
             />
@@ -471,7 +594,7 @@ function Deck({
               const captured = !fixedHead || i <= headBar;
               const peak = PEAK_SET.has(i);
               const flashing = flashes[i] !== undefined;
-              const h = v * (DECK_H * 0.42);
+              const h = v * (deckH * 0.42);
               const baseOpacity = captured ? (peak ? 0.95 : 0.62) : 0.14;
               return (
                 <line
@@ -498,7 +621,7 @@ function Deck({
           <line
             x1={0}
             y1={cy}
-            x2={DECK_W}
+            x2={deckW}
             y2={cy}
             stroke={A.accent}
             strokeWidth={tune.centerWeight}
@@ -533,15 +656,18 @@ function Deck({
         </div>
 
         {/* Phase caption */}
-        <span
-          className="absolute left-3 top-2.5 text-[7px] font-semibold uppercase tracking-[0.22em]"
-          style={{ color: A.inkFaint }}
-        >
-          {PHASES.find((p) => p.key === tune.phase)?.hint}
-        </span>
+        {!embed ? (
+          <span
+            className="absolute left-3 top-2.5 text-[7px] font-semibold uppercase tracking-[0.22em]"
+            style={{ color: A.inkFaint }}
+          >
+            {PHASES.find((p) => p.key === tune.phase)?.hint}
+          </span>
+        ) : null}
       </div>
 
       {/* Meter foot */}
+      {!embed ? (
       <div
         className="grid grid-cols-[auto_1fr_auto] items-center gap-3 px-[18px] py-3"
         style={{ borderTop: `0.5px solid ${A.edge}` }}
@@ -565,6 +691,7 @@ function Deck({
           48 kHz
         </span>
       </div>
+      ) : null}
     </div>
   );
 }

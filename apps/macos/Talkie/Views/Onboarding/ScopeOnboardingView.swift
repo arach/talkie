@@ -448,7 +448,7 @@ private struct PermissionRow: View {
 
             Button(action: action) {
                 Text(granted ? "✓ GRANTED" : "GRANT →")
-                    .font(ScopeOnboardingFonts.mono(size: 9.5))
+                    .font(ScopeOnboardingFonts.mono(size: 9))
                     .tracking(2.4)
                     .foregroundColor(ScopeOnboardingTokens.amber)
                     .padding(.horizontal, 16)
@@ -569,7 +569,7 @@ private struct ModelBlock: View {
                 Spacer()
                 Button(action: action.onTap) {
                     Text(action.label)
-                        .font(ScopeOnboardingFonts.mono(size: 9.5))
+                        .font(ScopeOnboardingFonts.mono(size: 9))
                         .tracking(2.4)
                         .foregroundColor(ScopeOnboardingTokens.amber)
                         .padding(.horizontal, 16)

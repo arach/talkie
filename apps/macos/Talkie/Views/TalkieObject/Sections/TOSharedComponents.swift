@@ -991,7 +991,7 @@ struct RecordingTranscriptCard: View {
                 Image(systemName: icon)
                     .font(.system(size: 10, weight: .regular))
                 Text(label)
-                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
                     .tracking(1.6)
             }
             .foregroundColor(
@@ -1074,7 +1074,7 @@ struct RecordingTranscriptCard: View {
                 Image(systemName: copied ? "checkmark" : "doc.on.doc")
                     .font(.system(size: 10, weight: .regular))
                 Text(copied ? "COPIED" : "COPY JSON")
-                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
                     .tracking(1.6)
             }
             .foregroundStyle(
@@ -1703,10 +1703,6 @@ enum TOFileReferenceCatalog {
             }
         }
 
-        if files.isEmpty {
-            add(directOriginal, isProblem: false, includeMissing: true)
-        }
-
         return files.sorted { lhs, rhs in
             if lhs.isProblem != rhs.isProblem { return !lhs.isProblem }
             return lhs.url.lastPathComponent.localizedStandardCompare(rhs.url.lastPathComponent) == .orderedAscending
@@ -2117,7 +2113,7 @@ struct DocumentBody: View {
     private func timestampSlot(seconds: Double?, visible: Bool, prominent: Bool) -> some View {
         if let seconds, visible {
             let label = Text(Self.formatTimestamp(seconds))
-                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
                 .tracking(1.4)
                 .foregroundStyle(
                     ScopeBrass.solid.opacity(prominent ? 0.85 : 0.55)
@@ -2134,7 +2130,7 @@ struct DocumentBody: View {
             // Invisible spacer — keeps the rule and body in a stable
             // column position even when the timestamp is hidden.
             Text("0:00")
-                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
                 .tracking(1.4)
                 .opacity(0)
         }

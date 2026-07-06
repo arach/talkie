@@ -44,6 +44,10 @@ struct TOHeaderSection: View {
     /// action row. Migrated out of the transcript-card's bottom overlay,
     /// which was clipping the label and leaving a stranded red dot.
     var onContinueMemo: (() -> Void)? = nil
+    var pinnedWorkflows: [Workflow] = []
+    var processingWorkflowIDs: Set<UUID> = []
+    var onExecuteWorkflow: (Workflow) -> Void = { _ in }
+    var onShowWorkflowPicker: () -> Void = {}
     var isDirty: Bool = false
     var showSavedBadge: Bool = false
     var onTitleChange: (() -> Void)? = nil
@@ -111,7 +115,7 @@ struct TOHeaderSection: View {
             // (Copy / Share / Export / ⋯) migrated to an inline row
             // beneath the byline so the document context owns them.
             Text(sequenceLabel)
-                .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
                 .tracking(2.2)
                 .foregroundColor(sequenceTint)
 
@@ -441,9 +445,74 @@ struct TOHeaderSection: View {
             if let showJSON {
                 jsonToggleChip(showJSON: showJSON)
             }
+            if recording.isMemo {
+                memoWorkflowActions
+            }
             Spacer(minLength: 8)
             overflowMenu
         }
+    }
+
+    @ViewBuilder
+    private var memoWorkflowActions: some View {
+        ForEach(Array(pinnedWorkflows.prefix(2))) { workflow in
+            workflowActionButton(workflow: workflow)
+        }
+
+        inlineActionButton(
+            label: "Run",
+            icon: "wand.and.stars",
+            action: onShowWorkflowPicker
+        )
+    }
+
+    private func workflowActionButton(workflow: Workflow) -> some View {
+        let hoverKey = "workflow:\(workflow.id.uuidString)"
+        let active = hoveredLabel == hoverKey
+        let isProcessing = processingWorkflowIDs.contains(workflow.id)
+        let fg = active ? Theme.current.foreground : Theme.current.foregroundSecondary
+        let border = active ? Theme.current.foreground.opacity(0.16) : Theme.current.foreground.opacity(0.10)
+
+        return Button {
+            onExecuteWorkflow(workflow)
+        } label: {
+            HStack(spacing: 5) {
+                if isProcessing {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .frame(width: 11, height: 11)
+                } else {
+                    Image(systemName: workflow.icon)
+                        .font(.system(size: 11, weight: .regular))
+                        .frame(width: 11, height: 11)
+                }
+
+                Text(workflow.name.uppercased())
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .tracking(1.6)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: 132, alignment: .leading)
+            }
+            .foregroundColor(fg)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(active ? Theme.current.foreground.opacity(0.06) : Color.clear)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 3)
+                            .stroke(border, lineWidth: 0.5)
+                    )
+            )
+            .animation(.easeOut(duration: 0.12), value: active)
+        }
+        .buttonStyle(.plain)
+        .disabled(isProcessing)
+        .onHover { hovering in
+            hoveredLabel = hovering ? hoverKey : (hoveredLabel == hoverKey ? nil : hoveredLabel)
+        }
+        .help(isProcessing ? "Running \(workflow.name)" : "Run \(workflow.name)")
     }
 
     /// Continue-memo chip — replaces the stranded red dot that used to
@@ -458,7 +527,7 @@ struct TOHeaderSection: View {
                     .fill(Color.red)
                     .frame(width: 7, height: 7)
                 Text("CONTINUE")
-                    .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
                     .tracking(1.6)
             }
             .foregroundColor(active ? Color.red : Color.red.opacity(0.85))
@@ -497,7 +566,7 @@ struct TOHeaderSection: View {
                 Image(systemName: on ? "doc.text" : "curlybraces")
                     .font(.system(size: 11, weight: .regular))
                 Text(on ? "TEXT" : "JSON")
-                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
                     .tracking(1.6)
             }
             .foregroundColor(
@@ -563,7 +632,7 @@ struct TOHeaderSection: View {
                 Image(systemName: icon)
                     .font(.system(size: 11, weight: isPrimary ? .semibold : .regular))
                 Text(label.uppercased())
-                    .font(.system(size: 9.5,
+                    .font(.system(size: 9,
                                   weight: isPrimary ? .semibold : .medium,
                                   design: .monospaced))
                     .tracking(1.6)

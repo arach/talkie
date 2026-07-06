@@ -242,6 +242,7 @@ struct DeckMirrorNext: View {
                         .frame(height: 248)
                     tileGrid(space.tiles)
                         .layoutPriority(60)
+                        .gesture(deckSpaceSwipeGesture(for: board))
                 }
                 // 40pt lets the summon button (occupies y=16..64
                 // above safe-area) barely encroach on the bottom-
@@ -367,6 +368,33 @@ struct DeckMirrorNext: View {
     private func currentSpace(in board: DeckBoardSnapshot) -> DeckSpace? {
         let target = selectedSpaceID ?? board.activeSpaceID
         return board.spaces.first { $0.id == target } ?? board.spaces.first
+    }
+
+    private func deckSpaceSwipeGesture(for board: DeckBoardSnapshot) -> some Gesture {
+        DragGesture(minimumDistance: 28, coordinateSpace: .local)
+            .onEnded { value in
+                let horizontal = value.translation.width
+                let vertical = value.translation.height
+                guard abs(horizontal) > 44,
+                      abs(horizontal) > abs(vertical) * 1.35 else {
+                    return
+                }
+
+                selectAdjacentSpace(in: board, step: horizontal < 0 ? 1 : -1)
+            }
+    }
+
+    private func selectAdjacentSpace(in board: DeckBoardSnapshot, step: Int) {
+        guard board.spaces.count > 1,
+              let current = currentSpace(in: board),
+              let index = board.spaces.firstIndex(where: { $0.id == current.id }) else {
+            return
+        }
+
+        let nextIndex = (index + step + board.spaces.count) % board.spaces.count
+        withAnimation(.easeOut(duration: 0.18)) {
+            selectedSpaceID = board.spaces[nextIndex].id
+        }
     }
 
     private func activeTileCount(in space: DeckSpace) -> Int {
@@ -670,11 +698,7 @@ struct DeckMirrorNext: View {
                 Spacer(minLength: 0)
                 Image(systemName: isDictating ? "stop.fill" : "mic")
                     .font(.system(size: 20, weight: .regular))
-                    .foregroundStyle(
-                        isDictating
-                            ? activeColor
-                            : theme.colors.textPrimary
-                    )
+                    .foregroundStyle(activeColor)
                     .frame(height: 24)
 
                 Text(isDictating ? "Stop" : tile.label)
@@ -785,17 +809,11 @@ struct DeckMirrorNext: View {
                     .foregroundStyle(activeColor)
                     .frame(height: 24)
 
-                Text(tile.label)
+                Text(tileCaption(for: tile))
                     .talkieType(.fieldValue)
                     .foregroundStyle(theme.colors.textPrimary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-
-                if let hint = tile.hint {
-                    Text(hint.uppercased())
-                        .talkieType(.channelLabelTiny)
-                        .foregroundStyle(theme.colors.textTertiary)
-                }
+                    .minimumScaleFactor(0.70)
                 Spacer(minLength: 0)
             }
         }
@@ -809,6 +827,15 @@ struct DeckMirrorNext: View {
         }
         .scaleEffect(isActive ? 1.02 : 1.0)
         .animation(.easeOut(duration: 0.18), value: isActive)
+    }
+
+    private func tileCaption(for tile: DeckTile) -> String {
+        guard let hint = tile.hint?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !hint.isEmpty else {
+            return tile.label
+        }
+
+        return "\(tile.label) · \(hint.uppercased())"
     }
 
     private func triggerResult(for tile: DeckTile) -> DeckMirrorStore.TriggerResult? {
@@ -1520,17 +1547,21 @@ private struct DeckCommandButton: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
+        let ink = isTriggering ? theme.chrome.accent : theme.chrome.panelInkFaint.opacity(0.82)
+        let fill = isTriggering ? theme.chrome.accentTint : theme.chrome.panel.opacity(0.92)
+        let stroke = isTriggering ? theme.chrome.accent.opacity(0.34) : theme.chrome.panelEdge
+
         Button(action: { onCommand(command) }) {
             HStack(spacing: showTitle ? 5 : 0) {
                 ZStack {
                     if isTriggering {
                         ProgressView()
                             .controlSize(.mini)
-                            .tint(theme.chrome.action)
+                            .tint(ink)
                     } else {
                         Image(systemName: command.icon)
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(theme.chrome.action)
+                            .foregroundStyle(ink)
                     }
                 }
                 .frame(width: 16, height: 16)
@@ -1538,7 +1569,7 @@ private struct DeckCommandButton: View {
                 if showTitle {
                     Text(command.title.uppercased())
                         .talkieType(.chipLabel)
-                        .foregroundStyle(theme.chrome.action)
+                        .foregroundStyle(ink)
                         .lineLimit(1)
                         .minimumScaleFactor(0.72)
                 }
@@ -1547,13 +1578,10 @@ private struct DeckCommandButton: View {
             .padding(.horizontal, showTitle ? 7 : 0)
             .background(
                 RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous)
-                    .fill(isTriggering ? theme.chrome.accentTint : theme.chrome.actionTint)
+                    .fill(fill)
                     .overlay(
                         RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous)
-                            .strokeBorder(
-                                isTriggering ? theme.chrome.accent.opacity(0.34) : theme.chrome.edgeFaint,
-                                lineWidth: theme.chrome.hairlineWidth
-                            )
+                            .strokeBorder(stroke, lineWidth: theme.chrome.hairlineWidth)
                     )
             )
         }

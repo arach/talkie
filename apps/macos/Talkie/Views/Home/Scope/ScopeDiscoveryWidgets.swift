@@ -37,7 +37,7 @@ struct DidYouKnowCard: View {
                         .foregroundStyle(ScopeInk.primary)
                         .lineLimit(1)
                     Text(detail)
-                        .font(.system(size: 11.5))
+                        .font(.system(size: 11))
                         .foregroundStyle(ScopeInk.faint)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)

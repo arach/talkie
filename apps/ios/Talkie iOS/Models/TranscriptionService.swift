@@ -201,22 +201,21 @@ class TranscriptionService {
     }
 
     func transcribeVoiceMemo(_ memo: VoiceMemo, context: NSManagedObjectContext) {
+        let memoObjectID = memo.objectID
+
         guard let filename = memo.fileURL else {
             AppLogger.transcription.warning("No filename for transcription")
+            clearTranscribingFlag(for: memoObjectID, context: context)
             return
         }
 
-        // Build full path from filename
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let url = documentsPath.appendingPathComponent(filename)
+        let url = URL.documentsDirectory.appending(path: filename)
 
         guard FileManager.default.fileExists(atPath: url.path) else {
             AppLogger.transcription.warning("Audio file doesn't exist at \(url.path)")
+            clearTranscribingFlag(for: memoObjectID, context: context)
             return
         }
-
-        // Store the objectID to fetch in the background context
-        let memoObjectID = memo.objectID
 
         // Set transcribing flag on main context
         context.perform {
@@ -281,6 +280,20 @@ class TranscriptionService {
                 } catch {
                     AppLogger.persistence.error("Failed to save transcription: \(error.localizedDescription)")
                 }
+            }
+        }
+    }
+
+    private func clearTranscribingFlag(for memoObjectID: NSManagedObjectID, context: NSManagedObjectContext) {
+        context.perform {
+            guard let memo = try? context.existingObject(with: memoObjectID) as? VoiceMemo else { return }
+            memo.isTranscribing = false
+
+            do {
+                try context.save()
+                VoiceMemoStore.publishChange(context: context)
+            } catch {
+                AppLogger.persistence.error("Failed to clear transcription state: \(error.localizedDescription)")
             }
         }
     }

@@ -215,7 +215,7 @@ function TopStrip({
         />
       </div>
       <span
-        className="ml-auto text-[8.5px] uppercase tracking-[0.22em]"
+        className="ml-auto text-[8px] uppercase tracking-[0.22em]"
         style={{ color: "var(--scheme-ink-faint)" }}
       >
         {showCommitCue ? "↵ capture · ⎋ dismiss" : "⎋ dismiss"}
@@ -365,7 +365,7 @@ function PrimaryCell({
       {/* Key chip — when active, the chip itself lights up so the
           keyboard feedback loop is obvious: "A is what's armed." */}
       <div
-        className="mt-2 flex items-center justify-center text-[10.5px] font-bold tabular-nums"
+        className="mt-2 flex items-center justify-center text-[10px] font-bold tabular-nums"
         style={{
           width: 22,
           height: 18,
@@ -390,7 +390,7 @@ function PrimaryCell({
 
       {/* Label */}
       <span
-        className="mt-1.5 text-[9.5px] font-medium uppercase tracking-[0.14em]"
+        className="mt-1.5 text-[9px] font-medium uppercase tracking-[0.14em]"
         style={{
           color: isActive ? lit : "var(--scheme-ink-faint)",
         }}
@@ -439,7 +439,7 @@ function ExtraCell({
       }}
     >
       <span
-        className="flex items-center justify-center text-[9.5px] font-bold tabular-nums"
+        className="flex items-center justify-center text-[9px] font-bold tabular-nums"
         style={{
           minWidth: 14,
           height: 14,

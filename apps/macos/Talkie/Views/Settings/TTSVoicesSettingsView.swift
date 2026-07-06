@@ -569,7 +569,7 @@ struct TTSVoiceCard: View {
                 .lineLimit(1)
 
             Text(voice.description)
-                .font(.system(size: 9.5))
+                .font(.system(size: 9))
                 .foregroundColor(settings.midnightTextSecondary)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)

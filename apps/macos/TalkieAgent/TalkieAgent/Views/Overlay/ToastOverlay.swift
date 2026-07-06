@@ -362,13 +362,13 @@ private struct SelectionFeedbackHUDView: View {
 
             VStack(spacing: message.detail == nil ? 0 : 2) {
                 Text(message.title)
-                    .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .tracking(0.7)
                     .foregroundColor(.white.opacity(0.96))
 
                 if let detail = message.detail, !detail.isEmpty {
                     Text(detail)
-                        .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
                         .tracking(0.35)
                         .foregroundColor(.white.opacity(0.6))
                         .lineLimit(1)

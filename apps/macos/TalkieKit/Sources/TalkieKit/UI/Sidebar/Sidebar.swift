@@ -75,6 +75,7 @@ public struct Sidebar<Selection: Hashable, RailHeader: View, LabelHeader: View, 
     let allCaps: Bool
     let labelWidth: CGFloat
     let onHeaderTap: (() -> Void)?
+    let tooltipState: SidebarTooltipState
     /// Scope-theme chrome tweak (header rule + flat rail surface). Injected by
     /// the host so this component carries no app-target dependency
     /// (SettingsManager lives in the Talkie app, not TalkieKit).
@@ -89,6 +90,7 @@ public struct Sidebar<Selection: Hashable, RailHeader: View, LabelHeader: View, 
     /// rendered alongside (and below) the selection underlay.
     @State private var hoveredID: Selection? = nil
 
+    @MainActor
     public init(
         selection: Binding<Selection?>,
         entries: [SidebarEntry<Selection>],
@@ -97,6 +99,7 @@ public struct Sidebar<Selection: Hashable, RailHeader: View, LabelHeader: View, 
         allCaps: Bool = false,
         labelWidth: CGFloat = SidebarLayout.labelWidth,
         onHeaderTap: (() -> Void)? = nil,
+        tooltipState: SidebarTooltipState? = nil,
         isScopeTheme: Bool = false,
         @ViewBuilder railHeader: @escaping () -> RailHeader,
         @ViewBuilder labelHeader: @escaping () -> LabelHeader,
@@ -109,6 +112,7 @@ public struct Sidebar<Selection: Hashable, RailHeader: View, LabelHeader: View, 
         self.allCaps = allCaps
         self.labelWidth = labelWidth
         self.onHeaderTap = onHeaderTap
+        self.tooltipState = tooltipState ?? .shared
         self.isScopeTheme = isScopeTheme
         self.railHeader = railHeader
         self.labelHeader = labelHeader
@@ -312,6 +316,7 @@ public struct Sidebar<Selection: Hashable, RailHeader: View, LabelHeader: View, 
                 accent: accent,
                 progress: progress,
                 compactBarOpacity: compactBarOpacity,
+                tooltipState: tooltipState,
                 onTap: { selection = item.id },
                 onHoverChange: { hovering in
                     updateHover(item.id, hovering: hovering)
@@ -512,6 +517,7 @@ private struct RailIcon<Selection: Hashable>: View {
     let accent: Color
     let progress: Double
     let compactBarOpacity: Double
+    let tooltipState: SidebarTooltipState
     let onTap: () -> Void
     var onHoverChange: (Bool) -> Void = { _ in }
 
@@ -560,18 +566,17 @@ private struct RailIcon<Selection: Hashable>: View {
             case .active(let location):
                 onHoverChange(true)
                 if isCompact, let label = tooltipLabel {
-                    let tooltip = SidebarTooltipState.shared
                     let anchor = CGPoint(x: location.x + SidebarLayout.railWidth / 2, y: location.y)
-                    if tooltip.label == label {
-                        tooltip.updateAnchor(anchor)
+                    if tooltipState.label == label {
+                        tooltipState.updateAnchor(anchor)
                     } else {
-                        tooltip.show(label: label, anchor: anchor)
+                        tooltipState.show(label: label, anchor: anchor)
                     }
                 }
             case .ended:
                 onHoverChange(false)
                 if isCompact, let label = tooltipLabel {
-                    SidebarTooltipState.shared.dismiss(matching: label)
+                    tooltipState.dismiss(matching: label)
                 }
             }
         }

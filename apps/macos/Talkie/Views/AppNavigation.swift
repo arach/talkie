@@ -132,6 +132,7 @@ struct AppNavigation: View {
     // Sidebar display mode
     @AppStorage("app.sidebar.iconsOnly") private var appSidebarIconsOnly = false
     @State private var didPrepareConsoleRegistry = false
+    @State private var sidebarTooltipState = SidebarTooltipState()
     @AppStorage("sidebar.isHidden") private var sidebarHidden = true
     @AppStorage("sidebar.expandedLabelWidth") private var storedExpandedLabelWidth: Double = Double(SidebarLayout.labelWidth)
     @State private var expandedLabelWidth: Double
@@ -393,7 +394,11 @@ struct AppNavigation: View {
             }
             .coordinateSpace(name: "mainLayout")
             .overlay(alignment: .topLeading) {
-                SidebarTooltipOverlay(surface: Theme.current.surfaceBase, foreground: Theme.current.foreground)
+                SidebarTooltipOverlay(
+                    surface: Theme.current.surfaceBase,
+                    foreground: Theme.current.foreground,
+                    tooltipState: sidebarTooltipState
+                )
             }
             .overlay(alignment: .center) {
                 // Big-screen recording companion. Renders on the cream
@@ -855,6 +860,7 @@ struct AppNavigation: View {
             progress: sidebarTransition.progress,
             accent: sidebarAccent,
             allCaps: settings.uiAllCaps,
+            tooltipState: sidebarTooltipState,
             isScopeTheme: SettingsManager.shared.isScopeTheme,
             handleTint: Theme.current.foreground,
             committedLabelWidth: expandedLabelWidth,
@@ -1072,7 +1078,10 @@ struct AppNavigation: View {
         case .contextRules:
             EmptyView()
         case .settings:
-            SettingsSidebarColumn(selectedSection: $selectedSettingsSection)
+            SettingsSidebarColumn(
+                selectedSection: $selectedSettingsSection,
+                tooltipState: sidebarTooltipState
+            )
         default:
             Text("Content Column")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1158,9 +1167,9 @@ struct AppNavigation: View {
                         // Scope console: rail owns the top-left identity
                         // (PhosphorDot + CONSOLE eyebrow), so we drop the
                         // universal header bar so the rail can bleed to the top.
-                        ConsoleScreen()
+                        ConsoleScreen(tooltipState: sidebarTooltipState)
                     } else {
-                        ConsoleScreen()
+                        ConsoleScreen(tooltipState: sidebarTooltipState)
                             .wrapInTalkieSection("Console")
                     }
                 case .screenshots:

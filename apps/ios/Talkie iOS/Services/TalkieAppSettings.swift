@@ -28,6 +28,7 @@ final class TalkieAppSettings {
     var recordingInputDevice = "system" { didSet { persistIfNeeded() } }
     var recordingSampleRate = "system" { didSet { persistIfNeeded() } }
     var recordingEchoCancellationEnabled = true { didSet { persistIfNeeded() } }
+    var recordingWaveformStyle: RecordingWaveformPreference = .tape { didSet { persistIfNeeded() } }
     var keyboardLEDIndicatorsEnabled = true { didSet { persistIfNeeded() } }
     var keyboardHapticFeedbackEnabled = true { didSet { persistIfNeeded() } }
     var keyboardAutoCapitalizeEnabled = true { didSet { persistIfNeeded() } }
@@ -94,6 +95,7 @@ final class TalkieAppSettings {
         recordingInputDevice = configuration.recording.inputDevice
         recordingSampleRate = configuration.recording.sampleRate
         recordingEchoCancellationEnabled = configuration.recording.echoCancellationEnabled
+        recordingWaveformStyle = RecordingWaveformPreference(rawValue: configuration.recording.waveformStyle) ?? .tape
         keyboardLEDIndicatorsEnabled = configuration.keyboard.ledIndicatorsEnabled
         keyboardHapticFeedbackEnabled = configuration.keyboard.hapticFeedbackEnabled
         keyboardAutoCapitalizeEnabled = configuration.keyboard.autoCapitalizeEnabled
@@ -154,6 +156,7 @@ final class TalkieAppSettings {
             configuration.recording.inputDevice = recordingInputDevice
             configuration.recording.sampleRate = recordingSampleRate
             configuration.recording.echoCancellationEnabled = recordingEchoCancellationEnabled
+            configuration.recording.waveformStyle = recordingWaveformStyle.rawValue
             configuration.keyboard.ledIndicatorsEnabled = keyboardLEDIndicatorsEnabled
             configuration.keyboard.hapticFeedbackEnabled = keyboardHapticFeedbackEnabled
             configuration.keyboard.autoCapitalizeEnabled = keyboardAutoCapitalizeEnabled
@@ -212,6 +215,7 @@ final class TalkieAppSettings {
         defaults.set(configuration.recording.inputDevice, forKey: "recording.inputDevice")
         defaults.set(configuration.recording.sampleRate, forKey: "recording.sampleRate")
         defaults.set(configuration.recording.echoCancellationEnabled, forKey: "recording.echoCancellation")
+        defaults.set(configuration.recording.waveformStyle, forKey: "recording.waveformStyle")
 
         defaults.set(configuration.keyboard.ledIndicatorsEnabled, forKey: "keyboard.ledIndicators")
         defaults.set(configuration.keyboard.autoCapitalizeEnabled, forKey: "keyboard.autoCapitalize")

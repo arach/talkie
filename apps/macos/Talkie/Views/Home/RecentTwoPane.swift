@@ -195,7 +195,7 @@ private struct CmdGlyphBadge: View {
             Text("⌘").foregroundColor(ScopeAmber.solid)
             Text(key).foregroundColor(ScopeInk.primary)
         }
-        .font(.system(size: 8.5, weight: .semibold, design: .monospaced))
+        .font(.system(size: 8, weight: .semibold, design: .monospaced))
         .padding(.horizontal, 4)
         .padding(.vertical, 1.5)
         .background(

@@ -39,6 +39,26 @@ private enum CapturePreviewMedia {
     }
 }
 
+private enum CaptureRailMetrics {
+    static let minWidth: CGFloat = 200
+    static let maxWidth: CGFloat = 300
+    static let widthFraction: CGFloat = 0.18
+
+    static let leadingPadding: CGFloat = 18
+    static let trailingPadding: CGFloat = 24
+    static let topPadding: CGFloat = 40
+    static let bottomPadding: CGFloat = 28
+    static let sectionSpacing: CGFloat = 22
+
+    static let iconWidth: CGFloat = 16
+    static let rowCornerRadius: CGFloat = 4
+    static let rowMinHeight: CGFloat = 28
+    static let rowHorizontalPadding: CGFloat = 8
+    static let rowVerticalPadding: CGFloat = 5
+
+    static let metaLabelWidth: CGFloat = 58
+}
+
 // MARK: - View
 
 struct ScopeCaptureDetailView: View {
@@ -56,7 +76,10 @@ struct ScopeCaptureDetailView: View {
     var body: some View {
         GeometryReader { proxy in
             let width = proxy.size.width
-            let marginWidth: CGFloat = max(200, min(300, width * 0.18))
+            let marginWidth: CGFloat = max(
+                CaptureRailMetrics.minWidth,
+                min(CaptureRailMetrics.maxWidth, width * CaptureRailMetrics.widthFraction)
+            )
             let bodyPad: CGFloat = width < 1300 ? 56 : (width * 0.06)
 
             VStack(spacing: 0) {
@@ -196,9 +219,25 @@ struct ScopeCaptureDetailView: View {
         return formatBytes(bytes)
     }
 
-    private var sizeSummary: String {
-        let parts = [fileSize, dimensions].filter { $0 != "—" && !$0.isEmpty }
-        return parts.isEmpty ? "—" : parts.joined(separator: " · ")
+    private var sourceRailValue: String {
+        sourceLabel.replacing(" · ", with: "\n")
+    }
+
+    private var capturedRailValue: String {
+        "\(dateLabel)\n\(timeLabel)"
+    }
+
+    private var sizeRailValue: String {
+        switch (fileSize, dimensions) {
+        case ("—", "—"):
+            return "—"
+        case ("—", let dimensions):
+            return dimensions
+        case (let fileSize, "—"):
+            return fileSize
+        default:
+            return "\(fileSize)\n\(dimensions)"
+        }
     }
 
     private var footerSummary: String {
@@ -526,7 +565,7 @@ struct ScopeCaptureDetailView: View {
 
                 if let extensionLabel = extensionLabel(for: attachment) {
                     Text(extensionLabel)
-                        .font(ScopeType.mono(size: 8, weight: .semibold))
+                        .font(ScopeType.chrome)
                         .tracking(1.0)
                         .foregroundStyle(ThemedScopeInk.primary)
                         .padding(.horizontal, 5)
@@ -622,15 +661,15 @@ struct ScopeCaptureDetailView: View {
 
     @ViewBuilder
     private func marginColumn(width: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: CaptureRailMetrics.sectionSpacing) {
             actionsBlock
             workflowsBlock
             metaBlock(
                 title: "Capture",
                 rows: [
-                    ("source", sourceLabel, true),
-                    ("captured", "\(dateLabel) · \(timeLabel)", false),
-                    ("size", sizeSummary, false),
+                    ("source", sourceRailValue, true),
+                    ("captured", capturedRailValue, false),
+                    ("size", sizeRailValue, false),
                 ]
             )
             metaBlock(
@@ -642,10 +681,10 @@ struct ScopeCaptureDetailView: View {
             )
             Spacer(minLength: 0)
         }
-        .padding(.leading, 20)
-        .padding(.trailing, 32)
-        .padding(.top, 40)
-        .padding(.bottom, 28)
+        .padding(.leading, CaptureRailMetrics.leadingPadding)
+        .padding(.trailing, CaptureRailMetrics.trailingPadding)
+        .padding(.top, CaptureRailMetrics.topPadding)
+        .padding(.bottom, CaptureRailMetrics.bottomPadding)
         .frame(width: width, alignment: .topLeading)
         .overlay(alignment: .leading) {
             ThemedScopeRule(.subtle, axis: .vertical)
@@ -659,7 +698,7 @@ struct ScopeCaptureDetailView: View {
             if case .image = primaryPreviewMedia {
                 CapRailAction(label: "Export", icon: "arrow.down.doc", action: exportCapture)
             }
-            CapRailAction(label: "Annotate", icon: "sparkles.rectangle.stack", action: openMarkup)
+            CapRailAction(label: "Markup", icon: "sparkles.rectangle.stack", action: openMarkup)
             CapRailAction(label: "Open",  icon: "arrow.up.right.square", action: openInDefault)
             CapRailAction(
                 label: capture.isPinned ? "Pinned" : "Pin",
@@ -734,36 +773,40 @@ struct ScopeCaptureDetailView: View {
         title: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 5) {
             railTitle(title)
-                .padding(.bottom, 4)
+                .padding(.bottom, 3)
             content()
         }
     }
 
     private func railTitle(_ title: String) -> some View {
         Text("· \(title.uppercased())")
-            .font(ScopeType.mono(size: 8.5, weight: .semibold))
+            .font(ScopeType.chrome)
             .tracking(2.8)
             .foregroundStyle(ThemedScopeInk.faint)
     }
 
     @ViewBuilder
     private func metaBlock(title: String, rows: [(String, String, Bool)]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 9) {
             railTitle(title)
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                    HStack(alignment: .firstTextBaseline) {
+                    HStack(alignment: .top, spacing: 8) {
                         Text(row.0)
                             .font(ScopeType.mono(size: 9, weight: .regular))
                             .tracking(1.4)
                             .foregroundStyle(ThemedScopeInk.faint)
-                        Spacer()
+                            .frame(width: CaptureRailMetrics.metaLabelWidth, alignment: .leading)
                         Text(row.1)
                             .font(ScopeType.mono(size: 10, weight: .regular))
                             .tracking(0.6)
                             .foregroundStyle(row.2 ? ThemedScopeAccent.capture : ThemedScopeInk.primary)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.trailing)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
                     }
                 }
             }
@@ -1066,18 +1109,22 @@ private struct CapRailAction: View {
         HStack(spacing: 9) {
             Image(systemName: icon)
                 .font(.system(size: 12, weight: (isPrimary || isActive) ? .semibold : .regular))
-                .frame(width: 14, alignment: .center)
+                .frame(width: CaptureRailMetrics.iconWidth, alignment: .center)
             Text(label)
                 .font(.system(size: 12, weight: (isPrimary || isActive) ? .medium : .regular))
+                .lineLimit(1)
+                .truncationMode(.tail)
             Spacer(minLength: 0)
         }
         .foregroundStyle(foregroundColor)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .padding(.horizontal, CaptureRailMetrics.rowHorizontalPadding)
+        .padding(.vertical, CaptureRailMetrics.rowVerticalPadding)
+        .frame(maxWidth: .infinity, minHeight: CaptureRailMetrics.rowMinHeight, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 3)
+            RoundedRectangle(cornerRadius: CaptureRailMetrics.rowCornerRadius)
                 .fill(backgroundFill)
         )
+        .contentShape(Rectangle())
     }
 
     /// Reusable label for the rail's "More" menu button so the visual
@@ -1109,14 +1156,17 @@ private struct CapRailMoreLabel: View {
         HStack(spacing: 9) {
             Image(systemName: "ellipsis")
                 .font(.system(size: 12, weight: .regular))
-                .frame(width: 14, alignment: .center)
+                .frame(width: CaptureRailMetrics.iconWidth, alignment: .center)
             Text(label)
                 .font(.system(size: 12, weight: .regular))
+                .lineLimit(1)
+                .truncationMode(.tail)
             Spacer(minLength: 0)
         }
         .foregroundStyle(ThemedScopeInk.faint)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .padding(.horizontal, CaptureRailMetrics.rowHorizontalPadding)
+        .padding(.vertical, CaptureRailMetrics.rowVerticalPadding)
+        .frame(maxWidth: .infinity, minHeight: CaptureRailMetrics.rowMinHeight, alignment: .leading)
         .contentShape(Rectangle())
     }
 }
@@ -1133,7 +1183,7 @@ private struct CapWorkflowAction: View {
             HStack(spacing: 9) {
                 Image(systemName: isRunning ? "hourglass" : workflow.icon)
                     .font(.system(size: 12, weight: .medium))
-                    .frame(width: 14, alignment: .center)
+                    .frame(width: CaptureRailMetrics.iconWidth, alignment: .center)
                     .foregroundStyle(workflow.color.color)
                 Text(workflow.name)
                     .font(.system(size: 12, weight: .medium))
@@ -1147,14 +1197,15 @@ private struct CapWorkflowAction: View {
                 }
             }
             .foregroundStyle(hovered || isRunning ? ThemedScopeInk.primary : ThemedScopeInk.faint)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
+            .padding(.horizontal, CaptureRailMetrics.rowHorizontalPadding)
+            .padding(.vertical, CaptureRailMetrics.rowVerticalPadding)
+            .frame(maxWidth: .infinity, minHeight: CaptureRailMetrics.rowMinHeight, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 3)
+                RoundedRectangle(cornerRadius: CaptureRailMetrics.rowCornerRadius)
                     .fill(isRunning ? workflow.color.color.opacity(0.14) : (hovered ? workflow.color.color.opacity(0.10) : Color.clear))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 3)
+                RoundedRectangle(cornerRadius: CaptureRailMetrics.rowCornerRadius)
                     .stroke(workflow.color.color.opacity(isRunning || hovered ? 0.24 : 0), lineWidth: 0.5)
             )
             .contentShape(Rectangle())

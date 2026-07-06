@@ -53,6 +53,7 @@ public struct ResizableSidebar<Selection: Hashable, RailHeader: View, LabelHeade
     let progress: Double
     let accent: Color
     let allCaps: Bool
+    let tooltipState: SidebarTooltipState
     /// Scope-theme chrome tweak, forwarded to the inner `Sidebar`.
     let isScopeTheme: Bool
     /// Color of the resize pill + its glow (was `Theme.current.foreground`
@@ -73,12 +74,14 @@ public struct ResizableSidebar<Selection: Hashable, RailHeader: View, LabelHeade
     @ViewBuilder let labelHeader: () -> LabelHeader
     @ViewBuilder let footer: () -> Footer
 
+    @MainActor
     public init(
         selection: Binding<Selection?>,
         entries: [SidebarEntry<Selection>],
         progress: Double,
         accent: Color = .accentColor,
         allCaps: Bool = false,
+        tooltipState: SidebarTooltipState? = nil,
         isScopeTheme: Bool = false,
         handleTint: Color = .primary,
         committedLabelWidth: Double,
@@ -101,6 +104,7 @@ public struct ResizableSidebar<Selection: Hashable, RailHeader: View, LabelHeade
         self.progress = progress
         self.accent = accent
         self.allCaps = allCaps
+        self.tooltipState = tooltipState ?? .shared
         self.isScopeTheme = isScopeTheme
         self.handleTint = handleTint
         self.committedLabelWidth = committedLabelWidth
@@ -199,6 +203,7 @@ public struct ResizableSidebar<Selection: Hashable, RailHeader: View, LabelHeade
             allCaps: allCaps,
             labelWidth: CGFloat(effectiveLabelWidth),
             onHeaderTap: onToggle,
+            tooltipState: tooltipState,
             isScopeTheme: isScopeTheme,
             railHeader: railHeader,
             labelHeader: labelHeader,
@@ -263,6 +268,7 @@ public struct ManagedResizableSidebar<Selection: Hashable, RailHeader: View, Lab
     let entries: [SidebarEntry<Selection>]
     let accent: Color
     let allCaps: Bool
+    let tooltipState: SidebarTooltipState
     let isScopeTheme: Bool
     let handleTint: Color
     let minWidth: Double
@@ -279,6 +285,7 @@ public struct ManagedResizableSidebar<Selection: Hashable, RailHeader: View, Lab
 
     @State private var isDragging = false
 
+    @MainActor
     public init(
         isCompact: Binding<Bool>,
         labelWidth: Binding<Double>,
@@ -286,6 +293,7 @@ public struct ManagedResizableSidebar<Selection: Hashable, RailHeader: View, Lab
         entries: [SidebarEntry<Selection>],
         accent: Color = .accentColor,
         allCaps: Bool = false,
+        tooltipState: SidebarTooltipState? = nil,
         isScopeTheme: Bool = false,
         handleTint: Color = .primary,
         minWidth: Double = 100,
@@ -303,6 +311,7 @@ public struct ManagedResizableSidebar<Selection: Hashable, RailHeader: View, Lab
         self.entries = entries
         self.accent = accent
         self.allCaps = allCaps
+        self.tooltipState = tooltipState ?? .shared
         self.isScopeTheme = isScopeTheme
         self.handleTint = handleTint
         self.minWidth = minWidth
@@ -322,6 +331,7 @@ public struct ManagedResizableSidebar<Selection: Hashable, RailHeader: View, Lab
             progress: isCompact ? 1 : 0,
             accent: accent,
             allCaps: allCaps,
+            tooltipState: tooltipState,
             isScopeTheme: isScopeTheme,
             handleTint: handleTint,
             committedLabelWidth: clamped(labelWidth),

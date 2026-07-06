@@ -25,6 +25,7 @@ final class RecordingSheetController: ObservableObject {
 struct RecordingSheetNext: View {
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var controller = RecordingSheetController.shared
+    @State private var appSettings = TalkieAppSettings.shared
     @StateObject private var recorder = AudioRecorderManager()
     // Live partial-transcript ticker. Rides a parallel AVAudioEngine
     // tap beside the AVAudioRecorder — preview only; the saved
@@ -153,23 +154,24 @@ struct RecordingSheetNext: View {
 
     // MARK: - Recording
 
+    private var recordingWaveformUsesParticles: Bool {
+        appSettings.recordingWaveformStyle == .particles
+    }
+
+    private var recordingWaveformColor: Color {
+        recordingWaveformUsesParticles ? .recording : theme.currentTheme.chrome.accent
+    }
+
     private var recordingBody: some View {
         VStack(spacing: 14) {
-            // Mag-tape waveform driven by AudioRecorderManager: VU bars
-            // stream from the tape head over the amber track. Shows a bare
-            // track until mic levels arrive.
-            TapeWaveformView(
-                levels: recorder.audioLevels,
-                height: 56,
-                color: theme.currentTheme.chrome.accent
-            )
-            .frame(height: 56)
-            .padding(.horizontal, -20)
+            recordingWaveform
+                .frame(height: 56)
+                .padding(.horizontal, -20)
 
             liveTranscriptPreview
 
             HStack(spacing: 10) {
-                RecordingPulse(color: theme.currentTheme.chrome.accent, size: 8)
+                RecordingPulse(color: recordingWaveformColor, size: 8)
                 Text(timeString(recorder.recordingDuration))
                     .talkieType(.instrumentReadout)
                     .foregroundStyle(theme.colors.textPrimary)
@@ -211,6 +213,24 @@ struct RecordingSheetNext: View {
             .padding(.bottom, 22)
         }
         .padding(.top, 4)
+    }
+
+    @ViewBuilder
+    private var recordingWaveform: some View {
+        if recordingWaveformUsesParticles {
+            ParticlesWaveformView(
+                levels: recorder.audioLevels,
+                height: 56,
+                color: .recording
+            )
+            .background(theme.colors.cardBackground.opacity(0.35))
+        } else {
+            TapeWaveformView(
+                levels: recorder.audioLevels,
+                height: 56,
+                color: theme.currentTheme.chrome.accent
+            )
+        }
     }
 
     // Two-line live transcript ticker beneath the waveform. The slot
@@ -647,7 +667,10 @@ struct RecordingSheetNext: View {
         memo.lastModified = Date()
         memo.duration = savedDuration
         memo.fileURL = url.lastPathComponent
-        memo.isTranscribing = false
+        // The detail screen may open before TranscriptionService has had a
+        // chance to flip the flag. Start optimistic so the first frame reads
+        // as "working" instead of empty.
+        memo.isTranscribing = true
         memo.sortOrder = Int32(Date().timeIntervalSince1970 * -1)
         memo.originDeviceId = PersistenceController.deviceId
         memo.autoProcessed = false

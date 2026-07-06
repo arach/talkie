@@ -507,6 +507,34 @@
     };
   }
 
+  function viewportToScreen(x, y) {
+    const rect = canvas.getBoundingClientRect();
+    const v = state.viewport;
+    return {
+      x: rect.left + v.panX + x * v.zoom,
+      y: rect.top + v.panY + y * v.zoom,
+    };
+  }
+
+  function textEditScreenRect(layer, fallbackX, fallbackY) {
+    if (layer && layer.frame) {
+      const size = viewportSize();
+      const origin = viewportToScreen(layer.frame.x * size.w, layer.frame.y * size.h);
+      return {
+        x: origin.x,
+        y: origin.y,
+        width: layer.frame.width * size.w * Math.max(0.25, state.viewport.zoom || 1),
+        height: layer.frame.height * size.h * Math.max(0.25, state.viewport.zoom || 1),
+      };
+    }
+    return {
+      x: fallbackX || 0,
+      y: fallbackY || 0,
+      width: 0,
+      height: 0,
+    };
+  }
+
   /** Convert a mouse event to normalized viewport coordinates. No clamp:
    *  users may drag into the surrounding workspace, and pan/zoom can expose
    *  off-viewport space while the drag is in progress. */
@@ -2457,8 +2485,8 @@
   // ---------------------------------------------------------------------------
   // Inline text editor
   //
-  // A real, focused <input> floated over the canvas at the click point. The
-  // committed value becomes the label layer's text. Replaces window.prompt,
+  // A real, focused <input> floated over the label frame. The committed value
+  // becomes the label layer's text. Replaces window.prompt,
   // which silently no-ops inside WKWebView. While it's focused the global
   // keydown guard treats real text fields as off-limits, and tool shortcuts now
   // require the Option-T prefix chord, so typing "rect"/"text"/etc. lands as
@@ -2471,16 +2499,19 @@
 
     const input = document.createElement("input");
     input.type = "text";
-    input.value = layer.text || "";
+    input.value = layer.text || layer.label || "";
     input.setAttribute("data-inline-text", "1");
     const fs = typeof layer.fontSize === "number" ? layer.fontSize : 16;
     const textStyle = labelStyle(layer);
+    const editRect = textEditScreenRect(layer, screenX, screenY);
     Object.assign(input.style, {
       position: "fixed",
-      left: Math.round(screenX) + "px",
-      top: Math.round(screenY) + "px",
+      left: Math.round(editRect.x) + "px",
+      top: Math.round(editRect.y) + "px",
       zIndex: "9999",
       minWidth: "120px",
+      width: Math.max(120, Math.round(editRect.width || 0)) + "px",
+      boxSizing: "border-box",
       font:
         (layer.bold ? "600 " : "") +
         (layer.italic ? "italic " : "") +
@@ -2506,18 +2537,24 @@
       if (done) return;
       done = true;
       const val = input.value.trim();
+      const oldVal = layer.text || layer.label || "";
       input.remove();
       activeTextEditor = null;
-      if (keep && val) {
-        layer.text = val;
-        debouncedUpdate();
-      } else {
-        // Empty / cancelled — drop the placeholder layer so a stray click
-        // with the text tool never litters the doc with empty labels.
+      if (keep && (!isNew || val)) {
+        if (val !== oldVal) {
+          if (!isNew) snapshotForUndo();
+          layer.text = val;
+          layer.label = val;
+          layer.author = "user";
+          debouncedUpdate();
+        }
+      } else if (isNew) {
+        // Empty / cancelled new label — drop the placeholder layer so a stray
+        // click with the text tool never litters the doc with empty labels.
         const idx = state.document.layers.findIndex((l) => l.id === layer.id);
         if (idx >= 0) state.document.layers.splice(idx, 1);
         if (state.selectedLayerId === layer.id) state.selectedLayerId = null;
-        if (isNew) debouncedUpdate();
+        debouncedUpdate();
       }
       render();
     };
@@ -2539,6 +2576,16 @@
 
   function cancelTextEdit() {
     if (activeTextEditor) activeTextEditor.commit(true);
+  }
+
+  function beginSelectedLabelEdit() {
+    const layer = selectedLayer();
+    if (!layer || layer.kind !== "label") return false;
+    setActiveTool(null);
+    state.selectedLayerId = layer.id;
+    render();
+    beginTextEdit(layer, null, null, /*isNew*/ false);
+    return true;
   }
 
   // ---------------------------------------------------------------------------
@@ -2621,6 +2668,9 @@
             zoom: state.viewport.zoom,
             w: state.viewport.width,
             h: state.viewport.height,
+            didSnapshot: true,
+            didMove: false,
+            editOnClick: false,
           };
         } else if (copy.from && copy.to) {
           state.segDrag = makeSegDrag(copy, "both", e, size);
@@ -2652,12 +2702,9 @@
     }
 
     const hit = hitTest(norm);
+    const editOnClick = Boolean(already && hit && already.id === hit.id && hit.kind === "label");
     state.selectedLayerId = hit ? hit.id : null;
     if (hit && hit.frame) {
-      // Snapshot before the move; if the user doesn't actually drag,
-      // the snapshot just becomes harmless redundancy. Undo will skip
-      // identical states quickly enough at HISTORY_LIMIT = 50.
-      snapshotForUndo();
       state.drag = {
         layerId: hit.id,
         startX: e.clientX,
@@ -2666,6 +2713,9 @@
         zoom: state.viewport.zoom,
         w: state.viewport.width,
         h: state.viewport.height,
+        didSnapshot: false,
+        didMove: false,
+        editOnClick,
       };
     } else if (hit && hit.from && hit.to) {
       // Whole-segment move — drag the body to translate both endpoints.
@@ -2817,6 +2867,13 @@
     if (!layer || !layer.frame) return;
     const dx = (e.clientX - state.drag.startX) / state.drag.zoom / state.drag.w;
     const dy = (e.clientY - state.drag.startY) / state.drag.zoom / state.drag.h;
+    const dist = Math.hypot(e.clientX - state.drag.startX, e.clientY - state.drag.startY);
+    if (!state.drag.didSnapshot && dist < MIN_DRAG_PX) return;
+    if (!state.drag.didSnapshot) {
+      snapshotForUndo();
+      state.drag.didSnapshot = true;
+    }
+    state.drag.didMove = true;
     layer.frame.x = state.drag.orig.x + dx;
     layer.frame.y = state.drag.orig.y + dy;
     layer.author = "user";
@@ -2882,8 +2939,13 @@
       return;
     }
     if (state.drag) {
+      const drag = state.drag;
+      const layer = state.document.layers.find((l) => l.id === drag.layerId);
       state.drag = null;
-      debouncedUpdate();
+      if (drag.didSnapshot) debouncedUpdate();
+      if (drag.editOnClick && !drag.didMove && layer && layer.kind === "label") {
+        beginTextEdit(layer, null, null, /*isNew*/ false);
+      }
     }
   });
 
@@ -2896,6 +2958,8 @@
         ? "Remove from next message"
         : "Add to next message";
     }
+    const editButton = popover.querySelector('[data-action="edit-text"]');
+    if (editButton) editButton.hidden = layer.kind !== "label";
     popover.classList.remove("hidden");
     popover.style.left = clientX + "px";
     popover.style.top = clientY + "px";
@@ -2937,6 +3001,11 @@
     if (action === "attach") {
       toggleMessageLayer(state.document.layers[idx]);
       popover.classList.add("hidden");
+      return;
+    }
+    if (action === "edit-text") {
+      popover.classList.add("hidden");
+      beginSelectedLabelEdit();
       return;
     }
     snapshotForUndo();
@@ -3002,6 +3071,13 @@
     }
 
     if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+    if (e.key === "Enter" || e.key === "Return") {
+      if (beginSelectedLabelEdit()) {
+        e.preventDefault();
+        return;
+      }
+    }
 
     if (e.key === "Escape") {
       cancelMarkupInteraction();

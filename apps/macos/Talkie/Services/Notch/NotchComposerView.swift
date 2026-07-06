@@ -2391,7 +2391,7 @@ private struct NotchTrayExtensionSurface: View {
                         DossierCardView(
                             item: item,
                             imageHeight: activeRows == 1 ? 42 : 50,
-                            fontSize: activeRows == 1 ? 7 : 7.5
+                            fontSize: activeRows == 1 ? 7 : 8
                         )
                         .frame(width: previewCardWidth, height: previewCardHeight)
                         .clipped()

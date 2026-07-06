@@ -11,6 +11,8 @@ import SwiftUI
 import TalkieKit
 
 struct ConsoleScreen: View {
+    var tooltipState: SidebarTooltipState = .shared
+
     @State private var registry = TabDefinitionRegistry.shared
     @State private var pool = ConsoleSessionPool.shared
     @State private var showSettings = false
@@ -51,6 +53,7 @@ struct ConsoleScreen: View {
                             set: { registry.activeTabId = $0 }
                         ),
                         sessionPool: pool,
+                        tooltipState: tooltipState,
                         onNewTab: { showTabEditor = true; editingTab = nil },
                         onEdit: { tab in editingTab = tab; showTabEditor = true },
                         onDuplicate: { tab in

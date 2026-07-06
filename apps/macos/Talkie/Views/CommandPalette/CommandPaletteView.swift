@@ -443,7 +443,7 @@ private struct CommandRow: View {
                 // line was a duplicate of the section header above it.
                 // Title alone keeps the list scannable and crisp.
                 Text(command.title)
-                    .font(.system(size: 13.5, weight: isSelected ? .semibold : .regular))
+                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                     .foregroundStyle(isHighlighted ? ScopePalette.ink : ScopePalette.ink.opacity(0.86))
 
                 Spacer()
