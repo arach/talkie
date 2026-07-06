@@ -791,7 +791,7 @@
 				CODE_SIGN_ENTITLEMENTS = TalkieShare/TalkieShare.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 25;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TalkieShare/Info.plist;
@@ -803,7 +803,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.5.30;
+				MARKETING_VERSION = 2.5.31;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_IOS_SHARE_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -822,7 +822,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 25;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TalkieWatchWidget/Info.plist;
@@ -834,7 +834,7 @@
 					"@executable_path/../../Frameworks",
 					"@executable_path/../../../../Frameworks",
 				);
-				MARKETING_VERSION = 2.5.30;
+				MARKETING_VERSION = 2.5.31;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_WATCH_WIDGET_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -854,7 +854,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 25;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TalkieWatchWidget/Info.plist;
@@ -866,7 +866,7 @@
 					"@executable_path/../../Frameworks",
 					"@executable_path/../../../../Frameworks",
 				);
-				MARKETING_VERSION = 2.5.30;
+				MARKETING_VERSION = 2.5.31;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_WATCH_WIDGET_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -1010,7 +1010,7 @@
 				CODE_SIGN_ENTITLEMENTS = "Talkie iOS/talkie.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 25;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				ENABLE_PREVIEWS = YES;
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
@@ -1034,7 +1034,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.5.30;
+				MARKETING_VERSION = 2.5.31;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_IOS_APP_BUNDLE_ID)";
 				PRODUCT_NAME = "Talkie iOS";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1056,7 +1056,7 @@
 				CODE_SIGN_ENTITLEMENTS = "Talkie iOS/talkie.release.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 25;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				ENABLE_PREVIEWS = YES;
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
@@ -1080,7 +1080,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.5.30;
+				MARKETING_VERSION = 2.5.31;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_IOS_APP_BUNDLE_ID)";
 				PRODUCT_NAME = "Talkie iOS";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1099,11 +1099,11 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 25;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 2.5.30;
+				MARKETING_VERSION = 2.5.31;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_IOS_TESTS_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -1119,11 +1119,11 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 25;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 2.5.30;
+				MARKETING_VERSION = 2.5.31;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_IOS_TESTS_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -1138,10 +1138,10 @@
 			baseConfigurationReference = F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 25;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 2.5.30;
+				MARKETING_VERSION = 2.5.31;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_IOS_UITESTS_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -1156,10 +1156,10 @@
 			baseConfigurationReference = F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 25;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 2.5.30;
+				MARKETING_VERSION = 2.5.31;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_IOS_UITESTS_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -1176,7 +1176,7 @@
 				CODE_SIGN_ENTITLEMENTS = TalkieKeys/TalkieKeys.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 25;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TalkieKeys/Info.plist;
@@ -1188,7 +1188,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.5.30;
+				MARKETING_VERSION = 2.5.31;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_IOS_KEYS_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -1208,7 +1208,7 @@
 				CODE_SIGN_ENTITLEMENTS = TalkieKeys/TalkieKeys.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 25;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TalkieKeys/Info.plist;
@@ -1220,7 +1220,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.5.30;
+				MARKETING_VERSION = 2.5.31;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_IOS_KEYS_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -1242,7 +1242,7 @@
 				CODE_SIGN_ENTITLEMENTS = TalkieWidgetExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 25;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TalkieWidget/Info.plist;
@@ -1253,7 +1253,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.5.30;
+				MARKETING_VERSION = 2.5.31;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_IOS_WIDGET_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -1272,7 +1272,7 @@
 				CODE_SIGN_ENTITLEMENTS = TalkieWidgetExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 25;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TalkieWidget/Info.plist;
@@ -1283,7 +1283,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.5.30;
+				MARKETING_VERSION = 2.5.31;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_IOS_WIDGET_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -1302,7 +1302,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 25;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1316,7 +1316,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.5.30;
+				MARKETING_VERSION = 2.5.31;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_WATCH_APP_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -1337,7 +1337,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 25;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1351,7 +1351,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.5.30;
+				MARKETING_VERSION = 2.5.31;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_WATCH_APP_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -1371,7 +1371,7 @@
 				CODE_SIGN_ENTITLEMENTS = TalkieShare/TalkieShare.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 25;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TalkieShare/Info.plist;
@@ -1383,7 +1383,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.5.30;
+				MARKETING_VERSION = 2.5.31;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_IOS_SHARE_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
