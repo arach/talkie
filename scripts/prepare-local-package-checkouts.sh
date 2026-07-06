@@ -10,6 +10,30 @@ ROOT_DIR="$(cd "$ROOT_DIR" && pwd)"
 SIBLING_ROOT="${TALKIE_SIBLING_ROOT:-$(cd "$ROOT_DIR/.." && pwd)}"
 HUDSON_REF="${HUDSON_REF:-main}"
 OPENSCOUT_REF="${OPENSCOUT_REF:-main}"
+SSH_KEY_FILES=()
+
+cleanup_ssh_keys() {
+    if [ "${#SSH_KEY_FILES[@]}" -eq 0 ]; then
+        return
+    fi
+
+    for key_file in "${SSH_KEY_FILES[@]}"; do
+        rm -f "$key_file"
+    done
+}
+trap cleanup_ssh_keys EXIT
+
+write_ssh_key() {
+    local label="$1"
+    local key_contents="$2"
+    local key_file
+
+    key_file="$(mktemp "${RUNNER_TEMP:-/tmp}/talkie-${label}-key.XXXXXX")"
+    printf '%s\n' "$key_contents" > "$key_file"
+    chmod 600 "$key_file"
+    SSH_KEY_FILES+=("$key_file")
+    printf '%s' "$key_file"
+}
 
 clone_with_optional_token() {
     local repo="$1"
@@ -34,6 +58,23 @@ clone_with_optional_token() {
     git -C "$destination" checkout --quiet --detach FETCH_HEAD
 }
 
+clone_with_deploy_key() {
+    local repo="$1"
+    local ref="$2"
+    local destination="$3"
+    local key_contents="$4"
+    local key_file
+
+    key_file="$(write_ssh_key "${repo//\//-}" "$key_contents")"
+
+    mkdir -p "$destination"
+    git -C "$destination" init --quiet
+    git -C "$destination" remote add origin "git@github.com:${repo}.git"
+    GIT_SSH_COMMAND="ssh -i $key_file -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
+        git -C "$destination" fetch --depth 1 origin "$ref"
+    git -C "$destination" checkout --quiet --detach FETCH_HEAD
+}
+
 prepare_checkout() {
     local label="$1"
     local repo="$2"
@@ -54,10 +95,12 @@ prepare_checkout() {
     fi
 
     local token=""
+    local deploy_key=""
     if [ "$private_repo" = "true" ]; then
+        deploy_key="${HUDSON_DEPLOY_KEY:-}"
         token="${HUDSON_REPO_TOKEN:-}"
-        if [ -z "$token" ] && [ "${CI:-}" = "true" ]; then
-            echo "Missing HUDSON_REPO_TOKEN for private $repo checkout." >&2
+        if [ -z "$deploy_key" ] && [ -z "$token" ] && [ "${CI:-}" = "true" ]; then
+            echo "Missing HUDSON_DEPLOY_KEY or HUDSON_REPO_TOKEN for private $repo checkout." >&2
             echo "Create a repository or release-environment secret with read access to $repo." >&2
             exit 1
         fi
@@ -67,7 +110,9 @@ prepare_checkout() {
     echo "Cloning $label ($repo@$ref) into $destination"
     mkdir -p "$(dirname "$destination")"
 
-    if command -v gh >/dev/null 2>&1 && [ -z "$token" ] && gh auth status >/dev/null 2>&1; then
+    if [ -n "$deploy_key" ]; then
+        clone_with_deploy_key "$repo" "$ref" "$destination" "$deploy_key"
+    elif command -v gh >/dev/null 2>&1 && [ -z "$token" ] && gh auth status >/dev/null 2>&1; then
         gh repo clone "$repo" "$destination" -- --no-checkout
         git -C "$destination" fetch --depth 1 origin "$ref"
         git -C "$destination" checkout --quiet --detach FETCH_HEAD
