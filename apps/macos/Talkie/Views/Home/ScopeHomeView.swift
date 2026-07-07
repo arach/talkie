@@ -19,6 +19,7 @@ import TalkieKit
 // Display + mono font lookups centralized in `ScopeType` (TalkieKit/UI/ScopeDesign.swift).
 
 struct ScopeHomeView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.chromeBarHeader) private var chromeBarHeader
 
     let unifiedActivity: [UnifiedActivityItem]
@@ -41,14 +42,18 @@ struct ScopeHomeView: View {
     @AppStorage("scopeAgentBay.heatmap")   private var bayHeatmap: Bool = false
     @AppStorage("scopeAgentBay.timeline")  private var bayTimeline: Bool = false
     @AppStorage("scopeAgentBay.brackets")  private var bayBrackets: Bool = false
-    // Default to CARBON so the top instrument continues the dark Scope
-    // chassis instead of reverting to a light insert.
-    @AppStorage("scopeAgentBay.scheme")    private var bayScheme: String = BayScheme.carbon.rawValue
-    @AppStorage("scopeAgentBay.migratedDefaultCarbon") private var didMigrateBayDefaultToCarbon: Bool = false
+    // Default follows appearance: a light printed-instrument bay in
+    // light mode, the carbon electronics bay only in dark mode.
+    @AppStorage("scopeAgentBay.scheme")    private var bayScheme: String = BayScheme.pearl.rawValue
+    @AppStorage("scopeAgentBay.migratedDefaultLightPanel") private var didMigrateBayDefaultToLightPanel: Bool = false
     // Migration fallback: users with deprecated stored values
     // (graphite/pewter/ash/stone — dropped 2026-05-17) decode to nil
-    // and should land on the Scope canonical, not the original amber.
-    private var currentScheme: BayScheme { BayScheme(rawValue: bayScheme) ?? .carbon }
+    // and should land on the appearance default, not the original amber.
+    private var currentScheme: BayScheme { BayScheme(rawValue: bayScheme) ?? defaultBayScheme }
+
+    private var defaultBayScheme: BayScheme {
+        colorScheme == .dark ? .carbon : .pearl
+    }
 
     @State private var memosStore = MemosViewModel.shared
     @State private var dictationStore = DictationStore.shared
@@ -147,11 +152,13 @@ struct ScopeHomeView: View {
     }
 
     private func migrateDefaultBaySchemeIfNeeded() {
-        guard !didMigrateBayDefaultToCarbon else { return }
-        if bayScheme == BayScheme.chiffon.rawValue {
-            bayScheme = BayScheme.carbon.rawValue
+        guard !didMigrateBayDefaultToLightPanel else { return }
+        if BayScheme(rawValue: bayScheme) == nil {
+            bayScheme = defaultBayScheme.rawValue
+        } else if colorScheme != .dark, bayScheme == BayScheme.carbon.rawValue {
+            bayScheme = defaultBayScheme.rawValue
         }
-        didMigrateBayDefaultToCarbon = true
+        didMigrateBayDefaultToLightPanel = true
     }
 
     /// Streak + word count promoted to inline chrome — the longer
@@ -974,7 +981,7 @@ struct ScopeHomeView: View {
         SystemStatusRail(scheme: currentScheme)
     }
 
-    // MARK: - Agent panel (dark instrument bay in the cream)
+    // MARK: - Agent panel (appearance-aware instrument bay)
 
     private var agentPanel: some View {
         let scheme = currentScheme
@@ -1182,9 +1189,13 @@ struct ScopeHomeView: View {
     private var wordsFormatted: String {
         if totalWords >= 1000 {
             let k = Double(totalWords) / 1000
-            return String(format: "%.1fk", k)
+            return k.formatted(
+                .number
+                    .grouping(.automatic)
+                    .precision(.fractionLength(0...1))
+            ) + "k"
         }
-        return "\(totalWords)"
+        return ScopeType.statCount(totalWords)
     }
 
     // MARK: - Treatment toggle strip (DEBUG + Design Mode only)
@@ -1222,7 +1233,7 @@ struct ScopeHomeView: View {
                         bayHeatmap = false
                         bayTimeline = false
                         bayBrackets = false
-                        bayScheme = BayScheme.carbon.rawValue
+                        bayScheme = defaultBayScheme.rawValue
                     } label: {
                         Text("RESET")
                             .font(.system(size: 9, weight: .semibold, design: .monospaced))

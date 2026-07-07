@@ -472,8 +472,16 @@ struct HelperAppsSettingsView: View {
                             if status.screen == .granted {
                                 permissionsManager.openScreenRecordingSettings()
                             } else {
-                                Task {
-                                    _ = await serviceManager.requestAgentScreenRecordingPermission()
+                                Task { @MainActor in
+                                    let granted = await serviceManager.requestAgentScreenRecordingPermission()
+                                    _ = await serviceManager.live.refreshPermissionsNow()
+
+                                    if granted != true {
+                                        AccessibilityInstallAssistant.shared.present(
+                                            target: .agent,
+                                            permission: .screenRecording
+                                        )
+                                    }
                                 }
                             }
                         }

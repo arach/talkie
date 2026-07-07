@@ -18,6 +18,7 @@
 //
 
 import SwiftUI
+import TalkieKit
 
 enum AgentVoiceScopePhase {
     case ready
@@ -32,6 +33,8 @@ enum AgentVoiceScopePhase {
 }
 
 struct AgentVoiceScopeView: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     @ObservedObject var session: AgentVoiceSession
     let onDismiss: () -> Void
 
@@ -49,14 +52,14 @@ struct AgentVoiceScopeView: View {
             footer
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(amberBody)
+        .background(palette.body)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(amberEdge, lineWidth: 1)
+                .strokeBorder(palette.edge, lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.55), radius: 30, x: 0, y: 24)
-        .shadow(color: .black.opacity(0.35), radius: 9, x: 0, y: 6)
+        .shadow(color: palette.shadowLarge, radius: 30, x: 0, y: 24)
+        .shadow(color: palette.shadowSmall, radius: 9, x: 0, y: 6)
         .animation(.easeOut(duration: 0.22), value: session.phase)
     }
 
@@ -76,7 +79,7 @@ struct AgentVoiceScopeView: View {
                 Text("T01")
                     .font(.system(size: 9, weight: .medium, design: .monospaced))
                     .tracking(2.0)
-                    .foregroundStyle(inkSubtle)
+                    .foregroundStyle(palette.inkSubtle)
             }
 
             Spacer()
@@ -87,7 +90,7 @@ struct AgentVoiceScopeView: View {
                 Text(timecode)
                     .font(.system(size: 9, weight: .medium, design: .monospaced))
                     .tracking(1.4)
-                    .foregroundStyle(inkSubtle)
+                    .foregroundStyle(palette.inkSubtle)
                     .monospacedDigit()
                 signalDot
             }
@@ -96,7 +99,7 @@ struct AgentVoiceScopeView: View {
         .padding(.vertical, 10)
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(amberEdgeFaint)
+                .fill(palette.edgeFaint)
                 .frame(height: 0.5)
         }
     }
@@ -106,17 +109,17 @@ struct AgentVoiceScopeView: View {
             Circle()
                 .fill(channelDotColor)
                 .frame(width: 6, height: 6)
-                .shadow(color: liveDot ? amberTrace.opacity(0.8) : .clear, radius: 4)
-            Text("CH-01 · NIGHTOPS")
+                .shadow(color: liveDot ? palette.trace.opacity(0.8) : .clear, radius: 4)
+            Text(palette.channelLabel)
                 .font(.system(size: 9, weight: .regular, design: .monospaced))
                 .tracking(1.0)
-                .foregroundStyle(ink)
+                .foregroundStyle(palette.ink)
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 2)
         .overlay(
             RoundedRectangle(cornerRadius: 3, style: .continuous)
-                .strokeBorder(amberEdgeFaint, lineWidth: 0.5)
+                .strokeBorder(palette.edgeFaint, lineWidth: 0.5)
         )
     }
 
@@ -124,16 +127,16 @@ struct AgentVoiceScopeView: View {
         Text(phaseLabel)
             .font(.system(size: 10, weight: .semibold, design: .monospaced))
             .tracking(3.2)
-            .foregroundStyle(badgeIsHot ? amberTrace : ink)
-            .shadow(color: badgeIsHot ? amberTrace.opacity(0.6) : .clear, radius: 6)
+            .foregroundStyle(badgeIsHot ? palette.trace : palette.ink)
+            .shadow(color: badgeIsHot ? palette.traceGlow : .clear, radius: 6)
     }
 
     private var signalDot: some View {
         Circle()
-            .fill(isMicLive ? Color(red: 0.85, green: 0.29, blue: 0.17) : inkSubtle)
+            .fill(isMicLive ? palette.liveRed : palette.inkSubtle)
             .frame(width: 6, height: 6)
             .shadow(
-                color: isMicLive ? Color(red: 0.85, green: 0.29, blue: 0.17).opacity(0.65) : .clear,
+                color: isMicLive ? palette.liveRed.opacity(0.65) : .clear,
                 radius: 4
             )
     }
@@ -146,7 +149,7 @@ struct AgentVoiceScopeView: View {
 
     private var display: some View {
         ZStack {
-            Color(red: 0.031, green: 0.035, blue: 0.039)
+            palette.display
             graticule
             scanlines
             scopeTrace
@@ -160,8 +163,8 @@ struct AgentVoiceScopeView: View {
 
     private var graticule: some View {
         Canvas { context, size in
-            let grid = amberGrid.opacity(0.85)
-            let axis = Color(red: 0.91, green: 0.60, blue: 0.24).opacity(0.18)
+            let grid = palette.grid.opacity(0.85)
+            let axis = palette.axis
 
             for i in 1..<8 {
                 let y = size.height * CGFloat(i) / 8.0
@@ -194,7 +197,7 @@ struct AgentVoiceScopeView: View {
                 var path = Path()
                 path.move(to: CGPoint(x: 0, y: y))
                 path.addLine(to: CGPoint(x: size.width, y: y))
-                context.stroke(path, with: .color(.white.opacity(0.018)), lineWidth: 1)
+                context.stroke(path, with: .color(palette.scanline), lineWidth: 1)
             }
         }
         .allowsHitTesting(false)
@@ -214,10 +217,10 @@ struct AgentVoiceScopeView: View {
                     path.addLine(to: scaled(p, to: size))
                 }
                 let hot = phase == .transmitting || phase == .followUpRecording || phase == .receiving
-                let color = hot ? amberTrace : amberTraceDim
+                let color = hot ? palette.trace : palette.traceDim
                 context.stroke(path, with: .color(color), lineWidth: 1.4)
             }
-            .shadow(color: amberTrace.opacity(0.55), radius: 6)
+            .shadow(color: palette.traceGlow, radius: 6)
         }
     }
 
@@ -265,7 +268,7 @@ struct AgentVoiceScopeView: View {
         Text(text)
             .font(.system(size: 8, weight: .medium, design: .monospaced))
             .tracking(1.4)
-            .foregroundStyle(inkSubtle)
+            .foregroundStyle(palette.inkSubtle)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
@@ -309,7 +312,7 @@ struct AgentVoiceScopeView: View {
         .padding(.bottom, 16)
         .overlay(alignment: .top) {
             Rectangle()
-                .fill(amberEdgeFaint)
+                .fill(palette.edgeFaint)
                 .frame(height: 0.5)
         }
     }
@@ -323,7 +326,7 @@ struct AgentVoiceScopeView: View {
             Text("TOOLS")
                 .font(.system(size: 9, weight: .semibold, design: .monospaced))
                 .tracking(2.4)
-                .foregroundStyle(inkSubtle)
+                .foregroundStyle(palette.inkSubtle)
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(session.toolInvocations) { invocation in
                     toolRow(invocation)
@@ -338,13 +341,13 @@ struct AgentVoiceScopeView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(invocation.displayCommand)
                     .font(.system(size: 11, weight: .regular, design: .monospaced))
-                    .foregroundStyle(ink)
+                    .foregroundStyle(palette.ink)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 if case let .failed(detail) = invocation.status {
                     Text(detail)
                         .font(.system(size: 10, weight: .regular, design: .monospaced))
-                        .foregroundStyle(Color(red: 0.85, green: 0.29, blue: 0.17))
+                        .foregroundStyle(palette.liveRed)
                         .lineLimit(2)
                 }
             }
@@ -352,7 +355,7 @@ struct AgentVoiceScopeView: View {
             if let ms = invocation.durationMs {
                 Text(latencyString(ms))
                     .font(.system(size: 10, weight: .regular, design: .monospaced))
-                    .foregroundStyle(inkSubtle)
+                    .foregroundStyle(palette.inkSubtle)
                     .monospacedDigit()
             }
         }
@@ -360,11 +363,11 @@ struct AgentVoiceScopeView: View {
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(amberTrace.opacity(0.04))
+                .fill(palette.trace.opacity(0.04))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .strokeBorder(amberEdgeFaint, lineWidth: 0.5)
+                .strokeBorder(palette.edgeFaint, lineWidth: 0.5)
         )
         .help(invocation.output ?? "")
     }
@@ -378,12 +381,12 @@ struct AgentVoiceScopeView: View {
         case .done:
             Image(systemName: "checkmark")
                 .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(amberTrace)
+                .foregroundStyle(palette.trace)
                 .frame(width: 9, height: 9)
         case .failed:
             Image(systemName: "xmark")
                 .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(Color(red: 0.85, green: 0.29, blue: 0.17))
+                .foregroundStyle(palette.liveRed)
                 .frame(width: 9, height: 9)
         }
     }
@@ -393,10 +396,10 @@ struct AgentVoiceScopeView: View {
             Text("YOU SAID")
                 .font(.system(size: 9, weight: .semibold, design: .monospaced))
                 .tracking(2.4)
-                .foregroundStyle(inkSubtle)
+                .foregroundStyle(palette.inkSubtle)
             Text(text)
                 .font(.system(size: 13, weight: .regular, design: .monospaced))
-                .foregroundStyle(ink)
+                .foregroundStyle(palette.ink)
                 .textSelection(.enabled)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -408,7 +411,7 @@ struct AgentVoiceScopeView: View {
             Text("Thinking…")
                 .font(.system(size: 13, weight: .regular, design: .serif))
                 .italic()
-                .foregroundStyle(amberTraceDim)
+                .foregroundStyle(palette.traceDim)
         }
         .padding(.top, 4)
     }
@@ -419,35 +422,35 @@ struct AgentVoiceScopeView: View {
                 Text("AGENT")
                     .font(.system(size: 9, weight: .semibold, design: .monospaced))
                     .tracking(2.4)
-                    .foregroundStyle(amberTrace)
+                    .foregroundStyle(palette.trace)
                 if let ms = session.llmLatencyMs {
                     Text("· \(latencyString(ms))")
                         .font(.system(size: 9, weight: .regular, design: .monospaced))
                         .tracking(1.4)
-                        .foregroundStyle(inkSubtle)
+                        .foregroundStyle(palette.inkSubtle)
                 }
                 Text("· \(modelMetaLabel)")
                     .font(.system(size: 9, weight: .regular, design: .monospaced))
                     .tracking(1.4)
-                    .foregroundStyle(inkSubtle)
+                    .foregroundStyle(palette.inkSubtle)
                 if session.continuationSessionId != nil {
                     Text("· SAME SESSION")
                         .font(.system(size: 9, weight: .regular, design: .monospaced))
                         .tracking(1.4)
-                        .foregroundStyle(amberTrace)
+                        .foregroundStyle(palette.trace)
                 }
                 if let branchMetaLabel {
                     Text("· \(branchMetaLabel)")
                         .font(.system(size: 9, weight: .regular, design: .monospaced))
                         .tracking(1.4)
-                        .foregroundStyle(amberTrace)
+                        .foregroundStyle(palette.trace)
                 }
             }
 
             Text(reply)
                 .font(.system(size: 17, weight: .regular, design: .serif))
                 .italic()
-                .foregroundStyle(amberTrace)
+                .foregroundStyle(palette.trace)
                 .lineSpacing(2)
                 .multilineTextAlignment(.leading)
                 .textSelection(.enabled)
@@ -479,28 +482,28 @@ struct AgentVoiceScopeView: View {
                 Text(voiceFollowUpBadge)
                     .font(.system(size: 10, weight: .semibold, design: .monospaced))
                     .monospacedDigit()
-                    .foregroundStyle(isRecordingFollowUp ? Color(red: 0.141, green: 0.078, blue: 0.031) : amberTrace)
+                    .foregroundStyle(isRecordingFollowUp ? palette.activeInk : palette.trace)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
                     .background(
                         RoundedRectangle(cornerRadius: 3, style: .continuous)
-                            .fill(isRecordingFollowUp ? amberTrace.opacity(0.78) : Color.black.opacity(0.2))
+                            .fill(isRecordingFollowUp ? palette.trace.opacity(0.78) : palette.controlFill)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 3, style: .continuous)
-                            .strokeBorder(amberTrace.opacity(0.4), lineWidth: 0.5)
+                            .strokeBorder(palette.trace.opacity(0.4), lineWidth: 0.5)
                     )
             }
-            .foregroundStyle(isRecordingFollowUp ? Color(red: 0.141, green: 0.078, blue: 0.031) : amberTrace)
+            .foregroundStyle(isRecordingFollowUp ? palette.activeInk : palette.trace)
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
             .background(
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(isRecordingFollowUp ? amberTrace : Color.black.opacity(0.16))
+                    .fill(isRecordingFollowUp ? palette.trace : palette.controlFill)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .strokeBorder(amberTrace.opacity(isRecordingFollowUp ? 0 : 0.55), lineWidth: 0.5)
+                    .strokeBorder(palette.trace.opacity(isRecordingFollowUp ? 0 : 0.55), lineWidth: 0.5)
             )
         }
         .buttonStyle(.plain)
@@ -541,17 +544,17 @@ struct AgentVoiceScopeView: View {
             TextField("Talk to the agent", text: $followUpText, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12, weight: .regular, design: .monospaced))
-                .foregroundStyle(ink)
+                .foregroundStyle(palette.ink)
                 .lineLimit(1...3)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 7)
                 .background(
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .fill(Color.black.opacity(0.18))
+                        .fill(palette.controlFill)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .strokeBorder(amberEdgeFaint, lineWidth: 0.5)
+                        .strokeBorder(palette.edgeFaint, lineWidth: 0.5)
                 )
                 .onSubmit(sendFollowUp)
                 .disabled(isRecordingFollowUp || executorBranchIsWorking)
@@ -559,15 +562,15 @@ struct AgentVoiceScopeView: View {
             Button(action: sendFollowUp) {
                 Image(systemName: "paperplane.fill")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(canSendFollowUp ? Color(red: 0.141, green: 0.078, blue: 0.031) : inkSubtle)
+                    .foregroundStyle(canSendFollowUp ? palette.activeInk : palette.inkSubtle)
                     .frame(width: 28, height: 28)
                     .background(
                         RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .fill(canSendFollowUp ? amberTrace : Color.clear)
+                            .fill(canSendFollowUp ? palette.trace : Color.clear)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .strokeBorder(amberTrace.opacity(canSendFollowUp ? 0 : 0.55), lineWidth: 0.5)
+                            .strokeBorder(palette.trace.opacity(canSendFollowUp ? 0 : 0.55), lineWidth: 0.5)
                     )
             }
             .buttonStyle(.plain)
@@ -601,16 +604,16 @@ struct AgentVoiceScopeView: View {
                     .font(.system(size: 9, weight: .semibold, design: .monospaced))
                     .tracking(1.8)
             }
-            .foregroundStyle(session.autoPlayEnabled ? Color(red: 0.141, green: 0.078, blue: 0.031) : amberTrace)
+            .foregroundStyle(session.autoPlayEnabled ? palette.activeInk : palette.trace)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(session.autoPlayEnabled ? amberTrace : Color.clear)
+                    .fill(session.autoPlayEnabled ? palette.trace : Color.clear)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .strokeBorder(amberTrace.opacity(session.autoPlayEnabled ? 0 : 0.55), lineWidth: 0.5)
+                    .strokeBorder(palette.trace.opacity(session.autoPlayEnabled ? 0 : 0.55), lineWidth: 0.5)
             )
         }
         .buttonStyle(.plain)
@@ -622,10 +625,10 @@ struct AgentVoiceScopeView: View {
             Text("ERROR")
                 .font(.system(size: 9, weight: .semibold, design: .monospaced))
                 .tracking(2.4)
-                .foregroundStyle(Color(red: 0.85, green: 0.29, blue: 0.17))
+                .foregroundStyle(palette.liveRed)
             Text(session.errorMessage ?? "Something went wrong.")
                 .font(.system(size: 13, weight: .regular, design: .monospaced))
-                .foregroundStyle(ink)
+                .foregroundStyle(palette.ink)
                 .multilineTextAlignment(.leading)
 
             HStack(spacing: 8) {
@@ -652,12 +655,12 @@ struct AgentVoiceScopeView: View {
                     .font(.system(size: 9, weight: .semibold, design: .monospaced))
                     .tracking(1.8)
             }
-            .foregroundStyle(amberTrace)
+            .foregroundStyle(palette.trace)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .overlay(
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .strokeBorder(amberTrace.opacity(0.55), lineWidth: 0.5)
+                    .strokeBorder(palette.trace.opacity(0.55), lineWidth: 0.5)
             )
         }
         .buttonStyle(.plain)
@@ -682,19 +685,19 @@ struct AgentVoiceScopeView: View {
                 Text("auto · talk now / agents later")
                     .font(.system(size: 9, weight: .medium, design: .monospaced))
                     .tracking(1.8)
-                    .foregroundStyle(inkSubtle)
+                    .foregroundStyle(palette.inkSubtle)
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
         .overlay(alignment: .top) {
             Rectangle()
-                .fill(amberEdgeFaint)
+                .fill(palette.edgeFaint)
                 .frame(height: 0.5)
         }
         .background(
             LinearGradient(
-                colors: [.clear, .black.opacity(0.35)],
+                colors: [.clear, palette.footerShade],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -712,7 +715,7 @@ struct AgentVoiceScopeView: View {
             Text(footerHint)
                 .font(.system(size: 9, weight: .medium, design: .monospaced))
                 .tracking(2.0)
-                .foregroundStyle(inkSubtle)
+                .foregroundStyle(palette.inkSubtle)
                 .padding(.leading, 8)
         }
     }
@@ -730,37 +733,21 @@ struct AgentVoiceScopeView: View {
     private func keycap(_ label: String, accent: Bool) -> some View {
         Text(label)
             .font(.system(size: 10, weight: .medium, design: .monospaced))
-            .foregroundStyle(accent ? Color(red: 0.141, green: 0.078, blue: 0.031) : ink)
+            .foregroundStyle(accent ? palette.activeInk : palette.ink)
             .frame(minWidth: 20, idealHeight: 20)
             .padding(.horizontal, accent ? 8 : 6)
             .background(
                 RoundedRectangle(cornerRadius: 3, style: .continuous)
                     .fill(
                         accent
-                        ? LinearGradient(
-                            colors: [
-                                Color(red: 1.0, green: 0.78, blue: 0.45),
-                                Color(red: 0.91, green: 0.60, blue: 0.24),
-                                Color(red: 0.71, green: 0.45, blue: 0.13),
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                        : LinearGradient(
-                            colors: [
-                                Color(red: 0.165, green: 0.18, blue: 0.19),
-                                Color(red: 0.11, green: 0.125, blue: 0.135),
-                                Color(red: 0.078, green: 0.094, blue: 0.102),
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
+                        ? palette.accentKeyFill
+                        : palette.keycapFill
                     )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 3, style: .continuous)
                     .strokeBorder(
-                        accent ? Color(red: 0.54, green: 0.35, blue: 0.10) : .white.opacity(0.06),
+                        accent ? palette.accentKeyBorder : palette.keycapBorder,
                         lineWidth: 0.5
                     )
             )
@@ -818,7 +805,7 @@ struct AgentVoiceScopeView: View {
     }
 
     private var channelDotColor: Color {
-        liveDot ? amberTrace : inkSubtle
+        liveDot ? palette.trace : palette.inkSubtle
     }
 
     private var timecode: String {
@@ -871,16 +858,11 @@ struct AgentVoiceScopeView: View {
         return String(model.prefix(15)) + "…"
     }
 
-    // MARK: - AMBER scheme palette
+    // MARK: - Scope palette
 
-    private let amberBody = Color(red: 0.078, green: 0.094, blue: 0.102)
-    private let amberTrace = Color(red: 1.0, green: 0.663, blue: 0.251)
-    private let amberTraceDim = Color(red: 0.91, green: 0.60, blue: 0.24)
-    private let amberEdge = Color(red: 1.0, green: 0.663, blue: 0.251).opacity(0.18)
-    private let amberEdgeFaint = Color(red: 1.0, green: 0.663, blue: 0.251).opacity(0.08)
-    private let amberGrid = Color(red: 0.91, green: 0.60, blue: 0.24).opacity(0.07)
-    private let ink = Color(red: 0.788, green: 0.647, blue: 0.42)
-    private let inkSubtle = Color(red: 0.353, green: 0.302, blue: 0.22)
+    private var palette: AgentVoiceScopePalette {
+        AgentVoiceScopePalette(colorScheme: colorScheme)
+    }
 }
 
 // MARK: - Thinking dot
@@ -899,5 +881,115 @@ private struct ThinkingDot: View {
                     pulse = true
                 }
             }
+    }
+}
+
+private struct AgentVoiceScopePalette {
+    let body: Color
+    let display: Color
+    let trace: Color
+    let traceDim: Color
+    let traceGlow: Color
+    let edge: Color
+    let edgeFaint: Color
+    let grid: Color
+    let axis: Color
+    let scanline: Color
+    let ink: Color
+    let inkSubtle: Color
+    let activeInk: Color
+    let controlFill: Color
+    let footerShade: Color
+    let liveRed: Color
+    let shadowLarge: Color
+    let shadowSmall: Color
+    let keycapFill: LinearGradient
+    let keycapBorder: Color
+    let accentKeyFill: LinearGradient
+    let accentKeyBorder: Color
+    let channelLabel: String
+
+    init(colorScheme: ColorScheme) {
+        if colorScheme == .dark {
+            body = Color(red: 0.078, green: 0.094, blue: 0.102)
+            display = Color(red: 0.031, green: 0.035, blue: 0.039)
+            trace = Color(red: 1.0, green: 0.663, blue: 0.251)
+            traceDim = Color(red: 0.91, green: 0.60, blue: 0.24)
+            traceGlow = trace.opacity(0.55)
+            edge = trace.opacity(0.18)
+            edgeFaint = trace.opacity(0.08)
+            grid = traceDim.opacity(0.07)
+            axis = traceDim.opacity(0.18)
+            scanline = .white.opacity(0.018)
+            ink = Color(red: 0.788, green: 0.647, blue: 0.42)
+            inkSubtle = Color(red: 0.353, green: 0.302, blue: 0.22)
+            activeInk = Color(red: 0.141, green: 0.078, blue: 0.031)
+            controlFill = Color.black.opacity(0.18)
+            footerShade = Color.black.opacity(0.35)
+            liveRed = Color(red: 0.85, green: 0.29, blue: 0.17)
+            shadowLarge = .black.opacity(0.55)
+            shadowSmall = .black.opacity(0.35)
+            keycapFill = LinearGradient(
+                colors: [
+                    Color(red: 0.165, green: 0.18, blue: 0.19),
+                    Color(red: 0.11, green: 0.125, blue: 0.135),
+                    Color(red: 0.078, green: 0.094, blue: 0.102),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            keycapBorder = .white.opacity(0.06)
+            accentKeyFill = LinearGradient(
+                colors: [
+                    Color(red: 1.0, green: 0.78, blue: 0.45),
+                    Color(red: 0.91, green: 0.60, blue: 0.24),
+                    Color(red: 0.71, green: 0.45, blue: 0.13),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            accentKeyBorder = Color(red: 0.54, green: 0.35, blue: 0.10)
+            channelLabel = "CH-01 · NIGHTOPS"
+        } else {
+            body = ScopeCanvas.surface
+            display = ScopeCanvas.canvasAlt
+            trace = ScopeAmber.solid
+            traceDim = ScopeBrass.solid
+            traceGlow = ScopeAmber.glowStrong
+            edge = ScopeEdge.normal
+            edgeFaint = ScopeEdge.subtle
+            grid = ScopeInk.primary.opacity(0.08)
+            axis = ScopeAmber.solid.opacity(0.24)
+            scanline = ScopeInk.primary.opacity(0.018)
+            ink = ScopeInk.primary
+            inkSubtle = ScopeInk.faint
+            activeInk = ScopeInk.primary
+            controlFill = ScopeInk.primary.opacity(0.055)
+            footerShade = ScopeInk.primary.opacity(0.045)
+            liveRed = SemanticColor.error
+            shadowLarge = .black.opacity(0.18)
+            shadowSmall = .black.opacity(0.10)
+            keycapFill = LinearGradient(
+                colors: [
+                    ScopeCanvas.canvas,
+                    ScopeCanvas.surface,
+                    ScopeCanvas.canvasAlt,
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            keycapBorder = ScopeEdge.faint
+            accentKeyFill = LinearGradient(
+                colors: [
+                    Color.hex("E8A64A"),
+                    ScopeAmber.solid,
+                    ScopeBrass.deep,
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            accentKeyBorder = ScopeBrass.deep.opacity(0.55)
+            channelLabel = "CH-01 · SCOPE"
+        }
     }
 }

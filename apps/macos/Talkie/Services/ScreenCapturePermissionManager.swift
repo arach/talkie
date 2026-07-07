@@ -11,6 +11,8 @@ import AppKit
 import Observation
 import TalkieKit
 
+private let screenCapturePermissionLog = Log(.system)
+
 enum ScreenCapturePermissionState: Equatable {
     case unknown
     case denied
@@ -53,6 +55,11 @@ final class ScreenCapturePermissionManager {
         } else {
             agentStatus = .unknown
         }
+
+        screenCapturePermissionLog.debug(
+            "Screen capture permission refresh",
+            detail: "app=\(appStatus), agent=\(agentStatus)"
+        )
     }
 
     @discardableResult
@@ -61,17 +68,36 @@ final class ScreenCapturePermissionManager {
         isRequesting = true
         defer { isRequesting = false }
 
+        screenCapturePermissionLog.info("Requesting screen capture enablement")
         await refresh()
 
         if !appStatus.isGranted {
-            _ = CGRequestScreenCaptureAccess()
+            AccessibilityInstallAssistant.shared.present(target: .talkie, permission: .screenRecording)
+            screenCapturePermissionLog.info(
+                "Screen capture enablement waiting on Talkie permission",
+                detail: "app=\(appStatus), agent=\(agentStatus)"
+            )
+            return isReadyForCapture
         }
 
         if agentStatus != .granted, let granted = await requestAgentScreenRecordingPermission() {
             agentStatus = Self.status(for: granted)
         }
 
+        if agentStatus != .granted {
+            AccessibilityInstallAssistant.shared.present(target: .agent, permission: .screenRecording)
+            screenCapturePermissionLog.info(
+                "Screen capture enablement waiting on Agent permission",
+                detail: "app=\(appStatus), agent=\(agentStatus)"
+            )
+            return isReadyForCapture
+        }
+
         await refresh()
+        screenCapturePermissionLog.info(
+            "Screen capture enablement completed",
+            detail: "ready=\(isReadyForCapture), app=\(appStatus), agent=\(agentStatus)"
+        )
         return isReadyForCapture
     }
 

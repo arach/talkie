@@ -295,9 +295,13 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
             // so TalkieAgent's internal state is never stale after a revocation.
             let hasAccessibility = AccessibilityCache.shared.preflight()
 
-            // Check screen recording permission
-            let hasScreenRecording = checkScreenRecordingPermission()
+            let screenRecording = screenRecordingPermissionSnapshot()
+            let hasScreenRecording = screenRecording.preflight
 
+            xpcLog.info(
+                "Screen Recording permission snapshot",
+                detail: "preflight=\(screenRecording.preflight), windowHeuristic=\(screenRecording.windowHeuristic), windowCount=\(screenRecording.windowCount), bundle=\(Bundle.main.bundleIdentifier ?? "unknown"), executable=\(Bundle.main.executableURL?.path ?? "unknown"), embedded=\(Self.isEmbeddedHelper)"
+            )
             AgentConsole.critical("[TalkieAgentXPC] Permissions: mic=\(hasMicrophone), accessibility=\(hasAccessibility), screenRecording=\(hasScreenRecording)")
             reply(hasMicrophone, hasAccessibility, hasScreenRecording)
         }
@@ -342,6 +346,10 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
 
     nonisolated func requestScreenRecordingPermission(reply: @escaping (Bool) -> Void) {
         Task { @MainActor in
+            xpcLog.info(
+                "Screen Recording permission request received",
+                detail: "bundle=\(Bundle.main.bundleIdentifier ?? "unknown"), executable=\(Bundle.main.executableURL?.path ?? "unknown")"
+            )
             let granted = await ScreenshotService.shared.requestPermission()
             AgentConsole.critical("[TalkieAgentXPC] Screen recording permission request result: \(granted)")
             reply(granted)
@@ -481,12 +489,18 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
     }
 
     private func checkScreenRecordingPermission() -> Bool {
-        // Screen recording permission check - try to get window info
-        guard let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else {
-            return false
-        }
-        // If we can see window owner names, we have permission
-        return windowList.contains { $0[kCGWindowOwnerName as String] != nil }
+        CGPreflightScreenCaptureAccess()
+    }
+
+    private func screenRecordingPermissionSnapshot() -> (
+        preflight: Bool,
+        windowHeuristic: Bool,
+        windowCount: Int
+    ) {
+        let preflight = CGPreflightScreenCaptureAccess()
+        let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+        let windowHeuristic = windowList.contains { $0[kCGWindowOwnerName as String] != nil }
+        return (preflight, windowHeuristic, windowList.count)
     }
 
     // MARK: - Screenshot Methods
