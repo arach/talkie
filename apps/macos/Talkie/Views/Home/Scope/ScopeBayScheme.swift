@@ -21,7 +21,7 @@ enum BayScheme: String, CaseIterable {
     // light-touch sibling work:
     //
     //   Modern theme -> PEARL    (cool family, canonical = lightest)
-    //   Scope theme  -> CHIFFON  (warm family, canonical = lightest)
+    //   Scope theme  -> PEARL    (matches the cool Scope canvas)
     //
     // Sibling ladder within each family for fine-tuning bay presence.
     // AMBER kept as the reference for the original lit-electronics
@@ -31,7 +31,7 @@ enum BayScheme: String, CaseIterable {
     case pearl       // Modern canonical - cool lightest
     case porcelain   // Cool mid
     case aluminum    // Cool saturated
-    case chiffon     // Scope canonical - warm lightest
+    case chiffon     // Warm lightest
     case vellum      // Warm mid
     case paper       // Warm saturated
 
@@ -229,7 +229,7 @@ enum BayScheme: String, CaseIterable {
     /// default state when no user-set value is stored.
     static func canonical(for theme: ThemePreset?) -> BayScheme {
         switch theme {
-        case .scope:       return .carbon
+        case .scope:       return .pearl
         // case .modern:   return .pearl     // future - when modern theme lands
         default:           return .amber
         }

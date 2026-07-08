@@ -268,14 +268,34 @@ actor ScreenshotService {
 
     /// Check if we have screen recording permission
     func hasScreenRecordingPermission() async -> Bool {
-        CGPreflightScreenCaptureAccess()
+        let granted = CGPreflightScreenCaptureAccess()
+        log.debug(
+            "Screen recording permission preflight",
+            detail: "\(permissionLogContext), granted=\(granted)"
+        )
+        return granted
     }
 
     /// Request screen recording permission by triggering the system prompt
     func requestPermission() async -> Bool {
-        log.info("Requesting screen recording permission")
-        _ = CGRequestScreenCaptureAccess()
-        return CGPreflightScreenCaptureAccess()
+        let before = CGPreflightScreenCaptureAccess()
+        log.info(
+            "Requesting screen recording permission",
+            detail: "\(permissionLogContext), before=\(before)"
+        )
+
+        let requestGranted = before || CGRequestScreenCaptureAccess()
+        let after = CGPreflightScreenCaptureAccess()
+
+        log.info(
+            "Screen recording permission request completed",
+            detail: "\(permissionLogContext), before=\(before), requestGranted=\(requestGranted), after=\(after)"
+        )
+        return after
+    }
+
+    private var permissionLogContext: String {
+        "bundle=\(Bundle.main.bundleIdentifier ?? "unknown"), executable=\(Bundle.main.executableURL?.path ?? "unknown")"
     }
 }
 

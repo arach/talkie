@@ -154,14 +154,22 @@ final class AccessibilityInstallAssistant {
                 openSettingsPane(for: permission)
             }
         case .screenRecording:
-            let wasGranted = CGPreflightScreenCaptureAccess()
-            let requestGranted = wasGranted || CGRequestScreenCaptureAccess()
-            permissionAssistantLog.debug(
-                "Screen Recording request returned",
-                detail: "wasGranted=\(wasGranted), requestGranted=\(requestGranted)"
-            )
+            if target == .talkie {
+                let wasGranted = CGPreflightScreenCaptureAccess()
+                let requestGranted = wasGranted || CGRequestScreenCaptureAccess()
+                permissionAssistantLog.debug(
+                    "Screen Recording request returned",
+                    detail: "target=\(target.displayName), wasGranted=\(wasGranted), requestGranted=\(requestGranted)"
+                )
 
-            if !requestGranted {
+                if !requestGranted {
+                    openSettingsPane(for: permission)
+                }
+            } else {
+                permissionAssistantLog.info(
+                    "Opening Screen Recording pane for helper target",
+                    detail: "target=\(target.displayName), bundle=\(target.bundleIdentifier)"
+                )
                 openSettingsPane(for: permission)
             }
         }
@@ -648,8 +656,16 @@ private struct AccessibilityInstallAssistantView: View {
                 }
             }
         case .screenRecording:
-            // Screen Recording status is per-process; only meaningful for .talkie target.
-            isGranted = CGPreflightScreenCaptureAccess()
+            switch target {
+            case .talkie:
+                isGranted = CGPreflightScreenCaptureAccess()
+            case .agent:
+                if let permissions = await ServiceManager.shared.live.refreshPermissionsNow() {
+                    isGranted = permissions.screenRecording
+                } else {
+                    isGranted = ServiceManager.shared.live.hasScreenRecordingPermission == true
+                }
+            }
         }
     }
 }
