@@ -235,7 +235,7 @@ struct Utterance: Identifiable, Codable, Hashable {
 @MainActor
 struct ContextCapture {
     /// Our own bundle identifier
-    static let agentBundleID = Bundle.main.bundleIdentifier ?? "to.talkie.app.agent"
+    static let agentBundleID = Bundle.main.bundleIdentifier ?? "to.talkie.agent"
 
     /// Check if Talkie Agent is the frontmost app
     static func isTalkieAgentFrontmost() -> Bool {

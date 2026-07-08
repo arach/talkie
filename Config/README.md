@@ -20,7 +20,7 @@ The canonical namespace is `to.talkie.app`:
 TALKIE_APP_IDENTIFIER = to.talkie.app
 TALKIE_IOS_APP_BUNDLE_ID = to.talkie.app
 TALKIE_MAC_CORE_BUNDLE_ID = to.talkie.app.mac
-TALKIE_MAC_AGENT_BUNDLE_ID = to.talkie.app.agent
+TALKIE_MAC_AGENT_BUNDLE_ID = to.talkie.agent
 TALKIE_MAC_SYNC_BUNDLE_ID = to.talkie.app.sync
 TALKIE_IOS_APP_GROUP = group.to.talkie.app
 TALKIE_MAC_APP_GROUP = group.to.talkie.app.mac

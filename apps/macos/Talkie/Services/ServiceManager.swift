@@ -1804,7 +1804,7 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
 
         let center = DistributedNotificationCenter.default()
         let queue = OperationQueue.main
-        let prefix = "to.talkie.app.agent"
+        let prefix = "to.talkie.agent"
 
         func observe(_ suffix: String, _ handler: @escaping (Notification) -> Void) {
             let name = Notification.Name("\(prefix).\(suffix)")

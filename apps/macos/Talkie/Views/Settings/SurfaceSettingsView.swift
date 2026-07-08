@@ -687,7 +687,7 @@ struct SurfaceSettingsView: View {
                             set: { newValue in
                                 AgentSettings.shared.selectionQuickHotkey = newValue
                                 DistributedNotificationCenter.default().postNotificationName(
-                                    NSNotification.Name("to.talkie.app.agentHotkeysDidChange"),
+                                    NSNotification.Name("to.talkie.agentHotkeysDidChange"),
                                     object: nil,
                                     userInfo: nil,
                                     deliverImmediately: true

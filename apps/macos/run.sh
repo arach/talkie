@@ -462,17 +462,27 @@ sign_app_bundle() {
     local app_path=$2
     local identity=$3
     local entitlements
+    local codesign_args
 
     [ -n "$identity" ] || return 0
     [ -d "$app_path" ] || return 0
 
     entitlements=$(get_entitlements "$app")
+    codesign_args=(--force --deep --sign "$identity")
+
+    # TalkieAgent owns screen capture and input automation permissions. Keep its
+    # dev signature aligned with the project target, which enables hardened
+    # runtime. Re-signing without this option strips the runtime flag and leaves
+    # the installed .app materially different from the Xcode-built product.
+    if [ "$app" = "TalkieAgent" ] || [ "$app" = "live" ]; then
+        codesign_args+=(--options runtime)
+    fi
 
     echo -n "  Code signing bundle... "
     if [ -f "$entitlements" ] && ! grep -q '\$(' "$entitlements"; then
-        codesign --force --deep --sign "$identity" --entitlements "$entitlements" "$app_path" >/dev/null
+        codesign "${codesign_args[@]}" --entitlements "$entitlements" "$app_path" >/dev/null
     else
-        codesign --force --deep --sign "$identity" "$app_path" >/dev/null
+        codesign "${codesign_args[@]}" "$app_path" >/dev/null
     fi
     codesign --verify --deep --strict "$app_path" >/dev/null
     echo -e "${GREEN}done${NC}"

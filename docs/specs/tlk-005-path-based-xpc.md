@@ -77,7 +77,7 @@ The file is fully written and the handle is closed before the engine ever touche
 
 | Component | Sandboxed | Implication |
 |-----------|-----------|-------------|
-| TalkieAgent | Yes | Files live in `~/Library/Containers/to.talkie.app.agent/` |
+| TalkieAgent | Yes | Files live in `~/Library/Containers/to.talkie.agent/` |
 | TalkieEngine | No | Can read any path on the filesystem |
 
 The engine's lack of sandboxing is intentional — it needs to read files from client containers. The path sent over XPC is just a string; the engine opens it with standard file I/O.

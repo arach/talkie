@@ -23,8 +23,8 @@ const DATA_LOCATIONS = {
       { path: join(HOME, "Library/Preferences/to.talkie.app.mac.plist"), desc: "Talkie preferences" },
       { path: join(HOME, "Library/Preferences/to.talkie.app.mac.dev.plist"), desc: "Talkie dev preferences" },
       { path: join(HOME, "Library/Preferences/to.talkie.app.mac.staging.plist"), desc: "Talkie staging preferences" },
-      { path: join(HOME, "Library/Preferences/to.talkie.app.agent.plist"), desc: "Agent preferences" },
-      { path: join(HOME, "Library/Preferences/to.talkie.app.agent.dev.plist"), desc: "Agent dev preferences" },
+      { path: join(HOME, "Library/Preferences/to.talkie.agent.plist"), desc: "Agent preferences" },
+      { path: join(HOME, "Library/Preferences/to.talkie.agent.dev.plist"), desc: "Agent dev preferences" },
     ],
   },
   sharedDefaults: {
@@ -38,9 +38,9 @@ const DATA_LOCATIONS = {
   launchAgents: {
     label: "Launch Agents",
     paths: [
-      { path: join(HOME, "Library/LaunchAgents/to.talkie.app.agent.plist"), desc: "Agent launch agent" },
+      { path: join(HOME, "Library/LaunchAgents/to.talkie.agent.plist"), desc: "Agent launch agent" },
       { path: join(HOME, "Library/LaunchAgents/to.talkie.app.sync.plist"), desc: "Sync launch agent" },
-      { path: join(HOME, "Library/LaunchAgents/to.talkie.app.agent.dev.plist"), desc: "Agent dev launch agent" },
+      { path: join(HOME, "Library/LaunchAgents/to.talkie.agent.dev.plist"), desc: "Agent dev launch agent" },
       { path: join(HOME, "Library/LaunchAgents/to.talkie.app.sync.dev.plist"), desc: "Sync dev launch agent" },
     ],
   },
@@ -49,8 +49,8 @@ const DATA_LOCATIONS = {
     paths: [
       { path: join(HOME, "Library/Caches/to.talkie.app.mac"), desc: "Talkie cache" },
       { path: join(HOME, "Library/Caches/to.talkie.app.mac.dev"), desc: "Talkie dev cache" },
-      { path: join(HOME, "Library/Caches/to.talkie.app.agent"), desc: "Agent cache" },
-      { path: join(HOME, "Library/Caches/to.talkie.app.agent.dev"), desc: "Agent dev cache" },
+      { path: join(HOME, "Library/Caches/to.talkie.agent"), desc: "Agent cache" },
+      { path: join(HOME, "Library/Caches/to.talkie.agent.dev"), desc: "Agent dev cache" },
     ],
   },
 };
@@ -64,7 +64,7 @@ function stopAllServices(): string[] {
   // Kill all Talkie processes
   for (const bundleId of [
     "to.talkie.app.mac", "to.talkie.app.mac.dev",
-    "to.talkie.app.agent", "to.talkie.app.agent.dev",
+    "to.talkie.agent", "to.talkie.agent.dev",
     "to.talkie.app.sync", "to.talkie.app.sync.dev",
   ]) {
     const result = Bun.spawnSync(["pkill", "-f", bundleId]);
@@ -251,7 +251,7 @@ export function registerWipeCommand(devCmd: Command): void {
       if (!dataOnly) {
         const defaultsDomains = [
           "to.talkie.app.mac", "to.talkie.app.mac.dev", "to.talkie.app.mac.staging",
-          "to.talkie.app.agent", "to.talkie.app.agent.dev",
+          "to.talkie.agent", "to.talkie.agent.dev",
           "to.talkie.app.shared", "to.talkie.app.shared.dev", "to.talkie.app.shared.staging",
         ].filter(d => !prodOnly || (!d.includes(".dev") && !d.includes(".staging")));
 

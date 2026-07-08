@@ -86,7 +86,7 @@ public enum CaptureIslandPlacement: String, CaseIterable, Codable, Identifiable,
 /// durable channel — read at Talkie launch — and this notification is the live
 /// signal when Talkie is already running.
 public enum TalkieNotchBridge {
-    public static let surfaceSettingsDidChange = "to.talkie.app.agent.notchSurfaceSettings"
+    public static let surfaceSettingsDidChange = "to.talkie.agent.notchSurfaceSettings"
 }
 
 /// All settings keys used by Agent settings

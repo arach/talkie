@@ -20,8 +20,8 @@ import TalkieKit
 private let logger = Log(.system)
 
 /// Notification name prefix for distributed notifications from TalkieAgent → Talkie
-/// Format: to.talkie.app.agent.{path} (e.g., to.talkie.app.agent.recording.started)
-let kTalkieAgentNotificationPrefix = "to.talkie.app.agent"
+/// Format: to.talkie.agent.{path} (e.g., to.talkie.agent.recording.started)
+let kTalkieAgentNotificationPrefix = "to.talkie.agent"
 
 @MainActor
 final class TalkieNotifier {

@@ -30,10 +30,10 @@ TALKIE_IOS_UITESTS_BUNDLE_ID = to.talkie.app.uitests
 
 TALKIE_MAC_CORE_BUNDLE_ID = to.talkie.app.mac
 TALKIE_MAC_CORE_BUNDLE_ID_DEBUG = to.talkie.app.mac.dev
-TALKIE_MAC_AGENT_BUNDLE_ID = to.talkie.app.agent
-TALKIE_MAC_AGENT_BUNDLE_ID_DEBUG = to.talkie.app.agent.dev
-TALKIE_MAC_AGENT_TESTS_BUNDLE_ID = to.talkie.app.agent.tests
-TALKIE_MAC_AGENT_UITESTS_BUNDLE_ID = to.talkie.app.agent.uitests
+TALKIE_MAC_AGENT_BUNDLE_ID = to.talkie.agent
+TALKIE_MAC_AGENT_BUNDLE_ID_DEBUG = to.talkie.agent.dev
+TALKIE_MAC_AGENT_TESTS_BUNDLE_ID = to.talkie.agent.tests
+TALKIE_MAC_AGENT_UITESTS_BUNDLE_ID = to.talkie.agent.uitests
 TALKIE_MAC_SYNC_BUNDLE_ID = to.talkie.app.sync
 TALKIE_MAC_SYNC_BUNDLE_ID_DEBUG = to.talkie.app.sync.dev
 

@@ -404,7 +404,7 @@ struct LogViewerConsole: View {
         }
 
         // Also copy the filter predicate to clipboard for easy use
-        let predicate = "subsystem == \"to.talkie.app.agent\""
+        let predicate = "subsystem == \"to.talkie.agent\""
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(predicate, forType: .string)
     }

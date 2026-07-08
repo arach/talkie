@@ -63,7 +63,7 @@ public enum TalkieHelper: String, CaseIterable, Sendable {
 
     private var bundleIdBase: String {
         switch self {
-        case .agent: return "to.talkie.app.agent"
+        case .agent: return "to.talkie.agent"
         case .engine: return "to.talkie.app.engine"
         case .sync: return "to.talkie.app.sync"
         }

@@ -41,9 +41,22 @@
 		B4C2F59A3E6D4A1190C7E201 /* TalkieAgent/Runtime */ = {isa = PBXFileReference; lastKnownFileType = folder; path = TalkieAgent/Runtime; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		53A11CE12F3C000000000001 /* Exceptions for "TalkieAgent" folder in "TalkieAgent" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 539FB5B82EE6785C004EEAF4 /* TalkieAgent */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		539FB5BB2EE6785C004EEAF4 /* TalkieAgent */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				53A11CE12F3C000000000001 /* Exceptions for "TalkieAgent" folder in "TalkieAgent" target */,
+			);
 			path = TalkieAgent;
 			sourceTree = "<group>";
 		};
@@ -486,9 +499,11 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Talkie Agent Dev";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "TalkieAgent needs to send keystrokes to automatically paste transcriptions into your active app.";
+				INFOPLIST_KEY_NSAudioCaptureUsageDescription = "TalkieAgent needs access to system audio when you choose to include system audio in a screen recording.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "TalkieAgent uses the camera when you show the camera bubble during screen recordings.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "TalkieAgent needs microphone access to continuously transcribe your speech in real-time.";
+				INFOPLIST_KEY_NSScreenCaptureUsageDescription = "TalkieAgent needs Screen Recording access to capture screenshots, screen recordings, and on-screen dictation context.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -526,9 +541,11 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Talkie Agent";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "TalkieAgent needs to send keystrokes to automatically paste transcriptions into your active app.";
+				INFOPLIST_KEY_NSAudioCaptureUsageDescription = "TalkieAgent needs access to system audio when you choose to include system audio in a screen recording.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "TalkieAgent uses the camera when you show the camera bubble during screen recordings.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "TalkieAgent needs microphone access to continuously transcribe your speech in real-time.";
+				INFOPLIST_KEY_NSScreenCaptureUsageDescription = "TalkieAgent needs Screen Recording access to capture screenshots, screen recordings, and on-screen dictation context.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",

@@ -1661,7 +1661,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(agentReportReceived(_:)),
-            name: NSNotification.Name("to.talkie.app.agent.voice.report"),
+            name: NSNotification.Name("to.talkie.agent.voice.report"),
             object: nil
         )
     }

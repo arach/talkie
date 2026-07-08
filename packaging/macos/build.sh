@@ -499,7 +499,7 @@ sign_app "$LOGIN_ITEMS/TalkieSync.app" "$SYNC_BUNDLE_ID"
 LAUNCH_AGENTS="$STAGING_DIR/Applications/Talkie.app/Contents/Resources/LaunchAgents"
 mkdir -p "$LAUNCH_AGENTS"
 echo "  📋 Embedding launch agent plist templates..."
-cp "$RESOURCES_DIR/user-agents/to.talkie.app.agent.plist" "$LAUNCH_AGENTS/"
+cp "$RESOURCES_DIR/user-agents/to.talkie.agent.plist" "$LAUNCH_AGENTS/"
 cp "$RESOURCES_DIR/user-agents/to.talkie.app.sync.plist" "$LAUNCH_AGENTS/"
 
 # Sign the main bundle (after embedding)

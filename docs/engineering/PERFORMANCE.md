@@ -393,7 +393,7 @@ Use these subsystems for different categories:
 |-----------|----------|---------|
 | `to.talkie.app` | Performance | General app performance |
 | `to.talkie.app.db` | Database | Database operations |
-| `to.talkie.app.agent` | LiveController | TalkieAgent state machine |
+| `to.talkie.agent` | LiveController | TalkieAgent state machine |
 | `to.talkie.app.engine` | EngineService | Transcription engine |
 
 ### Common Signpost Patterns

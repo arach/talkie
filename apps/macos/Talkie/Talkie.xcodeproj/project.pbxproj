@@ -2960,9 +2960,11 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Talkie can create reminders when you ask it to.";
+				INFOPLIST_KEY_NSAudioCaptureUsageDescription = "Talkie needs access to system audio when you choose to include system audio in a screen recording.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Talkie uses the camera when you capture camera clips or attach camera media during recordings.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talkie needs access to your microphone to record voice memos for transcription.";
+				INFOPLIST_KEY_NSScreenCaptureUsageDescription = "Talkie needs Screen Recording access when you capture screenshots or screen recordings.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -3051,9 +3053,11 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Talkie can create reminders when you ask it to.";
+				INFOPLIST_KEY_NSAudioCaptureUsageDescription = "Talkie needs access to system audio when you choose to include system audio in a screen recording.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Talkie uses the camera when you capture camera clips or attach camera media during recordings.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talkie needs access to your microphone to record voice memos for transcription.";
+				INFOPLIST_KEY_NSScreenCaptureUsageDescription = "Talkie needs Screen Recording access when you capture screenshots or screen recordings.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",

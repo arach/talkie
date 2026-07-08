@@ -14,17 +14,17 @@ const DATA_LOCATIONS = [
   { path: APP_SUPPORT, label: "Database & audio", desc: "Recordings, transcripts, and audio files" },
   { path: join(HOME, "Library/Preferences/to.talkie.app.mac.plist"), label: "Preferences", desc: "App settings and configuration" },
   { path: join(HOME, "Library/Preferences/to.talkie.app.shared.plist"), label: "Shared settings", desc: "Settings shared with helper apps" },
-  { path: join(HOME, "Library/LaunchAgents/to.talkie.app.agent.plist"), label: "Agent launch agent", desc: "Auto-start for dictation helper" },
+  { path: join(HOME, "Library/LaunchAgents/to.talkie.agent.plist"), label: "Agent launch agent", desc: "Auto-start for dictation helper" },
   { path: join(HOME, "Library/LaunchAgents/to.talkie.app.engine.plist"), label: "Engine launch agent", desc: "Auto-start for transcription engine" },
   { path: join(HOME, "Library/LaunchAgents/to.talkie.app.sync.plist"), label: "Sync launch agent", desc: "Auto-start for sync service" },
   { path: join(HOME, "Library/Caches/to.talkie.app.mac"), label: "App cache", desc: "Cached data" },
-  { path: join(HOME, "Library/Caches/to.talkie.app.agent"), label: "Agent cache", desc: "Agent cached data" },
+  { path: join(HOME, "Library/Caches/to.talkie.agent"), label: "Agent cache", desc: "Agent cached data" },
   { path: join(HOME, "Library/Caches/to.talkie.app.engine"), label: "Engine cache", desc: "Transcription model cache" },
 ];
 
 const DEFAULTS_DOMAINS = [
   "to.talkie.app.mac",
-  "to.talkie.app.agent",
+  "to.talkie.agent",
   "to.talkie.app.engine",
   "to.talkie.app.shared",
 ];

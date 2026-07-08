@@ -3,7 +3,12 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>to.talkie.app.agent.xpc.dev</string>
+    <string>to.talkie.agent.xpc.dev</string>
+    <key>AssociatedBundleIdentifiers</key>
+    <array>
+        <string>to.talkie.app.mac.dev</string>
+        <string>to.talkie.agent.dev</string>
+    </array>
     <key>ProgramArguments</key>
     <array>
         <string>/bin/zsh</string>
@@ -12,7 +17,7 @@
     </array>
     <key>MachServices</key>
     <dict>
-        <key>to.talkie.app.agent.xpc.dev</key>
+        <key>to.talkie.agent.xpc.dev</key>
         <true/>
     </dict>
     <key>RunAtLoad</key>
@@ -22,8 +27,8 @@
     <key>LimitLoadToSessionType</key>
     <string>Aqua</string>
     <key>StandardOutPath</key>
-    <string>/tmp/to.talkie.app.agent.xpc.dev.stdout.log</string>
+    <string>/tmp/to.talkie.agent.xpc.dev.stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/to.talkie.app.agent.xpc.dev.stderr.log</string>
+    <string>/tmp/to.talkie.agent.xpc.dev.stderr.log</string>
 </dict>
 </plist>

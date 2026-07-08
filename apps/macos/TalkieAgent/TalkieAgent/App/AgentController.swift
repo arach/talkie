@@ -1449,7 +1449,7 @@ final class AgentController: ObservableObject {
             try? await Task.sleep(for: .milliseconds(50))
             let agentIsNowFrontmost = ContextCapture.isTalkieAgentFrontmost()
             let targetBundleID = self.capturedContext?.activeAppBundleID
-            self.createdInTalkieView = agentIsNowFrontmost && (targetBundleID == "to.talkie.app.agent")
+            self.createdInTalkieView = agentIsNowFrontmost && (targetBundleID == "to.talkie.agent")
 
             // Log completion (context captured in background, doesn't add to latency)
             let appName = self.capturedContext?.activeAppName ?? "Unknown"

@@ -7,7 +7,7 @@ Snapshot of the running services and how they relate. Naming here reflects the d
 | Process | Ownership | Lifecycle | Role |
 |---|---|---|---|
 | **Talkie.app** | User | Foreground, user-invoked | Main UI, workflows, data |
-| **TalkieAgent** | launchd (`to.talkie.app.agent.dev`) | Always-on (KeepAlive) | Mic, keyboard injection, in-process transcription (Parakeet/Whisper) |
+| **TalkieAgent** | launchd (`to.talkie.agent.dev`) | Always-on (KeepAlive) | Mic, keyboard injection, in-process transcription (Parakeet/Whisper) |
 | **TalkieSync** | launchd (attached to Talkie) | Attached (today) / on-demand (aspirational) | CloudKit ↔ GRDB bridge |
 | **TalkieAgentServer** *(bun process, historically "the Bridge")* | TalkieAgent (supervised via `TalkieAgentServerSupervisor`) | With Agent | Bun backend — Bridge module + Gateway module |
 
@@ -80,7 +80,7 @@ TalkieAgentServer's lifecycle is nested under Agent's supervisor, not a direct h
 |---|---|---|
 | 8765 | TalkieAgentServer (bun) | External-facing (Tailscale + localhost) |
 | 8766 | TalkieHTTP (Swift, in Talkie.app) | Localhost only — bun → Swift door |
-| Mach | `to.talkie.app.agent.dev` | XPC to TalkieAgent |
+| Mach | `to.talkie.agent.dev` | XPC to TalkieAgent |
 | Mach | `to.talkie.app.sync.dev` | XPC to TalkieSync |
 
 ## Known naming debt

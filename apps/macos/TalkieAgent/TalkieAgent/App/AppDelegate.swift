@@ -347,6 +347,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             AgentHomeController.shared.showSettings()
         case "performance":
             showSettings(tab: .performance)
+        case "request-screen-recording":
+            AgentHomeController.shared.showSettings()
+            Task { @MainActor in
+                let granted = await ScreenshotService.shared.requestPermission()
+                AgentConsole.critical("[TalkieAgent] Screen Recording URL request result: \(granted)")
+                if !granted {
+                    AccessibilityInstallAssistant.shared.present(permission: .screenRecording)
+                }
+            }
         case "toggle":
             toggleListening(interstitial: false)
         default:
@@ -1478,7 +1487,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(sharedHotkeysDidChange(_:)),
-            name: NSNotification.Name("to.talkie.app.agentHotkeysDidChange"),
+            name: NSNotification.Name("to.talkie.agentHotkeysDidChange"),
             object: nil
         )
         DistributedNotificationCenter.default().addObserver(

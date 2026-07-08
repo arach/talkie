@@ -356,7 +356,7 @@ final class FeatureFlags {
 
         if sharedKey == AgentSettingsKey.featureCaptureEnabled {
             DistributedNotificationCenter.default().postNotificationName(
-                NSNotification.Name("to.talkie.app.agentHotkeysDidChange"),
+                NSNotification.Name("to.talkie.agentHotkeysDidChange"),
                 object: "featureCaptureEnabled",
                 userInfo: nil,
                 deliverImmediately: true

@@ -6,7 +6,7 @@ final class TalkieDevBuildManifestTests: XCTestCase {
     func testBundleIdentityReadsInfoPlistVersion() throws {
         let appURL = try makeAppBundle(
             product: "TalkieAgent",
-            bundleIdentifier: "to.talkie.app.agent.dev",
+            bundleIdentifier: "to.talkie.agent.dev",
             version: "2.5.28",
             build: "22"
         )
@@ -14,7 +14,7 @@ final class TalkieDevBuildManifestTests: XCTestCase {
 
         let identity = TalkieDevBuildManifestStore.bundleIdentity(for: appURL)
 
-        XCTAssertEqual(identity?.bundleIdentifier, "to.talkie.app.agent.dev")
+        XCTAssertEqual(identity?.bundleIdentifier, "to.talkie.agent.dev")
         XCTAssertEqual(identity?.version, "2.5.28")
         XCTAssertEqual(identity?.build, "22")
         XCTAssertEqual(identity?.displayVersion, "2.5.28 (22)")
@@ -23,7 +23,7 @@ final class TalkieDevBuildManifestTests: XCTestCase {
     func testAppManifestLivesBesideStableDevApp() throws {
         let appURL = try makeAppBundle(
             product: "TalkieAgent",
-            bundleIdentifier: "to.talkie.app.agent.dev",
+            bundleIdentifier: "to.talkie.agent.dev",
             version: "2.5.28",
             build: "22"
         )
@@ -39,7 +39,7 @@ final class TalkieDevBuildManifestTests: XCTestCase {
         )
         let manifest = TalkieDevBuildManifest(
             product: "TalkieAgent",
-            bundleIdentifier: "to.talkie.app.agent.dev",
+            bundleIdentifier: "to.talkie.agent.dev",
             version: "2.5.28",
             build: "22",
             sourcePath: "/repo/build/TalkieAgent.app",

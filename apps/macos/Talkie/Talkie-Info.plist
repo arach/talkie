@@ -31,8 +31,14 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Talkie needs access to system audio when you choose to include system audio in a screen recording.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Talkie uses the camera when you capture camera clips or attach camera media during recordings.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Talkie needs access to your microphone to record voice memos for transcription.</string>
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>Talkie needs Screen Recording access when you capture screenshots or screen recordings.</string>
 	<key>TalkieCloudKitContainerIdentifier</key>
 	<string>$(TALKIE_CLOUDKIT_CONTAINER)</string>
 	<key>TalkieMacAppGroupIdentifier</key>

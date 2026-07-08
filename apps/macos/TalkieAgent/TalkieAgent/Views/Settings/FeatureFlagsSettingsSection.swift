@@ -321,7 +321,7 @@ final class AgentFeatureFlagsModel: ObservableObject {
             }
 
             DistributedNotificationCenter.default().postNotificationName(
-                NSNotification.Name("to.talkie.app.agentHotkeysDidChange"),
+                NSNotification.Name("to.talkie.agentHotkeysDidChange"),
                 object: "featureCaptureEnabled",
                 userInfo: nil,
                 deliverImmediately: true
