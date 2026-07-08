@@ -64,6 +64,7 @@ private final class LiveSidecarSegmentTracker: @unchecked Sendable {
 @MainActor
 final class AgentController: ObservableObject {
     @MainActor static weak var current: AgentController?
+    private static let returnToOriginAfterPasteEnabled = false
 
     // State machine - centralized state management with validation
     private let stateMachine = LiveStateMachine()
@@ -82,8 +83,8 @@ final class AgentController: ObservableObject {
     private var createdInTalkieView: Bool = false  // Was Talkie Agent frontmost when recording started?
     private var intent: CaptureIntent = .paste  // Routing intent for current recording
     private var originalSelectedText: String?  // Text that was selected when recording started
-    private var startApp: NSRunningApplication?  // App where recording started (for return-to-origin)
-    private var originInsertionTarget: TranscriptInsertionTarget?  // Focused input captured at recording start
+    private var startApp: NSRunningApplication?  // App where recording started
+    private var originInsertionTarget: TranscriptInsertionTarget?  // Focused input bookmark when return-to-origin is enabled
     private var traceID: String?
 
     /// Performance trace for the current dictation flow (hotkey → paste)
@@ -1392,10 +1393,14 @@ final class AgentController: ObservableObject {
         let targetApp = NSWorkspace.shared.frontmostApplication
         log.info("Target app at hotkey: \(targetApp?.localizedName ?? "none") (\(targetApp?.bundleIdentifier ?? "?"))")
 
-        // Store an insertion bookmark before recording starts. This is not
-        // document/window context; it only lets paste return to this input.
         startApp = targetApp
-        originInsertionTarget = TranscriptInsertionTarget.capture(from: targetApp)
+        if Self.returnToOriginAfterPasteEnabled && LiveSettings.shared.returnToOriginAfterPaste {
+            originInsertionTarget = TranscriptInsertionTarget.capture(from: targetApp)
+        } else {
+            // Return-to-origin is paused because AX insertion bookmarks can add
+            // latency in the recording and delivery path.
+            originInsertionTarget = nil
+        }
         recordingStartTime = Date()
         recordingEndTime = nil
 
@@ -2244,7 +2249,7 @@ final class AgentController: ObservableObject {
                     let capturedContext = self.capturedContext
                     let capturedOriginTarget = self.originInsertionTarget
                     let currentTrace = trace
-                    let returnToOrigin = settings.returnToOriginAfterPaste
+                    let returnToOrigin = Self.returnToOriginAfterPasteEnabled && settings.returnToOriginAfterPaste
                     let routingModeStr = settings.routingMode == .paste ? "paste" : "clipboard"
                     let capturedRecordingId = self.recordingId
                     let capturedRecordingStartedAt = recordingStartTime
@@ -2294,17 +2299,15 @@ final class AgentController: ObservableObject {
                     let pasteTarget = returnToOrigin ? capturedOriginTarget : nil
                     let routeSucceeded = await router.handle(transcript: deliveryText, target: pasteTarget)
                     let pasteMs = trace?.end(routingMode) ?? 0
+                    let routeEnd = Date()
+                    let routeTimestamp = routeEnd.timeIntervalSince1970
                     logTiming("Router finished (\(pasteMs)ms)")
                     metadata.wasRouted = routeSucceeded
-                    if let storedRecordingId {
-                        if routeSucceeded {
-                            UnifiedDatabase.markPasted(id: storedRecordingId)
-                        } else {
-                            UnifiedDatabase.markRoutingFailed(id: storedRecordingId)
-                        }
+                    if routeSucceeded {
+                        SoundManager.shared.playPasted()
+                        ProcessingMilestones.shared.markSuccess()
                     }
 
-                    let routeEnd = Date()
                     let totalMs = Int(routeEnd.timeIntervalSince(pipelineStart) * 1000)
                     let postMs = Int(routeEnd.timeIntervalSince(engineEnd) * 1000)
                     let appMs = max(0, totalMs - transcriptionMs)
@@ -2316,10 +2319,13 @@ final class AgentController: ObservableObject {
 
                     let capturedMetadata = metadata
 
-                    Task.detached { [transcriptionMs, wordCount, audioFilename, durationSeconds, traceSuffix, totalMs, appMs, storedRecordingId] in
-                        await MainActor.run { SoundManager.shared.playPasted() }
-
+                    Task.detached { [transcriptionMs, wordCount, audioFilename, durationSeconds, traceSuffix, totalMs, appMs, storedRecordingId, routeSucceeded, routeTimestamp] in
                         if let id = storedRecordingId {
+                            if routeSucceeded {
+                                UnifiedDatabase.markPasted(id: id, timestamp: routeTimestamp)
+                            } else {
+                                UnifiedDatabase.markRoutingFailed(id: id)
+                            }
                             await TalkieAgentXPCService.shared.notifyDictationAdded()
                             await TranscriptionRetryManager.shared.refreshPendingCount()
                             if var baseline = capturedContext {
@@ -2350,7 +2356,6 @@ final class AgentController: ObservableObject {
                                 AppLogger.shared.log(.performance, "Trace complete", detail: trace.summary)
                             }
                             currentTrace?.invalidate()
-                            ProcessingMilestones.shared.markSuccess()
                         }
                     }
 
@@ -2453,7 +2458,7 @@ final class AgentController: ObservableObject {
                     let capturedContext = self.capturedContext
                     let capturedOriginTarget = self.originInsertionTarget
                     let currentTrace = trace
-                    let returnToOrigin = settings.returnToOriginAfterPaste
+                    let returnToOrigin = Self.returnToOriginAfterPasteEnabled && settings.returnToOriginAfterPaste
                     let capturedRecordingId = self.recordingId
                     let capturedRecordingStartedAt = recordingStartTime
                     let capturedRecordingEndedAt = recordingEndedAt
@@ -2502,17 +2507,15 @@ final class AgentController: ObservableObject {
                     let pasteTarget = returnToOrigin ? capturedOriginTarget : nil
                     let routeSucceeded = await router.handle(transcript: deliveryText, target: pasteTarget)
                     let pasteMs = trace?.end(routingMode) ?? 0
+                    let routeEnd = Date()
+                    let routeTimestamp = routeEnd.timeIntervalSince1970
                     logTiming("Router finished (\(pasteMs)ms)")
                     metadata.wasRouted = routeSucceeded
-                    if let storedRecordingId {
-                        if routeSucceeded {
-                            UnifiedDatabase.markPasted(id: storedRecordingId)
-                        } else {
-                            UnifiedDatabase.markRoutingFailed(id: storedRecordingId)
-                        }
+                    if routeSucceeded {
+                        SoundManager.shared.playPasted()
+                        ProcessingMilestones.shared.markSuccess()
                     }
 
-                    let routeEnd = Date()
                     let totalMs = Int(routeEnd.timeIntervalSince(pipelineStart) * 1000)
                     let postMs = Int(routeEnd.timeIntervalSince(engineEnd) * 1000)
                     let appMs = max(0, totalMs - transcriptionMs)
@@ -2524,10 +2527,13 @@ final class AgentController: ObservableObject {
 
                     let capturedMetadata = metadata
 
-                    Task.detached { [transcriptionMs, wordCount, audioFilename, durationSeconds, traceSuffix, totalMs, appMs, storedRecordingId] in
-                        await MainActor.run { SoundManager.shared.playPasted() }
-
+                    Task.detached { [transcriptionMs, wordCount, audioFilename, durationSeconds, traceSuffix, totalMs, appMs, storedRecordingId, routeSucceeded, routeTimestamp] in
                         if let id = storedRecordingId {
+                            if routeSucceeded {
+                                UnifiedDatabase.markPasted(id: id, timestamp: routeTimestamp)
+                            } else {
+                                UnifiedDatabase.markRoutingFailed(id: id)
+                            }
                             await TalkieAgentXPCService.shared.notifyDictationAdded()
                             await TranscriptionRetryManager.shared.refreshPendingCount()
                             if var baseline = capturedContext {
@@ -2557,7 +2563,6 @@ final class AgentController: ObservableObject {
                                 LivePerformanceStore.shared.add(metric)
                             }
                             currentTrace?.invalidate()
-                            ProcessingMilestones.shared.markSuccess()
                         }
                     }
 
@@ -2655,7 +2660,7 @@ final class AgentController: ObservableObject {
                 let dictationText = prepared.text
                 let metadataDict = buildMetadataDict(from: metadata)
                 let currentTrace = trace
-                let returnToOrigin = settings.returnToOriginAfterPaste
+                let returnToOrigin = Self.returnToOriginAfterPasteEnabled && settings.returnToOriginAfterPaste
                 let routingModeStr = settings.routingMode == .paste ? "paste" : "clipboard"
                 let capturedRecordingId = self.recordingId
                 let capturedRecordingStartedAt = recordingStartTime
@@ -2706,18 +2711,16 @@ final class AgentController: ObservableObject {
                 let pasteTarget = returnToOrigin ? capturedOriginTarget : nil
                 let routeSucceeded = await router.handle(transcript: deliveryText, target: pasteTarget)
                 let pasteMs = trace?.end(routingMode) ?? 0
+                let routeEnd = Date()
+                let routeTimestamp = routeEnd.timeIntervalSince1970
                 logTiming("Router finished (\(pasteMs)ms)")
                 metadata.wasRouted = routeSucceeded
-                if let storedRecordingId {
-                    if routeSucceeded {
-                        UnifiedDatabase.markPasted(id: storedRecordingId)
-                    } else {
-                        UnifiedDatabase.markRoutingFailed(id: storedRecordingId)
-                    }
+                if routeSucceeded {
+                    SoundManager.shared.playPasted()
+                    ProcessingMilestones.shared.markSuccess()
                 }
 
                 // Calculate timing metrics immediately after paste for logs
-                let routeEnd = Date()
                 let totalMs = Int(routeEnd.timeIntervalSince(pipelineStart) * 1000)
                 let postMs = Int(routeEnd.timeIntervalSince(engineEnd) * 1000)
                 let appMs = max(0, totalMs - transcriptionMs)
@@ -2730,11 +2733,13 @@ final class AgentController: ObservableObject {
                 let capturedMetadata = metadata
 
                 // Fire-and-forget: post-delivery polish runs in background.
-                Task.detached { [transcriptionMs, wordCount, audioFilename, durationSeconds, traceSuffix, totalMs, appMs, storedRecordingId] in
-                    // Play sound
-                    await MainActor.run { SoundManager.shared.playPasted() }
-
+                Task.detached { [transcriptionMs, wordCount, audioFilename, durationSeconds, traceSuffix, totalMs, appMs, storedRecordingId, routeSucceeded, routeTimestamp] in
                     if let id = storedRecordingId {
+                        if routeSucceeded {
+                            UnifiedDatabase.markPasted(id: id, timestamp: routeTimestamp)
+                        } else {
+                            UnifiedDatabase.markRoutingFailed(id: id)
+                        }
                         await TalkieAgentXPCService.shared.notifyDictationAdded()
                         await TranscriptionRetryManager.shared.refreshPendingCount()
                         if var baseline = capturedContext {
@@ -2771,7 +2776,6 @@ final class AgentController: ObservableObject {
                         }
                         // Clean up trace after we're done with it
                         currentTrace?.invalidate()
-                        ProcessingMilestones.shared.markSuccess()
                     }
                 }
             }

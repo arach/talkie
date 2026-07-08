@@ -194,6 +194,7 @@ struct TranscriptRouter: AgentRouter {
 
     @MainActor @discardableResult
     func handle(transcript: String, target: TranscriptInsertionTarget?) async -> Bool {
+        let routeStartedAt = Date()
         let cleaned = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Filter noise
@@ -209,41 +210,53 @@ struct TranscriptRouter: AgentRouter {
             return false
         }
 
+        log.info("Transcript router start: mode=\(mode.rawValue), chars=\(cleaned.count), target=\(target?.label ?? "current")")
+
         // Copy to clipboard (required for both modes)
+        let copyStartedAt = Date()
         let copySuccess = copyToClipboard(cleaned)
         guard copySuccess else {
             log.error("Clipboard copy failed")
             return false
         }
+        log.info("Transcript router copied clipboard in \(Self.elapsedMs(since: copyStartedAt))ms (elapsed \(Self.elapsedMs(since: routeStartedAt))ms)")
 
         if mode == .paste {
-            // Cache setting before paste to avoid async hop after
-            let shouldPressEnter = await MainActor.run { LiveSettings.shared.pressEnterAfterPaste }
+            let shouldPressEnter = LiveSettings.shared.pressEnterAfterPaste
 
             guard !Task.isCancelled else { return false }
 
             if let target {
+                let prepareStartedAt = Date()
                 let prepared = await target.prepareForPaste()
+                log.info("Transcript router prepared target in \(Self.elapsedMs(since: prepareStartedAt))ms (elapsed \(Self.elapsedMs(since: routeStartedAt))ms)")
                 guard prepared else {
                     log.error("Could not restore origin paste target; leaving transcript on clipboard")
                     return false
                 }
             }
 
+            let modifierWaitStartedAt = Date()
             let modifiersReleased = await waitForModifierReleaseBeforePaste()
+            log.info("Transcript router modifier wait finished in \(Self.elapsedMs(since: modifierWaitStartedAt))ms (released=\(modifiersReleased), elapsed \(Self.elapsedMs(since: routeStartedAt))ms)")
             if !modifiersReleased {
                 log.warning("Continuing paste after modifier release timeout using isolated shortcut events")
             }
             // Paste: clipboard + simulated Cmd+V
+            let pasteStartedAt = Date()
             let pasted = simulatePaste()
+            log.info("Transcript router posted paste in \(Self.elapsedMs(since: pasteStartedAt))ms (elapsed \(Self.elapsedMs(since: routeStartedAt))ms)")
             guard pasted else { return false }
 
             // Optionally press Enter after paste (for chat apps, terminals)
             if shouldPressEnter {
+                let submitStartedAt = Date()
                 await submitAfterPaste()
+                log.info("Transcript router submitted after paste in \(Self.elapsedMs(since: submitStartedAt))ms (elapsed \(Self.elapsedMs(since: routeStartedAt))ms)")
             }
         }
 
+        log.info("Transcript router complete in \(Self.elapsedMs(since: routeStartedAt))ms")
         return true
     }
 
@@ -317,6 +330,10 @@ struct TranscriptRouter: AgentRouter {
         if flags.contains(.shift) { parts.append("shift") }
         if flags.contains(.command) { parts.append("command") }
         return parts.isEmpty ? "none" : parts.joined(separator: "+")
+    }
+
+    private static func elapsedMs(since start: Date) -> Int {
+        Int(Date().timeIntervalSince(start) * 1000)
     }
 
     @MainActor
