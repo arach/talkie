@@ -2,10 +2,9 @@
 //  ScopeHomeView.swift
 //  Talkie macOS
 //
-//  Cream-phosphor Home that mirrors the usetalkie.com homepage
-//  vocabulary: eyebrow + serif headline, instrument-bay capture cards
-//  with channel tags, a dark agent-handoff panel embedded in the cream
-//  surface, and a signal-table activity list.
+//  Scope Home in an instrument-room treatment: Talkie-native agent
+//  stats, recent captures, routines, and tips on the canonical
+//  adaptive Scope surfaces.
 //
 //  Only mounted when SettingsManager.shared.isScopeTheme is true —
 //  HomeScreen branches on theme and renders the existing grid view
@@ -91,8 +90,7 @@ struct ScopeHomeView: View {
                 // Top padding clears the universal ScopeTopBand (44pt
                 // tall, offset by 4pt) plus enough breathing room that
                 // the agent panel's RUNNING strip doesn't crowd the
-                // band's bottom rule. Was 8pt — felt clipped under the
-                // band.
+                // band's bottom rule.
                 .padding(.top, ScopeTopBandLayout.height + ScopeTopBandLayout.topInset + 20)
                 .padding(.bottom, 32)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -263,7 +261,9 @@ struct ScopeHomeView: View {
                                 glyph: "●",
                                 line: rowLine(for: obj),
                                 body: nil,
+                                media: audioMedia(for: obj),
                                 meta: durationLabel(obj.duration),
+                                secondaryMeta: wordCountLabel(obj.text),
                                 when: whenLabel(obj.createdAt),
                                 onTap: { NavigationState.shared.navigate(to: .recordings, params: ["recordingId": obj.id.uuidString]) },
                                 menuActions: memoMenuActions(for: obj),
@@ -290,7 +290,9 @@ struct ScopeHomeView: View {
                                 glyph: "○",
                                 line: rowLine(for: obj),
                                 body: nil,
-                                meta: wordCountLabel(obj.text),
+                                media: audioMedia(for: obj),
+                                meta: durationLabel(obj.duration),
+                                secondaryMeta: wordCountLabel(obj.text),
                                 when: whenLabel(obj.createdAt),
                                 onTap: { NavigationState.shared.navigate(to: .dictations, params: ["recordingId": obj.id.uuidString]) },
                                 menuActions: dictationMenuActions(for: obj),
@@ -321,6 +323,7 @@ struct ScopeHomeView: View {
                                 glyph: "◫",
                                 line: item.line,
                                 body: nil,
+                                media: item.fileURL.map { .thumbnail($0) },
                                 meta: item.meta,
                                 when: whenLabel(item.date),
                                 onTap: { openRecentCapture(item) },
@@ -332,6 +335,7 @@ struct ScopeHomeView: View {
                             glyph: "◫",
                             label: "Capture screen",
                             kbd: ["⌃", "⇧", "⌘", "S"],
+                            detail: "Grab a region or window",
                             onTap: triggerCapture
                         ),
                         shortcutLetter: "C"
@@ -364,6 +368,7 @@ struct ScopeHomeView: View {
                             glyph: "¶",
                             label: "Write a note",
                             kbd: ["⌃", "⇧", "⌘", "N"],
+                            detail: "Start a text capture",
                             onTap: triggerNewNote
                         ),
                         shortcutLetter: "N"
@@ -733,6 +738,27 @@ struct ScopeHomeView: View {
         if text.isEmpty { return obj.title ?? "Untitled" }
         return text
     }
+    private func audioMedia(for obj: TalkieObject) -> RecentRowMedia? {
+        let audioMetrics = obj.metadata?.audio
+        let hasAudioSignal = obj.duration > 0 || obj.hasAudio || audioMetrics != nil
+        guard hasAudioSignal else { return nil }
+
+        let peak = Double(audioMetrics?.peakAmplitude ?? 0)
+        let average = Double(audioMetrics?.averageAmplitude ?? 0)
+        let durationSignal = min(0.84, max(0.22, obj.duration / 180))
+        let measuredSignal = min(1.0, max(peak, average * 1.5))
+        return .waveform(
+            seed: waveformSeed(for: obj.id),
+            strength: max(durationSignal, measuredSignal)
+        )
+    }
+    private func waveformSeed(for id: UUID) -> Int {
+        var hash = 5381
+        for byte in id.uuidString.utf8 {
+            hash = ((hash << 5) &+ hash) &+ Int(byte)
+        }
+        return Int(UInt(bitPattern: hash) & UInt(Int.max))
+    }
     private func noteTitle(for obj: TalkieObject) -> String {
         if let title = obj.title, !title.isEmpty { return title }
         let text = (obj.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -790,9 +816,9 @@ struct ScopeHomeView: View {
     // MARK: - Routines strip (Workflows · Console)
     //
     // RESTORED from the original HomeGrid taxonomy (actionWorkflows +
-    // actionHelpers + featureAgentConsole). Now demoted to borderless
-    // rule-separated rows on the canvas so Bay + Recent keep the only
-    // card weight on the page.
+    // actionHelpers + featureAgentConsole). Demoted to a shared
+    // rule-separated strip so Bay + Recent keep the strongest visual
+    // weight on the page.
     //
     // Console data remains stubbed until an active ConsoleRegistry lands.
 
@@ -857,6 +883,9 @@ struct ScopeHomeView: View {
                 leading: .filled,
                 label: run.workflowName,
                 trailing: workflowRunTimeText(run.runDate),
+                subtitle: "Successful local run",
+                chips: ["Run activity", "Local"],
+                treatment: .workflow,
                 onSelect: {
                     NavigationState.shared.navigate(
                         to: .workflows,
@@ -868,9 +897,12 @@ struct ScopeHomeView: View {
 
         if rows.isEmpty {
             return [.init(
-                leading: .hollow,
-                label: "Ready",
-                trailing: "",
+                leading: .filled,
+                label: "Hey Talkie",
+                trailing: "Ready",
+                subtitle: "Voice-triggered capture cleanup",
+                chips: ["Voice trigger", "Transcribe", "Clean up"],
+                treatment: .workflow,
                 onSelect: { NavigationState.shared.navigate(to: .workflows) }
             )]
         }
@@ -882,14 +914,19 @@ struct ScopeHomeView: View {
         [
             .init(
                 leading: .filled, label: "iTerm2", trailing: "ACTIVE",
+                subtitle: "~/talkie › talkie watch --local",
+                chips: ["Listening", "Local"],
+                treatment: .consoleActive,
                 onSelect: { NavigationState.shared.navigate(to: .systemConsole) }
             ),
             .init(
                 leading: .filled, label: "Codex",  trailing: "IDLE",
+                subtitle: "idle session",
                 onSelect: { NavigationState.shared.navigate(to: .systemConsole) }
             ),
             .init(
                 leading: .hollow, label: "Claude", trailing: "OFF",
+                subtitle: "session ended",
                 onSelect: { NavigationState.shared.navigate(to: .systemConsole) }
             ),
         ]
@@ -1720,10 +1757,14 @@ private struct BackgroundWaveform: View {
 
 private struct RoutinesPanel: View {
     enum Dot { case filled, hollow }
+    enum Treatment { case standard, workflow, consoleActive }
     struct Row {
         let leading: Dot
         let label: String
         let trailing: String
+        var subtitle: String? = nil
+        var chips: [String] = []
+        var treatment: Treatment = .standard
         var onSelect: (() -> Void)? = nil
     }
 
@@ -1774,42 +1815,7 @@ private struct RoutinesPanel: View {
                     // Row + trailing rule wrapped in a VStack so the
                     // conditional view has a stable layout slot.
                     VStack(spacing: 0) {
-                        Button {
-                            row.onSelect?()
-                        } label: {
-                            HStack(spacing: 10) {
-                                Circle()
-                                    .fill(row.leading == .filled ? accent : Color.clear)
-                                    .overlay(
-                                        Circle().stroke(accent.opacity(0.88), lineWidth: row.leading == .hollow ? 1 : 0)
-                                    )
-                                    .shadow(color: row.leading == .filled ? accent.opacity(0.22) : .clear, radius: 2)
-                                    .frame(width: 5, height: 5)
-                                Text(row.label)
-                                    .font(.system(size: 12, weight: .regular))
-                                    .foregroundStyle(hoveredRowIndex == idx ? accent : ScopeInk.primary)
-                                Spacer()
-                                Text(row.trailing.uppercased())
-                                    .font(ScopeType.chrome)
-                                    .tracking(ScopeType.Tracking.wide)
-                                    .foregroundStyle(ScopeInk.subtle)
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 7.5)
-                            .background(
-                                hoveredRowIndex == idx
-                                ? accent.opacity(0.05)
-                                : Color.clear
-                            )
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(row.onSelect == nil)
-                        .onHover { hover in
-                            if row.onSelect != nil {
-                                hoveredRowIndex = hover ? idx : (hoveredRowIndex == idx ? nil : hoveredRowIndex)
-                            }
-                        }
+                        routineRow(row, index: idx)
 
                         if idx < rows.count - 1 {
                             ScopeRule(.row)
@@ -1847,6 +1853,159 @@ private struct RoutinesPanel: View {
         }
         .frame(maxWidth: .infinity)
         .animation(.easeOut(duration: 0.16), value: footerHovered)
+    }
+
+    private func routineRow(_ row: Row, index: Int) -> some View {
+        Button {
+            row.onSelect?()
+        } label: {
+            Group {
+                switch row.treatment {
+                case .standard:
+                    compactRow(row, index: index)
+                case .workflow, .consoleActive:
+                    featureRow(row, index: index)
+                }
+            }
+            .background(hoveredRowIndex == index ? accent.opacity(0.045) : Color.clear)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(row.onSelect == nil)
+        .onHover { hover in
+            if row.onSelect != nil {
+                hoveredRowIndex = hover ? index : (hoveredRowIndex == index ? nil : hoveredRowIndex)
+            }
+        }
+    }
+
+    private func compactRow(_ row: Row, index: Int) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            routineDot(row)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(row.label)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(hoveredRowIndex == index ? accent : ScopeInk.primary)
+                    .lineLimit(1)
+                if let subtitle = row.subtitle, !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.system(size: 10))
+                        .foregroundStyle(ScopeInk.faint)
+                        .lineLimit(1)
+                }
+            }
+            Spacer()
+            Text(row.trailing.uppercased())
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopeInk.subtle)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, row.subtitle == nil ? 7.5 : 8.5)
+    }
+
+    private func featureRow(_ row: Row, index: Int) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                routineDot(row)
+                    .padding(.top, 5)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(row.label)
+                        .font(ScopeType.display(size: 18, weight: .medium))
+                        .foregroundStyle(hoveredRowIndex == index ? accent : ScopeInk.primary)
+                        .lineLimit(1)
+                    if let subtitle = row.subtitle, !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(row.treatment == .consoleActive ? ScopeType.chrome : Font.system(size: 11))
+                            .tracking(row.treatment == .consoleActive ? 0.9 : 0)
+                            .foregroundStyle(ScopeInk.faint)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 12)
+                VStack(alignment: .trailing, spacing: 6) {
+                    Text(row.trailing.uppercased())
+                        .font(ScopeType.chrome)
+                        .tracking(ScopeType.Tracking.wide)
+                        .foregroundStyle(row.treatment == .consoleActive ? accent : ScopeInk.subtle)
+                    if row.treatment == .workflow {
+                        RoutineHistogram(seed: row.label.hashValue, accent: accent)
+                            .frame(width: 92, height: 28)
+                    }
+                }
+            }
+
+            if !row.chips.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(row.chips.prefix(4), id: \.self) { chip in
+                        RoutineChip(label: chip, accent: accent)
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(ScopeInk.primary.opacity(0.025))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+        )
+    }
+
+    private func routineDot(_ row: Row) -> some View {
+        Circle()
+            .fill(row.leading == .filled ? accent : Color.clear)
+            .overlay(
+                Circle().stroke(accent.opacity(0.72), lineWidth: row.leading == .hollow ? 1 : 0)
+            )
+            .shadow(color: row.leading == .filled ? accent.opacity(0.16) : .clear, radius: 2)
+            .frame(width: 5, height: 5)
+    }
+}
+
+private struct RoutineChip: View {
+    let label: String
+    let accent: Color
+
+    var body: some View {
+        Text(label.uppercased())
+            .font(.system(size: 8.5, weight: .semibold, design: .monospaced))
+            .tracking(1.0)
+            .foregroundStyle(ScopeInk.faint)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(accent.opacity(0.055))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .strokeBorder(accent.opacity(0.12), lineWidth: 0.5)
+            )
+    }
+}
+
+private struct RoutineHistogram: View {
+    let seed: Int
+    let accent: Color
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 2) {
+            ForEach(0..<14, id: \.self) { idx in
+                RoundedRectangle(cornerRadius: 1, style: .continuous)
+                    .fill(accent.opacity(idx < 5 ? 0.48 : 0.28))
+                    .frame(width: 3, height: sample(index: idx))
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+    }
+
+    private func sample(index: Int) -> CGFloat {
+        let phase = Double(abs(seed % 251)) * 0.021
+        let value = (sin(Double(index) * 0.55 + phase) + 1.0) * 0.5
+        return 6 + CGFloat(value) * 20
     }
 }
 
