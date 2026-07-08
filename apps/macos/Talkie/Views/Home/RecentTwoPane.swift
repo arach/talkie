@@ -228,6 +228,31 @@ private struct CmdGlyphBadge: View {
     }
 }
 
+// MARK: - Header link
+//
+// "ALL MEMOS →" style trailing link. Idle it sits at whatever ink the
+// section hands it; on hover it lifts to brass — the page's standing
+// quiet-action color — instead of a fill, so header chrome stays flat.
+private struct RecentHeaderLink: View {
+    let label: String
+    let idleColor: Color
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Text("\(label) →")
+                .font(RecentFont.mono(size: 8, weight: .semibold))
+                .tracking(2.0)
+                .foregroundStyle(isHovered ? ScopeBrass.solid : idleColor)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovered)
+    }
+}
+
 // MARK: - TwoPane container
 
 struct RecentTwoPaneSection: View {
@@ -269,6 +294,10 @@ private struct RecentPane: View {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(RecentPaneTokens.cardBg)
         )
+        // Clip before the border: the header cap band and row hover
+        // fills are square rectangles that would otherwise poke past
+        // the rounded corners.
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         .scopeCardBorder(cornerRadius: 6)
         .shadow(color: Color.black.opacity(0.04), radius: 1, y: 1)
     }
@@ -289,6 +318,11 @@ private struct RecentPane: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        // Whisper-level cap band (the library's bgSunk idiom) so the
+        // Voice / Content headers read as the card's cap, not another
+        // row. Appearance-agnostic: primary ink darkens light panes,
+        // lightens dark ones.
+        .background(ScopeInk.primary.opacity(0.02))
         .overlay(ScopeRule(.section), alignment: .bottom)
     }
 }
@@ -304,10 +338,17 @@ private struct RecentSubBand: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text("· \(section.eyebrow.uppercased())")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .tracking(1.8)
-                    .foregroundStyle(ScopeInk.faint)
+                // The middot carries the section's tint; the label sits
+                // one ink step above the count so the eyebrow anchors
+                // the sub-band instead of blending into its metadata.
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text("·")
+                        .foregroundStyle(tint.opacity(0.85))
+                    Text(section.eyebrow.uppercased())
+                        .foregroundStyle(ScopeInk.muted)
+                }
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .tracking(1.8)
                 Text(section.count.uppercased())
                     .font(RecentFont.mono(size: 9, weight: .medium))
                     .tracking(1.8)
@@ -320,21 +361,17 @@ private struct RecentSubBand: View {
                 // reflows and it never collides with the secondary link.
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
                     if let secondaryLabel = section.secondaryLabel, let onSecondary = section.onSecondary {
-                        Button(action: onSecondary) {
-                            Text("\(secondaryLabel) →")
-                                .font(RecentFont.mono(size: 8, weight: .semibold))
-                                .tracking(2.0)
-                                .foregroundStyle(tint.opacity(0.86))
-                        }
-                        .buttonStyle(.plain)
+                        RecentHeaderLink(
+                            label: secondaryLabel,
+                            idleColor: tint.opacity(0.86),
+                            action: onSecondary
+                        )
                     }
-                    Button(action: section.onLibrary) {
-                        Text("\(section.libraryLabel) →")
-                            .font(RecentFont.mono(size: 8, weight: .semibold))
-                            .tracking(2.0)
-                            .foregroundStyle(ScopeInk.faint)
-                    }
-                    .buttonStyle(.plain)
+                    RecentHeaderLink(
+                        label: section.libraryLabel,
+                        idleColor: ScopeInk.faint,
+                        action: section.onLibrary
+                    )
                 }
                 .overlay(alignment: .leading) {
                     if cmdHeld, let letter = section.shortcutLetter {
@@ -382,10 +419,20 @@ private struct RecentRowView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, verticalPadding)
             .background(isHovered ? rowHoverFill : Color.clear)
+            // Leading tick on hover — the ScopeRule(.action) idiom at
+            // whisper strength. Marks the active row without lifting
+            // or darkening it.
+            .overlay(alignment: .leading) {
+                Rectangle()
+                    .fill(tint.opacity(isHovered ? 0.55 : 0))
+                    .frame(width: 2)
+                    .padding(.vertical, 5)
+            }
         }
         .buttonStyle(.plain)
         .overlay(ScopeRule(.subtle), alignment: .top)
         .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovered)
         .modifier(RecentRowContextMenu(actions: row.menuActions))
     }
 
@@ -529,14 +576,19 @@ private struct RecentWaveformLine: View {
 
     var body: some View {
         GeometryReader { geo in
+            // Bar count adapts to the slot so the tape runs edge to
+            // edge and the duration label reads as its counter. Pitch:
+            // 5pt bars (7pt every 7th) + 3pt gap ≈ 8.3pt per bar —
+            // floor keeps the last bar inside the slot.
+            let barCount = max(18, Int((geo.size.width + 3) / 8.3))
             ZStack {
                 Rectangle()
                     .fill(tint.opacity(0.18))
                     .frame(height: 1)
                 HStack(alignment: .center, spacing: 3) {
-                    ForEach(0..<30, id: \.self) { idx in
+                    ForEach(0..<barCount, id: \.self) { idx in
                         RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                            .fill(tint.opacity(idx % 5 == 0 ? 0.92 : 0.62))
+                            .fill(tint.opacity(idx % 5 == 0 ? 0.88 : 0.55))
                             .frame(
                                 width: Self.blockWidth(index: idx),
                                 height: max(3, geo.size.height * Self.sample(index: idx, seed: seed, strength: strength))
@@ -565,11 +617,12 @@ private struct RecentWaveformLine: View {
 private struct RecentCaptureThumbnail: View {
     let url: URL
     let tint: Color
+    @State private var image: NSImage?
 
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                if let image = NSImage(contentsOf: url) {
+                if let image {
                     Image(nsImage: image)
                         .resizable()
                         .scaledToFill()
@@ -587,13 +640,85 @@ private struct RecentCaptureThumbnail: View {
             .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
             .overlay(alignment: .bottom) {
                 Rectangle()
-                    .fill(tint.opacity(0.48))
+                    .fill(tint.opacity(0.40))
                     .frame(height: 1)
             }
             .overlay(
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
                     .strokeBorder(ScopeEdge.subtle, lineWidth: 0.5)
             )
+            // Barely-there lift so the capture reads as a mounted
+            // print on the pane, not a flat inline block.
+            .shadow(color: ScopeInk.primary.opacity(0.08), radius: 1.5, y: 1)
+        }
+        .task(id: url) {
+            if let cached = RecentThumbnailCache.image(for: url.path) {
+                image = cached
+                return
+            }
+            let thumbnail = await RecentThumbnailLoader.thumbnail(for: url, maxPixelSize: 176)
+            guard !Task.isCancelled else { return }
+            if let thumbnail {
+                RecentThumbnailCache.set(thumbnail, for: url.path)
+            }
+            image = thumbnail
+        }
+    }
+}
+
+// MARK: - Thumbnail loading
+//
+// Rows re-render on hover, so thumbnails must stay off the render
+// path — `NSImage(contentsOf:)` in `body` was re-decoding the full
+// screenshot PNG on every hover flip. Compact mirror of the library
+// list's loader: decode a downsampled CGImage off-main, cache by path.
+// 176px max edge covers the 66×38pt slot at 2× with fill headroom.
+
+@MainActor
+private enum RecentThumbnailCache {
+    private static let images: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 24
+        return cache
+    }()
+
+    static func image(for key: String) -> NSImage? {
+        images.object(forKey: key as NSString)
+    }
+
+    static func set(_ image: NSImage, for key: String) {
+        images.setObject(image, forKey: key as NSString)
+    }
+}
+
+private enum RecentThumbnailLoader {
+    static func thumbnail(for url: URL, maxPixelSize: Int) async -> NSImage? {
+        let box = await Task.detached(priority: .utility) {
+            SendableCGImageBox(decode(url: url, maxPixelSize: maxPixelSize))
+        }.value
+        guard let cgImage = box.image else { return nil }
+        return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+    }
+
+    private static func decode(url: URL, maxPixelSize: Int) -> CGImage? {
+        let options: [CFString: Any] = [kCGImageSourceShouldCache: false]
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, options as CFDictionary) else {
+            return nil
+        }
+        let thumbnailOptions: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary)
+    }
+
+    private final class SendableCGImageBox: @unchecked Sendable {
+        let image: CGImage?
+
+        init(_ image: CGImage?) {
+            self.image = image
         }
     }
 }
@@ -633,9 +758,18 @@ private struct EmptyCTARow: View {
             .padding(.horizontal, 14)
             .padding(.vertical, isRichAction ? 12 : 10)
             .background(isHovered ? hoverFill : Color.clear)
+            // Same leading tick as populated rows — the CTA is a row
+            // in the shared anatomy, so it hovers like one.
+            .overlay(alignment: .leading) {
+                Rectangle()
+                    .fill(tint.opacity(isHovered ? 0.55 : 0))
+                    .frame(width: 2)
+                    .padding(.vertical, 5)
+            }
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovered)
         .overlay(
             ScopeRule(.row),
             alignment: .top

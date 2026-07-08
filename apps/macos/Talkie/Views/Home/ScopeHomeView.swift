@@ -1824,6 +1824,7 @@ private struct RoutinesPanel: View {
                     }
                 }
             }
+            .animation(.easeOut(duration: 0.14), value: hoveredRowIndex)
 
             ScopeRule(.section)
                 .padding(.horizontal, 16)
@@ -1888,8 +1889,12 @@ private struct RoutinesPanel: View {
                     .foregroundStyle(hoveredRowIndex == index ? accent : ScopeInk.primary)
                     .lineLimit(1)
                 if let subtitle = row.subtitle, !subtitle.isEmpty {
+                    // Mono subtitle — these read as session/state lines
+                    // ("idle session", "session ended"), so they wear
+                    // the console voice, not body copy.
                     Text(subtitle)
-                        .font(.system(size: 10))
+                        .font(.system(size: 9.5, design: .monospaced))
+                        .tracking(0.5)
                         .foregroundStyle(ScopeInk.faint)
                         .lineLimit(1)
                 }
@@ -1910,8 +1915,11 @@ private struct RoutinesPanel: View {
                 routineDot(row)
                     .padding(.top, 5)
                 VStack(alignment: .leading, spacing: 3) {
+                    // Display 16, one step under the Recent pane rhythm
+                    // (header 14 / rows 12–13) — richer than a list row
+                    // without outranking the panel title above it.
                     Text(row.label)
-                        .font(ScopeType.display(size: 18, weight: .medium))
+                        .font(ScopeType.display(size: 16, weight: .medium))
                         .foregroundStyle(hoveredRowIndex == index ? accent : ScopeInk.primary)
                         .lineLimit(1)
                     if let subtitle = row.subtitle, !subtitle.isEmpty {
@@ -1947,8 +1955,15 @@ private struct RoutinesPanel: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(
+            // Hairline on the inset card so the featured row reads as
+            // a deliberate plate, not a smudge of ink — the wash alone
+            // lost its edge on the cream pane.
             RoundedRectangle(cornerRadius: 5, style: .continuous)
                 .fill(ScopeInk.primary.opacity(0.025))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .strokeBorder(ScopeEdge.subtle, lineWidth: 0.5)
+                )
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
         )
@@ -1993,9 +2008,12 @@ private struct RoutineHistogram: View {
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 2) {
+            // Bars read oldest→newest, left→right; the emphasis sits
+            // on the trailing (most recent) bars. The old `idx < 5`
+            // highlighted the oldest end — backwards for "activity."
             ForEach(0..<14, id: \.self) { idx in
                 RoundedRectangle(cornerRadius: 1, style: .continuous)
-                    .fill(accent.opacity(idx < 5 ? 0.48 : 0.28))
+                    .fill(accent.opacity(idx >= 10 ? 0.46 : 0.26))
                     .frame(width: 3, height: sample(index: idx))
             }
         }
