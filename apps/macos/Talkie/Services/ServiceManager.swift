@@ -417,7 +417,7 @@ public final class ServiceManager {
         if isProduction {
             // Production: install launch agents to ~/Library/LaunchAgents/ and bootstrap.
             // The embedded engine now lives inside TalkieAgent, so there is no standalone engine helper.
-            try? await HelperLaunchManager.shared.launch(.agent, resolvingConflicts: true)
+            try? await HelperLaunchManager.shared.launch(.agent)
             // Only install sync launch agent if iCloud sync is enabled AND auto-sync is on
             if shouldAutoStartSync {
                 try? HelperLaunchManager.shared.installLaunchAgent(for: .sync)
@@ -700,31 +700,14 @@ public final class ServiceManager {
         logger.info("[ServiceManager] \(shouldRefresh ? "Refreshing" : "Launching") Live (\(env.displayName))...")
 
         if shouldRefresh, let pid = live.processId {
-            _ = terminateProcess(pid: pid)
+            terminateProcess(pid: pid)
         }
 
-        if resolvingConflicts {
-            Task {
-                do {
-                    try await HelperLaunchManager.shared.launch(.agent, resolvingConflicts: true)
-                } catch {
-                    logger.error("[ServiceManager] Failed to launch Agent with conflict resolution: \(error.localizedDescription)")
-                }
-            }
-        } else if env == .production {
-            // Production: kickstart via launchd so MachServices are registered
-            let label = TalkieHelper.agent.launchdLabel(for: env)
-            let destPlist = userLaunchAgentsDir.appendingPathComponent("\(label).plist")
-            if FileManager.default.fileExists(atPath: destPlist.path) {
-                bootstrapAgent(label: label, plistPath: destPlist)
-            } else {
-                // Not installed yet - install and bootstrap
-                installLaunchAgentIfNeeded(label: label)
-            }
-        } else {
-            // Dev/staging: regenerate the launch agent against the stable dev install.
-            Task {
-                try? await HelperLaunchManager.shared.launch(.agent, resolvingConflicts: true)
+        Task {
+            do {
+                try await HelperLaunchManager.shared.launch(.agent, resolvingConflicts: resolvingConflicts)
+            } catch {
+                logger.error("[ServiceManager] Failed to launch Agent: \(error.localizedDescription)")
             }
         }
 
@@ -1778,7 +1761,7 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
         // Auto-launch TalkieAgent if XPC connection fails
         xpcManager?.autoLaunchHandler = {
             logger.info("[Agent] Auto-launching Talkie Agent...")
-            ServiceManager.shared.launchLive(resolvingConflicts: true)
+            ServiceManager.shared.launchLive()
         }
 
         xpcManager?.$connectionInfo

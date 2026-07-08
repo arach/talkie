@@ -814,6 +814,11 @@ private struct AgentMenuRecentGrabsSection: View {
         )) { _ in
             Task { await loadPreviews() }
         }
+        .onReceive(DistributedNotificationCenter.default().publisher(
+            for: Notification.Name(TalkieLibraryNotifications.recordsDidChange)
+        )) { _ in
+            Task { await loadPreviews() }
+        }
         .animation(.easeInOut(duration: 0.16), value: previews.map(\.id))
     }
 
@@ -976,7 +981,88 @@ private struct AgentMenuGrabTile: View {
 
 private enum AgentMenuGrabPreviewLoader {
     static func previews(limit: Int) async -> [AgentMenuGrabPreview] {
-        []
+        let records = UnifiedDatabase.recentCaptures(limit: max(limit * 3, limit))
+        let items = records.compactMap { item(from: $0) }
+        var previews: [AgentMenuGrabPreview] = []
+        previews.reserveCapacity(min(limit, items.count))
+
+        for item in items.prefix(max(0, limit)) {
+            let thumbnail = await AgentMenuGrabThumbnailLoader.thumbnail(for: item)
+            previews.append(AgentMenuGrabPreview(item: item, thumbnail: thumbnail))
+        }
+
+        return previews
+    }
+
+    private static func item(from record: LiveRecording) -> AgentLiveTrayItem? {
+        guard let assets = TalkieObjectAssets.from(json: record.assetsJSON) else {
+            return nil
+        }
+
+        if let screenshot = assets.screenshots?.first,
+           let fileURL = CaptureMediaFileResolver.screenshotURL(filename: screenshot.filename) {
+            return AgentLiveTrayItem(
+                id: record.id,
+                kind: .screenshot,
+                capturedAt: record.createdAt,
+                filename: screenshot.filename,
+                width: screenshot.width ?? 0,
+                height: screenshot.height ?? 0,
+                captureMode: screenshot.captureMode,
+                windowTitle: screenshot.windowTitle,
+                appName: screenshot.appName,
+                appBundleID: screenshot.appBundleID,
+                displayName: screenshot.displayName,
+                ocrText: ocrText(for: screenshot.filename, in: assets),
+                fileURL: fileURL
+            )
+        }
+
+        if let clip = assets.clips?.first,
+           let fileURL = CaptureMediaFileResolver.clipURL(filename: clip.filename) {
+            return AgentLiveTrayItem(
+                id: record.id,
+                kind: .clip,
+                capturedAt: record.createdAt,
+                durationMs: clip.durationMs,
+                filename: clip.filename,
+                width: clip.width ?? 0,
+                height: clip.height ?? 0,
+                captureMode: clip.captureMode ?? "clip",
+                windowTitle: clip.windowTitle,
+                appName: clip.appName,
+                appBundleID: nil,
+                displayName: clip.displayName,
+                fileURL: fileURL
+            )
+        }
+
+        if let context = assets.visualContexts?.first,
+           let fileURL = CaptureMediaFileResolver.visualContextSourceURL(for: context) {
+            return AgentLiveTrayItem(
+                id: record.id,
+                kind: .clip,
+                capturedAt: record.createdAt,
+                durationMs: context.durationMs,
+                filename: fileURL.lastPathComponent,
+                width: context.width ?? 0,
+                height: context.height ?? 0,
+                captureMode: context.captureMode,
+                windowTitle: context.windowTitle,
+                appName: context.appName,
+                appBundleID: nil,
+                displayName: context.displayName,
+                fileURL: fileURL
+            )
+        }
+
+        return nil
+    }
+
+    private static func ocrText(for filename: String, in assets: TalkieObjectAssets) -> String? {
+        assets.textProvenance?.first {
+            $0.source == .ocr && ($0.sourceAssetId == nil || $0.sourceAssetId == filename)
+        }?.originalText
     }
 }
 

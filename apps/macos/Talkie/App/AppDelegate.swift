@@ -1969,18 +1969,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                 return event
             }
 
-            // Check if we're in a text input context - if so, pass through
-            if let responder = NSApp.keyWindow?.firstResponder {
-                // NSTextView = rich text editors, field editor, multi-line text
-                if responder is NSTextView {
-                    return event
-                }
-                // NSTextField / NSSearchField — typing must not be intercepted
-                if responder is NSTextField {
-                    return event
-                }
-                // Note: Avoid a blanket NSTextInputClient check — SwiftUI list/table focus
-                // often uses input contexts that are not real typing; that blocked J/K/O and ?.
+            // Compose is an editor-first surface. With WKWebView-backed
+            // content, AppKit can leave the accessibility-focused editable DOM
+            // out of `keyWindow.firstResponder`, which makes the guard below
+            // miss and causes single-key navigation to eat typed letters.
+            // While Compose is selected, let keystrokes flow through; menu
+            // shortcuts and capture chords still get their normal modifier
+            // handling via the rest of the responder chain/monitors.
+            if NavigationState.shared.selectedSection == .drafts {
+                return event
+            }
+
+            // Check if we're in a text input context - if so, pass through.
+            // WKWebView's editable content usually appears as a private
+            // WKContentView first responder rather than NSTextView, so include
+            // WebKit responders explicitly for the embedded compose editor.
+            if Self.isTextEditingResponder(NSApp.keyWindow?.firstResponder) {
+                return event
             }
 
             // Don't intercept if command palette, voice command, or keyboard help is active
@@ -2052,6 +2057,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         }
 
         logger.info("Single-key shortcuts: C (compose) | R (record) | D (dictations) | N (notes) | S (screenshots) | J/K | O | ? | ⌘⇧? hints | ⌃⇧? hints")
+    }
+
+    private static func isTextEditingResponder(_ responder: NSResponder?) -> Bool {
+        guard let responder else { return false }
+
+        // Native text controls and SwiftUI field editors.
+        if responder is NSTextView || responder is NSTextField {
+            return true
+        }
+
+        // Embedded web editors: WebKit puts focus on private NSView subclasses
+        // such as WKContentView, not on NSTextView. Detect those by walking the
+        // view ancestry instead of using broad NSTextInputClient matching, which
+        // previously swallowed list/navigation shortcuts.
+        guard let responderView = responder as? NSView else { return false }
+        var view: NSView? = responderView
+        while let current = view {
+            let className = NSStringFromClass(type(of: current))
+            if className.contains("WKWebView") ||
+               className.contains("WKContentView") ||
+               className.contains("WebHTMLView") {
+                return true
+            }
+            view = current.superview
+        }
+
+        return false
     }
 
     /// ⌘⇧/ or ⌃⇧/ — toggles non-modal shortcut hint panel (same key as `?`).
