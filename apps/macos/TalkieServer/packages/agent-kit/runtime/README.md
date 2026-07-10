@@ -1,16 +1,17 @@
 # Runtime
 
-The `runtime/` directory holds shared executable logic for generated AgentKit workspace tools.
+The `runtime/` directory holds shared executable logic for generated AgentKit workspace utilities.
 
 Current runtime:
 
 - `agent-tools.ts`
-  - the shared TypeScript implementation behind workspace memo and workflow inspection commands
+  - legacy support for older generated workspace utilities and non-database debug actions
 
 ## Boundary
 
-- business logic belongs here
-- shell wrappers should only resolve runtime prerequisites and dispatch into this code
+- agents should use supported `talkie` CLI commands or Talkie bridge/API surfaces for normal app-data inspection
+- database schema knowledge belongs in docs and owning code references, not in agent-facing shell helpers
+- shell wrappers, when present, should only dispatch to supported app/debug entrypoints
 - prompt and KB content should stay outside runtime code
 
 If you add a new runtime entrypoint:

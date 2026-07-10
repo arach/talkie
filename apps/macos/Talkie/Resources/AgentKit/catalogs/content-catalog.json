@@ -97,6 +97,14 @@
       "description": "Workflow storage, runtime configuration, and run-history guidance."
     },
     {
+      "id": "docs.cli-guide",
+      "collection": "docs",
+      "path": "docs/cli-guide.md",
+      "title": "Talkie CLI Guide",
+      "consumers": ["workspace-generator", "agents"],
+      "description": "Supported command-line interface for agent-facing app data inspection."
+    },
+    {
       "id": "docs.workflow-templates-readme",
       "collection": "docs",
       "path": "docs/workflow-templates-readme.md",
@@ -174,7 +182,7 @@
       "path": "runtime/agent-tools.ts",
       "title": "Agent Tools Runtime",
       "consumers": ["workspace-tools"],
-      "description": "Shared TypeScript runtime for generated workspace memo and workflow tools."
+      "description": "Shared TypeScript runtime for optional non-database workspace utilities."
     }
   ]
 }
