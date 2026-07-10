@@ -43,5 +43,6 @@ This file owns pinned state, auto-run, sort order, action-surface placement, con
 - inspect `Live Config/workflow-user/`
 - inspect `Workflow Templates/`
 - read `WORKFLOW_CAPABILITIES.md`
-- run `Tools/list-workflow-runs.sh`
-- run `Tools/list-workflow-runs.sh <memo-id-prefix>`
+- run `talkie workflows --pretty`
+- run `talkie workflows <run-id-prefix> --pretty`
+- run `talkie search <query> --type memo --pretty` when you need to connect a memo to workflow output
