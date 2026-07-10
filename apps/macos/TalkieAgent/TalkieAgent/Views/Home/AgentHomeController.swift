@@ -79,7 +79,7 @@ final class AgentHomeController: NSObject, ObservableObject, NSWindowDelegate {
 
         let hostingView = NSHostingView(rootView: view)
         let homeWindow = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1040, height: 660),
+            contentRect: NSRect(x: 0, y: 0, width: 1080, height: 1160),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
@@ -95,7 +95,7 @@ final class AgentHomeController: NSObject, ObservableObject, NSWindowDelegate {
         // Versioned autosave key: the previous key restored a stale, undersized
         // frame (smaller than minSize), which clipped the settings layout. Bumping
         // the key discards old saved frames so the window opens at its real default.
-        homeWindow.setFrameAutosaveName("TalkieAgent.AgentHome.compact.v3")
+        homeWindow.setFrameAutosaveName("TalkieAgent.AgentHome.command-center.v5")
         homeWindow.center()
         homeWindow.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)

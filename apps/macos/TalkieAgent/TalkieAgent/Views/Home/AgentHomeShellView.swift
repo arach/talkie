@@ -56,35 +56,13 @@ struct AgentHomeShellView: View {
         OpsShell {
             sidebar
         } trailing: {
-            inspector
+            EmptyView()
         } content: {
             content
         } statusBar: {
             statusBar
         }
                 .opsManifest(manifest)
-                // Compact-rail hover tooltip — the same TalkieKit overlay the
-                // Talkie app mounts, reading the per-shell SidebarTooltipState
-                // that the Sidebar writes on hover. Spans the shell so the label
-                // isn't clipped by the 40pt rail.
-                .overlay(alignment: .topLeading) {
-                    SidebarTooltipOverlay(
-                        surface: OpsInk.surface,
-                        foreground: OpsInk.ink,
-                        tooltipState: sidebarTooltipState
-                    )
-                }
-                .background {
-                    GeometryReader { proxy in
-                        Color.clear
-                            .onAppear {
-                                collapseInspectorIfNeeded(width: proxy.size.width)
-                            }
-                            .onChange(of: proxy.size.width) { _, newWidth in
-                                collapseInspectorIfNeeded(width: newWidth)
-                            }
-                    }
-                }
         // Agent Home follows the user's appearance setting (NSApp.appearance,
         // driven by LiveSettings.applyAppearance): adaptive Ops tokens resolve
         // to their light or dark variant. No forced color scheme here.
@@ -113,35 +91,17 @@ struct AgentHomeShellView: View {
     }
 
     private var sidebar: some View {
-        // The canonical Talkie nav, now with the same drag-to-resize / collapse
-        // behavior as the main app — `ManagedResizableSidebar` (TalkieKit) owns
-        // the whole resize state machine; we just hand it our two persisted
-        // bindings. Header-tap still toggles compact; the trailing edge handle
-        // adds drag-to-resize, drag-left-to-collapse, drag-right-to-expand.
-        // It self-sizes to its intrinsic width, so no manual frame pin.
-        ManagedResizableSidebar(
-            isCompact: $railCompact,
-            labelWidth: $navigationSidebarLabelWidth,
-            selection: Binding<AgentHomeShellSection?>(
-                get: { selectedSection },
-                set: { next in
-                    guard let next else { return }
-                    if next == .more {
-                        // The "…" overflow doesn't navigate — it pops a native
-                        // flyout of the demoted (stop-gap) sections.
-                        presentOverflowMenu()
-                        return
-                    }
+        AgentHomeCommandRail(
+            selection: selectedSection,
+            settingsSelected: homeController.isShowingSettings,
+            onSelect: { next in
+                if next == .more {
+                    presentOverflowMenu()
+                } else {
                     selectSection(next)
                 }
-            ),
-            entries: AgentHomeShellSection.sidebarEntries,
-            accent: .accentColor,
-            tooltipState: sidebarTooltipState,
-            handleTint: OpsInk.ink,
-            railHeader: { brandMark },
-            labelHeader: { brandWordmark },
-            footer: { sidebarFooter }
+            },
+            onOpenSettings: openSettings
         )
     }
 
@@ -355,16 +315,16 @@ struct AgentHomeShellView: View {
     }
 
     private var statusBar: some View {
-        HStack(spacing: OpsSpacing.lg) {
-            Text("Talkie Agent")
-                .font(OpsType.mono(OpsSize.xs, weight: .semibold))
-                .foregroundStyle(OpsInk.ink)
-                .lineLimit(1)
+        HStack(spacing: 7) {
+            Text("TALKIE AGENT ·")
+                .font(OpsType.mono(9, weight: .semibold))
+                .tracking(1.0)
+                .foregroundStyle(AgentHomeCommandPalette.muted)
 
-            Text(statusBarHealthLabel)
-                .font(OpsType.mono(OpsSize.xs))
+            Text(statusBarHealthLabel.uppercased())
+                .font(OpsType.mono(9, weight: .semibold))
+                .tracking(1.0)
                 .foregroundStyle(statusBarHealthTint)
-                .lineLimit(1)
 
             if shouldSurfaceServerStatus {
                 OpsBadge(statusBarServerBadgeText, tint: serverTint)
@@ -379,17 +339,16 @@ struct AgentHomeShellView: View {
             // Build stamp — the running binary's link time. A fresh build moves
             // this; if it's stale, you're looking at an old binary.
             Text("BUILD \(Self.buildStamp)")
-                .font(OpsType.mono(OpsSize.micro, weight: .medium))
-                .tracking(0.5)
-                .foregroundStyle(OpsInk.dim)
+                .font(OpsType.mono(8, weight: .medium))
+                .tracking(0.9)
+                .foregroundStyle(AgentHomeCommandPalette.faint)
                 .lineLimit(1)
                 .help("Link time of the running TalkieAgent binary")
 
-            OpsInspectorToggle(isCollapsed: $inspectorCollapsed)
         }
-        .padding(.horizontal, OpsSpacing.xl)
+        .padding(.horizontal, 14)
         .frame(height: OpsLayout.statusBarHeight)
-        .background(OpsInk.chrome)
+        .background(AgentHomeCommandPalette.paper)
     }
 
     /// The running binary's link/modification time — proves which build is live.
@@ -574,6 +533,105 @@ private enum AgentHomeShellSection: String, CaseIterable, Hashable {
     }
 }
 
+// MARK: - Command-center chrome
+
+/// Fixed materials from the Agent command-center study. The rail and Wire stay
+/// dark in every appearance so they read as hardware; the surrounding page is
+/// a warm operational paper instead of a generic settings canvas.
+private enum AgentHomeCommandPalette {
+    static let paper = Color(red: 0.956, green: 0.949, blue: 0.929)
+    static let card = Color(red: 0.992, green: 0.989, blue: 0.978)
+    static let ink = Color(red: 0.095, green: 0.084, blue: 0.070)
+    static let muted = Color(red: 0.420, green: 0.385, blue: 0.330)
+    static let faint = Color(red: 0.625, green: 0.580, blue: 0.505)
+    static let hairline = Color(red: 0.820, green: 0.795, blue: 0.745)
+    static let amber = Color(red: 0.815, green: 0.475, blue: 0.055)
+    static let amberSoft = Color(red: 0.960, green: 0.884, blue: 0.690)
+    static let rail = Color(red: 0.105, green: 0.088, blue: 0.075)
+    static let railSelected = Color(red: 0.270, green: 0.180, blue: 0.085)
+    static let wire = Color(red: 0.030, green: 0.027, blue: 0.020)
+    static let wireChrome = Color(red: 0.085, green: 0.070, blue: 0.060)
+    static let wireMuted = Color(red: 0.580, green: 0.525, blue: 0.430)
+    static let wireText = Color(red: 0.895, green: 0.865, blue: 0.785)
+}
+
+private struct AgentHomeCommandRail: View {
+    let selection: AgentHomeShellSection
+    let settingsSelected: Bool
+    let onSelect: (AgentHomeShellSection) -> Void
+    let onOpenSettings: () -> Void
+
+    private let sections: [AgentHomeShellSection] = [
+        .home,
+        .library,
+        .conversations,
+        .permissions,
+        .logs,
+        .more,
+    ]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Image(systemName: "waveform.path.ecg")
+                .font(OpsType.ui(OpsSize.base, weight: .medium))
+                .foregroundStyle(AgentHomeCommandPalette.amber)
+                .frame(width: 34, height: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color.black.opacity(0.34))
+                )
+                .padding(.top, 14)
+                .padding(.bottom, 12)
+
+            Rectangle()
+                .fill(Color.white.opacity(0.07))
+                .frame(width: 26, height: 1)
+                .padding(.bottom, 8)
+
+            ForEach(sections, id: \.self) { section in
+                railButton(section)
+            }
+
+            Spacer(minLength: 16)
+
+            Button(action: onOpenSettings) {
+                Image(systemName: "gearshape")
+                    .font(OpsType.ui(OpsSize.base, weight: .medium))
+                    .foregroundStyle(settingsSelected ? AgentHomeCommandPalette.amber : Color.white.opacity(0.46))
+                    .frame(width: 38, height: 38)
+                    .background(
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(settingsSelected ? AgentHomeCommandPalette.railSelected : .clear)
+                    )
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Settings")
+            .padding(.bottom, 12)
+        }
+        .frame(width: 58)
+        .frame(maxHeight: .infinity)
+        .background(AgentHomeCommandPalette.rail)
+    }
+
+    private func railButton(_ section: AgentHomeShellSection) -> some View {
+        let isSelected = !settingsSelected && selection == section
+        return Button { onSelect(section) } label: {
+            Image(systemName: isSelected ? section.selectedIcon : section.icon)
+                .font(OpsType.ui(OpsSize.base, weight: .medium))
+                .foregroundStyle(isSelected ? AgentHomeCommandPalette.amber : Color.white.opacity(0.48))
+                .frame(width: 38, height: 38)
+                .background(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(isSelected ? AgentHomeCommandPalette.railSelected : .clear)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(section.title)
+    }
+}
+
 private extension AgentHomeRoute {
     /// Map an external deep-link target onto the shell's private section enum.
     var shellSection: AgentHomeShellSection {
@@ -614,45 +672,13 @@ private struct AgentHomeOverviewPage: View {
     @State private var showingLibraryPreview = false
 
     var body: some View {
-        GeometryReader { proxy in
-            ZStack {
-                AgentHomePageScaffold(
-                    title: "Home",
-                    subtitle: "Runtime status, recent history, and quick actions.",
-                    showsHeader: false,
-                    maxContentWidth: 1260
-                ) {
-                    VStack(alignment: .leading, spacing: OpsSpacing.xxxl) {
-                        VStack(alignment: .leading, spacing: OpsSpacing.md) {
-                            OpsSectionLabel("· Agent")
-                            bay
-                        }
-                        VStack(alignment: .leading, spacing: OpsSpacing.md) {
-                            OpsSectionLabel("· Recent")
-                            libraryPreview
-                        }
-                        shortcuts
-                    }
-                }
-
-                if showingLibraryPreview, let previewItem {
-                    AgentHomeLibrarySlideSheet(
-                        availableSize: proxy.size,
-                        onDismiss: closeLibraryPreview
-                    ) {
-                        AgentHomeLibraryDetailPane(item: previewItem) { item in
-                            AgentHomeTalkieLibraryOpener.open(item)
-                        }
-                    }
-                    .transition(.move(edge: proxy.size.width < 620 ? .bottom : .trailing).combined(with: .opacity))
-                    .zIndex(10)
-                }
-            }
-            .animation(OpsAnimation.chromeResize, value: showingLibraryPreview)
-            .onChange(of: libraryItems) { _, _ in
-                reconcileLibraryPreview()
-            }
-        }
+        AgentHomeCommandDashboard(
+            store: store,
+            permissionManager: permissionManager,
+            libraryItems: libraryItems,
+            onSelect: onSelect,
+            onOpenSettings: onOpenSettings
+        )
     }
 
     private var hero: some View {
@@ -901,6 +927,808 @@ private struct AgentHomeOverviewPage: View {
         default:
             return OpsInk.statusError
         }
+    }
+}
+
+// MARK: - Home command center
+
+private struct AgentHomeCommandDashboard: View {
+    @ObservedObject var store: AgentHomeActivityStore
+    @ObservedObject var permissionManager: PermissionManager
+    let libraryItems: [TalkieObject]
+    let onSelect: (AgentHomeShellSection) -> Void
+    let onOpenSettings: () -> Void
+
+    @StateObject private var voiceCapture = AgentHomeVoiceCapture()
+    @State private var prompt = ""
+
+    private var wireJobs: [AgentHomeExecutorJob] {
+        Array(store.executorJobs.sorted { $0.updatedDate < $1.updatedDate }.suffix(4))
+    }
+
+    private var failedJobs: [AgentHomeExecutorJob] {
+        Array(store.executorJobs.filter { $0.status == .failed }.prefix(2))
+    }
+
+    private var completedJobs: [AgentHomeExecutorJob] {
+        Array(
+            store.executorJobs
+                .filter { job in
+                    job.status == .done
+                        && (job.spokenSummary?.agentHomeTrimmed.isEmpty == false
+                            || job.output?.agentHomeTrimmed.isEmpty == false)
+                }
+                .prefix(3)
+        )
+    }
+
+    private var missingPermissions: [PermissionType] {
+        PermissionType.allCases.filter { permissionManager.status(for: $0) != .granted }
+    }
+
+    private var recentCaptures: [TalkieObject] {
+        Array(libraryItems.lazy.filter(\.agentHomeHasVisualPreview).prefix(3))
+    }
+
+    private var needsCount: Int {
+        missingPermissions.count + failedJobs.count
+    }
+
+    var body: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 22) {
+                wire
+                needsYou
+                readyForYou
+                recentCapturesSection
+                footerActions
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 22)
+            .padding(.bottom, 26)
+            .frame(maxWidth: 1240, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(AgentHomeCommandPalette.paper)
+        .onDisappear {
+            voiceCapture.cancel()
+        }
+    }
+
+    private var wire: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(store.runtimePing == nil ? Color.red.opacity(0.8) : Color.green.opacity(0.82))
+                    .frame(width: 7, height: 7)
+                    .shadow(color: store.runtimePing == nil ? .clear : Color.green.opacity(0.75), radius: 5)
+
+                Text("THE WIRE · TALKIE.AGENT")
+                    .font(OpsType.mono(10, weight: .semibold))
+                    .tracking(1.6)
+                    .foregroundStyle(AgentHomeCommandPalette.wireMuted)
+
+                Spacer(minLength: 0)
+
+                Text("LOCAL ONLY · NO TELEMETRY")
+                    .font(OpsType.mono(9, weight: .medium))
+                    .tracking(1.4)
+                    .foregroundStyle(AgentHomeCommandPalette.wireMuted)
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 34)
+            .background(AgentHomeCommandPalette.wireChrome)
+
+            Rectangle()
+                .fill(Color.white.opacity(0.06))
+                .frame(height: 1)
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 16) {
+                    if wireJobs.isEmpty {
+                        AgentHomeWireEmptyState(runtimeOnline: store.runtimePing != nil)
+                    } else {
+                        ForEach(wireJobs) { job in
+                            AgentHomeWireJobRow(job: job)
+                        }
+                    }
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 16)
+            }
+            .frame(minHeight: 190, maxHeight: 270)
+
+            Rectangle()
+                .fill(Color.white.opacity(0.07))
+                .frame(height: 1)
+
+            composer
+                .padding(12)
+                .background(AgentHomeCommandPalette.wireChrome)
+        }
+        .background(AgentHomeCommandPalette.wire)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    private var composer: some View {
+        HStack(spacing: 9) {
+            ZStack(alignment: .leading) {
+                if prompt.isEmpty {
+                    Text("Message your agent…")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(AgentHomeCommandPalette.wireMuted.opacity(0.72))
+                        .allowsHitTesting(false)
+                }
+
+                TextField("", text: $prompt)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(AgentHomeCommandPalette.wireText)
+                    .submitLabel(.send)
+                    .onSubmit { submit() }
+                    .disabled(store.isInvokingAgent || voiceCapture.phase != .idle)
+            }
+
+            if voiceCapture.phase == .recording {
+                Text(voiceCapture.formattedElapsed)
+                    .font(OpsType.mono(9, weight: .semibold))
+                    .foregroundStyle(AgentHomeCommandPalette.amber)
+            } else if voiceCapture.phase == .processing {
+                Text("TRANSCRIBING")
+                    .font(OpsType.mono(9, weight: .semibold))
+                    .tracking(1.0)
+                    .foregroundStyle(AgentHomeCommandPalette.amber)
+            } else {
+                Text("⌥ SPACE TO TALK")
+                    .font(OpsType.mono(8, weight: .medium))
+                    .tracking(0.9)
+                    .foregroundStyle(AgentHomeCommandPalette.wireMuted.opacity(0.72))
+            }
+
+            Button(action: toggleVoiceCapture) {
+                Image(systemName: voiceCapture.phase == .recording ? "stop.fill" : "mic.fill")
+                    .font(OpsType.ui(12, weight: .semibold))
+                    .foregroundStyle(voiceCapture.phase == .recording ? AgentHomeCommandPalette.ink : AgentHomeCommandPalette.amber)
+                    .frame(width: 34, height: 34)
+                    .background(
+                        Circle().fill(
+                            voiceCapture.phase == .recording
+                                ? AgentHomeCommandPalette.amber
+                                : AgentHomeCommandPalette.railSelected
+                        )
+                    )
+                    .overlay(Circle().stroke(AgentHomeCommandPalette.amber.opacity(0.65), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut(.space, modifiers: .option)
+            .disabled(store.isInvokingAgent || voiceCapture.phase == .processing)
+            .help(voiceCapture.phase == .recording ? "Stop and send" : "Talk to the agent")
+        }
+        .padding(.leading, 13)
+        .padding(.trailing, 5)
+        .frame(height: 40)
+        .background(AgentHomeCommandPalette.wire.opacity(0.66))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color.white.opacity(0.09), lineWidth: 1)
+        )
+    }
+
+    private var needsYou: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            AgentHomeCommandSectionHeader(
+                title: "Needs You",
+                detail: needsCount == 0 ? "clear" : "\(needsCount) waiting"
+            )
+
+            if needsCount == 0 {
+                AgentHomeCommandEmptyBand(
+                    icon: "checkmark.circle",
+                    title: "Nothing needs your attention",
+                    detail: "The agent can keep working without an approval or permission change."
+                )
+            } else {
+                VStack(spacing: 9) {
+                    ForEach(missingPermissions) { permission in
+                        AgentHomeNeedsPermissionRow(
+                            permission: permission,
+                            status: permissionManager.status(for: permission),
+                            onOpen: { permissionManager.handleRequest(for: permission) }
+                        )
+                    }
+
+                    ForEach(failedJobs) { job in
+                        AgentHomeNeedsJobRow(job: job) {
+                            onSelect(.conversations)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var readyForYou: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            AgentHomeCommandSectionHeader(
+                title: "Ready for You",
+                detail: completedJobs.isEmpty ? nil : "\(completedJobs.count) finished",
+                trailingLabel: "Everything the agent made",
+                onTrailing: { onSelect(.conversations) }
+            )
+
+            if completedJobs.isEmpty {
+                AgentHomeCommandEmptyBand(
+                    icon: "sparkles",
+                    title: "No finished agent work yet",
+                    detail: "Completed requests will collect here for a quick review."
+                )
+            } else {
+                LazyVGrid(columns: AgentHomeCommandGrid.three, spacing: 14) {
+                    ForEach(completedJobs) { job in
+                        AgentHomeReadyCard(job: job) {
+                            onSelect(.conversations)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var recentCapturesSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            AgentHomeCommandSectionHeader(
+                title: "Recent Captures",
+                trailingLabel: "Open Library",
+                onTrailing: { onSelect(.library) }
+            )
+
+            if recentCaptures.isEmpty {
+                AgentHomeCommandEmptyBand(
+                    icon: "viewfinder",
+                    title: "No recent captures",
+                    detail: "Screenshots and clips will appear here as soon as Talkie records them."
+                )
+            } else {
+                LazyVGrid(columns: AgentHomeCommandGrid.three, spacing: 14) {
+                    ForEach(recentCaptures) { item in
+                        AgentHomeCommandCaptureCard(item: item) {
+                            AgentHomeTalkieLibraryOpener.open(item)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var footerActions: some View {
+        HStack(spacing: 9) {
+            AgentHomeCommandFooterButton("Conversations", icon: "bubble.left.and.bubble.right") {
+                onSelect(.conversations)
+            }
+            AgentHomeCommandFooterButton("History", icon: "clock.arrow.circlepath") {
+                onSelect(.library)
+            }
+            AgentHomeCommandFooterButton("Permissions", icon: "lock.shield") {
+                onSelect(.permissions)
+            }
+            AgentHomeCommandFooterButton("Logs", icon: "doc.text") {
+                onSelect(.logs)
+            }
+
+            Spacer(minLength: 12)
+
+            AgentHomeCommandFooterButton("Open Talkie", icon: "arrow.up.forward.app", prominent: true) {
+                TalkieAppOpener.openApp()
+            }
+            AgentHomeCommandFooterButton("Settings", icon: "gearshape", iconOnly: true, action: onOpenSettings)
+        }
+    }
+
+    private func submit() {
+        submit(prompt)
+    }
+
+    private func submit(_ rawText: String) {
+        let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, !store.isInvokingAgent else { return }
+        prompt = ""
+
+        Task {
+            await store.invokeAgent(text: text)
+        }
+    }
+
+    private func toggleVoiceCapture() {
+        switch voiceCapture.phase {
+        case .idle:
+            voiceCapture.start()
+        case .recording:
+            voiceCapture.stopAndTranscribe(
+                onTranscript: submit,
+                onFinish: {}
+            )
+        case .processing:
+            break
+        }
+    }
+}
+
+private enum AgentHomeCommandGrid {
+    static let three = [
+        GridItem(.flexible(minimum: 180), spacing: 14, alignment: .top),
+        GridItem(.flexible(minimum: 180), spacing: 14, alignment: .top),
+        GridItem(.flexible(minimum: 180), spacing: 14, alignment: .top),
+    ]
+}
+
+private struct AgentHomeWireEmptyState: View {
+    let runtimeOnline: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(runtimeOnline ? "STANDING BY" : "RUNTIME OFFLINE")
+                .font(OpsType.mono(10, weight: .semibold))
+                .tracking(1.3)
+                .foregroundStyle(AgentHomeCommandPalette.amber)
+
+            Text(runtimeOnline
+                 ? "Send a message or hold the mic to start a new turn."
+                 : "Start the local runtime to send work through the Wire.")
+                .font(OpsType.ui(13))
+                .foregroundStyle(AgentHomeCommandPalette.wireText)
+        }
+        .frame(maxWidth: .infinity, minHeight: 132, alignment: .center)
+    }
+}
+
+private struct AgentHomeWireJobRow: View {
+    let job: AgentHomeExecutorJob
+
+    private var response: String? {
+        if let summary = job.spokenSummary?.agentHomeTrimmed, !summary.isEmpty {
+            return summary
+        }
+        if let output = job.output?.agentHomeTrimmed, !output.isEmpty {
+            return output
+        }
+        return nil
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Text(job.updatedDate, format: .dateTime.hour().minute())
+                .font(OpsType.mono(9, weight: .medium))
+                .foregroundStyle(AgentHomeCommandPalette.wireMuted)
+                .frame(width: 44, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 7) {
+                    Text(job.source == "agent-home" ? "YOU · HOME" : "YOU · VOICE")
+                        .font(OpsType.mono(9, weight: .semibold))
+                        .tracking(1.0)
+                        .foregroundStyle(AgentHomeCommandPalette.wireMuted)
+
+                    Text(job.status.title.uppercased())
+                        .font(OpsType.mono(8, weight: .semibold))
+                        .tracking(0.9)
+                        .foregroundStyle(statusTint)
+                }
+
+                Text(job.title)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(AgentHomeCommandPalette.wireText)
+                    .lineLimit(2)
+
+                if let response {
+                    Text(response)
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(Color.white.opacity(0.72))
+                        .lineLimit(3)
+                } else if job.status.isActive {
+                    HStack(spacing: 9) {
+                        ProgressView()
+                            .progressViewStyle(.linear)
+                            .tint(AgentHomeCommandPalette.amber)
+                            .frame(maxWidth: 150)
+
+                        Text(job.status == .waiting ? "WAKING" : "WORKING")
+                            .font(OpsType.mono(8, weight: .semibold))
+                            .tracking(1.0)
+                            .foregroundStyle(AgentHomeCommandPalette.wireMuted)
+                    }
+                } else if let error = job.error?.agentHomeTrimmed, !error.isEmpty {
+                    Text(error)
+                        .font(OpsType.ui(12))
+                        .foregroundStyle(Color.red.opacity(0.78))
+                        .lineLimit(2)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var statusTint: Color {
+        switch job.status {
+        case .waiting, .running: return AgentHomeCommandPalette.amber
+        case .done: return Color.green.opacity(0.78)
+        case .failed: return Color.red.opacity(0.78)
+        }
+    }
+}
+
+private struct AgentHomeCommandSectionHeader: View {
+    let title: String
+    var detail: String? = nil
+    var trailingLabel: String? = nil
+    var onTrailing: (() -> Void)? = nil
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Rectangle()
+                .fill(AgentHomeCommandPalette.amber)
+                .frame(width: 5, height: 5)
+
+            Text(title.uppercased())
+                .font(OpsType.mono(10, weight: .semibold))
+                .tracking(1.8)
+                .foregroundStyle(AgentHomeCommandPalette.ink)
+
+            if let detail {
+                Text(detail.uppercased())
+                    .font(OpsType.mono(9, weight: .medium))
+                    .tracking(1.1)
+                    .foregroundStyle(AgentHomeCommandPalette.faint)
+            }
+
+            Rectangle()
+                .fill(AgentHomeCommandPalette.hairline.opacity(0.72))
+                .frame(height: 1)
+
+            if let trailingLabel, let onTrailing {
+                Button(action: onTrailing) {
+                    HStack(spacing: 5) {
+                        Text(trailingLabel.uppercased())
+                        Image(systemName: "arrow.right")
+                    }
+                    .font(OpsType.mono(8, weight: .semibold))
+                    .tracking(1.0)
+                    .foregroundStyle(AgentHomeCommandPalette.amber)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(height: 18)
+    }
+}
+
+private struct AgentHomeCommandEmptyBand: View {
+    let icon: String
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack(spacing: 13) {
+            Image(systemName: icon)
+                .font(OpsType.ui(14, weight: .medium))
+                .foregroundStyle(AgentHomeCommandPalette.amber)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(OpsType.ui(13, weight: .semibold))
+                    .foregroundStyle(AgentHomeCommandPalette.ink)
+                Text(detail)
+                    .font(OpsType.ui(11))
+                    .foregroundStyle(AgentHomeCommandPalette.muted)
+            }
+        }
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+        .background(AgentHomeCommandPalette.card)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(AgentHomeCommandPalette.hairline.opacity(0.64), lineWidth: 1)
+        )
+    }
+}
+
+private struct AgentHomeNeedsPermissionRow: View {
+    let permission: PermissionType
+    let status: PermissionStatus
+    let onOpen: () -> Void
+
+    var body: some View {
+        HStack(spacing: 13) {
+            Image(systemName: permission.icon)
+                .font(OpsType.ui(14, weight: .medium))
+                .foregroundStyle(AgentHomeCommandPalette.amber)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("\(permission.title) needs access")
+                    .font(OpsType.ui(13, weight: .semibold))
+                    .foregroundStyle(AgentHomeCommandPalette.ink)
+
+                Text("\(status.label.uppercased()) · \(permission.shortDescription.uppercased())")
+                    .font(OpsType.mono(8, weight: .medium))
+                    .tracking(0.9)
+                    .foregroundStyle(AgentHomeCommandPalette.faint)
+            }
+
+            Spacer(minLength: 12)
+
+            AgentHomeCommandActionButton("Open permissions", action: onOpen)
+        }
+        .padding(.horizontal, 16)
+        .frame(minHeight: 64)
+        .background(AgentHomeCommandPalette.card)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(AgentHomeCommandPalette.hairline.opacity(0.64), lineWidth: 1)
+        )
+    }
+}
+
+private struct AgentHomeNeedsJobRow: View {
+    let job: AgentHomeExecutorJob
+    let onOpen: () -> Void
+
+    var body: some View {
+        HStack(spacing: 13) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(OpsType.ui(14, weight: .medium))
+                .foregroundStyle(Color.red.opacity(0.72))
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(job.title)
+                    .font(OpsType.ui(13, weight: .semibold))
+                    .foregroundStyle(AgentHomeCommandPalette.ink)
+                    .lineLimit(1)
+                Text((job.error ?? "The agent could not finish this request.").uppercased())
+                    .font(OpsType.mono(8, weight: .medium))
+                    .tracking(0.8)
+                    .foregroundStyle(AgentHomeCommandPalette.faint)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 12)
+            AgentHomeCommandActionButton("Review", action: onOpen)
+        }
+        .padding(.horizontal, 16)
+        .frame(minHeight: 64)
+        .background(AgentHomeCommandPalette.card)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(AgentHomeCommandPalette.hairline.opacity(0.64), lineWidth: 1)
+        )
+    }
+}
+
+private struct AgentHomeReadyCard: View {
+    let job: AgentHomeExecutorJob
+    let onOpen: () -> Void
+
+    private var preview: String {
+        if let summary = job.spokenSummary?.agentHomeTrimmed, !summary.isEmpty {
+            return summary
+        }
+        if let output = job.output?.agentHomeTrimmed, !output.isEmpty {
+            return output
+        }
+        return "Finished."
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            AgentHomeReadyCardGraphic(seed: job.id.hashValue)
+                .frame(height: 78)
+                .padding(.horizontal, 14)
+                .padding(.top, 12)
+
+            Rectangle()
+                .fill(AgentHomeCommandPalette.hairline.opacity(0.55))
+                .frame(height: 1)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(job.title)
+                    .font(OpsType.ui(13, weight: .semibold))
+                    .foregroundStyle(AgentHomeCommandPalette.ink)
+                    .lineLimit(1)
+
+                Text(preview)
+                    .font(OpsType.ui(11))
+                    .foregroundStyle(AgentHomeCommandPalette.muted)
+                    .lineLimit(2)
+
+                HStack(spacing: 5) {
+                    Text("DONE")
+                    Text("·")
+                    Text(AgentHomeRelative.shortLabel(for: job.updatedDate).uppercased())
+                    Spacer(minLength: 0)
+                    Button("OPEN", action: onOpen)
+                        .buttonStyle(.plain)
+                        .foregroundStyle(AgentHomeCommandPalette.ink)
+                }
+                .font(OpsType.mono(8, weight: .semibold))
+                .tracking(0.9)
+                .foregroundStyle(AgentHomeCommandPalette.faint)
+            }
+            .padding(14)
+        }
+        .frame(maxWidth: .infinity, minHeight: 170, alignment: .topLeading)
+        .background(AgentHomeCommandPalette.card)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(AgentHomeCommandPalette.hairline.opacity(0.68), lineWidth: 1)
+        )
+    }
+}
+
+private struct AgentHomeReadyCardGraphic: View {
+    let seed: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            ForEach(0..<4, id: \.self) { index in
+                HStack(spacing: 8) {
+                    if seed.isMultiple(of: 2) {
+                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                            .fill(index < 2 ? AgentHomeCommandPalette.amber : AgentHomeCommandPalette.hairline)
+                            .frame(width: 9, height: 9)
+                    }
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(index == 2 ? AgentHomeCommandPalette.amberSoft : AgentHomeCommandPalette.hairline.opacity(0.64))
+                        .frame(width: graphicWidth(for: index), height: 6)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+    }
+
+    private func graphicWidth(for index: Int) -> CGFloat {
+        switch abs(seed + index) % 4 {
+        case 0: return 112
+        case 1: return 152
+        case 2: return 92
+        default: return 132
+        }
+    }
+}
+
+private struct AgentHomeCommandCaptureCard: View {
+    let item: TalkieObject
+    let onOpen: () -> Void
+
+    private var media: CaptureMediaAsset? {
+        CaptureMediaFileResolver.primaryMedia(for: item)
+    }
+
+    private var sourceLabel: String {
+        let appName = item.appContext?.name?.agentHomeTrimmed ?? ""
+        return appName.isEmpty ? item.source.displayName : appName
+    }
+
+    var body: some View {
+        Button(action: onOpen) {
+            VStack(alignment: .leading, spacing: 0) {
+                AgentHomeMediaPreview(media: media, maxPixelSize: 520)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 118)
+                    .clipShape(.rect(topLeadingRadius: 10, topTrailingRadius: 10))
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(item.agentHomeDisplayTitle)
+                        .font(OpsType.ui(13, weight: .semibold))
+                        .foregroundStyle(AgentHomeCommandPalette.ink)
+                        .lineLimit(1)
+
+                    HStack(spacing: 5) {
+                        Text(sourceLabel.uppercased())
+                        Text("·")
+                        Text(AgentHomeRelative.shortLabel(for: item.createdAt).uppercased())
+                        Spacer(minLength: 0)
+                        if item.duration > 0 {
+                            Text(item.duration, format: .number.precision(.fractionLength(0)))
+                            Text("S")
+                        }
+                    }
+                    .font(OpsType.mono(8, weight: .medium))
+                    .tracking(0.8)
+                    .foregroundStyle(AgentHomeCommandPalette.faint)
+                }
+                .padding(14)
+            }
+            .background(AgentHomeCommandPalette.card)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(AgentHomeCommandPalette.hairline.opacity(0.68), lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct AgentHomeCommandActionButton: View {
+    let label: String
+    let action: () -> Void
+
+    init(_ label: String, action: @escaping () -> Void) {
+        self.label = label
+        self.action = action
+    }
+
+    var body: some View {
+        Button(label, action: action)
+            .buttonStyle(.plain)
+            .font(OpsType.ui(11, weight: .semibold))
+            .foregroundStyle(AgentHomeCommandPalette.ink)
+            .padding(.horizontal, 13)
+            .frame(height: 32)
+            .background(Color.white.opacity(0.62))
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(AgentHomeCommandPalette.hairline.opacity(0.82), lineWidth: 1)
+            )
+    }
+}
+
+private struct AgentHomeCommandFooterButton: View {
+    let label: String
+    let icon: String
+    let prominent: Bool
+    let iconOnly: Bool
+    let action: () -> Void
+
+    init(
+        _ label: String,
+        icon: String,
+        prominent: Bool = false,
+        iconOnly: Bool = false,
+        action: @escaping () -> Void
+    ) {
+        self.label = label
+        self.icon = icon
+        self.prominent = prominent
+        self.iconOnly = iconOnly
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                Image(systemName: icon)
+                    .font(OpsType.ui(11, weight: .medium))
+                if !iconOnly {
+                    Text(label)
+                        .font(OpsType.ui(11, weight: .medium))
+                }
+            }
+            .foregroundStyle(prominent ? Color.white : AgentHomeCommandPalette.ink)
+            .padding(.horizontal, iconOnly ? 9 : 12)
+            .frame(height: 34)
+            .background(prominent ? AgentHomeCommandPalette.ink : AgentHomeCommandPalette.card)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(prominent ? .clear : AgentHomeCommandPalette.hairline.opacity(0.75), lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(iconOnly ? label : "")
     }
 }
 
