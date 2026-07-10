@@ -553,9 +553,15 @@ final class AppShellRouter: ObservableObject {
     /// Prompt routed into the next Ask AI surface. Set by `openAskAISeeded`
     /// — typically the fallthrough path when a voice command lands on a
     /// surface with no specific intent handler. AskAINext consumes +
-    /// clears this on appear (sets `session.prompt = pending`, user
-    /// reviews + sends).
+    /// clears this on appear.
     @Published var pendingAskAIPrompt: String?
+    /// Whether the pending Ask AI prompt should send itself the instant the
+    /// surface appears (`true`) or just seed the composer for the user to
+    /// review + hit SEND (`false`). Voice-originated prompts auto-send;
+    /// typed command-bar submits seed-and-wait, preserving their prior
+    /// review-before-send behavior. Consumed + reset alongside
+    /// `pendingAskAIPrompt`.
+    @Published var pendingAskAIAutoSend: Bool = false
     /// Signals that the next Compose surface should auto-focus its
     /// editor on appear (popping the embedded Talkie keyboard).
     /// ComposeNextView consumes + clears this on appear.
@@ -718,8 +724,15 @@ final class AppShellRouter: ObservableObject {
     /// target when a voice command lands on a surface that has no
     /// specific intent handler — the user gets a fresh Ask AI session
     /// seeded with what they said.
-    func openAskAISeeded(prompt: String) {
+    ///
+    /// `autoSend` = true fires the prompt immediately on appear (the
+    /// walkie-talkie / voice path — you spoke, so it should answer, not
+    /// wait for a second tap). `autoSend` = false seeds the composer and
+    /// lets the user review before hitting SEND (the typed command-bar
+    /// path keeps this behavior).
+    func openAskAISeeded(prompt: String, autoSend: Bool = false) {
         pendingAskAIPrompt = prompt
+        pendingAskAIAutoSend = autoSend
         openAskAI()
     }
 
@@ -734,7 +747,9 @@ final class AppShellRouter: ObservableObject {
             activeComposeStore?.voiceCommandReceived(transcript)
             return
         }
-        openAskAISeeded(prompt: transcript)
+        // Voice-originated — the user spoke and released, so answer
+        // immediately instead of parking the transcript behind a SEND tap.
+        openAskAISeeded(prompt: transcript, autoSend: true)
     }
 }
 

@@ -5,6 +5,8 @@
 //  Agentic Ask AI loop surface for the Next shell.
 //
 
+import AVFoundation
+import Combine
 import SwiftUI
 
 struct AskAINext: View {
@@ -12,6 +14,7 @@ struct AskAINext: View {
     @FocusState private var isPromptFocused: Bool
     @ObservedObject private var theme = ThemeManager.shared
     @StateObject private var session = AskAISession()
+    @StateObject private var dictation = AskDictationController()
     @ObservedObject private var reachability = NetworkReachability.shared
 
     private let presets: [AskAIPreset] = [
@@ -58,6 +61,7 @@ struct AskAINext: View {
             consumePendingPrompt()
         }
         .onDisappear {
+            dictation.cancel()
             chrome.voiceCommandHandler = { transcript in
                 AppShellRouter.shared.submitVoiceCommand(transcript)
             }
@@ -159,7 +163,7 @@ struct AskAINext: View {
             }
             .frame(maxWidth: 260)
 
-            Text("OR · TYPE · DICTATE · ATTACH ·")
+            Text("OR · TYPE · DICTATE ·")
                 .talkieType(.channelLabelSmall)
                 .foregroundStyle(theme.colors.textTertiary)
 
@@ -191,15 +195,38 @@ struct AskAINext: View {
                         )
                 )
 
-            TextField("Ask anything…", text: $session.prompt, axis: .vertical)
-                .talkieType(.preview)
-                .foregroundStyle(theme.colors.textPrimary)
-                .lineLimit(1...4)
-                .textFieldStyle(.plain)
-                .focused($isPromptFocused)
-                .submitLabel(.send)
-                .onSubmit(sendPrompt)
-                .disabled(session.isThinking)
+            // The center slot is shared: text field at rest, live mag-tape
+            // strip while dictating/transcribing, and a brief "DIDN'T CATCH
+            // THAT" beat when a voice turn produced nothing usable.
+            Group {
+                switch dictation.phase {
+                case .recording, .transcribing:
+                    AskDictationStrip(
+                        levels: dictation.levels,
+                        elapsed: dictation.elapsed,
+                        transcribing: dictation.phase == .transcribing
+                    )
+                case .missed:
+                    Text("DIDN'T CATCH THAT")
+                        .talkieType(.chipLabel)
+                        .foregroundStyle(AskDictationStrip.amber)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                case .idle:
+                    TextField("Ask anything…", text: $session.prompt, axis: .vertical)
+                        .talkieType(.preview)
+                        .foregroundStyle(theme.colors.textPrimary)
+                        .lineLimit(1...4)
+                        .textFieldStyle(.plain)
+                        .focused($isPromptFocused)
+                        .submitLabel(.send)
+                        .onSubmit(sendPrompt)
+                        .disabled(session.isThinking)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .animation(.easeInOut(duration: 0.16), value: dictation.phase)
+
+            micButton
 
             Button(action: sendPrompt) {
                 Text("SEND")
@@ -211,8 +238,8 @@ struct AskAINext: View {
                     .shadow(color: theme.currentTheme.chrome.accentGlow, radius: 4, y: 2)
             }
             .buttonStyle(.plain)
-            .disabled(!session.canSend)
-            .opacity(session.canSend ? 1 : 0.45)
+            .disabled(!sendEnabled)
+            .opacity(sendEnabled ? 1 : 0.45)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
@@ -224,10 +251,83 @@ struct AskAINext: View {
         )
     }
 
+    /// SEND is a typed-input affordance; it stays dark while dictating so
+    /// the two paths don't fight over the same beat.
+    private var sendEnabled: Bool {
+        session.canSend && !dictation.isBusy
+    }
+
+    /// Tap-to-toggle dictation mic — start on first tap, stop + transcribe
+    /// + auto-send on the second. Disabled while a response is in flight
+    /// (guardrail: no overlapping turns) and during the transcribe beat.
+    private var micButton: some View {
+        Button(action: toggleDictation) {
+            Image(systemName: dictation.phase == .recording ? "stop.fill" : "mic.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(micTint)
+                .frame(width: 42, height: 42)
+                .background(Circle().fill(micFill))
+                .overlay(
+                    Circle().strokeBorder(micStroke, lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(!micEnabled)
+        .opacity(micEnabled ? 1 : 0.4)
+        .accessibilityLabel(dictation.phase == .recording ? "Stop dictation" : "Dictate")
+    }
+
+    /// The mic can be tapped from idle/missed (to arm) and while recording
+    /// (to stop). It's locked while a send is in flight and during the
+    /// transcribe hand-off so a stray tap can't start a competing capture.
+    private var micEnabled: Bool {
+        guard !session.isThinking else { return false }
+        return dictation.phase != .transcribing
+    }
+
+    private var micTint: Color {
+        switch dictation.phase {
+        case .recording: return theme.colors.cardBackground
+        case .transcribing, .missed: return AskDictationStrip.amber
+        case .idle: return theme.currentTheme.chrome.accent
+        }
+    }
+
+    private var micFill: Color {
+        dictation.phase == .recording ? AskDictationStrip.amber : .clear
+    }
+
+    private var micStroke: Color {
+        switch dictation.phase {
+        case .recording: return AskDictationStrip.amber
+        case .transcribing, .missed: return AskDictationStrip.amber.opacity(0.6)
+        case .idle: return theme.currentTheme.chrome.accent.opacity(0.55)
+        }
+    }
+
+    private func toggleDictation() {
+        switch dictation.phase {
+        case .idle, .missed:
+            guard !session.isThinking else { return }
+            isPromptFocused = false
+            dictation.start()
+        case .recording:
+            dictation.stop { transcript in
+                guard let transcript else { return }
+                session.submitVoiceTranscript(transcript)
+            }
+        case .transcribing:
+            break
+        }
+    }
+
     private func bindShellVoice() {
+        // The shell long-press pivot only ever produces voice transcripts,
+        // so anything arriving here is voice-originated: send it straight
+        // through as a turn instead of parking it in the composer.
         chrome.voiceCommandHandler = { transcript in
-            session.receiveVoicePrompt(transcript)
-            isPromptFocused = true
+            isPromptFocused = false
+            session.submitVoiceTranscript(transcript)
         }
     }
 
@@ -236,9 +336,19 @@ struct AskAINext: View {
               !pending.isEmpty
         else { return }
 
-        session.receiveVoicePrompt(pending)
-        isPromptFocused = true
+        let autoSend = AppShellRouter.shared.pendingAskAIAutoSend
         AppShellRouter.shared.pendingAskAIPrompt = nil
+        AppShellRouter.shared.pendingAskAIAutoSend = false
+
+        if autoSend {
+            // Voice path — speak, land, answer. No manual SEND step.
+            session.submitVoiceTranscript(pending)
+        } else {
+            // Typed command-bar path — seed the composer and let the user
+            // review before sending.
+            session.receiveVoicePrompt(pending)
+            isPromptFocused = true
+        }
     }
 
     private func applyPreset(_ preset: AskAIPreset) {
@@ -325,9 +435,22 @@ private final class AskAISession: ObservableObject {
     func send() {
         let instruction = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !instruction.isEmpty, !isThinking else { return }
-
-        errorMessage = nil
         prompt = ""
+        dispatch(instruction: instruction)
+    }
+
+    /// Send a voice-originated transcript straight through as a turn. Kept
+    /// separate from `send()` so it never disturbs whatever the user may
+    /// have already typed into the composer, and so voice can auto-send
+    /// without routing through the text buffer.
+    func submitVoiceTranscript(_ transcript: String) {
+        let instruction = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !instruction.isEmpty, !isThinking else { return }
+        dispatch(instruction: instruction)
+    }
+
+    private func dispatch(instruction: String) {
+        errorMessage = nil
 
         let userTurn = AskAITurn(
             code: Self.code(for: turns.count + 1),
@@ -704,6 +827,269 @@ private struct PulsingAccentDot: View {
     }
 }
 
+
+// MARK: - Ask-scoped dictation
+
+/// Tap-to-toggle dictation for the Ask composer. Owns a single
+/// `AudioRecorderManager` (the same capture stack the shell pivot and the
+/// memo recorder use — no new recording engine) and drives a compact live
+/// state off its metering. On stop it transcribes with the `.keyboard`
+/// use case and hands the transcript back so the caller can auto-send.
+///
+/// Deliberately drives the live visual from the recorder's own metered
+/// `audioLevels` / `recordingDuration` rather than `DictationMicMonitor`:
+/// the monitor installs a second `AVAudioEngine` input tap and flips the
+/// shared `AVAudioSession` to `.measurement`, which would contend with the
+/// `AVAudioRecorder` writing the file we need for transcription. The
+/// recorder already exposes a smoothed envelope, so we reuse it.
+@MainActor
+private final class AskDictationController: ObservableObject {
+    enum Phase: Equatable {
+        case idle
+        case recording
+        case transcribing
+        case missed
+    }
+
+    @Published private(set) var phase: Phase = .idle
+    /// Tail of the recorder's smoothed envelope, throttled to ~30Hz so the
+    /// strip re-renders calmly rather than at the 60fps metering cadence.
+    @Published private(set) var levels: [Float] = []
+    @Published private(set) var elapsed: TimeInterval = 0
+
+    /// How many bars the compact strip shows — one per recent envelope
+    /// sample, newest on the right.
+    static let barCount = 28
+
+    private let recorder = AudioRecorderManager()
+    private var bag = Set<AnyCancellable>()
+    private var missedResetTask: Task<Void, Never>?
+
+    /// True while the mic owns the beat — used to hold SEND dark and to
+    /// keep the composer showing the live strip.
+    var isBusy: Bool { phase == .recording || phase == .transcribing }
+
+    init() {
+        recorder.$audioLevels
+            .throttle(for: .milliseconds(33), scheduler: DispatchQueue.main, latest: true)
+            .sink { [weak self] samples in
+                self?.levels = Array(samples.suffix(Self.barCount))
+            }
+            .store(in: &bag)
+
+        recorder.$recordingDuration
+            .throttle(for: .milliseconds(100), scheduler: DispatchQueue.main, latest: true)
+            .sink { [weak self] duration in
+                self?.elapsed = duration
+            }
+            .store(in: &bag)
+    }
+
+    // MARK: Toggle
+
+    func start() {
+        guard phase == .idle || phase == .missed else { return }
+        missedResetTask?.cancel()
+
+        switch AVAudioApplication.shared.recordPermission {
+        case .granted:
+            beginRecording()
+        case .undetermined:
+            AVAudioApplication.requestRecordPermission { granted in
+                Task { @MainActor in
+                    granted ? self.beginRecording() : self.failSoftPermission()
+                }
+            }
+        case .denied:
+            failSoftPermission()
+        @unknown default:
+            failSoftPermission()
+        }
+    }
+
+    func stop(completion: @MainActor @escaping (String?) -> Void) {
+        guard phase == .recording else { return }
+        phase = .transcribing
+        Haptics.transition.fire()
+
+        recorder.stopRecording()
+        let url = recorder.currentRecordingURL
+        recorder.finalizeRecording()
+
+        guard let url else {
+            finishMissed()
+            completion(nil)
+            return
+        }
+
+        Task { @MainActor in
+            let transcript = try? await TranscriptionService.shared.transcribe(
+                audioURL: url,
+                useCase: .keyboard
+            )
+            let trimmed = transcript?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if trimmed.isEmpty {
+                finishMissed()
+                completion(nil)
+            } else {
+                phase = .idle
+                levels = []
+                elapsed = 0
+                completion(trimmed)
+            }
+        }
+    }
+
+    /// Tear down without transcribing — used when the surface disappears
+    /// mid-capture so the mic indicator releases immediately.
+    func cancel() {
+        missedResetTask?.cancel()
+        if recorder.isRecording {
+            recorder.stopRecording()
+            recorder.finalizeRecording()
+        }
+        phase = .idle
+        levels = []
+        elapsed = 0
+    }
+
+    // MARK: Internals
+
+    private func beginRecording() {
+        levels = []
+        elapsed = 0
+        phase = .recording
+        Haptics.confirm.fire()
+        recorder.startRecording()
+    }
+
+    private func failSoftPermission() {
+        phase = .idle
+        FeedbackToastCenter.shared.showError(
+            "Microphone access is off — enable it in Settings to dictate.",
+            actionLabel: "SETTINGS"
+        ) {
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
+        }
+    }
+
+    private func finishMissed() {
+        phase = .missed
+        levels = []
+        elapsed = 0
+        Haptics.warning.fire()
+        missedResetTask?.cancel()
+        missedResetTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            guard phase == .missed else { return }
+            phase = .idle
+        }
+    }
+}
+
+/// Compact magnetic-tape strip for the Ask composer's live dictation
+/// state: an amber recording pip, VU bars riding an amber centerline
+/// (drawn from the recorder's rolling envelope), and an elapsed readout.
+/// While transcribing the bars dim to signal the recording window closed.
+private struct AskDictationStrip: View {
+    let levels: [Float]
+    let elapsed: TimeInterval
+    let transcribing: Bool
+
+    /// Mag-tape amber — brand DNA shared with the Deck cockpit waveform,
+    /// not theme-tinted, so the recording state reads as "tape" everywhere.
+    static let amber = Color(red: 0.910, green: 0.604, blue: 0.235)
+
+    var body: some View {
+        HStack(spacing: 8) {
+            RecordingPip(dimmed: transcribing, color: Self.amber)
+
+            AskVUBars(levels: levels, color: Self.amber.opacity(transcribing ? 0.4 : 0.9))
+                .frame(maxWidth: .infinity)
+                .frame(height: 22)
+
+            Text(Self.timeString(elapsed))
+                .talkieType(.timestamp)
+                .foregroundStyle(Self.amber)
+                .monospacedDigit()
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(transcribing ? "Transcribing" : "Recording, \(Int(elapsed)) seconds")
+    }
+
+    private static func timeString(_ value: TimeInterval) -> String {
+        let total = max(0, Int(value))
+        return String(format: "%d:%02d", total / 60, total % 60)
+    }
+}
+
+/// Amber recording dot — softly pulsing while live, statically dim while
+/// transcribing (and never animated under Reduce Motion).
+private struct RecordingPip: View {
+    let dimmed: Bool
+    let color: Color
+
+    var body: some View {
+        Circle()
+            .fill(color)
+            .frame(width: 7, height: 7)
+            .modifier(PipPulse(active: !dimmed))
+            .opacity(dimmed ? 0.4 : 1)
+    }
+}
+
+private struct PipPulse: ViewModifier {
+    let active: Bool
+    @State private var lit = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(lit ? 1 : 0.5)
+            .onAppear {
+                guard active, !TalkieMotion.isReduced else { return }
+                withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
+                    lit = true
+                }
+            }
+    }
+}
+
+/// Canvas VU bars centered on a faint amber centerline. One bar per
+/// sample, newest at the right edge (the tape-head position), so the
+/// strip rolls right-to-left as new audio lands.
+private struct AskVUBars: View {
+    let levels: [Float]
+    let color: Color
+
+    var body: some View {
+        Canvas { ctx, size in
+            let centerY = size.height / 2
+
+            // Amber centerline — the tape's reference axis.
+            let line = CGRect(x: 0, y: centerY - 0.5, width: size.width, height: 1)
+            ctx.fill(Path(line), with: .color(color.opacity(0.28)))
+
+            let n = AskDictationController.barCount
+            guard n > 0 else { return }
+            let gap: CGFloat = 2.5
+            let barWidth = max(1.5, (size.width - CGFloat(n - 1) * gap) / CGFloat(n))
+
+            // Right-align the samples we actually have so a fresh capture
+            // fills in from the tape-head rather than stretching to fit.
+            let start = n - levels.count
+            for (i, sample) in levels.enumerated() {
+                let idx = start + i
+                let shaped = pow(max(0.04, CGFloat(sample)), 0.65)
+                let h = max(2, (size.height - 2) * shaped)
+                let x = CGFloat(idx) * (barWidth + gap)
+                let rect = CGRect(x: x, y: centerY - h / 2, width: barWidth, height: h)
+                ctx.fill(Path(roundedRect: rect, cornerRadius: 1), with: .color(color))
+            }
+        }
+    }
+}
 
 private extension String {
     func leftPadded(toLength targetLength: Int, with character: Character) -> String {
