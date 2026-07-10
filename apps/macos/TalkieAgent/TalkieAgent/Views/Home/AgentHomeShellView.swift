@@ -535,9 +535,9 @@ private enum AgentHomeShellSection: String, CaseIterable, Hashable {
 
 // MARK: - Command-center chrome
 
-/// Fixed materials from the Agent command-center study. The rail and Wire stay
-/// dark in every appearance so they read as hardware; the surrounding page is
-/// a warm operational paper instead of a generic settings canvas.
+/// Theme-aware materials from the Agent command-center study. Home remains a
+/// warm operational paper, while the rail and Wire use lightly tinted inset
+/// surfaces rather than relying on a heavy dark-versus-light split.
 private enum AgentHomeCommandPalette {
     static let paper = opsAdaptive(
         light: Color(red: 0.956, green: 0.949, blue: 0.929),
@@ -570,28 +570,31 @@ private enum AgentHomeCommandPalette {
     static let amber = Color.accentColor
     static let amberSoft = Color.accentColor.opacity(0.24)
 
-    // Hardware surfaces stay darker than the paper, but live in warm charcoal
-    // rather than near-black. This keeps the Wire special without letting it
-    // visually swallow the rest of Home.
+    // The structural surfaces are now light in the light appearance: hierarchy
+    // comes from tint, borders, and typography rather than near-black fills.
     static let rail = opsAdaptive(
-        light: Color(red: 0.200, green: 0.180, blue: 0.155),
+        light: Color(red: 0.895, green: 0.875, blue: 0.835),
         dark: Color(red: 0.145, green: 0.132, blue: 0.116)
     )
-    static let railSelected = Color.accentColor.opacity(0.20)
+    static let railIcon = opsAdaptive(
+        light: Color(red: 0.310, green: 0.285, blue: 0.250),
+        dark: Color(red: 0.780, green: 0.740, blue: 0.670)
+    )
+    static let railSelected = Color.accentColor.opacity(0.16)
     static let wire = opsAdaptive(
-        light: Color(red: 0.155, green: 0.143, blue: 0.125),
+        light: Color(red: 0.925, green: 0.905, blue: 0.865),
         dark: Color(red: 0.105, green: 0.098, blue: 0.086)
     )
     static let wireChrome = opsAdaptive(
-        light: Color(red: 0.215, green: 0.195, blue: 0.168),
+        light: Color(red: 0.870, green: 0.840, blue: 0.790),
         dark: Color(red: 0.155, green: 0.143, blue: 0.125)
     )
     static let wireMuted = opsAdaptive(
-        light: Color(red: 0.710, green: 0.650, blue: 0.555),
+        light: Color(red: 0.390, green: 0.355, blue: 0.305),
         dark: Color(red: 0.665, green: 0.620, blue: 0.535)
     )
     static let wireText = opsAdaptive(
-        light: Color(red: 0.965, green: 0.935, blue: 0.875),
+        light: Color(red: 0.125, green: 0.112, blue: 0.095),
         dark: Color(red: 0.900, green: 0.870, blue: 0.815)
     )
 }
@@ -619,13 +622,13 @@ private struct AgentHomeCommandRail: View {
                 .frame(width: 34, height: 28)
                 .background(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.black.opacity(0.34))
+                        .fill(AgentHomeCommandPalette.card.opacity(0.72))
                 )
                 .padding(.top, 14)
                 .padding(.bottom, 12)
 
             Rectangle()
-                .fill(Color.white.opacity(0.07))
+                .fill(AgentHomeCommandPalette.hairline.opacity(0.72))
                 .frame(width: 26, height: 1)
                 .padding(.bottom, 8)
 
@@ -638,7 +641,7 @@ private struct AgentHomeCommandRail: View {
             Button(action: onOpenSettings) {
                 Image(systemName: "gearshape")
                     .font(OpsType.ui(OpsSize.base, weight: .medium))
-                    .foregroundStyle(settingsSelected ? AgentHomeCommandPalette.amber : Color.white.opacity(0.46))
+                    .foregroundStyle(settingsSelected ? AgentHomeCommandPalette.amber : AgentHomeCommandPalette.railIcon.opacity(0.72))
                     .frame(width: 38, height: 38)
                     .background(
                         RoundedRectangle(cornerRadius: 9, style: .continuous)
@@ -660,7 +663,7 @@ private struct AgentHomeCommandRail: View {
         return Button { onSelect(section) } label: {
             Image(systemName: isSelected ? section.selectedIcon : section.icon)
                 .font(OpsType.ui(OpsSize.base, weight: .medium))
-                .foregroundStyle(isSelected ? AgentHomeCommandPalette.amber : Color.white.opacity(0.48))
+                .foregroundStyle(isSelected ? AgentHomeCommandPalette.amber : AgentHomeCommandPalette.railIcon.opacity(0.76))
                 .frame(width: 38, height: 38)
                 .background(
                     RoundedRectangle(cornerRadius: 9, style: .continuous)
@@ -1061,10 +1064,10 @@ private struct AgentHomeCommandDashboard: View {
             .background(AgentHomeCommandPalette.wireChrome)
 
             Rectangle()
-                .fill(Color.white.opacity(0.06))
+                .fill(AgentHomeCommandPalette.hairline.opacity(0.72))
                 .frame(height: 1)
 
-            ScrollView {
+            ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     if wireJobs.isEmpty {
                         AgentHomeWireEmptyState(runtimeOnline: store.runtimePing != nil)
@@ -1080,7 +1083,7 @@ private struct AgentHomeCommandDashboard: View {
             .frame(minHeight: 190, maxHeight: 270)
 
             Rectangle()
-                .fill(Color.white.opacity(0.07))
+                .fill(AgentHomeCommandPalette.hairline.opacity(0.72))
                 .frame(height: 1)
 
             composer
@@ -1091,17 +1094,17 @@ private struct AgentHomeCommandDashboard: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                .stroke(AgentHomeCommandPalette.hairline.opacity(0.88), lineWidth: 1)
         )
     }
 
     private var composer: some View {
-        HStack(spacing: 9) {
+        HStack(spacing: 7) {
             ZStack(alignment: .leading) {
                 if prompt.isEmpty {
                     Text("Message your agent…")
                         .font(.system(size: 13, weight: .regular))
-                        .foregroundStyle(AgentHomeCommandPalette.wireMuted.opacity(0.72))
+                        .foregroundStyle(AgentHomeCommandPalette.wireMuted.opacity(0.68))
                         .allowsHitTesting(false)
                 }
 
@@ -1123,40 +1126,60 @@ private struct AgentHomeCommandDashboard: View {
                     .font(OpsType.mono(9, weight: .semibold))
                     .tracking(1.0)
                     .foregroundStyle(AgentHomeCommandPalette.amber)
-            } else {
-                Text("⌥ SPACE TO TALK")
-                    .font(OpsType.mono(8, weight: .medium))
-                    .tracking(0.9)
-                    .foregroundStyle(AgentHomeCommandPalette.wireMuted.opacity(0.72))
             }
 
             Button(action: toggleVoiceCapture) {
                 Image(systemName: voiceCapture.phase == .recording ? "stop.fill" : "mic.fill")
                     .font(OpsType.ui(12, weight: .semibold))
-                    .foregroundStyle(voiceCapture.phase == .recording ? AgentHomeCommandPalette.ink : AgentHomeCommandPalette.amber)
+                    .foregroundStyle(voiceCapture.phase == .recording ? Color.white : AgentHomeCommandPalette.amber)
                     .frame(width: 34, height: 34)
                     .background(
                         Circle().fill(
                             voiceCapture.phase == .recording
                                 ? AgentHomeCommandPalette.amber
-                                : AgentHomeCommandPalette.railSelected
+                                : AgentHomeCommandPalette.amber.opacity(0.10)
                         )
                     )
-                    .overlay(Circle().stroke(AgentHomeCommandPalette.amber.opacity(0.65), lineWidth: 1))
+                    .overlay(Circle().stroke(AgentHomeCommandPalette.amber.opacity(0.36), lineWidth: 1))
             }
             .buttonStyle(.plain)
             .keyboardShortcut(.space, modifiers: .option)
             .disabled(store.isInvokingAgent || voiceCapture.phase == .processing)
             .help(voiceCapture.phase == .recording ? "Stop and send" : "Talk to the agent")
+
+            Button(action: submit) {
+                Image(systemName: "arrow.up")
+                    .font(OpsType.ui(12, weight: .bold))
+                    .foregroundStyle(canSubmit ? Color.white : AgentHomeCommandPalette.railIcon.opacity(0.55))
+                    .frame(width: 34, height: 34)
+                    .background(
+                        Circle().fill(
+                            canSubmit
+                                ? AgentHomeCommandPalette.amber
+                                : AgentHomeCommandPalette.paper.opacity(0.75)
+                        )
+                    )
+                    .overlay(
+                        Circle().stroke(
+                            canSubmit
+                                ? AgentHomeCommandPalette.amber
+                                : AgentHomeCommandPalette.hairline.opacity(0.82),
+                            lineWidth: 1
+                        )
+                    )
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSubmit)
+            .help("Send message")
         }
         .padding(.leading, 13)
         .padding(.trailing, 5)
         .frame(height: 40)
-        .background(AgentHomeCommandPalette.wire.opacity(0.66))
+        .background(AgentHomeCommandPalette.card.opacity(0.88))
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(Color.white.opacity(0.09), lineWidth: 1)
+                .stroke(AgentHomeCommandPalette.hairline.opacity(0.86), lineWidth: 1)
         )
     }
 
@@ -1270,6 +1293,12 @@ private struct AgentHomeCommandDashboard: View {
         }
     }
 
+    private var canSubmit: Bool {
+        !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !store.isInvokingAgent
+            && voiceCapture.phase == .idle
+    }
+
     private func submit() {
         submit(prompt)
     }
@@ -1368,7 +1397,7 @@ private struct AgentHomeWireJobRow: View {
                 if let response {
                     Text(response)
                         .font(.system(size: 13, weight: .regular))
-                        .foregroundStyle(Color.white.opacity(0.72))
+                        .foregroundStyle(AgentHomeCommandPalette.wireText.opacity(0.78))
                         .lineLimit(3)
                 } else if job.status.isActive {
                     HStack(spacing: 9) {
