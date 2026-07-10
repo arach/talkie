@@ -32,5 +32,4 @@ Important files:
 - `WORKFLOW_STEP_CATALOG.json`: machine-readable step catalog
 - `Live Config/`: mounted config files and workflow directories when available
 - `Workflow Templates/`: working starter examples to copy or adapt
-- `Tools/`: optional non-database utilities, when present
 - `Rule Packs/`: copied user-authored rule packs
