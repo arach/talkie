@@ -539,20 +539,61 @@ private enum AgentHomeShellSection: String, CaseIterable, Hashable {
 /// dark in every appearance so they read as hardware; the surrounding page is
 /// a warm operational paper instead of a generic settings canvas.
 private enum AgentHomeCommandPalette {
-    static let paper = Color(red: 0.956, green: 0.949, blue: 0.929)
-    static let card = Color(red: 0.992, green: 0.989, blue: 0.978)
-    static let ink = Color(red: 0.095, green: 0.084, blue: 0.070)
-    static let muted = Color(red: 0.420, green: 0.385, blue: 0.330)
-    static let faint = Color(red: 0.625, green: 0.580, blue: 0.505)
-    static let hairline = Color(red: 0.820, green: 0.795, blue: 0.745)
-    static let amber = Color(red: 0.815, green: 0.475, blue: 0.055)
-    static let amberSoft = Color(red: 0.960, green: 0.884, blue: 0.690)
-    static let rail = Color(red: 0.105, green: 0.088, blue: 0.075)
-    static let railSelected = Color(red: 0.270, green: 0.180, blue: 0.085)
-    static let wire = Color(red: 0.030, green: 0.027, blue: 0.020)
-    static let wireChrome = Color(red: 0.085, green: 0.070, blue: 0.060)
-    static let wireMuted = Color(red: 0.580, green: 0.525, blue: 0.430)
-    static let wireText = Color(red: 0.895, green: 0.865, blue: 0.785)
+    static let paper = opsAdaptive(
+        light: Color(red: 0.956, green: 0.949, blue: 0.929),
+        dark: Color(red: 0.122, green: 0.114, blue: 0.102)
+    )
+    static let card = opsAdaptive(
+        light: Color(red: 0.992, green: 0.989, blue: 0.978),
+        dark: Color(red: 0.165, green: 0.153, blue: 0.137)
+    )
+    static let ink = opsAdaptive(
+        light: Color(red: 0.095, green: 0.084, blue: 0.070),
+        dark: Color(red: 0.925, green: 0.902, blue: 0.855)
+    )
+    static let muted = opsAdaptive(
+        light: Color(red: 0.420, green: 0.385, blue: 0.330),
+        dark: Color(red: 0.715, green: 0.675, blue: 0.605)
+    )
+    static let faint = opsAdaptive(
+        light: Color(red: 0.625, green: 0.580, blue: 0.505),
+        dark: Color(red: 0.565, green: 0.525, blue: 0.465)
+    )
+    static let hairline = opsAdaptive(
+        light: Color(red: 0.820, green: 0.795, blue: 0.745),
+        dark: Color(red: 0.310, green: 0.285, blue: 0.250)
+    )
+
+    // The command center follows the active Talkie accent instead of pinning
+    // itself to amber. Amber remains the default visual-theme choice, while a
+    // different user theme now carries through the rail, Wire, and readouts.
+    static let amber = Color.accentColor
+    static let amberSoft = Color.accentColor.opacity(0.24)
+
+    // Hardware surfaces stay darker than the paper, but live in warm charcoal
+    // rather than near-black. This keeps the Wire special without letting it
+    // visually swallow the rest of Home.
+    static let rail = opsAdaptive(
+        light: Color(red: 0.200, green: 0.180, blue: 0.155),
+        dark: Color(red: 0.145, green: 0.132, blue: 0.116)
+    )
+    static let railSelected = Color.accentColor.opacity(0.20)
+    static let wire = opsAdaptive(
+        light: Color(red: 0.155, green: 0.143, blue: 0.125),
+        dark: Color(red: 0.105, green: 0.098, blue: 0.086)
+    )
+    static let wireChrome = opsAdaptive(
+        light: Color(red: 0.215, green: 0.195, blue: 0.168),
+        dark: Color(red: 0.155, green: 0.143, blue: 0.125)
+    )
+    static let wireMuted = opsAdaptive(
+        light: Color(red: 0.710, green: 0.650, blue: 0.555),
+        dark: Color(red: 0.665, green: 0.620, blue: 0.535)
+    )
+    static let wireText = opsAdaptive(
+        light: Color(red: 0.965, green: 0.935, blue: 0.875),
+        dark: Color(red: 0.900, green: 0.870, blue: 0.815)
+    )
 }
 
 private struct AgentHomeCommandRail: View {
