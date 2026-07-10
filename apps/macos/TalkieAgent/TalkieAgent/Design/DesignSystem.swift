@@ -11,32 +11,59 @@ import SwiftUI
 
 // MARK: - TalkieTheme (Agent-local shadow)
 //
-// Repoints the `TalkieTheme` tokens the Agent uses at the shared Ops palette so
-// the settings panes match the console shell exactly. The Ops tokens are now
-// appearance-adaptive (see `opsAdaptive` in OpsKit), so these follow the user's
-// light/dark setting too. Scoped to the Agent target: the shared kit (and the
-// views that depend on it, e.g. LivePill) is untouched.
+// The Agent shares Talkie's cool Scope chassis and ink hierarchy, then adds a
+// restrained steel-blue signal color for active agent state. That keeps both
+// apps in one visual family without making Agent Home look like another Talkie
+// library window. Scoped to the Agent target: the shared kit (and the views
+// that depend on it, e.g. LivePill) is untouched.
 enum TalkieTheme {
-    // Text — Hudson ink / muted / dim, with a fourth faint step for `textMuted`.
-    static let textPrimary   = OpsInk.ink            // #E5E5E5
-    static let textSecondary = OpsInk.muted          // #A3A3A3
-    static let textTertiary  = OpsInk.dim            // #737373
-    static let textMuted     = OpsInk.dim.opacity(0.7)
+    // Shared family foundation.
+    static let textPrimary   = ScopeInk.primary
+    static let textSecondary = ScopeInk.muted
+    static let textTertiary  = ScopeInk.faint
+    static let textMuted     = ScopeInk.subtle
 
-    // Surfaces — card == Hudson surface; elevated sits a hair above it.
-    static let background      = OpsInk.bg           // #0A0A0A
-    static let surface         = OpsInk.surface      // #171717
-    static let surfaceCard     = OpsInk.surface      // #171717
-    static let surfaceElevated = opsAdaptive(
-        light: Color(red: 248.0/255, green: 248.0/255, blue: 250.0/255),
-        dark: Color(red: 32.0/255, green: 32.0/255, blue: 32.0/255)
+    static let background      = ScopeCanvas.canvas
+    static let surface         = opsAdaptive(light: .white, dark: ScopeCanvas.surface)
+    static let surfaceCard     = surface
+    static let surfaceElevated = ScopeCanvas.pane
+
+    // Agent chrome is one cool step beyond Talkie's neutral chassis. The tint
+    // is deliberately low-chroma: it should read as equipment, not a blue app.
+    static let chrome = opsAdaptive(
+        light: Color(red: 231.0/255, green: 235.0/255, blue: 238.0/255),
+        dark: Color(red: 21.0/255, green: 27.0/255, blue: 31.0/255)
+    )
+    static let instrument = opsAdaptive(
+        light: Color(red: 234.0/255, green: 240.0/255, blue: 243.0/255),
+        dark: Color(red: 17.0/255, green: 26.0/255, blue: 33.0/255)
+    )
+    static let instrumentChrome = opsAdaptive(
+        light: Color(red: 225.0/255, green: 233.0/255, blue: 237.0/255),
+        dark: Color(red: 24.0/255, green: 36.0/255, blue: 45.0/255)
     )
 
     // Structure & interaction.
-    static let border  = OpsInk.border               // #272727
-    static let divider = OpsHairline.standard            // #262626
-    static let hover   = OpsSurface.hover                 // white @ 4.5%
+    static let border = opsAdaptive(
+        light: Color(red: 205.0/255, green: 214.0/255, blue: 220.0/255),
+        dark: Color(red: 43.0/255, green: 57.0/255, blue: 67.0/255)
+    )
+    static let divider = border.opacity(0.78)
+    static let hover = ScopeInk.primary.opacity(0.045)
 
-    // Accent follows the user's chosen accent color (appearance-independent).
-    static let accent  = Color.accentColor
+    // Agent signal: a desaturated blue that remains readable at small sizes.
+    // Brass stays available as the shared Talkie brand cue, not as a competing
+    // interaction color inside Agent Home.
+    static let accent = opsAdaptive(
+        light: Color(red: 72.0/255, green: 104.0/255, blue: 136.0/255),
+        dark: Color(red: 130.0/255, green: 169.0/255, blue: 203.0/255)
+    )
+    static let accentStrong = opsAdaptive(
+        light: Color(red: 49.0/255, green: 78.0/255, blue: 107.0/255),
+        dark: Color(red: 166.0/255, green: 197.0/255, blue: 220.0/255)
+    )
+    static let accentSoft = accent.opacity(0.10)
+    static let accentBorder = accent.opacity(0.28)
+    static let accentGlow = accent.opacity(0.22)
+    static let brandAccent = ScopeAmber.solid
 }
