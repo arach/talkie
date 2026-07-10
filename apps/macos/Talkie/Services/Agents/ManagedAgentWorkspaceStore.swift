@@ -157,12 +157,10 @@ struct ManagedAgentWorkspaceStore: Sendable {
 
         let rulePackDirectoryURL = workspaceURL.appending(path: "Rule Packs", directoryHint: .isDirectory)
         let liveConfigDirectoryURL = workspaceURL.appending(path: "Live Config", directoryHint: .isDirectory)
-        let toolsDirectoryURL = workspaceURL.appending(path: "Tools", directoryHint: .isDirectory)
         let workflowTemplatesDirectoryURL = workspaceURL.appending(path: "Workflow Templates", directoryHint: .isDirectory)
 
         try resetDirectory(at: rulePackDirectoryURL)
         try resetDirectory(at: liveConfigDirectoryURL)
-        try resetDirectory(at: toolsDirectoryURL)
         try resetDirectory(at: workflowTemplatesDirectoryURL)
 
         let contextFileURL = workspaceURL.appending(path: "CONTEXT.md")
@@ -181,7 +179,6 @@ struct ManagedAgentWorkspaceStore: Sendable {
         let openCodeConfigFileURL = workspaceURL.appending(path: "opencode.json")
         let readmeFileURL = workspaceURL.appending(path: "README.md")
         let liveConfigReadmeURL = liveConfigDirectoryURL.appending(path: "README.md")
-        let toolsReadmeURL = toolsDirectoryURL.appending(path: "README.md")
         let workflowTemplatesReadmeURL = workflowTemplatesDirectoryURL.appending(path: "README.md")
 
         try writeText(contextMarkdown(notes: notes), to: contextFileURL)
@@ -211,12 +208,10 @@ struct ManagedAgentWorkspaceStore: Sendable {
         )
         try writeText(readmeMarkdown(profile: profile, createdAt: createdAt, prompt: prompt), to: readmeFileURL)
         try writeText(liveConfigReadmeMarkdown(), to: liveConfigReadmeURL)
-        try writeText(toolsReadmeMarkdown(), to: toolsReadmeURL)
         try writeText(workflowTemplatesReadmeMarkdown(), to: workflowTemplatesReadmeURL)
 
         try copyRulePacks(into: rulePackDirectoryURL)
         try mountLiveConfig(into: liveConfigDirectoryURL)
-        try writeTools(into: toolsDirectoryURL)
         try copyWorkflowTemplates(into: workflowTemplatesDirectoryURL)
 
         return ManagedAgentWorkspace(
@@ -291,20 +286,6 @@ struct ManagedAgentWorkspaceStore: Sendable {
         )
     }
 
-    private func writeTools(into directoryURL: URL) throws {
-        let commonURL = directoryURL.appending(path: "_common.sh")
-        let captureMarkupDescribeURL = directoryURL.appending(path: "capture-markup-describe.sh")
-        let captureMarkupPlanURL = directoryURL.appending(path: "capture-markup-plan.sh")
-        let captureMarkupApplyURL = directoryURL.appending(path: "capture-markup-apply.sh")
-        let captureMarkupRenderURL = directoryURL.appending(path: "capture-markup-render.sh")
-
-        try writeExecutableText(commonScript(), to: commonURL)
-        try writeExecutableText(captureMarkupDescribeScript(), to: captureMarkupDescribeURL)
-        try writeExecutableText(captureMarkupPlanScript(), to: captureMarkupPlanURL)
-        try writeExecutableText(captureMarkupApplyScript(), to: captureMarkupApplyURL)
-        try writeExecutableText(captureMarkupRenderScript(), to: captureMarkupRenderURL)
-    }
-
     private func resetDirectory(at directoryURL: URL) throws {
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
@@ -339,14 +320,6 @@ struct ManagedAgentWorkspaceStore: Sendable {
     private func writeTextIfAbsent(_ text: String, to url: URL) throws {
         guard !FileManager.default.fileExists(atPath: url.path) else { return }
         try writeText(text, to: url)
-    }
-
-    private func writeExecutableText(_ text: String, to url: URL) throws {
-        try writeText(text, to: url)
-        try FileManager.default.setAttributes(
-            [.posixPermissions: NSNumber(value: 0o755)],
-            ofItemAtPath: url.path
-        )
     }
 
     private func agentsMarkdown(profile: AgentHarnessProfile) -> String {
@@ -394,7 +367,6 @@ struct ManagedAgentWorkspaceStore: Sendable {
         - `WORKFLOW_STEP_CATALOG.json`: machine-readable workflow step catalog
         - `Live Config/`: mounted config files and workflow directories when available
         - `Workflow Templates/`: working starter examples to copy or adapt
-        - `Tools/`: optional non-database utilities, when present
         - `Rule Packs/`: copied user-authored rule packs
         """
     }
@@ -895,22 +867,6 @@ struct ManagedAgentWorkspaceStore: Sendable {
         """
     }
 
-    private func toolsReadmeMarkdown() -> String {
-        return """
-        # Tools
-
-        These optional commands are thin wrappers over supported Talkie debug entrypoints.
-
-        Capture markup (screenshot annotation):
-        - `capture-markup-describe.sh <image-path>`
-        - `capture-markup-plan.sh <image-path> <instruction>`
-        - `capture-markup-apply.sh <image-path> <plan-json-path>`
-        - `capture-markup-render.sh <image-path> [output-path]`
-
-        There are intentionally no memo, dictation, workflow, or database inspection helpers here. Use `talkie` CLI commands from `CLI_GUIDE.md` for app data. If a supported command is missing, extend the CLI/API instead of adding a shell script that queries `talkie.sqlite`.
-        """
-    }
-
     private func openCodeConfigJSON(preferredModel: String?) -> String {
         var payload: [String: Any] = [
             "$schema": "https://opencode.ai/config.json",
@@ -974,14 +930,6 @@ struct ManagedAgentWorkspaceStore: Sendable {
         URL.applicationSupportDirectory
             .appendingPathComponent("Talkie", isDirectory: true)
             .appendingPathComponent("Audio", isDirectory: true)
-    }
-
-    private var talkieExecutablePath: String {
-        Bundle.main.executableURL?.path ?? ""
-    }
-
-    private var agentKitToolsRuntimePath: String {
-        agentKitURL(relativePath: "runtime/agent-tools.ts")?.path ?? ""
     }
 
     private func displayPath(_ url: URL) -> String {
@@ -1087,105 +1035,4 @@ struct ManagedAgentWorkspaceStore: Sendable {
         }
     }
 
-    private func commonScript() -> String {
-        """
-        #!/bin/zsh
-        set -euo pipefail
-
-        readonly TALKIE_EXECUTABLE_PATH=\(shellQuoted(talkieExecutablePath))
-        readonly TALKIE_AGENTKIT_RUNTIME_PATH=\(shellQuoted(agentKitToolsRuntimePath))
-
-        function resolved_bun_path() {
-          if command -v bun >/dev/null 2>&1; then
-            command -v bun
-            return 0
-          fi
-
-          local candidates=(
-            "$HOME/.bun/bin/bun"
-            "/opt/homebrew/bin/bun"
-            "/usr/local/bin/bun"
-          )
-
-          local candidate
-          for candidate in "${candidates[@]}"; do
-            if [[ -x "$candidate" ]]; then
-              print -- "$candidate"
-              return 0
-            fi
-          done
-
-          print -u2 "bun is required but was not found on PATH."
-          exit 1
-        }
-
-        function require_agentkit_runtime() {
-          if [[ -z "$TALKIE_AGENTKIT_RUNTIME_PATH" || ! -f "$TALKIE_AGENTKIT_RUNTIME_PATH" ]]; then
-            print -u2 "AgentKit runtime not available at '$TALKIE_AGENTKIT_RUNTIME_PATH'"
-            exit 1
-          fi
-        }
-
-        function exec_agentkit_tool() {
-          local bun_path
-          bun_path="$(resolved_bun_path)"
-          require_agentkit_runtime
-
-          TALKIE_EXECUTABLE_PATH="$TALKIE_EXECUTABLE_PATH" \
-          "$bun_path" "$TALKIE_AGENTKIT_RUNTIME_PATH" "$@"
-        }
-        """
-    }
-
-    private func captureMarkupDescribeScript() -> String {
-        """
-        #!/bin/zsh
-        set -euo pipefail
-
-        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-        source "$SCRIPT_DIR/_common.sh"
-
-        exec_agentkit_tool capture-markup-describe "$@"
-        """
-    }
-
-    private func captureMarkupPlanScript() -> String {
-        """
-        #!/bin/zsh
-        set -euo pipefail
-
-        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-        source "$SCRIPT_DIR/_common.sh"
-
-        exec_agentkit_tool capture-markup-plan "$@"
-        """
-    }
-
-    private func captureMarkupApplyScript() -> String {
-        """
-        #!/bin/zsh
-        set -euo pipefail
-
-        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-        source "$SCRIPT_DIR/_common.sh"
-
-        exec_agentkit_tool capture-markup-apply "$@"
-        """
-    }
-
-    private func captureMarkupRenderScript() -> String {
-        """
-        #!/bin/zsh
-        set -euo pipefail
-
-        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-        source "$SCRIPT_DIR/_common.sh"
-
-        exec_agentkit_tool capture-markup-render "$@"
-        """
-    }
-
-    private func shellQuoted(_ value: String) -> String {
-        "'" + value.replacingOccurrences(of: "'", with: "'\"'\"'") + "'"
-    }
 }

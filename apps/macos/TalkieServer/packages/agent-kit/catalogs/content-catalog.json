@@ -22,13 +22,6 @@
       "kind": "prompt",
       "bundleToApp": true,
       "description": "Behavior-shaping prompt content for embedded agent profiles."
-    },
-    {
-      "id": "runtime",
-      "path": "runtime",
-      "kind": "runtime",
-      "bundleToApp": true,
-      "description": "Shared TypeScript runtime used by generated workspace tools."
     }
   ],
   "assets": [
@@ -167,22 +160,6 @@
       "title": "Talkie Agent System Prompt",
       "consumers": ["console-profile"],
       "description": "Primary operating instructions for the Talkie agent profile."
-    },
-    {
-      "id": "runtime.readme",
-      "collection": "runtime",
-      "path": "runtime/README.md",
-      "title": "Runtime Overview",
-      "consumers": ["developers"],
-      "description": "Explains the runtime boundary between shell wrappers and shared TypeScript logic."
-    },
-    {
-      "id": "runtime.agent-tools",
-      "collection": "runtime",
-      "path": "runtime/agent-tools.ts",
-      "title": "Agent Tools Runtime",
-      "consumers": ["workspace-tools"],
-      "description": "Shared TypeScript runtime for optional non-database workspace utilities."
     }
   ]
 }

@@ -9,4 +9,4 @@ Current catalogs:
 - `workflow-step-catalog.json`
   - the workflow step vocabulary exposed to generated workspaces
 
-`content-catalog.json` is intentionally strict. Every managed file inside `docs/`, `prompts/`, `catalogs/`, and `runtime/` should be represented there so the package can detect drift.
+`content-catalog.json` is intentionally strict. Every managed file inside `docs/`, `prompts/`, and `catalogs/` should be represented there so the package can detect drift.
