@@ -111,7 +111,17 @@ private struct OverviewDigest: View {
     let onSelect: (UUID) -> Void
 
     private var padX: CGFloat { width < 560 ? 28 : 56 }
-    private var highlightColumns: Int { width < 440 ? 1 : (width < 700 ? 2 : 3) }
+    private var highlightContentWidth: CGFloat { max(0, width - (padX * 2)) }
+    private var highlightColumns: Int {
+        if highlightContentWidth >= 540 { return 3 }
+        if highlightContentWidth >= 350 { return 2 }
+        return 1
+    }
+    private var highlightCardWidth: CGFloat {
+        let gaps = CGFloat(max(0, highlightColumns - 1)) * 16
+        let distributedWidth = (highlightContentWidth - gaps) / CGFloat(highlightColumns)
+        return min(230, distributedWidth)
+    }
 
     private var captureCount: Int { items.filter { kind(of: $0) == .capture }.count }
     private var voiceCount: Int { items.filter { kind(of: $0) == .voice }.count }
@@ -282,14 +292,10 @@ private struct OverviewDigest: View {
             HStack(alignment: .top, spacing: 16) {
                 ForEach(picks, id: \.item.id) { pick in
                     HighlightCard(item: pick.item, eyebrow: pick.eyebrow, onTap: { onSelect(pick.item.id) })
-                        .frame(maxWidth: .infinity)
-                }
-                if picks.count < highlightColumns {
-                    ForEach(0..<(highlightColumns - picks.count), id: \.self) { _ in
-                        Color.clear.frame(maxWidth: .infinity)
-                    }
+                        .frame(width: highlightCardWidth)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -437,7 +443,7 @@ private struct HighlightCard: View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 10) {
                 media
-                    .aspectRatio(1.6, contentMode: .fit)
+                    .aspectRatio(2, contentMode: .fit)
                     .frame(maxWidth: .infinity)
 
                 VStack(alignment: .leading, spacing: 5) {
@@ -533,7 +539,8 @@ private struct OverviewCaptureThumb: View {
                 Image(nsImage: image)
                     .interpolation(.medium)
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
+                    .scaledToFit()
+                    .padding(5)
             } else {
                 Image(systemName: media.isVideo ? "play.rectangle" : "photo")
                     .font(.system(size: 16, weight: .semibold))
