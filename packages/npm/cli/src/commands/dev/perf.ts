@@ -1,4 +1,4 @@
-import type { Command } from "commander";
+import type { Command } from "../../gunshi-command";
 import { readLogEntries, type LogEntry } from "../../log-parser";
 import { getFormatOptions, output } from "../../format";
 

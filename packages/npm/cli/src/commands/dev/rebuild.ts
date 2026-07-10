@@ -1,4 +1,4 @@
-import type { Command } from "commander";
+import type { Command } from "../../gunshi-command";
 import { rmSync } from "fs";
 import { getFormatOptions, output } from "../../format";
 import { SERVICES, resolveService, getProjectRoot, getUid, type TalkieService } from "./services";

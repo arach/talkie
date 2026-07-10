@@ -1,4 +1,4 @@
-import type { Command } from "commander";
+import type { Command } from "../gunshi-command";
 import { getFormatOptions, output } from "../format";
 import { callBridge, callBridgeStreaming, ensureServiceRunning } from "../bridge";
 import { BRIDGE_PORTS } from "../ports";

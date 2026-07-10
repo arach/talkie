@@ -1,4 +1,4 @@
-import type { Command } from "commander";
+import type { Command } from "../../gunshi-command";
 
 /** Hidden alias: `fresh` delegates to `rebuild --clean`. */
 export function registerFreshCommand(parent: Command): void {

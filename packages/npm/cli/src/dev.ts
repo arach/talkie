@@ -54,4 +54,4 @@ registerWipeCommand(program);
 // Hidden `dev` subgroup for backwards compat
 registerDevCommand(program);
 
-program.parse();
+await program.parse();

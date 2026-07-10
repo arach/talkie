@@ -1,4 +1,4 @@
-import type { Command } from "commander";
+import type { Command } from "../../gunshi-command";
 import { existsSync, readFileSync, statSync, readdirSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";

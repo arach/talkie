@@ -1,4 +1,4 @@
-import type { Command } from "commander";
+import type { Command } from "../gunshi-command";
 import { getDb, queryOne } from "../db";
 import { getFormatOptions, output } from "../format";
 
