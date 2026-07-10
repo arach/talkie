@@ -86,6 +86,8 @@
     "appleReminders",
     "webhook",
     "email",
+    "appleNotes",
+    "appleCalendar",
     "cloudUpload"
   ]
 }

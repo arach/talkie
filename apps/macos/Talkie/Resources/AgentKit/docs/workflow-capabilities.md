@@ -47,6 +47,10 @@ This is the quick human-readable map of the workflow step vocabulary available t
 
 - `appleReminders`
   - create reminders
+- `appleNotes`
+  - create or update notes
+- `appleCalendar`
+  - create calendar events
 
 ## Network and outbound actions
 

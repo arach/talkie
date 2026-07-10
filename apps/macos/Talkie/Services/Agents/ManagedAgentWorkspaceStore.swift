@@ -107,8 +107,9 @@ struct ManagedAgentWorkspaceStore: Sendable {
     }
 
     /// Prepare (or refresh) the durable agent home. The prompt files are seeded
-    /// once and then left alone; the operational scaffolding (guides, `Tools/`,
-    /// `Live Config/`, rule packs) is rewritten each call so it tracks the app.
+    /// once and then left alone; the operational scaffolding (guides,
+    /// `Live Config/`, optional utilities, rule packs) is rewritten each call so
+    /// it tracks the app.
     @discardableResult
     func prepareAgentHome(
         harness: AgentHarnessProfile,
@@ -156,12 +157,10 @@ struct ManagedAgentWorkspaceStore: Sendable {
 
         let rulePackDirectoryURL = workspaceURL.appending(path: "Rule Packs", directoryHint: .isDirectory)
         let liveConfigDirectoryURL = workspaceURL.appending(path: "Live Config", directoryHint: .isDirectory)
-        let toolsDirectoryURL = workspaceURL.appending(path: "Tools", directoryHint: .isDirectory)
         let workflowTemplatesDirectoryURL = workspaceURL.appending(path: "Workflow Templates", directoryHint: .isDirectory)
 
         try resetDirectory(at: rulePackDirectoryURL)
         try resetDirectory(at: liveConfigDirectoryURL)
-        try resetDirectory(at: toolsDirectoryURL)
         try resetDirectory(at: workflowTemplatesDirectoryURL)
 
         let contextFileURL = workspaceURL.appending(path: "CONTEXT.md")
@@ -173,13 +172,13 @@ struct ManagedAgentWorkspaceStore: Sendable {
         let configurationGuideFileURL = workspaceURL.appending(path: "CONFIGURATION_GUIDE.md")
         let memoGuideFileURL = workspaceURL.appending(path: "MEMO_GUIDE.md")
         let workflowGuideFileURL = workspaceURL.appending(path: "WORKFLOW_GUIDE.md")
+        let cliGuideFileURL = workspaceURL.appending(path: "CLI_GUIDE.md")
         let workflowAuthoringGuideFileURL = workspaceURL.appending(path: "WORKFLOW_AUTHORING.md")
         let workflowCapabilitiesGuideFileURL = workspaceURL.appending(path: "WORKFLOW_CAPABILITIES.md")
         let workflowStepCatalogFileURL = workspaceURL.appending(path: "WORKFLOW_STEP_CATALOG.json")
         let openCodeConfigFileURL = workspaceURL.appending(path: "opencode.json")
         let readmeFileURL = workspaceURL.appending(path: "README.md")
         let liveConfigReadmeURL = liveConfigDirectoryURL.appending(path: "README.md")
-        let toolsReadmeURL = toolsDirectoryURL.appending(path: "README.md")
         let workflowTemplatesReadmeURL = workflowTemplatesDirectoryURL.appending(path: "README.md")
 
         try writeText(contextMarkdown(notes: notes), to: contextFileURL)
@@ -199,6 +198,7 @@ struct ManagedAgentWorkspaceStore: Sendable {
         try writeText(configurationGuideMarkdown(), to: configurationGuideFileURL)
         try writeText(memoGuideMarkdown(), to: memoGuideFileURL)
         try writeText(workflowGuideMarkdown(), to: workflowGuideFileURL)
+        try writeText(cliGuideMarkdown(), to: cliGuideFileURL)
         try writeText(workflowAuthoringMarkdown(), to: workflowAuthoringGuideFileURL)
         try writeText(workflowCapabilitiesMarkdown(), to: workflowCapabilitiesGuideFileURL)
         try workflowStepCatalogData().write(to: workflowStepCatalogFileURL, options: .atomic)
@@ -208,12 +208,10 @@ struct ManagedAgentWorkspaceStore: Sendable {
         )
         try writeText(readmeMarkdown(profile: profile, createdAt: createdAt, prompt: prompt), to: readmeFileURL)
         try writeText(liveConfigReadmeMarkdown(), to: liveConfigReadmeURL)
-        try writeText(toolsReadmeMarkdown(), to: toolsReadmeURL)
         try writeText(workflowTemplatesReadmeMarkdown(), to: workflowTemplatesReadmeURL)
 
         try copyRulePacks(into: rulePackDirectoryURL)
         try mountLiveConfig(into: liveConfigDirectoryURL)
-        try writeTools(into: toolsDirectoryURL)
         try copyWorkflowTemplates(into: workflowTemplatesDirectoryURL)
 
         return ManagedAgentWorkspace(
@@ -288,32 +286,6 @@ struct ManagedAgentWorkspaceStore: Sendable {
         )
     }
 
-    private func writeTools(into directoryURL: URL) throws {
-        let commonURL = directoryURL.appending(path: "_common.sh")
-        let listMemosURL = directoryURL.appending(path: "list-memos.sh")
-        let listFailedMemosURL = directoryURL.appending(path: "list-failed-memos.sh")
-        let searchMemosURL = directoryURL.appending(path: "search-memos.sh")
-        let showMemoURL = directoryURL.appending(path: "show-memo.sh")
-        let retranscribeMemoURL = directoryURL.appending(path: "retranscribe-memo.sh")
-        let listWorkflowRunsURL = directoryURL.appending(path: "list-workflow-runs.sh")
-        let captureMarkupDescribeURL = directoryURL.appending(path: "capture-markup-describe.sh")
-        let captureMarkupPlanURL = directoryURL.appending(path: "capture-markup-plan.sh")
-        let captureMarkupApplyURL = directoryURL.appending(path: "capture-markup-apply.sh")
-        let captureMarkupRenderURL = directoryURL.appending(path: "capture-markup-render.sh")
-
-        try writeExecutableText(commonScript(), to: commonURL)
-        try writeExecutableText(listMemosScript(), to: listMemosURL)
-        try writeExecutableText(listFailedMemosScript(), to: listFailedMemosURL)
-        try writeExecutableText(searchMemosScript(), to: searchMemosURL)
-        try writeExecutableText(showMemoScript(), to: showMemoURL)
-        try writeExecutableText(retranscribeMemoScript(), to: retranscribeMemoURL)
-        try writeExecutableText(listWorkflowRunsScript(), to: listWorkflowRunsURL)
-        try writeExecutableText(captureMarkupDescribeScript(), to: captureMarkupDescribeURL)
-        try writeExecutableText(captureMarkupPlanScript(), to: captureMarkupPlanURL)
-        try writeExecutableText(captureMarkupApplyScript(), to: captureMarkupApplyURL)
-        try writeExecutableText(captureMarkupRenderScript(), to: captureMarkupRenderURL)
-    }
-
     private func resetDirectory(at directoryURL: URL) throws {
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
@@ -350,14 +322,6 @@ struct ManagedAgentWorkspaceStore: Sendable {
         try writeText(text, to: url)
     }
 
-    private func writeExecutableText(_ text: String, to url: URL) throws {
-        try writeText(text, to: url)
-        try FileManager.default.setAttributes(
-            [.posixPermissions: NSNumber(value: 0o755)],
-            ofItemAtPath: url.path
-        )
-    }
-
     private func agentsMarkdown(profile: AgentHarnessProfile) -> String {
         if let markdown = renderedAgentKitMarkdown(
             relativePath: "docs/agents.md",
@@ -377,13 +341,13 @@ struct ManagedAgentWorkspaceStore: Sendable {
         - work from the files in this directory first
         - inspect `Rule Packs/*.trf.toml` before changing command interpretation behavior
         - if the task touches settings, quick actions, workflow pinning, SSH, or iPhone preferences, read `CONFIGURATION_GUIDE.md`
-        - if the task touches memos, transcripts, recordings, workflow runs, or pinned actions, read `MEMO_GUIDE.md` and `WORKFLOW_GUIDE.md`
-        - for memo transcription failures, inspect with `Tools/list-failed-memos.sh` and `Tools/show-memo.sh` first, explain whether saved audio exists and the likely cause, and only use `Tools/retranscribe-memo.sh` when the task explicitly calls for recovery
+        - if the task touches memos, transcripts, recordings, dictations, workflow runs, captures, or pinned actions, read `MEMO_GUIDE.md`, `WORKFLOW_GUIDE.md`, and `CLI_GUIDE.md`
+        - use supported `talkie` CLI commands or Talkie bridge/API surfaces for app-data inspection
+        - if the CLI/API lacks the needed view or recovery action, explain the gap or implement the missing supported surface instead of querying the database directly
         - if the task is to create or edit a workflow, read `WORKFLOW_AUTHORING.md`, inspect `Workflow Templates/`, read `WORKFLOW_CAPABILITIES.md`, and write the result into `Live Config/workflow-user/`
-        - use `Tools/*.sh` for read-only memo and workflow inspection when practical
-        - `Tools/retranscribe-memo.sh` is the only write-capable helper in this workspace; treat it as a recovery action, not a first inspection step
         - treat `Live Config/` as the canonical mounted file-backed surface when links are present
         - never edit `talkie.sqlite` directly unless the task is explicitly a database repair or migration
+        - never use `sqlite3`, `bun:sqlite`, raw SQL, or generated shell database helpers for normal app-data inspection
         - explain what you inspected, what matched, what failed, and the smallest useful fix
 
         Harness:
@@ -397,12 +361,12 @@ struct ManagedAgentWorkspaceStore: Sendable {
         - `CONFIGURATION_GUIDE.md`: map of Talkie's file-backed config surfaces and update rules
         - `MEMO_GUIDE.md`: map of memo storage, repositories, and safe inspection rules
         - `WORKFLOW_GUIDE.md`: map of workflow definitions, preferences, and run history
+        - `CLI_GUIDE.md`: supported CLI commands for memos, dictations, captures, workflows, and search
         - `WORKFLOW_AUTHORING.md`: the flat JSON workflow format and authoring quick-start
         - `WORKFLOW_CAPABILITIES.md`: the supported step vocabulary and common patterns
         - `WORKFLOW_STEP_CATALOG.json`: machine-readable workflow step catalog
         - `Live Config/`: mounted config files and workflow directories when available
         - `Workflow Templates/`: working starter examples to copy or adapt
-        - `Tools/`: memo/workflow inspection helpers plus a single sanctioned memo recovery helper
         - `Rule Packs/`: copied user-authored rule packs
         """
     }
@@ -428,14 +392,15 @@ struct ManagedAgentWorkspaceStore: Sendable {
 
         ## Then, by task
         - Settings, quick actions, workflow pinning, SSH, or iPhone prefs → `CONFIGURATION_GUIDE.md`
-        - Memos, recordings, transcripts, or workflow runs → `MEMO_GUIDE.md`, `WORKFLOW_GUIDE.md`, `Tools/`
+        - Memos, recordings, dictations, transcripts, captures, or workflow runs → `MEMO_GUIDE.md`, `WORKFLOW_GUIDE.md`, `CLI_GUIDE.md`
         - Creating or editing a workflow → `WORKFLOW_AUTHORING.md`, `Workflow Templates/`,
           `WORKFLOW_CAPABILITIES.md`; write the result into `Live Config/workflow-user/`
 
         ## Ground rules
         - `Live Config/` is the canonical, file-backed source of truth — edit it, not the mirrors.
-        - Prefer the read-only `Tools/*.sh` helpers for inspecting real app data.
+        - Prefer supported `talkie` CLI commands or Talkie bridge/API surfaces for inspecting real app data.
         - Never edit `talkie.sqlite` directly unless the task is explicitly a repair or migration.
+        - Never use `sqlite3`, `bun:sqlite`, raw SQL, or generated shell database helpers for normal app-data inspection.
         - Keep edits minimal and testable; explain what matched, what failed, and the smallest fix.
 
         Harness: \(profile.displayName)
@@ -520,7 +485,7 @@ struct ManagedAgentWorkspaceStore: Sendable {
 
         ## Notes
 
-        This workspace is intentionally small but operational. It includes prompt files, copied rule packs, mounted file-backed config, memo/workflow guides, workflow-authoring examples, and read-only data inspection tools.
+        This workspace is intentionally small but operational. It includes prompt files, copied rule packs, mounted file-backed config, memo/workflow guides, CLI guidance, and workflow-authoring examples.
         """
     }
 
@@ -595,37 +560,33 @@ struct ManagedAgentWorkspaceStore: Sendable {
 
         ## Safe interaction rules
 
-        - Prefer `Tools/*.sh` for read-only inspection of memos and workflow runs.
-        - Use `Tools/retranscribe-memo.sh` only when the user explicitly wants to recover a memo from saved audio.
+        - Prefer supported `talkie` CLI commands or Talkie bridge/API surfaces for app-data inspection.
         - Do not edit `talkie.sqlite` directly unless the task is explicitly a repair, migration, or forensic fix.
+        - Do not use `sqlite3`, `bun:sqlite`, raw SQL, or generated shell database helpers for normal app-data inspection.
         - Treat `voice_memos` as the source of truth for memo transcript recovery; `recordings` is only a mirror for unified browsing.
         - If the task is about workflow pinning or action surfaces, update the file-backed workflow config instead of mutating memo rows.
-        - If the task is about transcript display, summary, tasks, or reminders, inspect the memo row plus transcript/workflow history before proposing a fix.
+        - If the task is about transcript display, summary, tasks, or reminders, inspect supported CLI/API output plus transcript/workflow owning code before proposing a fix.
 
-        ## Memo transcription recovery workflow
+        ## Memo and dictation inspection workflow
 
-        1. Run `Tools/list-failed-memos.sh` to find candidates with saved audio and missing transcripts.
-        2. Run `Tools/show-memo.sh <uuid-or-prefix>` to inspect one memo in detail.
-        3. Confirm whether saved audio exists, whether the transcript is still missing, and whether the mirror row agrees.
-        4. Explain the likely failure mode and whether recovery is possible before taking action.
-        5. If the user wants recovery, run `Tools/retranscribe-memo.sh <uuid-or-prefix> [model-id]`.
-        6. Re-run `Tools/show-memo.sh <uuid-or-prefix>` to verify the transcript landed after recovery.
-        7. If audio is missing or retranscription still fails, stop and report the blocker instead of editing the database directly.
+        1. Read `CLI_GUIDE.md`.
+        2. Use `talkie memos`, `talkie dictations`, or `talkie search` to inspect user-facing data.
+        3. Use `talkie workflows` when workflow history is relevant.
+        4. Confirm what the supported output shows before inspecting owning code.
+        5. If recovery or a deeper query is not exposed, explain the missing supported surface or implement it in the CLI/API.
 
         ## Useful commands
 
-        - `Tools/list-memos.sh`
-        - `Tools/list-failed-memos.sh`
-        - `Tools/search-memos.sh ssh`
-        - `Tools/show-memo.sh 8f42c1b0`
-        - `Tools/retranscribe-memo.sh 8f42c1b0`
-        - `Tools/list-workflow-runs.sh`
-        - `Tools/list-workflow-runs.sh 8f42c1b0`
+        - `talkie memos --limit 20 --pretty`
+        - `talkie memos 8f42c1b0 --pretty`
+        - `talkie dictations --since 24h --pretty`
+        - `talkie search "ssh" --type memo --pretty`
+        - `talkie workflows --pretty`
 
         ## Near-term evolution
 
         TalkieAgent already has a placeholder data bridge surface at `apps/macos/TalkieAgent/TalkieAgent/Services/TalkieRoutes.swift`.
-        The current workspace uses direct read-only SQLite tools for memo inspection. A good next step is turning TalkieRoutes into a first-class memo/query API so agents can inspect and act on memos through Talkie's own bridge instead of ad hoc shell queries.
+        A good next step is turning TalkieRoutes into a first-class memo/query API so agents can inspect and act on memos through Talkie's own bridge instead of CLI-only workflows.
         """
     }
 
@@ -682,8 +643,51 @@ struct ManagedAgentWorkspaceStore: Sendable {
         - open `Live Config/macos-workflows.config.json`
         - inspect `Live Config/workflow-user/`
         - inspect `Workflow Templates/`
-        - run `Tools/list-workflow-runs.sh`
-        - run `Tools/list-workflow-runs.sh <memo-id-prefix>`
+        - run `talkie workflows --pretty`
+        - run `talkie workflows <run-id-prefix> --pretty`
+        - run `talkie search <query> --type memo --pretty` when you need to connect a memo to workflow output
+        """
+    }
+
+    private func cliGuideMarkdown() -> String {
+        if let markdown = renderedAgentKitMarkdown(
+            relativePath: "docs/cli-guide.md",
+            replacements: [:]
+        ) {
+            return markdown
+        }
+
+        return """
+        # Talkie CLI Guide
+
+        Use the Talkie CLI as the supported agent-facing interface for local app data.
+
+        ## First choice
+
+        - `talkie memos --limit 20 --pretty`
+        - `talkie memos <id-prefix> --pretty`
+        - `talkie dictations --since 24h --pretty`
+        - `talkie dictations <id-prefix> --pretty`
+        - `talkie search "<query>" --type memo --pretty`
+        - `talkie search "<query>" --type dictation --pretty`
+        - `talkie captures --kind screenshot --source all --paths`
+        - `talkie captures --kind clip --source all --paths`
+        - `talkie workflows --pretty`
+        - `talkie workflows <run-id-prefix> --pretty`
+        - `talkie stats --pretty`
+        - `talkie data path`
+
+        Use `--json` when another command or script needs structured output.
+
+        ## If `talkie` is unavailable
+
+        Do not fall back to `sqlite3`, `bun:sqlite`, or raw SQL. Explain that the supported CLI is not available in the current environment. In a source checkout, inspect `packages/npm/cli` and either run the CLI through its documented development path or implement the missing command there.
+
+        ## Database boundary
+
+        `talkie.sqlite` schema details are useful for understanding owning code, migrations, and data model behavior. They are not the normal runtime interface for agents.
+
+        Only inspect or modify the database directly when the user explicitly asks for a database repair, migration, or forensic recovery task. For ordinary product questions, debugging, memo lookup, dictation lookup, capture lookup, workflow history, and search, use the CLI or a first-class Talkie bridge/API surface.
         """
     }
 
@@ -863,39 +867,6 @@ struct ManagedAgentWorkspaceStore: Sendable {
         """
     }
 
-    private func toolsReadmeMarkdown() -> String {
-        return """
-        # Tools
-
-        These shell commands are thin wrappers over the shared AgentKit TypeScript runtime.
-
-        Read-only:
-        - `list-memos.sh [limit]`
-        - `list-failed-memos.sh [limit]`
-        - `search-memos.sh <query> [limit]`
-        - `show-memo.sh <uuid-or-prefix>`
-        - `list-workflow-runs.sh [memo-uuid-or-prefix] [limit]`
-
-        Recovery:
-        - `retranscribe-memo.sh <uuid-or-prefix> [model-id]`
-
-        Capture markup (screenshot annotation):
-        - `capture-markup-describe.sh <image-path>`
-        - `capture-markup-plan.sh <image-path> <instruction>`
-        - `capture-markup-apply.sh <image-path> <plan-json-path>`
-        - `capture-markup-render.sh <image-path> [output-path]`
-
-        The retranscription helper launches the current Talkie executable in headless debug mode so memo recovery goes through the app's own repositories instead of direct SQL writes.
-
-        Recommended memo recovery flow:
-        - `list-failed-memos.sh`
-        - `show-memo.sh <uuid-or-prefix>`
-        - explain whether saved audio exists and what likely failed
-        - `retranscribe-memo.sh <uuid-or-prefix> [model-id]` only when recovery is explicitly desired
-        - `show-memo.sh <uuid-or-prefix>` again to verify the result
-        """
-    }
-
     private func openCodeConfigJSON(preferredModel: String?) -> String {
         var payload: [String: Any] = [
             "$schema": "https://opencode.ai/config.json",
@@ -907,9 +878,9 @@ struct ManagedAgentWorkspaceStore: Sendable {
                 "CONFIGURATION_GUIDE.md",
                 "MEMO_GUIDE.md",
                 "WORKFLOW_GUIDE.md",
+                "CLI_GUIDE.md",
                 "WORKFLOW_AUTHORING.md",
                 "WORKFLOW_CAPABILITIES.md",
-                "Tools/README.md",
             ],
         ]
 
@@ -959,14 +930,6 @@ struct ManagedAgentWorkspaceStore: Sendable {
         URL.applicationSupportDirectory
             .appendingPathComponent("Talkie", isDirectory: true)
             .appendingPathComponent("Audio", isDirectory: true)
-    }
-
-    private var talkieExecutablePath: String {
-        Bundle.main.executableURL?.path ?? ""
-    }
-
-    private var agentKitToolsRuntimePath: String {
-        agentKitURL(relativePath: "runtime/agent-tools.ts")?.path ?? ""
     }
 
     private func displayPath(_ url: URL) -> String {
@@ -1072,181 +1035,4 @@ struct ManagedAgentWorkspaceStore: Sendable {
         }
     }
 
-    private func commonScript() -> String {
-        """
-        #!/bin/zsh
-        set -euo pipefail
-
-        readonly TALKIE_DATABASE_PATH=\(shellQuoted(memoDatabaseURL.path))
-        readonly TALKIE_DATABASE_DISPLAY_PATH=\(shellQuoted(displayPath(memoDatabaseURL)))
-        readonly TALKIE_EXECUTABLE_PATH=\(shellQuoted(talkieExecutablePath))
-        readonly TALKIE_AGENTKIT_RUNTIME_PATH=\(shellQuoted(agentKitToolsRuntimePath))
-
-        function resolved_bun_path() {
-          if command -v bun >/dev/null 2>&1; then
-            command -v bun
-            return 0
-          fi
-
-          local candidates=(
-            "$HOME/.bun/bin/bun"
-            "/opt/homebrew/bin/bun"
-            "/usr/local/bin/bun"
-          )
-
-          local candidate
-          for candidate in "${candidates[@]}"; do
-            if [[ -x "$candidate" ]]; then
-              print -- "$candidate"
-              return 0
-            fi
-          done
-
-          print -u2 "bun is required but was not found on PATH."
-          exit 1
-        }
-
-        function require_agentkit_runtime() {
-          if [[ -z "$TALKIE_AGENTKIT_RUNTIME_PATH" || ! -f "$TALKIE_AGENTKIT_RUNTIME_PATH" ]]; then
-            print -u2 "AgentKit runtime not available at '$TALKIE_AGENTKIT_RUNTIME_PATH'"
-            exit 1
-          fi
-        }
-
-        function exec_agentkit_tool() {
-          local bun_path
-          bun_path="$(resolved_bun_path)"
-          require_agentkit_runtime
-
-          TALKIE_DATABASE_PATH="$TALKIE_DATABASE_PATH" \
-          TALKIE_DATABASE_DISPLAY_PATH="$TALKIE_DATABASE_DISPLAY_PATH" \
-          TALKIE_EXECUTABLE_PATH="$TALKIE_EXECUTABLE_PATH" \
-          "$bun_path" "$TALKIE_AGENTKIT_RUNTIME_PATH" "$@"
-        }
-        """
-    }
-
-    private func listMemosScript() -> String {
-        """
-        #!/bin/zsh
-        set -euo pipefail
-
-        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-        source "$SCRIPT_DIR/_common.sh"
-
-        exec_agentkit_tool list-memos "$@"
-        """
-    }
-
-    private func searchMemosScript() -> String {
-        """
-        #!/bin/zsh
-        set -euo pipefail
-
-        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-        source "$SCRIPT_DIR/_common.sh"
-
-        exec_agentkit_tool search-memos "$@"
-        """
-    }
-
-    private func listFailedMemosScript() -> String {
-        """
-        #!/bin/zsh
-        set -euo pipefail
-
-        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-        source "$SCRIPT_DIR/_common.sh"
-
-        exec_agentkit_tool list-failed-memos "$@"
-        """
-    }
-
-    private func showMemoScript() -> String {
-        """
-        #!/bin/zsh
-        set -euo pipefail
-
-        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-        source "$SCRIPT_DIR/_common.sh"
-
-        exec_agentkit_tool show-memo "$@"
-        """
-    }
-
-    private func retranscribeMemoScript() -> String {
-        """
-        #!/bin/zsh
-        set -euo pipefail
-
-        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-        source "$SCRIPT_DIR/_common.sh"
-
-        exec_agentkit_tool retranscribe-memo "$@"
-        """
-    }
-
-    private func listWorkflowRunsScript() -> String {
-        """
-        #!/bin/zsh
-        set -euo pipefail
-
-        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-        source "$SCRIPT_DIR/_common.sh"
-
-        exec_agentkit_tool list-workflow-runs "$@"
-        """
-    }
-
-    private func captureMarkupDescribeScript() -> String {
-        """
-        #!/bin/zsh
-        set -euo pipefail
-
-        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-        source "$SCRIPT_DIR/_common.sh"
-
-        exec_agentkit_tool capture-markup-describe "$@"
-        """
-    }
-
-    private func captureMarkupPlanScript() -> String {
-        """
-        #!/bin/zsh
-        set -euo pipefail
-
-        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-        source "$SCRIPT_DIR/_common.sh"
-
-        exec_agentkit_tool capture-markup-plan "$@"
-        """
-    }
-
-    private func captureMarkupApplyScript() -> String {
-        """
-        #!/bin/zsh
-        set -euo pipefail
-
-        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-        source "$SCRIPT_DIR/_common.sh"
-
-        exec_agentkit_tool capture-markup-apply "$@"
-        """
-    }
-
-    private func captureMarkupRenderScript() -> String {
-        """
-        #!/bin/zsh
-        set -euo pipefail
-
-        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-        source "$SCRIPT_DIR/_common.sh"
-
-        exec_agentkit_tool capture-markup-render "$@"
-        """
-    }
-
-    private func shellQuoted(_ value: String) -> String {
-        "'" + value.replacingOccurrences(of: "'", with: "'\"'\"'") + "'"
-    }
 }
