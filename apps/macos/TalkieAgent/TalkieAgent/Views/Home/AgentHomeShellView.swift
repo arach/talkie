@@ -572,10 +572,9 @@ private enum AgentHomeCommandPalette {
 
     // The structural surfaces are now light in the light appearance: hierarchy
     // comes from tint, borders, and typography rather than near-black fills.
-    static let rail = opsAdaptive(
-        light: Color(red: 0.895, green: 0.875, blue: 0.835),
-        dark: Color(red: 0.145, green: 0.132, blue: 0.116)
-    )
+    // Share Talkie's cool structural sidebar surface. The tighter icon rail,
+    // square brand mark, and accent treatment still give Agent its identity.
+    static let rail = ScopeCanvas.canvasAlt
     static let railIcon = opsAdaptive(
         light: Color(red: 0.310, green: 0.285, blue: 0.250),
         dark: Color(red: 0.780, green: 0.740, blue: 0.670)
@@ -716,13 +715,35 @@ private struct AgentHomeOverviewPage: View {
     @State private var showingLibraryPreview = false
 
     var body: some View {
-        AgentHomeCommandDashboard(
-            store: store,
-            permissionManager: permissionManager,
-            libraryItems: libraryItems,
-            onSelect: onSelect,
-            onOpenSettings: onOpenSettings
-        )
+        GeometryReader { proxy in
+            ZStack {
+                AgentHomeCommandDashboard(
+                    store: store,
+                    permissionManager: permissionManager,
+                    libraryItems: libraryItems,
+                    onSelect: onSelect,
+                    onPreview: previewLibraryItem,
+                    onOpenSettings: onOpenSettings
+                )
+
+                if showingLibraryPreview, let previewItem {
+                    AgentHomeLibrarySlideSheet(
+                        availableSize: proxy.size,
+                        onDismiss: closeLibraryPreview
+                    ) {
+                        AgentHomeLibraryDetailPane(item: previewItem) { item in
+                            AgentHomeTalkieLibraryOpener.open(item)
+                        }
+                    }
+                    .transition(.move(edge: proxy.size.width < 620 ? .bottom : .trailing).combined(with: .opacity))
+                    .zIndex(10)
+                }
+            }
+            .animation(OpsAnimation.chromeResize, value: showingLibraryPreview)
+            .onChange(of: libraryItems) { _, _ in
+                reconcileLibraryPreview()
+            }
+        }
     }
 
     private var hero: some View {
@@ -981,6 +1002,7 @@ private struct AgentHomeCommandDashboard: View {
     @ObservedObject var permissionManager: PermissionManager
     let libraryItems: [TalkieObject]
     let onSelect: (AgentHomeShellSection) -> Void
+    let onPreview: (TalkieObject) -> Void
     let onOpenSettings: () -> Void
 
     @StateObject private var voiceCapture = AgentHomeVoiceCapture()
@@ -1014,6 +1036,10 @@ private struct AgentHomeCommandDashboard: View {
         Array(libraryItems.lazy.filter(\.agentHomeHasVisualPreview).prefix(3))
     }
 
+    private var recentDictations: [TalkieObject] {
+        Array(libraryItems.lazy.filter(\.isDictation).prefix(5))
+    }
+
     private var needsCount: Int {
         missingPermissions.count + failedJobs.count
     }
@@ -1022,9 +1048,8 @@ private struct AgentHomeCommandDashboard: View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 22) {
                 wire
-                needsYou
-                readyForYou
                 recentCapturesSection
+                recentDictationsSection
                 footerActions
             }
             .padding(.horizontal, 24)
@@ -1042,19 +1067,14 @@ private struct AgentHomeCommandDashboard: View {
     private var wire: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Circle()
-                    .fill(store.runtimePing == nil ? Color.red.opacity(0.8) : Color.green.opacity(0.82))
-                    .frame(width: 7, height: 7)
-                    .shadow(color: store.runtimePing == nil ? .clear : Color.green.opacity(0.75), radius: 5)
-
-                Text("THE WIRE · TALKIE.AGENT")
+                Text("TALKIE AGENT")
                     .font(OpsType.mono(10, weight: .semibold))
                     .tracking(1.6)
                     .foregroundStyle(AgentHomeCommandPalette.wireMuted)
 
                 Spacer(minLength: 0)
 
-                Text("LOCAL ONLY · NO TELEMETRY")
+                Text("NO TELEMETRY")
                     .font(OpsType.mono(9, weight: .medium))
                     .tracking(1.4)
                     .foregroundStyle(AgentHomeCommandPalette.wireMuted)
@@ -1150,18 +1170,18 @@ private struct AgentHomeCommandDashboard: View {
             Button(action: submit) {
                 Image(systemName: "arrow.up")
                     .font(OpsType.ui(12, weight: .bold))
-                    .foregroundStyle(canSubmit ? Color.white : AgentHomeCommandPalette.railIcon.opacity(0.55))
+                    .foregroundStyle(canSend ? Color.white : AgentHomeCommandPalette.railIcon.opacity(0.55))
                     .frame(width: 34, height: 34)
                     .background(
                         Circle().fill(
-                            canSubmit
+                            canSend
                                 ? AgentHomeCommandPalette.amber
                                 : AgentHomeCommandPalette.paper.opacity(0.75)
                         )
                     )
                     .overlay(
                         Circle().stroke(
-                            canSubmit
+                            canSend
                                 ? AgentHomeCommandPalette.amber
                                 : AgentHomeCommandPalette.hairline.opacity(0.82),
                             lineWidth: 1
@@ -1169,7 +1189,7 @@ private struct AgentHomeCommandDashboard: View {
                     )
             }
             .buttonStyle(.plain)
-            .disabled(!canSubmit)
+            .disabled(!canSend)
             .help("Send message")
         }
         .padding(.leading, 13)
@@ -1261,10 +1281,50 @@ private struct AgentHomeCommandDashboard: View {
                 LazyVGrid(columns: AgentHomeCommandGrid.three, spacing: 14) {
                     ForEach(recentCaptures) { item in
                         AgentHomeCommandCaptureCard(item: item) {
-                            AgentHomeTalkieLibraryOpener.open(item)
+                            onPreview(item)
                         }
                     }
                 }
+            }
+        }
+    }
+
+    private var recentDictationsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            AgentHomeCommandSectionHeader(
+                title: "Dictations",
+                detail: recentDictations.isEmpty ? nil : "\(recentDictations.count) recent",
+                trailingLabel: "Open History",
+                onTrailing: { onSelect(.library) }
+            )
+
+            if recentDictations.isEmpty {
+                AgentHomeCommandEmptyBand(
+                    icon: "waveform",
+                    title: "No recent dictations",
+                    detail: "New Talkie Agent dictations will appear here for quick review."
+                )
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(recentDictations) { item in
+                        AgentHomeCommandDictationRow(item: item) {
+                            onPreview(item)
+                        }
+
+                        if item.id != recentDictations.last?.id {
+                            Rectangle()
+                                .fill(AgentHomeCommandPalette.hairline.opacity(0.60))
+                                .frame(height: 1)
+                                .padding(.leading, 58)
+                        }
+                    }
+                }
+                .background(AgentHomeCommandPalette.card)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(AgentHomeCommandPalette.hairline.opacity(0.68), lineWidth: 1)
+                )
             }
         }
     }
@@ -1293,10 +1353,8 @@ private struct AgentHomeCommandDashboard: View {
         }
     }
 
-    private var canSubmit: Bool {
-        !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !store.isInvokingAgent
-            && voiceCapture.phase == .idle
+    private var canSend: Bool {
+        !store.isInvokingAgent && voiceCapture.phase == .idle
     }
 
     private func submit() {
@@ -1675,13 +1733,9 @@ private struct AgentHomeReadyCardGraphic: View {
     }
 }
 
-private struct AgentHomeCommandCaptureCard: View {
+private struct AgentHomeCommandDictationRow: View {
     let item: TalkieObject
-    let onOpen: () -> Void
-
-    private var media: CaptureMediaAsset? {
-        CaptureMediaFileResolver.primaryMedia(for: item)
-    }
+    let onPreview: () -> Void
 
     private var sourceLabel: String {
         let appName = item.appContext?.name?.agentHomeTrimmed ?? ""
@@ -1689,9 +1743,108 @@ private struct AgentHomeCommandCaptureCard: View {
     }
 
     var body: some View {
+        Button(action: onPreview) {
+            HStack(spacing: 12) {
+                Image(systemName: "waveform")
+                    .font(OpsType.ui(13, weight: .semibold))
+                    .foregroundStyle(AgentHomeCommandPalette.amber)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(AgentHomeCommandPalette.amber.opacity(0.10))
+                    )
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.agentHomeDisplayTitle)
+                        .font(OpsType.ui(13, weight: .semibold))
+                        .foregroundStyle(AgentHomeCommandPalette.ink)
+                        .lineLimit(1)
+
+                    HStack(spacing: 5) {
+                        Text(sourceLabel.uppercased())
+                        Text("·")
+                        Text(AgentHomeRelative.shortLabel(for: item.createdAt).uppercased())
+                        if item.duration > 0 {
+                            Text("·")
+                            Text(Self.formatDuration(item.duration))
+                        }
+                    }
+                    .font(OpsType.mono(8, weight: .medium))
+                    .tracking(0.8)
+                    .foregroundStyle(AgentHomeCommandPalette.faint)
+                }
+
+                Spacer(minLength: 12)
+
+                Text("PREVIEW")
+                    .font(OpsType.mono(8, weight: .semibold))
+                    .tracking(0.9)
+                    .foregroundStyle(AgentHomeCommandPalette.amber)
+
+                Image(systemName: "chevron.right")
+                    .font(OpsType.ui(9, weight: .semibold))
+                    .foregroundStyle(AgentHomeCommandPalette.faint)
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 58)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private static func formatDuration(_ seconds: Double) -> String {
+        let total = max(0, Int(seconds.rounded()))
+        let minutes = total / 60
+        let remainingSeconds = total % 60
+        let paddedSeconds = remainingSeconds < 10 ? "0\(remainingSeconds)" : "\(remainingSeconds)"
+        return "\(minutes):\(paddedSeconds)"
+    }
+}
+
+private struct AgentHomeCommandCaptureCard: View {
+    let item: TalkieObject
+    let onOpen: () -> Void
+
+    private var media: CaptureMediaAsset? {
+        if let clip = item.clips.first,
+           let url = CaptureMediaFileResolver.clipURL(filename: clip.filename) {
+            return .video(url)
+        }
+        if let context = item.visualContexts.first,
+           let url = CaptureMediaFileResolver.visualContextSourceURL(for: context) {
+            return .video(url)
+        }
+        return CaptureMediaFileResolver.primaryMedia(for: item)
+    }
+
+    private var sourceLabel: String {
+        let appName = item.appContext?.name?.agentHomeTrimmed ?? ""
+        return appName.isEmpty ? item.source.displayName : appName
+    }
+
+    private var captureDurationLabel: String? {
+        guard media?.isVideo == true else { return nil }
+
+        if let durationMs = item.clips.first?.durationMs, durationMs > 0 {
+            return Self.formatCaptureDuration(Double(durationMs) / 1_000)
+        }
+        if let durationMs = item.visualContexts.first?.durationMs, durationMs > 0 {
+            return Self.formatCaptureDuration(Double(durationMs) / 1_000)
+        }
+        if item.duration > 0 {
+            return Self.formatCaptureDuration(item.duration)
+        }
+        return nil
+    }
+
+    var body: some View {
         Button(action: onOpen) {
             VStack(alignment: .leading, spacing: 0) {
-                AgentHomeMediaPreview(media: media, maxPixelSize: 520)
+                AgentHomeMediaPreview(
+                    media: media,
+                    maxPixelSize: 520,
+                    style: .captureCard(durationLabel: captureDurationLabel)
+                )
                     .frame(maxWidth: .infinity)
                     .frame(height: 118)
                     .clipShape(.rect(topLeadingRadius: 10, topTrailingRadius: 10))
@@ -1706,11 +1859,6 @@ private struct AgentHomeCommandCaptureCard: View {
                         Text(sourceLabel.uppercased())
                         Text("·")
                         Text(AgentHomeRelative.shortLabel(for: item.createdAt).uppercased())
-                        Spacer(minLength: 0)
-                        if item.duration > 0 {
-                            Text(item.duration, format: .number.precision(.fractionLength(0)))
-                            Text("S")
-                        }
                     }
                     .font(OpsType.mono(8, weight: .medium))
                     .tracking(0.8)
@@ -1727,6 +1875,22 @@ private struct AgentHomeCommandCaptureCard: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private static func formatCaptureDuration(_ seconds: Double) -> String {
+        let total = max(0, Int(seconds.rounded()))
+        if total >= 3_600 {
+            let hours = total / 3_600
+            let minutes = (total % 3_600) / 60
+            let paddedMinutes = minutes < 10 ? "0\(minutes)" : "\(minutes)"
+            return "\(hours)h\(paddedMinutes)m"
+        }
+        if total >= 60 {
+            return "\(total / 60)m"
+        }
+
+        let paddedSeconds = total < 10 ? "0\(total)" : "\(total)"
+        return "0:\(paddedSeconds)"
     }
 }
 
@@ -3571,11 +3735,31 @@ private struct AgentHomeCapturePreviewTile: View {
     }
 }
 
+private enum AgentHomeMediaPreviewStyle: Equatable {
+    case standard
+    case captureCard(durationLabel: String?)
+
+    var fillsFrame: Bool {
+        if case .captureCard = self { return true }
+        return false
+    }
+
+    var durationLabel: String? {
+        if case .captureCard(let durationLabel) = self { return durationLabel }
+        return nil
+    }
+}
+
 private struct AgentHomeMediaPreview: View {
     let media: CaptureMediaAsset?
     var maxPixelSize: CGFloat = 420
+    var style: AgentHomeMediaPreviewStyle = .standard
 
     @State private var image: NSImage?
+
+    private var usesCinematicVideoTreatment: Bool {
+        style.fillsFrame && media?.isVideo == true
+    }
 
     private var cacheKey: String {
         guard let media else { return "none" }
@@ -3588,11 +3772,24 @@ private struct AgentHomeMediaPreview: View {
                 .fill(OpsSurface.inset)
 
             if let image {
-                Image(nsImage: image)
-                    .interpolation(.medium)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if style.fillsFrame {
+                    GeometryReader { proxy in
+                        Image(nsImage: image)
+                            .interpolation(.medium)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: proxy.size.width, height: proxy.size.height)
+                            .clipped()
+                            .blur(radius: usesCinematicVideoTreatment ? 7 : 0)
+                            .scaleEffect(usesCinematicVideoTreatment ? 1.08 : 1)
+                    }
+                } else {
+                    Image(nsImage: image)
+                        .interpolation(.medium)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             } else {
                 AgentHomeMediaPlaceholder(isVideo: media?.isVideo == true)
             }
@@ -3607,6 +3804,20 @@ private struct AgentHomeMediaPreview: View {
                 endPoint: .bottom
             )
             .allowsHitTesting(false)
+
+            if usesCinematicVideoTreatment {
+                Color.black.opacity(0.14)
+                    .allowsHitTesting(false)
+
+                Image(systemName: "play.fill")
+                    .font(OpsType.ui(13, weight: .bold))
+                    .foregroundStyle(Color.white)
+                    .frame(width: 38, height: 38)
+                    .background(Circle().fill(Color.black.opacity(0.55)))
+                    .overlay(Circle().stroke(Color.white.opacity(0.34), lineWidth: 1))
+                    .shadow(color: Color.black.opacity(0.24), radius: 6, y: 2)
+                    .allowsHitTesting(false)
+            }
         }
         .clipShape(RoundedRectangle(cornerRadius: OpsRadius.standard, style: .continuous))
         .overlay {
@@ -3615,12 +3826,22 @@ private struct AgentHomeMediaPreview: View {
         }
         .overlay(alignment: .topTrailing) {
             if media?.isVideo == true {
-                Image(systemName: "play.fill")
-                    .font(OpsType.ui(OpsSize.micro, weight: .bold))
-                    .foregroundStyle(OpsInk.ink)
-                    .padding(5)
-                    .background(Circle().fill(OpsInk.surface.opacity(0.82)))
-                    .padding(5)
+                if style == .standard {
+                    Image(systemName: "play.fill")
+                        .font(OpsType.ui(OpsSize.micro, weight: .bold))
+                        .foregroundStyle(OpsInk.ink)
+                        .padding(5)
+                        .background(Circle().fill(OpsInk.surface.opacity(0.82)))
+                        .padding(5)
+                } else if let durationLabel = style.durationLabel {
+                    Text(durationLabel)
+                        .font(OpsType.mono(8, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.92))
+                        .padding(.horizontal, 7)
+                        .frame(height: 20)
+                        .background(Capsule().fill(Color.black.opacity(0.58)))
+                        .padding(7)
+                }
             }
         }
         .task(id: cacheKey) {
