@@ -574,6 +574,20 @@ struct ScopeHomeView: View {
 
     private var recentCaptures: [RecentCapture] {
         var out: [RecentCapture] = []
+        var seenFilenames = Set<String>()
+
+        for item in recentTrayItems {
+            guard case .screenshot(let screenshot) = item else { continue }
+            seenFilenames.insert(screenshot.tempURL.lastPathComponent)
+            out.append(RecentCapture(
+                id: screenshot.id,
+                line: trayLine(for: screenshot),
+                meta: screenshotMeta(width: screenshot.width, height: screenshot.height),
+                date: screenshot.capturedAt,
+                source: .tray,
+                fileURL: screenshot.tempURL
+            ))
+        }
 
         // Saved capture objects created from screenshots. Do not pull
         // screenshots attached to notes/memos or imports from synced
@@ -583,6 +597,7 @@ struct ScopeHomeView: View {
                 let label = ss.windowTitle ?? ss.appName ?? obj.title ?? "Screenshot"
                 let url = ScreenshotStorage.screenshotsDirectory
                     .appendingPathComponent(ss.filename)
+                seenFilenames.insert(url.lastPathComponent)
                 out.append(RecentCapture(
                     id: stableUUID(from: "rec-\(ss.filename)"),
                     line: label,
@@ -594,7 +609,38 @@ struct ScopeHomeView: View {
             }
         }
 
+        for file in recentStandaloneScreenshotFiles where !seenFilenames.contains(file.url.lastPathComponent) {
+            out.append(RecentCapture(
+                id: stableUUID(from: "file-\(file.url.lastPathComponent)"),
+                line: standaloneCaptureLine(for: file.url),
+                meta: file.dimensions ?? screenshotMeta(width: nil, height: nil),
+                date: file.date,
+                source: .savedCapture,
+                fileURL: file.url
+            ))
+        }
+
         return out.sorted { $0.date > $1.date }
+    }
+
+    private var recentStandaloneScreenshotFiles: [(url: URL, date: Date, dimensions: String?)] {
+        let keys: Set<URLResourceKey> = [.contentModificationDateKey, .creationDateKey, .isRegularFileKey]
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: ScreenshotStorage.screenshotsDirectory,
+            includingPropertiesForKeys: Array(keys),
+            options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
+        ) else {
+            return []
+        }
+
+        return files.compactMap { url -> (url: URL, date: Date, dimensions: String?)? in
+            guard url.pathExtension.localizedCaseInsensitiveCompare("png") == .orderedSame else { return nil }
+            guard let values = try? url.resourceValues(forKeys: keys),
+                  values.isRegularFile != false else { return nil }
+            let date = values.contentModificationDate ?? values.creationDate ?? Date.distantPast
+            return (url, date, standaloneDimensions(from: url))
+        }
+        .sorted { $0.date > $1.date }
     }
 
     private func openRecentCapture(_ item: RecentCapture) {
@@ -789,6 +835,32 @@ struct ScopeHomeView: View {
         case .window: return "macwindow"
         }
     }
+    private func standaloneCaptureLine(for url: URL) -> String {
+        let stem = url.deletingPathExtension().lastPathComponent
+        let parts = stem.components(separatedBy: " - ")
+        guard parts.count >= 3 else { return "Screenshot" }
+
+        let context = parts[2]
+        if context.hasPrefix("Window ") {
+            let windowLabel = String(context.dropFirst("Window ".count))
+            return windowLabel.isEmpty ? "Window capture" : windowLabel
+        }
+        if context == "Region" { return "Region capture" }
+        if context.hasPrefix("Fullscreen") { return "Fullscreen capture" }
+        return context.isEmpty ? "Screenshot" : context
+    }
+    private func standaloneDimensions(from url: URL) -> String? {
+        let stem = url.deletingPathExtension().lastPathComponent
+        let parts = stem.components(separatedBy: " - ")
+        let dimensionPart = parts.first { part in
+            let pieces = part.split(separator: "x")
+            guard pieces.count == 2 else { return false }
+            return pieces.allSatisfy { piece in
+                !piece.isEmpty && piece.allSatisfy(\.isNumber)
+            }
+        }
+        return dimensionPart?.replacing("x", with: "×")
+    }
     private func screenshotMeta(width: Int?, height: Int?) -> String {
         let widthLabel = width.map(String.init) ?? "?"
         let heightLabel = height.map(String.init) ?? "?"
@@ -884,8 +956,10 @@ struct ScopeHomeView: View {
                 label: run.workflowName,
                 trailing: workflowRunTimeText(run.runDate),
                 subtitle: "Successful local run",
-                chips: ["Run activity", "Local"],
+                chips: workflowRunChips(for: run),
                 treatment: .workflow,
+                stepTypes: workflowPreviewSteps(for: run),
+                stepCount: run.stepCount > 0 ? run.stepCount : nil,
                 onSelect: {
                     NavigationState.shared.navigate(
                         to: .workflows,
@@ -903,6 +977,8 @@ struct ScopeHomeView: View {
                 subtitle: "Voice-triggered capture cleanup",
                 chips: ["Voice trigger", "Transcribe", "Clean up"],
                 treatment: .workflow,
+                stepTypes: [.trigger, .transcribe, .llm, .transform],
+                stepCount: 4,
                 onSelect: { NavigationState.shared.navigate(to: .workflows) }
             )]
         }
@@ -910,13 +986,42 @@ struct ScopeHomeView: View {
         return rows
     }
 
+    private func workflowRunChips(for run: WorkflowRunModel) -> [String] {
+        var chips: [String] = []
+        if run.stepCount > 0 {
+            chips.append("\(run.stepCount) steps")
+        } else {
+            chips.append("Run activity")
+        }
+        chips.append(run.backendId == "local-swift" ? "Local" : run.backendId)
+        if let provider = run.providerName, !provider.isEmpty {
+            chips.append(provider)
+        }
+        return Array(chips.prefix(4))
+    }
+
+    private func workflowPreviewSteps(for run: WorkflowRunModel) -> [WorkflowStep.StepType] {
+        var steps: [WorkflowStep.StepType] = []
+        if run.triggerSource != .manual {
+            steps.append(.trigger)
+        }
+        steps.append(.transcribe)
+        steps.append(run.providerName == nil ? .transform : .llm)
+        steps.append(run.stepCount > 3 ? .notification : .saveFile)
+        return Array(steps.prefix(4))
+    }
+
     private var consoleRows: [RoutinesPanel.Row] {
         [
             .init(
-                leading: .filled, label: "iTerm2", trailing: "ACTIVE",
-                subtitle: "~/talkie › talkie watch --local",
-                chips: ["Listening", "Local"],
+                leading: .filled, label: "Claude", trailing: "ACTIVE",
+                subtitle: "Talkie Terminal › claude",
+                chips: ["Internal", "Claude"],
                 treatment: .consoleActive,
+                terminalLines: [
+                    "nested inside Talkie's terminal",
+                    "home polish pass · live preview",
+                ],
                 onSelect: { NavigationState.shared.navigate(to: .systemConsole) }
             ),
             .init(
@@ -925,8 +1030,8 @@ struct ScopeHomeView: View {
                 onSelect: { NavigationState.shared.navigate(to: .systemConsole) }
             ),
             .init(
-                leading: .hollow, label: "Claude", trailing: "OFF",
-                subtitle: "session ended",
+                leading: .hollow, label: "iTerm2", trailing: "OFF",
+                subtitle: "external terminal",
                 onSelect: { NavigationState.shared.navigate(to: .systemConsole) }
             ),
         ]
@@ -1765,6 +1870,9 @@ private struct RoutinesPanel: View {
         var subtitle: String? = nil
         var chips: [String] = []
         var treatment: Treatment = .standard
+        var stepTypes: [WorkflowStep.StepType] = []
+        var stepCount: Int? = nil
+        var terminalLines: [String] = []
         var onSelect: (() -> Void)? = nil
     }
 
@@ -1922,7 +2030,7 @@ private struct RoutinesPanel: View {
                         .font(ScopeType.display(size: 16, weight: .medium))
                         .foregroundStyle(hoveredRowIndex == index ? accent : ScopeInk.primary)
                         .lineLimit(1)
-                    if let subtitle = row.subtitle, !subtitle.isEmpty {
+                    if row.treatment != .consoleActive, let subtitle = row.subtitle, !subtitle.isEmpty {
                         Text(subtitle)
                             .font(row.treatment == .consoleActive ? ScopeType.chrome : Font.system(size: 11))
                             .tracking(row.treatment == .consoleActive ? 0.9 : 0)
@@ -1942,6 +2050,8 @@ private struct RoutinesPanel: View {
                     }
                 }
             }
+
+            featurePreview(row)
 
             if !row.chips.isEmpty {
                 HStack(spacing: 6) {
@@ -1966,7 +2076,21 @@ private struct RoutinesPanel: View {
                 )
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-        )
+            )
+    }
+
+    @ViewBuilder
+    private func featurePreview(_ row: Row) -> some View {
+        switch row.treatment {
+        case .workflow:
+            if !row.stepTypes.isEmpty {
+                RoutineStepTypePreview(stepTypes: row.stepTypes, totalCount: row.stepCount, accent: accent)
+            }
+        case .consoleActive:
+            RoutineTerminalPreview(command: row.subtitle, lines: row.terminalLines, accent: accent)
+        case .standard:
+            EmptyView()
+        }
     }
 
     private func routineDot(_ row: Row) -> some View {
@@ -1977,6 +2101,178 @@ private struct RoutinesPanel: View {
             )
             .shadow(color: row.leading == .filled ? accent.opacity(0.16) : .clear, radius: 2)
             .frame(width: 5, height: 5)
+    }
+}
+
+private struct RoutineStepTypePreview: View {
+    let stepTypes: [WorkflowStep.StepType]
+    let totalCount: Int?
+    let accent: Color
+
+    private var visibleTypes: [WorkflowStep.StepType] {
+        Array(stepTypes.prefix(4))
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 0) {
+                ForEach(visibleTypes.indices, id: \.self) { idx in
+                    RoutineStepToken(stepType: visibleTypes[idx], accent: accent)
+                    if idx < visibleTypes.count - 1 {
+                        Rectangle()
+                            .fill(accent.opacity(0.20))
+                            .frame(width: 13, height: 1)
+                            .padding(.horizontal, 2)
+                    }
+                }
+            }
+            Spacer(minLength: 6)
+            Text(stepCountLabel)
+                .font(ScopeType.chrome)
+                .tracking(1.5)
+                .foregroundStyle(ScopeInk.faint)
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 7)
+        .background(ScopeInk.primary.opacity(0.018))
+        .overlay(
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .strokeBorder(ScopeEdge.faint, lineWidth: 0.5)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+    }
+
+    private var stepCountLabel: String {
+        if let totalCount {
+            return totalCount == 1 ? "1 STEP" : "\(totalCount) STEPS"
+        }
+        return stepTypes.count == 1 ? "1 TYPE" : "\(stepTypes.count) TYPES"
+    }
+}
+
+private struct RoutineStepToken: View {
+    let stepType: WorkflowStep.StepType
+    let accent: Color
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: stepType.icon)
+                .font(.system(size: 8, weight: .semibold))
+                .symbolRenderingMode(.hierarchical)
+            Text(shortLabel)
+                .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                .tracking(0.8)
+        }
+        .foregroundStyle(accent.opacity(0.86))
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(ScopeCanvas.surface.opacity(0.78))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .strokeBorder(accent.opacity(0.13), lineWidth: 0.5)
+        )
+    }
+
+    private var shortLabel: String {
+        switch stepType {
+        case .trigger: return "TRIG"
+        case .transcribe: return "AUDIO"
+        case .llm: return "LLM"
+        case .transform: return "CLEAN"
+        case .notification: return "NOTIFY"
+        case .saveFile: return "SAVE"
+        case .shell: return "SHELL"
+        case .webhook: return "HOOK"
+        case .email: return "MAIL"
+        case .iOSPush: return "PUSH"
+        case .appleNotes: return "NOTE"
+        case .appleReminders: return "REMIND"
+        case .appleCalendar: return "CAL"
+        case .clipboard: return "CLIP"
+        case .conditional: return "IF"
+        case .speak: return "SPEAK"
+        case .intentExtract: return "INTENT"
+        case .executeWorkflows: return "RUN"
+        case .cloudUpload: return "CLOUD"
+        }
+    }
+}
+
+private struct RoutineTerminalPreview: View {
+    let command: String?
+    let lines: [String]
+    let accent: Color
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 5) {
+                ForEach(0..<3, id: \.self) { idx in
+                    Circle()
+                        .fill(dotColor(index: idx))
+                        .frame(width: 4, height: 4)
+                }
+                Spacer(minLength: 8)
+                Text("TALKIE TERM")
+                    .font(.system(size: 7.5, weight: .semibold, design: .monospaced))
+                    .tracking(1.3)
+                    .foregroundStyle(ScopeInk.subtle)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(accent.opacity(0.035))
+
+            ScopeRule(.subtle)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 5) {
+                    Text("›")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(accent)
+                    Text(command ?? "talkie watch --local")
+                        .font(.system(size: 9.5, design: .monospaced))
+                        .tracking(0.2)
+                        .foregroundStyle(ScopeInk.dim)
+                        .lineLimit(1)
+                    Rectangle()
+                        .fill(accent.opacity(0.55))
+                        .frame(width: 5, height: 9)
+                }
+                ForEach(Array(lines.prefix(2).enumerated()), id: \.offset) { _, line in
+                    HStack(spacing: 6) {
+                        Rectangle()
+                            .fill(accent.opacity(0.34))
+                            .frame(width: 5, height: 1)
+                        Text(line)
+                            .font(.system(size: 8.8, design: .monospaced))
+                            .tracking(0.15)
+                            .foregroundStyle(ScopeInk.faint)
+                            .lineLimit(1)
+                    }
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(ScopeCanvas.surface.opacity(0.76))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .strokeBorder(accent.opacity(0.14), lineWidth: 0.5)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+    }
+
+    private func dotColor(index: Int) -> Color {
+        switch index {
+        case 0: return accent.opacity(0.70)
+        case 1: return ScopeBrass.solid.opacity(0.36)
+        default: return ScopeInk.subtle.opacity(0.30)
+        }
     }
 }
 

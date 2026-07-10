@@ -576,22 +576,69 @@ private struct RecentWaveformLine: View {
 
     var body: some View {
         GeometryReader { geo in
-            // Bar count adapts to the slot so the tape runs edge to
-            // edge and the duration label reads as its counter. Pitch:
-            // 5pt bars (7pt every 7th) + 3pt gap ≈ 8.3pt per bar —
-            // floor keeps the last bar inside the slot.
-            let barCount = max(18, Int((geo.size.width + 3) / 8.3))
+            // A denser tape: slim variable bars over a faint signal
+            // rail, so long dictation rows feel intentional rather
+            // than a string of identical blocks.
+            let barCount = max(34, Int((geo.size.width + 2) / 5.2))
             ZStack {
-                Rectangle()
-                    .fill(tint.opacity(0.18))
-                    .frame(height: 1)
-                HStack(alignment: .center, spacing: 3) {
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                tint.opacity(0.035),
+                                tint.opacity(0.070),
+                                tint.opacity(0.030),
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(height: 15)
+                    .overlay(alignment: .top) {
+                        Rectangle()
+                            .fill(tint.opacity(0.12))
+                            .frame(height: 0.5)
+                    }
+                    .overlay(alignment: .bottom) {
+                        Rectangle()
+                            .fill(ScopeInk.primary.opacity(0.045))
+                            .frame(height: 0.5)
+                    }
+
+                Path { path in
+                    let midY = geo.size.height / 2
+                    let width = max(1, geo.size.width)
+                    for idx in 0..<barCount {
+                        let x = CGFloat(idx) / CGFloat(max(1, barCount - 1)) * width
+                        let sample = Self.sample(index: idx, seed: seed, strength: strength)
+                        let y = midY + CGFloat(sample - 0.48) * 5
+                        if idx == 0 {
+                            path.move(to: CGPoint(x: x, y: y))
+                        } else {
+                            path.addLine(to: CGPoint(x: x, y: y))
+                        }
+                    }
+                }
+                .stroke(tint.opacity(0.22), style: StrokeStyle(lineWidth: 0.75, lineCap: .round, lineJoin: .round))
+
+                HStack(alignment: .center, spacing: 2.2) {
                     ForEach(0..<barCount, id: \.self) { idx in
+                        let sample = Self.sample(index: idx, seed: seed, strength: strength)
+                        let opacity = Self.barOpacity(index: idx, sample: sample)
                         RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                            .fill(tint.opacity(idx % 5 == 0 ? 0.88 : 0.55))
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        tint.opacity(opacity),
+                                        tint.opacity(opacity * 0.58),
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
                             .frame(
                                 width: Self.blockWidth(index: idx),
-                                height: max(3, geo.size.height * Self.sample(index: idx, seed: seed, strength: strength))
+                                height: max(3, geo.size.height * sample)
                             )
                     }
                 }
@@ -605,12 +652,22 @@ private struct RecentWaveformLine: View {
         let phase = Double(abs(seed % 997)) * 0.013
         let low = (sin(Double(index) * 0.66 + phase) + 1.0) * 0.25
         let high = (sin(Double(index) * 1.71 + phase * 2.3) + 1.0) * 0.17
-        let shaped = 0.12 + low + high
-        return min(0.88, max(0.16, shaped * (0.50 + normalized * 0.50)))
+        let transient = pow((sin(Double(index) * 0.23 + phase * 0.7) + 1.0) * 0.5, 3.0) * 0.20
+        let shaped = 0.10 + low + high + transient
+        return min(0.92, max(0.14, shaped * (0.46 + normalized * 0.54)))
+    }
+
+    private static func barOpacity(index: Int, sample: Double) -> Double {
+        let peakBoost = index % 9 == 0 ? 0.14 : 0
+        return min(0.88, 0.34 + sample * 0.44 + peakBoost)
     }
 
     private static func blockWidth(index: Int) -> CGFloat {
-        index % 7 == 0 ? 7 : 5
+        switch index % 9 {
+        case 0: return 3.5
+        case 4: return 2.8
+        default: return 2.2
+        }
     }
 }
 
