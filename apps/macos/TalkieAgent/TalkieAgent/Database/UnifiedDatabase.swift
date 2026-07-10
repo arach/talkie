@@ -1328,7 +1328,7 @@ extension UnifiedDatabase {
     }
 
     /// Mark a recording as pasted
-    static func markPasted(id: UUID) {
+    static func markPasted(id: UUID, timestamp: TimeInterval = Date().timeIntervalSince1970) {
         do {
             try shared.write { db in
                 // Fetch current metadataJSON
@@ -1339,7 +1339,6 @@ extension UnifiedDatabase {
                 )
 
                 // Parse and update
-                let timestamp = Date().timeIntervalSince1970
                 var metadata = LiveRecording.ParsedMetadata(from: currentJSON)
                 if metadata.queue == nil {
                     metadata.queue = .init()

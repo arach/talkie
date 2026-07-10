@@ -2026,7 +2026,7 @@ private struct AgentHomeCapturePage: View {
                             OpsKVRow("Context capture", value: settings.contextCaptureDetail.displayName)
                             OpsKVRow("Primary app", value: settings.primaryContextSource.displayName)
                             OpsKVRow("Session allowed", value: settings.contextCaptureSessionAllowed ? "Yes" : "No", valueColor: settings.contextCaptureSessionAllowed ? OpsInk.statusOk : OpsInk.statusWarn)
-                            OpsKVRow("Return to origin", value: settings.returnToOriginAfterPaste ? "Yes" : "No")
+                            OpsKVRow("Return to origin", value: "Paused", valueColor: OpsInk.statusWarn)
                         }
 
                         Text("Talkie remains the durable review/edit/save surface; Agent owns the live window, live files, and promotion/drain timing.")
