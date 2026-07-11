@@ -7,17 +7,14 @@ import { MacWindowFrame } from "@/components/studies/primitives/MacWindowFrame";
 /**
  * Mac Agent Home (Shell) — the TalkieAgent home / library surface.
  *
- * Ports the surface we refined directly in AgentHomeShellView.swift:
- * Talkie-homepage eyebrow + serif headline, a lean KPI stat row in the
- * Stats vocabulary, and the recent-library list/detail split. Stamped
- * at the app's new default width (1040) in both content variants —
- * History (shared recordings) and Home (runtime overview) — so the
- * "same family, not a clone" relationship with Talkie reads at a glance.
+ * Ports the surface refined in AgentHomeShellView.swift. Talkie's cool Scope
+ * substrate and ink ladder establish the family; steel Agent chrome and one
+ * signal-blue active color make the runtime legible as a sibling, not a clone.
  */
 export default function MacAgentHomeShellStudy() {
   return (
     <StudioPage
-      eyebrow="Agent · macOS · Home / Library surface · light OPS"
+      eyebrow="Agent · macOS · Cool Scope chassis · steel signal"
       title="Agent Home (Shell)"
       help="edit components/studies/MacAgentHomeShell.tsx · ports AgentHomeShellView.swift"
     >
@@ -26,7 +23,7 @@ export default function MacAgentHomeShellStudy() {
           size={{
             width: 1040,
             label: "Home",
-            note: "runtime overview · agent bay + recent library",
+            note: "runtime overview · steel agent bay + recent library",
           }}
           title="Talkie Agent"
         >

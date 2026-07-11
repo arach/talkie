@@ -35,7 +35,7 @@ export default function MacAgentConversationStudy() {
 
   return (
     <StudioPage
-      eyebrow="Agent · macOS · Conversation surface · revamp v1"
+      eyebrow="Agent · macOS · Scope chassis · signal-blue conversation"
       title="Mac Agent Conversation"
       help="components/studies/MacAgentConversation.tsx · ports to AgentHomeView.swift"
     >

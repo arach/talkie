@@ -410,7 +410,7 @@ export const STUDIO_PAGES: StudioPage[] = [
     family: "agent",
     status: "wip",
     swift: ["apps/macos/TalkieAgent/TalkieAgent/Views/Home/AgentHomeShellView.swift"],
-    blurb: "Home / library surface in light OPS: Talkie-homepage eyebrow + serif headline, lean KPI stat row (Stats vocabulary), recent-library list/detail split. Home + History variants.",
+    blurb: "Talkie's cool Scope chassis with steel Agent chrome and one signal-blue active color: same family, distinct runtime instrument. Home + History variants.",
   },
   {
     href: "/mac-agent-home",
@@ -430,7 +430,7 @@ export const STUDIO_PAGES: StudioPage[] = [
     family: "agent",
     status: "concept",
     swift: ["apps/macos/TalkieAgent/TalkieAgent/Views/Home/AgentHomeView.swift"],
-    blurb: "Conversations tab revamp: no top status strip, quiet new-conversation + agent picker, per-conversation settings top-right, active agent beside the input, adapters demoted to a subtle footer entry.",
+    blurb: "Signal-blue conversation surface on Talkie's cool Scope chassis: quiet new-conversation flow, active agent beside the input, and adapters demoted to a subtle footer entry.",
   },
   {
     href: "/mac-agent-tray",
