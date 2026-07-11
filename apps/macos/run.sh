@@ -22,7 +22,14 @@ BUILD_BASE="$ROOT_DIR/build/macos"
 DEV_APPS_DIR="${TALKIE_DEV_APPS_DIR:-$HOME/Applications/dev/Talkie}"
 LEGACY_DEV_APPS_DIR="$HOME/Applications/Talkie.dev"
 RUN_ENV="${TALKIE_RUN_ENV:-dev}"
-SIGNING_ENV_FILE="${TALKIE_SIGNING_ENV_FILE:-$ROOT_DIR/Config/signing.env}"
+GLOBAL_SIGNING_ENV_FILE="$HOME/.config/talkie/signing.env"
+if [ -n "${TALKIE_SIGNING_ENV_FILE:-}" ]; then
+    SIGNING_ENV_FILE="$TALKIE_SIGNING_ENV_FILE"
+elif [ -f "$GLOBAL_SIGNING_ENV_FILE" ]; then
+    SIGNING_ENV_FILE="$GLOBAL_SIGNING_ENV_FILE"
+else
+    SIGNING_ENV_FILE="$ROOT_DIR/Config/signing.env"
+fi
 
 # Talkie owns voice capture/playback; consume Hudson's shared UI without its optional Vox-backed voice target.
 export HUDSONKIT_WITH_VOICE="${HUDSONKIT_WITH_VOICE:-0}"
@@ -338,6 +345,101 @@ is_nonprod_bundle_id() {
     [[ "$bundle_id" == *.dev || "$bundle_id" == *.staging ]]
 }
 
+is_agent_product() {
+    [ "$1" = "TalkieAgent" ]
+}
+
+signing_requirement() {
+    local app_path=$1
+    codesign -d -r- "$app_path" 2>&1 | sed -n 's/^designated => //p'
+}
+
+require_agent_signing_config() {
+    local development_team="${TALKIE_DEVELOPMENT_TEAM:-${TALKIE_TEAM_ID:-}}"
+    local identity="${TALKIE_CODE_SIGN_IDENTITY:-Apple Development}"
+
+    if [ -z "$development_team" ]; then
+        echo -e "  ${RED}TalkieAgent requires a development signing team${NC}"
+        echo "  Configure $GLOBAL_SIGNING_ENV_FILE or set TALKIE_SIGNING_ENV_FILE."
+        return 1
+    fi
+
+    if ! security find-identity -v -p codesigning 2>/dev/null | grep -Fq "$identity"; then
+        echo -e "  ${RED}TalkieAgent signing identity is unavailable: $identity${NC}"
+        echo "  Install the expected Apple Development certificate before rebuilding."
+        return 1
+    fi
+}
+
+verify_agent_signature() {
+    local app_path=$1
+    local expected_team="${2:-}"
+    local signature_details
+    local actual_team
+    local requirement
+    local bundle_id
+
+    if ! codesign --verify --deep --strict "$app_path" >/dev/null 2>&1; then
+        echo -e "  ${RED}TalkieAgent is not validly signed: $app_path${NC}"
+        return 1
+    fi
+
+    signature_details=$(codesign -d --verbose=4 "$app_path" 2>&1)
+    actual_team=$(printf '%s\n' "$signature_details" | sed -n 's/^TeamIdentifier=//p' | tail -n 1)
+    bundle_id=$(get_bundle_id "$app_path")
+    requirement=$(signing_requirement "$app_path")
+
+    if ! is_nonprod_bundle_id "$bundle_id"; then
+        echo -e "  ${RED}Refusing non-development TalkieAgent bundle: $bundle_id${NC}"
+        return 1
+    fi
+
+    if [ -z "$actual_team" ] || { [ -n "$expected_team" ] && [ "$actual_team" != "$expected_team" ]; }; then
+        echo -e "  ${RED}TalkieAgent signing team mismatch${NC}"
+        echo "  Expected: ${expected_team:-a named team}; actual: ${actual_team:-none}"
+        return 1
+    fi
+
+    if ! printf '%s\n' "$signature_details" | grep -Fq '(runtime)'; then
+        echo -e "  ${RED}TalkieAgent signature is missing hardened runtime${NC}"
+        return 1
+    fi
+
+    if [ -z "$requirement" ]; then
+        echo -e "  ${RED}TalkieAgent signature has no designated requirement${NC}"
+        return 1
+    fi
+}
+
+validate_stable_agent_candidate() {
+    local app_path=$1
+    local product=$2
+    local expected_team="${TALKIE_DEVELOPMENT_TEAM:-${TALKIE_TEAM_ID:-}}"
+    local dest
+    local incoming_requirement
+    local installed_requirement
+
+    is_agent_product "$product" || return 0
+    verify_agent_signature "$app_path" "$expected_team" || return 1
+
+    dest=$(stable_dev_app "$product")
+    [ -d "$dest" ] || return 0
+    [ "$app_path" != "$dest" ] || return 0
+
+    if ! verify_agent_signature "$dest" "$expected_team" >/dev/null 2>&1; then
+        echo -e "  ${YELLOW}Replacing invalid existing TalkieAgent signature${NC}"
+        return 0
+    fi
+
+    incoming_requirement=$(signing_requirement "$app_path")
+    installed_requirement=$(signing_requirement "$dest")
+    if [ "$incoming_requirement" != "$installed_requirement" ]; then
+        echo -e "  ${RED}Refusing to replace TalkieAgent with a different signing identity${NC}"
+        echo "  This would invalidate macOS privacy grants. Resolve the identity change explicitly."
+        return 1
+    fi
+}
+
 resolve_app_path() {
     local app=$1
     local product=$(get_product "$app")
@@ -358,6 +460,8 @@ install_dev_app_if_needed() {
     local product=$2
     local bundle_id=$3
     local dest
+    local staged_dest
+    local backup_dest
 
     RUNNABLE_APP_PATH="$app_path"
 
@@ -367,6 +471,9 @@ install_dev_app_if_needed() {
     cleanup_legacy_dev_app "$product"
 
     if [ "$app_path" = "$dest" ]; then
+        if is_agent_product "$product"; then
+            verify_agent_signature "$dest" "${TALKIE_DEVELOPMENT_TEAM:-${TALKIE_TEAM_ID:-}}" || return 1
+        fi
         RUNNABLE_APP_PATH="$dest"
         write_dev_build_manifest "$product" "$app_path" "$dest" "$bundle_id"
         return 0
@@ -374,8 +481,24 @@ install_dev_app_if_needed() {
 
     echo -n "  Installing dev app... "
     mkdir -p "$DEV_APPS_DIR"
-    rm -rf "$dest"
-    /usr/bin/ditto "$app_path" "$dest"
+    staged_dest="$DEV_APPS_DIR/.$product.install.$$"
+    backup_dest="$DEV_APPS_DIR/.$product.backup.$$"
+    rm -rf "$staged_dest" "$backup_dest"
+    /usr/bin/ditto "$app_path" "$staged_dest"
+    if is_agent_product "$product"; then
+        if ! verify_agent_signature "$staged_dest" "${TALKIE_DEVELOPMENT_TEAM:-${TALKIE_TEAM_ID:-}}"; then
+            rm -rf "$staged_dest"
+            return 1
+        fi
+    fi
+    if [ -d "$dest" ]; then
+        /bin/mv "$dest" "$backup_dest"
+    fi
+    if ! /bin/mv "$staged_dest" "$dest"; then
+        [ ! -d "$backup_dest" ] || /bin/mv "$backup_dest" "$dest"
+        return 1
+    fi
+    rm -rf "$backup_dest"
     /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
         -f "$dest" >/dev/null 2>&1 || true
     RUNNABLE_APP_PATH="$dest"
@@ -722,8 +845,9 @@ build_app() {
 
     echo -e "${CYAN}━━━ $product ━━━${NC}"
 
-    # Stop conflicting production/dev instances before relaunching
-    stop_conflicting_instances "$app"
+    if is_agent_product "$product" && ! $EXEC_ONLY; then
+        require_agent_signing_config || return 1
+    fi
 
     # Check if exec-only mode
     if $EXEC_ONLY; then
@@ -802,6 +926,12 @@ build_app() {
 
     local bundle_id
     bundle_id=$(get_bundle_id "$app_path")
+    validate_stable_agent_candidate "$app_path" "$product" || return 1
+
+    # Do not interrupt the running app until the replacement has built and its
+    # signing identity has been proven safe for existing macOS privacy grants.
+    stop_conflicting_instances "$app"
+
     install_dev_app_if_needed "$app_path" "$product" "$bundle_id" || return 1
     app_path="$RUNNABLE_APP_PATH"
 

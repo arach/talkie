@@ -4,7 +4,27 @@
 
 `Signing.xcconfig` includes those defaults and then optionally includes ignored machine-local overrides from `Signing.local.xcconfig`.
 
-Use `Signing.local.xcconfig` only for values that should vary by machine or Apple account, such as:
+For `apps/macos/run.sh`, prefer a user-global environment file so every Git
+worktree uses the same signing identity:
+
+```bash
+mkdir -p ~/.config/talkie
+$EDITOR ~/.config/talkie/signing.env
+```
+
+```bash
+TALKIE_DEVELOPMENT_TEAM="D58PF38LQK"
+TALKIE_CODE_SIGNING_ALLOWED="YES"
+TALKIE_CODE_SIGNING_REQUIRED="YES"
+TALKIE_CODE_SIGN_IDENTITY="Apple Development"
+```
+
+`run.sh` uses `TALKIE_SIGNING_ENV_FILE` when explicitly set, then the global
+file above, then the checkout-local `Config/signing.env`. TalkieAgent builds
+fail before install or launch when a stable development signature is not
+available; an unsigned Agent is never installed over the stable dev app.
+
+Use `Signing.local.xcconfig` for Xcode settings that should vary by machine or Apple account, such as:
 
 ```xcconfig
 TALKIE_DEVELOPMENT_TEAM = D58PF38LQK
