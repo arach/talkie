@@ -202,13 +202,19 @@ jobs:
           set -euo pipefail
 
           gem install fastlane --version 2.237.0 --no-document
-          ruby scripts/asc-upload-app-preview.rb \
-            --bundle-id "$TALKIE_APP_IDENTIFIER" \
-            --version "$VERSION" \
-            --path apps/ios/fastlane/marketing/app-preview/output/Talkie-App-Preview-6.9-inch.mp4 \
-            --key-id "$APP_STORE_CONNECT_KEY_ID" \
-            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+          preview_args=(
+            --bundle-id "$TALKIE_APP_IDENTIFIER"
+            --version "$VERSION"
+            --path apps/ios/fastlane/marketing/app-preview/output/Talkie-App-Preview-6.9-inch.mp4
+            --key-id "$APP_STORE_CONNECT_KEY_ID"
+            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID"
             --private-key-path "$APP_STORE_CONNECT_API_KEY_PATH"
+          )
+          if [ "${{ inputs.wait_for_processing }}" = "true" ]; then
+            preview_args+=(--wait-for-processing)
+          fi
+
+          ruby scripts/asc-upload-app-preview.rb "${preview_args[@]}"
 
       - name: Sync version metadata
         if: ${{ inputs.upload_binary }}

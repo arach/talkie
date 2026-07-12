@@ -6,7 +6,10 @@ require "spaceship"
 
 options = {
   locales: %w[en-US en-CA],
-  preview_type: Spaceship::ConnectAPI::AppPreviewSet::PreviewType::IPHONE_67
+  preview_type: Spaceship::ConnectAPI::AppPreviewSet::PreviewType::IPHONE_67,
+  wait_for_processing: false,
+  processing_timeout: 1800,
+  frame_time_code: "00:00:05:06"
 }
 
 OptionParser.new do |parser|
@@ -21,6 +24,12 @@ OptionParser.new do |parser|
   end
   parser.on("--preview-type TYPE", "App Preview set type (default: IPHONE_67)") do |value|
     options[:preview_type] = value
+  end
+  parser.on("--wait-for-processing", "Verify processing and set the poster frame") do
+    options[:wait_for_processing] = true
+  end
+  parser.on("--processing-timeout SECONDS", Integer, "Processing timeout (default: 1800)") do |value|
+    options[:processing_timeout] = value
   end
   parser.on("--key-id ID", "App Store Connect API key ID") { |value| options[:key_id] = value }
   parser.on("--issuer-id ID", "App Store Connect issuer ID") { |value| options[:issuer_id] = value }
@@ -75,6 +84,30 @@ options[:locales].each do |locale|
     path: File.expand_path(options[:path]),
     wait_for_processing: false
   )
+
+  if options[:wait_for_processing]
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + options[:processing_timeout]
+    loop do
+      uploaded = Spaceship::ConnectAPI::AppPreview.get(app_preview_id: uploaded.id)
+      delivery_state = (uploaded.asset_delivery_state || {})["state"]
+      break if uploaded.complete? || uploaded.video_url
+
+      if %w[FAILED REJECTED INVALID].include?(delivery_state)
+        abort("#{locale} App Preview processing failed: #{uploaded.asset_delivery_state}")
+      end
+      if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+        abort("#{locale} App Preview processing timed out after #{options[:processing_timeout]} seconds")
+      end
+
+      puts "Waiting for #{locale} App Preview processing (#{delivery_state || 'pending'})..."
+      sleep 15
+    end
+
+    uploaded = uploaded.update(
+      attributes: { previewFrameTimeCode: options[:frame_time_code] }
+    )
+    puts "Processed #{locale} App Preview and set poster frame to #{options[:frame_time_code]}"
+  end
 
   existing.each(&:delete!)
   puts "Uploaded #{locale} #{options[:preview_type]} App Preview #{uploaded.id}"
