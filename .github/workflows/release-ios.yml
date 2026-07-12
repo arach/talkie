@@ -16,6 +16,11 @@ on:
         required: false
         default: true
         type: boolean
+      upload_screenshots:
+        description: 'Replace the English App Store screenshots with the checked-in marketing set'
+        required: false
+        default: false
+        type: boolean
       wait_for_processing:
         description: 'Wait for App Store Connect processing to complete'
         required: false
@@ -133,6 +138,39 @@ jobs:
             --key-id "$APP_STORE_CONNECT_KEY_ID" \
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
             --private-key-path "$APP_STORE_CONNECT_API_KEY_PATH"
+
+      - name: Set up Ruby for screenshot upload
+        if: ${{ inputs.upload_screenshots }}
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+
+      - name: Upload App Store screenshots
+        if: ${{ inputs.upload_screenshots }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          gem install fastlane --version 2.232.1 --no-document
+
+          api_key_json="$RUNNER_TEMP/fastlane-api-key.json"
+          export FASTLANE_API_KEY_JSON="$api_key_json"
+          ruby -rjson -e '
+            payload = {
+              key_id: ENV.fetch("APP_STORE_CONNECT_KEY_ID"),
+              issuer_id: ENV.fetch("APP_STORE_CONNECT_ISSUER_ID"),
+              key: File.binread(ENV.fetch("APP_STORE_CONNECT_API_KEY_PATH")),
+              in_house: false
+            }
+            File.write(ENV.fetch("FASTLANE_API_KEY_JSON"), JSON.generate(payload))
+          '
+          chmod 600 "$api_key_json"
+
+          apps/ios/fastlane/marketing/prepare-upload.sh
+          (
+            cd apps/ios
+            TALKIE_FASTLANE_API_KEY_PATH="$api_key_json" fastlane deliver
+          )
 
       - name: Sync version metadata
         if: ${{ inputs.upload_binary }}

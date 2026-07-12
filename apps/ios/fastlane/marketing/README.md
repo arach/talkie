@@ -46,6 +46,23 @@ Override it with `TALKIE_SCREENSHOTS_PATH` when needed. Uploads require the
 gitignored App Store Connect API key at `apps/ios/fastlane/api_key.json`, or a
 path supplied through `TALKIE_FASTLANE_API_KEY_PATH`.
 
+## Export the App Store build
+
+After creating an Xcode archive, export its IPA with the checked-in App Store
+options:
+
+```bash
+xcodebuild -exportArchive \
+  -archivePath /path/to/Talkie.xcarchive \
+  -exportPath /path/to/export \
+  -exportOptionsPlist apps/ios/fastlane/ExportOptions-AppStore.plist \
+  -allowProvisioningUpdates
+```
+
+The export keeps the repository version and build number unchanged, signs with
+automatic distribution signing, uses the production iCloud environment, and
+includes symbols for App Store Connect.
+
 ## Source material
 
 - `source/backgrounds/ivory-waveform.png`: generated tactile ivory campaign art
