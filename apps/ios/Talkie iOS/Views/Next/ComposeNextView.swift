@@ -1375,11 +1375,7 @@ private struct InlineMicButton: View {
             ZStack {
                 Image(systemName: state == .dictating ? "stop.fill" : "mic.fill")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(
-                        state == .dictating
-                            ? theme.currentTheme.chrome.accent
-                            : theme.chrome.action
-                    )
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
             }
             .frame(width: 31, height: 30)
             .background(commandKeyBackground(isActive: state == .dictating))
@@ -1390,11 +1386,11 @@ private struct InlineMicButton: View {
 
     private func commandKeyBackground(isActive: Bool = false) -> some View {
         RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous)
-            .fill(theme.chrome.panelAlt)
+            .fill(theme.currentTheme.chrome.accentTint)
             .overlay(
                 RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous)
                     .strokeBorder(
-                        isActive ? theme.currentTheme.chrome.accent.opacity(0.42) : theme.chrome.edgeFaint,
+                        isActive ? theme.currentTheme.chrome.accent.opacity(0.52) : theme.currentTheme.chrome.accentStrong,
                         lineWidth: theme.currentTheme.chrome.hairlineWidth
                     )
             )
@@ -1413,7 +1409,7 @@ private struct ComposeFloatingTools: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        // Deck-style rail: one dark bed with tight command groups. The mic is
+        // Quick-actions rail: one paper-and-hairline bed with tight command groups. The mic is
         // pinned to the true center so it lines up with the cursor pad below.
         ZStack {
             HStack(spacing: 0) {
@@ -1456,7 +1452,7 @@ private struct ComposeFloatingTools: View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(theme.chrome.action)
+                .foregroundStyle(theme.currentTheme.chrome.action)
                 .frame(width: 31, height: 30)
                 .background(commandKeyBackground)
         }
@@ -1471,7 +1467,7 @@ private struct ComposeFloatingTools: View {
         } label: {
             Text("space")
                 .font(.system(size: 10.5, weight: .medium, design: .rounded))
-                .foregroundStyle(theme.chrome.action)
+                .foregroundStyle(theme.currentTheme.chrome.action)
                 .frame(width: 54, height: 30)
                 .background(commandKeyBackground)
         }
@@ -1481,27 +1477,33 @@ private struct ComposeFloatingTools: View {
 
     private var commandKeyBackground: some View {
         RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous)
-            .fill(theme.chrome.panelAlt)
+            .fill(theme.colors.cardBackground)
             .overlay(
                 RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous)
-                    .strokeBorder(theme.chrome.edgeFaint,
+                    .strokeBorder(theme.currentTheme.chrome.edgeFaint,
                                   lineWidth: theme.currentTheme.chrome.hairlineWidth)
             )
     }
 
     private var railBackground: some View {
         RoundedRectangle(cornerRadius: CornerRadius.sm + 4, style: .continuous)
-            .fill(.ultraThinMaterial)
+            .fill(theme.colors.cardBackground)
             .overlay(
                 RoundedRectangle(cornerRadius: CornerRadius.sm + 4, style: .continuous)
-                    .fill(theme.chrome.panel.opacity(0.48))
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.18), theme.currentTheme.chrome.actionTint],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: CornerRadius.sm + 4, style: .continuous)
-                    .strokeBorder(theme.chrome.panelEdge,
+                    .strokeBorder(theme.currentTheme.chrome.edge,
                                   lineWidth: theme.currentTheme.chrome.hairlineWidth)
             )
-            .shadow(color: .black.opacity(0.22), radius: 10, x: 0, y: 5)
+            .shadow(color: .black.opacity(0.10), radius: 8, x: 0, y: 4)
     }
 }
 

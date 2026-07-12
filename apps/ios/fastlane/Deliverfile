@@ -5,7 +5,7 @@ api_key_path(ENV.fetch("TALKIE_FASTLANE_API_KEY_PATH", "./fastlane/api_key.json"
 app_identifier(ENV.fetch("TALKIE_IOS_APP_BUNDLE_ID", "to.talkie.app"))
 
 # Screenshots
-screenshots_path("./fastlane/screenshots")
+screenshots_path(ENV.fetch("TALKIE_SCREENSHOTS_PATH", "./fastlane/marketing/.upload"))
 
 # Only upload screenshots, skip metadata and binary
 skip_metadata(true)

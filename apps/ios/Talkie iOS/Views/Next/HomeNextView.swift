@@ -470,24 +470,36 @@ private struct CockpitLaneModel {
     let level: Double
 }
 
+private struct HomeActivityEvent: Identifiable {
+    let time: String
+    let title: String
+    let kind: String
+
+    var id: String { "\(time)-\(title)" }
+}
+
 private struct HomeCockpit: View {
     @State private var bridgeManager = BridgeManager.shared
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("· COCKPIT")
+            Text(isScreenshotMode ? "· TODAY" : "· COCKPIT")
                 .talkieType(.channelLabelTiny)
                 .foregroundStyle(theme.colors.textSecondary)
                 .padding(.leading, 4)
 
             Button(action: open) {
                 VStack(spacing: 8) {
-                    CockpitScreen(
-                        statusLabel: statusLabel,
-                        statusIsLive: isConnected,
-                        lanes: lanes
-                    )
+                    if isScreenshotMode {
+                        HomeActivityScreen(events: screenshotEvents)
+                    } else {
+                        CockpitScreen(
+                            statusLabel: statusLabel,
+                            statusIsLive: isConnected,
+                            lanes: lanes
+                        )
+                    }
 
                     Text(detailLine)
                         .talkieType(.channelLabelTiny)
@@ -500,7 +512,7 @@ private struct HomeCockpit: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(accessibilitySummary)
-            .accessibilityHint(isConnected ? "Opens Deck remote" : "Opens Bridge detail")
+            .accessibilityHint(accessibilityHint)
         }
     }
 
@@ -508,6 +520,10 @@ private struct HomeCockpit: View {
 
     private var isConnected: Bool {
         bridgeManager.isPaired && bridgeManager.status == .connected
+    }
+
+    private var isScreenshotMode: Bool {
+        ProcessInfo.processInfo.arguments.contains("-FASTLANE_SNAPSHOT")
     }
 
     private func open() {
@@ -532,6 +548,14 @@ private struct HomeCockpit: View {
 
     private var lanes: [CockpitLaneModel] {
         [bridgeLane, sharesLane, repliesLane]
+    }
+
+    private var screenshotEvents: [HomeActivityEvent] {
+        [
+            HomeActivityEvent(time: "9:36", title: "Roadmap memo recorded", kind: "VOICE"),
+            HomeActivityEvent(time: "9:18", title: "Product brief summarized", kind: "AI"),
+            HomeActivityEvent(time: "8:54", title: "Follow-up added to Reminders", kind: "ACTION"),
+        ]
     }
 
     private var bridgeLane: CockpitLaneModel {
@@ -565,6 +589,9 @@ private struct HomeCockpit: View {
     }
 
     private var detailLine: String {
+        if isScreenshotMode {
+            return "3 COMPLETED TODAY · LATEST 5 MIN AGO"
+        }
         let bridgePart: String
         if isConnected {
             bridgePart = "Bridge live on \(bridgeManager.pairedMacDisplayName ?? "Mac")"
@@ -577,6 +604,9 @@ private struct HomeCockpit: View {
     }
 
     private var accessibilitySummary: String {
+        if isScreenshotMode {
+            return "Today's Talkie activity: roadmap memo recorded, product brief summarized, follow-up added to Reminders"
+        }
         let bridge: String
         if isConnected {
             bridge = "bridge ready on \(bridgeManager.pairedMacDisplayName ?? "Mac")"
@@ -586,6 +616,114 @@ private struct HomeCockpit: View {
             bridge = "no Mac paired"
         }
         return "Communication cockpit, \(bridge), 2 shares queued, 1 reply waiting"
+    }
+
+    private var accessibilityHint: String {
+        if isScreenshotMode { return "Shows today's completed Talkie activity" }
+        return isConnected ? "Opens Deck remote" : "Opens Bridge detail"
+    }
+}
+
+/// Screenshot-mode event log. Unlike the production communication cockpit,
+/// this shows discrete outcomes in time order—no synthetic levels or telemetry.
+private struct HomeActivityScreen: View {
+    let events: [HomeActivityEvent]
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        let hairline = max(theme.currentTheme.chrome.hairlineWidth, 0.8)
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+
+        VStack(spacing: 8) {
+            HStack {
+                Text("TALKIE")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(HomeTacticalPalette.screenInkFaint)
+                Spacer()
+                Text("ACTIVITY")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(HomeTacticalPalette.accent)
+                Spacer()
+                Text("9:41")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(HomeTacticalPalette.screenInkFaint)
+            }
+
+            VStack(spacing: 0) {
+                ForEach(events.enumerated(), id: \.element.id) { index, event in
+                    HomeActivityRow(event: event, showsDivider: index < events.count - 1)
+                }
+            }
+            .background(Color.white.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(HomeTacticalPalette.accent.opacity(0.14), lineWidth: 1)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .background {
+            ZStack {
+                HomeTacticalPalette.screen
+                LinearGradient(
+                    colors: [Color.white.opacity(0.08), Color.black.opacity(0.20)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                RadialGradient(
+                    colors: [HomeTacticalPalette.accent.opacity(0.18), .clear],
+                    center: UnitPoint(x: 0.72, y: 0.36),
+                    startRadius: 0,
+                    endRadius: 140
+                )
+            }
+        }
+        .clipShape(shape)
+        .overlay {
+            shape.strokeBorder(HomeTacticalPalette.accentEdge, lineWidth: hairline)
+        }
+    }
+}
+
+private struct HomeActivityRow: View {
+    let event: HomeActivityEvent
+    let showsDivider: Bool
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Text(event.time)
+                .talkieType(.timestamp)
+                .foregroundStyle(HomeTacticalPalette.screenInkFaint)
+                .frame(width: 34, alignment: .leading)
+
+            Circle()
+                .fill(HomeTacticalPalette.accent)
+                .frame(width: 5, height: 5)
+                .shadow(color: HomeTacticalPalette.accent.opacity(0.65), radius: 3)
+
+            Text(event.title)
+                .talkieType(.fieldLabel)
+                .foregroundStyle(HomeTacticalPalette.screenInk)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text(event.kind)
+                .talkieType(.channelLabelTiny)
+                .foregroundStyle(HomeTacticalPalette.accent)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 8)
+        .overlay(alignment: .bottom) {
+            if showsDivider {
+                Rectangle()
+                    .fill(Color.white.opacity(0.08))
+                    .frame(height: 0.5)
+                    .padding(.leading, 52)
+            }
+        }
     }
 }
 

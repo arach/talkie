@@ -98,6 +98,7 @@ final class TalkieUITestsScreenshots: XCTestCase {
         }
         app.launchArguments += spec.launchArguments
         app.launch()
+        dismissSystemAlertsIfNeeded()
 
         // Navigate to the target screen (if the spec requires taps)
         spec.navigate?(app)
@@ -109,6 +110,7 @@ final class TalkieUITestsScreenshots: XCTestCase {
             "\(spec.name): ready element should exist"
         )
 
+        dismissSystemAlertsIfNeeded()
         snapshot(spec.name, timeWaitingForIdle: 0)
     }
 

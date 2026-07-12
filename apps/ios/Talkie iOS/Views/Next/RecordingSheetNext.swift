@@ -162,6 +162,25 @@ struct RecordingSheetNext: View {
         recordingWaveformUsesParticles ? .recording : theme.currentTheme.chrome.accent
     }
 
+    private var recordingWaveformLevels: [Float] {
+        if ProcessInfo.processInfo.arguments.contains("-FASTLANE_SNAPSHOT") {
+            return Self.screenshotWaveformLevels
+        }
+        return recorder.audioLevels
+    }
+
+    /// A fixed speech-like envelope for deterministic App Store captures.
+    /// Simulator microphone input is effectively silent, which otherwise
+    /// produces a dead centerline even while the recording state is live.
+    private static let screenshotWaveformLevels: [Float] = (0..<96).map { index in
+        let position = Float(index)
+        let syllable = abs(sin(position * 0.57))
+        let phraseEnvelope = 0.42 + abs(sin(position * 0.115)) * 0.58
+        let isPause = index % 29 >= 24
+        let signal = isPause ? syllable * 0.10 : syllable * phraseEnvelope
+        return min(0.94, max(0.06, 0.08 + signal * 0.82))
+    }
+
     private var recordingBody: some View {
         VStack(spacing: 14) {
             recordingWaveform
@@ -219,14 +238,14 @@ struct RecordingSheetNext: View {
     private var recordingWaveform: some View {
         if recordingWaveformUsesParticles {
             ParticlesWaveformView(
-                levels: recorder.audioLevels,
+                levels: recordingWaveformLevels,
                 height: 56,
                 color: .recording
             )
             .background(theme.colors.cardBackground.opacity(0.35))
         } else {
             TapeWaveformView(
-                levels: recorder.audioLevels,
+                levels: recordingWaveformLevels,
                 height: 56,
                 color: theme.currentTheme.chrome.accent
             )
