@@ -151,7 +151,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          gem install fastlane --version 2.232.1 --no-document
+          gem install fastlane --version 2.237.0 --no-document
 
           api_key_json="$RUNNER_TEMP/fastlane-api-key.json"
           export FASTLANE_API_KEY_JSON="$api_key_json"
@@ -175,7 +175,9 @@ jobs:
           (
             cd apps/ios
             unset APP_STORE_CONNECT_API_KEY_PATH
-            TALKIE_FASTLANE_API_KEY_PATH="$api_key_json" fastlane deliver
+            TALKIE_APP_STORE_VERSION="$VERSION" \
+              TALKIE_FASTLANE_API_KEY_PATH="$api_key_json" \
+              fastlane deliver
           )
 
       - name: Sync version metadata
