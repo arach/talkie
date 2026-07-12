@@ -47,10 +47,10 @@ struct ShortcutsSettingsSection: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Toggle Recording")
                                 .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(TalkieTheme.textPrimary)
+                                .foregroundColor(AgentTheme.textPrimary)
                             Text("Press to start, press again to stop and transcribe")
                                 .font(.system(size: 9))
-                                .foregroundColor(TalkieTheme.textTertiary)
+                                .foregroundColor(AgentTheme.textTertiary)
                         }
 
                         Spacer()
@@ -78,10 +78,10 @@ struct ShortcutsSettingsSection: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Enable Push-to-Talk")
                                 .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(TalkieTheme.textPrimary)
+                                .foregroundColor(AgentTheme.textPrimary)
                             Text("Hold to record, release to stop and transcribe")
                                 .font(.system(size: 9))
-                                .foregroundColor(TalkieTheme.textTertiary)
+                                .foregroundColor(AgentTheme.textTertiary)
                         }
 
                         Spacer()
@@ -94,12 +94,12 @@ struct ShortcutsSettingsSection: View {
 
                     if settings.pttEnabled {
                         Divider()
-                            .background(TalkieTheme.surfaceElevated)
+                            .background(AgentTheme.surfaceElevated)
 
                         HStack {
                             Text("PTT Shortcut")
                                 .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(TalkieTheme.textSecondary)
+                                .foregroundColor(AgentTheme.textSecondary)
 
                             Spacer()
 
@@ -130,10 +130,10 @@ struct ShortcutsSettingsSection: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Paste from Queue")
                                 .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(TalkieTheme.textPrimary)
+                                .foregroundColor(AgentTheme.textPrimary)
                             Text("Show picker to paste queued transcriptions")
                                 .font(.system(size: 9))
-                                .foregroundColor(TalkieTheme.textTertiary)
+                                .foregroundColor(AgentTheme.textTertiary)
                         }
 
                         Spacer()
@@ -151,7 +151,7 @@ struct ShortcutsSettingsSection: View {
 
                     Text("Recordings made while Talkie Agent is the active app are queued instead of auto-pasted. Use this shortcut to select and paste from your queue.")
                         .font(.system(size: 10))
-                        .foregroundColor(TalkieTheme.textMuted)
+                        .foregroundColor(AgentTheme.textMuted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -165,7 +165,7 @@ struct ShortcutsSettingsSection: View {
                                 .font(.system(size: 11))
                             Text("Capture is disabled in this environment. Shortcuts are saved here, but Agent will not register them until Capture is enabled.")
                                 .font(.system(size: 10))
-                                .foregroundColor(TalkieTheme.textSecondary)
+                                .foregroundColor(AgentTheme.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
                             Spacer()
                         }
@@ -181,7 +181,7 @@ struct ShortcutsSettingsSection: View {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text("Registration status only. Edit shortcuts in the sections above.")
                         .font(.system(size: 10))
-                        .foregroundColor(TalkieTheme.textMuted)
+                        .foregroundColor(AgentTheme.textMuted)
                         .fixedSize(horizontal: false, vertical: true)
 
                     let managers = AppDelegate.hotkeyManagers
@@ -189,7 +189,7 @@ struct ShortcutsSettingsSection: View {
                     if managers.isEmpty {
                         Text("No hotkeys loaded")
                             .font(.system(size: 10))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .foregroundColor(AgentTheme.textTertiary)
                     } else {
                         ForEach(Array(managers.enumerated()), id: \.offset) { _, entry in
                             HStack(spacing: Spacing.sm) {
@@ -199,7 +199,7 @@ struct ShortcutsSettingsSection: View {
 
                                 Text(entry.label)
                                     .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(TalkieTheme.textPrimary)
+                                    .foregroundColor(AgentTheme.textPrimary)
 
                                 Spacer()
 
@@ -207,7 +207,7 @@ struct ShortcutsSettingsSection: View {
                                     if let display = hotkeyDisplay(for: entry.manager) {
                                         Text(display)
                                             .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                            .foregroundColor(entry.manager.isRegistered ? TalkieTheme.textTertiary : .orange)
+                                            .foregroundColor(entry.manager.isRegistered ? AgentTheme.textTertiary : .orange)
                                     }
 
                                     if !entry.manager.isRegistered {
@@ -254,12 +254,12 @@ struct ShortcutsSettingsSection: View {
                             Text("Restore Default Shortcuts")
                                 .font(.system(size: 10, weight: .medium))
                         }
-                        .foregroundColor(isRestoreHovered ? .white : TalkieTheme.textTertiary)
+                        .foregroundColor(isRestoreHovered ? .white : AgentTheme.textTertiary)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background(
                             RoundedRectangle(cornerRadius: 6)
-                                .fill(isRestoreHovered ? TalkieTheme.surfaceElevated : Color.clear)
+                                .fill(isRestoreHovered ? AgentTheme.surfaceElevated : Color.clear)
                         )
                     }
                     .buttonStyle(.plain)
@@ -318,10 +318,10 @@ struct ShortcutsSettingsSection: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(shortcut.title)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .foregroundColor(AgentTheme.textPrimary)
                 Text(shortcut.subtitle)
                     .font(.system(size: 9))
-                    .foregroundColor(TalkieTheme.textTertiary)
+                    .foregroundColor(AgentTheme.textTertiary)
             }
 
             Spacer()

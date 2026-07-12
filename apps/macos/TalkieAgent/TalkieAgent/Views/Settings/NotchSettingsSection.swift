@@ -43,10 +43,10 @@ struct NotchSettingsSection: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Placement")
                                 .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(TalkieTheme.textPrimary)
+                                .foregroundColor(AgentTheme.textPrimary)
                             Text(placement.description)
                                 .font(.system(size: 9))
-                                .foregroundColor(TalkieTheme.textTertiary)
+                                .foregroundColor(AgentTheme.textTertiary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
 
@@ -70,10 +70,10 @@ struct NotchSettingsSection: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Auto-dismiss")
                                 .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(TalkieTheme.textPrimary)
+                                .foregroundColor(AgentTheme.textPrimary)
                             Text("Hover the preview to keep it open")
                                 .font(.system(size: 9))
-                                .foregroundColor(TalkieTheme.textTertiary)
+                                .foregroundColor(AgentTheme.textTertiary)
                         }
 
                         Spacer()
@@ -96,16 +96,16 @@ struct NotchSettingsSection: View {
                 HStack(alignment: .top, spacing: Spacing.sm) {
                     Image(systemName: "info.circle")
                         .font(.system(size: 11))
-                        .foregroundColor(TalkieTheme.textTertiary)
+                        .foregroundColor(AgentTheme.textTertiary)
                         .frame(width: 20)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Markup opens in Agent")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(TalkieTheme.textSecondary)
+                            .foregroundColor(AgentTheme.textSecondary)
                         Text("Tap a screenshot preview to annotate it in place, then drag the saved PNG anywhere. Open Talkie when you want the full tray.")
                             .font(.system(size: 9))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .foregroundColor(AgentTheme.textTertiary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }

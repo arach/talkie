@@ -23,12 +23,12 @@ struct AmbientSettingsSection: View {
                 HStack {
                     Image(systemName: "waveform.circle")
                         .font(.system(size: 20))
-                        .foregroundColor(TalkieTheme.accent)
+                        .foregroundColor(AgentTheme.accent)
 
                     Text("AMBIENT MODE")
                         .font(.techLabel)
                         .tracking(Tracking.wide)
-                        .foregroundColor(TalkieTheme.textPrimary)
+                        .foregroundColor(AgentTheme.textPrimary)
 
                     Text("BETA")
                         .font(.system(size: 9, weight: .bold))
@@ -48,7 +48,7 @@ struct AmbientSettingsSection: View {
 
                 Text("Always-on listening with wake word activation")
                     .font(.system(size: 12))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(AgentTheme.textSecondary)
             }
 
             // Feature toggle
@@ -57,10 +57,10 @@ struct AmbientSettingsSection: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Enable Ambient Mode")
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(TalkieTheme.textPrimary)
+                            .foregroundColor(AgentTheme.textPrimary)
                         Text("Experimental feature - adds menu items and continuous listening")
                             .font(.system(size: 10))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .foregroundColor(AgentTheme.textTertiary)
                     }
 
                     Spacer()
@@ -88,7 +88,7 @@ struct AmbientSettingsSection: View {
                     Text("PHRASES")
                         .font(.techLabelSmall)
                         .tracking(Tracking.normal)
-                        .foregroundColor(TalkieTheme.textMuted)
+                        .foregroundColor(AgentTheme.textMuted)
 
                     // Wake phrase
                     phraseRow(
@@ -128,10 +128,10 @@ struct AmbientSettingsSection: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Audio Chimes")
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(TalkieTheme.textPrimary)
+                            .foregroundColor(AgentTheme.textPrimary)
                         Text("Play sounds on activation and completion")
                             .font(.system(size: 10))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .foregroundColor(AgentTheme.textTertiary)
                     }
 
                     Spacer()
@@ -150,18 +150,18 @@ struct AmbientSettingsSection: View {
                     HStack {
                         Text("Buffer Duration")
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(TalkieTheme.textPrimary)
+                            .foregroundColor(AgentTheme.textPrimary)
 
                         Spacer()
 
                         Text(formatDuration(settings.bufferDuration))
                             .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(TalkieTheme.accent)
+                            .foregroundColor(AgentTheme.accent)
                     }
 
                     Text("How much audio history to keep in memory")
                         .font(.system(size: 10))
-                        .foregroundColor(TalkieTheme.textTertiary)
+                        .foregroundColor(AgentTheme.textTertiary)
 
                     Slider(
                         value: $settings.bufferDuration,
@@ -181,7 +181,7 @@ struct AmbientSettingsSection: View {
                     }) {
                         Text("Reset to Defaults")
                             .font(.system(size: 11))
-                            .foregroundColor(TalkieTheme.textSecondary)
+                            .foregroundColor(AgentTheme.textSecondary)
                     }
                     .buttonStyle(.plain)
                 }
@@ -233,14 +233,14 @@ struct AmbientSettingsSection: View {
             HStack {
                 Text(label)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(AgentTheme.textSecondary)
 
                 Spacer()
 
                 TextField(placeholder, text: value)
                     .textFieldStyle(.plain)
                     .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .foregroundColor(AgentTheme.textPrimary)
                     .frame(width: 150)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
@@ -252,7 +252,7 @@ struct AmbientSettingsSection: View {
 
             Text(description)
                 .font(.system(size: 9))
-                .foregroundColor(TalkieTheme.textTertiary)
+                .foregroundColor(AgentTheme.textTertiary)
         }
     }
 
@@ -270,6 +270,6 @@ struct AmbientSettingsSection: View {
 #Preview {
     AmbientSettingsSection()
         .frame(width: 450, height: 600)
-        .background(TalkieTheme.background)
+        .background(AgentTheme.background)
         .preferredColorScheme(.dark)
 }

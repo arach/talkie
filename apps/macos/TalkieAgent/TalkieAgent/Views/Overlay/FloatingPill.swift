@@ -765,17 +765,17 @@ struct FloatingPillView: View {
                     // Build timestamp (e.g., "Dec 26 14:32")
                     Text(buildInfo)
                         .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                        .foregroundColor(TalkieTheme.textSecondary)
+                        .foregroundColor(AgentTheme.textSecondary)
 
                     Text("•")
                         .font(.system(size: 8))
-                        .foregroundColor(TalkieTheme.textMuted)
+                        .foregroundColor(AgentTheme.textMuted)
 
                     // PID (clickable to copy)
                     Button(action: { copyPID() }) {
                         Text(verbatim: "PID \(ProcessInfo.processInfo.processIdentifier)")
                             .font(.system(size: 9, weight: .medium, design: .monospaced))
-                            .foregroundColor(pidCopied ? SemanticColor.success : TalkieTheme.textTertiary)
+                            .foregroundColor(pidCopied ? SemanticColor.success : AgentTheme.textTertiary)
                     }
                     .buttonStyle(.plain)
                     .help("Click to copy PID")

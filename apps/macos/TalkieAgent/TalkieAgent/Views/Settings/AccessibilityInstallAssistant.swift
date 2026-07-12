@@ -218,11 +218,11 @@ private struct AccessibilityInstallAssistantView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(headline)
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(TalkieTheme.textPrimary)
+                        .foregroundStyle(AgentTheme.textPrimary)
 
                     Text(hint)
                         .font(.system(size: 11))
-                        .foregroundStyle(TalkieTheme.textSecondary)
+                        .foregroundStyle(AgentTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -230,7 +230,7 @@ private struct AccessibilityInstallAssistantView: View {
 
                 Label(statusText, systemImage: statusIcon)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(isGranted ? Color.green : TalkieTheme.textTertiary)
+                    .foregroundStyle(isGranted ? Color.green : AgentTheme.textTertiary)
             }
 
             HStack(alignment: .center, spacing: 16) {
@@ -244,7 +244,7 @@ private struct AccessibilityInstallAssistantView: View {
                         .foregroundStyle(Color.accentColor)
                 }
                 .frame(width: 92, height: 92)
-                .background(TalkieTheme.surfaceCard)
+                .background(AgentTheme.surfaceCard)
                 .overlay {
                     NativeAppFileDragSource(
                         appURL: appURL,
@@ -264,20 +264,20 @@ private struct AccessibilityInstallAssistantView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("TalkieAgent")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(TalkieTheme.textPrimary)
+                        .foregroundStyle(AgentTheme.textPrimary)
 
                     Text("Dictation agent")
                         .font(.system(size: 11))
-                        .foregroundStyle(TalkieTheme.textTertiary)
+                        .foregroundStyle(AgentTheme.textTertiary)
 
                     Text(bundleIdentifier)
                         .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(TalkieTheme.textSecondary)
+                        .foregroundStyle(AgentTheme.textSecondary)
                         .textSelection(.enabled)
 
                     Text(appURL.path)
                         .font(.system(size: 9, design: .monospaced))
-                        .foregroundStyle(TalkieTheme.textTertiary)
+                        .foregroundStyle(AgentTheme.textTertiary)
                         .lineLimit(2)
                         .truncationMode(.middle)
                         .textSelection(.enabled)
@@ -314,7 +314,7 @@ private struct AccessibilityInstallAssistantView: View {
         }
         .padding(18)
         .frame(width: 430)
-        .background(TalkieTheme.surface)
+        .background(AgentTheme.surface)
         .task {
             while !Task.isCancelled {
                 refreshStatus()

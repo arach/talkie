@@ -820,7 +820,7 @@ private struct OverlaySettingsFloatingPreviewView: View {
             return islandSurfaceBorder
         }
 
-        return TalkieTheme.textSecondary.opacity(0.1)
+        return AgentTheme.textSecondary.opacity(0.1)
     }
 
     private var animationStyle: AgentOverlay.AnimationStyle {
@@ -1137,7 +1137,7 @@ struct RecordingOverlayView: View {
         if settings.effectiveOverlayStyle == .island {
             return islandSurfaceBorder
         }
-        return TalkieTheme.textSecondary.opacity(0.1)
+        return AgentTheme.textSecondary.opacity(0.1)
     }
 
     private var recordingAnimationStyle: AgentOverlay.AnimationStyle {
@@ -1624,7 +1624,7 @@ private struct WavyParticlesCanvas: View, Animatable {
                         width: particleSize,
                         height: particleSize
                     )
-                    // Use explicit white for overlay context (TalkieTheme colors can resolve incorrectly in overlays)
+                    // Use explicit white for overlay context (AgentTheme colors can resolve incorrectly in overlays)
                     context.fill(Circle().path(in: rect), with: .color(.white))
                 }
             }

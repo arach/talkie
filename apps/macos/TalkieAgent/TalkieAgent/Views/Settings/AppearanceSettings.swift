@@ -64,17 +64,17 @@ struct AppearanceSettingsContent: View {
                 Text("LIVE")
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
                     .tracking(1)
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .foregroundColor(AgentTheme.textPrimary)
                     .padding(.bottom, 4)
 
                 ForEach(["History", "Console", "Settings"], id: \.self) { item in
                     HStack(spacing: 4) {
                         Image(systemName: item == "History" ? "clock" : (item == "Console" ? "terminal" : "gearshape"))
                             .font(.system(size: 8))
-                            .foregroundColor(item == "History" ? settings.accentColor.color : TalkieTheme.textMuted)
+                            .foregroundColor(item == "History" ? settings.accentColor.color : AgentTheme.textMuted)
                         Text(item)
                             .font(.system(size: 9, design: .monospaced))
-                            .foregroundColor(item == "History" ? TalkieTheme.textPrimary : TalkieTheme.textTertiary)
+                            .foregroundColor(item == "History" ? AgentTheme.textPrimary : AgentTheme.textTertiary)
                     }
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -96,27 +96,27 @@ struct AppearanceSettingsContent: View {
                 HStack {
                     Text("TIMESTAMP")
                         .font(.system(size: 7, weight: .bold, design: .monospaced))
-                        .foregroundColor(TalkieTheme.textMuted)
+                        .foregroundColor(AgentTheme.textMuted)
                         .frame(width: 60, alignment: .leading)
                     Text("TEXT")
                         .font(.system(size: 7, weight: .bold, design: .monospaced))
-                        .foregroundColor(TalkieTheme.textMuted)
+                        .foregroundColor(AgentTheme.textMuted)
                     Spacer()
                 }
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)
-                .background(TalkieTheme.divider)
+                .background(AgentTheme.divider)
 
                 // Sample rows
                 ForEach(0..<3, id: \.self) { i in
                     HStack {
                         Text(["12:34", "12:31", "12:28"][i])
                             .font(.system(size: 8, design: .monospaced))
-                            .foregroundColor(TalkieTheme.textMuted)
+                            .foregroundColor(AgentTheme.textMuted)
                             .frame(width: 60, alignment: .leading)
                         Text(["Quick memo...", "Meeting notes...", "Recording..."][i])
                             .font(.system(size: 8, design: .monospaced))
-                            .foregroundColor(TalkieTheme.textSecondary)
+                            .foregroundColor(AgentTheme.textSecondary)
                             .lineLimit(1)
                         Spacer()
                     }
@@ -153,7 +153,7 @@ struct AppearanceSettingsContent: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(isActive ? settings.accentColor.color.opacity(0.15) : TalkieTheme.divider)
+            .background(isActive ? settings.accentColor.color.opacity(0.15) : AgentTheme.divider)
             .cornerRadius(4)
             .overlay(
                 RoundedRectangle(cornerRadius: 4)
@@ -192,7 +192,7 @@ struct AppearanceSettingsContent: View {
                     .font(.system(size: 16))
                     .foregroundColor(isSelected ? settings.accentColor.color : .secondary)
                     .frame(width: 40, height: 40)
-                    .background(isSelected ? settings.accentColor.color.opacity(0.15) : TalkieTheme.divider)
+                    .background(isSelected ? settings.accentColor.color.opacity(0.15) : AgentTheme.divider)
                     .cornerRadius(8)
 
                 Text(mode.displayName)
@@ -233,7 +233,7 @@ struct AppearanceSettingsContent: View {
                     .frame(width: 12, height: 12)
                     .overlay(
                         Circle()
-                            .stroke(TalkieTheme.border, lineWidth: 1)
+                            .stroke(AgentTheme.border, lineWidth: 1)
                     )
 
                 Text(colorOption.displayName)
@@ -244,7 +244,7 @@ struct AppearanceSettingsContent: View {
             .padding(.horizontal, 6)
             .padding(.vertical, 4)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(isSelected ? colorOption.color.opacity(0.15) : TalkieTheme.divider)
+            .background(isSelected ? colorOption.color.opacity(0.15) : AgentTheme.divider)
             .cornerRadius(4)
             .overlay(
                 RoundedRectangle(cornerRadius: 4)
@@ -289,7 +289,7 @@ struct AppearanceSettingsContent: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
-            .background(isSelected ? settings.accentColor.color.opacity(0.15) : TalkieTheme.divider)
+            .background(isSelected ? settings.accentColor.color.opacity(0.15) : AgentTheme.divider)
             .cornerRadius(6)
             .overlay(
                 RoundedRectangle(cornerRadius: 6)

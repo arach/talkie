@@ -247,7 +247,7 @@ struct FailedQueueView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Pending Transcriptions")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(TalkieTheme.textPrimary)
+                        .foregroundColor(AgentTheme.textPrimary)
 
                     HStack(spacing: 6) {
                         Circle()
@@ -255,7 +255,7 @@ struct FailedQueueView: View {
                             .frame(width: 6, height: 6)
                         Text(viewModel.isEngineConnected ? "Engine connected" : "Engine offline")
                             .font(.system(size: 11))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .foregroundColor(AgentTheme.textTertiary)
                     }
                 }
 
@@ -274,7 +274,7 @@ struct FailedQueueView: View {
 
             // Divider
             Rectangle()
-                .fill(TalkieTheme.border)
+                .fill(AgentTheme.border)
                 .frame(height: 1)
 
             // Items list
@@ -297,7 +297,7 @@ struct FailedQueueView: View {
 
             // Divider
             Rectangle()
-                .fill(TalkieTheme.border)
+                .fill(AgentTheme.border)
                 .frame(height: 1)
 
             // Footer with Retry All
@@ -305,10 +305,10 @@ struct FailedQueueView: View {
                 Button(action: { viewModel.dismiss() }) {
                     Text("Close")
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(TalkieTheme.textSecondary)
+                        .foregroundColor(AgentTheme.textSecondary)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(TalkieTheme.surfaceCard)
+                        .background(AgentTheme.surfaceCard)
                         .cornerRadius(5)
                 }
                 .buttonStyle(.plain)
@@ -347,10 +347,10 @@ struct FailedQueueView: View {
         .frame(width: 440)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(TalkieTheme.surfaceElevated)
+                .fill(AgentTheme.surfaceElevated)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(TalkieTheme.border, lineWidth: 1)
+                        .stroke(AgentTheme.border, lineWidth: 1)
                 )
         )
     }
@@ -377,11 +377,11 @@ struct FailedItemRow: View {
             HStack(spacing: 4) {
                 Image(systemName: "waveform")
                     .font(.system(size: 12))
-                    .foregroundColor(TalkieTheme.textTertiary)
+                    .foregroundColor(AgentTheme.textTertiary)
 
                 Text(formatDuration(item.duration))
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(TalkieTheme.textMuted)
+                    .foregroundColor(AgentTheme.textMuted)
             }
             .frame(width: 50, alignment: .leading)
 
@@ -393,15 +393,15 @@ struct FailedItemRow: View {
             // Time ago
             Text(timeAgo(from: item.createdAt))
                 .font(.system(size: 10))
-                .foregroundColor(TalkieTheme.textTertiary)
+                .foregroundColor(AgentTheme.textTertiary)
 
             // App name (from metadata)
             if let appName = item.parsedMetadata.app?.name {
                 Text("•")
-                    .foregroundColor(TalkieTheme.textMuted)
+                    .foregroundColor(AgentTheme.textMuted)
                 Text(appName)
                     .font(.system(size: 10))
-                    .foregroundColor(TalkieTheme.textMuted)
+                    .foregroundColor(AgentTheme.textMuted)
                     .lineLimit(1)
             }
 
@@ -415,9 +415,9 @@ struct FailedItemRow: View {
                     } else {
                         Image(systemName: "arrow.clockwise")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(isEngineConnected ? SemanticColor.success : TalkieTheme.textMuted)
+                            .foregroundColor(isEngineConnected ? SemanticColor.success : AgentTheme.textMuted)
                             .frame(width: 24, height: 24)
-                            .background(isEngineConnected ? SemanticColor.success.opacity(0.1) : TalkieTheme.surfaceCard)
+                            .background(isEngineConnected ? SemanticColor.success.opacity(0.1) : AgentTheme.surfaceCard)
                             .cornerRadius(5)
                     }
                 }
@@ -439,7 +439,7 @@ struct FailedItemRow: View {
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected ? Color.accentColor.opacity(0.15) : (isHovered ? TalkieTheme.hover : Color.clear))
+                .fill(isSelected ? Color.accentColor.opacity(0.15) : (isHovered ? AgentTheme.hover : Color.clear))
                 .overlay(
                     RoundedRectangle(cornerRadius: 6)
                         .stroke(isSelected ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
@@ -487,14 +487,14 @@ struct KeyboardHint: View {
         HStack(spacing: 3) {
             Text(key)
                 .font(.system(size: 9, weight: .medium, design: .monospaced))
-                .foregroundColor(TalkieTheme.textTertiary)
+                .foregroundColor(AgentTheme.textTertiary)
                 .padding(.horizontal, 4)
                 .padding(.vertical, 2)
-                .background(TalkieTheme.surfaceCard)
+                .background(AgentTheme.surfaceCard)
                 .cornerRadius(3)
             Text(label)
                 .font(.system(size: 9))
-                .foregroundColor(TalkieTheme.textMuted)
+                .foregroundColor(AgentTheme.textMuted)
         }
     }
 }
