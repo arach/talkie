@@ -195,6 +195,10 @@ struct talkieApp: App {
             ("Meeting notes — product roadmap Q1", "We discussed the new onboarding flow, API rate limits, and the timeline for the v3 launch. Sarah will own the design spec, target is end of March."),
             ("Idea: offline-first sync architecture", "What if we treat the local database as the source of truth and let CloudKit be a sync layer? GRDB for speed, Core Data just for the bridge. Need to prototype the conflict resolution."),
             ("Quick thought on keyboard shortcuts", "The dictation keyboard needs a long-press gesture to switch between voice and text mode. Should feel like a walkie-talkie — press and hold to talk, release to send."),
+            ("Launch checklist — Friday release", "Confirm the final build, review the App Store copy, and send the launch note to the team before Friday morning."),
+            ("Customer interview takeaways", "People want faster capture, clearer next steps, and confidence that their recordings stay private across every device."),
+            ("Research: on-device transcription", "Compare accuracy and battery use across the latest local speech models, then document the best default for longer recordings."),
+            ("Follow-up: send revised brief", "Share the updated product brief with design and engineering, including the launch sequence and the open decisions."),
         ]
 
         for (i, (title, transcript)) in titles.enumerated() {

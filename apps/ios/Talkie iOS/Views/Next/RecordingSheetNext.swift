@@ -32,7 +32,9 @@ struct RecordingSheetNext: View {
     // transcript still comes from the full-file pass after save.
     @StateObject private var liveTranscript = LiveTranscriptMonitor()
 
-    @State private var detent: PresentationDetent = .height(330)
+    @State private var detent: PresentationDetent = ProcessInfo.processInfo.arguments.contains("-FASTLANE_SNAPSHOT")
+        ? .height(290)
+        : .height(330)
     @State private var phase: Phase = .starting
     @State private var title: String = ""
     @State private var startedAt: Date = Date()
@@ -79,9 +81,13 @@ struct RecordingSheetNext: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.horizontal, 20)
-        // 330 (was 280) — the recording screen gained a reserved
-        // two-line live-transcript slot beneath the waveform.
-        .presentationDetents([.height(330), .height(460), .height(560)], selection: $detent)
+        // Production keeps the roomy 330pt recorder. App Store captures use
+        // a denser 290pt instrument so the deterministic transcript and
+        // controls remain legible at thumbnail scale without a dead panel.
+        .presentationDetents(
+            [.height(screenshotCompactDetentHeight), .height(460), .height(560)],
+            selection: $detent
+        )
         .presentationDragIndicator(.hidden)
         // Theme-true sheet: the app's palette is fixed-dark per theme, but
         // `.regularMaterial` follows the SYSTEM appearance — on a light-mode
@@ -139,6 +145,10 @@ struct RecordingSheetNext: View {
     }
 
     // MARK: - Starting
+
+    private var screenshotCompactDetentHeight: CGFloat {
+        ProcessInfo.processInfo.arguments.contains("-FASTLANE_SNAPSHOT") ? 290 : 330
+    }
 
     private var startingBody: some View {
         VStack(spacing: 14) {
@@ -276,6 +286,10 @@ struct RecordingSheetNext: View {
     /// Last ~2 lines' worth of the running partial transcript, cut on
     /// a word boundary with a leading ellipsis once it overflows.
     private var liveTranscriptTail: String {
+        if ProcessInfo.processInfo.arguments.contains("-FASTLANE_SNAPSHOT") {
+            return "The launch checklist is ready. I’ll confirm the final build and share the release plan with the team."
+        }
+
         let text = liveTranscript.transcript
         let maxTail = 96  // ≈ two lines of 12pt mono at sheet width
         guard text.count > maxTail else { return text }
