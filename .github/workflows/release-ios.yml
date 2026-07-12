@@ -21,6 +21,11 @@ on:
         required: false
         default: false
         type: boolean
+      upload_app_preview:
+        description: 'Replace the English 6.9-inch iPhone App Preview'
+        required: false
+        default: false
+        type: boolean
       wait_for_processing:
         description: 'Wait for App Store Connect processing to complete'
         required: false
@@ -139,8 +144,8 @@ jobs:
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
             --private-key-path "$APP_STORE_CONNECT_API_KEY_PATH"
 
-      - name: Set up Ruby for screenshot upload
-        if: ${{ inputs.upload_screenshots }}
+      - name: Set up Ruby for marketing upload
+        if: ${{ inputs.upload_screenshots || inputs.upload_app_preview }}
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.3'
@@ -189,6 +194,21 @@ jobs:
               TALKIE_FASTLANE_API_KEY_PATH="$api_key_json" \
               fastlane deliver
           )
+
+      - name: Upload App Preview
+        if: ${{ inputs.upload_app_preview }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          gem install fastlane --version 2.237.0 --no-document
+          ruby scripts/asc-upload-app-preview.rb \
+            --bundle-id "$TALKIE_APP_IDENTIFIER" \
+            --version "$VERSION" \
+            --path apps/ios/fastlane/marketing/app-preview/output/Talkie-App-Preview-6.9-inch.mp4 \
+            --key-id "$APP_STORE_CONNECT_KEY_ID" \
+            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+            --private-key-path "$APP_STORE_CONNECT_API_KEY_PATH"
 
       - name: Sync version metadata
         if: ${{ inputs.upload_binary }}

@@ -265,3 +265,82 @@ extension TalkieUITestsScreenshots {
         XCTAssertTrue(app.buttons["Accept"].firstMatch.waitForExistence(timeout: 10), "Voice command button should produce a mock diff")
     }
 }
+
+// MARK: - App Preview Capture
+
+/// Deterministic, real-app performances used by `scripts/app-preview.sh`.
+///
+/// These tests intentionally linger on the meaningful beats so `simctl`
+/// screen recordings can be trimmed into a 15–30 second App Preview without
+/// relying on microphone input or production data.
+extension TalkieUITestsScreenshots {
+    func testAppPreviewCaptureFlow() async {
+        app.terminate()
+        app.launchEnvironment["FASTLANE_SNAPSHOT"] = "1"
+        app.launchArguments = [
+            "-FASTLANE_SNAPSHOT",
+            "--screenshotSkipSplash",
+            "--screenshotTheme", "scope",
+            "--celebrateFirstSave",
+        ]
+        app.launch()
+        dismissSystemAlertsIfNeeded()
+
+        let firstMemo = app.buttons["memo.row"].firstMatch
+        XCTAssertTrue(firstMemo.waitForExistence(timeout: 10), "Preview home should be ready")
+        try? await Task.sleep(for: .seconds(2))
+
+        let record = app.otherElements["dock.record"].firstMatch
+        if record.waitForExistence(timeout: 2) {
+            record.tap()
+        } else {
+            app.buttons["dock.record"].firstMatch.tap()
+        }
+
+        let save = app.buttons["recording.save"].firstMatch
+        XCTAssertTrue(save.waitForExistence(timeout: 8), "Preview recorder should be ready")
+        try? await Task.sleep(for: .seconds(6))
+        save.tap()
+        // The saved-state celebration dismisses into memo detail. Avoid tying
+        // the capture to the detail screen's accessibility container type;
+        // that hierarchy differs between simulator runtimes while the visual
+        // transition remains deterministic.
+        try? await Task.sleep(for: .seconds(7))
+    }
+
+    func testAppPreviewComposeFlow() async {
+        app.terminate()
+        app.launchEnvironment["FASTLANE_SNAPSHOT"] = "1"
+        app.launchArguments = [
+            "-FASTLANE_SNAPSHOT",
+            "--screenshotSkipSplash",
+            "--screenshotTheme", "scope",
+            "--composeState", "idle",
+        ]
+        app.launch()
+        dismissSystemAlertsIfNeeded()
+
+        let composeHeader = app.staticTexts.containing(
+            NSPredicate(format: "label CONTAINS %@", "COMPOSE WITH")
+        ).firstMatch
+        XCTAssertTrue(composeHeader.waitForExistence(timeout: 10), "Preview compose screen should be ready")
+        try? await Task.sleep(for: .seconds(2))
+
+        let startDictation = app.buttons["Start dictation"].firstMatch
+        XCTAssertTrue(startDictation.waitForExistence(timeout: 5), "Inline dictation should be available")
+        startDictation.tap()
+        try? await Task.sleep(for: .seconds(4))
+
+        let stopDictation = app.buttons["Stop dictation"].firstMatch
+        if stopDictation.waitForExistence(timeout: 3) {
+            stopDictation.tap()
+        }
+
+        let voiceCommand = app.buttons["Voice command"].firstMatch
+        XCTAssertTrue(voiceCommand.waitForExistence(timeout: 5), "Voice command should be available")
+        voiceCommand.tap()
+
+        XCTAssertTrue(app.buttons["Accept"].firstMatch.waitForExistence(timeout: 10), "Preview diff should appear")
+        try? await Task.sleep(for: .seconds(5))
+    }
+}

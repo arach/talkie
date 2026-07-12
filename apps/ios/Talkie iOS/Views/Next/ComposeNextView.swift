@@ -99,14 +99,6 @@ struct ComposeNextView: View {
                 .padding(.bottom, 6)
             }
 
-            if compose.state != .diff {
-                QuickTransforms(
-                    state: compose.state,
-                    onTap: { compose.applyTransform($0) },
-                    onCommand: { compose.toggleVoiceCommand() }
-                )
-            }
-
             ActionTray(
                 state: compose.state,
                 onAccept: { compose.acceptDiff() },
@@ -116,6 +108,18 @@ struct ComposeNextView: View {
                     NotificationCenter.default.post(name: .composeNextEditorToggleKeyboard, object: nil)
                 }
             )
+
+            // Keep the contextual action rail below the center Talkie pivot.
+            // In review, ActionTray itself is the bottom rail; while writing,
+            // the cursor/keyboard lane holds the pivot and quick transforms
+            // become the final row beneath it.
+            if compose.state != .diff {
+                QuickTransforms(
+                    state: compose.state,
+                    onTap: { compose.applyTransform($0) },
+                    onCommand: { compose.toggleVoiceCommand() }
+                )
+            }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if keyboardController.isVisible {
@@ -2569,23 +2573,19 @@ private struct ActionTray: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
         } else {
-            // Lower chrome row: the summon floats bottom-left (shell), the
-            // cursor pad sits in the middle as the hero, and the keyboard
-            // toggle caps the right. The editing tools + mic live on the
-            // floating row above this — not here.
-            ZStack {
+            // The global Talkie pivot occupies the center of this lane. Keep
+            // the cursor and keyboard controls on its flanks so all three
+            // remain visible and tappable.
+            HStack {
                 joystickButton
-
-                HStack {
-                    Spacer()
-                    trayButton(
-                        size: 48,
-                        systemImage: "keyboard",
-                        accessibilityLabel: "Keyboard",
-                        accessibilityID: "compose.keyboard.toggle",
-                        action: onKeyboard
-                    )
-                }
+                Spacer()
+                trayButton(
+                    size: 48,
+                    systemImage: "keyboard",
+                    accessibilityLabel: "Keyboard",
+                    accessibilityID: "compose.keyboard.toggle",
+                    action: onKeyboard
+                )
             }
             .padding(.horizontal, 16)
             .padding(.top, 4)

@@ -3,6 +3,9 @@
 This folder contains the English 6.9-inch iPhone screenshot set for Talkie.
 The exported PNGs are 1320 x 2868 pixels and use real simulator captures.
 
+The companion 29-second App Preview, poster frame, capture harness, and
+reproducible edit live under `app-preview/`.
+
 ## Story order
 
 1. Catch every thought while it's alive — home and capture overview
