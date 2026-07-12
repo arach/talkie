@@ -155,20 +155,26 @@ jobs:
 
           api_key_json="$RUNNER_TEMP/fastlane-api-key.json"
           export FASTLANE_API_KEY_JSON="$api_key_json"
-          ruby -rjson -e '
+          ruby -rbase64 -rjson -e '
             payload = {
               key_id: ENV.fetch("APP_STORE_CONNECT_KEY_ID"),
               issuer_id: ENV.fetch("APP_STORE_CONNECT_ISSUER_ID"),
-              key: File.binread(ENV.fetch("APP_STORE_CONNECT_API_KEY_PATH")),
+              key: Base64.strict_encode64(File.binread(ENV.fetch("APP_STORE_CONNECT_API_KEY_PATH"))),
+              is_key_content_base64: true,
               in_house: false
             }
             File.write(ENV.fetch("FASTLANE_API_KEY_JSON"), JSON.generate(payload))
           '
           chmod 600 "$api_key_json"
+          ruby -rjson -e '
+            payload = JSON.parse(File.read(ENV.fetch("FASTLANE_API_KEY_JSON")))
+            abort "Invalid Fastlane API key JSON" unless payload.values_at("key_id", "issuer_id", "key").all? { |value| !value.to_s.empty? }
+          '
 
           apps/ios/fastlane/marketing/prepare-upload.sh
           (
             cd apps/ios
+            unset APP_STORE_CONNECT_API_KEY_PATH
             TALKIE_FASTLANE_API_KEY_PATH="$api_key_json" fastlane deliver
           )
 
