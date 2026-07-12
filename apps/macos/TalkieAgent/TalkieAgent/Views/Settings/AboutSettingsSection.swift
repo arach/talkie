@@ -167,7 +167,7 @@ struct AboutSettingsSection: View {
                     AboutInfoRow(label: "Build", value: buildTypeLabel, valueColor: buildTypeColor)
 
                     Divider()
-                        .background(TalkieTheme.border.opacity(0.5))
+                        .background(AgentTheme.border.opacity(0.5))
 
                     AboutInfoRow(label: "Path", value: appPath, isMonospaced: true, canCopy: true)
                     AboutInfoRow(label: "macOS", value: ProcessInfo.processInfo.operatingSystemVersionString)
@@ -180,7 +180,7 @@ struct AboutSettingsSection: View {
                     HStack {
                         Text("Status")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .foregroundColor(AgentTheme.textTertiary)
                         Spacer()
                         HStack(spacing: 6) {
                             Circle()
@@ -205,7 +205,7 @@ struct AboutSettingsSection: View {
                     HStack {
                         Text("Status")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .foregroundColor(AgentTheme.textTertiary)
                         Spacer()
                         HStack(spacing: 6) {
                             Circle()
@@ -246,7 +246,7 @@ struct AboutSettingsSection: View {
                     HStack {
                         Text("If you need help or want to report an issue, please include the information above.")
                             .font(.system(size: 10))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .foregroundColor(AgentTheme.textTertiary)
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer()
                     }
@@ -402,18 +402,18 @@ struct AboutPermissionRow: View {
         HStack(spacing: Spacing.sm) {
             Image(systemName: permission.icon)
                 .font(.system(size: 11))
-                .foregroundColor(TalkieTheme.textSecondary)
+                .foregroundColor(AgentTheme.textSecondary)
                 .frame(width: 16, alignment: .center)
 
             Text(permission.title)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundColor(TalkieTheme.textTertiary)
+                .foregroundColor(AgentTheme.textTertiary)
 
             if !permission.isRequired {
                 Text("Optional")
                     .font(.system(size: 9, weight: .semibold))
                     .tracking(0.4)
-                    .foregroundColor(TalkieTheme.textMuted)
+                    .foregroundColor(AgentTheme.textMuted)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 1)
                     .background(
@@ -434,7 +434,7 @@ struct AboutPermissionRow: View {
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundColor(TalkieTheme.textMuted.opacity(isHovered ? 1.0 : 0.4))
+                    .foregroundColor(AgentTheme.textMuted.opacity(isHovered ? 1.0 : 0.4))
             }
         }
         .padding(.vertical, 2)
@@ -450,7 +450,7 @@ struct AboutPermissionRow: View {
 struct AboutInfoRow: View {
     let label: String
     let value: String
-    var valueColor: Color = TalkieTheme.textPrimary
+    var valueColor: Color = AgentTheme.textPrimary
     var isMonospaced: Bool = false
     var canCopy: Bool = false
 
@@ -460,7 +460,7 @@ struct AboutInfoRow: View {
         HStack {
             Text(label)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundColor(TalkieTheme.textTertiary)
+                .foregroundColor(AgentTheme.textTertiary)
             Spacer()
             HStack(spacing: 4) {
                 Text(value)
@@ -480,7 +480,7 @@ struct AboutInfoRow: View {
                     }) {
                         Image(systemName: showCopied ? "checkmark" : "doc.on.doc")
                             .font(.system(size: 9))
-                            .foregroundColor(showCopied ? SemanticColor.success : TalkieTheme.textMuted)
+                            .foregroundColor(showCopied ? SemanticColor.success : AgentTheme.textMuted)
                     }
                     .buttonStyle(.plain)
                 }
@@ -503,12 +503,12 @@ private struct ReportSubmissionSheet: View {
             HStack {
                 Text("Submit Report")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .foregroundColor(AgentTheme.textPrimary)
                 Spacer()
                 Button(action: onDismiss) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 16))
-                        .foregroundColor(TalkieTheme.textMuted)
+                        .foregroundColor(AgentTheme.textMuted)
                 }
                 .buttonStyle(.plain)
             }
@@ -517,7 +517,7 @@ private struct ReportSubmissionSheet: View {
             .padding(.bottom, Spacing.md)
 
             Divider()
-                .background(TalkieTheme.border)
+                .background(AgentTheme.border)
 
             // Content
             VStack(alignment: .leading, spacing: Spacing.md) {
@@ -533,30 +533,30 @@ private struct ReportSubmissionSheet: View {
             .padding(Spacing.lg)
         }
         .frame(width: 360)
-        .background(TalkieTheme.surface)
+        .background(AgentTheme.surface)
     }
 
     @ViewBuilder
     private var idleContent: some View {
         Text("This will send diagnostic information to help troubleshoot issues. No personal data is included.")
             .font(.system(size: 11))
-            .foregroundColor(TalkieTheme.textSecondary)
+            .foregroundColor(AgentTheme.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
 
         VStack(alignment: .leading, spacing: Spacing.xs) {
             Text("What's happening? (optional)")
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(TalkieTheme.textTertiary)
+                .foregroundColor(AgentTheme.textTertiary)
 
             TextEditor(text: $description)
                 .font(.system(size: 11))
                 .frame(height: 80)
                 .scrollContentBackground(.hidden)
-                .background(TalkieTheme.surfaceCard)
+                .background(AgentTheme.surfaceCard)
                 .cornerRadius(CornerRadius.sm)
                 .overlay(
                     RoundedRectangle(cornerRadius: CornerRadius.sm)
-                        .stroke(TalkieTheme.border, lineWidth: 1)
+                        .stroke(AgentTheme.border, lineWidth: 1)
                 )
         }
 
@@ -565,10 +565,10 @@ private struct ReportSubmissionSheet: View {
             Button(action: onDismiss) {
                 Text("Cancel")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(AgentTheme.textSecondary)
                     .padding(.horizontal, Spacing.md)
                     .padding(.vertical, Spacing.sm)
-                    .background(TalkieTheme.surfaceCard)
+                    .background(AgentTheme.surfaceCard)
                     .cornerRadius(CornerRadius.sm)
             }
             .buttonStyle(.plain)
@@ -604,16 +604,16 @@ private struct ReportSubmissionSheet: View {
 
             Text("Report Submitted")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(TalkieTheme.textPrimary)
+                .foregroundColor(AgentTheme.textPrimary)
 
             Text("Reference ID:")
                 .font(.system(size: 10))
-                .foregroundColor(TalkieTheme.textTertiary)
+                .foregroundColor(AgentTheme.textTertiary)
 
             HStack(spacing: 6) {
                 Text(id)
                     .font(.system(size: 14, weight: .bold, design: .monospaced))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .foregroundColor(AgentTheme.textPrimary)
 
                 Button(action: {
                     NSPasteboard.general.clearContents()
@@ -621,18 +621,18 @@ private struct ReportSubmissionSheet: View {
                 }) {
                     Image(systemName: "doc.on.doc")
                         .font(.system(size: 10))
-                        .foregroundColor(TalkieTheme.textMuted)
+                        .foregroundColor(AgentTheme.textMuted)
                 }
                 .buttonStyle(.plain)
             }
             .padding(.horizontal, Spacing.md)
             .padding(.vertical, Spacing.sm)
-            .background(TalkieTheme.surfaceCard)
+            .background(AgentTheme.surfaceCard)
             .cornerRadius(CornerRadius.sm)
 
             Text("Include this ID if you contact support.")
                 .font(.system(size: 10))
-                .foregroundColor(TalkieTheme.textTertiary)
+                .foregroundColor(AgentTheme.textTertiary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, Spacing.md)
@@ -661,11 +661,11 @@ private struct ReportSubmissionSheet: View {
 
             Text("Submission Failed")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(TalkieTheme.textPrimary)
+                .foregroundColor(AgentTheme.textPrimary)
 
             Text(message)
                 .font(.system(size: 11))
-                .foregroundColor(TalkieTheme.textSecondary)
+                .foregroundColor(AgentTheme.textSecondary)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
@@ -676,10 +676,10 @@ private struct ReportSubmissionSheet: View {
             Button(action: onDismiss) {
                 Text("Close")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(AgentTheme.textSecondary)
                     .padding(.horizontal, Spacing.md)
                     .padding(.vertical, Spacing.sm)
-                    .background(TalkieTheme.surfaceCard)
+                    .background(AgentTheme.surfaceCard)
                     .cornerRadius(CornerRadius.sm)
             }
             .buttonStyle(.plain)

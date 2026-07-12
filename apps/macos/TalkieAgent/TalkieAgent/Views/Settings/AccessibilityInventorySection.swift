@@ -832,11 +832,11 @@ struct AccessibilityInventorySection: View {
                     Text("ACCESSIBILITY INVENTORY")
                         .font(.system(size: 13, weight: .semibold))
                         .tracking(Tracking.normal)
-                        .foregroundColor(TalkieTheme.textPrimary)
+                        .foregroundColor(AgentTheme.textPrimary)
 
                     Text("Deep scan of all apps, windows, menus, and focused elements.")
                         .font(.system(size: 11))
-                        .foregroundColor(TalkieTheme.textTertiary)
+                        .foregroundColor(AgentTheme.textTertiary)
                 }
 
                 Spacer()
@@ -879,16 +879,16 @@ struct AccessibilityInventorySection: View {
                 .toggleStyle(.switch)
                 .scaleEffect(0.8)
                 .font(.system(size: 10))
-                .foregroundColor(TalkieTheme.textSecondary)
+                .foregroundColor(AgentTheme.textSecondary)
 
             if let scan = scan {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("\(scan.apps.count) apps • \(scan.totalWindows) windows • \(scan.totalAttributes) attrs")
                         .font(.system(size: 11))
-                        .foregroundColor(TalkieTheme.textSecondary)
+                        .foregroundColor(AgentTheme.textSecondary)
                     Text("Scanned in \(scan.durationMs)ms")
                         .font(.system(size: 10))
-                        .foregroundColor(TalkieTheme.textTertiary)
+                        .foregroundColor(AgentTheme.textTertiary)
                 }
             }
 
@@ -905,10 +905,10 @@ struct AccessibilityInventorySection: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Accessibility Permission Required")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .foregroundColor(AgentTheme.textPrimary)
                 Text("Enable TalkieAgent in System Settings > Privacy & Security > Accessibility")
                     .font(.system(size: 11))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(AgentTheme.textSecondary)
             }
 
             Spacer()
@@ -933,10 +933,10 @@ struct AccessibilityInventorySection: View {
         VStack(spacing: 12) {
             Image(systemName: "waveform.badge.magnifyingglass")
                 .font(.system(size: 36))
-                .foregroundColor(TalkieTheme.textTertiary)
+                .foregroundColor(AgentTheme.textTertiary)
             Text("Run a deep scan to see all accessible data")
                 .font(.system(size: 12))
-                .foregroundColor(TalkieTheme.textSecondary)
+                .foregroundColor(AgentTheme.textSecondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)
@@ -973,7 +973,7 @@ struct AccessibilityInventorySection: View {
                 HStack(spacing: 10) {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundColor(TalkieTheme.textTertiary)
+                        .foregroundColor(AgentTheme.textTertiary)
                         .frame(width: 10)
 
                     if let icon = app.icon {
@@ -989,7 +989,7 @@ struct AccessibilityInventorySection: View {
 
                     Text(app.name)
                         .font(.system(size: 12, weight: app.isFrontmost ? .semibold : .regular))
-                        .foregroundColor(TalkieTheme.textPrimary)
+                        .foregroundColor(AgentTheme.textPrimary)
 
                     if app.isFrontmost {
                         Text("ACTIVE")
@@ -1026,12 +1026,12 @@ struct AccessibilityInventorySection: View {
 
                     Text("\(app.windows.count) window\(app.windows.count == 1 ? "" : "s")")
                         .font(.system(size: 10))
-                        .foregroundColor(TalkieTheme.textTertiary)
+                        .foregroundColor(AgentTheme.textTertiary)
 
                     if let bundleId = app.bundleId {
                         Text(bundleId)
                             .font(.system(size: 9, design: .monospaced))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .foregroundColor(AgentTheme.textTertiary)
                             .lineLimit(1)
                     }
                 }
@@ -1046,7 +1046,7 @@ struct AccessibilityInventorySection: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("MENU BAR")
                         .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(TalkieTheme.textTertiary)
+                        .foregroundColor(AgentTheme.textTertiary)
                         .padding(.leading, 32)
 
                     ForEach(app.menuBar) { menuItem in
@@ -1085,7 +1085,7 @@ struct AccessibilityInventorySection: View {
                     .foregroundColor(item.enabled ? .secondary : .secondary.opacity(0.5))
                 Text(item.title)
                     .font(.system(size: 10))
-                    .foregroundColor(item.enabled ? TalkieTheme.textPrimary : TalkieTheme.textTertiary)
+                    .foregroundColor(item.enabled ? AgentTheme.textPrimary : AgentTheme.textTertiary)
                 if let shortcut = item.shortcut {
                     Text(shortcut)
                         .font(.system(size: 9, design: .monospaced))
@@ -1105,7 +1105,7 @@ struct AccessibilityInventorySection: View {
                         .foregroundColor(child.enabled ? .secondary : .secondary.opacity(0.5))
                     Text(child.title)
                         .font(.system(size: 10))
-                        .foregroundColor(child.enabled ? TalkieTheme.textPrimary : TalkieTheme.textTertiary)
+                        .foregroundColor(child.enabled ? AgentTheme.textPrimary : AgentTheme.textTertiary)
                     if let shortcut = child.shortcut {
                         Text(shortcut)
                             .font(.system(size: 9, design: .monospaced))
@@ -1135,7 +1135,7 @@ struct AccessibilityInventorySection: View {
                 HStack(spacing: 8) {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 8, weight: .semibold))
-                        .foregroundColor(TalkieTheme.textTertiary)
+                        .foregroundColor(AgentTheme.textTertiary)
                         .frame(width: 8)
 
                     Image(systemName: window.isFocused ? "macwindow.badge.plus" : "macwindow")
@@ -1144,7 +1144,7 @@ struct AccessibilityInventorySection: View {
 
                     Text(window.title)
                         .font(.system(size: 11))
-                        .foregroundColor(TalkieTheme.textPrimary)
+                        .foregroundColor(AgentTheme.textPrimary)
                         .lineLimit(1)
 
                     if window.isMain {
@@ -1164,7 +1164,7 @@ struct AccessibilityInventorySection: View {
 
                     Text("\(window.allAttributes.count) attrs")
                         .font(.system(size: 9))
-                        .foregroundColor(TalkieTheme.textTertiary)
+                        .foregroundColor(AgentTheme.textTertiary)
                 }
                 .padding(.vertical, 4)
                 .contentShape(Rectangle())
@@ -1201,7 +1201,7 @@ struct AccessibilityInventorySection: View {
                             HStack(spacing: 4) {
                                 Text("Tabs:")
                                     .font(.system(size: 9))
-                                    .foregroundColor(TalkieTheme.textTertiary)
+                                    .foregroundColor(AgentTheme.textTertiary)
                                 ForEach(terminal.tabs) { tab in
                                     Text(tab.title)
                                         .font(.system(size: 8, design: .monospaced))
@@ -1226,11 +1226,11 @@ struct AccessibilityInventorySection: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Last \(terminal.lastLines.count) lines:")
                                     .font(.system(size: 9))
-                                    .foregroundColor(TalkieTheme.textTertiary)
+                                    .foregroundColor(AgentTheme.textTertiary)
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     Text(terminal.lastLines.joined(separator: "\n"))
                                         .font(.system(size: 8, design: .monospaced))
-                                        .foregroundColor(TalkieTheme.textSecondary)
+                                        .foregroundColor(AgentTheme.textSecondary)
                                         .textSelection(.enabled)
                                 }
                                 .frame(maxHeight: 100)
@@ -1243,10 +1243,10 @@ struct AccessibilityInventorySection: View {
                         Divider()
                         Text("All Attributes (\(window.allAttributes.count))")
                             .font(.system(size: 9, weight: .semibold))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .foregroundColor(AgentTheme.textTertiary)
                         Text(window.allAttributes.joined(separator: ", "))
                             .font(.system(size: 8, design: .monospaced))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .foregroundColor(AgentTheme.textTertiary)
                             .textSelection(.enabled)
                     }
 
@@ -1313,10 +1313,10 @@ struct AccessibilityInventorySection: View {
                             Divider()
                             Text("Element Attributes (\(element.allAttributes.count))")
                                 .font(.system(size: 9, weight: .semibold))
-                                .foregroundColor(TalkieTheme.textTertiary)
+                                .foregroundColor(AgentTheme.textTertiary)
                             Text(element.allAttributes.joined(separator: ", "))
                                 .font(.system(size: 8, design: .monospaced))
-                                .foregroundColor(TalkieTheme.textTertiary)
+                                .foregroundColor(AgentTheme.textTertiary)
                                 .textSelection(.enabled)
                         }
                     }
@@ -1346,11 +1346,11 @@ struct AccessibilityInventorySection: View {
         HStack(alignment: .top, spacing: 8) {
             Text(label)
                 .font(.system(size: 9))
-                .foregroundColor(TalkieTheme.textTertiary)
+                .foregroundColor(AgentTheme.textTertiary)
                 .frame(width: 80, alignment: .trailing)
             Text(value)
                 .font(.system(size: 9, design: .monospaced))
-                .foregroundColor(TalkieTheme.textSecondary)
+                .foregroundColor(AgentTheme.textSecondary)
                 .textSelection(.enabled)
                 .lineLimit(4)
             Spacer()

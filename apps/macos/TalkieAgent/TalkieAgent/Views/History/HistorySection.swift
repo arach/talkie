@@ -31,7 +31,7 @@ struct HistorySection: View {
             searchBar
 
             Divider()
-                .background(TalkieTheme.border)
+                .background(AgentTheme.border)
 
             // Content
             if filteredDictations.isEmpty {
@@ -41,7 +41,7 @@ struct HistorySection: View {
             }
 
             Divider()
-                .background(TalkieTheme.border)
+                .background(AgentTheme.border)
 
             // Footer
             footer
@@ -82,11 +82,11 @@ struct HistorySection: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Recent Dictations")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .foregroundColor(AgentTheme.textPrimary)
 
                 Text("\(dictations.count) items")
                     .font(.system(size: 11))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(AgentTheme.textSecondary)
             }
 
             Spacer()
@@ -94,7 +94,7 @@ struct HistorySection: View {
             Button(action: refresh) {
                 Image(systemName: "arrow.clockwise")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(AgentTheme.textSecondary)
             }
             .buttonStyle(.plain)
             .help("Refresh")
@@ -109,25 +109,25 @@ struct HistorySection: View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 11))
-                .foregroundColor(TalkieTheme.textTertiary)
+                .foregroundColor(AgentTheme.textTertiary)
 
             TextField("Search dictations...", text: $searchText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
-                .foregroundColor(TalkieTheme.textPrimary)
+                .foregroundColor(AgentTheme.textPrimary)
 
             if !searchText.isEmpty {
                 Button(action: { searchText = "" }) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 11))
-                        .foregroundColor(TalkieTheme.textTertiary)
+                        .foregroundColor(AgentTheme.textTertiary)
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(TalkieTheme.surfaceElevated)
+        .background(AgentTheme.surfaceElevated)
         .cornerRadius(8)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -158,7 +158,7 @@ struct HistorySection: View {
 
                     if dictation.id != filteredDictations.last?.id {
                         Divider()
-                            .background(TalkieTheme.border)
+                            .background(AgentTheme.border)
                             .padding(.leading, 12)
                     }
                 }
@@ -175,15 +175,15 @@ struct HistorySection: View {
 
             Image(systemName: searchText.isEmpty ? "waveform" : "magnifyingglass")
                 .font(.system(size: 32, weight: .light))
-                .foregroundColor(TalkieTheme.textTertiary)
+                .foregroundColor(AgentTheme.textTertiary)
 
             Text(searchText.isEmpty ? "No dictations yet" : "No matches")
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(TalkieTheme.textSecondary)
+                .foregroundColor(AgentTheme.textSecondary)
 
             Text(searchText.isEmpty ? "Start recording to see your history" : "Try a different search")
                 .font(.system(size: 11))
-                .foregroundColor(TalkieTheme.textTertiary)
+                .foregroundColor(AgentTheme.textTertiary)
 
             Spacer()
         }
@@ -234,7 +234,7 @@ struct HistoryDictationRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(dictation.text)
                     .font(.system(size: 12))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .foregroundColor(AgentTheme.textPrimary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
 
@@ -242,13 +242,13 @@ struct HistoryDictationRow: View {
                     // Time
                     Text(timeAgo)
                         .font(.system(size: 10))
-                        .foregroundColor(TalkieTheme.textTertiary)
+                        .foregroundColor(AgentTheme.textTertiary)
 
                     // App context
                     if let appName = dictation.parsedMetadata.app?.name {
                         Text(appName)
                             .font(.system(size: 10))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .foregroundColor(AgentTheme.textTertiary)
                             .lineLimit(1)
                     }
 
@@ -257,7 +257,7 @@ struct HistoryDictationRow: View {
                     if wordCount > 0 {
                         Text("\(wordCount) words")
                             .font(.system(size: 10))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .foregroundColor(AgentTheme.textTertiary)
                     }
                 }
             }
@@ -271,11 +271,11 @@ struct HistoryDictationRow: View {
                     Button(action: onOpenInTalkie) {
                         Image(systemName: "arrow.up.forward.app")
                             .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(TalkieTheme.textSecondary)
+                            .foregroundColor(AgentTheme.textSecondary)
                             .padding(5)
                             .background(
                                 RoundedRectangle(cornerRadius: 6)
-                                    .fill(TalkieTheme.hover)
+                                    .fill(AgentTheme.hover)
                             )
                     }
                     .buttonStyle(.plain)
@@ -304,7 +304,7 @@ struct HistoryDictationRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(isHovered ? TalkieTheme.hover : Color.clear)
+        .background(isHovered ? AgentTheme.hover : Color.clear)
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
     }

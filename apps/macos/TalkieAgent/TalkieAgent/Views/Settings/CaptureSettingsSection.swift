@@ -207,7 +207,7 @@ struct CaptureSettingsSection: View {
 
             Text("Defaults use the Hyper layer (⌃⌥⇧⌘). Direct capture tools skip the HUD; screenshot rows fire immediately. A shortcut that collides with a HUD chord is skipped when hotkeys register.")
                 .font(.system(size: 9))
-                .foregroundColor(TalkieTheme.textTertiary)
+                .foregroundColor(AgentTheme.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
 
             if model.hasModifiedShortcuts {
@@ -222,7 +222,7 @@ struct CaptureSettingsSection: View {
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 Text("QUALITY")
                     .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .foregroundColor(TalkieTheme.textTertiary)
+                    .foregroundColor(AgentTheme.textTertiary)
 
                 HStack(spacing: Spacing.sm) {
                     ForEach(ScreenRecordingQualityPreset.allCases, id: \.self) { preset in
@@ -234,7 +234,7 @@ struct CaptureSettingsSection: View {
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 Text("COUNTDOWN")
                     .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .foregroundColor(TalkieTheme.textTertiary)
+                    .foregroundColor(AgentTheme.textTertiary)
 
                 HStack(spacing: Spacing.sm) {
                     ForEach([0, 1, 3, 5], id: \.self) { seconds in
@@ -279,18 +279,18 @@ struct CaptureSettingsSection: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(preset.label)
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(isSelected ? TalkieTheme.textPrimary : TalkieTheme.textSecondary)
+                    .foregroundColor(isSelected ? AgentTheme.textPrimary : AgentTheme.textSecondary)
 
                 Text("\(preset.bitrateSummary) / \(preset.fpsSummary)")
                     .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(TalkieTheme.textTertiary)
+                    .foregroundColor(AgentTheme.textTertiary)
             }
             .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
             .padding(.horizontal, Spacing.sm)
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: CornerRadius.xs)
-                    .fill(isSelected ? OpsTint.amber.color.opacity(0.14) : TalkieTheme.surfaceElevated.opacity(0.5))
+                    .fill(isSelected ? OpsTint.amber.color.opacity(0.14) : AgentTheme.surfaceElevated.opacity(0.5))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: CornerRadius.xs)
@@ -309,11 +309,11 @@ struct CaptureSettingsSection: View {
         } label: {
             Text(title)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(isSelected ? TalkieTheme.textPrimary : TalkieTheme.textSecondary)
+                .foregroundColor(isSelected ? AgentTheme.textPrimary : AgentTheme.textSecondary)
                 .frame(maxWidth: .infinity, minHeight: 32)
                 .background(
                     RoundedRectangle(cornerRadius: CornerRadius.xs)
-                        .fill(isSelected ? OpsTint.amber.color.opacity(0.14) : TalkieTheme.surfaceElevated.opacity(0.5))
+                        .fill(isSelected ? OpsTint.amber.color.opacity(0.14) : AgentTheme.surfaceElevated.opacity(0.5))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: CornerRadius.xs)
@@ -342,10 +342,10 @@ struct CaptureSettingsSection: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(shortcut.title)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .foregroundColor(AgentTheme.textPrimary)
                 Text(shortcut.subtitle)
                     .font(.system(size: 9))
-                    .foregroundColor(TalkieTheme.textTertiary)
+                    .foregroundColor(AgentTheme.textTertiary)
             }
 
             Spacer()
@@ -373,7 +373,7 @@ struct CaptureSettingsSection: View {
                     .font(.system(size: 11))
                 Text("Capture is currently disabled by a feature flag. Shortcuts here are saved but won’t fire until capture is enabled.")
                     .font(.system(size: 10))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(AgentTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer()
             }
@@ -404,12 +404,12 @@ private struct RestoreCaptureDefaultsButton: View {
                 Text("Restore Default Capture Shortcuts")
                     .font(.system(size: 10, weight: .medium))
             }
-            .foregroundColor(isHovered ? .white : TalkieTheme.textTertiary)
+            .foregroundColor(isHovered ? .white : AgentTheme.textTertiary)
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isHovered ? TalkieTheme.surfaceElevated : Color.clear)
+                    .fill(isHovered ? AgentTheme.surfaceElevated : Color.clear)
             )
         }
         .buttonStyle(.plain)

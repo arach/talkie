@@ -154,7 +154,7 @@ struct LogViewerConsole: View {
             Divider()
             statusBar
         }
-        .background(TalkieTheme.surface)
+        .background(AgentTheme.surface)
         .onAppear {
             NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                 if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "f" {
@@ -204,7 +204,7 @@ struct LogViewerConsole: View {
         VStack(spacing: Spacing.sm) {
             // Filter pills row with inline search
             HStack(spacing: 6) {
-                filterPill(nil, "All", color: TalkieTheme.textSecondary)
+                filterPill(nil, "All", color: AgentTheme.textSecondary)
                 filterPill(.error, "Errors", color: EventType.error.color)
                 filterPill(.system, "System", color: EventType.system.color)
                 filterPill(.transcription, "Trans", color: EventType.transcription.color)
@@ -218,10 +218,10 @@ struct LogViewerConsole: View {
                 // Entry count badge
                 Text("\(filteredEntries.count)")
                     .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .foregroundColor(TalkieTheme.textMuted)
+                    .foregroundColor(AgentTheme.textMuted)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(TalkieTheme.surfaceCard)
+                    .background(AgentTheme.surfaceCard)
                     .cornerRadius(CornerRadius.xs)
 
                 // Inline search
@@ -230,7 +230,7 @@ struct LogViewerConsole: View {
             .padding(.horizontal, Spacing.md)
             .padding(.vertical, Spacing.sm)
         }
-        .background(TalkieTheme.surfaceElevated)
+        .background(AgentTheme.surfaceElevated)
     }
 
     private var inlineSearch: some View {
@@ -246,14 +246,14 @@ struct LogViewerConsole: View {
                         Button(action: { searchText = "" }) {
                             Image(systemName: "xmark.circle.fill")
                                 .font(.system(size: 10))
-                                .foregroundColor(TalkieTheme.textMuted)
+                                .foregroundColor(AgentTheme.textMuted)
                         }
                         .buttonStyle(.plain)
                     }
                 }
                 .padding(.horizontal, Spacing.sm)
                 .padding(.vertical, 4)
-                .background(TalkieTheme.surfaceCard)
+                .background(AgentTheme.surfaceCard)
                 .cornerRadius(CornerRadius.sm)
             }
 
@@ -265,7 +265,7 @@ struct LogViewerConsole: View {
             }) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(showSearch ? TalkieTheme.accent : TalkieTheme.textMuted)
+                    .foregroundColor(showSearch ? AgentTheme.accent : AgentTheme.textMuted)
             }
             .buttonStyle(.plain)
             .help("Search (⌘F)")
@@ -295,7 +295,7 @@ struct LogViewerConsole: View {
             TableColumn("Time") { entry in
                 Text(Self.timeFormatter.string(from: entry.timestamp))
                     .font(.monoXSmall)
-                    .foregroundColor(TalkieTheme.textMuted)
+                    .foregroundColor(AgentTheme.textMuted)
             }
             .width(65)
 
@@ -314,11 +314,11 @@ struct LogViewerConsole: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(entry.message)
                         .font(.monoSmall)
-                        .foregroundColor(TalkieTheme.textPrimary)
+                        .foregroundColor(AgentTheme.textPrimary)
                     if let detail = entry.detail {
                         Text(detail)
                             .font(.monoXSmall)
-                            .foregroundColor(TalkieTheme.textMuted)
+                            .foregroundColor(AgentTheme.textMuted)
                     }
                 }
             }
@@ -371,14 +371,14 @@ struct LogViewerConsole: View {
                     Text("Full History")
                         .font(.monoXSmall)
                 }
-                .foregroundColor(TalkieTheme.textMuted)
+                .foregroundColor(AgentTheme.textMuted)
             }
             .buttonStyle(.plain)
             .help("Open Console.app for persistent log history")
         }
         .padding(.horizontal, Spacing.md)
         .padding(.vertical, Spacing.xs)
-        .background(TalkieTheme.surfaceElevated)
+        .background(AgentTheme.surfaceElevated)
     }
 
     // MARK: - Console.app

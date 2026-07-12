@@ -8,10 +8,11 @@
 //  transcript on the right, every Talkie reply tucks extra context
 //  (summary, action log, timing) behind a quiet "Details" link.
 //
-//  Palette: cool-gray Scope substrate (ScopeCanvas / ScopeInk),
-//  amber as the sole accent (live state, Talkie avatar). One
-//  display-serif moment for the conversation title; everything else
-//  is the system sans on the 4 / 8 / 12 / 16 / 24 / 32 spacing scale.
+//  Palette: Talkie's cool-gray Scope substrate and ink hierarchy, with
+//  Agent's steel chrome and signal-blue active state. Amber is reserved for
+//  the shared Talkie brand mark and semantic warnings. One display-serif
+//  moment for the conversation title; everything else is the system sans on
+//  the 4 / 8 / 12 / 16 / 24 / 32 spacing scale.
 //
 
 import SwiftUI
@@ -57,7 +58,19 @@ struct AgentHomeView: View {
 
             reader
         }
-        .background(ScopeCanvas.canvas)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AgentHomeChatPalette.pearl)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(AgentHomeChatPalette.edge, lineWidth: 1)
+        }
+        .compositingGroup()
+        .shadow(color: Color.black.opacity(0.11), radius: 16, y: 8)
+        .padding(.horizontal, 28)
+        .padding(.top, 24)
+        .padding(.bottom, 28)
+        .background(AgentTheme.background)
         .onAppear {
             configureAgentHomeReplySpeech()
             store.startRefreshing()
@@ -104,7 +117,7 @@ struct AgentHomeView: View {
             // runtime badge, no adapter roster). Starting a conversation drops
             // you into the main area; the agent is picked there, in the input.
             HStack(spacing: 8) {
-                Text("CONVERSATIONS")
+                Text("· CONVERSATIONS")
                     .font(.system(size: 9, weight: .semibold))
                     .tracking(1.4)
                     .foregroundStyle(ScopeInk.subtle)
@@ -155,7 +168,7 @@ struct AgentHomeView: View {
 
             sidebarFooter
         }
-        .background(ScopeCanvas.canvasAlt)
+        .background(AgentHomeChatPalette.chrome)
     }
 
     /// Two distinct, deliberately-separated footer entries: the relocated
@@ -244,31 +257,57 @@ struct AgentHomeView: View {
                     .padding(.top, 56)
                     .padding(.bottom, 32)
                     .frame(maxWidth: AgentHomeMetrics.readerColumn + AgentHomeMetrics.gutter * 2,
-                           alignment: .leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                           alignment: .center)
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
             } else {
                 ScrollView(.vertical, showsIndicators: true) {
-                    AgentHomeTranscriptView(
-                        turns: selectedTurns,
-                        openTurnIds: openWorkTurnIds,
-                        onToggleWork: toggleWork,
-                        onCopy: store.copy,
-                        onContinue: continueConversation
+                    VStack(alignment: .leading, spacing: 0) {
+                        AgentHomeTranscriptView(
+                            turns: selectedTurns,
+                            openTurnIds: openWorkTurnIds,
+                            onToggleWork: toggleWork,
+                            onCopy: store.copy,
+                            onContinue: continueConversation
+                        )
+                    }
+                    .padding(20)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(AgentHomeChatPalette.card)
                     )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(AgentHomeChatPalette.edge.opacity(0.72), lineWidth: 1)
+                    }
                     .padding(.leading, AgentHomeMetrics.gutter)
                     .padding(.trailing, AgentHomeMetrics.gutter)
                     .padding(.top, 24)
                     .padding(.bottom, 24)
                     .frame(maxWidth: AgentHomeMetrics.readerColumn + AgentHomeMetrics.gutter * 2,
                            alignment: .leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
 
                 composer
             }
         }
-        .background(ScopeCanvas.canvas)
+        .background {
+            ZStack {
+                AgentHomeChatPalette.pearl
+
+                RadialGradient(
+                    colors: [
+                        AgentHomeChatPalette.brandSignal.opacity(0.055),
+                        .clear,
+                    ],
+                    center: .topLeading,
+                    startRadius: 0,
+                    endRadius: 540
+                )
+            }
+        }
     }
 
     private var isIdle: Bool { selectedTurns.isEmpty }
@@ -276,14 +315,26 @@ struct AgentHomeView: View {
     private var readerHeader: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("· CONVERSATION")
-                    .font(ScopeType.eyebrow)
-                    .tracking(ScopeType.Tracking.wide)
-                    .foregroundStyle(ScopeInk.subtle)
+                HStack(spacing: 8) {
+                    Rectangle()
+                        .fill(AgentHomeChatPalette.brandSignal)
+                        .frame(width: 5, height: 5)
+
+                    Text("AGENT CHAT")
+                        .font(OpsType.mono(OpsSize.micro, weight: .bold))
+                        .tracking(1.6)
+                        .foregroundStyle(AgentHomeChatPalette.brandSignal)
+
+                    Text("· CONVERSATION")
+                        .font(OpsType.mono(OpsSize.micro, weight: .semibold))
+                        .tracking(1.2)
+                        .foregroundStyle(ScopeInk.subtle)
+                }
 
                 Text(selectedTopic.title)
-                    .font(.system(size: 22, weight: .medium, design: .serif))
+                    .font(ScopeType.display(size: 28, weight: .regular))
                     .foregroundStyle(ScopeInk.primary)
+                    .tracking(-0.25)
                     .lineLimit(1)
                     .truncationMode(.tail)
 
@@ -329,15 +380,15 @@ struct AgentHomeView: View {
         .padding(.bottom, 18)
         .frame(maxWidth: AgentHomeMetrics.readerColumn + AgentHomeMetrics.gutter * 2,
                alignment: .leading)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
     private var composer: some View {
         VStack(spacing: 0) {
             LinearGradient(
                 stops: [
-                    .init(color: ScopeCanvas.canvas.opacity(0), location: 0),
-                    .init(color: ScopeCanvas.canvas, location: 1),
+                    .init(color: AgentTheme.background.opacity(0), location: 0),
+                    .init(color: AgentTheme.background, location: 1),
                 ],
                 startPoint: .top,
                 endPoint: .bottom
@@ -370,9 +421,9 @@ struct AgentHomeView: View {
             .padding(.bottom, 18)
             .frame(maxWidth: AgentHomeMetrics.readerColumn + AgentHomeMetrics.gutter * 2,
                    alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .center)
         }
-        .background(ScopeCanvas.canvas)
+        .background(AgentHomeChatPalette.pearl)
     }
 
     // MARK: Derived
@@ -678,28 +729,40 @@ struct AgentHomeView: View {
 
 private enum AgentHomeMetrics {
     /// Reader column width. Matches the studio's READER_COLUMN.
-    static let readerColumn: CGFloat = 720
+    static let readerColumn: CGFloat = 860
     /// Left/right gutter inside the reader. Matches studio READER_GUTTER.
     static let gutter: CGFloat = 32
+}
+
+private enum AgentHomeChatPalette {
+    static let pearl = AgentInstrumentStyle.surface
+    static let chrome = AgentInstrumentStyle.conversationChrome
+    static let brandSignal = AgentTheme.brandAccent
+    static let brandSignalStrong = AgentTheme.brandAccentStrong
+    static let brandSignalSoft = brandSignal.opacity(0.10)
+    static let brandSignalBorder = brandSignal.opacity(0.28)
+    static let brandSignalGlow = brandSignal.opacity(0.22)
+    static let edge = AgentInstrumentStyle.brandEdge
+    static let card = AgentInstrumentStyle.prominentCard
 }
 
 private enum AgentHomeHudTheme {
     static var theme: HudTheme {
         HudTheme(
             palette: HudThemePalette(
-                bg: ScopeCanvas.canvas,
-                surface: Color.white,
-                chrome: ScopeCanvas.canvasAlt,
+                bg: AgentTheme.background,
+                surface: AgentTheme.surface,
+                chrome: AgentTheme.chrome,
                 ink: ScopeInk.primary,
                 muted: ScopeInk.muted,
                 dim: ScopeInk.subtle,
                 border: ScopeEdge.faint,
-                accent: ScopeAmber.solid,
-                accentSoft: ScopeAmber.tint,
-                statusOk: .green,
-                statusWarn: ScopeAmber.solid,
-                statusError: .red,
-                statusInfo: .blue
+                accent: AgentHomeChatPalette.brandSignal,
+                accentSoft: AgentHomeChatPalette.brandSignalSoft,
+                statusOk: SemanticColor.success,
+                statusWarn: SemanticColor.warning,
+                statusError: SemanticColor.error,
+                statusInfo: AgentHomeChatPalette.brandSignal
             ),
             hairline: HudThemeHairline(
                 subtle: ScopeEdge.subtle,
@@ -840,7 +903,7 @@ private struct AgentHomeConversationRow: View {
     }
 
     private var rowFill: Color {
-        if selected { return .white }
+        if selected { return AgentTheme.surface }
         if hovered  { return ScopeInk.primary.opacity(0.025) }
         return .clear
     }
@@ -851,19 +914,19 @@ private struct AgentHomeConversationRow: View {
             HStack(spacing: 6) {
                 Text("working")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(ScopeBrass.solid)
+                    .foregroundStyle(AgentHomeChatPalette.brandSignalStrong)
                 Circle()
-                    .fill(ScopeAmber.solid)
+                    .fill(AgentHomeChatPalette.brandSignal)
                     .frame(width: 6, height: 6)
-                    .shadow(color: ScopeAmber.glow, radius: 0, x: 0, y: 0)
+                    .shadow(color: AgentHomeChatPalette.brandSignalGlow, radius: 0, x: 0, y: 0)
                     .overlay(
-                        Circle().stroke(ScopeAmber.tint, lineWidth: 3)
+                        Circle().stroke(AgentHomeChatPalette.brandSignalSoft, lineWidth: 3)
                     )
             }
         } else if hovered || selected {
             Image(systemName: "arrow.turn.down.right")
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(hovered ? ScopeBrass.solid : ScopeInk.subtle)
+                .foregroundStyle(hovered ? AgentHomeChatPalette.brandSignalStrong : ScopeInk.subtle)
                 .frame(width: 20, alignment: .trailing)
         } else {
             Text(AgentHomeActivityStore.sidebarStamp(for: topic.lastActivityAt))
@@ -909,16 +972,16 @@ private struct AgentHomeAgentChip: View {
                     .frame(width: 6, height: 6)
                 Text(active?.name ?? "Agent")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(ScopeBrass.solid)
+                    .foregroundStyle(AgentHomeChatPalette.brandSignalStrong)
                     .lineLimit(1)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 7, weight: .semibold))
-                    .foregroundStyle(ScopeBrass.solid)
+                    .foregroundStyle(AgentHomeChatPalette.brandSignalStrong)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(Capsule().fill(ScopeAmber.tint))
-            .overlay(Capsule().stroke(ScopeAmber.solid.opacity(0.30), lineWidth: 0.5))
+            .background(Capsule().fill(AgentHomeChatPalette.brandSignalSoft))
+            .overlay(Capsule().stroke(AgentHomeChatPalette.brandSignalBorder, lineWidth: 0.5))
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
@@ -937,9 +1000,9 @@ private struct AgentHomeVoiceReplyToggle: View {
         } label: {
             Image(systemName: isOn ? "speaker.wave.2.fill" : "speaker.slash")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(isOn ? ScopeBrass.solid : ScopeInk.faint)
+                .foregroundStyle(isOn ? AgentHomeChatPalette.brandSignalStrong : ScopeInk.faint)
                 .frame(width: 26, height: 26)
-                .background(Circle().fill(isOn ? ScopeAmber.tint : ScopeInk.primary.opacity(0.04)))
+                .background(Circle().fill(isOn ? AgentHomeChatPalette.brandSignalSoft : ScopeInk.primary.opacity(0.04)))
         }
         .buttonStyle(.plain)
         .help(isOn ? "Agent voice on — replies are read aloud" : "Agent voice off — tap to read replies aloud")
@@ -1086,7 +1149,7 @@ private struct AgentHomeTurnBlock: View {
         .hudTheme(AgentHomeHudTheme.theme)
         .overlay(alignment: .leading) {
             Rectangle()
-                .fill(isLive ? ScopeAmber.solid : Color.clear)
+                .fill(isLive ? AgentHomeChatPalette.brandSignal : Color.clear)
                 .frame(width: 2)
         }
         .animation(.easeOut(duration: 0.18), value: isLive)
@@ -1131,7 +1194,7 @@ private struct AgentHomeLiveTurnRow: View {
 
             Text(turn.liveHeadline)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(ScopeBrass.solid)
+                .foregroundStyle(AgentTheme.accentStrong)
 
             if let detail = detailText {
                 Text(detail)
@@ -1145,11 +1208,11 @@ private struct AgentHomeLiveTurnRow: View {
         .padding(.vertical, 7)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(ScopeAmber.tint.opacity(0.78))
+                .fill(AgentTheme.accentSoft.opacity(0.78))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(ScopeAmber.solid.opacity(0.22), lineWidth: 0.5)
+                .stroke(AgentTheme.accent.opacity(0.22), lineWidth: 0.5)
         )
     }
 
@@ -1189,7 +1252,7 @@ private struct AgentHomeWireTrace: View {
     private var primaryColor: Color {
         switch turn.status {
         case .waiting, .running:
-            return ScopeBrass.solid
+            return AgentTheme.accentStrong
         case .done:
             return ScopeInk.subtle
         case .failed:
@@ -1282,15 +1345,15 @@ private struct AgentHomeSpeech: View {
             if let meta {
                 Text("· \(meta)")
                     .font(.system(size: 11, weight: live ? .semibold : .medium))
-                    .foregroundStyle(live ? ScopeBrass.solid : ScopeInk.subtle)
+                    .foregroundStyle(live ? AgentHomeChatPalette.brandSignalStrong : ScopeInk.subtle)
             }
 
             if live {
                 Circle()
-                    .fill(ScopeAmber.solid)
+                    .fill(AgentHomeChatPalette.brandSignal)
                     .frame(width: 6, height: 6)
                     .overlay(
-                        Circle().stroke(ScopeAmber.tint, lineWidth: 3)
+                        Circle().stroke(AgentHomeChatPalette.brandSignalSoft, lineWidth: 3)
                     )
             }
 
@@ -1315,7 +1378,7 @@ private struct AgentHomeSpeech: View {
                         Text("Continue")
                             .font(.system(size: 10, weight: .semibold))
                     }
-                    .foregroundStyle(ScopeBrass.solid)
+                    .foregroundStyle(AgentTheme.accentStrong)
                 }
                 .buttonStyle(.plain)
                 .help("Continue from this turn")
@@ -1346,7 +1409,7 @@ private struct AgentHomeAttachmentStrip: View {
                     HStack(spacing: 5) {
                         Image(systemName: attachment.systemImage)
                             .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(ScopeBrass.solid)
+                            .foregroundStyle(AgentTheme.accentStrong)
 
                         Text(attachment.name)
                             .font(.system(size: 10, weight: .medium))
@@ -1358,10 +1421,10 @@ private struct AgentHomeAttachmentStrip: View {
                     .padding(.vertical, 4)
                     .background(
                         Capsule()
-                            .fill(ScopeAmber.tint.opacity(0.62))
+                            .fill(AgentTheme.accentSoft.opacity(0.62))
                             .overlay(
                                 Capsule()
-                                    .stroke(ScopeAmber.solid.opacity(0.18), lineWidth: 0.5)
+                                    .stroke(AgentTheme.accent.opacity(0.18), lineWidth: 0.5)
                             )
                     )
                 }
@@ -1376,8 +1439,8 @@ private struct AgentHomeAvatar: View {
 
     var body: some View {
         let isTalkie = speaker == .talkie
-        let bg: Color = isTalkie ? ScopeAmber.tint : ScopeInk.primary.opacity(0.05)
-        let fg: Color = isTalkie ? ScopeBrass.solid : ScopeInk.muted
+        let bg: Color = isTalkie ? AgentHomeChatPalette.brandSignalSoft : ScopeInk.primary.opacity(0.05)
+        let fg: Color = isTalkie ? AgentHomeChatPalette.brandSignalStrong : ScopeInk.muted
 
         RoundedRectangle(cornerRadius: 6)
             .fill(bg)
@@ -1482,7 +1545,7 @@ private struct AgentHomeActionRow: View {
     private var statusBadge: some View {
         switch thread.status {
         case .running:
-            Circle().fill(ScopeAmber.solid).frame(width: 6, height: 6)
+            Circle().fill(AgentTheme.accent).frame(width: 6, height: 6)
         case .waiting:
             Text("queued")
                 .font(.system(size: 10, weight: .medium))
@@ -1594,20 +1657,20 @@ private struct AgentHomeIdleMic: View {
         Button(action: action) {
             ZStack {
                 Circle()
-                    .fill(ScopeAmber.glow)
+                    .fill(AgentHomeChatPalette.brandSignalGlow)
                     .frame(width: 84, height: 84)
                     .blur(radius: 14)
                     .opacity(0.6)
 
                 Circle()
-                    .fill(ScopeAmber.solid)
+                    .fill(AgentHomeChatPalette.brandSignal)
                     .frame(width: 56, height: 56)
                     .overlay(
                         Image(systemName: iconName)
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundStyle(.white)
                     )
-                    .shadow(color: ScopeAmber.solid.opacity(0.22), radius: 8, x: 0, y: 4)
+                    .shadow(color: AgentHomeChatPalette.brandSignalGlow, radius: 8, x: 0, y: 4)
                     .scaleEffect(hovered || phase == .recording ? 1.04 : 1.0)
             }
         }
@@ -1646,7 +1709,7 @@ private struct AgentHomeKbd: View {
             .padding(.vertical, 1)
             .background(
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(Color.white)
+                    .fill(AgentTheme.surface)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 3)
@@ -1706,7 +1769,7 @@ private struct AgentHomeStarterChip: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .background(
-                Capsule().fill(hovered ? ScopeInk.primary.opacity(0.04) : Color.white)
+                Capsule().fill(hovered ? ScopeInk.primary.opacity(0.04) : AgentTheme.surface)
             )
             .overlay(
                 Capsule().stroke(ScopeEdge.subtle, lineWidth: 0.5)
@@ -1777,9 +1840,9 @@ private struct AgentHomeComposer: View {
                     Button(action: onTalkBack) {
                         Image(systemName: voiceButtonIcon)
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(ScopeBrass.solid)
+                            .foregroundStyle(AgentHomeChatPalette.brandSignalStrong)
                             .frame(width: 30, height: 30)
-                            .background(Circle().fill(ScopeAmber.tint))
+                            .background(Circle().fill(AgentHomeChatPalette.brandSignalSoft))
                     }
                     .buttonStyle(.plain)
                     .disabled(voiceCapture.phase == .processing || isSending)
@@ -1802,7 +1865,7 @@ private struct AgentHomeComposer: View {
             .hudTheme(AgentHomeHudTheme.theme)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(Color.white)
+                    .fill(AgentTheme.surface)
                     .shadow(color: Color.black.opacity(0.04), radius: 1, x: 0, y: 1)
                     .shadow(color: Color.black.opacity(0.06), radius: 14, x: 0, y: 12)
             )
@@ -1883,7 +1946,7 @@ private struct AgentHomeContinuationPill: View {
 
             Text("·")
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(ScopeBrass.solid.opacity(0.65))
+                .foregroundStyle(AgentHomeChatPalette.brandSignalStrong.opacity(0.65))
 
             Text(continuation.label)
                 .font(.system(size: 10, weight: .medium))
@@ -1898,11 +1961,11 @@ private struct AgentHomeContinuationPill: View {
             .buttonStyle(.plain)
             .help(mode.clearHelp)
         }
-        .foregroundStyle(ScopeBrass.solid)
+        .foregroundStyle(AgentHomeChatPalette.brandSignalStrong)
         .padding(.horizontal, 9)
         .padding(.vertical, 4)
-        .background(Capsule().fill(ScopeAmber.tint))
-        .overlay(Capsule().stroke(ScopeAmber.solid.opacity(0.28), lineWidth: 0.5))
+        .background(Capsule().fill(AgentHomeChatPalette.brandSignalSoft))
+        .overlay(Capsule().stroke(AgentHomeChatPalette.brandSignalBorder, lineWidth: 0.5))
     }
 }
 
@@ -1942,7 +2005,7 @@ private struct AgentHomeVoiceCaptureStatus: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 5)
                         .background(
-                            Capsule().fill(ScopeAmber.solid)
+                            Capsule().fill(AgentTheme.accent)
                         )
                 }
                 .buttonStyle(.plain)
@@ -1965,7 +2028,7 @@ private struct AgentHomeVoiceCaptureStatus: View {
         .padding(.vertical, 7)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(Color.white.opacity(0.82))
+                .fill(AgentTheme.surface.opacity(0.82))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
@@ -2036,7 +2099,7 @@ private struct AgentHomeVoiceMiniMeter: View {
                     let y = (size.height - height) / 2
                     let rect = CGRect(x: x, y: y, width: barWidth, height: height)
                     let path = Path(roundedRect: rect, cornerRadius: barWidth / 2)
-                    context.fill(path, with: .color(active ? ScopeAmber.solid : ScopeInk.subtle.opacity(0.45)))
+                    context.fill(path, with: .color(active ? AgentTheme.accent : ScopeInk.subtle.opacity(0.45)))
                 }
             }
         }

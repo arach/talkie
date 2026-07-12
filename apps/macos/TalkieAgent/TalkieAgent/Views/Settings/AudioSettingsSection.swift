@@ -48,10 +48,10 @@ struct AudioSettingsSection: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Input Device")
                                 .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(TalkieTheme.textPrimary)
+                                .foregroundColor(AgentTheme.textPrimary)
                             Text("Select which microphone to use for recording")
                                 .font(.system(size: 10))
-                                .foregroundColor(TalkieTheme.textTertiary)
+                                .foregroundColor(AgentTheme.textTertiary)
                         }
 
                         Spacer()
@@ -94,15 +94,15 @@ struct AudioSettingsSection: View {
                             HStack(spacing: 6) {
                                 Text(selectedDeviceName)
                                     .font(.system(size: 11))
-                                    .foregroundColor(TalkieTheme.textPrimary)
+                                    .foregroundColor(AgentTheme.textPrimary)
                                     .lineLimit(1)
                                 Image(systemName: "chevron.up.chevron.down")
                                     .font(.system(size: 9))
-                                    .foregroundColor(TalkieTheme.textTertiary)
+                                    .foregroundColor(AgentTheme.textTertiary)
                             }
                             .padding(.horizontal, Spacing.sm)
                             .padding(.vertical, 6)
-                            .background(TalkieTheme.surfaceElevated)
+                            .background(AgentTheme.surfaceElevated)
                             .cornerRadius(CornerRadius.xs)
                         }
                         .menuStyle(.borderlessButton)
@@ -118,10 +118,10 @@ struct AudioSettingsSection: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Audio Diagnostics")
                                 .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(TalkieTheme.textPrimary)
+                                .foregroundColor(AgentTheme.textPrimary)
                             Text("Check input levels, permissions, and fix common issues")
                                 .font(.system(size: 10))
-                                .foregroundColor(TalkieTheme.textTertiary)
+                                .foregroundColor(AgentTheme.textTertiary)
                         }
 
                         Spacer()

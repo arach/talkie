@@ -941,7 +941,7 @@ struct StatusBar: View {
         if whisperService.isWarmingUp { return SemanticColor.info }
         if showSuccess { return SemanticColor.success }
         switch controller.state {
-        case .idle: return TalkieTheme.textMuted
+        case .idle: return AgentTheme.textMuted
         case .listening: return .red  // Keep red for the indicator, but not alarming
         case .transcribing: return SemanticColor.warning
         case .routing: return SemanticColor.success
@@ -953,7 +953,7 @@ struct StatusBar: View {
     private var barBackgroundColor: Color {
         // Only subtle tint during warmup, otherwise stay neutral
         if whisperService.isWarmingUp { return SemanticColor.info.opacity(0.08) }
-        return TalkieTheme.surfaceElevated
+        return AgentTheme.surfaceElevated
     }
 
     private var isActive: Bool {
@@ -964,7 +964,7 @@ struct StatusBar: View {
         VStack(spacing: 0) {
             // Top border
             Rectangle()
-                .fill(TalkieTheme.border)
+                .fill(AgentTheme.border)
                 .frame(height: 1)
 
             ZStack {
@@ -989,12 +989,12 @@ struct StatusBar: View {
                         Button(action: copyPID) {
                             Text(verbatim: "\(pid)")
                                 .font(.system(size: 9, weight: .medium, design: .monospaced))
-                                .foregroundColor(pidCopied ? SemanticColor.success : TalkieTheme.textTertiary)
+                                .foregroundColor(pidCopied ? SemanticColor.success : AgentTheme.textTertiary)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 3)
                                 .background(
                                     RoundedRectangle(cornerRadius: 4)
-                                        .fill(TalkieTheme.hover)
+                                        .fill(AgentTheme.hover)
                                 )
                         }
                         .buttonStyle(.plain)
@@ -1151,7 +1151,7 @@ struct StatusBar: View {
             if whisperService.isWarmingUp { return SemanticColor.info }
             if showSuccess { return SemanticColor.success }
             switch controller.state {
-            case .idle: return TalkieTheme.textMuted
+            case .idle: return AgentTheme.textMuted
             case .listening: return .red
             case .transcribing: return SemanticColor.warning
             case .routing: return SemanticColor.success
@@ -1183,13 +1183,13 @@ struct StatusBar: View {
             case .idle:
                 Text("Ready")
                     .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(TalkieTheme.textTertiary)
+                    .foregroundColor(AgentTheme.textTertiary)
             case .listening:
                 // Timer + audio level (like pill)
                 HStack(spacing: 3) {
                     Text(formatRecordingTime(recordingDuration))
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundColor(TalkieTheme.textSecondary)
+                        .foregroundColor(AgentTheme.textSecondary)
                     verticalAudioLevel
                 }
             case .transcribing:
@@ -1228,7 +1228,7 @@ struct StatusBar: View {
             // Timer - simple seconds format
             Text(formatRecordingTime(recordingDuration))
                 .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundColor(TalkieTheme.textSecondary)
+                .foregroundColor(AgentTheme.textSecondary)
 
             // Vertical audio level indicator
             verticalAudioLevel
@@ -1247,7 +1247,7 @@ struct StatusBar: View {
         let barHeight = max(2, 12 * level)
         return ZStack(alignment: .bottom) {
             RoundedRectangle(cornerRadius: 1)
-                .fill(TalkieTheme.textTertiary.opacity(0.5 + Double(level) * 0.4))
+                .fill(AgentTheme.textTertiary.opacity(0.5 + Double(level) * 0.4))
                 .frame(width: 3, height: barHeight)
                 .animation(.easeOut(duration: 0.08), value: level)
         }
@@ -1478,7 +1478,7 @@ struct StatusBar: View {
                         // Connected but no model
                         Text("Engine")
                             .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(TalkieTheme.textMuted.opacity(0.8))
+                            .foregroundColor(AgentTheme.textMuted.opacity(0.8))
                     }
 
                     // DEV badge only
@@ -1494,7 +1494,7 @@ struct StatusBar: View {
                 } else {
                     Text("Engine")
                         .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(TalkieTheme.textMuted.opacity(0.5))
+                        .foregroundColor(AgentTheme.textMuted.opacity(0.5))
 
                     Text("offline")
                         .font(.system(size: 9))
@@ -1505,7 +1505,7 @@ struct StatusBar: View {
             .padding(.vertical, 3)
             .background(
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(TalkieTheme.surfaceCard.opacity(0.5))
+                    .fill(AgentTheme.surfaceCard.opacity(0.5))
             )
         }
         .buttonStyle(.plain)
@@ -1603,7 +1603,7 @@ struct StatusIcon: View {
 
                 Text(label)
                     .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(TalkieTheme.textTertiary)
+                    .foregroundColor(AgentTheme.textTertiary)
                     .lineLimit(1)
 
                 if let badge = badge {
@@ -1620,7 +1620,7 @@ struct StatusIcon: View {
             .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(isHovered ? TalkieTheme.hover : Color.clear)
+                    .fill(isHovered ? AgentTheme.hover : Color.clear)
             )
         }
         .buttonStyle(.plain)
@@ -1716,12 +1716,12 @@ struct EngineStatusIcon: View {
                 Button(action: { copyPID(pid) }) {
                     Text(verbatim: "\(pid)")
                         .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundColor(pidCopied ? SemanticColor.success : TalkieTheme.textTertiary)
+                        .foregroundColor(pidCopied ? SemanticColor.success : AgentTheme.textTertiary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
                         .background(
                             RoundedRectangle(cornerRadius: 4)
-                                .fill(TalkieTheme.hover)
+                                .fill(AgentTheme.hover)
                         )
                 }
                 .buttonStyle(.plain)
@@ -1800,7 +1800,7 @@ struct ModelStatusIcon: View {
     }
 
     private var statusColor: Color {
-        guard let status = engineClient.status else { return TalkieTheme.textMuted }
+        guard let status = engineClient.status else { return AgentTheme.textMuted }
         if status.loadedModelId != nil { return SemanticColor.success }
         return SemanticColor.warning
     }
@@ -1865,13 +1865,13 @@ struct LogStatusIcon: View {
                 }
                 Text("\(infoCount)")
                     .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(TalkieTheme.textTertiary)
+                    .foregroundColor(AgentTheme.textTertiary)
             }
             .padding(.horizontal, 6)
             .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(isHovered ? TalkieTheme.hover : Color.clear)
+                    .fill(isHovered ? AgentTheme.hover : Color.clear)
             )
         }
         .buttonStyle(.plain)
@@ -1893,19 +1893,19 @@ struct ShortcutHint: View {
         HStack(spacing: 3) {
             Text(label)
                 .font(.system(size: 9, weight: .medium))
-                .foregroundColor(TalkieTheme.textMuted.opacity(0.7))
+                .foregroundColor(AgentTheme.textMuted.opacity(0.7))
 
             Text(shortcut)
                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
                 .tracking(1.5)  // Subtle letter spacing
-                .foregroundColor(TalkieTheme.textMuted)
+                .foregroundColor(AgentTheme.textMuted)
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
         .offset(y: -1)  // Move up 1 pixel
         .background(
             RoundedRectangle(cornerRadius: 3)
-                .fill(TalkieTheme.surfaceCard)
+                .fill(AgentTheme.surfaceCard)
                 .overlay(
                     RoundedRectangle(cornerRadius: 3)
                         .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
@@ -1945,13 +1945,13 @@ struct LogPreview: View {
                 // Small chevron indicator
                 Image(systemName: "chevron.up")
                     .font(.system(size: 7, weight: .semibold))
-                    .foregroundColor(TalkieTheme.textMuted.opacity(0.6))
+                    .foregroundColor(AgentTheme.textMuted.opacity(0.6))
             }
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
             .background(
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(isHovered ? TalkieTheme.surfaceCard : Color.clear)
+                    .fill(isHovered ? AgentTheme.surfaceCard : Color.clear)
             )
         }
         .buttonStyle(.plain)
@@ -1979,7 +1979,7 @@ struct ConsolePopover: View {
                 Text("CONSOLE")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .tracking(1)
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(AgentTheme.textSecondary)
 
                 Spacer()
 
@@ -1990,10 +1990,10 @@ struct ConsolePopover: View {
                         Image(systemName: "arrow.up.right")
                             .font(.system(size: 8, weight: .semibold))
                     }
-                    .foregroundColor(TalkieTheme.accent)
+                    .foregroundColor(AgentTheme.accent)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
-                    .background(TalkieTheme.accent.opacity(0.12))
+                    .background(AgentTheme.accent.opacity(0.12))
                     .clipShape(.rect(cornerRadius: 3))
                 }
                 .buttonStyle(.plain)
@@ -2001,7 +2001,7 @@ struct ConsolePopover: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(TalkieTheme.surfaceCard)
+            .background(AgentTheme.surfaceCard)
 
             Divider()
 
@@ -2011,7 +2011,7 @@ struct ConsolePopover: View {
                     if recentEvents.isEmpty {
                         Text("No events")
                             .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(TalkieTheme.textMuted)
+                            .foregroundColor(AgentTheme.textMuted)
                             .padding(12)
                     } else {
                         ForEach(recentEvents) { event in
@@ -2028,7 +2028,7 @@ struct ConsolePopover: View {
             HStack {
                 Text("\(events.events.count) total events")
                     .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(TalkieTheme.textMuted)
+                    .foregroundColor(AgentTheme.textMuted)
 
                 Spacer()
 
@@ -2037,14 +2037,14 @@ struct ConsolePopover: View {
                 }
                 .font(.system(size: 9))
                 .buttonStyle(.plain)
-                .foregroundColor(TalkieTheme.textSecondary)
+                .foregroundColor(AgentTheme.textSecondary)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(TalkieTheme.surfaceCard)
+            .background(AgentTheme.surfaceCard)
         }
         .frame(width: 400)
-        .background(TalkieTheme.surfaceElevated)
+        .background(AgentTheme.surfaceElevated)
     }
 
     private func openFullLogs() {
@@ -2076,7 +2076,7 @@ struct ConsolePopoverRow: View {
             // Timestamp
             Text(Self.timeFormatter.string(from: event.timestamp))
                 .font(.system(size: 9, design: .monospaced))
-                .foregroundColor(TalkieTheme.textMuted)
+                .foregroundColor(AgentTheme.textMuted)
                 .frame(width: 50, alignment: .leading)
 
             // Type indicator
@@ -2089,13 +2089,13 @@ struct ConsolePopoverRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(event.message)
                     .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .foregroundColor(AgentTheme.textPrimary)
                     .lineLimit(2)
 
                 if let detail = event.detail {
                     Text(detail)
                         .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(TalkieTheme.textSecondary)
+                        .foregroundColor(AgentTheme.textSecondary)
                         .lineLimit(1)
                 }
             }
@@ -2181,7 +2181,7 @@ struct ConsoleView: View {
                 .font(.labelSmall)
             }
             .padding(Spacing.md)
-            .background(TalkieTheme.surfaceElevated)
+            .background(AgentTheme.surfaceElevated)
 
             Divider()
 
@@ -2189,7 +2189,7 @@ struct ConsoleView: View {
             HStack(spacing: Spacing.xs) {
                 Image(systemName: "magnifyingglass")
                     .font(.monoXSmall)
-                    .foregroundColor(TalkieTheme.textMuted)
+                    .foregroundColor(AgentTheme.textMuted)
 
                 TextField("Search logs...", text: $searchText)
                     .textFieldStyle(.plain)
@@ -2197,7 +2197,7 @@ struct ConsoleView: View {
             }
             .padding(.horizontal, Spacing.md)
             .padding(.vertical, Spacing.xs)
-            .background(TalkieTheme.surfaceCard)
+            .background(AgentTheme.surfaceCard)
 
             Divider()
 
@@ -2211,7 +2211,7 @@ struct ConsoleView: View {
             }
         }
         .frame(width: 700, height: 500)
-        .background(TalkieTheme.surface)
+        .background(AgentTheme.surface)
     }
 
     private func filterPill(_ type: EventType?, _ label: String) -> some View {
@@ -2222,9 +2222,9 @@ struct ConsoleView: View {
                 .padding(.vertical, 2)
                 .background(
                     RoundedRectangle(cornerRadius: CornerRadius.xs)
-                        .fill(filterType == type ? TalkieTheme.accent.opacity(0.2) : Color.clear)
+                        .fill(filterType == type ? AgentTheme.accent.opacity(0.2) : Color.clear)
                 )
-                .foregroundColor(filterType == type ? TalkieTheme.accent : TalkieTheme.textSecondary)
+                .foregroundColor(filterType == type ? AgentTheme.accent : AgentTheme.textSecondary)
         }
         .buttonStyle(.plain)
     }
@@ -2246,7 +2246,7 @@ struct ConsoleEventRow: View {
                 // Timestamp
                 Text(timeString)
                     .font(.monoXSmall)
-                    .foregroundColor(TalkieTheme.textMuted)
+                    .foregroundColor(AgentTheme.textMuted)
                     .frame(width: 80, alignment: .leading)
 
                 // Type badge
@@ -2265,7 +2265,7 @@ struct ConsoleEventRow: View {
                 // Message
                 Text(event.message)
                     .font(.monoSmall)
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .foregroundColor(AgentTheme.textPrimary)
                     .lineLimit(isExpanded ? nil : 1)
 
                 Spacer()
@@ -2275,7 +2275,7 @@ struct ConsoleEventRow: View {
                     Button(action: { isExpanded.toggle() }) {
                         Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                             .font(.system(size: 10))
-                            .foregroundColor(TalkieTheme.textMuted)
+                            .foregroundColor(AgentTheme.textMuted)
                     }
                     .buttonStyle(.plain)
                 }
@@ -2287,7 +2287,7 @@ struct ConsoleEventRow: View {
             if isExpanded, let detail = event.detail {
                 Text(detail)
                     .font(.monoXSmall)
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(AgentTheme.textSecondary)
                     .padding(.horizontal, Spacing.md)
                     .padding(.leading, 90) // Align with message
                     .padding(.bottom, Spacing.xs)
@@ -3600,7 +3600,7 @@ struct ParticleTuningPanel: View {
                 Button(action: { isShowing = false }) {
                     Image(systemName: "xmark")
                         .font(.system(size: 10))
-                        .foregroundColor(TalkieTheme.textMuted)
+                        .foregroundColor(AgentTheme.textMuted)
                 }
                 .buttonStyle(.plain)
             }
@@ -3949,7 +3949,7 @@ struct WaveformTuningPanel: View {
                 Button(action: { isShowing = false }) {
                     Image(systemName: "xmark")
                         .font(.system(size: 10))
-                        .foregroundColor(TalkieTheme.textMuted)
+                        .foregroundColor(AgentTheme.textMuted)
                 }
                 .buttonStyle(.plain)
             }
@@ -4081,7 +4081,7 @@ struct OverlayTuningPanel: View {
                 Button(action: { isShowing = false }) {
                     Image(systemName: "xmark")
                         .font(.system(size: 10))
-                        .foregroundColor(TalkieTheme.textMuted)
+                        .foregroundColor(AgentTheme.textMuted)
                 }
                 .buttonStyle(.plain)
             }

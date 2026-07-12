@@ -460,7 +460,7 @@ private struct SelectionFeedbackHUDView: View {
     private var borderColor: Color {
         switch message.tone {
         case .active:
-            return TalkieTheme.textSecondary.opacity(0.1)
+            return AgentTheme.textSecondary.opacity(0.1)
         case .success:
             return Color.green.opacity(0.28)
         case .warning:
@@ -468,7 +468,7 @@ private struct SelectionFeedbackHUDView: View {
         case .failure:
             return Color.red.opacity(0.32)
         case .neutral:
-            return TalkieTheme.textSecondary.opacity(0.1)
+            return AgentTheme.textSecondary.opacity(0.1)
         }
     }
 

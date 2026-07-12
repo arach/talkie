@@ -34,7 +34,7 @@ struct FeatureFlagsSettingsSection: View {
                     }
 
                     Divider()
-                        .background(TalkieTheme.border.opacity(0.5))
+                        .background(AgentTheme.border.opacity(0.5))
 
                     HStack(spacing: Spacing.sm) {
                         Button(action: {
@@ -70,10 +70,10 @@ struct FeatureFlagsSettingsSection: View {
                                 Text("Copy Snapshot")
                                     .font(.system(size: 10, weight: .medium))
                             }
-                            .foregroundColor(TalkieTheme.textSecondary)
+                            .foregroundColor(AgentTheme.textSecondary)
                             .padding(.horizontal, Spacing.md)
                             .padding(.vertical, Spacing.sm)
-                            .background(TalkieTheme.textMuted.opacity(0.12))
+                            .background(AgentTheme.textMuted.opacity(0.12))
                             .clipShape(.rect(cornerRadius: CornerRadius.xs))
                         }
                         .buttonStyle(.plain)
@@ -94,7 +94,7 @@ struct FeatureFlagsSettingsSection: View {
 
                         if definition.id != model.visibleDefinitions.last?.id {
                             Divider()
-                                .background(TalkieTheme.border.opacity(0.35))
+                                .background(AgentTheme.border.opacity(0.35))
                         }
                     }
                 }
@@ -112,7 +112,7 @@ private struct FeatureFlagReadOnlyRow: View {
     let source: AgentFeatureFlagSource
 
     private var valueColor: Color {
-        value ? SemanticColor.success : TalkieTheme.textTertiary
+        value ? SemanticColor.success : AgentTheme.textTertiary
     }
 
     var body: some View {
@@ -125,16 +125,16 @@ private struct FeatureFlagReadOnlyRow: View {
                 HStack(spacing: 6) {
                     Text(definition.title)
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(TalkieTheme.textPrimary)
+                        .foregroundColor(AgentTheme.textPrimary)
 
                     Text(definition.key)
                         .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundColor(TalkieTheme.textMuted)
+                        .foregroundColor(AgentTheme.textMuted)
                 }
 
                 Text(definition.detail)
                     .font(.system(size: 10))
-                    .foregroundColor(TalkieTheme.textTertiary)
+                    .foregroundColor(AgentTheme.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -179,7 +179,7 @@ enum AgentFeatureFlagSource {
         case .production: return OpsTint.amber.color
         case .remote: return .blue
         case .shared: return .purple
-        case .default: return TalkieTheme.textMuted
+        case .default: return AgentTheme.textMuted
         }
     }
 }

@@ -38,7 +38,7 @@ struct ConnectionsSettingsSection: View {
                             Text("CONNECTIONS")
                                 .font(.system(size: 13, weight: .semibold))
                                 .tracking(Tracking.normal)
-                                .foregroundColor(TalkieTheme.textPrimary)
+                                .foregroundColor(AgentTheme.textPrimary)
 
                             Spacer()
 
@@ -52,12 +52,12 @@ struct ConnectionsSettingsSection: View {
                                 }
                             }
                             .buttonStyle(.plain)
-                            .foregroundColor(TalkieTheme.textSecondary)
+                            .foregroundColor(AgentTheme.textSecondary)
                         }
 
                         Text("XPC service connections to Talkie ecosystem.")
                             .font(.system(size: 11))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .foregroundColor(AgentTheme.textTertiary)
                     }
 
                     Spacer()
@@ -101,22 +101,22 @@ struct ConnectionsSettingsSection: View {
                 Text("ENVIRONMENT")
                     .font(.system(size: 10, weight: .bold))
                     .tracking(Tracking.normal)
-                    .foregroundColor(TalkieTheme.textTertiary)
+                    .foregroundColor(AgentTheme.textTertiary)
 
                 HStack {
                     Text("Mode:")
                         .font(.system(size: 11))
-                        .foregroundColor(TalkieTheme.textSecondary)
+                        .foregroundColor(AgentTheme.textSecondary)
                     Text(TalkieEnvironment.current.rawValue.uppercased())
                         .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundColor(TalkieTheme.accent)
+                        .foregroundColor(AgentTheme.accent)
 
                     Spacer()
 
                     if let bundleID = Bundle.main.bundleIdentifier {
                         Text(bundleID)
                             .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .foregroundColor(AgentTheme.textTertiary)
                             .textSelection(.enabled)
                     }
                 }
@@ -183,7 +183,7 @@ struct TalkieAppCard: View {
     }
 
     private var statusColor: Color {
-        isTalkieRunning ? .green : TalkieTheme.textTertiary
+        isTalkieRunning ? .green : AgentTheme.textTertiary
     }
 
     private var statusText: String {
@@ -208,16 +208,16 @@ struct TalkieAppCard: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Talkie")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .foregroundColor(AgentTheme.textPrimary)
 
                 Text("Memos, Workflows & Dictations")
                     .font(.system(size: 11))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(AgentTheme.textSecondary)
 
                 if let serviceName = serviceName {
                     Text(serviceName)
                         .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(TalkieTheme.textTertiary)
+                        .foregroundColor(AgentTheme.textTertiary)
                 }
             }
 
@@ -245,7 +245,7 @@ struct TalkieAppCard: View {
                             Text(isLaunching ? "Launching..." : "Launch")
                                 .font(.system(size: 11, weight: .medium))
                         }
-                        .foregroundColor(TalkieTheme.textSecondary)
+                        .foregroundColor(AgentTheme.textSecondary)
                         .padding(.horizontal, Spacing.sm)
                         .padding(.vertical, 5)
                         .background(
@@ -258,7 +258,7 @@ struct TalkieAppCard: View {
 
                     Text(statusText)
                         .font(.system(size: 10))
-                        .foregroundColor(TalkieTheme.textTertiary)
+                        .foregroundColor(AgentTheme.textTertiary)
                 }
             }
         }
@@ -346,16 +346,16 @@ struct ConnectionCard: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .foregroundColor(AgentTheme.textPrimary)
 
                 Text(subtitle)
                     .font(.system(size: 11))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(AgentTheme.textSecondary)
 
                 if let serviceName = serviceName {
                     Text(serviceName)
                         .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(TalkieTheme.textTertiary)
+                        .foregroundColor(AgentTheme.textTertiary)
                 }
             }
 
@@ -375,7 +375,7 @@ struct ConnectionCard: View {
                 if let pid = pid {
                     Text(verbatim: "PID \(pid)")
                         .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(TalkieTheme.textTertiary)
+                        .foregroundColor(AgentTheme.textTertiary)
                 }
             }
         }

@@ -88,12 +88,12 @@ struct AppearanceSettingsSection: View {
                     // Preview text
                     Text("The quick brown fox jumps over the lazy dog.")
                         .font(.system(size: settings.fontSize.previewSize))
-                        .foregroundColor(TalkieTheme.textSecondary)
+                        .foregroundColor(AgentTheme.textSecondary)
                         .padding(Spacing.sm)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(
                             RoundedRectangle(cornerRadius: CornerRadius.xs)
-                                .fill(TalkieTheme.hover)
+                                .fill(AgentTheme.hover)
                         )
                 }
             }
@@ -115,12 +115,12 @@ struct AdvancedVisualizationSection: View {
                 HStack(spacing: Spacing.xs) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 8, weight: .semibold))
-                        .foregroundColor(TalkieTheme.textMuted)
+                        .foregroundColor(AgentTheme.textMuted)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
 
                     Text("Advanced Visualization")
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(TalkieTheme.textTertiary)
+                        .foregroundColor(AgentTheme.textTertiary)
 
                     Spacer()
                 }
@@ -140,12 +140,12 @@ struct AdvancedVisualizationSection: View {
                     } else if overlayStyle == .island {
                         Text("Island uses fixed dark pill geometry for now.")
                             .font(.system(size: 10))
-                            .foregroundColor(TalkieTheme.textMuted)
+                            .foregroundColor(AgentTheme.textMuted)
                             .padding(.vertical, Spacing.sm)
                     } else {
                         Text("Select Particles or Waveform style to customize.")
                             .font(.system(size: 10))
-                            .foregroundColor(TalkieTheme.textMuted)
+                            .foregroundColor(AgentTheme.textMuted)
                             .padding(.vertical, Spacing.sm)
                     }
 
@@ -161,7 +161,7 @@ struct AdvancedVisualizationSection: View {
                         }) {
                             Text("Reset to Defaults")
                                 .font(.system(size: 9, weight: .medium))
-                                .foregroundColor(TalkieTheme.textMuted)
+                                .foregroundColor(AgentTheme.textMuted)
                         }
                         .buttonStyle(.plain)
                         .opacity(0.7)
@@ -175,7 +175,7 @@ struct AdvancedVisualizationSection: View {
         .padding(.vertical, Spacing.xs)
         .background(
             RoundedRectangle(cornerRadius: CornerRadius.sm)
-                .fill(TalkieTheme.hover.opacity(0.5))
+                .fill(AgentTheme.hover.opacity(0.5))
         )
     }
 }
@@ -234,7 +234,7 @@ private struct WaveformControlsView: View {
             HStack(spacing: Spacing.sm) {
                 Text("Bars")
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(AgentTheme.textSecondary)
                     .frame(width: 60, alignment: .leading)
 
                 HStack(spacing: Spacing.xs) {
@@ -245,12 +245,12 @@ private struct WaveformControlsView: View {
                         }) {
                             Text("\(count)")
                                 .font(.system(size: 9, weight: barCount == count ? .semibold : .regular))
-                                .foregroundColor(barCount == count ? .white : TalkieTheme.textMuted)
+                                .foregroundColor(barCount == count ? .white : AgentTheme.textMuted)
                                 .padding(.horizontal, Spacing.xs)
                                 .padding(.vertical, 4)
                                 .background(
                                     RoundedRectangle(cornerRadius: CornerRadius.xs)
-                                        .fill(barCount == count ? Color.accentColor : TalkieTheme.hover)
+                                        .fill(barCount == count ? Color.accentColor : AgentTheme.hover)
                                 )
                         }
                         .buttonStyle(.plain)
@@ -295,19 +295,19 @@ private struct RangeTuningSlider: View {
             HStack {
                 Text(label)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(AgentTheme.textSecondary)
                     .frame(width: 60, alignment: .leading)
 
                 Text(leftLabel)
                     .font(.system(size: 8))
-                    .foregroundColor(TalkieTheme.textMuted)
+                    .foregroundColor(AgentTheme.textMuted)
 
                 Slider(value: $value, in: range)
                     .controlSize(.small)
 
                 Text(rightLabel)
                     .font(.system(size: 8))
-                    .foregroundColor(TalkieTheme.textMuted)
+                    .foregroundColor(AgentTheme.textMuted)
             }
         }
     }
@@ -325,12 +325,12 @@ struct CompactThemeRow: View {
     var body: some View {
         HStack(spacing: Spacing.xs) {
             Circle()
-                .fill(isSelected ? Color.accentColor : TalkieTheme.textMuted)
+                .fill(isSelected ? Color.accentColor : AgentTheme.textMuted)
                 .frame(width: 6, height: 6)
 
             Text(theme.displayName)
                 .font(.system(size: 10, weight: isSelected ? .semibold : .regular))
-                .foregroundColor(isSelected ? .white : TalkieTheme.textSecondary)
+                .foregroundColor(isSelected ? .white : AgentTheme.textSecondary)
 
             Spacer()
         }
@@ -338,7 +338,7 @@ struct CompactThemeRow: View {
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: CornerRadius.xs)
-                .fill(isSelected ? Color.accentColor.opacity(0.2) : (isHovered ? TalkieTheme.hover : Color.clear))
+                .fill(isSelected ? Color.accentColor.opacity(0.2) : (isHovered ? AgentTheme.hover : Color.clear))
         )
         .contentShape(Rectangle())
         .onTapGesture { action() }
@@ -432,12 +432,12 @@ struct FontSizeButton: View {
         Button(action: action) {
             Text(size.displayName)
                 .font(.system(size: 10, weight: isSelected ? .semibold : .regular))
-                .foregroundColor(isSelected ? .white : TalkieTheme.textTertiary)
+                .foregroundColor(isSelected ? .white : AgentTheme.textTertiary)
                 .padding(.horizontal, Spacing.sm)
                 .padding(.vertical, 6)
                 .background(
                     RoundedRectangle(cornerRadius: CornerRadius.xs)
-                        .fill(isSelected ? Color.accentColor : (isHovered ? TalkieTheme.surfaceElevated : TalkieTheme.hover))
+                        .fill(isSelected ? Color.accentColor : (isHovered ? AgentTheme.surfaceElevated : AgentTheme.hover))
                 )
         }
         .buttonStyle(.plain)
@@ -490,11 +490,11 @@ struct OverlayPositionSelector: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(selection.displayName)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .foregroundColor(AgentTheme.textPrimary)
 
                 Text("Click a position on the screen")
                     .font(.system(size: 9))
-                    .foregroundColor(TalkieTheme.textTertiary)
+                    .foregroundColor(AgentTheme.textTertiary)
             }
         }
     }
@@ -511,7 +511,7 @@ struct PositionDot: View {
     var body: some View {
         Button(action: { selection = position }) {
             RoundedRectangle(cornerRadius: 2)
-                .fill(isSelected ? Color.accentColor : (isHovered ? TalkieTheme.textMuted : TalkieTheme.border))
+                .fill(isSelected ? Color.accentColor : (isHovered ? AgentTheme.textMuted : AgentTheme.border))
                 .frame(width: isSelected ? 24 : 16, height: 6)
         }
         .buttonStyle(.plain)
@@ -574,7 +574,7 @@ struct OverlayStylePreview: View {
 
                 Text(style.displayName)
                     .font(.system(size: 8, weight: isSelected ? .semibold : .regular))
-                    .foregroundColor(isSelected ? .accentColor : (isHovered ? TalkieTheme.textPrimary : TalkieTheme.textSecondary))
+                    .foregroundColor(isSelected ? .accentColor : (isHovered ? AgentTheme.textPrimary : AgentTheme.textSecondary))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
@@ -696,7 +696,7 @@ struct OverlayPreviewAnimation: View {
                         width: pillWidth,
                         height: pillHeight
                     )
-                    context.fill(RoundedRectangle(cornerRadius: 2).path(in: pillRect), with: .color(TalkieTheme.textMuted))
+                    context.fill(RoundedRectangle(cornerRadius: 2).path(in: pillRect), with: .color(AgentTheme.textMuted))
                 }
             }
         }
@@ -717,11 +717,11 @@ struct ThemeOptionRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(theme.displayName)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .foregroundColor(AgentTheme.textPrimary)
 
                 Text(theme.description)
                     .font(.system(size: 10))
-                    .foregroundColor(TalkieTheme.textTertiary)
+                    .foregroundColor(AgentTheme.textTertiary)
             }
 
             Spacer()
@@ -734,7 +734,7 @@ struct ThemeOptionRow: View {
         .padding(Spacing.sm)
         .background(
             RoundedRectangle(cornerRadius: CornerRadius.xs)
-                .fill(isSelected ? Color.accentColor.opacity(0.2) : (isHovered ? TalkieTheme.hover : Color.clear))
+                .fill(isSelected ? Color.accentColor.opacity(0.2) : (isHovered ? AgentTheme.hover : Color.clear))
         )
         .contentShape(Rectangle())
         .onTapGesture { action() }
@@ -769,12 +769,12 @@ struct VisualThemeButton: View {
 
             Text(theme.displayName)
                 .font(.system(size: 9, weight: .medium))
-                .foregroundColor(isSelected ? .accentColor : TalkieTheme.textSecondary)
+                .foregroundColor(isSelected ? .accentColor : AgentTheme.textSecondary)
         }
         .padding(Spacing.xs)
         .background(
             RoundedRectangle(cornerRadius: CornerRadius.sm)
-                .fill(isHovered ? TalkieTheme.hover : Color.clear)
+                .fill(isHovered ? AgentTheme.hover : Color.clear)
         )
         .contentShape(Rectangle())
         .onTapGesture { action() }
@@ -803,12 +803,12 @@ struct AccentColorButton: View {
 
             Text(option.displayName)
                 .font(.system(size: 8))
-                .foregroundColor(TalkieTheme.textTertiary)
+                .foregroundColor(AgentTheme.textTertiary)
         }
         .padding(Spacing.xs)
         .background(
             RoundedRectangle(cornerRadius: CornerRadius.xs)
-                .fill(isHovered ? TalkieTheme.hover : Color.clear)
+                .fill(isHovered ? AgentTheme.hover : Color.clear)
         )
         .contentShape(Rectangle())
         .onTapGesture { action() }
@@ -829,7 +829,7 @@ struct OverlayPositionRow: View {
         HStack {
             Text(position.displayName)
                 .font(.system(size: 11))
-                .foregroundColor(TalkieTheme.textPrimary)
+                .foregroundColor(AgentTheme.textPrimary)
 
             Spacer()
 
@@ -843,7 +843,7 @@ struct OverlayPositionRow: View {
         .padding(.vertical, Spacing.xs)
         .background(
             RoundedRectangle(cornerRadius: CornerRadius.xs)
-                .fill(isSelected ? Color.accentColor.opacity(0.15) : (isHovered ? TalkieTheme.hover : Color.clear))
+                .fill(isSelected ? Color.accentColor.opacity(0.15) : (isHovered ? AgentTheme.hover : Color.clear))
         )
         .contentShape(Rectangle())
         .onTapGesture { action() }
@@ -865,11 +865,11 @@ struct OverlayStyleRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(style.displayName)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .foregroundColor(AgentTheme.textPrimary)
 
                 Text(style.description)
                     .font(.system(size: 9))
-                    .foregroundColor(TalkieTheme.textTertiary)
+                    .foregroundColor(AgentTheme.textTertiary)
             }
 
             Spacer()
@@ -883,7 +883,7 @@ struct OverlayStyleRow: View {
         .padding(Spacing.sm)
         .background(
             RoundedRectangle(cornerRadius: CornerRadius.xs)
-                .fill(isSelected ? Color.accentColor.opacity(0.15) : (isHovered ? TalkieTheme.hover : Color.clear))
+                .fill(isSelected ? Color.accentColor.opacity(0.15) : (isHovered ? AgentTheme.hover : Color.clear))
         )
         .contentShape(Rectangle())
         .onTapGesture { action() }
