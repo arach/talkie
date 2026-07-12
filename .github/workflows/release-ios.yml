@@ -152,6 +152,16 @@ jobs:
           set -euo pipefail
 
           gem install fastlane --version 2.237.0 --no-document
+          ruby -e '
+            spec = Gem::Specification.find_by_name("fastlane", "2.237.0")
+            path = File.join(spec.full_gem_path, "spaceship/lib/spaceship/connect_api/models/app.rb")
+            source = File.read(path)
+            needle = "Spaceship::ConnectAPI::AppStoreVersion::AppVersionState::PREPARE_FOR_SUBMISSION,\n            Spaceship::ConnectAPI::AppStoreVersion::AppVersionState::DEVELOPER_REJECTED,"
+            replacement = "Spaceship::ConnectAPI::AppStoreVersion::AppVersionState::PREPARE_FOR_SUBMISSION,\n            Spaceship::ConnectAPI::AppStoreVersion::AppVersionState::READY_FOR_REVIEW,\n            Spaceship::ConnectAPI::AppStoreVersion::AppVersionState::DEVELOPER_REJECTED,"
+            patched = source.sub(needle, replacement)
+            abort "Fastlane editable-version patch did not apply" if patched == source
+            File.write(path, patched)
+          '
 
           api_key_json="$RUNNER_TEMP/fastlane-api-key.json"
           export FASTLANE_API_KEY_JSON="$api_key_json"

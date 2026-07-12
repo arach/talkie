@@ -11,6 +11,7 @@ screenshots_path(ENV.fetch("TALKIE_SCREENSHOTS_PATH", "./fastlane/marketing/.upl
 # Only upload screenshots, skip metadata and binary
 skip_metadata(true)
 skip_binary_upload(true)
+skip_app_version_update(true)
 
 # Don't submit for review automatically
 submit_for_review(false)
