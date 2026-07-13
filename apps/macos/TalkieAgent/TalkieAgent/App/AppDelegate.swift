@@ -30,7 +30,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private let hotKeyManager = HotKeyManager(signature: "\(sig)IV", hotkeyID: 1)  // Toggle mode
     private let pttHotKeyManager = HotKeyManager(signature: "\(sig)PT", hotkeyID: 3)  // Push-to-talk
     private let queuePickerHotKeyManager = HotKeyManager(signature: "\(sig)QP", hotkeyID: 2)  // Queue picker
-    private let ambientHotKeyManager = HotKeyManager(signature: "\(sig)AB", hotkeyID: 6)  // Ambient mode toggle
     private let composeHotKeyManager = HotKeyManager(signature: "\(sig)CO", hotkeyID: 7)  // Compose with selection
     private let speakSelectionHotKeyManager = HotKeyManager(signature: "\(sig)SP", hotkeyID: 14)  // Speak selected text
     private let screenshotHotKeyManager = HotKeyManager(signature: "\(sig)SS", hotkeyID: 8)  // Screenshot during recording
@@ -583,23 +582,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         menu.addItem(NSMenuItem.separator())
 
-        let ambientItem = NSMenuItem(title: "Ambient Mode", action: #selector(toggleAmbientModeFromMenu), keyEquivalent: "")
-        ambientItem.target = self
-        ambientItem.state = AmbientSettings.shared.isEnabled ? .on : .off
-        menu.addItem(ambientItem)
-
-        let streamingItem = NSMenuItem(title: "Streaming Wake Detection", action: #selector(toggleStreamingWakeFromMenu), keyEquivalent: "")
-        streamingItem.target = self
-        streamingItem.state = AmbientSettings.shared.useStreamingASR ? .on : .off
-        menu.addItem(streamingItem)
-
-        let clearQueueItem = NSMenuItem(title: "Clear Failed Queue", action: #selector(clearFailedQueue), keyEquivalent: "")
-        clearQueueItem.target = self
-        clearQueueItem.isHidden = true
-        menu.addItem(clearQueueItem)
-
-        menu.addItem(NSMenuItem.separator())
-
         let settingsItem = NSMenuItem(title: "Open Agent Home Settings...", action: #selector(showSettingsAction), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
@@ -776,7 +758,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             stateDetail = "Polishing the transcript"
         case .some(.idle):
             stateTitle = permissionsGranted ? "Ready" : "Needs Permissions"
-            stateDetail = AmbientSettings.shared.isEnabled ? "Ambient wake is on" : "Ready for \(settings.hotkey.displayString)"
+            stateDetail = "Ready for \(settings.hotkey.displayString)"
         case nil:
             stateTitle = "Starting"
             stateDetail = "Audio engine starting"
@@ -1004,20 +986,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                     self.showPermissions()
                 }
             },
-            openQueue: { [weak self] in
-                Task { @MainActor in
-                    guard let self else { return }
-                    self.dismissAgentMenuPopover()
-                    self.showQueuePicker()
-                }
-            },
-            clearQueue: { [weak self] in
-                Task { @MainActor in
-                    guard let self else { return }
-                    self.dismissAgentMenuPopover()
-                    self.clearFailedQueue()
-                }
-            },
             refreshAudioDevices: { [weak self] in
                 Task { @MainActor in
                     guard let self else { return }
@@ -1095,9 +1063,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         updateRecordingMenuItem(isRecording: agentController?.state == .listening)
         updateRecentMenu()
         updatePermissionsMenuItem()
-        updateAmbientMenuItem()
-        updateStreamingMenuItem()
-        updateClearQueueMenuItem()
     }
 
     private nonisolated static func truncatedMenuText(_ text: String, limit: Int) -> String {
@@ -1412,20 +1377,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             self?.showQueuePicker()
         }
 
-        // Register ambient mode toggle hotkey: ⌥⌘A (Option + Command + A)
-        // Only register if ambient mode feature flag is enabled
-        let ambientEnabled = TalkieSharedSettings.bool(forKey: AgentSettingsKey.featureAmbientModeEnabled)
-        if ambientEnabled {
-            // keyCode 0 = A key
-            ambientHotKeyManager.registerHotKey(
-                modifiers: UInt32(cmdKey | optionKey),
-                keyCode: 0
-            ) { [weak self] _ in  // Ignore timestamp for non-recording hotkeys
-                self?.toggleAmbientMode()
-            }
-            log.info("Ambient mode hotkey registered: ⌥⌘A")
-        }
-
         registerCaptureHotkeys()
         registerMarkupSafetyHotkey()
 
@@ -1463,10 +1414,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         lastPTTEnabled = settings.pttEnabled
         lastSelectionQuickHotkey = settings.selectionQuickHotkey
 
-        refreshHotkeyManagerDiagnostics(
-            pttEnabled: settings.pttEnabled,
-            ambientEnabled: ambientEnabled
-        )
+        refreshHotkeyManagerDiagnostics(pttEnabled: settings.pttEnabled)
 
         // Listen for hotkey config changes (from settings UI in this process)
         NotificationCenter.default.addObserver(
@@ -2285,7 +2233,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }
     }
 
-    private func refreshHotkeyManagerDiagnostics(pttEnabled: Bool, ambientEnabled: Bool) {
+    private func refreshHotkeyManagerDiagnostics(pttEnabled: Bool) {
         var managers: [(label: String, manager: HotKeyManager)] = [
             ("Toggle Recording", hotKeyManager),
             ("Queue Picker", queuePickerHotKeyManager),
@@ -2308,9 +2256,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         if pttEnabled {
             managers.append(("Push-to-Talk", pttHotKeyManager))
-        }
-        if ambientEnabled {
-            managers.append(("Ambient Mode", ambientHotKeyManager))
         }
         #if DEBUG
         managers.append(("Debug Paste", debugPasteHotKeyManager))
@@ -2418,10 +2363,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         lastPTTEnabled = settings.pttEnabled
         lastSelectionQuickHotkey = settings.selectionQuickHotkey
 
-        refreshHotkeyManagerDiagnostics(
-            pttEnabled: settings.pttEnabled,
-            ambientEnabled: TalkieSharedSettings.bool(forKey: AgentSettingsKey.featureAmbientModeEnabled)
-        )
+        refreshHotkeyManagerDiagnostics(pttEnabled: settings.pttEnabled)
 
         // Update menu item key equivalent
         updateMenuKeyEquivalent()
@@ -2973,28 +2915,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         ]
     }
 
-    private func toggleAmbientMode() {
-        let wasEnabled = AmbientController.shared.state != .disabled
-        log.info("Toggling ambient mode (currently \(wasEnabled ? "enabled" : "disabled"))")
-        AmbientController.shared.toggle()
-    }
-
-    @objc private func toggleAmbientModeFromMenu(_ sender: NSMenuItem) {
-        toggleAmbientMode()
-        sender.state = AmbientSettings.shared.isEnabled ? .on : .off
-    }
-
-    @objc private func clearFailedQueue() {
-        let count = UnifiedDatabase.countQueued()
-        guard count > 0 else {
-            log.info("No failed items to clear")
-            return
-        }
-
-        TranscriptionRetryManager.shared.clearPending()
-        log.info("Cleared \(count) failed transcriptions from queue")
-    }
-
     @objc private func rebootAudioSystem() {
         log.info("════════════════════════════════════════════════════════════")
         log.info("🔄 MANUAL AUDIO REBOOT requested from menu")
@@ -3018,19 +2938,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 showToast(emoji: "❌", message: "Audio reboot failed", color: .systemRed)
             }
         }
-    }
-
-    @objc private func toggleStreamingWakeFromMenu(_ sender: NSMenuItem) {
-        toggleStreamingWake()
-        sender.state = AmbientSettings.shared.useStreamingASR ? .on : .off
-    }
-
-    private func toggleStreamingWake() {
-        let newValue = !AmbientSettings.shared.useStreamingASR
-        AmbientSettings.shared.useStreamingASR = newValue
-        log.info("Streaming wake detection: \(newValue ? "enabled" : "disabled")")
-
-        // If ambient is currently running, it will pick up the change via the settings binding
     }
 
     @objc private func showHistory() {
@@ -3064,39 +2971,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             self.updateRecordingMenuItem(isRecording: self.agentController?.state == .listening)
             self.updateRecentMenu()
             self.updatePermissionsMenuItem()
-            self.updateAmbientMenuItem()
-            self.updateStreamingMenuItem()
-            self.updateClearQueueMenuItem()
-        }
-    }
-
-    private func updateAmbientMenuItem() {
-        guard let menu = agentStatusMenu,
-              let ambientItem = menu.items.first(where: { $0.action == #selector(toggleAmbientModeFromMenu) }) else {
-            return
-        }
-        ambientItem.state = AmbientSettings.shared.isEnabled ? .on : .off
-    }
-
-    private func updateStreamingMenuItem() {
-        guard let menu = agentStatusMenu,
-              let streamingItem = menu.items.first(where: { $0.action == #selector(toggleStreamingWakeFromMenu) }) else {
-            return
-        }
-        streamingItem.state = AmbientSettings.shared.useStreamingASR ? .on : .off
-    }
-
-    private func updateClearQueueMenuItem() {
-        guard let menu = agentStatusMenu,
-              let clearItem = menu.items.first(where: { $0.action == #selector(clearFailedQueue) }) else {
-            return
-        }
-        let count = UnifiedDatabase.countQueued()
-        if count > 0 {
-            clearItem.title = "Clear Failed Queue (\(count))"
-            clearItem.isHidden = false
-        } else {
-            clearItem.isHidden = true
         }
     }
 

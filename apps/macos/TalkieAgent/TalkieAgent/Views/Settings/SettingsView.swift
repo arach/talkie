@@ -717,7 +717,6 @@ enum QuickSettingsTab: String, CaseIterable {
     case audio
     case feedback
     case output
-    case ambient
     case permissions
     case connections
     case performance
@@ -736,7 +735,6 @@ enum QuickSettingsTab: String, CaseIterable {
         case .audio: return "Audio"
         case .feedback: return "Feedback"
         case .output: return "Output"
-        case .ambient: return "Ambient"
         case .permissions: return "Permissions"
         case .connections: return "Connections"
         case .performance: return "Performance"
@@ -757,7 +755,6 @@ enum QuickSettingsTab: String, CaseIterable {
         case .audio: return "mic.fill"
         case .feedback: return "rectangle.inset.topright.filled"
         case .output: return "arrow.right.doc.on.clipboard"
-        case .ambient: return "waveform.circle"
         case .permissions: return "lock.shield.fill"
         case .connections: return "network"
         case .performance: return "gauge.with.needle"
@@ -794,11 +791,6 @@ struct QuickSettingsView: View {
                     ForEach([QuickSettingsTab.shortcuts, .audio], id: \.self) { tab in
                         Label(tab.title, systemImage: tab.icon)
                             .tag(tab)
-                    }
-
-                    if TalkieSharedSettings.bool(forKey: AgentSettingsKey.featureAmbientModeEnabled) {
-                        Label(QuickSettingsTab.ambient.title, systemImage: QuickSettingsTab.ambient.icon)
-                            .tag(QuickSettingsTab.ambient)
                     }
                 }
 
@@ -856,8 +848,6 @@ struct QuickSettingsView: View {
                             OverlaySettingsSection()
                         case .output:
                             OutputSettingsSection()
-                        case .ambient:
-                            AmbientSettingsSection()
                         case .permissions:
                             PermissionsSettingsSection()
                         case .connections:

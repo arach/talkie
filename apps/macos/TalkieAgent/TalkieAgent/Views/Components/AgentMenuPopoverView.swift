@@ -49,8 +49,6 @@ struct AgentMenuActions {
     var openAudioSettings: () -> Void
     var openLogs: () -> Void
     var openPermissions: () -> Void
-    var openQueue: () -> Void
-    var clearQueue: () -> Void
     var refreshAudioDevices: () -> Void
     var selectSystemDefaultInput: () -> Void
     var selectInputDevice: (AgentMenuInputDevice) -> Void
@@ -1509,8 +1507,6 @@ private struct AgentMenuEmptyRow: View {
             openAudioSettings: {},
             openLogs: {},
             openPermissions: {},
-            openQueue: {},
-            clearQueue: {},
             refreshAudioDevices: {},
             selectSystemDefaultInput: {},
             selectInputDevice: { _ in },
