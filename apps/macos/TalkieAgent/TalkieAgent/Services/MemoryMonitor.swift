@@ -81,13 +81,8 @@ final class MemoryMonitor {
 
             // Audio memory tracker (most likely culprit)
             let audio = AudioMemoryTracker.shared.summary
-            context.append("audio_chunks=\(audio["audio_chunks"] ?? 0)(\(audio["audio_chunk_mb"] ?? 0)MB)")
             context.append("pcm_buf=\(audio["pcm_buffer_kb"] ?? 0)KB")
             context.append("temp_files=\(audio["temp_files"] ?? 0)")
-
-            // Ambient audio state
-            let ambient = AmbientAudioCapture.shared
-            context.append("ambient_dur=\(String(format: "%.0f", ambient.totalBufferedDuration))s")
 
             // Database counts
             let dictationCount = UnifiedDatabase.countDictations()

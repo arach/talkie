@@ -2084,18 +2084,6 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
         }
     }
 
-    nonisolated public func ambientCommandReceived(command: String, duration: TimeInterval, bufferContext: String?) {
-        DispatchQueue.main.async { [weak self] in
-            self?.handleAmbientCommand(command, duration: duration, bufferContext: bufferContext)
-        }
-    }
-
-    nonisolated public func voiceNavigationReceived(intent: String, confidence: Float, rawText: String) {
-        DispatchQueue.main.async { [weak self] in
-            self?.handleVoiceNavigation(intent: intent, confidence: confidence, rawText: rawText)
-        }
-    }
-
     nonisolated public func talkieAgentServerStatusDidChange(_ statusJSON: Data) {
         if let status = try? JSONDecoder().decode(TalkieAgentServerStatus.self, from: statusJSON) {
             Task { @MainActor in
@@ -2109,37 +2097,6 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
 
     // Live tray drains are now Agent-owned. Talkie stays on durable
     // view/edit/save surfaces and no longer serves tray asset fetch callbacks.
-
-    private func handleAmbientCommand(_ command: String, duration: TimeInterval, bufferContext: String?) {
-        logger.info("[Agent] Ambient command received: '\(command.prefix(50))...' (\(String(format: "%.1f", duration))s)")
-
-        // Store for UI (optional)
-        lastAmbientCommand = command
-        lastAmbientCommandTime = Date()
-
-        // TODO: Route to workflow system
-        // For now, just log the command
-        // Future: Create synthetic memo or trigger workflow directly
-    }
-
-    private func handleVoiceNavigation(intent: String, confidence: Float, rawText: String) {
-        logger.info("[Agent] Voice navigation received: \(intent) (confidence: \(String(format: "%.0f%%", confidence * 100)))")
-
-        // Store for UI
-        lastVoiceNavigationIntent = intent
-        lastVoiceNavigationTime = Date()
-
-        // Route to NavigationState
-        NavigationState.shared.handleVoiceNavigation(intent: intent, rawText: rawText)
-    }
-
-    // Track last ambient command for UI display
-    public private(set) var lastAmbientCommand: String?
-    public private(set) var lastAmbientCommandTime: Date?
-
-    // Track last voice navigation for UI display
-    public private(set) var lastVoiceNavigationIntent: String?
-    public private(set) var lastVoiceNavigationTime: Date?
 
     private func updateState(_ stateString: String, _ elapsed: TimeInterval) {
         let newState = LiveState(rawValue: stateString) ?? .idle

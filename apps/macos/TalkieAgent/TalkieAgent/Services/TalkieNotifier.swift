@@ -78,13 +78,6 @@ final class TalkieNotifier {
         sendSilent("routing")
     }
 
-    // MARK: - Ambient Mode
-
-    /// Notify Talkie of an ambient voice command
-    func ambientCommand(_ command: String) {
-        sendSilent("ambient.command", userInfo: ["cmd": command])
-    }
-
     // MARK: - Data Notifications (silent — refresh without activation)
 
     /// Notify Talkie that a new dictation was saved
