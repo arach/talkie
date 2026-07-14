@@ -3654,7 +3654,7 @@ private struct AgentHomeLibraryDetailPane: View {
                     .frame(height: 1)
 
                 ScrollView {
-                    Text(item.agentHomeTextPreview ?? item.agentHomeDisplayTitle)
+                    Text(item.agentHomeCopyableText ?? item.agentHomeDisplayTitle)
                         .font(OpsType.ui(OpsSize.lg))
                         .foregroundStyle(OpsInk.ink)
                         .lineSpacing(5)
@@ -3702,7 +3702,6 @@ private struct AgentHomeLibraryDetailPane: View {
             Text(item.agentHomeDisplayTitle)
                 .font(OpsType.ui(OpsSize.xl, weight: .semibold))
                 .foregroundStyle(OpsInk.ink)
-                .lineLimit(3)
 
             VStack(alignment: .leading, spacing: OpsSpacing.md) {
                 OpsButton("Open in Talkie", icon: "arrow.up.forward.app", style: .secondary) {
@@ -3769,17 +3768,25 @@ private struct AgentHomeLibraryDetailPane: View {
         let source = appName.isEmpty ? item.source.displayName : appName
 
         return AgentHomeKeyValueStack {
-            OpsKVRow("Source", value: source)
-            OpsKVRow("Created", value: item.createdAt.formatted(date: .abbreviated, time: .shortened))
-            OpsKVRow("Duration", value: item.duration > 0 ? Self.formatDuration(item.duration) : "-")
-            OpsKVRow("Words", value: item.wordCount > 0 ? "\(item.wordCount)" : "-")
-            OpsKVRow("Status", value: item.transcriptionStatus.displayName)
+            OpsKVRow("Source", value: source, valueLineLimit: nil)
+            OpsKVRow(
+                "Created",
+                value: item.createdAt.formatted(date: .abbreviated, time: .shortened),
+                valueLineLimit: nil
+            )
+            OpsKVRow(
+                "Duration",
+                value: item.duration > 0 ? Self.formatDuration(item.duration) : "-",
+                valueLineLimit: nil
+            )
+            OpsKVRow("Words", value: item.wordCount > 0 ? "\(item.wordCount)" : "-", valueLineLimit: nil)
+            OpsKVRow("Status", value: item.transcriptionStatus.displayName, valueLineLimit: nil)
 
             if item.hasAudio || !item.screenshots.isEmpty || !item.clips.isEmpty || !item.attachments.isEmpty {
-                OpsKVRow("Audio", value: item.hasAudio ? "Available" : "-")
-                OpsKVRow("Screenshots", value: "\(item.screenshots.count)")
-                OpsKVRow("Clips", value: "\(item.clips.count)")
-                OpsKVRow("Attachments", value: "\(item.attachments.count)")
+                OpsKVRow("Audio", value: item.hasAudio ? "Available" : "-", valueLineLimit: nil)
+                OpsKVRow("Screenshots", value: "\(item.screenshots.count)", valueLineLimit: nil)
+                OpsKVRow("Clips", value: "\(item.clips.count)", valueLineLimit: nil)
+                OpsKVRow("Attachments", value: "\(item.attachments.count)", valueLineLimit: nil)
             }
         }
     }
