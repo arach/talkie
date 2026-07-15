@@ -27,14 +27,10 @@ struct RecordingSheetNext: View {
     @ObservedObject private var controller = RecordingSheetController.shared
     @State private var appSettings = TalkieAppSettings.shared
     @StateObject private var recorder = AudioRecorderManager()
-    // Live partial-transcript ticker. Rides a parallel AVAudioEngine
-    // tap beside the AVAudioRecorder — preview only; the saved
-    // transcript still comes from the full-file pass after save.
-    @StateObject private var liveTranscript = LiveTranscriptMonitor()
 
     @State private var detent: PresentationDetent = ProcessInfo.processInfo.arguments.contains("-FASTLANE_SNAPSHOT")
-        ? .height(290)
-        : .height(330)
+        ? .height(260)
+        : .height(300)
     @State private var phase: Phase = .starting
     @State private var title: String = ""
     @State private var startedAt: Date = Date()
@@ -81,11 +77,16 @@ struct RecordingSheetNext: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.horizontal, 20)
-        // Production keeps the roomy 330pt recorder. App Store captures use
-        // a denser 290pt instrument so the deterministic transcript and
-        // controls remain legible at thumbnail scale without a dead panel.
+        // Production keeps a comfortable 300pt recorder. App Store captures
+        // use a denser 260pt instrument so the controls remain legible at
+        // thumbnail scale without leaving a dead panel.
         .presentationDetents(
-            [.height(screenshotCompactDetentHeight), .height(460), .height(560)],
+            [
+                .height(completionDetentHeight),
+                .height(screenshotCompactDetentHeight),
+                .height(460),
+                .height(560)
+            ],
             selection: $detent
         )
         .presentationDragIndicator(.hidden)
@@ -109,26 +110,22 @@ struct RecordingSheetNext: View {
             Haptics.confirm.fire()        // gentle "go" the frame capture engages
             Haptics.prepare(.transition)  // warm the stop thunk so it lands instantly
             phase = .recording
-            // Live preview + Live Activity ride along once the tape is
-            // actually rolling. startRecording() can defer ~300ms while
-            // the keyboard dictation service releases the mic, so poll
-            // briefly instead of assuming the session is live — starting
-            // the parallel AVAudioEngine tap before the recorder owns
-            // the session would race its category setup.
+            // Start the Live Activity once the tape is actually rolling.
+            // startRecording() can defer ~300ms while the keyboard dictation
+            // service releases the mic, so poll briefly instead of assuming
+            // the session is already live.
             Task { @MainActor in
                 for _ in 0..<4 {
                     try? await Task.sleep(for: .milliseconds(350))
                     guard controller.isPresented, phase == .recording else { return }
                     if recorder.isRecording {
                         RecordingLiveActivityController.shared.start(startedAt: startedAt)
-                        liveTranscript.start()
                         return
                     }
                 }
             }
         }
         .onDisappear {
-            liveTranscript.stop()
             if recorder.isRecording {
                 recorder.stopRecording()
                 recorder.finalizeRecording()
@@ -147,7 +144,17 @@ struct RecordingSheetNext: View {
     // MARK: - Starting
 
     private var screenshotCompactDetentHeight: CGFloat {
-        ProcessInfo.processInfo.arguments.contains("-FASTLANE_SNAPSHOT") ? 290 : 330
+        ProcessInfo.processInfo.arguments.contains("-FASTLANE_SNAPSHOT") ? 260 : 300
+    }
+
+    private var completionDetentHeight: CGFloat { 220 }
+
+    private var recordingContentSpacing: CGFloat {
+        ProcessInfo.processInfo.arguments.contains("-FASTLANE_SNAPSHOT") ? 6 : 8
+    }
+
+    private var recordingWaveformHeight: CGFloat {
+        ProcessInfo.processInfo.arguments.contains("-FASTLANE_SNAPSHOT") ? 40 : 44
     }
 
     private var startingBody: some View {
@@ -172,6 +179,14 @@ struct RecordingSheetNext: View {
         recordingWaveformUsesParticles ? .recording : theme.currentTheme.chrome.accent
     }
 
+    private var isAppPreviewCapture: Bool {
+        let arguments = ProcessInfo.processInfo.arguments
+        return arguments.contains("-FASTLANE_SNAPSHOT")
+            && arguments.contains("--animateRecordingWaveform")
+    }
+
+    private var animatesPreviewWaveform: Bool { isAppPreviewCapture }
+
     private var recordingWaveformLevels: [Float] {
         if ProcessInfo.processInfo.arguments.contains("-FASTLANE_SNAPSHOT") {
             return Self.screenshotWaveformLevels
@@ -191,13 +206,36 @@ struct RecordingSheetNext: View {
         return min(0.94, max(0.06, 0.08 + signal * 0.82))
     }
 
-    private var recordingBody: some View {
-        VStack(spacing: 14) {
-            recordingWaveform
-                .frame(height: 56)
-                .padding(.horizontal, -20)
+    /// The App Preview cannot produce a reliable speech transcript from the
+    /// simulator microphone. Seed the saved memo so the capture demonstrates
+    /// the same post-recording detail state real recordings reach after the
+    /// background transcription pass completes.
+    private static let appPreviewTranscript =
+        "The launch checklist is ready. I’ll confirm the final build and share the release plan with the team."
 
-            liveTranscriptPreview
+    /// The App Preview has no meaningful simulator microphone input, so move
+    /// the deterministic envelope past the tape head at a speech-like rate.
+    /// Interpolating adjacent samples keeps the motion fluid while ordinary
+    /// screenshot tests retain the exact fixed waveform above.
+    private func animatedScreenshotWaveformLevels(at date: Date) -> [Float] {
+        let levels = Self.screenshotWaveformLevels
+        guard !levels.isEmpty else { return [] }
+
+        let elapsed = max(0, date.timeIntervalSince(startedAt))
+        let samplePosition = elapsed * 12
+        let wholeStep = Int(samplePosition)
+        let blend = Float(samplePosition - Double(wholeStep))
+
+        return levels.indices.map { index in
+            let current = levels[(index + wholeStep) % levels.count]
+            let next = levels[(index + wholeStep + 1) % levels.count]
+            return current + (next - current) * blend
+        }
+    }
+
+    private var recordingBody: some View {
+        VStack(spacing: recordingContentSpacing) {
+            recordingWaveform
 
             HStack(spacing: 10) {
                 RecordingPulse(color: recordingWaveformColor, size: 8)
@@ -239,65 +277,53 @@ struct RecordingSheetNext: View {
                     }
                 )
             }
-            .padding(.bottom, 22)
+            .padding(.bottom, ProcessInfo.processInfo.arguments.contains("-FASTLANE_SNAPSHOT") ? 0 : 8)
         }
-        .padding(.top, 4)
     }
 
     @ViewBuilder
     private var recordingWaveform: some View {
-        if recordingWaveformUsesParticles {
-            ParticlesWaveformView(
-                levels: recordingWaveformLevels,
-                height: 56,
-                color: .recording
-            )
-            .background(theme.colors.cardBackground.opacity(0.35))
+        if animatesPreviewWaveform && !TalkieMotion.isReduced {
+            TimelineView(.animation(minimumInterval: 1.0 / 15.0)) { timeline in
+                recordingWaveformTrack(
+                    levels: animatedScreenshotWaveformLevels(at: timeline.date)
+                )
+            }
         } else {
-            TapeWaveformView(
-                levels: recordingWaveformLevels,
-                height: 56,
-                color: theme.currentTheme.chrome.accent
-            )
+            recordingWaveformTrack(levels: recordingWaveformLevels)
         }
     }
 
-    // Two-line live transcript ticker beneath the waveform. The slot
-    // height is RESERVED whether or not words ever arrive — degraded
-    // (no speech permission, recognizer down) is just quiet emptiness,
-    // never an error and never a layout jump. Tail-biased so the most
-    // recent words are always the visible ones.
-    private var liveTranscriptPreview: some View {
-        Text(liveTranscriptTail)
-            .talkieType(.fieldValue)
-            .foregroundStyle(theme.colors.textSecondary)
-            .lineLimit(2)
-            .truncationMode(.head)
-            .multilineTextAlignment(.leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: 34, alignment: .bottom)
-            .animation(
-                TalkieMotion.isReduced ? nil : .easeOut(duration: 0.18),
-                value: liveTranscript.transcript
-            )
-            .accessibilityLabel("Live transcript preview")
-    }
-
-    /// Last ~2 lines' worth of the running partial transcript, cut on
-    /// a word boundary with a leading ellipsis once it overflows.
-    private var liveTranscriptTail: String {
-        if ProcessInfo.processInfo.arguments.contains("-FASTLANE_SNAPSHOT") {
-            return "The launch checklist is ready. I’ll confirm the final build and share the release plan with the team."
+    private func recordingWaveformTrack(levels: [Float]) -> some View {
+        Group {
+            if recordingWaveformUsesParticles {
+                ParticlesWaveformView(
+                    levels: levels,
+                    height: recordingWaveformHeight,
+                    color: .recording
+                )
+            } else {
+                TapeWaveformView(
+                    levels: levels,
+                    height: recordingWaveformHeight,
+                    color: theme.currentTheme.chrome.accent
+                )
+            }
         }
-
-        let text = liveTranscript.transcript
-        let maxTail = 96  // ≈ two lines of 12pt mono at sheet width
-        guard text.count > maxTail else { return text }
-        let tail = text.suffix(maxTail)
-        if let space = tail.firstIndex(of: " ") {
-            return "… " + tail[tail.index(after: space)...]
-        }
-        return "… " + tail
+        .frame(height: recordingWaveformHeight)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(theme.colors.cardBackground.opacity(0.62))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(
+                            theme.currentTheme.chrome.edgeFaint,
+                            lineWidth: theme.currentTheme.chrome.hairlineWidth
+                        )
+                )
+        )
+        .clipShape(.rect(cornerRadius: 10))
+        .accessibilityElement(children: .contain)
     }
 
     // MARK: - Stopped (save metadata)
@@ -409,9 +435,10 @@ struct RecordingSheetNext: View {
                         .talkieType(.listTitle)
                         .foregroundStyle(theme.colors.textPrimary)
                 }
-                .padding(.top, 40)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .padding(.bottom, 14)
     }
 
     // The first-ever save. A single amber ring expands out of the
@@ -442,7 +469,6 @@ struct RecordingSheetNext: View {
                     .foregroundStyle(theme.currentTheme.chrome.accent)
             }
         }
-        .padding(.top, 36)
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.62)) {
                 firstSavePulse = true
@@ -635,9 +661,6 @@ struct RecordingSheetNext: View {
 
     private func cancelRecording() {
         Haptics.toggle.fire()  // neutral dismiss — nothing kept
-        // Preview engine down BEFORE the recorder deactivates the
-        // shared session — reverse order races the teardown.
-        liveTranscript.stop()
         recorder.stopRecording()
         recorder.finalizeRecording()
         // Delete the temp file
@@ -650,9 +673,6 @@ struct RecordingSheetNext: View {
 
     private func stopRecording() {
         Haptics.transition.fire()  // firm "caught it" the instant capture ends
-        // Preview engine down BEFORE the recorder deactivates the
-        // shared session — reverse order races the teardown.
-        liveTranscript.stop()
         // Snapshot duration + levels BEFORE finalizing — the recorder
         // resets isRecording and may clear state on finalize.
         savedDuration = recorder.recordingDuration
@@ -686,6 +706,7 @@ struct RecordingSheetNext: View {
         phase = .saving
 
         let context = PersistenceController.shared.container.viewContext
+        let isPreviewCapture = isAppPreviewCapture
         // Detect the milestone BEFORE inserting this memo — count == 0
         // means this is the first one ever. `--celebrateFirstSave` forces
         // it so the moment can be previewed on a device that already has
@@ -700,10 +721,12 @@ struct RecordingSheetNext: View {
         memo.lastModified = Date()
         memo.duration = savedDuration
         memo.fileURL = url.lastPathComponent
-        // The detail screen may open before TranscriptionService has had a
-        // chance to flip the flag. Start optimistic so the first frame reads
-        // as "working" instead of empty.
-        memo.isTranscribing = true
+        // Real recordings start their post-save transcription pass below.
+        // The deterministic App Preview starts in the already-completed state.
+        memo.isTranscribing = !isPreviewCapture
+        if isPreviewCapture {
+            memo.transcription = Self.appPreviewTranscript
+        }
         memo.sortOrder = Int32(Date().timeIntervalSince1970 * -1)
         memo.originDeviceId = PersistenceController.deviceId
         memo.autoProcessed = false
@@ -730,17 +753,16 @@ struct RecordingSheetNext: View {
                 persistQueuedContext(for: memoID, memoTitle: memo.title ?? defaultTitle)
             }
 
-            // Kick off transcription on the saved memo. Matches the
-            // donor RecordingView flow: ~500ms grace so Core Data
-            // settles the write, then hand the memo + context to
-            // TranscriptionService.shared which writes the transcript
-            // back via isTranscribing toggling + transcription field.
-            let memoObjectID = memo.objectID
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(500))
-                if let savedMemo = context.object(with: memoObjectID) as? VoiceMemo {
-                    AppLogger.transcription.info("Starting transcription for persisted memo")
-                    TranscriptionService.shared.transcribeVoiceMemo(savedMemo, context: context)
+            if !isPreviewCapture {
+                // Give Core Data a brief grace period, then transcribe the
+                // saved audio file and publish the result back to this memo.
+                let memoObjectID = memo.objectID
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(500))
+                    if let savedMemo = context.object(with: memoObjectID) as? VoiceMemo {
+                        AppLogger.transcription.info("Starting transcription for persisted memo")
+                        TranscriptionService.shared.transcribeVoiceMemo(savedMemo, context: context)
+                    }
                 }
             }
 
@@ -756,6 +778,7 @@ struct RecordingSheetNext: View {
                     WalkieFX.shared.playOpeningClick()
                 }
             }
+            detent = .height(completionDetentHeight)
             phase = .saved
             // Let the first-save moment breathe before the sheet dismisses.
             let savedMemoID = memo.id?.uuidString

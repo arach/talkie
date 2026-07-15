@@ -550,12 +550,10 @@ final class AppShellRouter: ObservableObject {
     /// AppShellNext consumes this, creates the VoiceMemo, and routes
     /// to the new detail surface.
     @Published var pendingNewMemoText: String?
-    /// Prompt routed into the next Ask AI surface. Set by `openAskAISeeded`
-    /// — typically the fallthrough path when a voice command lands on a
-    /// surface with no specific intent handler. AskAINext consumes +
-    /// clears this on appear (sets `session.prompt = pending`, user
-    /// reviews + sends).
-    @Published var pendingAskAIPrompt: String?
+    /// Request routed into the next Ask AI surface. Callers can choose
+    /// whether the prompt is only staged for review or sent immediately,
+    /// and whether it should begin a clean conversation.
+    @Published var pendingAskAIRequest: AskAISeedRequest?
     /// Signals that the next Compose surface should auto-focus its
     /// editor on appear (popping the embedded Talkie keyboard).
     /// ComposeNextView consumes + clears this on appear.
@@ -714,12 +712,19 @@ final class AppShellRouter: ObservableObject {
         pendingNewMemoText = text
     }
 
-    /// Open Ask AI with the prompt pre-filled. Used as the fallthrough
-    /// target when a voice command lands on a surface that has no
-    /// specific intent handler — the user gets a fresh Ask AI session
-    /// seeded with what they said.
-    func openAskAISeeded(prompt: String) {
-        pendingAskAIPrompt = prompt
+    /// Open Ask AI with a routed prompt. Home and release-to-send voice
+    /// commands can dispatch immediately; editing surfaces can still stage
+    /// text for review by using the default arguments.
+    func openAskAISeeded(
+        prompt: String,
+        autoSend: Bool = false,
+        startsNewSession: Bool = false
+    ) {
+        pendingAskAIRequest = AskAISeedRequest(
+            prompt: prompt,
+            autoSend: autoSend,
+            startsNewSession: startsNewSession
+        )
         openAskAI()
     }
 
@@ -734,8 +739,18 @@ final class AppShellRouter: ObservableObject {
             activeComposeStore?.voiceCommandReceived(transcript)
             return
         }
-        openAskAISeeded(prompt: transcript)
+        openAskAISeeded(
+            prompt: transcript,
+            autoSend: true,
+            startsNewSession: true
+        )
     }
+}
+
+struct AskAISeedRequest: Equatable {
+    let prompt: String
+    let autoSend: Bool
+    let startsNewSession: Bool
 }
 
 /// Payload routed into the ReadAloud surface from any "Listen"

@@ -54,6 +54,20 @@ BridgeManager (Talkie.app)
     └── HTTP → TalkieAgentServer :8765 (pairing, devices, status)
 ```
 
+## Data flow: reusable iPhone inference
+
+Ask AI and future iPhone features pass structured chat messages to one iOS
+`InferenceService`. It chooses transport without changing the feature's
+intent:
+
+- If the selected provider has a key on iPhone, call that provider directly.
+- Otherwise, if a Mac is paired, call TalkieAgentServer's
+  `POST /inference/configured` route. The Mac resolves its configured provider
+  and executes through the existing Gateway registry.
+- Scout remains the interface for agent/session handoff. Generic model
+  inference uses the Gateway so it can be shared without pretending every
+  request is an agent session or exporting Mac credentials to iPhone.
+
 ## The inversion
 
 Most of the smart logic lives in **TypeScript** (TalkieAgentServer), owned by the **Agent** process. The Swift HTTP surface in Talkie.app is the dumb passthrough.

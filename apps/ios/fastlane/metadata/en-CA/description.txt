@@ -1,11 +1,27 @@
-Record your thoughts. Talkie transcribes them on your device.
+Say it before it slips away.
 
-No account. No cloud processing. Your recordings and transcripts live in your iCloud. Private by default.
+Talkie turns your voice into useful work. Record a memo, follow the transcript as it takes shape, or dictate straight into any text field. When a thought needs polish, ask Talkie to shorten it, clean it up, or change the tone—then review every edit before accepting it.
 
-Tap to record. Talkie creates a searchable transcript when you stop. Browse your memos, search by content, pick up where you left off.
+CAPTURE WITHOUT BREAKING FLOW
+• Start a voice memo in one tap
+• Follow a live transcript as you speak
+• Find past memos by what you said
 
-Speech recognition runs entirely on your device. Your audio never touches a server.
+WRITE AT THE SPEED OF THOUGHT
+• Dictate into Messages, Notes, Mail, and more with the Talkie keyboard
+• Keep composing without jumping between apps
+• Turn rough speech into clear, useful writing
 
-Install the Talkie keyboard to dictate into any app. Messages, Notes, Mail, anywhere you type. Your voice becomes text.
+STAY IN CONTROL OF AI EDITS
+• Ask for a rewrite in your own words
+• Compare the before and after
+• Accept only the changes you want
 
-Syncs across your devices through iCloud.
+CHOOSE HOW TALKIE WORKS
+• Use Apple Speech or a local Parakeet model for transcription
+• Connect your own AI provider or route work through your Mac
+• Keep recordings and transcripts in sync with iCloud
+
+No Talkie account is required. Your captures live on your devices and in your iCloud account.
+
+For ideas that arrive faster than a keyboard, there’s Talkie.

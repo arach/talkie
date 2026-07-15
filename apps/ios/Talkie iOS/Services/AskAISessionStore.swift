@@ -12,6 +12,9 @@ struct AskAISessionSnapshot: Codable, Equatable {
     let lastPreset: AskAIPreset?
     let lastModel: String?
     let lastTurnID: AskAITurn.ID?
+    let draftPrompt: String?
+    let retryMessages: [InferenceMessage]?
+    let failure: InferenceError?
 }
 
 @MainActor
@@ -42,7 +45,10 @@ final class AskAISessionStore {
             turns: snapshot.turns.filter { !$0.isThinking },
             lastPreset: snapshot.lastPreset,
             lastModel: snapshot.lastModel,
-            lastTurnID: snapshot.lastTurnID
+            lastTurnID: snapshot.lastTurnID,
+            draftPrompt: snapshot.draftPrompt,
+            retryMessages: snapshot.retryMessages,
+            failure: snapshot.failure
         )
         cachedSnapshot = stableSnapshot
 

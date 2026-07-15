@@ -613,6 +613,37 @@ actor BridgeClient {
         return try JSONDecoder().decode(ComposeRevisionEnvelope.self, from: data)
     }
 
+    func configuredInference(messages: [InferenceMessage]) async throws -> InferenceResult {
+        let body = ConfiguredInferenceRequest(
+            messages: messages,
+            temperature: 0.3,
+            maxTokens: 2048
+        )
+        let data = try await post("/inference/configured", body: body, timeout: 90)
+        let envelope = try JSONDecoder().decode(ConfiguredInferenceEnvelope.self, from: data)
+
+        guard envelope.ok, let result = envelope.result else {
+            let message = envelope.error ?? "Mac inference failed"
+            switch envelope.errorCode {
+            case .configurationRequired:
+                throw InferenceError.configurationRequired
+            case .credentialsRejected:
+                throw InferenceError.credentialsRejected(providerName: "Paired Mac")
+            case .network:
+                throw InferenceError.network(message: message)
+            case .requestFailed, .none:
+                throw InferenceError.request(message: message)
+            }
+        }
+
+        return InferenceResult(
+            content: result.content,
+            providerName: result.providerName,
+            modelId: result.modelId,
+            route: .mac
+        )
+    }
+
     func composeCommand(
         body: ComposeCommandRequest
     ) async throws -> ComposeCommandEnvelope {
@@ -1241,6 +1272,33 @@ struct ComposeRevisionRequest: Codable {
     let instruction: String
 }
 
+struct ConfiguredInferenceRequest: Codable {
+    let messages: [InferenceMessage]
+    let temperature: Double?
+    let maxTokens: Int?
+}
+
+struct ConfiguredInferenceEnvelope: Codable {
+    let ok: Bool
+    let result: ConfiguredInferenceWireResult?
+    let error: String?
+    let errorCode: ConfiguredInferenceErrorCode?
+}
+
+enum ConfiguredInferenceErrorCode: String, Codable {
+    case configurationRequired = "configuration_required"
+    case credentialsRejected = "credentials_rejected"
+    case network
+    case requestFailed = "request_failed"
+}
+
+struct ConfiguredInferenceWireResult: Codable {
+    let content: String
+    let providerId: String
+    let providerName: String
+    let modelId: String
+}
+
 struct ComposeCommandRequest: Codable {
     let context: String
     let instruction: String
@@ -1322,7 +1380,7 @@ struct ComposeCommandResult: Codable {
     let fallbackReason: String?
 }
 
-struct ComposeBorrowedProvider: Codable {
+struct ComposeBorrowedProvider: Codable, Sendable {
     let providerId: String
     let providerName: String
     let modelId: String

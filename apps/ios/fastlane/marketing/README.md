@@ -6,14 +6,22 @@ The exported PNGs are 1320 x 2868 pixels and use real simulator captures.
 The companion 29-second App Preview, poster frame, capture harness, and
 reproducible edit live under `app-preview/`.
 
+## Campaign spine
+
+**Voice into action.** Talkie catches an idea at speaking speed, turns it into
+usable writing, and keeps the user in control of what happens next.
+
+The first three frames sell momentum. The last three prove control: visible AI
+edits, flexible processing, and dictation anywhere.
+
 ## Story order
 
-1. Catch every thought while it's alive — home and capture overview
-2. Talk naturally. Talkie keeps up — active voice recording
-3. Turn speech into finished writing — live dictation and composition
-4. See every edit. Keep the final say — AI diff review
-5. Private by design. Flexible by default — engines and settings
-6. Your voice works wherever you type — Talkie keyboard
+1. Say it before it slips away — home and capture overview
+2. Talk at full speed. Talkie keeps up — active voice recording
+3. Go from voice to finished writing — live dictation and composition
+4. Ask for the edit. Approve every word — AI diff review
+5. Choose how Talkie gets it done — engines, providers, and Mac routing
+6. Dictate anywhere. Keep moving — Talkie keyboard
 
 The opening three carry the core capture-to-writing story because they may be
 shown in App Store search results. The sequence alternates warm paper and dark

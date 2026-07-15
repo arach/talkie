@@ -1076,7 +1076,7 @@ private struct DocumentBody: View {
                         isEditable: state == .idle || state == .dictating,
                         textColor: UIColor(theme.colors.textPrimary),
                         accentColor: UIColor(theme.currentTheme.chrome.accent),
-                        contentBottomInset: 72
+                        contentBottomInset: state == .dictating ? 116 : 72
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     // Win the card's full height ahead of the trailing
@@ -1086,11 +1086,6 @@ private struct DocumentBody: View {
                     .layoutPriority(1)
                     .padding(.horizontal, 14)
                     .padding(.top, 12)
-
-                    if state == .dictating, let dictationPreview {
-                        DictationPreviewStrip(preview: dictationPreview)
-                            .padding(.horizontal, 16)
-                    }
 
                     if state == .listening, let voiceCommand {
                         ListeningStrip(commandText: voiceCommand)
@@ -1111,18 +1106,21 @@ private struct DocumentBody: View {
             // out of the way while scrolling down so it stops covering
             // the text you're reading, glides back on scroll-up.
             if state == .idle || state == .dictating {
-                EditorBottomChromeFade()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .allowsHitTesting(false)
+                VStack(spacing: 8) {
+                    if state == .dictating, let dictationPreview {
+                        DictationPreviewStrip(preview: dictationPreview)
+                            .padding(.horizontal, 30)
+                    }
 
-                ComposeFloatingTools(state: state, onMic: onMic)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .padding(.bottom, 14)
-                    .opacity(isMicVisible ? 1 : 0)
-                    .scaleEffect(isMicVisible ? 1 : 0.85, anchor: .bottom)
-                    .offset(y: isMicVisible ? 0 : 16)
-                    .allowsHitTesting(isMicVisible)
-                    .animation(.easeOut(duration: 0.2), value: isMicVisible)
+                    ComposeFloatingTools(state: state, onMic: onMic)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .padding(.bottom, 14)
+                .opacity(isMicVisible ? 1 : 0)
+                .scaleEffect(isMicVisible ? 1 : 0.85, anchor: .bottom)
+                .offset(y: isMicVisible ? 0 : 16)
+                .allowsHitTesting(isMicVisible)
+                .animation(.easeOut(duration: 0.2), value: isMicVisible)
             }
         }
         .padding(.top, 6)
@@ -1136,29 +1134,6 @@ private struct DocumentBody: View {
                     .strokeBorder(theme.currentTheme.chrome.edgeFaint,
                                   lineWidth: theme.currentTheme.chrome.hairlineWidth)
             )
-    }
-}
-
-private struct EditorBottomChromeFade: View {
-    @ObservedObject private var theme = ThemeManager.shared
-
-    var body: some View {
-        VStack(spacing: 0) {
-            LinearGradient(
-                colors: [
-                    theme.colors.cardBackground.opacity(0),
-                    theme.colors.cardBackground.opacity(0.14),
-                    theme.colors.cardBackground.opacity(0.24),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 50)
-
-            Rectangle()
-                .fill(theme.colors.cardBackground.opacity(0.18))
-                .frame(height: 18)
-        }
     }
 }
 
@@ -1494,20 +1469,9 @@ private struct ComposeFloatingTools: View {
             .fill(theme.colors.cardBackground)
             .overlay(
                 RoundedRectangle(cornerRadius: CornerRadius.sm + 4, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.white.opacity(0.18), theme.currentTheme.chrome.actionTint],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: CornerRadius.sm + 4, style: .continuous)
                     .strokeBorder(theme.currentTheme.chrome.edge,
                                   lineWidth: theme.currentTheme.chrome.hairlineWidth)
             )
-            .shadow(color: .black.opacity(0.10), radius: 8, x: 0, y: 4)
     }
 }
 
@@ -2328,14 +2292,12 @@ private struct ComposeNotesListSheet: View {
                                     Image(systemName: note.id == activeID ? "checkmark.circle.fill" : "doc.text")
                                         .foregroundStyle(note.id == activeID ? theme.currentTheme.chrome.accent : theme.colors.textTertiary)
                                     VStack(alignment: .leading, spacing: 3) {
-                                        Text(note.title)
-                                            .foregroundStyle(theme.colors.textPrimary)
-                                            .lineLimit(1)
                                         Text(note.preview)
-                                            .foregroundStyle(theme.colors.textTertiary)
+                                            .talkieType(.preview)
+                                            .foregroundStyle(theme.colors.textPrimary)
                                             .lineLimit(2)
                                         Text(note.modifiedLabel)
-                                            .font(.caption2)
+                                            .talkieType(.channelLabelTiny)
                                             .foregroundStyle(theme.colors.textTertiary)
                                     }
                                 }

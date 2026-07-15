@@ -11,8 +11,32 @@ import Security
 struct ComposeProviderCredentialStore {
     static let shared = ComposeProviderCredentialStore()
 
-    private let service = "to.talkie.compose-provider"
+    private let readData: (String) -> Data?
+    private let writeData: (Data, String) -> OSStatus
+    private let removeData: (String) -> OSStatus
     private let lastProviderAccount = "last-provider"
+
+    init(service: String = "to.talkie.compose-provider") {
+        self.readData = { account in
+            Self.readKeychainData(service: service, account: account)
+        }
+        self.writeData = { data, account in
+            Self.writeKeychainData(data, service: service, account: account)
+        }
+        self.removeData = { account in
+            Self.removeKeychainData(service: service, account: account)
+        }
+    }
+
+    init(
+        readData: @escaping (String) -> Data?,
+        writeData: @escaping (Data, String) -> OSStatus,
+        removeData: @escaping (String) -> OSStatus
+    ) {
+        self.readData = readData
+        self.writeData = writeData
+        self.removeData = removeData
+    }
 
     @discardableResult
     func save(_ provider: ComposeBorrowedProvider) -> Bool {
@@ -36,8 +60,10 @@ struct ComposeProviderCredentialStore {
     }
 
     func load(providerId: String? = nil, modelId: String? = nil) -> ComposeBorrowedProvider? {
-        if let providerId = normalized(providerId),
-           let provider = load(account: account(for: providerId)) {
+        if let providerId = normalized(providerId) {
+            guard let provider = load(account: account(for: providerId)) else {
+                return nil
+            }
             return provider.borrowedProvider(modelId: normalized(modelId))
         }
 
@@ -49,17 +75,21 @@ struct ComposeProviderCredentialStore {
         // leave Anthropic/OpenRouter keys behind in the Keychain on "clear".
         let accounts = [lastProviderAccount] + AIProviderCatalog.ids.map { account(for: $0) }
         for account in accounts {
-            let query: [CFString: Any] = [
-                kSecClass: kSecClassGenericPassword,
-                kSecAttrService: service,
-                kSecAttrAccount: account
-            ]
-            let status = SecItemDelete(query as CFDictionary)
+            let status = removeData(account)
             if status != errSecSuccess && status != errSecItemNotFound {
                 AppLogger.ai.warning("AI credential delete failed", detail: "account=\(account) status=\(status)")
             }
         }
         AppLogger.ai.info("AI credentials cleared")
+    }
+
+    func delete(providerId: String) {
+        guard let providerId = normalized(providerId) else { return }
+        delete(account: account(for: providerId))
+
+        if load(account: lastProviderAccount)?.providerId == providerId {
+            delete(account: lastProviderAccount)
+        }
     }
 
     private func save(_ provider: CachedComposeProvider, account: String) -> Bool {
@@ -68,34 +98,29 @@ struct ComposeProviderCredentialStore {
             return false
         }
 
-        let query: [CFString: Any] = [
-            kSecClass: kSecClassGenericPassword,
-            kSecAttrService: service,
-            kSecAttrAccount: account
-        ]
-
-        let updateStatus = SecItemUpdate(query as CFDictionary, [kSecValueData: data] as CFDictionary)
-        if updateStatus == errSecSuccess {
+        let status = writeData(data, account)
+        if status == errSecSuccess {
             AppLogger.ai.info("AI credentials updated", detail: "provider=\(provider.providerId) model=\(provider.modelId) account=\(account)")
             return true
         }
 
-        var attributes = query
-        attributes[kSecValueData] = data
-        attributes[kSecAttrAccessible] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-
-        SecItemDelete(query as CFDictionary)
-        let addStatus = SecItemAdd(attributes as CFDictionary, nil)
-        if addStatus == errSecSuccess {
-            AppLogger.ai.info("AI credentials saved", detail: "provider=\(provider.providerId) model=\(provider.modelId) account=\(account)")
-            return true
-        } else {
-            AppLogger.ai.error("AI credential save failed", detail: "provider=\(provider.providerId) account=\(account) status=\(addStatus)")
-            return false
-        }
+        AppLogger.ai.error("AI credential save failed", detail: "provider=\(provider.providerId) account=\(account) status=\(status)")
+        return false
     }
 
     private func load(account: String) -> CachedComposeProvider? {
+        guard let data = readData(account) else { return nil }
+        return try? JSONDecoder().decode(CachedComposeProvider.self, from: data)
+    }
+
+    private func delete(account: String) {
+        let status = removeData(account)
+        if status != errSecSuccess && status != errSecItemNotFound {
+            AppLogger.ai.warning("AI credential delete failed", detail: "account=\(account) status=\(status)")
+        }
+    }
+
+    private static func readKeychainData(service: String, account: String) -> Data? {
         let query: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: service,
@@ -105,14 +130,36 @@ struct ComposeProviderCredentialStore {
         ]
 
         var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-
-        guard status == errSecSuccess,
-              let data = item as? Data else {
+        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess else {
             return nil
         }
+        return item as? Data
+    }
 
-        return try? JSONDecoder().decode(CachedComposeProvider.self, from: data)
+    private static func writeKeychainData(_ data: Data, service: String, account: String) -> OSStatus {
+        let query: [CFString: Any] = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: service,
+            kSecAttrAccount: account
+        ]
+
+        let updateStatus = SecItemUpdate(query as CFDictionary, [kSecValueData: data] as CFDictionary)
+        if updateStatus == errSecSuccess { return updateStatus }
+        guard updateStatus == errSecItemNotFound else { return updateStatus }
+
+        var attributes = query
+        attributes[kSecValueData] = data
+        attributes[kSecAttrAccessible] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        return SecItemAdd(attributes as CFDictionary, nil)
+    }
+
+    private static func removeKeychainData(service: String, account: String) -> OSStatus {
+        let query: [CFString: Any] = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: service,
+            kSecAttrAccount: account
+        ]
+        return SecItemDelete(query as CFDictionary)
     }
 
     private func account(for providerId: String) -> String {

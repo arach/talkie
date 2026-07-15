@@ -1082,6 +1082,25 @@ final class BridgeManager {
         return result
     }
 
+    func configuredInference(messages: [InferenceMessage]) async throws -> InferenceResult {
+        guard isPaired else {
+            throw BridgeError.notConfigured
+        }
+
+        if status != .connected {
+            await connect()
+        }
+
+        guard status == .connected else {
+            throw BridgeError.connectionFailed
+        }
+
+        let result = try await client.configuredInference(messages: messages)
+        lastSuccessfulContactAt = .now
+        updateActiveMacContactDate(.now)
+        return result
+    }
+
     func composeCommand(
         context: String,
         instruction: String,

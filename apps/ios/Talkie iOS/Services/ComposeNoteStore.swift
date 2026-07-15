@@ -11,7 +11,6 @@ import TalkieMobileKit
 enum ComposeNoteStore {
     struct NoteSummary: Identifiable, Equatable {
         let id: String
-        let title: String
         let preview: String
         let modifiedLabel: String
     }
@@ -164,10 +163,20 @@ enum ComposeNoteStore {
         let content = note.content?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return NoteSummary(
             id: id,
-            title: cleanTitle(note.title, fallback: "Untitled note"),
-            preview: content.isEmpty ? "Empty note" : String(content.prefix(120)),
+            preview: displayText(from: content, limit: 120),
             modifiedLabel: modifiedLabel(note.lastModified ?? note.createdAt)
         )
+    }
+
+    /// Compose documents are content-first. Their stored title is an internal
+    /// compatibility field, so list surfaces should derive a compact label
+    /// from the document itself instead of exposing "Untitled note".
+    static func displayText(from content: String?, limit: Int = 64) -> String {
+        let collapsed = (content ?? "")
+            .split(whereSeparator: \Character.isWhitespace)
+            .joined(separator: " ")
+        guard !collapsed.isEmpty else { return "Empty note" }
+        return String(collapsed.prefix(limit))
     }
 
     private static func cleanTitle(_ value: String?, fallback: String) -> String {

@@ -67,8 +67,8 @@ private let panels = [
         number: "01",
         background: "ivory-waveform.png",
         screenshot: "iPhone 17 Pro Max-01_Home.png",
-        headline: "Catch every thought\nwhile it’s alive.",
-        subtitle: "One tap. A clean voice memo. Nothing lost.",
+        headline: "Say it before\nit slips away.",
+        subtitle: "One tap turns a passing thought into something you can use.",
         theme: .light,
         output: "01-catch-every-thought.png"
     ),
@@ -76,8 +76,8 @@ private let panels = [
         number: "02",
         background: "charcoal-waveform.png",
         screenshot: "iPhone 17 Pro Max-02_Recording.png",
-        headline: "Talk naturally.\nTalkie keeps up.",
-        subtitle: "A focused recorder that stays out of your way.",
+        headline: "Talk at full speed.\nTalkie keeps up.",
+        subtitle: "A focused recorder with a live transcript that follows along.",
         theme: .dark,
         output: "02-talk-naturally.png"
     ),
@@ -85,8 +85,8 @@ private let panels = [
         number: "03",
         background: "paper-waveform.png",
         screenshot: "iPhone 17 Pro Max-state-dictating.png",
-        headline: "Turn speech into\nfinished writing.",
-        subtitle: "Dictate, shape, and refine without leaving the page.",
+        headline: "Go from voice to\nfinished writing.",
+        subtitle: "Dictate, shape, and keep moving right on the page.",
         theme: .light,
         output: "03-finished-writing.png"
     ),
@@ -94,8 +94,8 @@ private let panels = [
         number: "04",
         background: "charcoal-waveform.png",
         screenshot: "iPhone 17 Pro Max-state-diff.png",
-        headline: "See every edit.\nKeep the final say.",
-        subtitle: "Review AI changes before they touch your words.",
+        headline: "Ask for the edit.\nApprove every word.",
+        subtitle: "See exactly what changed before it reaches the page.",
         theme: .dark,
         output: "04-review-every-edit.png"
     ),
@@ -103,8 +103,8 @@ private let panels = [
         number: "05",
         background: "ivory-waveform.png",
         screenshot: "iPhone 17 Pro Max-04_Settings.png",
-        headline: "Private by design.\nFlexible by default.",
-        subtitle: "Choose your engines, voice, and connections.",
+        headline: "Choose how Talkie\ngets it done.",
+        subtitle: "Run speech locally, connect your AI, or route through your Mac.",
         theme: .light,
         output: "05-private-and-flexible.png"
     ),
@@ -112,8 +112,8 @@ private let panels = [
         number: "06",
         background: "paper-waveform.png",
         screenshot: "iPhone 17 Pro Max-05_Keyboard.png",
-        headline: "Your voice works\nwherever you type.",
-        subtitle: "Bring Talkie into any text field with its custom keyboard.",
+        headline: "Dictate anywhere.\nKeep moving.",
+        subtitle: "Bring Talkie to Messages, Notes, Mail, and every other text field.",
         theme: .light,
         output: "06-voice-anywhere.png"
     ),
@@ -282,7 +282,7 @@ private func compose(_ panel: Panel, icon: NSImage) throws {
         let body = NSFont.systemFont(ofSize: 39, weight: .regular)
 
         drawText(
-            "TALKIE  /  VOICE + AI",
+            "TALKIE  /  VOICE INTO ACTION",
             in: NSRect(x: 208, y: 2711, width: 650, height: 48),
             font: mono,
             color: panel.theme.secondary,

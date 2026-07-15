@@ -266,6 +266,53 @@ extension TalkieUITestsScreenshots {
     }
 }
 
+// MARK: - Home Ask AI Console
+
+extension TalkieUITestsScreenshots {
+    func testHomeAskTalkieFlowScreenshots() {
+        app.terminate()
+        app.launchEnvironment["FASTLANE_SNAPSHOT"] = "1"
+        app.launchArguments = [
+            "-FASTLANE_SNAPSHOT",
+            "--screenshotSkipSplash",
+            "--screenshotTheme", "scope",
+            "--askaiNoProviders",
+        ]
+        app.launch()
+        dismissSystemAlertsIfNeeded()
+
+        let commandField = app.textFields["home.command-field"].firstMatch
+        XCTAssertTrue(
+            commandField.waitForExistence(timeout: 10),
+            "Home Ask Talkie field should exist"
+        )
+        if !commandField.isHittable {
+            app.swipeUp()
+        }
+        commandField.tap()
+        snapshot("state-home-ask-focused", timeWaitingForIdle: 0)
+
+        let prompt = "Help me outline the launch plan"
+        commandField.typeText(prompt)
+
+        let sendButton = app.buttons["home.command-send"].firstMatch
+        XCTAssertTrue(sendButton.waitForExistence(timeout: 3), "Home Ask Talkie send should exist")
+        sendButton.tap()
+
+        let askPromptField = app.textFields["askai.prompt-field"].firstMatch
+        XCTAssertTrue(
+            askPromptField.waitForExistence(timeout: 10),
+            "Home prompt should route into Ask AI"
+        )
+        XCTAssertEqual(askPromptField.value as? String, prompt)
+        XCTAssertTrue(
+            app.buttons["askai.open-ai-keys"].waitForExistence(timeout: 3),
+            "Missing credentials should offer a direct AI Keys recovery action"
+        )
+        snapshot("state-ask-ai-from-home", timeWaitingForIdle: 0)
+    }
+}
+
 // MARK: - App Preview Capture
 
 /// Deterministic, real-app performances used by `scripts/app-preview.sh`.
@@ -282,6 +329,7 @@ extension TalkieUITestsScreenshots {
             "--screenshotSkipSplash",
             "--screenshotTheme", "scope",
             "--celebrateFirstSave",
+            "--animateRecordingWaveform",
         ]
         app.launch()
         dismissSystemAlertsIfNeeded()
@@ -305,7 +353,15 @@ extension TalkieUITestsScreenshots {
         // the capture to the detail screen's accessibility container type;
         // that hierarchy differs between simulator runtimes while the visual
         // transition remains deterministic.
-        try? await Task.sleep(for: .seconds(7))
+        try? await Task.sleep(for: .seconds(6))
+        let savedTranscript = app.staticTexts.containing(
+            NSPredicate(format: "label CONTAINS %@", "launch checklist is ready")
+        ).firstMatch
+        XCTAssertTrue(
+            savedTranscript.waitForExistence(timeout: 3),
+            "Saved memo detail should show the post-recording transcript"
+        )
+        try? await Task.sleep(for: .seconds(1))
     }
 
     func testAppPreviewComposeFlow() async {

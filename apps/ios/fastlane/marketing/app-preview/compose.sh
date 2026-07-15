@@ -38,8 +38,8 @@ ffmpeg -y -v error \
     -i "$COMPOSE_CLIP" \
     -f lavfi -t 29 -i "anullsrc=channel_layout=stereo:sample_rate=48000" \
     -filter_complex \
-    "[0:v]trim=start=28:end=44,setpts=PTS-STARTPTS,fps=30,scale=886:-2:flags=lanczos,crop=886:1920[capture];\
-[1:v]trim=start=30:end=43.5,setpts=PTS-STARTPTS,fps=30,scale=886:-2:flags=lanczos,crop=886:1920[compose];\
+    "[0:v]trim=start=24:end=40,setpts=PTS-STARTPTS,fps=30,scale=886:-2:flags=lanczos,crop=886:1920[capture];\
+[1:v]trim=start=18:end=31.5,setpts=PTS-STARTPTS,fps=30,scale=886:-2:flags=lanczos,crop=886:1920[compose];\
 [capture][compose]xfade=transition=fadewhite:duration=0.5:offset=15.5,format=yuv420p[video]" \
     -map "[video]" -map 2:a \
     -t 29 \
