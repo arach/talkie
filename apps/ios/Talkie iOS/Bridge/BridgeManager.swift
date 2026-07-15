@@ -34,6 +34,18 @@ final class BridgeManager {
         let pairingResult: PairingResult
     }
 
+    private struct PendingPairingCandidate: Sendable {
+        let attemptID: UUID
+        let deviceId: String
+        let privateKeyBase64: String
+        let connectionHost: String
+        let pairedMacName: String
+        let port: Int
+        let serverPublicKeyBase64: String
+        let encryptionPinned: Bool
+        let streamEncryptionPinned: Bool
+    }
+
     private enum PairingExecutionError: LocalizedError {
         case rejected
         case pendingApproval
@@ -137,6 +149,7 @@ final class BridgeManager {
     private var autoReconnectCancellables = Set<AnyCancellable>()
     private var companionPollTask: Task<Void, Never>?
     private var pendingPairingApprovalTask: Task<Void, Never>?
+    private var activePairingAttemptID: UUID?
     private var companionEventTask: Task<Void, Never>?
     private var companionEventSocket: URLSessionWebSocketTask?
     // Captured per stream connection: when true, each companion event frame is a
@@ -357,6 +370,9 @@ final class BridgeManager {
             return nil
         }
 
+        stopPendingPairingApprovalMonitor()
+        let pairingAttemptID = UUID()
+        activePairingAttemptID = pairingAttemptID
         let hadPairedMacsBeforePairing = hasPairedMacs
         status = .connecting
         errorMessage = nil
@@ -431,6 +447,22 @@ final class BridgeManager {
                 throw lastError ?? BridgeError.connectionFailed
             }.value
 
+            guard activePairingAttemptID == pairingAttemptID else {
+                return nil
+            }
+
+            let pendingCandidate = PendingPairingCandidate(
+                attemptID: pairingAttemptID,
+                deviceId: localDeviceId,
+                privateKeyBase64: result.privateKeyBase64,
+                connectionHost: result.connectionHost,
+                pairedMacName: result.pairedMacName,
+                port: port,
+                serverPublicKeyBase64: serverPublicKeyBase64,
+                encryptionPinned: encryptionPinned,
+                streamEncryptionPinned: streamEncryptionPinned
+            )
+
             let shouldStorePairing =
                 result.pairingResult == .approved ||
                 !hadPairedMacsBeforePairing ||
@@ -459,6 +491,7 @@ final class BridgeManager {
 
             switch result.pairingResult {
             case .approved:
+                activePairingAttemptID = nil
                 stopPendingPairingApprovalMonitor()
                 awaitingPairingApproval = false
                 lastSuccessfulContactAt = .now
@@ -483,16 +516,21 @@ final class BridgeManager {
                 awaitingPairingApproval = true
                 justCompletedPairing = false
                 status = .disconnected
+                log.info("Bridge pairing is waiting for Mac approval")
+                startPendingPairingApprovalMonitor(candidate: pendingCandidate)
                 if shouldStorePairing {
                     lastSuccessfulContactAt = nil
                     errorMessage = "Approve this iPhone on your Mac to finish pairing."
-                    startPendingPairingApprovalMonitor()
                 } else {
                     errorMessage = "Approve this iPhone on your Mac to refresh pairing. Your current pairing is still saved."
                 }
             }
             return result.pairingResult
         } catch {
+            guard activePairingAttemptID == pairingAttemptID else {
+                return nil
+            }
+            activePairingAttemptID = nil
             awaitingPairingApproval = false
             status = .error
             errorMessage = pairingErrorMessage(for: error, hostname: hostname)
@@ -611,6 +649,7 @@ final class BridgeManager {
             pairedMacName = resolvedMacName
             updateStoredActiveMacName(resolvedMacName)
             TalkieAppSettings.shared.reloadFromDisk()
+            activePairingAttemptID = nil
             stopPendingPairingApprovalMonitor()
             awaitingPairingApproval = false
             lastSuccessfulContactAt = .now
@@ -652,17 +691,88 @@ final class BridgeManager {
         }
     }
 
-    private func startPendingPairingApprovalMonitor() {
+    private func startPendingPairingApprovalMonitor(candidate: PendingPairingCandidate) {
         pendingPairingApprovalTask?.cancel()
+        let approvalClient = BridgeClient()
         pendingPairingApprovalTask = Task { [weak self] in
             guard let self else { return }
 
             while !Task.isCancelled && self.awaitingPairingApproval {
                 try? await Task.sleep(for: .seconds(2))
-                guard !Task.isCancelled, self.awaitingPairingApproval else { return }
-                await self.connect()
+                guard
+                    !Task.isCancelled,
+                    self.awaitingPairingApproval,
+                    self.activePairingAttemptID == candidate.attemptID
+                else {
+                    return
+                }
+
+                let approved = await self.isPairingApproved(
+                    candidate,
+                    using: approvalClient
+                )
+                guard
+                    approved,
+                    !Task.isCancelled,
+                    self.activePairingAttemptID == candidate.attemptID
+                else {
+                    continue
+                }
+
+                self.pendingPairingApprovalTask = nil
+                await self.completeApprovedPairing(candidate)
+                return
             }
         }
+    }
+
+    private func isPairingApproved(
+        _ candidate: PendingPairingCandidate,
+        using approvalClient: BridgeClient
+    ) async -> Bool {
+        do {
+            await approvalClient.configure(
+                hostname: candidate.connectionHost,
+                port: candidate.port
+            )
+            try await Self.restoreAuth(
+                client: approvalClient,
+                deviceId: candidate.deviceId,
+                privateKeyBase64: candidate.privateKeyBase64,
+                serverPublicKeyBase64: candidate.serverPublicKeyBase64
+            )
+            await approvalClient.setEncryptionRequired(candidate.encryptionPinned)
+            await approvalClient.setStreamEncryptionRequired(candidate.streamEncryptionPinned)
+            try await approvalClient.connect()
+            _ = try await approvalClient.companionState(deviceId: candidate.deviceId)
+            return true
+        } catch BridgeError.httpError(let statusCode, detail: _) where statusCode == 401 {
+            return false
+        } catch {
+            return false
+        }
+    }
+
+    private func completeApprovedPairing(_ candidate: PendingPairingCandidate) async {
+        guard activePairingAttemptID == candidate.attemptID else { return }
+
+        _ = upsertPairedMac(
+            deviceId: candidate.deviceId,
+            hostname: candidate.connectionHost,
+            port: candidate.port,
+            pairedMacName: candidate.pairedMacName,
+            serverPublicKey: candidate.serverPublicKeyBase64,
+            privateKey: candidate.privateKeyBase64,
+            activate: true
+        )
+        TalkieAppSettings.shared.reloadFromDisk()
+        activePairingAttemptID = nil
+        awaitingPairingApproval = false
+        log.info("Mac approval confirmed; completing Bridge pairing")
+
+        await client.clearAuth()
+        await connect()
+        justCompletedPairing = status == .connected
     }
 
     private func stopPendingPairingApprovalMonitor() {
@@ -1821,6 +1931,18 @@ final class BridgeManager {
             }
         }.value
 
+        let pendingCandidate = PendingPairingCandidate(
+            attemptID: UUID(),
+            deviceId: localDeviceId,
+            privateKeyBase64: result.privateKeyBase64,
+            connectionHost: result.connectionHost,
+            pairedMacName: result.pairedMacName,
+            port: port,
+            serverPublicKeyBase64: serverPublicKeyBase64,
+            encryptionPinned: encryptionPinned,
+            streamEncryptionPinned: streamEncryptionPinned
+        )
+
         let storedPairedMacId = upsertPairedMac(
             deviceId: localDeviceId,
             hostname: result.connectionHost,
@@ -1834,6 +1956,7 @@ final class BridgeManager {
 
         switch result.pairingResult {
         case .approved:
+            activePairingAttemptID = nil
             recordCredentialImportEvent("The Mac approved the refreshed pairing.", level: .success)
             stopPendingPairingApprovalMonitor()
             awaitingPairingApproval = false
@@ -1854,7 +1977,8 @@ final class BridgeManager {
             lastSuccessfulContactAt = nil
             status = .disconnected
             errorMessage = "Approve this iPhone on your Mac, then try importing credentials again."
-            startPendingPairingApprovalMonitor()
+            activePairingAttemptID = pendingCandidate.attemptID
+            startPendingPairingApprovalMonitor(candidate: pendingCandidate)
             recordCredentialImportEvent(
                 "Open Talkie on the Mac, then approve this iPhone under Settings > iOS > Pending Pairings.",
                 level: .warning

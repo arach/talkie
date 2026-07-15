@@ -58,6 +58,13 @@ actor BridgeClient {
         encryptionKey != nil && (serverSupportsEncryption || encryptionRequired)
     }
 
+    /// Pairing is the bootstrap that establishes the server-side device key.
+    /// It must stay plaintext even after `/health` advertises v2 encryption,
+    /// because the server cannot decrypt a device payload it has not registered.
+    static func supportsTransportEncryption(for path: String) -> Bool {
+        path != "/pair"
+    }
+
     /// Whether stream frames should be sealed/opened — gated on the server
     /// advertising per-frame stream support, or on the per-Mac pin. Old servers
     /// that never advertised encStream → plaintext streams, unchanged (fully
@@ -771,7 +778,7 @@ actor BridgeClient {
 
         // Seal the request body and ask the server to seal its response (v2).
         // Encrypt before signing so the HMAC covers the ciphertext that is sent.
-        let encrypted = shouldEncrypt
+        let encrypted = shouldEncrypt && Self.supportsTransportEncryption(for: path)
         if encrypted, let plaintextBody = request.httpBody {
             request.httpBody = try seal(plaintextBody)
             request.setValue("2", forHTTPHeaderField: "X-Enc")

@@ -809,61 +809,58 @@ private struct PendingPairingsSection: View {
     let onReject: (String) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
-                Image(systemName: "bell.badge.fill")
+                Image(systemName: "iphone.badge.plus")
                     .font(Theme.current.fontXS)
-                    .foregroundColor(.orange)
-                Text("PENDING PAIRINGS")
+                    .foregroundStyle(Theme.current.accent)
+                Text(pairings.count == 1 ? "Pairing request" : "Pairing requests")
                     .font(Theme.current.fontXSMedium)
-                    .foregroundColor(.orange)
+                    .foregroundStyle(Theme.current.foregroundSecondary)
             }
 
             ForEach(pairings) { pairing in
                 HStack(spacing: 12) {
                     Image(systemName: "iphone")
-                        .font(.system(size: 20))
-                        .foregroundColor(.orange)
-                        .frame(width: 36, height: 36)
-                        .background(Color.orange.opacity(0.15))
-                        .cornerRadius(8)
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(Theme.current.accent)
+                        .frame(width: 38, height: 38)
+                        .background(Theme.current.accent.opacity(0.1))
+                        .clipShape(.rect(cornerRadius: 10))
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 3) {
                         Text(pairing.name)
                             .font(Theme.current.fontSMMedium)
-                            .foregroundColor(Theme.current.foreground)
-                        Text("Wants to connect")
+                            .foregroundStyle(Theme.current.foreground)
+                        Text("Requests access to Mac Bridge")
                             .font(Theme.current.fontXS)
-                            .foregroundColor(Theme.current.foregroundSecondary)
+                            .foregroundStyle(Theme.current.foregroundSecondary)
                     }
 
-                    Spacer()
+                    Spacer(minLength: 16)
 
-                    HStack(spacing: 6) {
-                        Button(action: { onReject(pairing.deviceId) }) {
-                            Image(systemName: "xmark")
-                                .font(Theme.current.fontSM)
-                                .foregroundColor(.red)
-                                .frame(width: 28, height: 28)
-                                .background(Color.red.opacity(0.1))
-                                .cornerRadius(6)
+                    HStack(spacing: 8) {
+                        Button("Decline", role: .cancel) {
+                            onReject(pairing.deviceId)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
 
-                        Button(action: { onApprove(pairing.deviceId) }) {
-                            Image(systemName: "checkmark")
-                                .font(Theme.current.fontSM)
-                                .foregroundColor(.green)
-                                .frame(width: 28, height: 28)
-                                .background(Color.green.opacity(0.1))
-                                .cornerRadius(6)
+                        Button("Approve") {
+                            onApprove(pairing.deviceId)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .tint(Theme.current.accent)
                     }
                 }
-                .padding(10)
-                .background(Color.orange.opacity(0.05))
-                .cornerRadius(8)
+                .padding(12)
+                .background(Theme.current.surface1)
+                .clipShape(.rect(cornerRadius: 10))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Theme.current.borderSubtle, lineWidth: 1)
+                }
             }
         }
     }

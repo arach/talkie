@@ -438,61 +438,47 @@ private struct BridgePairingApprovalPrompt: View {
 
     var body: some View {
         if let pairing = bridgeManager.pendingPairings.first {
-            HStack(spacing: 12) {
+            HStack(spacing: 14) {
                 Image(systemName: "iphone.gen3.radiowaves.left.and.right")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.orange)
-                    .frame(width: 38, height: 38)
-                    .background(Color.orange.opacity(0.12))
-                    .clipShape(.rect(cornerRadius: 8))
+                    .foregroundStyle(Theme.current.accent)
+                    .frame(width: 40, height: 40)
+                    .background(Theme.current.accent.opacity(0.1))
+                    .clipShape(.rect(cornerRadius: 10))
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Approve iPhone Pairing?")
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Pair \(pairing.name)?")
                         .font(Theme.current.fontSMMedium)
                         .foregroundStyle(Theme.current.foreground)
 
-                    Text("\(pairing.name) wants to connect or refresh bridge access.")
+                    Text("Allow this iPhone to use Mac Bridge on this Mac.")
                         .font(Theme.current.fontXS)
                         .foregroundStyle(Theme.current.foregroundSecondary)
                 }
 
-                Spacer(minLength: 12)
+                Spacer(minLength: 16)
 
-                Button {
+                Button("Decline", role: .cancel) {
                     Task { await bridgeManager.rejectPairing(pairing.deviceId) }
-                } label: {
-                    Text("Reject")
-                        .font(Theme.current.fontXSMedium)
-                        .foregroundStyle(.red)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(Color.red.opacity(0.1))
-                        .clipShape(.rect(cornerRadius: 6))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
 
-                Button {
+                Button("Approve") {
                     Task { await bridgeManager.approvePairing(pairing.deviceId) }
-                } label: {
-                    Text("Approve")
-                        .font(Theme.current.fontXSMedium)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(Color.green)
-                        .clipShape(.rect(cornerRadius: 6))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .tint(Theme.current.accent)
             }
-            .padding(12)
-            .frame(maxWidth: 560)
-            .background(.regularMaterial)
-            .clipShape(.rect(cornerRadius: 8))
+            .padding(14)
+            .frame(maxWidth: 600)
+            .background(.regularMaterial, in: .rect(cornerRadius: 12))
             .overlay {
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.orange.opacity(0.22), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Theme.current.border, lineWidth: 1)
             }
-            .shadow(color: .black.opacity(0.14), radius: 18, y: 8)
+            .shadow(color: Theme.current.background.opacity(0.32), radius: 20, y: 10)
             .transition(.move(edge: .top).combined(with: .opacity))
         }
     }
