@@ -1,9 +1,9 @@
-import type { Command } from "commander";
+import type { Command } from "../../gunshi-command";
 import { SERVICES, resolveService } from "./services";
 
 const COLORS: Record<string, string> = {
   "to.talkie.app.mac": "\x1b[36m",   // cyan
-  "to.talkie.app.agent": "\x1b[35m",  // magenta
+  "to.talkie.agent": "\x1b[35m",  // magenta
 };
 const RESET = "\x1b[0m";
 

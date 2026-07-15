@@ -75,6 +75,8 @@ enum TalkieSound: String, CaseIterable, Codable {
 final class SoundManager {
     static let shared = SoundManager()
 
+    private var activeSounds: [NSSound] = []
+
     private init() {}
 
     func play(_ sound: TalkieSound) {
@@ -102,6 +104,22 @@ final class SoundManager {
         play(LiveSettings.shared.pastedSound)
     }
 
+    func playMicRecoveryStarted() {
+        playSubtle(.tink, volume: 0.12)
+    }
+
+    func playMicRecoverySucceeded() {
+        playSubtle(.pop, volume: 0.16)
+    }
+
+    func playMicRecoveryDegraded() {
+        playSubtle(.submarine, volume: 0.12)
+    }
+
+    func playMicRecoveryFailed() {
+        playSubtle(.basso, volume: 0.15)
+    }
+
     /// Play error sound when paste is blocked (e.g., missing accessibility permission)
     func playPasteBlocked() {
         play(.basso)
@@ -117,6 +135,34 @@ final class SoundManager {
     // Preview a sound (for settings UI)
     func preview(_ sound: TalkieSound) {
         play(sound)
+    }
+
+    private func playSubtle(_ sound: TalkieSound, volume: Float) {
+        guard isAudioFeedbackEnabled,
+              let name = sound.systemSoundName,
+              let soundURL = Self.systemSoundURL(named: name),
+              let player = NSSound(contentsOf: soundURL, byReference: true) else { return }
+
+        player.volume = volume
+        activeSounds.append(player)
+        player.play()
+
+        Task { @MainActor [weak self, weak player] in
+            try? await Task.sleep(for: .seconds(3))
+            guard let self else { return }
+            self.activeSounds.removeAll { activeSound in
+                guard let player else { return true }
+                return activeSound === player
+            }
+        }
+    }
+
+    private var isAudioFeedbackEnabled: Bool {
+        let settings = LiveSettings.shared
+        return settings.startSound != .none
+            || settings.finishSound != .none
+            || settings.pastedSound != .none
+            || settings.cancelledSound != .none
     }
 
     private static func systemSoundURL(named name: String) -> URL? {

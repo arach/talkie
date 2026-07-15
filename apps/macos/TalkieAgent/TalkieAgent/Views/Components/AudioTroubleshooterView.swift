@@ -48,7 +48,7 @@ struct AudioTroubleshooterView: View {
             header
 
             Divider()
-                .background(TalkieTheme.border)
+                .background(AgentTheme.border)
 
             // Content
             ScrollView {
@@ -83,13 +83,13 @@ struct AudioTroubleshooterView: View {
             }
 
             Divider()
-                .background(TalkieTheme.border)
+                .background(AgentTheme.border)
 
             // Footer
             footer
         }
         .frame(width: 520, height: 600)
-        .background(TalkieTheme.surface)
+        .background(AgentTheme.surface)
         .onAppear {
             Task {
                 await diagnostics.runDiagnostics()
@@ -104,11 +104,11 @@ struct AudioTroubleshooterView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Audio Troubleshooter")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .foregroundColor(AgentTheme.textPrimary)
 
                 Text("Let's figure out what's wrong")
                     .font(.system(size: 12))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(AgentTheme.textSecondary)
             }
 
             Spacer()
@@ -116,9 +116,9 @@ struct AudioTroubleshooterView: View {
             Button(action: { controller.hide() }) {
                 Image(systemName: "xmark")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(AgentTheme.textSecondary)
                     .padding(8)
-                    .background(Circle().fill(TalkieTheme.hover))
+                    .background(Circle().fill(AgentTheme.hover))
             }
             .buttonStyle(.plain)
         }
@@ -147,13 +147,13 @@ struct AudioTroubleshooterView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(status == .denied ? "Microphone Access Denied" : "Microphone Access Required")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(TalkieTheme.textPrimary)
+                            .foregroundColor(AgentTheme.textPrimary)
 
                         Text(status == .denied
                              ? "Enable microphone access in System Settings"
                              : "TalkieAgent needs microphone access to record")
                             .font(.system(size: 11))
-                            .foregroundColor(TalkieTheme.textSecondary)
+                            .foregroundColor(AgentTheme.textSecondary)
                     }
 
                     Spacer()
@@ -204,7 +204,7 @@ struct AudioTroubleshooterView: View {
             Text("AUDIO TEST")
                 .font(.system(size: 10, weight: .bold))
                 .tracking(1)
-                .foregroundColor(TalkieTheme.textTertiary)
+                .foregroundColor(AgentTheme.textTertiary)
 
             HStack(spacing: 12) {
                 // Test result indicator
@@ -222,31 +222,31 @@ struct AudioTroubleshooterView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(result.success ? "Audio Capture Working" : "Audio Test Failed")
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(TalkieTheme.textPrimary)
+                            .foregroundColor(AgentTheme.textPrimary)
 
                         Text(result.message)
                             .font(.system(size: 11))
-                            .foregroundColor(TalkieTheme.textSecondary)
+                            .foregroundColor(AgentTheme.textSecondary)
                     }
                 } else {
                     ZStack {
                         Circle()
-                            .fill(TalkieTheme.hover)
+                            .fill(AgentTheme.hover)
                             .frame(width: 36, height: 36)
 
                         Image(systemName: "waveform")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .foregroundColor(AgentTheme.textTertiary)
                     }
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Test Microphone")
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(TalkieTheme.textPrimary)
+                            .foregroundColor(AgentTheme.textPrimary)
 
                         Text("Verify audio capture is working")
                             .font(.system(size: 11))
-                            .foregroundColor(TalkieTheme.textSecondary)
+                            .foregroundColor(AgentTheme.textSecondary)
                     }
                 }
 
@@ -283,10 +283,10 @@ struct AudioTroubleshooterView: View {
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(TalkieTheme.surfaceCard)
+                    .fill(AgentTheme.surfaceCard)
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(TalkieTheme.border, lineWidth: 1)
+                            .stroke(AgentTheme.border, lineWidth: 1)
                     )
             )
         }
@@ -310,11 +310,11 @@ struct AudioTroubleshooterView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(statusTitle(result.overallStatus))
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .foregroundColor(AgentTheme.textPrimary)
 
                 Text(statusSubtitle(result))
                     .font(.system(size: 12))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(AgentTheme.textSecondary)
             }
 
             Spacer()
@@ -325,7 +325,7 @@ struct AudioTroubleshooterView: View {
             }) {
                 Image(systemName: "arrow.clockwise")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(AgentTheme.textSecondary)
             }
             .buttonStyle(.plain)
             .disabled(diagnostics.isRunningDiagnostics)
@@ -333,7 +333,7 @@ struct AudioTroubleshooterView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(TalkieTheme.surfaceCard)
+                .fill(AgentTheme.surfaceCard)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(statusColor(result.overallStatus).opacity(0.3), lineWidth: 1)
@@ -348,7 +348,7 @@ struct AudioTroubleshooterView: View {
             Text("DIAGNOSTIC CHECKLIST")
                 .font(.system(size: 10, weight: .bold))
                 .tracking(1)
-                .foregroundColor(TalkieTheme.textTertiary)
+                .foregroundColor(AgentTheme.textTertiary)
 
             VStack(spacing: 0) {
                 ForEach(Array(result.checks.enumerated()), id: \.element.id) { index, check in
@@ -357,10 +357,10 @@ struct AudioTroubleshooterView: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(TalkieTheme.surfaceCard)
+                    .fill(AgentTheme.surfaceCard)
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(TalkieTheme.border, lineWidth: 1)
+                            .stroke(AgentTheme.border, lineWidth: 1)
                     )
             )
         }
@@ -378,11 +378,11 @@ struct AudioTroubleshooterView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(check.name)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .foregroundColor(AgentTheme.textPrimary)
 
                 Text(check.detail)
                     .font(.system(size: 11))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(AgentTheme.textSecondary)
             }
 
             Spacer()
@@ -390,14 +390,14 @@ struct AudioTroubleshooterView: View {
             // Icon
             Image(systemName: check.icon)
                 .font(.system(size: 12))
-                .foregroundColor(TalkieTheme.textTertiary)
+                .foregroundColor(AgentTheme.textTertiary)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .overlay(alignment: .bottom) {
             if !isLast {
                 Divider()
-                    .background(TalkieTheme.border)
+                    .background(AgentTheme.border)
                     .padding(.leading, 46)
             }
         }
@@ -410,7 +410,7 @@ struct AudioTroubleshooterView: View {
             Text("SUGGESTED STEPS")
                 .font(.system(size: 10, weight: .bold))
                 .tracking(1)
-                .foregroundColor(TalkieTheme.textTertiary)
+                .foregroundColor(AgentTheme.textTertiary)
 
             VStack(spacing: 8) {
                 ForEach(Array(result.suggestedFixes.enumerated()), id: \.element.id) { index, fix in
@@ -430,12 +430,12 @@ struct AudioTroubleshooterView: View {
                 // Step number
                 ZStack {
                     Circle()
-                        .fill(fix.isPrimary ? SemanticColor.info.opacity(0.15) : TalkieTheme.hover)
+                        .fill(fix.isPrimary ? SemanticColor.info.opacity(0.15) : AgentTheme.hover)
                         .frame(width: 24, height: 24)
 
                     Text("\(stepNumber)")
                         .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundColor(fix.isPrimary ? SemanticColor.info : TalkieTheme.textSecondary)
+                        .foregroundColor(fix.isPrimary ? SemanticColor.info : AgentTheme.textSecondary)
                 }
 
                 // Content
@@ -443,7 +443,7 @@ struct AudioTroubleshooterView: View {
                     HStack(spacing: 6) {
                         Text(fix.title)
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(TalkieTheme.textPrimary)
+                            .foregroundColor(AgentTheme.textPrimary)
 
                         if fix.isPrimary {
                             Text("RECOMMENDED")
@@ -461,18 +461,18 @@ struct AudioTroubleshooterView: View {
                             Text("MANUAL")
                                 .font(.system(size: 8, weight: .bold))
                                 .tracking(0.5)
-                                .foregroundColor(TalkieTheme.textTertiary)
+                                .foregroundColor(AgentTheme.textTertiary)
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 2)
                                 .background(
-                                    Capsule().fill(TalkieTheme.hover)
+                                    Capsule().fill(AgentTheme.hover)
                                 )
                         }
                     }
 
                     Text(fix.description)
                         .font(.system(size: 11))
-                        .foregroundColor(TalkieTheme.textSecondary)
+                        .foregroundColor(AgentTheme.textSecondary)
                 }
 
                 Spacer()
@@ -483,20 +483,20 @@ struct AudioTroubleshooterView: View {
                 } else if fix.isManual {
                     Image(systemName: "hand.point.up.left")
                         .font(.system(size: 12))
-                        .foregroundColor(TalkieTheme.textTertiary)
+                        .foregroundColor(AgentTheme.textTertiary)
                 } else {
                     Image(systemName: "play.circle.fill")
                         .font(.system(size: 16))
-                        .foregroundColor(fix.isPrimary ? SemanticColor.info : TalkieTheme.textTertiary)
+                        .foregroundColor(fix.isPrimary ? SemanticColor.info : AgentTheme.textTertiary)
                 }
             }
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(TalkieTheme.surfaceCard)
+                    .fill(AgentTheme.surfaceCard)
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(fix.isPrimary ? SemanticColor.info.opacity(0.3) : TalkieTheme.border, lineWidth: 1)
+                            .stroke(fix.isPrimary ? SemanticColor.info.opacity(0.3) : AgentTheme.border, lineWidth: 1)
                     )
             )
         }
@@ -512,7 +512,7 @@ struct AudioTroubleshooterView: View {
 
             Text("Running diagnostics...")
                 .font(.system(size: 12))
-                .foregroundColor(TalkieTheme.textSecondary)
+                .foregroundColor(AgentTheme.textSecondary)
         }
         .padding(20)
     }
@@ -529,7 +529,7 @@ struct AudioTroubleshooterView: View {
 
                     Text(result.message)
                         .font(.system(size: 11))
-                        .foregroundColor(TalkieTheme.textSecondary)
+                        .foregroundColor(AgentTheme.textSecondary)
                         .lineLimit(1)
                 }
             }

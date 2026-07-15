@@ -1,4 +1,4 @@
-import type { Command } from "commander";
+import type { Command } from "../../gunshi-command";
 import { registerStatusCommand } from "./status";
 import { registerCleanCommand } from "./clean";
 import { registerStopCommand } from "./stop";

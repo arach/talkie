@@ -1,4 +1,4 @@
-import type { Command } from "commander";
+import type { Command } from "../../gunshi-command";
 import { existsSync, statSync } from "fs";
 import { Database } from "bun:sqlite";
 import { getFormatOptions, output, outputTable } from "../../format";

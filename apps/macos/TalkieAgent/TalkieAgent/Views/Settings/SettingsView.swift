@@ -717,7 +717,6 @@ enum QuickSettingsTab: String, CaseIterable {
     case audio
     case feedback
     case output
-    case ambient
     case permissions
     case connections
     case performance
@@ -736,7 +735,6 @@ enum QuickSettingsTab: String, CaseIterable {
         case .audio: return "Audio"
         case .feedback: return "Feedback"
         case .output: return "Output"
-        case .ambient: return "Ambient"
         case .permissions: return "Permissions"
         case .connections: return "Connections"
         case .performance: return "Performance"
@@ -757,7 +755,6 @@ enum QuickSettingsTab: String, CaseIterable {
         case .audio: return "mic.fill"
         case .feedback: return "rectangle.inset.topright.filled"
         case .output: return "arrow.right.doc.on.clipboard"
-        case .ambient: return "waveform.circle"
         case .permissions: return "lock.shield.fill"
         case .connections: return "network"
         case .performance: return "gauge.with.needle"
@@ -794,11 +791,6 @@ struct QuickSettingsView: View {
                     ForEach([QuickSettingsTab.shortcuts, .audio], id: \.self) { tab in
                         Label(tab.title, systemImage: tab.icon)
                             .tag(tab)
-                    }
-
-                    if TalkieSharedSettings.bool(forKey: AgentSettingsKey.featureAmbientModeEnabled) {
-                        Label(QuickSettingsTab.ambient.title, systemImage: QuickSettingsTab.ambient.icon)
-                            .tag(QuickSettingsTab.ambient)
                     }
                 }
 
@@ -856,8 +848,6 @@ struct QuickSettingsView: View {
                             OverlaySettingsSection()
                         case .output:
                             OutputSettingsSection()
-                        case .ambient:
-                            AmbientSettingsSection()
                         case .permissions:
                             PermissionsSettingsSection()
                         case .connections:
@@ -1017,17 +1007,17 @@ struct ShortcutsQuickSection: View {
                 HStack {
                     Image(systemName: "command")
                         .font(.system(size: 20))
-                        .foregroundColor(TalkieTheme.accent)
+                        .foregroundColor(AgentTheme.accent)
 
                     Text("SHORTCUTS")
                         .font(.techLabel)
                         .tracking(Tracking.wide)
-                        .foregroundColor(TalkieTheme.textPrimary)
+                        .foregroundColor(AgentTheme.textPrimary)
                 }
 
                 Text("Global keyboard shortcuts")
                     .font(.system(size: 12))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(AgentTheme.textSecondary)
             }
 
             // Toggle Recording
@@ -1036,10 +1026,10 @@ struct ShortcutsQuickSection: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Toggle Recording")
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(TalkieTheme.textPrimary)
+                            .foregroundColor(AgentTheme.textPrimary)
                         Text("Press to start/stop")
                             .font(.system(size: 10))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .foregroundColor(AgentTheme.textTertiary)
                     }
 
                     Spacer()
@@ -1066,10 +1056,10 @@ struct ShortcutsQuickSection: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Push-to-Talk")
                                 .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(TalkieTheme.textPrimary)
+                                .foregroundColor(AgentTheme.textPrimary)
                             Text("Hold to record")
                                 .font(.system(size: 10))
-                                .foregroundColor(TalkieTheme.textTertiary)
+                                .foregroundColor(AgentTheme.textTertiary)
                         }
 
                         Spacer()
@@ -1088,7 +1078,7 @@ struct ShortcutsQuickSection: View {
                         HStack {
                             Text("PTT Shortcut")
                                 .font(.system(size: 11))
-                                .foregroundColor(TalkieTheme.textSecondary)
+                                .foregroundColor(AgentTheme.textSecondary)
 
                             Spacer()
 
@@ -1117,10 +1107,10 @@ struct ShortcutsQuickSection: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Paste from Queue")
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(TalkieTheme.textPrimary)
+                            .foregroundColor(AgentTheme.textPrimary)
                         Text("Select queued transcription")
                             .font(.system(size: 10))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .foregroundColor(AgentTheme.textTertiary)
                     }
 
                     Spacer()
@@ -1193,6 +1183,6 @@ struct GlassCard<Content: View>: View {
 #Preview("Connections") {
     ConnectionsSettingsSection()
         .frame(width: 500, height: 500)
-        .background(TalkieTheme.background)
+        .background(AgentTheme.background)
         .preferredColorScheme(.dark)
 }

@@ -20,8 +20,8 @@ import TalkieKit
 private let logger = Log(.system)
 
 /// Notification name prefix for distributed notifications from TalkieAgent → Talkie
-/// Format: to.talkie.app.agent.{path} (e.g., to.talkie.app.agent.recording.started)
-let kTalkieAgentNotificationPrefix = "to.talkie.app.agent"
+/// Format: to.talkie.agent.{path} (e.g., to.talkie.agent.recording.started)
+let kTalkieAgentNotificationPrefix = "to.talkie.agent"
 
 @MainActor
 final class TalkieNotifier {
@@ -76,13 +76,6 @@ final class TalkieNotifier {
     /// Notify Talkie that output routing is in progress
     func routing() {
         sendSilent("routing")
-    }
-
-    // MARK: - Ambient Mode
-
-    /// Notify Talkie of an ambient voice command
-    func ambientCommand(_ command: String) {
-        sendSilent("ambient.command", userInfo: ["cmd": command])
     }
 
     // MARK: - Data Notifications (silent — refresh without activation)

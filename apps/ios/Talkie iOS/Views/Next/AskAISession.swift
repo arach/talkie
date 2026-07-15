@@ -98,6 +98,17 @@ final class AskAISession: ObservableObject {
 
     func send() {
         let instruction = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        submit(instruction: instruction, clearsDraft: true)
+    }
+
+    /// Sends a voice turn without overwriting a typed draft already waiting
+    /// in the composer.
+    func submitVoiceTranscript(_ transcript: String) {
+        let instruction = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        submit(instruction: instruction, clearsDraft: false)
+    }
+
+    private func submit(instruction: String, clearsDraft: Bool) {
         guard !instruction.isEmpty, !isThinking else { return }
 
         guard readiness.isReady else {
@@ -108,7 +119,9 @@ final class AskAISession: ObservableObject {
 
         failure = nil
         retryRequest = nil
-        prompt = ""
+        if clearsDraft {
+            prompt = ""
+        }
 
         let messages = conversationMessages() + [
             InferenceMessage(role: .user, content: instruction)

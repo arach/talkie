@@ -345,21 +345,6 @@ public struct HotKeyStatusInfo: Codable, Sendable, Identifiable {
     /// Called when audio level changes (throttled to ~2Hz)
     func audioLevelDidChange(level: Float)
 
-    /// Called when ambient mode captures a voice command
-    /// TalkieAgent handles wake phrase detection; this delivers the command text
-    /// - Parameters:
-    ///   - command: The voice command text (between wake and end phrases)
-    ///   - duration: How long the command took to speak
-    ///   - bufferContext: Optional recent transcript for context retrieval
-    func ambientCommandReceived(command: String, duration: TimeInterval, bufferContext: String?)
-
-    /// Called when TalkieAgent detects a voice navigation intent
-    /// - Parameters:
-    ///   - intent: The recognized intent (e.g., "navigateHome", "openSearch")
-    ///   - confidence: Confidence score from 0 to 1
-    ///   - rawText: The original transcribed text
-    func voiceNavigationReceived(intent: String, confidence: Float, rawText: String)
-
     /// Legacy paste callback retained for older agents. Talkie does not mutate Agent-owned live tray items.
     /// - Parameter recordingId: The UUID string of the dictation recording
     func dictationWasPasted(recordingId: String)

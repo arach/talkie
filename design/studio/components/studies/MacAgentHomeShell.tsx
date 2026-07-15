@@ -4,11 +4,10 @@
  * Mac Agent Home (Shell) — the TalkieAgent home / library surface.
  *
  * Built ON the canonical SCOPE substrate (cool-gray instrument case),
- * with the KPI row rendered as the Talkie Mac Home **Agent Bay** — the
- * warm-paper instrument panel (runtime rail · divided stat cells with
- * sparklines · signal-path footer) that already represents the agent in
- * Talkie's home. Donor: components/studies/Bay.tsx + MacHome.tsx +
- * AgentHomeShellView.swift.
+ * with a steel-tinted **Agent Bay** — runtime rail · divided stat cells with
+ * sparklines · signal-path footer. The substrate and ink ladder are shared
+ * with Talkie; Agent uses one low-chroma blue signal for active state while
+ * the amber brand tile remains the small family cue.
  *
  * The bay's top rail carries the agent identity ("RUNNING · AG-01 /
  * TALKIE.AGENT"), so we drop the separate page header entirely and land
@@ -29,19 +28,18 @@ const OPS = {
   dim: SCOPE.inkFaint, // rgba .55 labels
   hairline: SCOPE.edge, // #DEDEDD
   hairlineSubtle: SCOPE.edgeSubtle, // #E6E6E5
-  amber: SCOPE.amber, // #C47D1C
-  amberFaint: SCOPE.amberFaint,
-  amberSoft: SCOPE.amberSoft,
-  brass: SCOPE.brass, // #9A6A22
+  brand: SCOPE.amber,
+  signal: "#486888",
+  signalFaint: "rgba(72,104,136,0.10)",
 };
 
-// Agent Bay — warm paper instrument panel (CHIFFON-family) on the cool case.
+// Agent Bay — cool steel equipment nested inside Talkie's neutral case.
 const BAY = {
-  bg: "#F3EFE2", // warm paper
-  strip: "#EDE8D6", // top / bottom rails
-  edge: "#E2DAC6", // warm dividers + border
-  accent: "#9A6A22", // brass — dot + sparklines
-  glow: "rgba(154,106,34,0.40)",
+  bg: "#EAF0F3",
+  strip: "#E1E9ED",
+  edge: "#CDD6DC",
+  accent: OPS.signal,
+  glow: "rgba(72,104,136,0.22)",
   ink: SCOPE.ink, // numbers
   inkFaint: SCOPE.inkFaint, // labels / runtime
   inkSubtle: SCOPE.inkFainter, // right-rail captions / time
@@ -162,7 +160,7 @@ function Rail({ active }: { active: string }) {
           width: 26,
           height: 26,
           borderRadius: 7,
-          background: OPS.amber,
+          background: OPS.brand,
           color: "#FFF",
           fontSize: 15,
           marginBottom: 6,
@@ -180,8 +178,8 @@ function Rail({ active }: { active: string }) {
               width: 30,
               height: 30,
               borderRadius: 7,
-              color: on ? OPS.amber : OPS.dim,
-              background: on ? OPS.amberSoft : "transparent",
+              color: on ? OPS.signal : OPS.dim,
+              background: on ? OPS.signalFaint : "transparent",
             }}
           >
             <OpsIcon name={it.icon} size={16} />
@@ -428,7 +426,7 @@ function RecentLibrary({ fill }: { fill?: boolean }) {
       }}
     >
       <div className="flex items-start" style={{ padding: 14, gap: 10 }}>
-        <span style={{ color: OPS.amber, marginTop: 1 }}>
+        <span style={{ color: OPS.signal, marginTop: 1 }}>
           <OpsIcon name="history" size={15} />
         </span>
         <div className="flex flex-col" style={{ gap: 2, flex: 1, minWidth: 0 }}>
@@ -503,8 +501,8 @@ function Row({
       style={{
         gap: 10,
         padding: "9px 14px",
-        background: active ? OPS.amberFaint : "transparent",
-        borderLeft: `2px solid ${active ? OPS.amber : "transparent"}`,
+        background: active ? OPS.signalFaint : "transparent",
+        borderLeft: `2px solid ${active ? OPS.signal : "transparent"}`,
       }}
     >
       <div

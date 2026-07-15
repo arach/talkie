@@ -244,7 +244,7 @@ final class NotchComposer {
 
     private func observeAgentState() {
         let center = DistributedNotificationCenter.default()
-        let prefix = "to.talkie.app.agent"
+        let prefix = "to.talkie.agent"
 
         func observe(_ suffix: String, handler: @escaping () -> Void) {
             let token = center.addObserver(

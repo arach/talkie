@@ -31,7 +31,7 @@ struct DebugSettingsSection: View {
                                 .font(.system(size: 12, weight: .medium))
                             Text("Test recovery when audio device setup fails")
                                 .font(.system(size: 10))
-                                .foregroundColor(TalkieTheme.textTertiary)
+                                .foregroundColor(AgentTheme.textTertiary)
                         }
                     }
                     .toggleStyle(.switch)
@@ -59,7 +59,7 @@ struct DebugSettingsSection: View {
                                 .font(.system(size: 12, weight: .medium))
                             Text("Test recovery when mic produces no audio")
                                 .font(.system(size: 10))
-                                .foregroundColor(TalkieTheme.textTertiary)
+                                .foregroundColor(AgentTheme.textTertiary)
                         }
                     }
                     .toggleStyle(.switch)
@@ -85,10 +85,10 @@ struct DebugSettingsSection: View {
                     HStack {
                         Text("Path:")
                             .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .foregroundColor(AgentTheme.textTertiary)
                         Text(dumpPath)
                             .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(TalkieTheme.textSecondary)
+                            .foregroundColor(AgentTheme.textSecondary)
                             .textSelection(.enabled)
                         Spacer()
                         Button("Refresh") {
@@ -105,7 +105,7 @@ struct DebugSettingsSection: View {
                     ScrollView {
                         Text(settingsJSON)
                             .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(TalkieTheme.textPrimary)
+                            .foregroundColor(AgentTheme.textPrimary)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -158,7 +158,7 @@ struct DebugSettingsSection: View {
 #Preview {
     DebugSettingsSection()
         .frame(width: 500, height: 600)
-        .background(TalkieTheme.background)
+        .background(AgentTheme.background)
         .preferredColorScheme(.dark)
 }
 #endif

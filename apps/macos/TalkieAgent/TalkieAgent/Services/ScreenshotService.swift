@@ -276,22 +276,52 @@ actor ScreenshotService {
         return granted
     }
 
-    /// Request screen recording permission by triggering the system prompt
+    /// Request screen recording permission by triggering the system prompt.
+    ///
+    /// `CGRequestScreenCaptureAccess()` is the official prompt API, but on some
+    /// macOS builds it can return without materializing a row for helper apps.
+    /// If preflight is still false, also touch ScreenCaptureKit's shareable
+    /// content API, which is the capture API we actually use and gives TCC a
+    /// second chance to associate this bundle with Screen Recording.
     func requestPermission() async -> Bool {
-        let before = CGPreflightScreenCaptureAccess()
+        let before = await MainActor.run {
+            CGPreflightScreenCaptureAccess()
+        }
         log.info(
             "Requesting screen recording permission",
             detail: "\(permissionLogContext), before=\(before)"
         )
 
-        let requestGranted = before || CGRequestScreenCaptureAccess()
-        let after = CGPreflightScreenCaptureAccess()
+        let requestGranted = await MainActor.run {
+            before || CGRequestScreenCaptureAccess()
+        }
+        let after = await MainActor.run {
+            CGPreflightScreenCaptureAccess()
+        }
+        var materializedByScreenCaptureKit = false
+        var final = after
+
+        if !final {
+            do {
+                _ = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+                materializedByScreenCaptureKit = true
+                final = true
+            } catch {
+                final = await MainActor.run {
+                    CGPreflightScreenCaptureAccess()
+                }
+                log.warning(
+                    "ScreenCaptureKit permission probe failed",
+                    detail: "\(permissionLogContext), error=\(error.localizedDescription), final=\(final)"
+                )
+            }
+        }
 
         log.info(
             "Screen recording permission request completed",
-            detail: "\(permissionLogContext), before=\(before), requestGranted=\(requestGranted), after=\(after)"
+            detail: "\(permissionLogContext), before=\(before), requestGranted=\(requestGranted), after=\(after), materializedByScreenCaptureKit=\(materializedByScreenCaptureKit), final=\(final)"
         )
-        return after
+        return final
     }
 
     private var permissionLogContext: String {

@@ -664,7 +664,7 @@ struct FloatingPillView: View {
     }
 
     private var isExpanded: Bool {
-        isHovered
+        isHovered || showPermissionWarning
     }
 
     private var pillWidth: CGFloat {
@@ -697,41 +697,34 @@ struct FloatingPillView: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            // Permission warning badge (appears when missing)
+            // Keep the permission action beside the recording control so the
+            // warning reads as part of the pill instead of a detached glyph.
             if !permissionManager.allRequiredGranted && isExpanded {
                 Button(action: { showPermissionWarning.toggle() }) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 9))
-                        .foregroundColor(.orange)
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 8, weight: .semibold))
+
+                        Text("Permissions")
+                            .font(.system(size: 8, weight: .semibold))
+                    }
+                    .foregroundStyle(SemanticColor.warning)
+                    .padding(.horizontal, 8)
+                    .frame(height: 18)
+                    .liveGlassSurface(
+                        borderColor: SemanticColor.warning.opacity(0.45),
+                        cornerRadius: 9
+                    )
+                    .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .help("Missing permissions - click to fix")
+                .help("Show missing Talkie permissions")
+                .accessibilityLabel("Show missing Talkie permissions")
                 .popover(isPresented: $showPermissionWarning, arrowEdge: .bottom) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Missing Permissions")
-                            .font(.system(size: 12, weight: .semibold))
-
-                        if permissionManager.microphoneStatus != .granted {
-                            Label("Microphone not granted", systemImage: "mic.slash.fill")
-                                .font(.system(size: 11))
-                                .foregroundColor(.red)
-                        }
-                        if permissionManager.accessibilityStatus != .granted {
-                            Label("Accessibility not granted", systemImage: "hand.raised.slash.fill")
-                                .font(.system(size: 11))
-                                .foregroundColor(.red)
-                        }
-
-                        Button("Open Permissions...") {
-                            showPermissionWarning = false
-                            // Post notification to show permissions window
-                            NotificationCenter.default.post(name: .showPermissionsWindow, object: nil)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
-                    }
-                    .padding()
-                    .frame(width: 200)
+                    FloatingPillPermissionPopover(
+                        permissionManager: permissionManager,
+                        onOpenPermissionCenter: openPermissionCenter
+                    )
                 }
             }
 
@@ -772,17 +765,17 @@ struct FloatingPillView: View {
                     // Build timestamp (e.g., "Dec 26 14:32")
                     Text(buildInfo)
                         .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                        .foregroundColor(TalkieTheme.textSecondary)
+                        .foregroundColor(AgentTheme.textSecondary)
 
                     Text("•")
                         .font(.system(size: 8))
-                        .foregroundColor(TalkieTheme.textMuted)
+                        .foregroundColor(AgentTheme.textMuted)
 
                     // PID (clickable to copy)
                     Button(action: { copyPID() }) {
                         Text(verbatim: "PID \(ProcessInfo.processInfo.processIdentifier)")
                             .font(.system(size: 9, weight: .medium, design: .monospaced))
-                            .foregroundColor(pidCopied ? SemanticColor.success : TalkieTheme.textTertiary)
+                            .foregroundColor(pidCopied ? SemanticColor.success : AgentTheme.textTertiary)
                     }
                     .buttonStyle(.plain)
                     .help("Click to copy PID")
@@ -933,6 +926,12 @@ struct FloatingPillView: View {
         }
     }
 
+    private func openPermissionCenter() {
+        showPermissionWarning = false
+        permissionManager.refreshAll()
+        NotificationCenter.default.post(name: .showPermissionsWindow, object: nil)
+    }
+
     private func provideTapFeedback() {
         // Quick scale down, then bounce back
         withAnimation(.easeOut(duration: 0.1)) {
@@ -943,6 +942,69 @@ struct FloatingPillView: View {
                 tapFeedbackScale = 1.0
             }
         }
+    }
+}
+
+private struct FloatingPillPermissionPopover: View {
+    @ObservedObject var permissionManager: PermissionManager
+    let onOpenPermissionCenter: () -> Void
+
+    private var missingRequiredPermissions: [PermissionType] {
+        PermissionType.allCases.filter {
+            $0.isRequired && permissionManager.status(for: $0) != .granted
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: "lock.trianglebadge.exclamationmark.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(SemanticColor.warning)
+                    .frame(width: 30, height: 30)
+                    .background(SemanticColor.warning.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Talkie needs access")
+                        .font(.system(size: 12, weight: .semibold))
+
+                    Text("Grant access to keep dictation and paste working.")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 7) {
+                ForEach(missingRequiredPermissions) { permission in
+                    HStack(spacing: 7) {
+                        Image(systemName: permission.icon)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(SemanticColor.warning)
+                            .frame(width: 14)
+
+                        Text(permission.title)
+                            .font(.system(size: 11, weight: .medium))
+
+                        Spacer(minLength: 8)
+
+                        Text(permissionManager.status(for: permission).label)
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(9)
+            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+
+            Button("Open Permission Center", systemImage: "arrow.up.right.square") {
+                onOpenPermissionCenter()
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .tint(SemanticColor.warning)
+        }
+        .padding(14)
+        .frame(width: 270)
     }
 }
 

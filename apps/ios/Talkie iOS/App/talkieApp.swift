@@ -103,14 +103,11 @@ struct talkieApp: App {
             }
             .animation(Self.isScreenshotMode ? nil : .easeInOut(duration: 0.3), value: persistenceController != nil)
             .overlay {
-                // Screenshot splash — sits on top of everything, auto-dismisses
+                // Screenshot splash stays pinned until the screenshot test exits.
+                // Every other screenshot launch passes --screenshotSkipSplash.
                 if screenshotSplashVisible {
                     SplashView()
                         .ignoresSafeArea()
-                        .task {
-                            try? await Task.sleep(for: .seconds(5))
-                            screenshotSplashVisible = false
-                        }
                 }
             }
             .onOpenURL { url in

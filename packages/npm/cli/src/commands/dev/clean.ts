@@ -1,4 +1,4 @@
-import type { Command } from "commander";
+import type { Command } from "../../gunshi-command";
 import { readdirSync, statSync, rmSync, existsSync } from "fs";
 import { join } from "path";
 import { getFormatOptions, output } from "../../format";

@@ -42,19 +42,19 @@ struct SidebarNavItem: View {
 
     private var foregroundColor: Color {
         if isSubtle {
-            if isSelected { return TalkieTheme.textSecondary }
-            if isHovered { return TalkieTheme.textTertiary }
-            return TalkieTheme.textMuted
+            if isSelected { return AgentTheme.textSecondary }
+            if isHovered { return AgentTheme.textTertiary }
+            return AgentTheme.textMuted
         } else {
-            if isSelected { return TalkieTheme.textPrimary }
-            if isHovered { return TalkieTheme.textSecondary }
-            return TalkieTheme.textTertiary
+            if isSelected { return AgentTheme.textPrimary }
+            if isHovered { return AgentTheme.textSecondary }
+            return AgentTheme.textTertiary
         }
     }
 
     private var backgroundColor: Color {
-        if isSelected { return TalkieTheme.hover }
-        if isHovered { return TalkieTheme.hover.opacity(0.5) }
+        if isSelected { return AgentTheme.hover }
+        if isHovered { return AgentTheme.hover.opacity(0.5) }
         return Color.clear
     }
 
@@ -130,11 +130,11 @@ struct CollapsedNavButton: View {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: icon)
                     .font(.system(size: 14))
-                    .foregroundColor(isSelected ? .white : (isHovered ? TalkieTheme.textSecondary : TalkieTheme.textTertiary))
+                    .foregroundColor(isSelected ? .white : (isHovered ? AgentTheme.textSecondary : AgentTheme.textTertiary))
                     .frame(width: 36, height: 32)
                     .background(
                         RoundedRectangle(cornerRadius: 6)
-                            .fill(isSelected ? Color.accentColor.opacity(0.3) : (isHovered ? TalkieTheme.border : Color.clear))
+                            .fill(isSelected ? Color.accentColor.opacity(0.3) : (isHovered ? AgentTheme.border : Color.clear))
                     )
 
                 if let badge = badge, badge > 0 {

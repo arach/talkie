@@ -72,9 +72,13 @@ public final class HelperLaunchManager {
         let env = ServiceManager.shared.effectiveHelperEnvironment
         log.info("[\(kind.displayName)] Launching (\(env.displayName), mode: \(resolvedMode.rawValue))...")
 
-        if resolvingConflicts {
-            await bootoutLegacyLabels(for: kind, environment: env)
-        }
+        // Always clean stale same-environment labels before launch.
+        // After the Agent bundle-ID cutover, an old launchd job can point at the
+        // new executable while still advertising the old MachService; that leaves
+        // XPC/permission requests talking to a name nobody serves. This is cleanup,
+        // not compatibility: we remove the stale job/plist and launch only the
+        // canonical label below.
+        await bootoutLegacyLabels(for: kind, environment: env, removePlists: true)
 
         let conflicts = conflictingEnvironments(for: kind, launching: env)
         if !conflicts.isEmpty {
@@ -414,6 +418,10 @@ public final class HelperLaunchManager {
         )
         let plist: [String: Any] = [
             "Label": label,
+            "AssociatedBundleIdentifiers": [
+                env.talkieBundleId,
+                label,
+            ],
             "ProgramArguments": programArguments,
             "MachServices": [
                 xpcService: true
@@ -463,11 +471,33 @@ public final class HelperLaunchManager {
 
     // MARK: - Private
 
-    private func bootoutLegacyLabels(for kind: TalkieHelper, environment env: TalkieEnvironment) async {
+    private func bootoutLegacyLabels(
+        for kind: TalkieHelper,
+        environment env: TalkieEnvironment,
+        removePlists: Bool = false
+    ) async {
         let currentLabel = kind.launchdLabel(for: env)
-        for label in legacyLaunchdLabels(for: kind, environment: env) where isAgentLoaded(label: label) {
-            log.info("[\(kind.displayName)] Booting out legacy launchd label \(label) before launching \(currentLabel)")
-            await bootout(label: label)
+        for label in legacyLaunchdLabels(for: kind, environment: env) {
+            if isAgentLoaded(label: label) {
+                log.info("[\(kind.displayName)] Booting out legacy launchd label \(label) before launching \(currentLabel)")
+                await bootout(label: label)
+            }
+
+            if removePlists {
+                removeLaunchAgentPlistIfPresent(label: label, reason: "legacy label cleanup")
+            }
+        }
+    }
+
+    private func removeLaunchAgentPlistIfPresent(label: String, reason: String) {
+        let plist = userLaunchAgentsDir.appendingPathComponent("\(label).plist")
+        guard FileManager.default.fileExists(atPath: plist.path) else { return }
+
+        do {
+            try FileManager.default.removeItem(at: plist)
+            log.info("[HelperLaunchManager] Removed \(label).plist (\(reason))")
+        } catch {
+            log.warning("[HelperLaunchManager] Failed to remove \(label).plist (\(reason)): \(error.localizedDescription)")
         }
     }
 

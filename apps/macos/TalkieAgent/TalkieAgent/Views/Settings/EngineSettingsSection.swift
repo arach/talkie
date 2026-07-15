@@ -42,13 +42,13 @@ struct EngineSettingsSection: View {
                                     .frame(width: 8, height: 8)
                                 Text(engineClient.isConnected ? "Ready" : "Connecting...")
                                     .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(TalkieTheme.textPrimary)
+                                    .foregroundColor(AgentTheme.textPrimary)
                             }
 
                             if engineClient.isConnected, let status = engineClient.status {
                                 Text("\(status.totalTranscriptions) transcriptions processed")
                                     .font(.system(size: 10))
-                                    .foregroundColor(TalkieTheme.textSecondary)
+                                    .foregroundColor(AgentTheme.textSecondary)
                             } else if let error = engineClient.lastError {
                                 Text(error)
                                     .font(.system(size: 10))
@@ -56,7 +56,7 @@ struct EngineSettingsSection: View {
                             } else {
                                 Text("Starting transcription service...")
                                     .font(.system(size: 10))
-                                    .foregroundColor(TalkieTheme.textSecondary)
+                                    .foregroundColor(AgentTheme.textSecondary)
                             }
                         }
 
@@ -104,7 +104,7 @@ struct EngineSettingsSection: View {
 
                                 if model.id != models.last?.id {
                                     Divider()
-                                        .background(TalkieTheme.divider)
+                                        .background(AgentTheme.divider)
                                 }
                             }
                         }
@@ -120,11 +120,11 @@ struct EngineSettingsSection: View {
                             BrailleSpinner()
                             Text("Loading available models...")
                                 .font(.system(size: 11))
-                                .foregroundColor(TalkieTheme.textTertiary)
+                                .foregroundColor(AgentTheme.textTertiary)
                         } else {
                             Text("Connect to engine to see available models")
                                 .font(.system(size: 11))
-                                .foregroundColor(TalkieTheme.textTertiary)
+                                .foregroundColor(AgentTheme.textTertiary)
                         }
                     }
                     .frame(maxWidth: .infinity)
@@ -137,7 +137,7 @@ struct EngineSettingsSection: View {
                 VStack(alignment: .leading, spacing: Spacing.md) {
                     Text("The transcription engine is hosted inside TalkieAgent and stays available whenever Agent is running. It supports multiple speech recognition models including Whisper and Parakeet, all running locally via Apple's Neural Engine.")
                         .font(.system(size: 10))
-                        .foregroundColor(TalkieTheme.textSecondary)
+                        .foregroundColor(AgentTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
 
                     // Technical details
@@ -150,10 +150,10 @@ struct EngineSettingsSection: View {
                             HStack(spacing: Spacing.xs) {
                                 Text("Process ID:")
                                     .font(.system(size: 9, weight: .medium))
-                                    .foregroundColor(TalkieTheme.textSecondary)
+                                    .foregroundColor(AgentTheme.textSecondary)
                                 Text(verbatim: "\(status.pid)")
                                     .font(.system(size: 9, design: .monospaced))
-                                    .foregroundColor(TalkieTheme.textPrimary)
+                                    .foregroundColor(AgentTheme.textPrimary)
                             }
 
                             // XPC service name
@@ -161,10 +161,10 @@ struct EngineSettingsSection: View {
                                 HStack(spacing: Spacing.xs) {
                                     Text("XPC Service:")
                                         .font(.system(size: 9, weight: .medium))
-                                        .foregroundColor(TalkieTheme.textSecondary)
+                                        .foregroundColor(AgentTheme.textSecondary)
                                     Text(mode.rawValue)
                                         .font(.system(size: 9, design: .monospaced))
-                                        .foregroundColor(TalkieTheme.textPrimary)
+                                        .foregroundColor(AgentTheme.textPrimary)
                                 }
                             }
 
@@ -172,7 +172,7 @@ struct EngineSettingsSection: View {
                             HStack(spacing: Spacing.xs) {
                                 Text("Connection:")
                                     .font(.system(size: 9, weight: .medium))
-                                    .foregroundColor(TalkieTheme.textSecondary)
+                                    .foregroundColor(AgentTheme.textSecondary)
                                 Text(engineClient.connectionState.rawValue)
                                     .font(.system(size: 9))
                                     .foregroundColor(engineStatusColor)
@@ -182,20 +182,20 @@ struct EngineSettingsSection: View {
                             HStack(spacing: Spacing.xs) {
                                 Text("Uptime:")
                                     .font(.system(size: 9, weight: .medium))
-                                    .foregroundColor(TalkieTheme.textSecondary)
+                                    .foregroundColor(AgentTheme.textSecondary)
                                 Text(formatUptime(status.uptime))
                                     .font(.system(size: 9))
-                                    .foregroundColor(TalkieTheme.textPrimary)
+                                    .foregroundColor(AgentTheme.textPrimary)
                             }
 
                             // Transcriptions processed
                             HStack(spacing: Spacing.xs) {
                                 Text("Transcriptions:")
                                     .font(.system(size: 9, weight: .medium))
-                                    .foregroundColor(TalkieTheme.textSecondary)
+                                    .foregroundColor(AgentTheme.textSecondary)
                                 Text("\(status.totalTranscriptions)")
                                     .font(.system(size: 9))
-                                    .foregroundColor(TalkieTheme.textPrimary)
+                                    .foregroundColor(AgentTheme.textPrimary)
                             }
 
                             // Memory usage
@@ -203,10 +203,10 @@ struct EngineSettingsSection: View {
                                 HStack(spacing: Spacing.xs) {
                                     Text("Memory:")
                                         .font(.system(size: 9, weight: .medium))
-                                        .foregroundColor(TalkieTheme.textSecondary)
+                                        .foregroundColor(AgentTheme.textSecondary)
                                     Text("\(memoryMB) MB")
                                         .font(.system(size: 9))
-                                        .foregroundColor(TalkieTheme.textPrimary)
+                                        .foregroundColor(AgentTheme.textPrimary)
                                 }
                             }
 
@@ -214,10 +214,10 @@ struct EngineSettingsSection: View {
                             HStack(spacing: Spacing.xs) {
                                 Text("Build:")
                                     .font(.system(size: 9, weight: .medium))
-                                    .foregroundColor(TalkieTheme.textSecondary)
+                                    .foregroundColor(AgentTheme.textSecondary)
                                 Text(status.isDebugBuild ? "Debug" : "Release")
                                     .font(.system(size: 9))
-                                    .foregroundColor(TalkieTheme.textPrimary)
+                                    .foregroundColor(AgentTheme.textPrimary)
                             }
 
                             // Loaded model
@@ -225,10 +225,10 @@ struct EngineSettingsSection: View {
                                 HStack(spacing: Spacing.xs) {
                                     Text("Loaded Model:")
                                         .font(.system(size: 9, weight: .medium))
-                                        .foregroundColor(TalkieTheme.textSecondary)
+                                        .foregroundColor(AgentTheme.textSecondary)
                                     Text(modelId)
                                         .font(.system(size: 9))
-                                        .foregroundColor(TalkieTheme.textPrimary)
+                                        .foregroundColor(AgentTheme.textPrimary)
                                 }
                             }
                         }
@@ -355,11 +355,11 @@ struct EngineStatBadge: View {
                 Text(label.uppercased())
                     .font(.system(size: 7, weight: .bold))
                     .tracking(0.5)
-                    .foregroundColor(TalkieTheme.textMuted)
+                    .foregroundColor(AgentTheme.textMuted)
 
                 Text(value)
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .foregroundColor(AgentTheme.textPrimary)
             }
         }
     }
@@ -383,7 +383,7 @@ struct ModelManagementRow: View {
             Button(action: onSelect) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 14))
-                    .foregroundColor(isSelected ? .accentColor : (model.isDownloaded ? TalkieTheme.textSecondary : TalkieTheme.textMuted))
+                    .foregroundColor(isSelected ? .accentColor : (model.isDownloaded ? AgentTheme.textSecondary : AgentTheme.textMuted))
             }
             .buttonStyle(.plain)
             .disabled(!model.isDownloaded)
@@ -393,7 +393,7 @@ struct ModelManagementRow: View {
                 HStack(spacing: 6) {
                     Text(model.displayName)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(model.isDownloaded ? TalkieTheme.textPrimary : TalkieTheme.textSecondary)
+                        .foregroundColor(model.isDownloaded ? AgentTheme.textPrimary : AgentTheme.textSecondary)
 
                     if model.isLoaded {
                         Text("LOADED")
@@ -407,7 +407,7 @@ struct ModelManagementRow: View {
 
                     Text(model.sizeDescription)
                         .font(.system(size: 8))
-                        .foregroundColor(TalkieTheme.textSecondary)
+                        .foregroundColor(AgentTheme.textSecondary)
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1)
                         .background(OpsSurface.control)
@@ -416,7 +416,7 @@ struct ModelManagementRow: View {
 
                 Text(model.description)
                     .font(.system(size: 9))
-                    .foregroundColor(model.isDownloaded ? TalkieTheme.textSecondary : TalkieTheme.textTertiary)
+                    .foregroundColor(model.isDownloaded ? AgentTheme.textSecondary : AgentTheme.textTertiary)
             }
 
             Spacer()
@@ -427,14 +427,14 @@ struct ModelManagementRow: View {
                     BrailleSpinner(size: 10)
                     Text("\(Int(downloadProgress * 100))%")
                         .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(TalkieTheme.textTertiary)
+                        .foregroundColor(AgentTheme.textTertiary)
                 }
                 .frame(width: 60)
             } else if model.isDownloaded {
                 Button(action: onDelete) {
                     Image(systemName: "trash")
                         .font(.system(size: 10))
-                        .foregroundColor(isHovered ? SemanticColor.error : TalkieTheme.textMuted)
+                        .foregroundColor(isHovered ? SemanticColor.error : AgentTheme.textMuted)
                 }
                 .buttonStyle(.plain)
                 .opacity(isHovered ? 1 : 0.5)
@@ -473,7 +473,7 @@ struct ModelInfoBadge: View {
             Text(label)
                 .font(.system(size: 9))
         }
-        .foregroundColor(TalkieTheme.textSecondary)
+        .foregroundColor(AgentTheme.textSecondary)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(OpsSurface.control)

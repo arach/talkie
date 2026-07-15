@@ -207,7 +207,22 @@ public final class ScreenshotCaptureService {
 
     public func requestPermission() async -> Bool {
         _ = CGRequestScreenCaptureAccess()
-        return CGPreflightScreenCaptureAccess()
+        var granted = CGPreflightScreenCaptureAccess()
+
+        if !granted {
+            do {
+                _ = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+                granted = true
+            } catch {
+                granted = CGPreflightScreenCaptureAccess()
+                log.warning(
+                    "ScreenCaptureKit permission probe failed",
+                    detail: "error=\(error.localizedDescription), granted=\(granted)"
+                )
+            }
+        }
+
+        return granted
     }
 
     public func captureWindowImage(windowID: CGWindowID) async -> CGImage? {

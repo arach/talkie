@@ -30,6 +30,7 @@ let package = Package(
                 .product(name: "GRDB", package: "GRDB.swift"),
             ],
             resources: [
+                .copy("Resources/ComposeWebEditor"),
                 .copy("Resources/Context"),
                 .copy("Resources/Fonts"),
             ]),

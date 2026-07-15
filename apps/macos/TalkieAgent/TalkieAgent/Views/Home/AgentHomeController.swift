@@ -79,14 +79,20 @@ final class AgentHomeController: NSObject, ObservableObject, NSWindowDelegate {
 
         let hostingView = NSHostingView(rootView: view)
         let homeWindow = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1040, height: 660),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            contentRect: NSRect(x: 0, y: 0, width: 1080, height: 1160),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
 
-        // Native title bar is the only top chrome (no custom OpsShell titlebar).
+        // Keep native window controls, but let the centered in-content pill
+        // carry product identity instead of duplicating a left-aligned title.
         homeWindow.title = "Talkie Agent"
+        homeWindow.titleVisibility = .hidden
+        homeWindow.titlebarAppearsTransparent = true
+        homeWindow.toolbarStyle = .unifiedCompact
+        homeWindow.backgroundColor = .clear
+        homeWindow.isOpaque = false
         homeWindow.minSize = NSSize(width: 680, height: 500)
         homeWindow.contentView = hostingView
         homeWindow.isMovableByWindowBackground = false
@@ -95,7 +101,7 @@ final class AgentHomeController: NSObject, ObservableObject, NSWindowDelegate {
         // Versioned autosave key: the previous key restored a stale, undersized
         // frame (smaller than minSize), which clipped the settings layout. Bumping
         // the key discards old saved frames so the window opens at its real default.
-        homeWindow.setFrameAutosaveName("TalkieAgent.AgentHome.compact.v3")
+        homeWindow.setFrameAutosaveName("TalkieAgent.AgentHome.command-center.v5")
         homeWindow.center()
         homeWindow.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)

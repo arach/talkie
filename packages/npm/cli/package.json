@@ -1,10 +1,10 @@
 {
   "name": "@talkie/cli",
-  "version": "0.4.8",
-  "description": "Access Talkie voice memos, dictations, captures, and workflows from the command line",
+  "version": "0.4.9",
+  "description": "Talkie CLI for macOS — voice memos, dictations, screenshots, screen clips, search, and agent workflows",
   "type": "module",
   "bin": {
-    "talkie": "./dist/index.js"
+    "talkie": "dist/index.js"
   },
   "files": [
     "README.md",
@@ -22,18 +22,27 @@
   },
   "keywords": [
     "talkie",
+    "macos",
+    "cli",
     "voice-memos",
     "dictation",
     "transcription",
-    "cli",
+    "screenshots",
+    "screen-capture",
+    "screen-clips",
     "sqlite",
-    "ai-agent"
+    "ai-agent",
+    "workflows"
   ],
+  "author": "Arach Tchoupani <arach@tchoupani.com>",
   "license": "PolyForm-Noncommercial-1.0.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/arach/talkie",
+    "url": "git+https://github.com/arach/talkie.git",
     "directory": "packages/npm/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/arach/talkie/issues"
   },
   "homepage": "https://usetalkie.com",
   "engines": {
@@ -43,7 +52,7 @@
     "darwin"
   ],
   "dependencies": {
-    "commander": "^13.0.0"
+    "gunshi": "^0.36.0"
   },
   "devDependencies": {
     "@types/bun": "latest"

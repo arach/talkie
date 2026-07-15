@@ -222,14 +222,14 @@ struct QueuePickerView: View {
             HStack {
                 Text("Unpasted Lives")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .foregroundColor(AgentTheme.textPrimary)
                 Spacer()
                 Text("\(viewModel.items.count)")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(TalkieTheme.textTertiary)
+                    .foregroundColor(AgentTheme.textTertiary)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 2)
-                    .background(TalkieTheme.border)
+                    .background(AgentTheme.border)
                     .cornerRadius(4)
             }
             .padding(.horizontal, 16)
@@ -238,7 +238,7 @@ struct QueuePickerView: View {
 
             // Divider
             Rectangle()
-                .fill(TalkieTheme.border)
+                .fill(AgentTheme.border)
                 .frame(height: 1)
 
             // Items list
@@ -269,10 +269,10 @@ struct QueuePickerView: View {
         .frame(width: 420)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(TalkieTheme.surfaceElevated)
+                .fill(AgentTheme.surfaceElevated)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(TalkieTheme.border, lineWidth: 1)
+                        .stroke(AgentTheme.border, lineWidth: 1)
                 )
         )
     }
@@ -296,15 +296,15 @@ struct QueueItemRow: View {
             HStack(spacing: 6) {
                 Text(timeAgo(from: item.createdAt))
                     .font(.system(size: 9))
-                    .foregroundColor(TalkieTheme.textMuted)
+                    .foregroundColor(AgentTheme.textMuted)
 
                 let wordCount = item.text.split(separator: " ").count
                 if wordCount > 0 {
                     Text("·")
-                        .foregroundColor(TalkieTheme.textMuted)
+                        .foregroundColor(AgentTheme.textMuted)
                     Text("\(wordCount)w")
                         .font(.system(size: 9))
-                        .foregroundColor(TalkieTheme.textMuted)
+                        .foregroundColor(AgentTheme.textMuted)
                 }
             }
 
@@ -312,7 +312,7 @@ struct QueueItemRow: View {
             if isSelected {
                 Text("↵")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(TalkieTheme.textTertiary)
+                    .foregroundColor(AgentTheme.textTertiary)
             }
         }
         .padding(.horizontal, 10)

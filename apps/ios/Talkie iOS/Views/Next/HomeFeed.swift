@@ -104,7 +104,47 @@ final class HomeFeed: ObservableObject {
         static let empty = TodayStats(memos: 0, dictations: 0, items: 0)
     }
 
+    /// Derived instrument model for the Home cockpit (Message Line · Take Log ·
+    /// the Roll). Computed once per `reload()` from the SAME unfiltered fetch the
+    /// feed already runs — no second feed, no extra fetch, and independent of the
+    /// search box / content filter. "Takes" = the tape universe: voice memos +
+    /// keyboard dictations + captures (typed compose notes are not takes).
+    struct CockpitModel: Equatable {
+        /// Every take on the tape (drives the milestone + empty-library facts).
+        var totalTakes: Int
+        /// The freshest take's date (drives the recency fact); nil when empty.
+        var lastTakeDate: Date?
+        /// `rollWeeks * rollDaysPerWeek` day intensities (0 = none · 1–3), oldest→newest.
+        var rollDays: [Int]
+        /// Index of today's cell inside `rollDays` (its real weekday column slot).
+        var todayIndex: Int
+        /// Trailing consecutive capture-day run ending on today (or yesterday).
+        var streak: Int
+
+        // ── GAUGES · derived in the SAME reload pass (no extra fetch) ──
+        /// Takes captured today (uncapped — the TAKES gauge readout).
+        var todayTakes: Int
+        /// Σ capture seconds today (the TIME gauge readout, m:ss).
+        var todayDurationSeconds: Double
+        /// Trailing 7-day mean takes/day, EXCLUDING today — the TAKES meter baseline tick.
+        var avgTakes: Double
+        /// Trailing 7-day mean seconds/day, EXCLUDING today — the TIME meter baseline tick.
+        var avgDurationSeconds: Double
+        /// Last 12 days' activity (oldest→newest, newest = today) — the STRK Life-in-Dots.
+        var last12Days: [Bool]
+
+        var isEmpty: Bool { totalTakes == 0 }
+
+        static let empty = CockpitModel(
+            totalTakes: 0, lastTakeDate: nil, rollDays: [], todayIndex: 0, streak: 0,
+            todayTakes: 0, todayDurationSeconds: 0, avgTakes: 0, avgDurationSeconds: 0, last12Days: []
+        )
+    }
+
     @Published private(set) var todayStats: TodayStats
+
+    /// See `CockpitModel`. Consumed by `HomeCockpit`; recomputed each `reload()`.
+    @Published private(set) var cockpit: CockpitModel = .empty
     var hasMoreRecentItems: Bool { totalRecentCount > displayLimit }
     var remainingRecentItems: Int { max(0, totalRecentCount - displayLimit) }
     var isSearching: Bool { !normalizedSearchText.isEmpty }
@@ -149,6 +189,11 @@ final class HomeFeed: ObservableObject {
                 dictations: dictations,
                 captures: captures
             )
+            cockpit = Self.makeCockpit(
+                memos: unfilteredMemos,
+                dictations: dictations,
+                captures: captures
+            )
 
             entries = Self.makeEntries(
                 memos: filteredMemos,
@@ -164,6 +209,7 @@ final class HomeFeed: ObservableObject {
             entries = []
             recentItems = []
             totalRecentCount = 0
+            cockpit = .empty
             AppLogger.persistence.error("Failed to load home feed: \(error.localizedDescription)")
         }
     }
@@ -229,6 +275,39 @@ final class HomeFeed: ObservableObject {
 
     private var normalizedSearchText: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+// MARK: - Cockpit constants + shared formatters
+
+extension HomeFeed {
+    // ── The Roll geometry — mirrors the studio grid (CockpitGrid.tsx). ──
+    /// Week columns in the Roll.
+    static let rollWeeks = 18
+    /// Day rows per column (Sun→Sat).
+    static let rollDaysPerWeek = 7
+
+    /// Compact uppercase relative age for terminal readouts — "NOW" · "20M" ·
+    /// "2H" · "1D" · "3W" · "2MO". No "ago" suffix (the Take Log lane is fixed-width).
+    nonisolated static func compactAge(from date: Date, now: Date = Date()) -> String {
+        let seconds = max(0, Int(now.timeIntervalSince(date)))
+        if seconds < 60 { return "NOW" }
+        let minutes = seconds / 60
+        if minutes < 60 { return "\(minutes)M" }
+        let hours = minutes / 60
+        if hours < 24 { return "\(hours)H" }
+        let days = hours / 24
+        if days < 7 { return "\(days)D" }
+        let weeks = days / 7
+        if weeks < 5 { return "\(weeks)W" }
+        let months = days / 30
+        return "\(max(1, months))MO"
+    }
+
+    /// Duration as "m:ss" — "0:42", "6:30".
+    nonisolated static func compactDuration(_ seconds: Double) -> String {
+        let total = max(0, Int(seconds.rounded()))
+        return "\(total / 60):" + String(format: "%02d", total % 60)
     }
 }
 
@@ -556,6 +635,101 @@ private extension HomeFeed {
                 + dictations.filter { calendar.isDateInToday($0.timestamp) }.count,
             items: captures.filter { calendar.isDateInToday($0.timestamp) }.count
         )
+    }
+
+    /// Build the cockpit instrument model from the tape universe (memos +
+    /// dictations + captures). One pass over each already-fetched array — the
+    /// Roll day buckets, the streak, the gauge totals, and the message-line facts
+    /// all derive from the same raw list. Notes are excluded (they aren't "takes").
+    static func makeCockpit(
+        memos: [VoiceMemo],
+        dictations: [KeyboardDictation],
+        captures: [Capture],
+        now: Date = Date()
+    ) -> CockpitModel {
+        struct Raw { let date: Date; let duration: Double }
+        var raws: [Raw] = []
+        raws.reserveCapacity(memos.count + dictations.count + captures.count)
+
+        for memo in memos {
+            raws.append(Raw(date: memo.createdAt ?? memo.lastModified ?? .distantPast, duration: memo.duration))
+        }
+        for dictation in dictations {
+            raws.append(Raw(date: dictation.timestamp, duration: dictation.durationSeconds ?? 0))
+        }
+        for capture in captures {
+            raws.append(Raw(date: capture.timestamp, duration: 0))
+        }
+
+        // Newest-first only for the freshest-take fact (the Take Log is retired).
+        let sorted = raws.sorted { $0.date > $1.date }
+
+        // The Roll — bucket each take's day into the trailing 18-week grid.
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: now)
+        let weekdayRow = calendar.component(.weekday, from: today) - 1 // 0 = Sunday
+        let todayIndex = (rollWeeks - 1) * rollDaysPerWeek + weekdayRow
+        var days = [Int](repeating: 0, count: rollWeeks * rollDaysPerWeek)
+
+        // GAUGES — today's totals + the trailing 7-day (pre-today) daily totals,
+        // derived in this SAME pass over `raws`.
+        var todayTakes = 0
+        var todayDuration = 0.0
+        var prevTakes = 0
+        var prevDuration = 0.0
+        for raw in raws {
+            let day = calendar.startOfDay(for: raw.date)
+            guard let offset = calendar.dateComponents([.day], from: day, to: today).day else { continue }
+            // Roll bucket (in-window, not future).
+            let index = todayIndex - offset
+            if index >= 0, index <= todayIndex {
+                days[index] = min(3, days[index] + 1)
+            }
+            // Gauge buckets — today vs the trailing 7 days before today.
+            if offset == 0 {
+                todayTakes += 1
+                todayDuration += raw.duration
+            } else if offset >= 1, offset <= 7 {
+                prevTakes += 1
+                prevDuration += raw.duration
+            }
+        }
+        let avgTakes = Double(prevTakes) / 7.0
+        let avgDuration = prevDuration / 7.0
+
+        // Last 12 days' activity (oldest→newest, newest = today) from the Roll grid.
+        var last12 = [Bool](repeating: false, count: 12)
+        for i in 0..<12 {
+            let index = todayIndex - (11 - i)
+            last12[i] = index >= 0 && index < days.count && days[index] > 0
+        }
+
+        return CockpitModel(
+            totalTakes: raws.count,
+            lastTakeDate: sorted.first?.date,
+            rollDays: days,
+            todayIndex: todayIndex,
+            streak: rollStreak(days: days, todayIndex: todayIndex),
+            todayTakes: todayTakes,
+            todayDurationSeconds: todayDuration,
+            avgTakes: avgTakes,
+            avgDurationSeconds: avgDuration,
+            last12Days: last12
+        )
+    }
+
+    /// Length of the trailing consecutive capture-day run ending on today — or on
+    /// yesterday when today has no take yet (the streak is still alive). Mirrors
+    /// the studio `streakRun` derivation exactly.
+    static func rollStreak(days: [Int], todayIndex: Int) -> Int {
+        var end = -1
+        if todayIndex < days.count, days[todayIndex] > 0 { end = todayIndex }
+        else if todayIndex - 1 >= 0, days[todayIndex - 1] > 0 { end = todayIndex - 1 }
+        guard end >= 0 else { return 0 }
+        var count = 0
+        var i = end
+        while i >= 0, days[i] > 0 { count += 1; i -= 1 }
+        return count
     }
 
     static func relativeAge(from date: Date) -> String {

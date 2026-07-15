@@ -100,7 +100,7 @@ struct ScopeDraftsScreen: View {
     @Environment(\.navigationState) private var navigationState
     @Environment(SettingsManager.self) private var settings
     @State private var editorState = VoiceEditorState()
-    @FocusState private var isTextFieldFocused: Bool
+    @State private var markdownEditorBridge = TalkieMarkdownWebEditorBridge()
 
     // Dictation state (DictationInput → TalkieEngine)
     @State private var dictationPillState: DictationPillState = .idle
@@ -192,9 +192,7 @@ struct ScopeDraftsScreen: View {
         .onAppear {
             initializeLLMSettings()
             consumeNavigationParams()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                isTextFieldFocused = true
-            }
+            focusMarkdownEditorSoon()
         }
         .onChange(of: navigationState.params["initialText"] as? String) { _, newValue in
             if newValue != nil {
@@ -460,6 +458,22 @@ struct ScopeDraftsScreen: View {
         return snippet.lowercased()
     }
 
+    private var markdownEditorAppearance: TalkieMarkdownWebEditorAppearance {
+        TalkieMarkdownWebEditorAppearance(
+            fontSize: 14 * settings.contentFontSize.scale,
+            lineHeight: 1.62,
+            textColor: "#232423",
+            mutedTextColor: "rgba(35,36,35,0.46)",
+            accentColor: "#9A6A22",
+            selectionColor: "rgba(154,106,34,0.22)",
+            insertionColor: "rgba(44,128,72,0.16)",
+            insertionBorderColor: "rgba(44,128,72,0.42)",
+            deletionColor: "rgba(196,58,28,0.16)",
+            deletionBorderColor: "rgba(196,58,28,0.42)",
+            widgetBackgroundColor: "rgba(248,248,247,0.97)"
+        )
+    }
+
     /// V2.1 — editor surface as a sheet of paper. Brass marginal rule
     /// on the left of the text column (matches `MacMemoDetail.documentBody`),
     /// a subtle paper background tint so the writing area has a visible
@@ -478,18 +492,21 @@ struct ScopeDraftsScreen: View {
                 Rectangle()
                     .fill(ScopeCanvas.surface.opacity(0.7))
 
-                TalkieTextEditor(
+                TalkieMarkdownWebEditor(
                     text: $editorState.text,
                     selectedRange: $editorState.selectedRange,
-                    font: NSFont.systemFont(ofSize: 14 * settings.contentFontSize.scale),
-                    textColor: NSColor(ScopeInk.primary),
-                    insertionPointColor: NSColor(ScopeAmber.solid)
+                    placeholder: "Type, paste, or dictate…",
+                    appearance: markdownEditorAppearance,
+                    bridge: markdownEditorBridge
                 )
                 .padding(.leading, 26)
                 .padding(.trailing, 14)
                 .padding(.top, 14)
                 .padding(.bottom, 56)
                 .frame(minHeight: 240, maxHeight: .infinity)
+                .onAppear {
+                    markdownEditorBridge.focus()
+                }
 
                 if editorState.isTransformingSelection {
                     selectionIndicator
@@ -1097,16 +1114,20 @@ struct ScopeDraftsScreen: View {
         navigationState.params.removeValue(forKey: "initialText")
         navigationState.params.removeValue(forKey: "sourceRecordingId")
         log.info("Compose (scope) opened with \(initialText.count) chars\(sourceRecordingId != nil ? " from recording \(sourceRecordingId!.uuidString.prefix(8))" : "")")
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            isTextFieldFocused = true
-        }
+        focusMarkdownEditorSoon()
     }
 
     private func startNewNote() {
         editorState.reset()
         sourceRecordingId = nil
-        isTextFieldFocused = true
+        focusMarkdownEditorSoon()
+    }
+
+    private func focusMarkdownEditorSoon() {
+        Task {
+            try? await Task.sleep(for: .milliseconds(200))
+            markdownEditorBridge.focus()
+        }
     }
 
     // MARK: - Dictation (Talkie → Engine)
@@ -1183,11 +1204,7 @@ struct ScopeDraftsScreen: View {
                     )
                     try await repo.saveRecording(segment)
 
-                    let needsSpace = !editorState.text.isEmpty
-                        && !editorState.text.hasSuffix(" ")
-                        && !editorState.text.hasSuffix("\n")
-                    if needsSpace { editorState.text += " " }
-                    editorState.text += result.text
+                    insertDictationTranscript(result.text)
 
                     log.info("Scope dictation segment saved: \(result.text.count) chars")
                 }
@@ -1200,6 +1217,20 @@ struct ScopeDraftsScreen: View {
                 editorState.error = error.localizedDescription
                 dictationPillState = .idle
             }
+        }
+    }
+
+    private func insertDictationTranscript(_ transcript: String) {
+        let needsSpace = editorState.selectedRange == nil
+            && !editorState.text.isEmpty
+            && !editorState.text.hasSuffix(" ")
+            && !editorState.text.hasSuffix("\n")
+        let insertedText = needsSpace ? " \(transcript)" : transcript
+
+        if markdownEditorBridge.isReady {
+            markdownEditorBridge.insertTextAtCursor(insertedText)
+        } else {
+            editorState.text += insertedText
         }
     }
 

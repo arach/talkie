@@ -417,7 +417,7 @@ public final class ServiceManager {
         if isProduction {
             // Production: install launch agents to ~/Library/LaunchAgents/ and bootstrap.
             // The embedded engine now lives inside TalkieAgent, so there is no standalone engine helper.
-            try? await HelperLaunchManager.shared.launch(.agent, resolvingConflicts: true)
+            try? await HelperLaunchManager.shared.launch(.agent)
             // Only install sync launch agent if iCloud sync is enabled AND auto-sync is on
             if shouldAutoStartSync {
                 try? HelperLaunchManager.shared.installLaunchAgent(for: .sync)
@@ -700,31 +700,14 @@ public final class ServiceManager {
         logger.info("[ServiceManager] \(shouldRefresh ? "Refreshing" : "Launching") Live (\(env.displayName))...")
 
         if shouldRefresh, let pid = live.processId {
-            _ = terminateProcess(pid: pid)
+            terminateProcess(pid: pid)
         }
 
-        if resolvingConflicts {
-            Task {
-                do {
-                    try await HelperLaunchManager.shared.launch(.agent, resolvingConflicts: true)
-                } catch {
-                    logger.error("[ServiceManager] Failed to launch Agent with conflict resolution: \(error.localizedDescription)")
-                }
-            }
-        } else if env == .production {
-            // Production: kickstart via launchd so MachServices are registered
-            let label = TalkieHelper.agent.launchdLabel(for: env)
-            let destPlist = userLaunchAgentsDir.appendingPathComponent("\(label).plist")
-            if FileManager.default.fileExists(atPath: destPlist.path) {
-                bootstrapAgent(label: label, plistPath: destPlist)
-            } else {
-                // Not installed yet - install and bootstrap
-                installLaunchAgentIfNeeded(label: label)
-            }
-        } else {
-            // Dev/staging: regenerate the launch agent against the stable dev install.
-            Task {
-                try? await HelperLaunchManager.shared.launch(.agent, resolvingConflicts: true)
+        Task {
+            do {
+                try await HelperLaunchManager.shared.launch(.agent, resolvingConflicts: resolvingConflicts)
+            } catch {
+                logger.error("[ServiceManager] Failed to launch Agent: \(error.localizedDescription)")
             }
         }
 
@@ -1778,7 +1761,7 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
         // Auto-launch TalkieAgent if XPC connection fails
         xpcManager?.autoLaunchHandler = {
             logger.info("[Agent] Auto-launching Talkie Agent...")
-            ServiceManager.shared.launchLive(resolvingConflicts: true)
+            ServiceManager.shared.launchLive()
         }
 
         xpcManager?.$connectionInfo
@@ -1821,7 +1804,7 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
 
         let center = DistributedNotificationCenter.default()
         let queue = OperationQueue.main
-        let prefix = "to.talkie.app.agent"
+        let prefix = "to.talkie.agent"
 
         func observe(_ suffix: String, _ handler: @escaping (Notification) -> Void) {
             let name = Notification.Name("\(prefix).\(suffix)")
@@ -2101,18 +2084,6 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
         }
     }
 
-    nonisolated public func ambientCommandReceived(command: String, duration: TimeInterval, bufferContext: String?) {
-        DispatchQueue.main.async { [weak self] in
-            self?.handleAmbientCommand(command, duration: duration, bufferContext: bufferContext)
-        }
-    }
-
-    nonisolated public func voiceNavigationReceived(intent: String, confidence: Float, rawText: String) {
-        DispatchQueue.main.async { [weak self] in
-            self?.handleVoiceNavigation(intent: intent, confidence: confidence, rawText: rawText)
-        }
-    }
-
     nonisolated public func talkieAgentServerStatusDidChange(_ statusJSON: Data) {
         if let status = try? JSONDecoder().decode(TalkieAgentServerStatus.self, from: statusJSON) {
             Task { @MainActor in
@@ -2126,37 +2097,6 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
 
     // Live tray drains are now Agent-owned. Talkie stays on durable
     // view/edit/save surfaces and no longer serves tray asset fetch callbacks.
-
-    private func handleAmbientCommand(_ command: String, duration: TimeInterval, bufferContext: String?) {
-        logger.info("[Agent] Ambient command received: '\(command.prefix(50))...' (\(String(format: "%.1f", duration))s)")
-
-        // Store for UI (optional)
-        lastAmbientCommand = command
-        lastAmbientCommandTime = Date()
-
-        // TODO: Route to workflow system
-        // For now, just log the command
-        // Future: Create synthetic memo or trigger workflow directly
-    }
-
-    private func handleVoiceNavigation(intent: String, confidence: Float, rawText: String) {
-        logger.info("[Agent] Voice navigation received: \(intent) (confidence: \(String(format: "%.0f%%", confidence * 100)))")
-
-        // Store for UI
-        lastVoiceNavigationIntent = intent
-        lastVoiceNavigationTime = Date()
-
-        // Route to NavigationState
-        NavigationState.shared.handleVoiceNavigation(intent: intent, rawText: rawText)
-    }
-
-    // Track last ambient command for UI display
-    public private(set) var lastAmbientCommand: String?
-    public private(set) var lastAmbientCommandTime: Date?
-
-    // Track last voice navigation for UI display
-    public private(set) var lastVoiceNavigationIntent: String?
-    public private(set) var lastVoiceNavigationTime: Date?
 
     private func updateState(_ stateString: String, _ elapsed: TimeInterval) {
         let newState = LiveState(rawValue: stateString) ?? .idle

@@ -20,12 +20,12 @@ struct PerformanceSettingsSection: View {
                 HStack {
                     Image(systemName: "gauge.with.needle")
                         .font(.system(size: 20))
-                        .foregroundColor(TalkieTheme.accent)
+                        .foregroundColor(AgentTheme.accent)
 
                     Text("PERFORMANCE")
                         .font(.techLabel)
                         .tracking(Tracking.wide)
-                        .foregroundColor(TalkieTheme.textPrimary)
+                        .foregroundColor(AgentTheme.textPrimary)
 
                     Spacer()
 
@@ -33,7 +33,7 @@ struct PerformanceSettingsSection: View {
                         Button(action: { store.clear() }) {
                             Text("Clear")
                                 .font(.system(size: 10))
-                                .foregroundColor(TalkieTheme.textSecondary)
+                                .foregroundColor(AgentTheme.textSecondary)
                         }
                         .buttonStyle(.plain)
                     }
@@ -41,7 +41,7 @@ struct PerformanceSettingsSection: View {
 
                 Text("Dictation latency measurements")
                     .font(.system(size: 12))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(AgentTheme.textSecondary)
             }
 
             if store.traces.isEmpty {
@@ -50,15 +50,15 @@ struct PerformanceSettingsSection: View {
                     VStack(spacing: Spacing.md) {
                         Image(systemName: "waveform.path.ecg")
                             .font(.system(size: 32))
-                            .foregroundColor(TalkieTheme.textMuted)
+                            .foregroundColor(AgentTheme.textMuted)
 
                         Text("No traces yet")
                             .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(TalkieTheme.textSecondary)
+                            .foregroundColor(AgentTheme.textSecondary)
 
                         Text("Complete a dictation to see performance data")
                             .font(.system(size: 11))
-                            .foregroundColor(TalkieTheme.textMuted)
+                            .foregroundColor(AgentTheme.textMuted)
                             .multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: .infinity)
@@ -90,13 +90,13 @@ private struct SummaryStatsCard: View {
                 HStack {
                     Text("LATENCY")
                         .font(.techLabelSmall)
-                        .foregroundColor(TalkieTheme.textMuted)
+                        .foregroundColor(AgentTheme.textMuted)
 
                     Spacer()
 
                     Text("excludes recording time")
                         .font(.system(size: 8))
-                        .foregroundColor(TalkieTheme.textMuted)
+                        .foregroundColor(AgentTheme.textMuted)
                 }
 
                 // Primary metrics: actionable latency
@@ -131,7 +131,7 @@ private struct SummaryStatsCard: View {
                     StatItem(
                         label: "Traces",
                         value: "\(store.traces.count)",
-                        color: TalkieTheme.textSecondary
+                        color: AgentTheme.textSecondary
                     )
 
                     if let bottleneck = store.mostCommonBottleneck {
@@ -156,7 +156,7 @@ private struct StatItem: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
                 .font(.system(size: 9))
-                .foregroundColor(TalkieTheme.textMuted)
+                .foregroundColor(AgentTheme.textMuted)
 
             Text(value)
                 .font(.system(size: 14, weight: .semibold, design: .monospaced))
@@ -175,7 +175,7 @@ private struct StepBreakdownCard: View {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 Text("STEP BREAKDOWN")
                     .font(.techLabelSmall)
-                    .foregroundColor(TalkieTheme.textMuted)
+                    .foregroundColor(AgentTheme.textMuted)
 
                 VStack(spacing: Spacing.xs) {
                     ForEach(store.stepStatistics) { stats in
@@ -198,7 +198,7 @@ private struct StepStatRow: View {
         case "context_capture": return .purple
         case "file_save": return .orange
         case "routing": return .cyan
-        default: return TalkieTheme.textSecondary
+        default: return AgentTheme.textSecondary
         }
     }
 
@@ -212,7 +212,7 @@ private struct StepStatRow: View {
 
                 Text(stats.name)
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .foregroundColor(AgentTheme.textPrimary)
             }
             .frame(width: 100, alignment: .leading)
 
@@ -222,15 +222,15 @@ private struct StepStatRow: View {
             HStack(spacing: Spacing.md) {
                 Text("avg \(stats.avgMs)ms")
                     .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(AgentTheme.textSecondary)
 
                 Text("p95 \(stats.p95Ms)ms")
                     .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(stats.p95Ms > 1000 ? .orange : TalkieTheme.textMuted)
+                    .foregroundColor(stats.p95Ms > 1000 ? .orange : AgentTheme.textMuted)
 
                 Text("(\(stats.count)x)")
                     .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(TalkieTheme.textMuted)
+                    .foregroundColor(AgentTheme.textMuted)
             }
         }
         .padding(.vertical, 4)
@@ -248,7 +248,7 @@ private struct RecentTracesCard: View {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 Text("RECENT TRACES")
                     .font(.techLabelSmall)
-                    .foregroundColor(TalkieTheme.textMuted)
+                    .foregroundColor(AgentTheme.textMuted)
 
                 VStack(spacing: Spacing.xs) {
                     ForEach(store.traces.prefix(10)) { trace in
@@ -303,7 +303,7 @@ private struct TraceRow: View {
                     // Pre/post breakdown
                     Text("\(trace.preRecordingMs)+\(trace.postRecordingMs)")
                         .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(TalkieTheme.textMuted)
+                        .foregroundColor(AgentTheme.textMuted)
 
                     Spacer()
 
@@ -311,25 +311,25 @@ private struct TraceRow: View {
                     if trace.recordingMs > 0 {
                         Text("rec: \(String(format: "%.1f", Double(trace.recordingMs) / 1000))s")
                             .font(.system(size: 9))
-                            .foregroundColor(TalkieTheme.textMuted.opacity(0.6))
+                            .foregroundColor(AgentTheme.textMuted.opacity(0.6))
                     }
 
                     // Word count if available
                     if let words = trace.wordCount {
                         Text("\(words)w")
                             .font(.system(size: 9))
-                            .foregroundColor(TalkieTheme.textMuted)
+                            .foregroundColor(AgentTheme.textMuted)
                     }
 
                     // Time ago
                     Text(timeAgo)
                         .font(.system(size: 9))
-                        .foregroundColor(TalkieTheme.textMuted)
+                        .foregroundColor(AgentTheme.textMuted)
 
                     // Expand indicator
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                         .font(.system(size: 9))
-                        .foregroundColor(TalkieTheme.textMuted)
+                        .foregroundColor(AgentTheme.textMuted)
                 }
                 .padding(.vertical, 6)
                 .padding(.horizontal, Spacing.sm)
@@ -374,7 +374,7 @@ private struct TraceDetailView: View {
         case "file_save": return .orange
         case "routing": return .cyan
         case "recording": return Color.white.opacity(0.3)
-        default: return TalkieTheme.textSecondary
+        default: return AgentTheme.textSecondary
         }
     }
 
@@ -396,24 +396,24 @@ private struct TraceDetailView: View {
 
                         Text(displayName(for: step.name))
                             .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(isRecording ? TalkieTheme.textMuted.opacity(0.5) : TalkieTheme.textSecondary)
+                            .foregroundColor(isRecording ? AgentTheme.textMuted.opacity(0.5) : AgentTheme.textSecondary)
                             .frame(width: 70, alignment: .leading)
 
                         // Duration - show recording in seconds, others in ms
                         if isRecording {
                             Text("\(String(format: "%.1f", Double(step.durationMs) / 1000))s")
                                 .font(.system(size: 10, design: .monospaced))
-                                .foregroundColor(TalkieTheme.textMuted.opacity(0.4))
+                                .foregroundColor(AgentTheme.textMuted.opacity(0.4))
                         } else {
                             Text("\(step.durationMs)ms")
                                 .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                .foregroundColor(step.durationMs > 500 ? .orange : TalkieTheme.textPrimary)
+                                .foregroundColor(step.durationMs > 500 ? .orange : AgentTheme.textPrimary)
                         }
 
                         if let meta = step.metadata {
                             Text(meta)
                                 .font(.system(size: 9))
-                                .foregroundColor(TalkieTheme.textMuted)
+                                .foregroundColor(AgentTheme.textMuted)
                                 .lineLimit(1)
                         }
 
@@ -433,7 +433,7 @@ private struct TraceDetailView: View {
             if let preview = trace.transcriptPreview {
                 Text("\"\(preview)...\"")
                     .font(.system(size: 10, weight: .regular))
-                    .foregroundColor(TalkieTheme.textMuted)
+                    .foregroundColor(AgentTheme.textMuted)
                     .italic()
                     .lineLimit(1)
                     .padding(.horizontal, Spacing.sm)
@@ -520,6 +520,6 @@ private struct TraceTimeline: View {
 #Preview {
     PerformanceSettingsSection()
         .frame(width: 500, height: 600)
-        .background(TalkieTheme.background)
+        .background(AgentTheme.background)
         .preferredColorScheme(.dark)
 }

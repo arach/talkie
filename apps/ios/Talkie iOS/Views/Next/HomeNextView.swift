@@ -41,7 +41,7 @@ struct HomeNextView: View {
             VStack(spacing: 12) {
                 HomeHeader()
 
-                HomeCockpit()
+                HomeCockpit(model: feed.cockpit)
                     .padding(.horizontal, 12)
 
                 HomeFrequentActionsStrip(onSearch: focusSearch)
@@ -382,6 +382,12 @@ private enum HomeTacticalPalette {
     static let screenAlt = Color(hex: "121212")
     static let screenInk = Color(hex: "F3F1EA")
     static let screenInkFaint = Color(hex: "A6A29A")
+
+    // ── Amber-CRT terminal ink — the phosphor shared by the Message Line strip
+    // (TerminalMessageStrip) and the Roll / Gauge amber. The terminal dark-glass
+    // gradient stops now live with the reusable strip in TerminalMessageStrip.swift.
+    /// The terminal's lit ink — amber phosphor (#FFB24A).
+    static let phosphor = Color(hex: "FFB24A")
 }
 
 // MARK: - Command center
@@ -642,24 +648,109 @@ private struct HomeCommandBar: View {
     }
 }
 
-// MARK: - Communication cockpit
+// MARK: - Communication cockpit (the Console)
 //
-// Replaces the Today ticker. One compact retrofuturist comms instrument — a
-// raised metal chassis around an always-dark instrument screen — summarizing
-// live communication state: the Mac bridge lane plus shares/replies lanes,
-// with a Life-in-Dots module on the right and a single truncated detail line
-// under the screen. Tapping routes to Deck when the bridge is live, Bridge
-// detail otherwise.
+// The converged "Cockpit Two-Row Console" (design/studio/components/studies/
+// CockpitTwoRow.tsx). A raised metal Bezel (bezelChassis) around a dark-glass
+// Screen — the Message Line straight on top (NO header row) over a fixed-height
+// Bay that toggles between two pages via a user-controlled Bay Selector:
 //
-// Spec: design/studio/app/home/COCKPIT_IMPLEMENTATION_BRIEF.md
-// Visual donor: design/studio/components/studies/Home.tsx (`communication-cockpit`).
+//   1. Message Line — a slim amber-CRT terminal readout of ONE derived fact,
+//      carrying an optional right-docked Docked Readout (STRK n / take count).
+//   2. The Bay      — one recessed 144pt well holding both pages so the Selector
+//      swaps content with no reflow: THE ROLL (18×7 contribution calendar) ⁄
+//      GAUGES (TAKES count + Meter · TIME m:ss + Meter · STRK Life-in-Dots).
+//      The list-replay Take Log is retired; GAUGES read as instruments only.
+//
+// Nominal tap opens the Library (the tape it summarizes); first-run standby taps
+// open the recorder. Screen ink only — always dark. The Bay Selector's 0.4s
+// crossfade is the only animation.
+//
+// Vocabulary: design/studio/app/cockpit-two-row/page.tsx (NamesMarginalia —
+// Console · Bezel · Message Line · Docked Readout · Toggle · Bay · Roll Bay ·
+// Gauge Bay · Meter · Life-in-Dots). Data: HomeFeed.makeCockpit (one pass).
 
-private struct CockpitLaneModel {
-    let label: String
-    let shortLabel: String
-    let value: String
-    let meta: String
-    let level: Double
+/// Studio-mirrored Console geometry. Named so studio · Swift · chat share one
+/// vocabulary; values track CockpitTwoRow.tsx exactly. The Roll grid geometry
+/// lives on HomeFeed (the data owner); these are the visual + message knobs.
+private enum HomeCockpitMetrics {
+    // Bezel + Screen (BEZEL_PAD 7 · SCREEN_PAD 10 · STACK_GAP 8 → CONSOLE_H 220)
+    static let bezelPad: CGFloat = 7
+    static let bezelCorner: CGFloat = 14
+    static let screenPad: CGFloat = 10
+    static let screenCorner: CGFloat = 12
+    static let stackGap: CGFloat = 8
+
+    // Message Line
+    static let messageHeight: CGFloat = 32      // MSG_H
+
+    // The Roll (CELL 12 · CGAP 3 → grid 102pt tall)
+    static let rollCell: CGFloat = 12           // CELL
+    static let rollGap: CGFloat = 3             // CGAP
+
+    // The Bay (BAY_PAD 10 · BAY_LABEL_H 14 · BAY_LABEL_GAP 8 · BAY_CONTENT_H 102 → BAY_H 144)
+    static let bayPad: CGFloat = 10
+    static let bayCorner: CGFloat = 8
+    static let bayLabelHeight: CGFloat = 14
+    static let bayLabelGap: CGFloat = 8
+    static let bayContentHeight: CGFloat = 102
+    static let bayHeight: CGFloat = 144
+
+    // Gauge lanes (G_TAKES_H 28 · G_TIME_H 28 · G_STRK_H 38 · G_GAP 4 → 102)
+    static let gaugeTakesHeight: CGFloat = 28
+    static let gaugeTimeHeight: CGFloat = 28
+    static let gaugeStrkHeight: CGFloat = 38
+    static let gaugeGap: CGFloat = 4
+    static let gaugeCorner: CGFloat = 6
+
+    // Life-in-Dots (DOT 7 · DOT_GAP 4 · last 12 days, 6×2)
+    static let dot: CGFloat = 7
+    static let dotGap: CGFloat = 4
+
+    // Meter full-bar scales (a full 12-seg bar = a strong day)
+    static let scaleTakes: Double = 4           // SCALE_TAKES — 4 takes fills the bar
+    static let scaleTimeSeconds: Double = 360   // SCALE_TIME — 6:00 fills the bar
+
+    // Bay Selector crossfade (user-initiated)
+    static let baySelectorCrossfade: Double = 0.4
+
+    // Message-line derivation
+    static let milestoneWindow = 5              // "just crossed" a 100 boundary
+    static let recencyDays = 7                  // recency inside a week, else station ident
+
+    /// Clamp a level to the meter's [0, 1] fill range.
+    static func clamp01(_ x: Double) -> Double { min(1, max(0, x)) }
+}
+
+/// The single derived fact on the Message Line, priority-ordered. Pure so both
+/// the terminal render and the accessibility label read the same string.
+private enum CockpitMessage {
+    static func line(model: HomeFeed.CockpitModel, parakeetDownloading: Bool, now: Date) -> String {
+        if model.isEmpty { return "STANDING BY — ROLL TAPE TO BEGIN" }
+        if parakeetDownloading { return "PARAKEET DOWNLOADING" }
+        if model.totalTakes >= 100, model.totalTakes % 100 < HomeCockpitMetrics.milestoneWindow {
+            return "TAKE #\(model.totalTakes) ON TAPE"
+        }
+        if let last = model.lastTakeDate {
+            let calendar = Calendar.current
+            let days = calendar.dateComponents(
+                [.day],
+                from: calendar.startOfDay(for: last),
+                to: calendar.startOfDay(for: now)
+            ).day ?? 0
+            if days < HomeCockpitMetrics.recencyDays {
+                return "LAST TAKE \(HomeFeed.compactAge(from: last, now: now)) AGO"
+            }
+        }
+        return stationIdent(now: now)
+    }
+
+    private static func stationIdent(now: Date) -> String {
+        let hour = Calendar.current.component(.hour, from: now)
+        if hour < 9 { return "TALKIE · EARLY SHIFT" }
+        if hour >= 22 { return "NIGHT DESK" }
+        return "TALKIE · ON AIR"
+    }
 }
 
 private struct HomeActivityEvent: Identifiable {
@@ -671,80 +762,74 @@ private struct HomeActivityEvent: Identifiable {
 }
 
 private struct HomeCockpit: View {
-    @State private var bridgeManager = BridgeManager.shared
+    let model: HomeFeed.CockpitModel
+    @ObservedObject private var parakeet = ParakeetModelManager.shared
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(isScreenshotMode ? "· TODAY" : "· COCKPIT")
-                .talkieType(.channelLabelTiny)
-                .foregroundStyle(theme.colors.textSecondary)
-                .padding(.leading, 4)
+        if isScreenshotMode {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("· TODAY")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textSecondary)
+                    .padding(.leading, 4)
 
-            Button(action: open) {
-                VStack(spacing: 8) {
-                    if isScreenshotMode {
+                Button(action: open) {
+                    VStack(spacing: 8) {
                         HomeActivityScreen(events: screenshotEvents)
-                    } else {
-                        CockpitScreen(
-                            statusLabel: statusLabel,
-                            statusIsLive: isConnected,
-                            lanes: lanes
-                        )
-                    }
 
-                    Text(detailLine)
-                        .talkieType(.channelLabelTiny)
-                        .foregroundStyle(theme.colors.textTertiary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                        Text("3 COMPLETED TODAY · LATEST 5 MIN AGO")
+                            .talkieType(.channelLabelTiny)
+                            .foregroundStyle(theme.colors.textTertiary)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .softCard(
+                        padding: 10,
+                        corner: 14,
+                        emphasis: .edge,
+                        fill: HomeTacticalPalette.matte
+                    )
                 }
-                .frame(maxWidth: .infinity)
-                .softCard(
-                    padding: 10,
-                    corner: 14,
-                    emphasis: .edge,
-                    fill: HomeTacticalPalette.matte
-                )
+                .buttonStyle(.plain)
+                .accessibilityLabel("Today's Talkie activity: roadmap memo recorded, product brief summarized, follow-up added to Reminders")
+                .accessibilityHint("Shows today's completed Talkie activity")
+            }
+        } else {
+            // The production cockpit retains master's latest Roll/Gauges bay.
+            Button(action: open) {
+                CockpitScreen(model: model, parakeetDownloading: parakeetDownloading)
+                    .frame(maxWidth: .infinity)
+                    .bezelChassis(
+                        padding: HomeCockpitMetrics.bezelPad,
+                        corner: HomeCockpitMetrics.bezelCorner,
+                        metal: true,
+                        fill: HomeTacticalPalette.matte
+                    )
             }
             .buttonStyle(.plain)
             .accessibilityLabel(accessibilitySummary)
-            .accessibilityHint(accessibilityHint)
+            .accessibilityHint(model.isEmpty ? "Opens the recorder to capture your first take" : "Opens your library")
         }
     }
 
-    // MARK: - Routing
-
-    private var isConnected: Bool {
-        bridgeManager.isPaired && bridgeManager.status == .connected
+    private var parakeetDownloading: Bool {
+        if case .downloading = parakeet.state { return true }
+        return false
     }
 
     private var isScreenshotMode: Bool {
         ProcessInfo.processInfo.arguments.contains("-FASTLANE_SNAPSHOT")
     }
 
+    // Routing: nominal → the Library (the tape this instrument summarizes);
+    // first-run standby → the recorder, since there is nothing to browse yet.
     private func open() {
-        if isConnected {
-            AppShellRouter.shared.openDeck()
+        if model.isEmpty {
+            RecordingSheetController.shared.isPresented = true
         } else {
-            AppShellRouter.shared.openBridgeDetail()
+            AppShellRouter.shared.openLibrary()
         }
-    }
-
-    // MARK: - State derivation
-
-    private var statusLabel: String {
-        guard bridgeManager.isPaired else { return "STANDBY" }
-        switch bridgeManager.status {
-        case .connected: return "LIVE"
-        case .connecting: return "LINKING"
-        case .disconnected: return "OFFLINE"
-        case .error: return "ERROR"
-        }
-    }
-
-    private var lanes: [CockpitLaneModel] {
-        [bridgeLane, sharesLane, repliesLane]
     }
 
     private var screenshotEvents: [HomeActivityEvent] {
@@ -755,70 +840,19 @@ private struct HomeCockpit: View {
         ]
     }
 
-    private var bridgeLane: CockpitLaneModel {
-        let mac = bridgeManager.pairedMacDisplayName ?? "Mac"
-        guard bridgeManager.isPaired else {
-            return CockpitLaneModel(label: "BRIDGE", shortLabel: "BRDG", value: "Not paired", meta: "PAIR", level: 0.12)
-        }
-        if bridgeManager.awaitingPairingApproval {
-            return CockpitLaneModel(label: "BRIDGE", shortLabel: "BRDG", value: mac, meta: "APPROVE", level: 0.30)
-        }
-        switch bridgeManager.status {
-        case .connected:
-            return CockpitLaneModel(label: "BRIDGE", shortLabel: "BRDG", value: mac, meta: "READY", level: 0.92)
-        case .connecting:
-            return CockpitLaneModel(label: "BRIDGE", shortLabel: "BRDG", value: mac, meta: "LINKING", level: 0.50)
-        case .disconnected:
-            return CockpitLaneModel(label: "BRIDGE", shortLabel: "BRDG", value: mac, meta: "OFFLINE", level: 0.24)
-        case .error:
-            return CockpitLaneModel(label: "BRIDGE", shortLabel: "BRDG", value: mac, meta: "ERROR", level: 0.24)
-        }
-    }
-
-    // Shares/replies have no HomeFeed source yet — static instrument content
-    // until the share queue / reply prompts get a real publisher.
-    private var sharesLane: CockpitLaneModel {
-        CockpitLaneModel(label: "SHARES", shortLabel: "SEND", value: "2 drafts", meta: "QUEUED", level: 0.54)
-    }
-
-    private var repliesLane: CockpitLaneModel {
-        CockpitLaneModel(label: "REPLIES", shortLabel: "WAIT", value: "1 prompt", meta: "WAITING", level: 0.36)
-    }
-
-    private var detailLine: String {
-        if isScreenshotMode {
-            return "3 COMPLETED TODAY · LATEST 5 MIN AGO"
-        }
-        let bridgePart: String
-        if isConnected {
-            bridgePart = "Bridge live on \(bridgeManager.pairedMacDisplayName ?? "Mac")"
-        } else if bridgeManager.isPaired {
-            bridgePart = "Bridge \(statusLabel.lowercased())"
-        } else {
-            bridgePart = "Pair your Mac"
-        }
-        return "\(bridgePart) / 2 shares / 1 reply"
-    }
-
+    // Describes both bay pages regardless of which is up: the message line, the
+    // Roll streak, and today's take count. Standby leads with the recorder cue.
     private var accessibilitySummary: String {
-        if isScreenshotMode {
-            return "Today's Talkie activity: roadmap memo recorded, product brief summarized, follow-up added to Reminders"
+        let message = CockpitMessage.line(model: model, parakeetDownloading: parakeetDownloading, now: Date())
+        if model.isEmpty {
+            return "Cockpit, standing by. \(message). Tap to record your first take."
         }
-        let bridge: String
-        if isConnected {
-            bridge = "bridge ready on \(bridgeManager.pairedMacDisplayName ?? "Mac")"
-        } else if bridgeManager.isPaired {
-            bridge = "bridge \(statusLabel.lowercased()) for \(bridgeManager.pairedMacDisplayName ?? "Mac")"
-        } else {
-            bridge = "no Mac paired"
-        }
-        return "Communication cockpit, \(bridge), 2 shares queued, 1 reply waiting"
+        let streakPart = model.streak == 1 ? "the Roll, 1 day streak" : "the Roll, \(model.streak) day streak"
+        let todayPart = model.todayTakes == 1 ? "1 take today" : "\(model.todayTakes) takes today"
+        let totalPart = model.totalTakes == 1 ? "1 take on tape" : "\(model.totalTakes) takes on tape"
+        return "Cockpit. \(message). \(totalPart). \(streakPart). \(todayPart)."
     }
 
-    private var accessibilityHint: String {
-        if isScreenshotMode { return "Shows today's completed Talkie activity" }
-        return isConnected ? "Opens Deck remote" : "Opens Bridge detail"
-    }
 }
 
 /// Screenshot-mode event log. Unlike the production communication cockpit,
@@ -924,48 +958,40 @@ private struct HomeActivityRow: View {
     }
 }
 
-/// The always-dark instrument screen inside the cockpit chassis: TALKIE /
-/// status / clock header, three comms lanes, and the dots module. Panel ink
-/// only — the screen ignores light/dark so it reads as lit glass everywhere.
+/// The always-dark instrument screen inside the cockpit chassis: the Message Line
+/// on top (now the sole status carrier — no more TALKIE/status/clock header row)
+/// over the shared slot where the Take Log and the Roll alternate. Panel ink only
+/// — the screen ignores light/dark so it reads as lit glass everywhere. The
+/// 60-second timeline keeps the message-line age and the time-of-day station ident
+/// fresh without any per-frame animation.
 private struct CockpitScreen: View {
-    let statusLabel: String
-    let statusIsLive: Bool
-    let lanes: [CockpitLaneModel]
+    let model: HomeFeed.CockpitModel
+    let parakeetDownloading: Bool
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
         let hairline = max(theme.currentTheme.chrome.hairlineWidth, 0.8)
-        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: HomeCockpitMetrics.screenCorner, style: .continuous)
 
-        VStack(spacing: 8) {
-            HStack {
-                Text("TALKIE")
-                    .talkieType(.channelLabelTiny)
-                    .foregroundStyle(HomeTacticalPalette.screenInkFaint)
-                Spacer()
-                Text(statusLabel)
-                    .talkieType(.channelLabelTiny)
-                    .foregroundStyle(statusIsLive ? HomeTacticalPalette.accent : HomeTacticalPalette.screenInkFaint)
-                Spacer()
-                TimelineView(.periodic(from: .now, by: 60)) { context in
-                    Text(context.date, format: .dateTime.hour().minute())
-                        .talkieType(.channelLabelTiny)
-                        .foregroundStyle(HomeTacticalPalette.screenInkFaint)
-                }
+        VStack(spacing: HomeCockpitMetrics.stackGap) {
+            // Message Line — straight on top (no header). Its own 60s timeline
+            // keeps the age / station-ident fresh with no per-frame animation.
+            TimelineView(.periodic(from: .now, by: 60)) { context in
+                TerminalMessageStrip(
+                    text: CockpitMessage.line(
+                        model: model,
+                        parakeetDownloading: parakeetDownloading,
+                        now: context.date
+                    ),
+                    height: HomeCockpitMetrics.messageHeight,
+                    dock: dockReadout
+                )
             }
 
-            HStack(alignment: .center, spacing: 12) {
-                VStack(spacing: 6) {
-                    ForEach(lanes, id: \.label) { lane in
-                        CockpitLaneRow(lane: lane)
-                    }
-                }
-                CockpitDotsModule(lanes: lanes)
-                    .frame(width: 84)
-            }
+            // The Bay — the toggled 144pt well (Roll ⁄ Gauges).
+            CockpitBay(model: model)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(HomeCockpitMetrics.screenPad)
         .frame(maxWidth: .infinity)
         .background {
             ZStack {
@@ -1000,128 +1026,534 @@ private struct CockpitScreen: View {
             shape.strokeBorder(HomeTacticalPalette.accentEdge, lineWidth: hairline)
         }
     }
-}
 
-/// One comms lane: LABEL · value · META over a 12-segment level bar. Raw
-/// white opacities are deliberate — the screen is always dark, so lane
-/// surfaces don't theme.
-private struct CockpitLaneRow: View {
-    let lane: CockpitLaneModel
-    @ObservedObject private var theme = ThemeManager.shared
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(lane.label)
-                    .talkieType(.channelLabelTiny)
-                    .foregroundStyle(HomeTacticalPalette.screenInkFaint)
-                    .lineLimit(1)
-                    .frame(width: 56, alignment: .leading)
-                Text(lane.value)
-                    .talkieType(.fieldLabel)
-                    .foregroundStyle(HomeTacticalPalette.screenInk)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Text(lane.meta)
-                    .talkieType(.channelLabelTiny)
-                    .foregroundStyle(HomeTacticalPalette.accent)
-                    .lineLimit(1)
-            }
-
-            levelBar()
+    /// The Docked Readout for the Message Line, resolved from the dial. Hidden in
+    /// first-run standby (DAY 1 semantics haven't started yet).
+    private var dockReadout: TerminalDockReadout? {
+        guard !model.isEmpty else { return nil }
+        switch CockpitDockDial.current {
+        case .none:
+            return nil
+        case .streak:
+            return TerminalDockReadout(label: "STRK", value: "\(model.streak)", hot: model.streak > 0)
+        case .takesToday:
+            return TerminalDockReadout(label: "TAKES", value: "\(model.todayTakes)", hot: model.todayTakes > 0)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(Color.white.opacity(0.04))
-        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .strokeBorder(HomeTacticalPalette.accent.opacity(0.12), lineWidth: 1)
-        }
-    }
-
-    private func levelBar() -> some View {
-        let filled = Int((lane.level * 12).rounded())
-        return HStack(spacing: 3) {
-            ForEach(0..<12, id: \.self) { index in
-                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                    .fill(index < filled ? HomeTacticalPalette.accent : Color.white.opacity(0.12))
-                    .frame(height: 3)
-                    .frame(maxWidth: .infinity)
-                    .shadow(
-                        color: index == filled - 1 ? HomeTacticalPalette.accent.opacity(0.50) : .clear,
-                        radius: index == filled - 1 ? 3 : 0
-                    )
-            }
-        }
-        .accessibilityHidden(true)
     }
 }
 
-/// Compact Life-in-Dots module: BRDG / SEND / WAIT rows, each a 6x2 dot grid
-/// whose fill mirrors the lane level. The leading-edge marker uses the
-/// homepage tactical accent, keeping the cockpit vocabulary coherent.
-private struct CockpitDotsModule: View {
-    let lanes: [CockpitLaneModel]
+/// The Docked Readout dial — the single knob picking which useful fact the
+/// Message Line's right-docked lane carries (studio "Docked Readout"). Defaults
+/// to `.streak`; `.none` bares the strip and `.takesToday` shows the day's count.
+/// The lane is hidden entirely in first-run standby (see `dockReadout`).
+private enum CockpitDockDial {
+    case none, streak, takesToday
+    static let current: CockpitDockDial = .streak
+}
+
+// MARK: - The Bay (Roll ⁄ Gauges)
+
+/// Which page the Bay is showing. Persisted via @AppStorage so the chosen bay
+/// survives relaunch.
+private enum CockpitBayPage: String {
+    case roll, gauges
+    var toggled: CockpitBayPage { self == .roll ? .gauges : .roll }
+}
+
+/// The toggled big section under the Message Line — one recessed 144pt well that
+/// both pages fill (ZStack, opacity), so the Bay Selector swaps content with no
+/// reflow. Its label row carries the Selector on the left and a contextual
+/// readout on the right (STRK n on ROLL · TODAY · 7-DAY AVG on GAUGES).
+private struct CockpitBay: View {
+    let model: HomeFeed.CockpitModel
+    @AppStorage("home.cockpit.bayPage") private var bayPageRaw = CockpitBayPage.roll.rawValue
+
+    private var page: CockpitBayPage { CockpitBayPage(rawValue: bayPageRaw) ?? .roll }
 
     var body: some View {
-        VStack(spacing: 8) {
-            ForEach(lanes, id: \.shortLabel) { lane in
-                dotRow(for: lane)
+        let shape = RoundedRectangle(cornerRadius: HomeCockpitMetrics.bayCorner, style: .continuous)
+
+        VStack(spacing: HomeCockpitMetrics.bayLabelGap) {
+            // Label row — the Bay Selector + a contextual readout.
+            HStack(spacing: 8) {
+                BaySelector(page: page, onToggle: toggle)
+                Spacer(minLength: 0)
+                Text(readout)
+                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                    .tracking(0.8) // 0.1em at 8pt
+                    .foregroundStyle(readoutHot ? HomeTacticalPalette.accent : HomeTacticalPalette.screenInkFaint)
+                    .accessibilityHidden(true)
             }
+            .frame(height: HomeCockpitMetrics.bayLabelHeight)
+
+            // Content — both pages laid out; the chosen one lit. Fixed 102pt.
+            ZStack {
+                CockpitRollPage(model: model)
+                    .opacity(page == .roll ? 1 : 0)
+                CockpitGaugePage(model: model)
+                    .opacity(page == .gauges ? 1 : 0)
+            }
+            .frame(height: HomeCockpitMetrics.bayContentHeight)
         }
-        .padding(8)
+        .padding(HomeCockpitMetrics.bayPad)
+        .frame(height: HomeCockpitMetrics.bayHeight)
+        .frame(maxWidth: .infinity)
         .background(Color.white.opacity(0.035))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
-        }
-        .accessibilityHidden(true)
+        .clipShape(shape)
+        .overlay(shape.strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
     }
 
-    private func dotRow(for lane: CockpitLaneModel) -> some View {
-        let filled = Int((lane.level * 12).rounded())
-        let marker = filled - 1
-        return VStack(spacing: 3) {
-            HStack {
-                Text(lane.shortLabel)
-                    .talkieType(.channelLabelTiny)
-                    .foregroundStyle(HomeTacticalPalette.screenInkFaint)
-                Spacer(minLength: 4)
-                Text("\(Int((lane.level * 100).rounded()))%")
-                    .talkieType(.timestamp)
-                    .foregroundStyle(HomeTacticalPalette.screenInkFaint)
-            }
-            .lineLimit(1)
+    private func toggle() {
+        withAnimation(.easeInOut(duration: HomeCockpitMetrics.baySelectorCrossfade)) {
+            bayPageRaw = page.toggled.rawValue
+        }
+    }
 
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: 6),
-                spacing: 3
-            ) {
-                ForEach(0..<12, id: \.self) { index in
-                    Circle()
-                        .fill(dotFill(index: index, filled: filled, marker: marker))
-                        .overlay {
-                            if index >= filled && index != marker {
-                                Circle().strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5)
-                            }
-                        }
-                        .frame(width: 5, height: 5)
-                        .shadow(
-                            color: index == marker ? HomeTacticalPalette.accent.opacity(0.75) : .clear,
-                            radius: index == marker ? 3 : 0
+    private var readout: String {
+        if model.isEmpty { return page == .roll ? "DAY 1" : "DAY 1 · STANDBY" }
+        return page == .roll ? "STRK \(model.streak)" : "TODAY · 7-DAY AVG"
+    }
+
+    private var readoutHot: Bool {
+        page == .roll && (model.isEmpty || model.streak > 0)
+    }
+}
+
+// MARK: - Bay Selector (the two-position Toggle)
+
+/// The tiny hardware two-position Bay Selector on the Bay's label row — a
+/// recessed dark track with ROLL ⁄ GAUGES segments, the active bay lit amber
+/// phosphor. A nested Button: tapping it toggles the bay (0.4s crossfade) and,
+/// because SwiftUI gives the innermost button the tap, never fires the outer
+/// whole-Console tap.
+private struct BaySelector: View {
+    let page: CockpitBayPage
+    let onToggle: () -> Void
+
+    var body: some View {
+        Button(action: onToggle) {
+            HStack(spacing: 1) {
+                segment(.roll, "ROLL")
+                segment(.gauges, "GAUGES")
+            }
+            .padding(1)
+            .frame(height: HomeCockpitMetrics.bayLabelHeight)
+            .background(
+                LinearGradient(
+                    colors: [Color(hex: "050301"), Color(hex: "0B0704")],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .strokeBorder(HomeTacticalPalette.accent.opacity(0.22), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Bay selector")
+        .accessibilityValue(page == .roll ? "The Roll" : "Gauges")
+        .accessibilityHint("Toggles the cockpit bay between the Roll and the Gauges")
+    }
+
+    @ViewBuilder
+    private func segment(_ key: CockpitBayPage, _ label: String) -> some View {
+        let on = key == page
+        Text(label)
+            .font(.system(size: 8, weight: .bold, design: .monospaced))
+            .tracking(0.96) // 0.12em at 8pt
+            .foregroundStyle(on ? HomeTacticalPalette.phosphor : HomeTacticalPalette.phosphor.opacity(0.5))
+            .shadow(color: on ? HomeTacticalPalette.accent.opacity(0.55) : .clear, radius: on ? 3 : 0)
+            .padding(.horizontal, 7)
+            .frame(maxHeight: .infinity)
+            .background(on ? HomeTacticalPalette.accent.opacity(0.16) : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+            .overlay {
+                if on {
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .strokeBorder(HomeTacticalPalette.accent.opacity(0.4), lineWidth: 0.5)
+                }
+            }
+    }
+}
+
+// MARK: - The Roll page (Roll Bay)
+
+/// THE ROLL page — the 18×7 contribution calendar reseated into the Bay's well
+/// (the label + STRK readout now live on the Bay's shared label row). Cell
+/// intensity = captures that day; the trailing Streak Run lights amber and ends
+/// on the Today Marker. Standby ⇒ Ghost Cells + the amber Today Seed.
+private struct CockpitRollPage: View {
+    let model: HomeFeed.CockpitModel
+
+    private var days: [Int] { model.rollDays }
+    private var todayIndex: Int { model.todayIndex }
+    private var streak: Int { model.streak }
+    private var ghost: Bool { model.isEmpty }
+
+    private func intensity(_ index: Int) -> Int {
+        index >= 0 && index < days.count ? days[index] : 0
+    }
+
+    private var runEnd: Int {
+        guard streak > 0 else { return -1 }
+        return intensity(todayIndex) > 0 ? todayIndex : todayIndex - 1
+    }
+
+    var body: some View {
+        let end = runEnd
+        let runStart = end - streak + 1
+
+        VStack(spacing: HomeCockpitMetrics.rollGap) {
+            ForEach(0..<HomeFeed.rollDaysPerWeek, id: \.self) { row in
+                HStack(spacing: HomeCockpitMetrics.rollGap) {
+                    ForEach(0..<HomeFeed.rollWeeks, id: \.self) { col in
+                        let index = col * HomeFeed.rollDaysPerWeek + row
+                        RollCell(
+                            intensity: intensity(index),
+                            isToday: index == todayIndex,
+                            inRun: streak > 0 && index >= runStart && index <= end,
+                            isFuture: index > todayIndex,
+                            ghost: ghost
                         )
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity) // center the grid in the well
+        .accessibilityHidden(true)
+    }
+}
+
+// MARK: - The Gauge page (Gauge Bay)
+
+/// GAUGES page — three instrument lanes filling the well (NOT a Take Log replay):
+/// TAKES (today's count + 12-seg Meter vs 7-day avg + pace) · TIME (today's m:ss
+/// + Meter) · STRK (Life-in-Dots + run count). Lane heights sum to 102pt.
+private struct CockpitGaugePage: View {
+    let model: HomeFeed.CockpitModel
+
+    private var standby: Bool { model.isEmpty }
+
+    var body: some View {
+        VStack(spacing: HomeCockpitMetrics.gaugeGap) {
+            MeterLane(
+                caption: "TAKES",
+                readout: standby ? "0" : "\(model.todayTakes)",
+                todayLevel: HomeCockpitMetrics.clamp01(Double(model.todayTakes) / HomeCockpitMetrics.scaleTakes),
+                avgLevel: HomeCockpitMetrics.clamp01(model.avgTakes / HomeCockpitMetrics.scaleTakes),
+                standby: standby,
+                height: HomeCockpitMetrics.gaugeTakesHeight
+            )
+            MeterLane(
+                caption: "TIME",
+                readout: standby ? "0:00" : HomeFeed.compactDuration(model.todayDurationSeconds),
+                todayLevel: HomeCockpitMetrics.clamp01(model.todayDurationSeconds / HomeCockpitMetrics.scaleTimeSeconds),
+                avgLevel: HomeCockpitMetrics.clamp01(model.avgDurationSeconds / HomeCockpitMetrics.scaleTimeSeconds),
+                standby: standby,
+                height: HomeCockpitMetrics.gaugeTimeHeight
+            )
+            StrkLane(model: model, height: HomeCockpitMetrics.gaugeStrkHeight)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Meter lane (TAKES · TIME)
+
+/// One meter gauge lane — CAPTION · big phosphor readout · 12-segment Meter ·
+/// pace label. Reused by the TAKES + TIME gauges.
+private struct MeterLane: View {
+    let caption: String
+    let readout: String
+    let todayLevel: Double
+    let avgLevel: Double
+    let standby: Bool
+    let height: CGFloat
+
+    var body: some View {
+        let pace = MeterLane.pace(todayLevel: todayLevel, avgLevel: avgLevel, standby: standby)
+        HStack(spacing: 9) {
+            Text(caption)
+                .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                .tracking(0.8) // 0.1em at 8pt
+                .foregroundStyle(HomeTacticalPalette.phosphor.opacity(0.5))
+                .frame(width: 42, alignment: .leading)
+
+            Text(readout)
+                .font(.system(size: 15, weight: .bold, design: .monospaced).monospacedDigit())
+                .tracking(0.3) // 0.02em at 15pt
+                .foregroundStyle(standby ? HomeTacticalPalette.phosphor.opacity(0.5) : HomeTacticalPalette.phosphor)
+                .shadow(color: standby ? .clear : HomeTacticalPalette.accent.opacity(0.55), radius: standby ? 0 : 4)
+                .lineLimit(1)
+                .frame(width: 44, alignment: .leading)
+
+            SegMeter(todayLevel: todayLevel, avgLevel: avgLevel, standby: standby)
+                .frame(maxWidth: .infinity)
+
+            Text(pace.text)
+                .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                .tracking(0.48) // 0.06em at 8pt
+                .foregroundStyle(pace.hot ? HomeTacticalPalette.accent : HomeTacticalPalette.phosphor.opacity(0.5))
+                .lineLimit(1)
+                .frame(width: 72, alignment: .trailing)
+        }
+        .padding(.horizontal, 9)
+        .frame(height: height)
+        .frame(maxWidth: .infinity)
+        .background(Color.white.opacity(0.035))
+        .clipShape(RoundedRectangle(cornerRadius: HomeCockpitMetrics.gaugeCorner, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: HomeCockpitMetrics.gaugeCorner, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    /// Pace from the today-vs-average delta (studio `paceOf`).
+    static func pace(todayLevel: Double, avgLevel: Double, standby: Bool) -> (text: String, hot: Bool) {
+        if standby { return ("—", false) }
+        let d = todayLevel - avgLevel
+        if d > 0.02 { return ("▲ ABOVE AVG", true) }
+        if d < -0.02 { return ("▼ BELOW AVG", false) }
+        return ("= AT AVG", false)
+    }
+}
+
+// MARK: - Segment Meter
+
+/// The slim 12-segment Meter — fill = today, a brighter amber tick marks where
+/// the trailing 7-day average sits, so today reads against its own baseline.
+/// Standby ⇒ 12 outlined Ghost segments.
+private struct SegMeter: View {
+    let todayLevel: Double
+    let avgLevel: Double
+    let standby: Bool
+
+    var body: some View {
+        let filled = standby ? 0 : Int((HomeCockpitMetrics.clamp01(todayLevel) * 12).rounded())
+        let avgIndex = standby ? 0 : Int((HomeCockpitMetrics.clamp01(avgLevel) * 12).rounded())
+
+        HStack(spacing: 2) {
+            ForEach(0..<12, id: \.self) { i in
+                let lit = i < filled
+                let isAvg = !standby && avgIndex > 0 && i == avgIndex - 1
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(fill(lit: lit, isAvg: isAvg))
+                    .overlay {
+                        if standby {
+                            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+                        }
+                    }
+                    .shadow(
+                        color: glow(i: i, filled: filled, lit: lit, isAvg: isAvg),
+                        radius: (isAvg || (lit && i == filled - 1)) ? 3 : 0
+                    )
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .frame(height: 6)
+    }
+
+    private func fill(lit: Bool, isAvg: Bool) -> Color {
+        if standby { return .clear }
+        if isAvg && !lit { return HomeTacticalPalette.accent.opacity(0.5) }
+        if lit { return HomeTacticalPalette.accent }
+        return Color.white.opacity(0.12)
+    }
+
+    private func glow(i: Int, filled: Int, lit: Bool, isAvg: Bool) -> Color {
+        if standby { return .clear }
+        if isAvg { return HomeTacticalPalette.accent.opacity(0.7) }
+        if lit && i == filled - 1 { return HomeTacticalPalette.accent.opacity(0.55) }
+        return .clear
+    }
+}
+
+// MARK: - STRK lane (Life-in-Dots)
+
+/// The STRK gauge — the run count + the Life-in-Dots module (last 12 days, 6×2).
+private struct StrkLane: View {
+    let model: HomeFeed.CockpitModel
+    let height: CGFloat
+
+    private var standby: Bool { model.isEmpty }
+    private var streak: Int { model.streak }
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Text("STRK")
+                .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                .tracking(0.8) // 0.1em at 8pt
+                .foregroundStyle(HomeTacticalPalette.phosphor.opacity(0.5))
+                .frame(width: 42, alignment: .leading)
+
+            HStack(alignment: .firstTextBaseline, spacing: 5) {
+                Text(standby ? "0" : "\(streak)")
+                    .font(.system(size: 17, weight: .bold, design: .monospaced).monospacedDigit())
+                    .foregroundStyle(standby || streak > 0 ? HomeTacticalPalette.accent : HomeTacticalPalette.phosphor.opacity(0.5))
+                    .shadow(
+                        color: (!standby && streak > 0) ? HomeTacticalPalette.accent.opacity(0.5) : .clear,
+                        radius: (!standby && streak > 0) ? 3 : 0
+                    )
+                Text(standby ? "DAY 1" : "DAY RUN")
+                    .font(.system(size: 7, weight: .semibold, design: .monospaced))
+                    .tracking(0.56) // 0.08em at 7pt
+                    .foregroundStyle(HomeTacticalPalette.phosphor.opacity(0.5))
+            }
+            .frame(width: 66, alignment: .leading)
+
+            Spacer(minLength: 0)
+
+            LifeInDots(days: model.last12Days, standby: standby)
+        }
+        .padding(.horizontal, 9)
+        .frame(height: height)
+        .frame(maxWidth: .infinity)
+        .background(Color.white.opacity(0.035))
+        .clipShape(RoundedRectangle(cornerRadius: HomeCockpitMetrics.gaugeCorner, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: HomeCockpitMetrics.gaugeCorner, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+        )
+    }
+}
+
+/// The Life-in-Dots module — the last 12 days as a 6×2 dot grid (row-major,
+/// oldest→newest; today = bottom-right). Filled = captured · amber = today ·
+/// outlined = empty. Standby ⇒ Ghost dots + the amber Today Seed.
+private struct LifeInDots: View {
+    let days: [Bool] // oldest→newest, length 12
+    let standby: Bool
+
+    var body: some View {
+        VStack(spacing: HomeCockpitMetrics.dotGap) {
+            ForEach(0..<2, id: \.self) { row in
+                HStack(spacing: HomeCockpitMetrics.dotGap) {
+                    ForEach(0..<6, id: \.self) { col in
+                        let i = row * 6 + col
+                        Dot(filled: filled(i), isToday: i == 11, standby: standby)
+                    }
                 }
             }
         }
     }
 
-    private func dotFill(index: Int, filled: Int, marker: Int) -> Color {
-        if index == marker { return HomeTacticalPalette.accent }
-        if index < filled { return Color.white.opacity(0.92) }
+    private func filled(_ i: Int) -> Bool { i >= 0 && i < days.count ? days[i] : false }
+}
+
+private struct Dot: View {
+    let filled: Bool
+    let isToday: Bool
+    let standby: Bool
+
+    var body: some View {
+        Circle()
+            .fill(fill)
+            .frame(width: HomeCockpitMetrics.dot, height: HomeCockpitMetrics.dot)
+            .overlay { stroke }
+            .shadow(color: glowColor, radius: glowRadius)
+    }
+
+    private var fill: Color {
+        if standby { return .clear }
+        if isToday { return HomeTacticalPalette.accent }
+        if filled { return Color.white.opacity(0.9) }
         return .clear
+    }
+
+    @ViewBuilder
+    private var stroke: some View {
+        if standby && isToday {
+            Circle().strokeBorder(HomeTacticalPalette.accent, lineWidth: 1.5) // amber Today Seed
+        } else if standby {
+            Circle().strokeBorder(Color.white.opacity(0.11), lineWidth: 1) // Ghost dot
+        } else if !filled && !isToday {
+            Circle().strokeBorder(Color.white.opacity(0.16), lineWidth: 1) // empty day
+        }
+    }
+
+    private var glowColor: Color {
+        if standby && isToday { return HomeTacticalPalette.accent.opacity(0.7) }
+        if !standby && isToday { return HomeTacticalPalette.accent.opacity(0.8) }
+        return .clear
+    }
+
+    private var glowRadius: CGFloat {
+        if isToday { return standby ? 3 : 4 }
+        return 0
+    }
+}
+
+// MARK: - Roll cell
+
+/// One Roll cell. Precedence (matching studio RollCell): ghost (standby) → future
+/// → today → in-run → active intensity → empty past day.
+private struct RollCell: View {
+    let intensity: Int
+    let isToday: Bool
+    let inRun: Bool
+    let isFuture: Bool
+    /// Standby / first-run — draw an outlined Ghost Cell, today as the amber Seed.
+    var ghost: Bool = false
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 2, style: .continuous)
+            .fill(fill)
+            .frame(width: HomeCockpitMetrics.rollCell, height: HomeCockpitMetrics.rollCell)
+            .overlay { strokeOverlay }
+            .shadow(color: glowColor, radius: glowRadius)
+    }
+
+    @ViewBuilder
+    private var strokeOverlay: some View {
+        if ghost && isToday {
+            // The amber Today Seed — the "you are here" the streak grows from.
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .strokeBorder(HomeTacticalPalette.accent, lineWidth: 1.5)
+        } else if ghost {
+            // A Ghost Cell — a faint outline sketching the grid that will fill in.
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.11), lineWidth: 1)
+        } else if isToday && intensity == 0 {
+            // Today, no capture yet — an unlit amber ring marker.
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .strokeBorder(HomeTacticalPalette.accent, lineWidth: 1)
+        }
+    }
+
+    private var fill: Color {
+        if ghost { return .clear }  // ghost cells are outlined only
+        if isFuture { return Color.white.opacity(0.03) }
+        if isToday && intensity > 0 { return HomeTacticalPalette.accent }
+        if isToday { return .clear }  // ring drawn in the overlay
+        if inRun { return HomeTacticalPalette.accent.opacity(0.7 + Double(intensity) * 0.1) }
+        if intensity > 0 { return activeInk }
+        return Color.white.opacity(0.05)   // empty past day
+    }
+
+    private var activeInk: Color {
+        if intensity >= 3 { return Color.white.opacity(0.85) }
+        if intensity == 2 { return Color.white.opacity(0.55) }
+        return Color.white.opacity(0.30)
+    }
+
+    private var glowColor: Color {
+        if ghost && isToday { return HomeTacticalPalette.accent.opacity(0.7) }
+        if ghost { return .clear }
+        if isToday && intensity > 0 { return HomeTacticalPalette.accent.opacity(0.85) }
+        if inRun { return HomeTacticalPalette.accent.opacity(0.4) }
+        return .clear
+    }
+
+    private var glowRadius: CGFloat {
+        if ghost && isToday { return 4 }
+        if ghost { return 0 }
+        if isToday && intensity > 0 { return 4 }
+        if inRun { return 2 }
+        return 0
     }
 }
 

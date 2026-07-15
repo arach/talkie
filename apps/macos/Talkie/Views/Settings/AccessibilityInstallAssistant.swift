@@ -167,9 +167,10 @@ final class AccessibilityInstallAssistant {
                 }
             } else {
                 permissionAssistantLog.info(
-                    "Opening Screen Recording pane for helper target",
+                    "Requesting helper Screen Recording permission",
                     detail: "target=\(target.displayName), bundle=\(target.bundleIdentifier)"
                 )
+                primeAgentScreenRecordingPermission(target: target)
                 openSettingsPane(for: permission)
             }
         }
@@ -233,6 +234,57 @@ final class AccessibilityInstallAssistant {
             NSApp.activate(ignoringOtherApps: true)
             existingPanel.orderFrontRegardless()
             existingPanel.makeKey()
+        }
+    }
+
+    private func primeAgentScreenRecordingPermission(target: AccessibilityInstallTarget) {
+        Task { @MainActor in
+            let env = ServiceManager.shared.effectiveHelperEnvironment
+            let label = TalkieHelper.agent.launchdLabel(for: env)
+            let appURL = target.appURL
+
+            // Screen Recording's Settings UI only materializes rows for app
+            // processes. The dev Agent normally runs as a launchd-owned
+            // MachService (`osservice<to.talkie.agent.dev>`), which can serve
+            // XPC but does not become a Screen Recording list entry. For this
+            // permission-primer path, stop the launchd job and open the same
+            // bundle through LaunchServices so TCC sees
+            // `app<application.to.talkie.agent.dev...>`.
+            await HelperLaunchManager.shared.bootout(label: label)
+
+            if let pid = ServiceManager.shared.live.processId {
+                Darwin.kill(pid, SIGTERM)
+            }
+
+            try? await Task.sleep(for: .milliseconds(400))
+
+            let scheme = TalkieHelper.agent.urlScheme(for: env)
+            guard let url = URL(string: "\(scheme)://request-screen-recording") else {
+                permissionAssistantLog.error("Failed to build Agent Screen Recording permission URL")
+                return
+            }
+
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = true
+            configuration.addsToRecentItems = false
+
+            permissionAssistantLog.info(
+                "Opening Agent as app for Screen Recording permission",
+                detail: "bundle=\(target.bundleIdentifier), appURL=\(appURL.path), url=\(url.absoluteString)"
+            )
+
+            NSWorkspace.shared.open(
+                [url],
+                withApplicationAt: appURL,
+                configuration: configuration
+            ) { _, error in
+                if let error {
+                    permissionAssistantLog.error(
+                        "Failed to open Agent Screen Recording permission route",
+                        detail: error.localizedDescription
+                    )
+                }
+            }
         }
     }
 
@@ -554,42 +606,21 @@ private struct AccessibilityInstallAssistantView: View {
         }
     }
 
-    /// Drag card — SwiftUI VStack (icon + hand-draw glyph) with `.onDrag`
-    /// attached. Uses the canonical Talkie pattern (matches
-    /// `TrayDrawer.swift:46-48`, `TrayViewer.swift`): an `NSItemProvider`
-    /// returned from `.onDrag` is the SwiftUI-native drag mechanism and
-    /// works inside utility panels without any custom NSView,
-    /// NSDraggingSource subclass, or first-responder dance.
+    /// Drag card — native AppKit file drag.
+    ///
+    /// System Settings is picky about app-bundle drags. It needs the file URL
+    /// written by `NSURL`/`NSDraggingItem`, not an internal app drag marker.
     @ViewBuilder
     private var dragCard: some View {
-        VStack(spacing: Spacing.xs) {
-            Image(nsImage: appIcon)
-                .resizable()
-                .frame(width: 52, height: 52)
-
-            if supportsDragToAdd {
-                Image(systemName: "hand.draw")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(Color.accentColor)
-            }
-        }
-        .frame(width: 92, height: 92)
-        .background(Theme.current.surface1)
-        .overlay(
-            RoundedRectangle(cornerRadius: CornerRadius.sm)
-                .strokeBorder(Color.accentColor.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
-                .allowsHitTesting(false)
+        NativeAppFileDragCard(
+            appURL: target.appURL,
+            appIcon: appIcon,
+            showsDragGlyph: supportsDragToAdd,
+            isDragEnabled: supportsDragToAdd,
+            dropListName: permission.displayName,
+            onDragCompleted: schedulePermissionRefresh
         )
-        .clipShape(.rect(cornerRadius: CornerRadius.sm))
-        .help(supportsDragToAdd
-              ? "Drag \(target.appURL.lastPathComponent) into the Accessibility list"
-              : target.appURL.lastPathComponent)
-        .onDrag {
-            let provider = NSItemProvider(contentsOf: target.appURL) ?? NSItemProvider()
-            provider.suggestedName = target.appURL.lastPathComponent
-            schedulePermissionRefresh()
-            return TalkieInternalDrag.mark(provider)
-        }
+        .frame(width: 92, height: 92)
     }
 
     private var statusText: String {
@@ -675,6 +706,7 @@ private struct NativeAppFileDragCard: NSViewRepresentable {
     let appIcon: NSImage
     let showsDragGlyph: Bool
     let isDragEnabled: Bool
+    let dropListName: String
     let onDragCompleted: () -> Void
 
     func makeNSView(context: Context) -> NativeAppFileDragCardView {
@@ -683,6 +715,7 @@ private struct NativeAppFileDragCard: NSViewRepresentable {
             appIcon: appIcon,
             showsDragGlyph: showsDragGlyph,
             isDragEnabled: isDragEnabled,
+            dropListName: dropListName,
             onDragCompleted: onDragCompleted
         )
     }
@@ -692,6 +725,7 @@ private struct NativeAppFileDragCard: NSViewRepresentable {
         nsView.appIcon = appIcon
         nsView.showsDragGlyph = showsDragGlyph
         nsView.isDragEnabled = isDragEnabled
+        nsView.dropListName = dropListName
         nsView.onDragCompleted = onDragCompleted
     }
 }
@@ -720,6 +754,11 @@ private final class NativeAppFileDragCardView: NSView, NSDraggingSource {
             needsDisplay = true
         }
     }
+    var dropListName: String {
+        didSet {
+            updateToolTip()
+        }
+    }
     var onDragCompleted: () -> Void
 
     private var dragStartLocation: NSPoint?
@@ -731,12 +770,14 @@ private final class NativeAppFileDragCardView: NSView, NSDraggingSource {
         appIcon: NSImage,
         showsDragGlyph: Bool,
         isDragEnabled: Bool,
+        dropListName: String,
         onDragCompleted: @escaping () -> Void
     ) {
         self.appURL = appURL
         self.appIcon = appIcon
         self.showsDragGlyph = showsDragGlyph
         self.isDragEnabled = isDragEnabled
+        self.dropListName = dropListName
         self.onDragCompleted = onDragCompleted
         super.init(frame: .zero)
         updateToolTip()
@@ -932,7 +973,7 @@ private final class NativeAppFileDragCardView: NSView, NSDraggingSource {
 
     private func updateToolTip() {
         toolTip = isDragEnabled
-            ? "Drag \(appURL.lastPathComponent) into the Accessibility list"
+            ? "Drag \(appURL.lastPathComponent) into the \(dropListName) list"
             : appURL.lastPathComponent
     }
 }

@@ -1,4 +1,4 @@
-import type { Command } from "commander";
+import type { Command } from "../../gunshi-command";
 
 const RESET = "\x1b[0m";
 const DIM = "\x1b[90m";

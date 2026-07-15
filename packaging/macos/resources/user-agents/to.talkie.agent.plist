@@ -3,12 +3,19 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>to.talkie.app.agent</string>
-    <key>BundleProgram</key>
-    <string>Contents/Library/LoginItems/TalkieAgent.app/Contents/MacOS/TalkieAgent</string>
+    <string>to.talkie.agent</string>
+    <key>AssociatedBundleIdentifiers</key>
+    <array>
+        <string>to.talkie.app.mac</string>
+        <string>to.talkie.agent</string>
+    </array>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Applications/Talkie.app/Contents/Library/LoginItems/TalkieAgent.app/Contents/MacOS/TalkieAgent</string>
+    </array>
     <key>MachServices</key>
     <dict>
-        <key>to.talkie.app.agent.xpc</key>
+        <key>to.talkie.agent.xpc</key>
         <true/>
     </dict>
     <key>RunAtLoad</key>

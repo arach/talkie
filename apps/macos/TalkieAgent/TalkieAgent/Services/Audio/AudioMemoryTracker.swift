@@ -19,9 +19,6 @@ final class AudioMemoryTracker {
 
     // MARK: - Tracked Allocations
 
-    /// Audio chunks in memory (AmbientAudioCapture)
-    private var chunkAllocations: [UUID: Int] = [:]  // id -> bytes
-
     /// PCM buffer sizes
     private var pcmBufferBytes: Int = 0
 
@@ -32,56 +29,6 @@ final class AudioMemoryTracker {
     private var tempFiles: Set<String> = []
 
     private init() {}
-
-    // MARK: - Chunk Tracking
-
-    func chunkAllocated(id: UUID, bytes: Int) {
-        lock.lock()
-        chunkAllocations[id] = bytes
-        let totalMB = _totalChunkMB_locked
-        let count = chunkAllocations.count
-        lock.unlock()
-
-        log.debug("Chunk allocated", detail: "\(bytes / 1000)KB, total=\(count) chunks (\(totalMB)MB)")
-    }
-
-    func chunkDeallocated(id: UUID) {
-        lock.lock()
-        let bytes = chunkAllocations.removeValue(forKey: id) ?? 0
-        let totalMB = _totalChunkMB_locked
-        let count = chunkAllocations.count
-        lock.unlock()
-
-        log.debug("Chunk freed", detail: "\(bytes / 1000)KB, remaining=\(count) chunks (\(totalMB)MB)")
-    }
-
-    /// Internal: call only when lock is already held
-    private var _totalChunkBytes_locked: Int {
-        chunkAllocations.values.reduce(0, +)
-    }
-
-    /// Internal: call only when lock is already held
-    private var _totalChunkMB_locked: Int {
-        _totalChunkBytes_locked / 1_000_000
-    }
-
-    var totalChunkBytes: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return _totalChunkBytes_locked
-    }
-
-    var totalChunkMB: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return _totalChunkMB_locked
-    }
-
-    var chunkCount: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return chunkAllocations.count
-    }
 
     // MARK: - PCM Buffer Tracking
 
@@ -126,13 +73,11 @@ final class AudioMemoryTracker {
 
     func logSummary() {
         lock.lock()
-        let chunks = chunkAllocations.count
-        let chunkMB = _totalChunkMB_locked
         let pcmKB = pcmBufferBytes / 1000
         let files = tempFiles.count
         lock.unlock()
 
-        log.info("Audio memory summary", detail: "chunks=\(chunks) (\(chunkMB)MB), pcm=\(pcmKB)KB, temp_files=\(files)")
+        log.info("Audio memory summary", detail: "pcm=\(pcmKB)KB, temp_files=\(files)")
     }
 
     /// Get summary as dictionary for MemoryMonitor
@@ -140,8 +85,6 @@ final class AudioMemoryTracker {
         lock.lock()
         defer { lock.unlock() }
         return [
-            "audio_chunks": chunkAllocations.count,
-            "audio_chunk_mb": _totalChunkMB_locked,
             "pcm_buffer_kb": pcmBufferBytes / 1000,
             "temp_files": tempFiles.count
         ]

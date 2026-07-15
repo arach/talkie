@@ -1,4 +1,4 @@
-import type { Command } from "commander";
+import type { Command } from "../gunshi-command";
 import { getFormatOptions, output } from "../format";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -257,7 +257,7 @@ async function checkAction(opts: { target?: string }, pretty: boolean) {
   }
 }
 
-async function installAction(opts: { target?: string; force?: boolean; launch?: boolean; check?: boolean; noRestart?: boolean }, pretty: boolean) {
+async function installAction(opts: { target?: string; force?: boolean; launch?: boolean; check?: boolean; restart?: boolean }, pretty: boolean) {
   if (opts.check) return checkAction(opts, pretty);
 
   const installed = getInstalledVersion();
@@ -386,7 +386,7 @@ async function installAction(opts: { target?: string; force?: boolean; launch?: 
     }
 
     // After upgrade: restart running services so they pick up the new binary
-    if ((wasUpgrade || opts.force) && !opts.noRestart) {
+    if ((wasUpgrade || opts.force) && opts.restart !== false) {
       restartServices(pretty);
     }
 
@@ -485,7 +485,7 @@ export function registerInstallCommand(program: Command): void {
       }
     });
 
-  const runInstallAction = async (opts: { target?: string; force?: boolean; launch?: boolean; check?: boolean; noRestart?: boolean }, cmd: Command) => {
+  const runInstallAction = async (opts: { target?: string; force?: boolean; launch?: boolean; check?: boolean; restart?: boolean }, cmd: Command) => {
     const globalOpts = cmd.optsWithGlobals();
     const fmt = getFormatOptions(globalOpts);
     try {

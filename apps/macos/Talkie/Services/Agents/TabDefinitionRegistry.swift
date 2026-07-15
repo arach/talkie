@@ -379,10 +379,10 @@ final class TabDefinitionRegistry {
           "$HOME/Library/Application Support/Talkie/logs/talkie-$today.log"
           "$HOME/Library/Application Support/TalkieAgent/logs/talkie-$today.log"
           "/tmp/talkie-agent-debug.log"
-          "/tmp/to.talkie.app.agent.dev.stdout.log"
-          "/tmp/to.talkie.app.agent.dev.stderr.log"
-          "/tmp/to.talkie.app.agent.xpc.dev.stdout.log"
-          "/tmp/to.talkie.app.agent.xpc.dev.stderr.log"
+          "/tmp/to.talkie.agent.dev.stdout.log"
+          "/tmp/to.talkie.agent.dev.stderr.log"
+          "/tmp/to.talkie.agent.xpc.dev.stdout.log"
+          "/tmp/to.talkie.agent.xpc.dev.stderr.log"
         )
 
         existing=()

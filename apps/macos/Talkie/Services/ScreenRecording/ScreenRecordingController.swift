@@ -631,6 +631,50 @@ final class ScreenRecordingController {
     }
 }
 
+// MARK: - Overlay Coordinate Mapping
+
+/// Height of the display anchored at the AppKit global origin (the main
+/// display). Reference height for flipping ScreenCaptureKit frames — reported
+/// in Core Graphics' top-left, y-down space — into AppKit's bottom-left, y-up
+/// space. Mirrors `ScreenCaptureOverlay`'s window-frame conversion.
+@MainActor
+private func mainDisplayReferenceHeight() -> CGFloat {
+    NSScreen.screens.first(where: { $0.frame.origin == .zero })?.frame.height
+        ?? NSScreen.screens.first?.frame.height
+        ?? 0
+}
+
+/// Flips a Core Graphics global rect (origin at the top-left of the main
+/// display, y growing down — the space `SCWindow.frame` is reported in) into
+/// an AppKit global rect (origin bottom-left, y up), which is what the
+/// recording overlays draw in.
+@MainActor
+private func appKitGlobalRect(fromCoreGraphics frame: CGRect) -> CGRect {
+    CGRect(
+        x: frame.minX,
+        y: mainDisplayReferenceHeight() - frame.minY - frame.height,
+        width: frame.width,
+        height: frame.height
+    ).standardized
+}
+
+/// The recording target's frame in AppKit global coordinates, ready for the
+/// selection/countdown and active-recording overlays. Region rects are
+/// already selected in AppKit space; window frames arrive from
+/// ScreenCaptureKit in Core Graphics space and must be flipped — otherwise
+/// the highlight lands mirrored across the display's horizontal centerline.
+@MainActor
+private func overlayRect(for target: ScreenRecordingTarget) -> CGRect {
+    switch target.kind {
+    case .fullscreen(let display):
+        return display.frame
+    case .region(_, let rect):
+        return rect
+    case .window(let window):
+        return appKitGlobalRect(fromCoreGraphics: window.frame)
+    }
+}
+
 // MARK: - Reusable Target Confirmation
 
 @MainActor
@@ -669,7 +713,7 @@ private final class ScreenRecordingCountdownController {
     }
 
     private func show(seconds: Int) {
-        let targetRect = Self.screenRect(for: target)
+        let targetRect = overlayRect(for: target)
         guard let screen = Self.screen(for: targetRect) ?? NSScreen.main ?? NSScreen.screens.first else {
             finish(.selectTarget)
             return
@@ -929,17 +973,6 @@ private final class ScreenRecordingCountdownController {
         overlayView.updateCursor(atScreenPoint: mouseLocation)
     }
 
-    private static func screenRect(for target: ScreenRecordingTarget) -> CGRect {
-        switch target.kind {
-        case .fullscreen(let display):
-            return display.frame
-        case .region(_, let rect):
-            return rect
-        case .window(let window):
-            return window.frame
-        }
-    }
-
     private static func isFullscreen(_ target: ScreenRecordingTarget) -> Bool {
         if case .fullscreen = target.kind {
             return true
@@ -996,7 +1029,7 @@ private final class ScreenRecordingActiveOverlayController {
     }
 
     func show() {
-        let targetRect = Self.screenRect(for: target)
+        let targetRect = overlayRect(for: target)
         guard let screen = Self.screen(for: targetRect) ?? NSScreen.main ?? NSScreen.screens.first else {
             return
         }

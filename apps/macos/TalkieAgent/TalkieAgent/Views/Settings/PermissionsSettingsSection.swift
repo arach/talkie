@@ -434,7 +434,7 @@ struct PermissionsSettingsSection: View {
                         Text("PERMISSIONS")
                             .font(.system(size: 13, weight: .semibold))
                             .tracking(Tracking.normal)
-                            .foregroundColor(TalkieTheme.textPrimary)
+                            .foregroundColor(AgentTheme.textPrimary)
 
                         Spacer()
 
@@ -454,12 +454,12 @@ struct PermissionsSettingsSection: View {
                             }
                         }
                         .buttonStyle(.plain)
-                        .foregroundColor(TalkieTheme.textSecondary)
+                        .foregroundColor(AgentTheme.textSecondary)
                     }
 
                     Text("Grant required permissions for TalkieAgent to function.")
                         .font(.system(size: 11))
-                        .foregroundColor(TalkieTheme.textTertiary)
+                        .foregroundColor(AgentTheme.textTertiary)
                 }
 
                 Spacer()
@@ -501,11 +501,11 @@ struct PermissionsSettingsSection: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(permissionManager.allRequiredGranted ? "All Set" : "Action Required")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .foregroundColor(AgentTheme.textPrimary)
 
                 Text("\(permissionManager.grantedCount)/\(permissionManager.totalCount) permissions granted")
                     .font(.system(size: 12))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(AgentTheme.textSecondary)
             }
 
             Spacer()
@@ -539,7 +539,7 @@ struct PermissionsSettingsSection: View {
             Text("TROUBLESHOOTING")
                 .font(.system(size: 10, weight: .bold))
                 .tracking(Tracking.normal)
-                .foregroundColor(TalkieTheme.textTertiary)
+                .foregroundColor(AgentTheme.textTertiary)
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 tipRow(icon: "arrow.clockwise", text: "Toggle permissions off and on if they seem stuck")
@@ -556,17 +556,17 @@ struct PermissionsSettingsSection: View {
                     HStack(alignment: .top, spacing: Spacing.sm) {
                         Image(systemName: "app.badge")
                             .font(.system(size: 10))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .foregroundColor(AgentTheme.textTertiary)
                             .frame(width: 14)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Look for this app in System Settings:")
                                 .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(TalkieTheme.textSecondary)
+                                .foregroundColor(AgentTheme.textSecondary)
 
                             Text(bundleID)
                                 .font(.system(size: 10, design: .monospaced))
-                                .foregroundColor(TalkieTheme.textTertiary)
+                                .foregroundColor(AgentTheme.textTertiary)
                                 .textSelection(.enabled)
                         }
                     }
@@ -599,12 +599,12 @@ struct PermissionsSettingsSection: View {
         HStack(alignment: .top, spacing: Spacing.sm) {
             Image(systemName: icon)
                 .font(.system(size: 10))
-                .foregroundColor(TalkieTheme.textTertiary)
+                .foregroundColor(AgentTheme.textTertiary)
                 .frame(width: 14)
 
             Text(text)
                 .font(.system(size: 11))
-                .foregroundColor(TalkieTheme.textSecondary)
+                .foregroundColor(AgentTheme.textSecondary)
         }
     }
 
@@ -638,21 +638,21 @@ struct PermissionSettingsRow: View {
         HStack(spacing: Spacing.md) {
             Image(systemName: status == .granted ? "checkmark.circle.fill" : "circle")
                 .font(.system(size: 18))
-                .foregroundColor(status == .granted ? .green : TalkieTheme.textTertiary)
+                .foregroundColor(status == .granted ? .green : AgentTheme.textTertiary)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(permission.title)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .foregroundColor(AgentTheme.textPrimary)
 
                 HStack(spacing: 6) {
                     Text(permission.shortDescription)
                         .font(.system(size: 11))
-                        .foregroundColor(TalkieTheme.textTertiary)
+                        .foregroundColor(AgentTheme.textTertiary)
 
                     Text("•")
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(TalkieTheme.textTertiary.opacity(0.7))
+                        .foregroundColor(AgentTheme.textTertiary.opacity(0.7))
 
                     Text(status.label)
                         .font(.system(size: 11, weight: .medium))
@@ -692,5 +692,5 @@ struct PermissionSettingsRow: View {
 #Preview {
     PermissionsSettingsSection()
         .frame(width: 500, height: 600)
-        .background(TalkieTheme.background)
+        .background(AgentTheme.background)
 }

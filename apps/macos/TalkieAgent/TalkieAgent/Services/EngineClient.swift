@@ -13,8 +13,8 @@ import TalkieEngineCore
 private let log = Log(.xpc)
 
 public enum EngineServiceMode: String, CaseIterable, Identifiable {
-    case production = "to.talkie.app.agent.xpc"
-    case dev = "to.talkie.app.agent.xpc.dev"
+    case production = "to.talkie.agent.xpc"
+    case dev = "to.talkie.agent.xpc.dev"
 
     public var id: String { rawValue }
 

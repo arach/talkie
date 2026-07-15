@@ -136,8 +136,8 @@ Environment configuration (prod/staging/dev).
 - Detects environment from bundle ID suffix (.dev, .staging, or none)
 
 **Isolated Per-Environment:**
-- Bundle IDs: `to.talkie.app.agent` vs `to.talkie.app.agent.dev`
-- XPC Services: `to.talkie.app.agent.xpc` vs `to.talkie.app.agent.xpc.dev`
+- Bundle IDs: `to.talkie.agent` vs `to.talkie.agent.dev`
+- XPC Services: `to.talkie.agent.xpc` vs `to.talkie.agent.xpc.dev`
 - Settings Storage: `to.talkie.app.shared` vs `.shared.dev`
 - Database Paths: `~/...Talkie` vs `~/...Talkie.dev`
 - Hotkey Signatures: TLIV vs DLIV

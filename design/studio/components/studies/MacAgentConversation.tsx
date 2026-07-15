@@ -19,13 +19,22 @@
  *   - surface: "active" (a real transcript) vs "new" (agent picker open,
  *     idle hero).
  *
- * House style mirrors MacAgentHome.tsx: cool-gray Scope substrate, amber
- * as the only accent, mono for chrome / paths / timecodes, one serif moment
- * for the conversation title.
+ * House style mirrors Agent Home: Talkie's cool-gray Scope substrate and ink
+ * hierarchy, steel Agent chrome, one signal-blue interaction color, mono for
+ * paths / timecodes, and one serif moment for the conversation title.
  */
 
 import React from "react";
 import { SCOPE } from "@/lib/scope-tokens";
+
+const AGENT = {
+  chrome: "#E7EBEE",
+  signal: "#486888",
+  signalStrong: "#314E6B",
+  signalFaint: "rgba(72,104,136,0.10)",
+  signalBorder: "rgba(72,104,136,0.28)",
+  signalGlow: "rgba(72,104,136,0.22)",
+};
 
 // ── Types / fixtures ──────────────────────────────────────────────────
 
@@ -127,7 +136,7 @@ function Titlebar() {
   return (
     <div
       className="flex items-center gap-2 px-4 py-2.5"
-      style={{ borderBottom: `0.5px solid ${SCOPE.edge}`, background: SCOPE.chrome }}
+      style={{ borderBottom: `0.5px solid ${SCOPE.edge}`, background: AGENT.chrome }}
     >
       <div className="flex gap-1.5">
         <span className="h-3 w-3 rounded-full" style={{ background: "#DEDEDD" }} />
@@ -155,7 +164,7 @@ function Sidebar({ creatingNew }: { creatingNew: boolean }) {
   return (
     <aside
       className="flex min-w-0 flex-col"
-      style={{ background: SCOPE.pane, borderRight: `0.5px solid ${SCOPE.edge}` }}
+      style={{ background: AGENT.chrome, borderRight: `0.5px solid ${SCOPE.edge}` }}
     >
       {/* List header — quiet "+" replaces the big New conversation button.
           Starting one just drops you into the main area; the agent is picked
@@ -194,9 +203,9 @@ function NewButton({ active }: { active: boolean }) {
       type="button"
       className="flex h-[22px] w-[22px] items-center justify-center rounded-[6px]"
       style={{
-        background: active ? SCOPE.amberFaint : "transparent",
-        color: active ? SCOPE.amber : SCOPE.inkFaint,
-        border: `0.5px solid ${active ? SCOPE.amberSoft : SCOPE.edgeSubtle}`,
+        background: active ? AGENT.signalFaint : "transparent",
+        color: active ? AGENT.signal : SCOPE.inkFaint,
+        border: `0.5px solid ${active ? AGENT.signalBorder : SCOPE.edgeSubtle}`,
       }}
       title="New conversation — pick an agent"
     >
@@ -239,7 +248,7 @@ function ConversationRow({ conversation, selected }: { conversation: Conversatio
           {conversation.title}
         </span>
         {conversation.working ? (
-          <span className="h-[6px] w-[6px] rounded-full" style={{ background: SCOPE.amber }} />
+          <span className="h-[6px] w-[6px] rounded-full" style={{ background: AGENT.signal }} />
         ) : (
           <span className="text-[10.5px]" style={{ color: SCOPE.inkFainter }}>
             {conversation.stamp}
@@ -249,7 +258,7 @@ function ConversationRow({ conversation, selected }: { conversation: Conversatio
       {conversation.wire ? (
         <span
           className="truncate text-[10px]"
-          style={{ color: selected ? SCOPE.brass : SCOPE.inkFainter }}
+          style={{ color: selected ? AGENT.signalStrong : SCOPE.inkFainter }}
         >
           ↩ CH-01 · TALKIE · {conversation.wire}
         </span>
@@ -376,8 +385,8 @@ function Speech({ turn }: { turn: Turn }) {
       <div
         className="flex h-[22px] w-[22px] items-center justify-center rounded-[6px] text-[10.5px] font-semibold"
         style={{
-          background: isTalkie ? SCOPE.amberFaint : "rgba(35,36,35,0.05)",
-          color: isTalkie ? SCOPE.brass : SCOPE.inkMid,
+          background: isTalkie ? AGENT.signalFaint : "rgba(35,36,35,0.05)",
+          color: isTalkie ? AGENT.signalStrong : SCOPE.inkMid,
         }}
       >
         {isTalkie ? "T" : "Y"}
@@ -431,7 +440,7 @@ function IdleHero() {
     <div className="flex flex-1 flex-col items-center justify-center gap-5 px-8 py-14">
       <div
         className="flex h-14 w-14 items-center justify-center rounded-full"
-        style={{ background: SCOPE.amber, boxShadow: `0 8px 22px ${SCOPE.amberSoft}` }}
+        style={{ background: AGENT.signal, boxShadow: `0 8px 22px ${AGENT.signalGlow}` }}
       >
         <MicGlyph tint="#fff" large />
       </div>
@@ -476,10 +485,10 @@ function InputBar({ placeholder }: { placeholder: string }) {
         <button
           type="button"
           className="flex h-7 w-7 items-center justify-center rounded-full"
-          style={{ background: SCOPE.amberFaint }}
+          style={{ background: AGENT.signalFaint }}
           title="Voice input"
         >
-          <MicGlyph tint={SCOPE.brass} />
+          <MicGlyph tint={AGENT.signalStrong} />
         </button>
         <button
           type="button"
@@ -501,14 +510,14 @@ function AgentChip() {
     <button
       type="button"
       className="flex shrink-0 items-center gap-1.5 rounded-full px-2 py-1"
-      style={{ background: SCOPE.amberFaint, border: `0.5px solid ${SCOPE.amberSoft}` }}
+      style={{ background: AGENT.signalFaint, border: `0.5px solid ${AGENT.signalBorder}` }}
       title="Switch agent"
     >
       <span className="h-[6px] w-[6px] rounded-full" style={{ background: "#3FA66A" }} />
-      <span className="text-[11px] font-semibold" style={{ color: SCOPE.amberDeep }}>
+      <span className="text-[11px] font-semibold" style={{ color: AGENT.signalStrong }}>
         {agent.name}
       </span>
-      <span className="text-[9px]" style={{ color: SCOPE.brass }}>
+      <span className="text-[9px]" style={{ color: AGENT.signal }}>
         ▾
       </span>
     </button>
@@ -524,11 +533,11 @@ function VoiceToggle() {
       title="Agent voice — read replies aloud"
       className="flex h-[26px] w-[26px] items-center justify-center rounded-full"
       style={{
-        background: on ? SCOPE.amberFaint : "rgba(35,36,35,0.04)",
-        border: on ? `0.5px solid ${SCOPE.amberSoft}` : "0.5px solid transparent",
+        background: on ? AGENT.signalFaint : "rgba(35,36,35,0.04)",
+        border: on ? `0.5px solid ${AGENT.signalBorder}` : "0.5px solid transparent",
       }}
     >
-      <SpeakerGlyph tint={on ? SCOPE.brass : SCOPE.inkFaint} />
+      <SpeakerGlyph tint={on ? AGENT.signalStrong : SCOPE.inkFaint} />
     </button>
   );
 }

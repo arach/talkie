@@ -69,12 +69,19 @@ private enum RecentFont {
 
 // MARK: - Models
 
+enum RecentRowMedia {
+    case waveform(seed: Int, strength: Double)
+    case thumbnail(URL)
+}
+
 struct RecentRow: Identifiable {
     let id: UUID
     let glyph: String
     let line: String
     let body: String?
+    let media: RecentRowMedia?
     let meta: String
+    let secondaryMeta: String?
     let when: String
     let onTap: () -> Void
     let menuActions: [RecentMenuItem]
@@ -86,7 +93,9 @@ struct RecentRow: Identifiable {
         glyph: String,
         line: String,
         body: String?,
+        media: RecentRowMedia? = nil,
         meta: String,
+        secondaryMeta: String? = nil,
         when: String,
         onTap: @escaping () -> Void,
         menuActions: [RecentMenuItem] = [],
@@ -96,7 +105,9 @@ struct RecentRow: Identifiable {
         self.glyph = glyph
         self.line = line
         self.body = body
+        self.media = media
         self.meta = meta
+        self.secondaryMeta = secondaryMeta
         self.when = when
         self.onTap = onTap
         self.menuActions = menuActions
@@ -122,7 +133,22 @@ struct RecentCTA {
     let glyph: String
     let label: String
     let kbd: [String]
+    let detail: String?
     let onTap: () -> Void
+
+    init(
+        glyph: String,
+        label: String,
+        kbd: [String],
+        detail: String? = nil,
+        onTap: @escaping () -> Void
+    ) {
+        self.glyph = glyph
+        self.label = label
+        self.kbd = kbd
+        self.detail = detail
+        self.onTap = onTap
+    }
 }
 
 struct RecentSection: Identifiable {
@@ -170,16 +196,6 @@ private enum RecentPaneTokens {
     static let voiceTint   = ScopeBrass.solid
     static let contentTint = ScopeKind.note
     static let cardBg      = ScopeCanvas.pane
-    static let hoverBg     = ScopeCanvas.paneHover
-}
-
-private extension HomeHoverChromeStyle {
-    static func recentPaneRow() -> HomeHoverChromeStyle {
-        HomeHoverChromeStyle(
-            cornerRadius: 0,
-            hoverFill: NSColor(RecentPaneTokens.hoverBg)
-        )
-    }
 }
 
 // MARK: - ⌘ glyph badge
@@ -209,6 +225,31 @@ private struct CmdGlyphBadge: View {
         .shadow(color: ScopeInk.primary.opacity(0.10), radius: 2, y: 1)
         .transition(.opacity.combined(with: .scale(scale: 0.85)))
         .allowsHitTesting(false)
+    }
+}
+
+// MARK: - Header link
+//
+// "ALL MEMOS →" style trailing link. Idle it sits at whatever ink the
+// section hands it; on hover it lifts to brass — the page's standing
+// quiet-action color — instead of a fill, so header chrome stays flat.
+private struct RecentHeaderLink: View {
+    let label: String
+    let idleColor: Color
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Text("\(label) →")
+                .font(RecentFont.mono(size: 8, weight: .semibold))
+                .tracking(2.0)
+                .foregroundStyle(isHovered ? ScopeBrass.solid : idleColor)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovered)
     }
 }
 
@@ -248,11 +289,15 @@ private struct RecentPane: View {
                 RecentSubBand(section: section, tint: tint, divided: idx > 0)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 290, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(RecentPaneTokens.cardBg)
         )
+        // Clip before the border: the header cap band and row hover
+        // fills are square rectangles that would otherwise poke past
+        // the rounded corners.
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         .scopeCardBorder(cornerRadius: 6)
         .shadow(color: Color.black.opacity(0.04), radius: 1, y: 1)
     }
@@ -273,6 +318,11 @@ private struct RecentPane: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        // Whisper-level cap band (the library's bgSunk idiom) so the
+        // Voice / Content headers read as the card's cap, not another
+        // row. Appearance-agnostic: primary ink darkens light panes,
+        // lightens dark ones.
+        .background(ScopeInk.primary.opacity(0.02))
         .overlay(ScopeRule(.section), alignment: .bottom)
     }
 }
@@ -288,10 +338,17 @@ private struct RecentSubBand: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text("· \(section.eyebrow.uppercased())")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .tracking(1.8)
-                    .foregroundStyle(ScopeInk.faint)
+                // The middot carries the section's tint; the label sits
+                // one ink step above the count so the eyebrow anchors
+                // the sub-band instead of blending into its metadata.
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text("·")
+                        .foregroundStyle(tint.opacity(0.85))
+                    Text(section.eyebrow.uppercased())
+                        .foregroundStyle(ScopeInk.muted)
+                }
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .tracking(1.8)
                 Text(section.count.uppercased())
                     .font(RecentFont.mono(size: 9, weight: .medium))
                     .tracking(1.8)
@@ -304,21 +361,17 @@ private struct RecentSubBand: View {
                 // reflows and it never collides with the secondary link.
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
                     if let secondaryLabel = section.secondaryLabel, let onSecondary = section.onSecondary {
-                        Button(action: onSecondary) {
-                            Text("\(secondaryLabel) →")
-                                .font(RecentFont.mono(size: 8, weight: .semibold))
-                                .tracking(2.0)
-                                .foregroundStyle(tint.opacity(0.86))
-                        }
-                        .buttonStyle(.plain)
+                        RecentHeaderLink(
+                            label: secondaryLabel,
+                            idleColor: tint.opacity(0.86),
+                            action: onSecondary
+                        )
                     }
-                    Button(action: section.onLibrary) {
-                        Text("\(section.libraryLabel) →")
-                            .font(RecentFont.mono(size: 8, weight: .semibold))
-                            .tracking(2.0)
-                            .foregroundStyle(ScopeInk.faint)
-                    }
-                    .buttonStyle(.plain)
+                    RecentHeaderLink(
+                        label: section.libraryLabel,
+                        idleColor: ScopeInk.faint,
+                        action: section.onLibrary
+                    )
                 }
                 .overlay(alignment: .leading) {
                     if cmdHeld, let letter = section.shortcutLetter {
@@ -333,7 +386,7 @@ private struct RecentSubBand: View {
             .padding(.bottom, 4)
 
             if section.rows.isEmpty {
-                EmptyCTARow(cta: section.emptyCTA, tint: tint)
+                EmptyCTARow(cta: section.emptyCTA, tint: tint, sectionID: section.id)
             } else {
                 ForEach(section.rows.prefix(3)) { row in
                     RecentRowView(row: row, tint: tint)
@@ -355,64 +408,375 @@ private struct RecentRowView: View {
     let row: RecentRow
     let tint: Color
     @Environment(\.cmdHeld) private var cmdHeld
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var isHovered = false
 
     private var showBadge: Bool { cmdHeld && row.shortcutNumber != nil }
 
     var body: some View {
         Button(action: row.onTap) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                // ⌘ held: the ⌘N quick-open badge floats *over* the row
-                // marker as an overlay — the glyph fades under it so the
-                // row text never reflows (badge is wider than the glyph).
-                Text(row.glyph)
-                    .font(RecentFont.mono(size: 11, weight: .medium))
-                    .foregroundStyle(tint)
-                    .opacity(showBadge ? 0 : 1)
-                    .overlay {
-                        if showBadge, let n = row.shortcutNumber {
-                            CmdGlyphBadge(key: "\(n)").fixedSize()
-                        }
-                    }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(row.line)
-                        .font(.system(size: 12))
-                        .foregroundStyle(ScopeInk.primary)
+            rowContent
+            .padding(.horizontal, 14)
+            .padding(.vertical, verticalPadding)
+            .background(isHovered ? rowHoverFill : Color.clear)
+            // Leading tick on hover — the ScopeRule(.action) idiom at
+            // whisper strength. Marks the active row without lifting
+            // or darkening it.
+            .overlay(alignment: .leading) {
+                Rectangle()
+                    .fill(tint.opacity(isHovered ? 0.55 : 0))
+                    .frame(width: 2)
+                    .padding(.vertical, 5)
+            }
+        }
+        .buttonStyle(.plain)
+        .overlay(ScopeRule(.subtle), alignment: .top)
+        .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovered)
+        .modifier(RecentRowContextMenu(actions: row.menuActions))
+    }
+
+    @ViewBuilder
+    private var rowContent: some View {
+        switch row.media {
+        case .waveform(let seed, let strength):
+            audioRow(seed: seed, strength: strength)
+        default:
+            compactRow
+        }
+    }
+
+    private var compactRow: some View {
+        HStack(alignment: .center, spacing: 10) {
+            marker
+            if case .thumbnail(let url) = row.media {
+                RecentCaptureThumbnail(url: url, tint: tint)
+                    .frame(width: 66, height: 38)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(row.line)
+                    .font(.system(size: 12))
+                    .foregroundStyle(ScopeInk.primary)
+                    .lineLimit(1)
+                if let body = row.body, !body.isEmpty {
+                    Text(body)
+                        .font(.system(size: 11))
+                        .foregroundStyle(ScopeInk.faint)
                         .lineLimit(1)
-                    if let body = row.body, !body.isEmpty {
-                        Text(body)
-                            .font(.system(size: 11))
-                            .foregroundStyle(ScopeInk.faint)
-                            .lineLimit(1)
-                    }
                 }
-                Spacer(minLength: 8)
-                // Meta + when inline — was a two-line VStack which wasted
-                // vertical space. "73 WORDS · 12:35 PM" on one line reads
-                // cleaner and matches how the bottom rows of other
-                // surfaces (Library row, sheaf card) present their meta.
-                HStack(spacing: 6) {
+            }
+            Spacer(minLength: 8)
+            inlineMeta
+        }
+    }
+
+    private func audioRow(seed: Int, strength: Double) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            playMarker
+                .padding(.top, 1)
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 8) {
+                    RecentWaveformLine(seed: seed, strength: strength, tint: tint)
+                        .frame(height: 18)
                     if !row.meta.isEmpty {
                         Text(row.meta.uppercased())
                             .font(RecentFont.mono(size: 9, weight: .medium))
                             .tracking(1.6)
                             .foregroundStyle(ScopeInk.faint)
-                        Text("·")
-                            .font(.system(size: 9, design: .monospaced))
-                            .foregroundStyle(ScopeInk.subtle)
+                            .frame(minWidth: 42, alignment: .trailing)
+                    }
+                }
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(row.line)
+                        .font(RecentFont.display(size: 13))
+                        .italic()
+                        .foregroundStyle(ScopeInk.dim)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    if let secondaryMeta = row.secondaryMeta, !secondaryMeta.isEmpty {
+                        Text(secondaryMeta.uppercased())
+                            .font(RecentFont.mono(size: 8.5, weight: .medium))
+                            .tracking(1.5)
+                            .foregroundStyle(ScopeInk.faint)
                     }
                     Text(row.when.uppercased())
-                        .font(.system(size: 9, design: .monospaced))
-                        .tracking(1.8)
+                        .font(.system(size: 8.5, design: .monospaced))
+                        .tracking(1.6)
                         .foregroundStyle(ScopeInk.subtle)
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(HomeHoverChrome(style: .recentPaneRow()))
         }
-        .buttonStyle(.plain)
-        .overlay(ScopeRule(.subtle), alignment: .top)
-        .modifier(RecentRowContextMenu(actions: row.menuActions))
+    }
+
+    private var marker: some View {
+        Text(row.glyph)
+            .font(RecentFont.mono(size: 11, weight: .medium))
+            .foregroundStyle(tint)
+            .opacity(showBadge ? 0 : 1)
+            .frame(width: 14)
+            .overlay {
+                if showBadge, let n = row.shortcutNumber {
+                    CmdGlyphBadge(key: "\(n)").fixedSize()
+                }
+            }
+    }
+
+    private var playMarker: some View {
+        ZStack {
+            Circle()
+                .stroke(tint.opacity(0.88), lineWidth: 1)
+            Image(systemName: "play.fill")
+                .font(.system(size: 6, weight: .bold))
+                .foregroundStyle(tint)
+                .offset(x: 0.5)
+        }
+        .frame(width: 18, height: 18)
+        .opacity(showBadge ? 0 : 1)
+        .overlay {
+            if showBadge, let n = row.shortcutNumber {
+                CmdGlyphBadge(key: "\(n)").fixedSize()
+            }
+        }
+    }
+
+    private var inlineMeta: some View {
+        HStack(spacing: 6) {
+            if !row.meta.isEmpty {
+                Text(row.meta.uppercased())
+                    .font(RecentFont.mono(size: 9, weight: .medium))
+                    .tracking(1.6)
+                    .foregroundStyle(ScopeInk.faint)
+                Text("·")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundStyle(ScopeInk.subtle)
+            }
+            Text(row.when.uppercased())
+                .font(.system(size: 9, design: .monospaced))
+                .tracking(1.8)
+                .foregroundStyle(ScopeInk.subtle)
+        }
+    }
+
+    private var verticalPadding: CGFloat {
+        if case .waveform = row.media { return 8 }
+        return row.media == nil ? 8 : 6
+    }
+
+    private var rowHoverFill: Color {
+        colorScheme == .dark
+            ? ScopeAmber.tintSubtle
+            : ScopeAmber.solid.opacity(0.055)
+    }
+}
+
+private struct RecentWaveformLine: View {
+    let seed: Int
+    let strength: Double
+    let tint: Color
+
+    var body: some View {
+        GeometryReader { geo in
+            // A denser tape: slim variable bars over a faint signal
+            // rail, so long dictation rows feel intentional rather
+            // than a string of identical blocks.
+            let barCount = max(34, Int((geo.size.width + 2) / 5.2))
+            ZStack {
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                tint.opacity(0.035),
+                                tint.opacity(0.070),
+                                tint.opacity(0.030),
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(height: 15)
+                    .overlay(alignment: .top) {
+                        Rectangle()
+                            .fill(tint.opacity(0.12))
+                            .frame(height: 0.5)
+                    }
+                    .overlay(alignment: .bottom) {
+                        Rectangle()
+                            .fill(ScopeInk.primary.opacity(0.045))
+                            .frame(height: 0.5)
+                    }
+
+                Path { path in
+                    let midY = geo.size.height / 2
+                    let width = max(1, geo.size.width)
+                    for idx in 0..<barCount {
+                        let x = CGFloat(idx) / CGFloat(max(1, barCount - 1)) * width
+                        let sample = Self.sample(index: idx, seed: seed, strength: strength)
+                        let y = midY + CGFloat(sample - 0.48) * 5
+                        if idx == 0 {
+                            path.move(to: CGPoint(x: x, y: y))
+                        } else {
+                            path.addLine(to: CGPoint(x: x, y: y))
+                        }
+                    }
+                }
+                .stroke(tint.opacity(0.22), style: StrokeStyle(lineWidth: 0.75, lineCap: .round, lineJoin: .round))
+
+                HStack(alignment: .center, spacing: 2.2) {
+                    ForEach(0..<barCount, id: \.self) { idx in
+                        let sample = Self.sample(index: idx, seed: seed, strength: strength)
+                        let opacity = Self.barOpacity(index: idx, sample: sample)
+                        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        tint.opacity(opacity),
+                                        tint.opacity(opacity * 0.58),
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .frame(
+                                width: Self.blockWidth(index: idx),
+                                height: max(3, geo.size.height * sample)
+                            )
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private static func sample(index: Int, seed: Int, strength: Double) -> Double {
+        let normalized = min(1.0, max(0.18, strength))
+        let phase = Double(abs(seed % 997)) * 0.013
+        let low = (sin(Double(index) * 0.66 + phase) + 1.0) * 0.25
+        let high = (sin(Double(index) * 1.71 + phase * 2.3) + 1.0) * 0.17
+        let transient = pow((sin(Double(index) * 0.23 + phase * 0.7) + 1.0) * 0.5, 3.0) * 0.20
+        let shaped = 0.10 + low + high + transient
+        return min(0.92, max(0.14, shaped * (0.46 + normalized * 0.54)))
+    }
+
+    private static func barOpacity(index: Int, sample: Double) -> Double {
+        let peakBoost = index % 9 == 0 ? 0.14 : 0
+        return min(0.88, 0.34 + sample * 0.44 + peakBoost)
+    }
+
+    private static func blockWidth(index: Int) -> CGFloat {
+        switch index % 9 {
+        case 0: return 3.5
+        case 4: return 2.8
+        default: return 2.2
+        }
+    }
+}
+
+private struct RecentCaptureThumbnail: View {
+    let url: URL
+    let tint: Color
+    @State private var image: NSImage?
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                if let image {
+                    Image(nsImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geo.size.width, height: geo.size.height)
+                } else {
+                    ZStack {
+                        ScopeCanvas.surface
+                        Image(systemName: "photo")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(ScopeInk.faint)
+                    }
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(tint.opacity(0.40))
+                    .frame(height: 1)
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .strokeBorder(ScopeEdge.subtle, lineWidth: 0.5)
+            )
+            // Barely-there lift so the capture reads as a mounted
+            // print on the pane, not a flat inline block.
+            .shadow(color: ScopeInk.primary.opacity(0.08), radius: 1.5, y: 1)
+        }
+        .task(id: url) {
+            if let cached = RecentThumbnailCache.image(for: url.path) {
+                image = cached
+                return
+            }
+            let thumbnail = await RecentThumbnailLoader.thumbnail(for: url, maxPixelSize: 176)
+            guard !Task.isCancelled else { return }
+            if let thumbnail {
+                RecentThumbnailCache.set(thumbnail, for: url.path)
+            }
+            image = thumbnail
+        }
+    }
+}
+
+// MARK: - Thumbnail loading
+//
+// Rows re-render on hover, so thumbnails must stay off the render
+// path — `NSImage(contentsOf:)` in `body` was re-decoding the full
+// screenshot PNG on every hover flip. Compact mirror of the library
+// list's loader: decode a downsampled CGImage off-main, cache by path.
+// 176px max edge covers the 66×38pt slot at 2× with fill headroom.
+
+@MainActor
+private enum RecentThumbnailCache {
+    private static let images: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 24
+        return cache
+    }()
+
+    static func image(for key: String) -> NSImage? {
+        images.object(forKey: key as NSString)
+    }
+
+    static func set(_ image: NSImage, for key: String) {
+        images.setObject(image, forKey: key as NSString)
+    }
+}
+
+private enum RecentThumbnailLoader {
+    static func thumbnail(for url: URL, maxPixelSize: Int) async -> NSImage? {
+        let box = await Task.detached(priority: .utility) {
+            SendableCGImageBox(decode(url: url, maxPixelSize: maxPixelSize))
+        }.value
+        guard let cgImage = box.image else { return nil }
+        return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+    }
+
+    private static func decode(url: URL, maxPixelSize: Int) -> CGImage? {
+        let options: [CFString: Any] = [kCGImageSourceShouldCache: false]
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, options as CFDictionary) else {
+            return nil
+        }
+        let thumbnailOptions: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary)
+    }
+
+    private final class SendableCGImageBox: @unchecked Sendable {
+        let image: CGImage?
+
+        init(_ image: CGImage?) {
+            self.image = image
+        }
     }
 }
 
@@ -441,34 +805,150 @@ private struct RecentRowContextMenu: ViewModifier {
 private struct EmptyCTARow: View {
     let cta: RecentCTA
     let tint: Color
+    let sectionID: String
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var isHovered = false
 
     var body: some View {
         Button(action: cta.onTap) {
-            HStack(spacing: 10) {
-                Text(cta.glyph)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(tint)
-                Text(cta.label.uppercased())
-                    .font(RecentFont.mono(size: 11, weight: .semibold))
-                    .tracking(1.6)
-                    .foregroundStyle(ScopeInk.primary)
-                Text("→")
-                    .font(.system(size: 11))
-                    .foregroundStyle(ScopeInk.faint)
-                Spacer()
-                if !cta.kbd.isEmpty {
-                    ShortcutChordBadge(keys: cta.kbd)
-                }
-            }
+            content
             .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(HomeHoverChrome(style: .recentPaneRow()))
+            .padding(.vertical, isRichAction ? 12 : 10)
+            .background(isHovered ? hoverFill : Color.clear)
+            // Same leading tick as populated rows — the CTA is a row
+            // in the shared anatomy, so it hovers like one.
+            .overlay(alignment: .leading) {
+                Rectangle()
+                    .fill(tint.opacity(isHovered ? 0.55 : 0))
+                    .frame(width: 2)
+                    .padding(.vertical, 5)
+            }
         }
         .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovered)
         .overlay(
             ScopeRule(.row),
             alignment: .top
         )
+    }
+
+    private var content: some View {
+        HStack(alignment: isRichAction ? .center : .firstTextBaseline, spacing: 10) {
+            if isRichAction {
+                actionPreview
+            } else {
+                Text(cta.glyph)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(tint)
+            }
+
+            VStack(alignment: .leading, spacing: isRichAction ? 3 : 0) {
+                HStack(spacing: 5) {
+                    Text(cta.label.uppercased())
+                        .font(RecentFont.mono(size: 11, weight: .semibold))
+                        .tracking(1.6)
+                        .foregroundStyle(ScopeInk.primary)
+                    Text("→")
+                        .font(.system(size: 11))
+                        .foregroundStyle(ScopeInk.faint)
+                }
+                if isRichAction, let detail = cta.detail {
+                    Text(detail)
+                        .font(.system(size: 11))
+                        .foregroundStyle(ScopeInk.faint)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 8)
+            if !cta.kbd.isEmpty {
+                ShortcutChordBadge(keys: cta.kbd)
+            }
+        }
+        .frame(minHeight: isRichAction ? 42 : 0, alignment: .center)
+    }
+
+    @ViewBuilder
+    private var actionPreview: some View {
+        switch sectionID {
+        case "captures":
+            CaptureActionGlyph(tint: tint)
+                .frame(width: 52, height: 34)
+        case "notes":
+            NoteActionGlyph(tint: tint)
+                .frame(width: 52, height: 34)
+        default:
+            Text(cta.glyph)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(tint)
+                .frame(width: 18)
+        }
+    }
+
+    private var isRichAction: Bool {
+        sectionID == "captures" || sectionID == "notes"
+    }
+
+    private var hoverFill: Color {
+        colorScheme == .dark
+            ? ScopeAmber.tintSubtle
+            : ScopeAmber.solid.opacity(0.045)
+    }
+}
+
+private struct CaptureActionGlyph: View {
+    let tint: Color
+
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(ScopeCanvas.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .strokeBorder(ScopeEdge.subtle, lineWidth: 0.5)
+                )
+            VStack(alignment: .leading, spacing: 4) {
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(tint.opacity(0.45))
+                    .frame(width: 20, height: 4)
+                HStack(spacing: 4) {
+                    RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                        .fill(ScopeInk.primary.opacity(0.10))
+                    RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                        .fill(ScopeInk.primary.opacity(0.06))
+                }
+            }
+            .padding(6)
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .stroke(tint.opacity(0.65), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                .frame(width: 18, height: 12)
+                .padding(6)
+        }
+    }
+}
+
+private struct NoteActionGlyph: View {
+    let tint: Color
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 4, style: .continuous)
+            .fill(ScopeCanvas.surface)
+            .overlay(
+                VStack(alignment: .leading, spacing: 5) {
+                    ForEach(0..<3, id: \.self) { idx in
+                        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                            .fill(idx == 0 ? tint.opacity(0.55) : ScopeInk.primary.opacity(0.10))
+                            .frame(width: idx == 2 ? 24 : 36, height: 3)
+                    }
+                }
+                .padding(7),
+                alignment: .leading
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .strokeBorder(ScopeEdge.subtle, lineWidth: 0.5)
+            )
     }
 }
 

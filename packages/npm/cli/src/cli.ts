@@ -1,4 +1,4 @@
-import { Command } from "commander";
+import { Command } from "./gunshi-command";
 import { closeDb } from "./db";
 import { registerMemosCommand } from "./commands/memos";
 import { registerDictationsCommand } from "./commands/dictations";

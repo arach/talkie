@@ -63,7 +63,7 @@ struct StorageSettingsSection: View {
                     }
 
                     Divider()
-                        .background(TalkieTheme.surfaceElevated)
+                        .background(AgentTheme.surfaceElevated)
 
                     // Secondary stats
                     HStack(spacing: Spacing.lg) {
@@ -72,16 +72,16 @@ struct StorageSettingsSection: View {
                             Text("TIME RANGE")
                                 .font(.system(size: 8, weight: .bold))
                                 .tracking(0.5)
-                                .foregroundColor(TalkieTheme.textMuted)
+                                .foregroundColor(AgentTheme.textMuted)
 
                             if let oldest = storageStats.oldestDate, let newest = storageStats.newestDate {
                                 Text("\(formatDate(oldest)) → \(formatDate(newest))")
                                     .font(.system(size: 10, design: .monospaced))
-                                    .foregroundColor(TalkieTheme.textSecondary)
+                                    .foregroundColor(AgentTheme.textSecondary)
                             } else {
                                 Text("No data")
                                     .font(.system(size: 10))
-                                    .foregroundColor(TalkieTheme.textMuted)
+                                    .foregroundColor(AgentTheme.textMuted)
                             }
                         }
 
@@ -92,11 +92,11 @@ struct StorageSettingsSection: View {
                             Text("TOTAL WORDS")
                                 .font(.system(size: 8, weight: .bold))
                                 .tracking(0.5)
-                                .foregroundColor(TalkieTheme.textMuted)
+                                .foregroundColor(AgentTheme.textMuted)
 
                             Text(formatNumber(storageStats.totalWords))
                                 .font(.system(size: 10, design: .monospaced))
-                                .foregroundColor(TalkieTheme.textSecondary)
+                                .foregroundColor(AgentTheme.textSecondary)
                         }
 
                         // Total duration
@@ -104,11 +104,11 @@ struct StorageSettingsSection: View {
                             Text("TOTAL DURATION")
                                 .font(.system(size: 8, weight: .bold))
                                 .tracking(0.5)
-                                .foregroundColor(TalkieTheme.textMuted)
+                                .foregroundColor(AgentTheme.textMuted)
 
                             Text(formatDuration(storageStats.totalDurationSeconds))
                                 .font(.system(size: 10, design: .monospaced))
-                                .foregroundColor(TalkieTheme.textSecondary)
+                                .foregroundColor(AgentTheme.textSecondary)
                         }
                     }
 
@@ -126,7 +126,7 @@ struct StorageSettingsSection: View {
                                 Text("Refresh")
                                     .font(.system(size: 9))
                             }
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .foregroundColor(AgentTheme.textTertiary)
                         }
                         .buttonStyle(.plain)
 
@@ -134,7 +134,7 @@ struct StorageSettingsSection: View {
 
                         Text("Last updated: \(formatTime(storageStats.lastUpdated))")
                             .font(.system(size: 9))
-                            .foregroundColor(TalkieTheme.textMuted)
+                            .foregroundColor(AgentTheme.textMuted)
                     }
                 }
             }
@@ -147,7 +147,7 @@ struct StorageSettingsSection: View {
                             HStack {
                                 Text(app.name)
                                     .font(.system(size: 10))
-                                    .foregroundColor(TalkieTheme.textSecondary)
+                                    .foregroundColor(AgentTheme.textSecondary)
                                     .lineLimit(1)
 
                                 Spacer()
@@ -176,7 +176,7 @@ struct StorageSettingsSection: View {
                     HStack {
                         Text("Keep dictations for:")
                             .font(.system(size: 11))
-                            .foregroundColor(TalkieTheme.textPrimary)
+                            .foregroundColor(AgentTheme.textPrimary)
 
                         Spacer()
 
@@ -193,7 +193,7 @@ struct StorageSettingsSection: View {
                          ? "Dictations will be kept indefinitely."
                          : "Older dictations will be automatically deleted.")
                         .font(.system(size: 10))
-                        .foregroundColor(settings.dictationTTLHours <= 0 ? .green : TalkieTheme.textTertiary)
+                        .foregroundColor(settings.dictationTTLHours <= 0 ? .green : AgentTheme.textTertiary)
                 }
             }
 
@@ -204,11 +204,11 @@ struct StorageSettingsSection: View {
                     HStack {
                         Image(systemName: "folder.fill")
                             .font(.system(size: 10))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .foregroundColor(AgentTheme.textTertiary)
 
                         Text("~/Library/Application Support/TalkieAgent")
                             .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .foregroundColor(AgentTheme.textTertiary)
                             .lineLimit(1)
                             .truncationMode(.middle)
 
@@ -225,7 +225,7 @@ struct StorageSettingsSection: View {
                     }
 
                     Divider()
-                        .background(TalkieTheme.surfaceElevated)
+                        .background(AgentTheme.surfaceElevated)
 
                     // Action buttons
                     HStack(spacing: Spacing.sm) {
@@ -434,11 +434,11 @@ struct StorageStatBox: View {
 
             Text(value)
                 .font(.system(size: 14, weight: .bold, design: .monospaced))
-                .foregroundColor(TalkieTheme.textPrimary)
+                .foregroundColor(AgentTheme.textPrimary)
 
             Text(label)
                 .font(.system(size: 8, weight: .medium))
-                .foregroundColor(TalkieTheme.textTertiary)
+                .foregroundColor(AgentTheme.textTertiary)
                 .textCase(.uppercase)
         }
         .frame(maxWidth: .infinity)
@@ -468,12 +468,12 @@ struct StorageActionButton: View {
                 Text(label)
                     .font(.system(size: 9, weight: .medium))
             }
-            .foregroundColor(isHovered ? color : TalkieTheme.textTertiary)
+            .foregroundColor(isHovered ? color : AgentTheme.textTertiary)
             .padding(.horizontal, Spacing.sm)
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: CornerRadius.xs)
-                    .fill(isHovered ? color.opacity(0.15) : TalkieTheme.hover)
+                    .fill(isHovered ? color.opacity(0.15) : AgentTheme.hover)
             )
         }
         .buttonStyle(.plain)

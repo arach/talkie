@@ -38,11 +38,13 @@ struct AgentHomeShellView: View {
     @State private var lastOperationalRefresh: Date?
 
     private var manifest: OpsManifest {
-        // Nav selection follows the user's accent (OpsInk.accent == Color.accentColor).
-        // The brand "T" keeps its fixed amber callout (see railHeader).
+        // Runtime interaction uses the Agent signal. The brand mark keeps its
+        // fixed Talkie amber callout.
         OpsManifest(
             name: "Talkie Agent",
             version: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0",
+            accent: AgentTheme.accent,
+            accentSoft: AgentTheme.accentSoft,
             targetLabel: "Runtime"
         )
     }
@@ -56,35 +58,19 @@ struct AgentHomeShellView: View {
         OpsShell {
             sidebar
         } trailing: {
-            inspector
+            EmptyView()
         } content: {
             content
         } statusBar: {
             statusBar
         }
                 .opsManifest(manifest)
-                // Compact-rail hover tooltip — the same TalkieKit overlay the
-                // Talkie app mounts, reading the per-shell SidebarTooltipState
-                // that the Sidebar writes on hover. Spans the shell so the label
-                // isn't clipped by the 40pt rail.
-                .overlay(alignment: .topLeading) {
-                    SidebarTooltipOverlay(
-                        surface: OpsInk.surface,
-                        foreground: OpsInk.ink,
-                        tooltipState: sidebarTooltipState
-                    )
-                }
-                .background {
-                    GeometryReader { proxy in
-                        Color.clear
-                            .onAppear {
-                                collapseInspectorIfNeeded(width: proxy.size.width)
-                            }
-                            .onChange(of: proxy.size.width) { _, newWidth in
-                                collapseInspectorIfNeeded(width: newWidth)
-                            }
-                    }
-                }
+        .overlay(alignment: .top) {
+            AgentHomeTitlePill()
+                .padding(.top, 4)
+                .offset(x: navigationSidebarWidth / 2)
+                .allowsHitTesting(false)
+        }
         // Agent Home follows the user's appearance setting (NSApp.appearance,
         // driven by LiveSettings.applyAppearance): adaptive Ops tokens resolve
         // to their light or dark variant. No forced color scheme here.
@@ -113,42 +99,46 @@ struct AgentHomeShellView: View {
     }
 
     private var sidebar: some View {
-        // The canonical Talkie nav, now with the same drag-to-resize / collapse
-        // behavior as the main app — `ManagedResizableSidebar` (TalkieKit) owns
-        // the whole resize state machine; we just hand it our two persisted
-        // bindings. Header-tap still toggles compact; the trailing edge handle
-        // adds drag-to-resize, drag-left-to-collapse, drag-right-to-expand.
-        // It self-sizes to its intrinsic width, so no manual frame pin.
         ManagedResizableSidebar(
             isCompact: $railCompact,
             labelWidth: $navigationSidebarLabelWidth,
-            selection: Binding<AgentHomeShellSection?>(
-                get: { selectedSection },
-                set: { next in
-                    guard let next else { return }
-                    if next == .more {
-                        // The "…" overflow doesn't navigate — it pops a native
-                        // flyout of the demoted (stop-gap) sections.
-                        presentOverflowMenu()
-                        return
-                    }
-                    selectSection(next)
-                }
-            ),
+            selection: sidebarSelection,
             entries: AgentHomeShellSection.sidebarEntries,
-            accent: .accentColor,
+            accent: AgentTheme.accent,
+            allCaps: false,
             tooltipState: sidebarTooltipState,
-            handleTint: OpsInk.ink,
+            isScopeTheme: true,
+            handleTint: ScopeInk.primary,
             railHeader: { brandMark },
             labelHeader: { brandWordmark },
             footer: { sidebarFooter }
         )
     }
 
+    private var sidebarSelection: Binding<AgentHomeShellSection?> {
+        Binding(
+            get: { homeController.isShowingSettings ? nil : selectedSection },
+            set: { next in
+                guard let next else { return }
+                if next == .more {
+                    presentOverflowMenu()
+                } else {
+                    selectSection(next)
+                }
+            }
+        )
+    }
+
+    private var navigationSidebarWidth: CGFloat {
+        SidebarLayout.leadingInset
+            + SidebarLayout.railWidth
+            + (railCompact ? 0 : CGFloat(max(100, min(220, navigationSidebarLabelWidth))))
+    }
+
     /// The JetBrains Mono "T" from the Talkie logo in its amber callout box.
     /// `ScopeType.mono` resolves the real bundled font (registered at launch)
-    /// instead of SF Mono. Amber stays fixed even as nav selection follows the
-    /// user's accent.
+    /// instead of SF Mono. Amber is the shared Talkie brand cue; interaction
+    /// inside Agent Home uses the cooler Agent signal color.
     private var brandMark: some View {
         Text("t")
             .font(ScopeType.mono(size: OpsSize.base, weight: .bold))
@@ -156,7 +146,7 @@ struct AgentHomeShellView: View {
             .frame(width: 24, height: 24)
             .background(
                 RoundedRectangle(cornerRadius: OpsRadius.standard, style: .continuous)
-                    .fill(OpsTint.amber.color)
+                    .fill(AgentTheme.brandAccent)
             )
     }
 
@@ -182,7 +172,7 @@ struct AgentHomeShellView: View {
         Button { openSettings() } label: {
             Image(systemName: "gearshape")
                 .font(OpsType.ui(OpsSize.base, weight: .medium))
-                .foregroundStyle(homeController.isShowingSettings ? Color.accentColor : OpsInk.muted)
+                .foregroundStyle(homeController.isShowingSettings ? AgentTheme.accent : OpsInk.muted)
                 .frame(width: SidebarLayout.railWidth, height: SidebarLayout.rowHeight)
                 .contentShape(Rectangle())
         }
@@ -355,16 +345,16 @@ struct AgentHomeShellView: View {
     }
 
     private var statusBar: some View {
-        HStack(spacing: OpsSpacing.lg) {
-            Text("Talkie Agent")
-                .font(OpsType.mono(OpsSize.xs, weight: .semibold))
-                .foregroundStyle(OpsInk.ink)
-                .lineLimit(1)
+        HStack(spacing: 7) {
+            Text("TALKIE AGENT ·")
+                .font(OpsType.mono(9, weight: .semibold))
+                .tracking(1.0)
+                .foregroundStyle(AgentHomeCommandPalette.muted)
 
-            Text(statusBarHealthLabel)
-                .font(OpsType.mono(OpsSize.xs))
+            Text(statusBarHealthLabel.uppercased())
+                .font(OpsType.mono(9, weight: .semibold))
+                .tracking(1.0)
                 .foregroundStyle(statusBarHealthTint)
-                .lineLimit(1)
 
             if shouldSurfaceServerStatus {
                 OpsBadge(statusBarServerBadgeText, tint: serverTint)
@@ -379,17 +369,16 @@ struct AgentHomeShellView: View {
             // Build stamp — the running binary's link time. A fresh build moves
             // this; if it's stale, you're looking at an old binary.
             Text("BUILD \(Self.buildStamp)")
-                .font(OpsType.mono(OpsSize.micro, weight: .medium))
-                .tracking(0.5)
-                .foregroundStyle(OpsInk.dim)
+                .font(OpsType.mono(8, weight: .medium))
+                .tracking(0.9)
+                .foregroundStyle(AgentHomeCommandPalette.faint)
                 .lineLimit(1)
                 .help("Link time of the running TalkieAgent binary")
 
-            OpsInspectorToggle(isCollapsed: $inspectorCollapsed)
         }
-        .padding(.horizontal, OpsSpacing.xl)
+        .padding(.horizontal, 14)
         .frame(height: OpsLayout.statusBarHeight)
-        .background(OpsInk.chrome)
+        .background(AgentHomeCommandPalette.paper)
     }
 
     /// The running binary's link/modification time — proves which build is live.
@@ -574,6 +563,137 @@ private enum AgentHomeShellSection: String, CaseIterable, Hashable {
     }
 }
 
+// MARK: - Command-center chrome
+
+/// Agent-local materials built on Talkie's Scope chassis. The page substrate
+/// and ink hierarchy are shared with Talkie; steel chrome and signal-blue state
+/// make the runtime surface identifiable as Agent Home. The live conversation
+/// borrows the main app's PEARL instrument treatment so the primary interaction
+/// feels fabricated and lifted instead of reading as a flat blue slab.
+private enum AgentHomeCommandPalette {
+    static let paper = AgentTheme.background
+    static let card = AgentTheme.surface
+    static let ink = AgentTheme.textPrimary
+    static let muted = AgentTheme.textSecondary
+    static let faint = AgentTheme.textTertiary
+    static let hairline = AgentTheme.border
+
+    static let signal = AgentTheme.accent
+    static let signalSoft = AgentTheme.accentSoft
+
+    // Preserve the user's cool structural-rail calibration. The denser icon
+    // rail and signal treatment carry the Agent identity.
+    static let rail = AgentTheme.backgroundSecondary
+    static let railIcon = AgentTheme.textSecondary
+    static let railSelected = AgentTheme.accentSoft
+    static let wire = AgentInstrumentStyle.surface
+    static let wireChrome = AgentInstrumentStyle.commandChrome
+    static let wireSignal = AgentInstrumentStyle.action
+    static let wireSignalSoft = AgentInstrumentStyle.actionSoft
+    static let wireEdge = AgentInstrumentStyle.actionBorder
+    static let wireCard = AgentInstrumentStyle.card
+    static let wireMuted = AgentInstrumentStyle.mutedText
+    static let wireText = AgentInstrumentStyle.text
+}
+
+private struct AgentHomeTitlePill: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(AgentTheme.brandAccent)
+                .frame(width: 5, height: 5)
+
+            Text("TALKIE AGENT")
+                .font(OpsType.mono(9, weight: .semibold))
+                .tracking(1.9)
+                .foregroundStyle(ScopeCanvas.canvas)
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 24)
+        .background(Capsule().fill(ScopeInk.primary))
+        .shadow(color: Color.black.opacity(0.14), radius: 4, y: 2)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Talkie Agent")
+    }
+}
+
+private struct AgentHomeCommandRail: View {
+    let selection: AgentHomeShellSection
+    let settingsSelected: Bool
+    let onSelect: (AgentHomeShellSection) -> Void
+    let onOpenSettings: () -> Void
+
+    private let sections: [AgentHomeShellSection] = [
+        .home,
+        .library,
+        .conversations,
+        .permissions,
+        .logs,
+        .more,
+    ]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Image(systemName: "waveform.path.ecg")
+                .font(OpsType.ui(OpsSize.base, weight: .medium))
+                .foregroundStyle(AgentTheme.brandAccent)
+                .frame(width: 34, height: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(AgentHomeCommandPalette.card.opacity(0.72))
+                )
+                .padding(.top, 14)
+                .padding(.bottom, 12)
+
+            Rectangle()
+                .fill(AgentHomeCommandPalette.hairline.opacity(0.72))
+                .frame(width: 26, height: 1)
+                .padding(.bottom, 8)
+
+            ForEach(sections, id: \.self) { section in
+                railButton(section)
+            }
+
+            Spacer(minLength: 16)
+
+            Button(action: onOpenSettings) {
+                Image(systemName: "gearshape")
+                    .font(OpsType.ui(OpsSize.base, weight: .medium))
+                    .foregroundStyle(settingsSelected ? AgentHomeCommandPalette.signal : AgentHomeCommandPalette.railIcon.opacity(0.72))
+                    .frame(width: 38, height: 38)
+                    .background(
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(settingsSelected ? AgentHomeCommandPalette.railSelected : .clear)
+                    )
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Settings")
+            .padding(.bottom, 12)
+        }
+        .frame(width: 58)
+        .frame(maxHeight: .infinity)
+        .background(AgentHomeCommandPalette.rail)
+    }
+
+    private func railButton(_ section: AgentHomeShellSection) -> some View {
+        let isSelected = !settingsSelected && selection == section
+        return Button { onSelect(section) } label: {
+            Image(systemName: isSelected ? section.selectedIcon : section.icon)
+                .font(OpsType.ui(OpsSize.base, weight: .medium))
+                .foregroundStyle(isSelected ? AgentHomeCommandPalette.signal : AgentHomeCommandPalette.railIcon.opacity(0.76))
+                .frame(width: 38, height: 38)
+                .background(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(isSelected ? AgentHomeCommandPalette.railSelected : .clear)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(section.title)
+    }
+}
+
 private extension AgentHomeRoute {
     /// Map an external deep-link target onto the shell's private section enum.
     var shellSection: AgentHomeShellSection {
@@ -616,24 +736,14 @@ private struct AgentHomeOverviewPage: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack {
-                AgentHomePageScaffold(
-                    title: "Home",
-                    subtitle: "Runtime status, recent history, and quick actions.",
-                    showsHeader: false,
-                    maxContentWidth: 1260
-                ) {
-                    VStack(alignment: .leading, spacing: OpsSpacing.xxxl) {
-                        VStack(alignment: .leading, spacing: OpsSpacing.md) {
-                            OpsSectionLabel("· Agent")
-                            bay
-                        }
-                        VStack(alignment: .leading, spacing: OpsSpacing.md) {
-                            OpsSectionLabel("· Recent")
-                            libraryPreview
-                        }
-                        shortcuts
-                    }
-                }
+                AgentHomeCommandDashboard(
+                    store: store,
+                    permissionManager: permissionManager,
+                    libraryItems: libraryItems,
+                    onSelect: onSelect,
+                    onPreview: previewLibraryItem,
+                    onOpenSettings: onOpenSettings
+                )
 
                 if showingLibraryPreview, let previewItem {
                     AgentHomeLibrarySlideSheet(
@@ -904,6 +1014,1111 @@ private struct AgentHomeOverviewPage: View {
     }
 }
 
+// MARK: - Home command center
+
+private struct AgentHomeCommandDashboard: View {
+    @ObservedObject var store: AgentHomeActivityStore
+    @ObservedObject var permissionManager: PermissionManager
+    let libraryItems: [TalkieObject]
+    let onSelect: (AgentHomeShellSection) -> Void
+    let onPreview: (TalkieObject) -> Void
+    let onOpenSettings: () -> Void
+
+    @StateObject private var voiceCapture = AgentHomeVoiceCapture()
+    @State private var prompt = ""
+
+    private var wireJobs: [AgentHomeExecutorJob] {
+        Array(store.executorJobs.sorted { $0.updatedDate < $1.updatedDate }.suffix(4))
+    }
+
+    private var failedJobs: [AgentHomeExecutorJob] {
+        Array(store.executorJobs.filter { $0.status == .failed }.prefix(2))
+    }
+
+    private var completedJobs: [AgentHomeExecutorJob] {
+        Array(
+            store.executorJobs
+                .filter { job in
+                    job.status == .done
+                        && (job.spokenSummary?.agentHomeTrimmed.isEmpty == false
+                            || job.output?.agentHomeTrimmed.isEmpty == false)
+                }
+                .prefix(3)
+        )
+    }
+
+    private var missingPermissions: [PermissionType] {
+        PermissionType.allCases.filter { permissionManager.status(for: $0) != .granted }
+    }
+
+    private var recentCaptures: [TalkieObject] {
+        Array(libraryItems.lazy.filter(\.agentHomeHasVisualPreview).prefix(3))
+    }
+
+    private var recentDictations: [TalkieObject] {
+        Array(libraryItems.lazy.filter(\.isDictation).prefix(5))
+    }
+
+    private var needsCount: Int {
+        missingPermissions.count + failedJobs.count
+    }
+
+    var body: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 10) {
+                    AgentHomeCommandSectionHeader(
+                        title: "Agent Chat",
+                        detail: wireSectionDetail,
+                        trailingLabel: "Conversations",
+                        tint: AgentHomeCommandPalette.wireSignal,
+                        onTrailing: { onSelect(.conversations) }
+                    )
+
+                    wire
+                }
+                recentCapturesSection
+                recentDictationsSection
+                footerActions
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 32)
+            .padding(.bottom, 26)
+            .frame(maxWidth: 1240, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(AgentHomeCommandPalette.paper)
+        .onDisappear {
+            voiceCapture.cancel()
+        }
+    }
+
+    private var wire: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                PhosphorDot(
+                    color: store.runtimePing == nil
+                        ? AgentHomeCommandPalette.wireMuted
+                        : AgentHomeCommandPalette.wireSignal,
+                    size: 5
+                )
+
+                Text(wireRailLabel)
+                    .font(OpsType.mono(9, weight: .semibold))
+                    .tracking(1.35)
+                    .foregroundStyle(AgentHomeCommandPalette.wireMuted)
+
+                Spacer(minLength: 0)
+
+                Text("NO TELEMETRY")
+                    .font(OpsType.mono(9, weight: .medium))
+                    .tracking(1.4)
+                    .foregroundStyle(AgentHomeCommandPalette.wireMuted)
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 38)
+            .background(AgentHomeCommandPalette.wireChrome)
+
+            Rectangle()
+                .fill(AgentHomeCommandPalette.wireEdge)
+                .frame(height: 1)
+
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    if wireJobs.isEmpty {
+                        AgentHomeWireEmptyState(runtimeOnline: store.runtimePing != nil)
+                    } else {
+                        ForEach(wireJobs) { job in
+                            AgentHomeWireJobRow(job: job)
+                        }
+                    }
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 18)
+            }
+            .frame(minHeight: 210, maxHeight: 330)
+
+            Rectangle()
+                .fill(AgentHomeCommandPalette.wireEdge)
+                .frame(height: 1)
+
+            composer
+                .padding(12)
+                .background(AgentHomeCommandPalette.wireChrome)
+        }
+        .background {
+            ZStack {
+                AgentHomeCommandPalette.wire
+
+                RadialGradient(
+                    colors: [
+                        AgentHomeCommandPalette.wireSignal.opacity(0.095),
+                        AgentHomeCommandPalette.wireSignal.opacity(0.035),
+                        .clear,
+                    ],
+                    center: .topLeading,
+                    startRadius: 0,
+                    endRadius: 520
+                )
+
+                GraticuleBackground(
+                    pitch: 32,
+                    color: AgentHomeCommandPalette.wireSignal.opacity(0.075),
+                    opacity: 0.26
+                )
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(AgentHomeCommandPalette.wireEdge, lineWidth: 1)
+        )
+        .compositingGroup()
+        .shadow(color: Color.black.opacity(0.12), radius: 14, y: 7)
+    }
+
+    private var wireSectionDetail: String {
+        if wireJobs.isEmpty {
+            return store.runtimePing == nil ? "offline" : "standing by"
+        }
+        return "\(wireJobs.count) recent"
+    }
+
+    private var wireRailLabel: String {
+        store.runtimePing == nil
+            ? "TALKIE.AGENT · CHANNEL OFFLINE"
+            : "TALKIE.AGENT · LOCAL LIVE WIRE"
+    }
+
+    private var composer: some View {
+        HStack(spacing: 7) {
+            ZStack(alignment: .leading) {
+                if prompt.isEmpty {
+                    Text("Message your agent…")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(AgentHomeCommandPalette.wireMuted.opacity(0.68))
+                        .allowsHitTesting(false)
+                }
+
+                TextField("", text: $prompt)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(AgentHomeCommandPalette.wireText)
+                    .submitLabel(.send)
+                    .onSubmit { submit() }
+                    .disabled(store.isInvokingAgent || voiceCapture.phase != .idle)
+            }
+
+            if voiceCapture.phase == .recording {
+                Text(voiceCapture.formattedElapsed)
+                    .font(OpsType.mono(9, weight: .semibold))
+                    .foregroundStyle(AgentHomeCommandPalette.wireSignal)
+            } else if voiceCapture.phase == .processing {
+                Text("TRANSCRIBING")
+                    .font(OpsType.mono(9, weight: .semibold))
+                    .tracking(1.0)
+                    .foregroundStyle(AgentHomeCommandPalette.wireSignal)
+            }
+
+            Button(action: toggleVoiceCapture) {
+                Image(systemName: voiceCapture.phase == .recording ? "stop.fill" : "mic.fill")
+                    .font(OpsType.ui(12, weight: .semibold))
+                    .foregroundStyle(voiceCapture.phase == .recording ? Color.white : AgentHomeCommandPalette.wireSignal)
+                    .frame(width: 34, height: 34)
+                    .background(
+                        Circle().fill(
+                            voiceCapture.phase == .recording
+                                ? AgentHomeCommandPalette.wireSignal
+                                : AgentHomeCommandPalette.wireSignalSoft
+                        )
+                    )
+                    .overlay(Circle().stroke(AgentHomeCommandPalette.wireSignal.opacity(0.36), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut(.space, modifiers: .option)
+            .disabled(store.isInvokingAgent || voiceCapture.phase == .processing)
+            .help(voiceCapture.phase == .recording ? "Stop and send" : "Talk to the agent")
+
+            Button(action: submit) {
+                Image(systemName: "arrow.up")
+                    .font(OpsType.ui(12, weight: .bold))
+                    .foregroundStyle(canSend ? Color.white : AgentHomeCommandPalette.railIcon.opacity(0.55))
+                    .frame(width: 34, height: 34)
+                    .background(
+                        Circle().fill(
+                            canSend
+                                ? AgentHomeCommandPalette.wireSignal
+                                : AgentHomeCommandPalette.paper.opacity(0.75)
+                        )
+                    )
+                    .overlay(
+                        Circle().stroke(
+                            canSend
+                                ? AgentHomeCommandPalette.wireSignal
+                                : AgentHomeCommandPalette.hairline.opacity(0.82),
+                            lineWidth: 1
+                        )
+                    )
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSend)
+            .help("Send message")
+        }
+        .padding(.leading, 13)
+        .padding(.trailing, 5)
+        .frame(height: 40)
+        .background(AgentHomeCommandPalette.wireCard.opacity(0.94))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(AgentHomeCommandPalette.wireEdge.opacity(0.82), lineWidth: 1)
+        )
+    }
+
+    private var needsYou: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            AgentHomeCommandSectionHeader(
+                title: "Needs You",
+                detail: needsCount == 0 ? "clear" : "\(needsCount) waiting"
+            )
+
+            if needsCount == 0 {
+                AgentHomeCommandEmptyBand(
+                    icon: "checkmark.circle",
+                    title: "Nothing needs your attention",
+                    detail: "The agent can keep working without an approval or permission change."
+                )
+            } else {
+                VStack(spacing: 9) {
+                    ForEach(missingPermissions) { permission in
+                        AgentHomeNeedsPermissionRow(
+                            permission: permission,
+                            status: permissionManager.status(for: permission),
+                            onOpen: { permissionManager.handleRequest(for: permission) }
+                        )
+                    }
+
+                    ForEach(failedJobs) { job in
+                        AgentHomeNeedsJobRow(job: job) {
+                            onSelect(.conversations)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var readyForYou: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            AgentHomeCommandSectionHeader(
+                title: "Ready for You",
+                detail: completedJobs.isEmpty ? nil : "\(completedJobs.count) finished",
+                trailingLabel: "Everything the agent made",
+                onTrailing: { onSelect(.conversations) }
+            )
+
+            if completedJobs.isEmpty {
+                AgentHomeCommandEmptyBand(
+                    icon: "sparkles",
+                    title: "No finished agent work yet",
+                    detail: "Completed requests will collect here for a quick review."
+                )
+            } else {
+                LazyVGrid(columns: AgentHomeCommandGrid.three, spacing: 14) {
+                    ForEach(completedJobs) { job in
+                        AgentHomeReadyCard(job: job) {
+                            onSelect(.conversations)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var recentCapturesSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            AgentHomeCommandSectionHeader(
+                title: "Recent Captures",
+                trailingLabel: "Open Library",
+                onTrailing: { onSelect(.library) }
+            )
+
+            if recentCaptures.isEmpty {
+                AgentHomeCommandEmptyBand(
+                    icon: "viewfinder",
+                    title: "No recent captures",
+                    detail: "Screenshots and clips will appear here as soon as Talkie records them."
+                )
+            } else {
+                LazyVGrid(columns: AgentHomeCommandGrid.three, spacing: 14) {
+                    ForEach(recentCaptures) { item in
+                        AgentHomeCommandCaptureCard(item: item) {
+                            onPreview(item)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var recentDictationsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            AgentHomeCommandSectionHeader(
+                title: "Dictations",
+                detail: recentDictations.isEmpty ? nil : "\(recentDictations.count) recent",
+                trailingLabel: "Open History",
+                onTrailing: { onSelect(.library) }
+            )
+
+            if recentDictations.isEmpty {
+                AgentHomeCommandEmptyBand(
+                    icon: "waveform",
+                    title: "No recent dictations",
+                    detail: "New Talkie Agent dictations will appear here for quick review."
+                )
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(recentDictations) { item in
+                        AgentHomeCommandDictationRow(item: item) {
+                            onPreview(item)
+                        }
+
+                        if item.id != recentDictations.last?.id {
+                            Rectangle()
+                                .fill(AgentHomeCommandPalette.hairline.opacity(0.60))
+                                .frame(height: 1)
+                                .padding(.leading, 58)
+                        }
+                    }
+                }
+                .background(AgentHomeCommandPalette.card)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(AgentHomeCommandPalette.hairline.opacity(0.68), lineWidth: 1)
+                )
+            }
+        }
+    }
+
+    private var footerActions: some View {
+        HStack(spacing: 9) {
+            AgentHomeCommandFooterButton("Conversations", icon: "bubble.left.and.bubble.right") {
+                onSelect(.conversations)
+            }
+            AgentHomeCommandFooterButton("History", icon: "clock.arrow.circlepath") {
+                onSelect(.library)
+            }
+            AgentHomeCommandFooterButton("Permissions", icon: "lock.shield") {
+                onSelect(.permissions)
+            }
+            AgentHomeCommandFooterButton("Logs", icon: "doc.text") {
+                onSelect(.logs)
+            }
+
+            Spacer(minLength: 12)
+
+            AgentHomeCommandFooterButton("Open Talkie", icon: "arrow.up.forward.app", prominent: true) {
+                TalkieAppOpener.openApp()
+            }
+            AgentHomeCommandFooterButton("Settings", icon: "gearshape", iconOnly: true, action: onOpenSettings)
+        }
+    }
+
+    private var canSend: Bool {
+        !store.isInvokingAgent && voiceCapture.phase == .idle
+    }
+
+    private func submit() {
+        submit(prompt)
+    }
+
+    private func submit(_ rawText: String) {
+        let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, !store.isInvokingAgent else { return }
+        prompt = ""
+
+        Task {
+            await store.invokeAgent(text: text)
+        }
+    }
+
+    private func toggleVoiceCapture() {
+        switch voiceCapture.phase {
+        case .idle:
+            voiceCapture.start()
+        case .recording:
+            voiceCapture.stopAndTranscribe(
+                onTranscript: submit,
+                onFinish: {}
+            )
+        case .processing:
+            break
+        }
+    }
+}
+
+private enum AgentHomeCommandGrid {
+    static let three = [
+        GridItem(.flexible(minimum: 180), spacing: 14, alignment: .top),
+        GridItem(.flexible(minimum: 180), spacing: 14, alignment: .top),
+        GridItem(.flexible(minimum: 180), spacing: 14, alignment: .top),
+    ]
+}
+
+private struct AgentHomeWireEmptyState: View {
+    let runtimeOnline: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(runtimeOnline ? "STANDING BY" : "RUNTIME OFFLINE")
+                .font(OpsType.mono(10, weight: .semibold))
+                .tracking(1.3)
+                .foregroundStyle(AgentHomeCommandPalette.wireSignal)
+
+            Text(runtimeOnline
+                 ? "Send a message or hold the mic to start a new turn."
+                 : "Start the local runtime to send work through the Wire.")
+                .font(OpsType.ui(13))
+                .foregroundStyle(AgentHomeCommandPalette.wireText)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, minHeight: 150, alignment: .center)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(AgentHomeCommandPalette.wireCard)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(AgentHomeCommandPalette.wireEdge.opacity(0.62), lineWidth: 1)
+        )
+    }
+}
+
+private struct AgentHomeWireJobRow: View {
+    let job: AgentHomeExecutorJob
+
+    private var response: String? {
+        if let summary = job.spokenSummary?.agentHomeTrimmed, !summary.isEmpty {
+            return summary
+        }
+        if let output = job.output?.agentHomeTrimmed, !output.isEmpty {
+            return output
+        }
+        return nil
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 7) {
+                Text(job.updatedDate, format: .dateTime.hour().minute())
+                    .font(OpsType.mono(9, weight: .medium))
+                    .foregroundStyle(AgentHomeCommandPalette.wireMuted)
+
+                Text(job.source == "agent-home" ? "HOME" : "VOICE")
+                    .font(OpsType.mono(8, weight: .semibold))
+                    .tracking(0.95)
+                    .foregroundStyle(AgentHomeCommandPalette.wireMuted.opacity(0.82))
+
+                Spacer(minLength: 8)
+
+                Circle()
+                    .fill(statusTint)
+                    .frame(width: 5, height: 5)
+
+                Text(job.status.title.uppercased())
+                    .font(OpsType.mono(8, weight: .semibold))
+                    .tracking(0.9)
+                    .foregroundStyle(statusTint)
+            }
+
+            AgentHomeWireSpeechGroup(
+                label: "You",
+                text: job.title,
+                emphasized: false
+            )
+
+            if let response {
+                AgentHomeWireSpeechGroup(
+                    label: "Talkie",
+                    text: response,
+                    emphasized: true
+                )
+            } else if job.status.isActive {
+                HStack(spacing: 9) {
+                    ProgressView()
+                        .progressViewStyle(.linear)
+                        .tint(AgentHomeCommandPalette.wireSignal)
+                        .frame(maxWidth: 150)
+
+                    Text(job.status == .waiting ? "WAKING" : "WORKING")
+                        .font(OpsType.mono(8, weight: .semibold))
+                        .tracking(1.0)
+                        .foregroundStyle(AgentHomeCommandPalette.wireMuted)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(AgentHomeCommandPalette.wireSignalSoft)
+                )
+            } else if let error = job.error?.agentHomeTrimmed, !error.isEmpty {
+                Text(error)
+                    .font(OpsType.ui(12))
+                    .foregroundStyle(Color.red.opacity(0.78))
+                    .lineLimit(2)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color.red.opacity(0.055))
+                    )
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(AgentHomeCommandPalette.wireCard)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(AgentHomeCommandPalette.wireEdge.opacity(0.58), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.035), radius: 2, y: 1)
+    }
+
+    private var statusTint: Color {
+        switch job.status {
+        case .waiting, .running: return AgentHomeCommandPalette.wireSignal
+        case .done: return Color.green.opacity(0.78)
+        case .failed: return Color.red.opacity(0.78)
+        }
+    }
+}
+
+private struct AgentHomeWireSpeechGroup: View {
+    let label: String
+    let text: String
+    let emphasized: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 6) {
+                if emphasized {
+                    Circle()
+                        .fill(AgentHomeCommandPalette.wireSignal)
+                        .frame(width: 4, height: 4)
+                }
+
+                Text(label.uppercased())
+                    .font(OpsType.mono(8, weight: .semibold))
+                    .tracking(1.1)
+                    .foregroundStyle(
+                        emphasized
+                            ? AgentHomeCommandPalette.wireSignal
+                            : AgentHomeCommandPalette.wireMuted
+                    )
+            }
+
+            Text(text)
+                .font(.system(size: 13, weight: emphasized ? .regular : .medium))
+                .foregroundStyle(AgentHomeCommandPalette.wireText.opacity(emphasized ? 0.84 : 1))
+                .lineSpacing(3)
+                .lineLimit(emphasized ? 4 : 3)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+        }
+        .padding(.horizontal, emphasized ? 12 : 0)
+        .padding(.vertical, emphasized ? 10 : 0)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            if emphasized {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(AgentHomeCommandPalette.wireSignalSoft)
+            }
+        }
+    }
+}
+
+private struct AgentHomeCommandSectionHeader: View {
+    let title: String
+    var detail: String? = nil
+    var trailingLabel: String? = nil
+    var tint: Color = AgentHomeCommandPalette.signal
+    var onTrailing: (() -> Void)? = nil
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Rectangle()
+                .fill(tint)
+                .frame(width: 5, height: 5)
+
+            Text(title.uppercased())
+                .font(OpsType.mono(10, weight: .semibold))
+                .tracking(1.8)
+                .foregroundStyle(AgentHomeCommandPalette.ink)
+
+            if let detail {
+                Text(detail.uppercased())
+                    .font(OpsType.mono(9, weight: .medium))
+                    .tracking(1.1)
+                    .foregroundStyle(AgentHomeCommandPalette.faint)
+            }
+
+            Rectangle()
+                .fill(AgentHomeCommandPalette.hairline.opacity(0.72))
+                .frame(height: 1)
+
+            if let trailingLabel, let onTrailing {
+                Button(action: onTrailing) {
+                    HStack(spacing: 5) {
+                        Text(trailingLabel.uppercased())
+                        Image(systemName: "arrow.right")
+                    }
+                    .font(OpsType.mono(8, weight: .semibold))
+                    .tracking(1.0)
+                    .foregroundStyle(tint)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(height: 18)
+    }
+}
+
+private struct AgentHomeCommandEmptyBand: View {
+    let icon: String
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack(spacing: 13) {
+            Image(systemName: icon)
+                .font(OpsType.ui(14, weight: .medium))
+                .foregroundStyle(AgentHomeCommandPalette.signal)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(OpsType.ui(13, weight: .semibold))
+                    .foregroundStyle(AgentHomeCommandPalette.ink)
+                Text(detail)
+                    .font(OpsType.ui(11))
+                    .foregroundStyle(AgentHomeCommandPalette.muted)
+            }
+        }
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+        .background(AgentHomeCommandPalette.card)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(AgentHomeCommandPalette.hairline.opacity(0.64), lineWidth: 1)
+        )
+    }
+}
+
+private struct AgentHomeNeedsPermissionRow: View {
+    let permission: PermissionType
+    let status: PermissionStatus
+    let onOpen: () -> Void
+
+    var body: some View {
+        HStack(spacing: 13) {
+            Image(systemName: permission.icon)
+                .font(OpsType.ui(14, weight: .medium))
+                .foregroundStyle(AgentHomeCommandPalette.signal)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("\(permission.title) needs access")
+                    .font(OpsType.ui(13, weight: .semibold))
+                    .foregroundStyle(AgentHomeCommandPalette.ink)
+
+                Text("\(status.label.uppercased()) · \(permission.shortDescription.uppercased())")
+                    .font(OpsType.mono(8, weight: .medium))
+                    .tracking(0.9)
+                    .foregroundStyle(AgentHomeCommandPalette.faint)
+            }
+
+            Spacer(minLength: 12)
+
+            AgentHomeCommandActionButton("Open permissions", action: onOpen)
+        }
+        .padding(.horizontal, 16)
+        .frame(minHeight: 64)
+        .background(AgentHomeCommandPalette.card)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(AgentHomeCommandPalette.hairline.opacity(0.64), lineWidth: 1)
+        )
+    }
+}
+
+private struct AgentHomeNeedsJobRow: View {
+    let job: AgentHomeExecutorJob
+    let onOpen: () -> Void
+
+    var body: some View {
+        HStack(spacing: 13) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(OpsType.ui(14, weight: .medium))
+                .foregroundStyle(Color.red.opacity(0.72))
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(job.title)
+                    .font(OpsType.ui(13, weight: .semibold))
+                    .foregroundStyle(AgentHomeCommandPalette.ink)
+                    .lineLimit(1)
+                Text((job.error ?? "The agent could not finish this request.").uppercased())
+                    .font(OpsType.mono(8, weight: .medium))
+                    .tracking(0.8)
+                    .foregroundStyle(AgentHomeCommandPalette.faint)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 12)
+            AgentHomeCommandActionButton("Review", action: onOpen)
+        }
+        .padding(.horizontal, 16)
+        .frame(minHeight: 64)
+        .background(AgentHomeCommandPalette.card)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(AgentHomeCommandPalette.hairline.opacity(0.64), lineWidth: 1)
+        )
+    }
+}
+
+private struct AgentHomeReadyCard: View {
+    let job: AgentHomeExecutorJob
+    let onOpen: () -> Void
+
+    private var preview: String {
+        if let summary = job.spokenSummary?.agentHomeTrimmed, !summary.isEmpty {
+            return summary
+        }
+        if let output = job.output?.agentHomeTrimmed, !output.isEmpty {
+            return output
+        }
+        return "Finished."
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            AgentHomeReadyCardGraphic(seed: job.id.hashValue)
+                .frame(height: 78)
+                .padding(.horizontal, 14)
+                .padding(.top, 12)
+
+            Rectangle()
+                .fill(AgentHomeCommandPalette.hairline.opacity(0.55))
+                .frame(height: 1)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(job.title)
+                    .font(OpsType.ui(13, weight: .semibold))
+                    .foregroundStyle(AgentHomeCommandPalette.ink)
+                    .lineLimit(1)
+
+                Text(preview)
+                    .font(OpsType.ui(11))
+                    .foregroundStyle(AgentHomeCommandPalette.muted)
+                    .lineLimit(2)
+
+                HStack(spacing: 5) {
+                    Text("DONE")
+                    Text("·")
+                    Text(AgentHomeRelative.shortLabel(for: job.updatedDate).uppercased())
+                    Spacer(minLength: 0)
+                    Button("OPEN", action: onOpen)
+                        .buttonStyle(.plain)
+                        .foregroundStyle(AgentHomeCommandPalette.ink)
+                }
+                .font(OpsType.mono(8, weight: .semibold))
+                .tracking(0.9)
+                .foregroundStyle(AgentHomeCommandPalette.faint)
+            }
+            .padding(14)
+        }
+        .frame(maxWidth: .infinity, minHeight: 170, alignment: .topLeading)
+        .background(AgentHomeCommandPalette.card)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(AgentHomeCommandPalette.hairline.opacity(0.68), lineWidth: 1)
+        )
+    }
+}
+
+private struct AgentHomeReadyCardGraphic: View {
+    let seed: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            ForEach(0..<4, id: \.self) { index in
+                HStack(spacing: 8) {
+                    if seed.isMultiple(of: 2) {
+                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                            .fill(index < 2 ? AgentHomeCommandPalette.signal : AgentHomeCommandPalette.hairline)
+                            .frame(width: 9, height: 9)
+                    }
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(index == 2 ? AgentHomeCommandPalette.signalSoft : AgentHomeCommandPalette.hairline.opacity(0.64))
+                        .frame(width: graphicWidth(for: index), height: 6)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+    }
+
+    private func graphicWidth(for index: Int) -> CGFloat {
+        switch abs(seed + index) % 4 {
+        case 0: return 112
+        case 1: return 152
+        case 2: return 92
+        default: return 132
+        }
+    }
+}
+
+private struct AgentHomeCommandDictationRow: View {
+    let item: TalkieObject
+    let onPreview: () -> Void
+
+    private var sourceLabel: String {
+        let appName = item.appContext?.name?.agentHomeTrimmed ?? ""
+        return appName.isEmpty ? item.source.displayName : appName
+    }
+
+    var body: some View {
+        Button(action: onPreview) {
+            HStack(spacing: 12) {
+                Image(systemName: "waveform")
+                    .font(OpsType.ui(13, weight: .semibold))
+                    .foregroundStyle(AgentHomeCommandPalette.signal)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(AgentHomeCommandPalette.signal.opacity(0.10))
+                    )
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.agentHomeDisplayTitle)
+                        .font(OpsType.ui(13, weight: .regular))
+                        .foregroundStyle(AgentHomeCommandPalette.ink)
+                        .lineLimit(1)
+
+                    HStack(spacing: 5) {
+                        Text(sourceLabel.uppercased())
+                        Text("·")
+                        Text(AgentHomeRelative.shortLabel(for: item.createdAt).uppercased())
+                        if item.duration > 0 {
+                            Text("·")
+                            Text(Self.formatDuration(item.duration))
+                        }
+                    }
+                    .font(OpsType.mono(8, weight: .medium))
+                    .tracking(0.8)
+                    .foregroundStyle(AgentHomeCommandPalette.faint)
+                }
+
+                Spacer(minLength: 12)
+
+                Text("PREVIEW")
+                    .font(OpsType.mono(8, weight: .semibold))
+                    .tracking(0.9)
+                    .foregroundStyle(AgentHomeCommandPalette.signal)
+
+                Image(systemName: "chevron.right")
+                    .font(OpsType.ui(9, weight: .semibold))
+                    .foregroundStyle(AgentHomeCommandPalette.faint)
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 58)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private static func formatDuration(_ seconds: Double) -> String {
+        let total = max(0, Int(seconds.rounded()))
+        let minutes = total / 60
+        let remainingSeconds = total % 60
+        let paddedSeconds = remainingSeconds < 10 ? "0\(remainingSeconds)" : "\(remainingSeconds)"
+        return "\(minutes):\(paddedSeconds)"
+    }
+}
+
+private struct AgentHomeCommandCaptureCard: View {
+    let item: TalkieObject
+    let onOpen: () -> Void
+
+    private var media: CaptureMediaAsset? {
+        if let clip = item.clips.first,
+           let url = CaptureMediaFileResolver.clipURL(filename: clip.filename) {
+            return .video(url)
+        }
+        if let context = item.visualContexts.first,
+           let url = CaptureMediaFileResolver.visualContextSourceURL(for: context) {
+            return .video(url)
+        }
+        return CaptureMediaFileResolver.primaryMedia(for: item)
+    }
+
+    private var sourceLabel: String {
+        let appName = item.appContext?.name?.agentHomeTrimmed ?? ""
+        return appName.isEmpty ? item.source.displayName : appName
+    }
+
+    private var captureDurationLabel: String? {
+        guard media?.isVideo == true else { return nil }
+
+        if let durationMs = item.clips.first?.durationMs, durationMs > 0 {
+            return Self.formatCaptureDuration(Double(durationMs) / 1_000)
+        }
+        if let durationMs = item.visualContexts.first?.durationMs, durationMs > 0 {
+            return Self.formatCaptureDuration(Double(durationMs) / 1_000)
+        }
+        if item.duration > 0 {
+            return Self.formatCaptureDuration(item.duration)
+        }
+        return nil
+    }
+
+    var body: some View {
+        Button(action: onOpen) {
+            VStack(alignment: .leading, spacing: 0) {
+                AgentHomeMediaPreview(
+                    media: media,
+                    maxPixelSize: 520,
+                    style: .captureCard(durationLabel: captureDurationLabel)
+                )
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 118)
+                    .clipShape(.rect(topLeadingRadius: 10, topTrailingRadius: 10))
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(item.agentHomeDisplayTitle)
+                        .font(ScopeType.display(size: 17, weight: .regular))
+                        .foregroundStyle(AgentHomeCommandPalette.ink)
+                        .lineLimit(1)
+
+                    HStack(spacing: 5) {
+                        Text(sourceLabel.uppercased())
+                        Text("·")
+                        Text(AgentHomeRelative.shortLabel(for: item.createdAt).uppercased())
+                    }
+                    .font(OpsType.mono(8, weight: .medium))
+                    .tracking(0.8)
+                    .foregroundStyle(AgentHomeCommandPalette.faint)
+                }
+                .padding(14)
+            }
+            .background(AgentHomeCommandPalette.card)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(AgentHomeCommandPalette.hairline.opacity(0.68), lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private static func formatCaptureDuration(_ seconds: Double) -> String {
+        let total = max(0, Int(seconds.rounded()))
+        if total >= 3_600 {
+            let hours = total / 3_600
+            let minutes = (total % 3_600) / 60
+            let paddedMinutes = minutes < 10 ? "0\(minutes)" : "\(minutes)"
+            return "\(hours)h\(paddedMinutes)m"
+        }
+        if total >= 60 {
+            return "\(total / 60)m"
+        }
+
+        let paddedSeconds = total < 10 ? "0\(total)" : "\(total)"
+        return "0:\(paddedSeconds)"
+    }
+}
+
+private struct AgentHomeCommandActionButton: View {
+    let label: String
+    let action: () -> Void
+
+    init(_ label: String, action: @escaping () -> Void) {
+        self.label = label
+        self.action = action
+    }
+
+    var body: some View {
+        Button(label, action: action)
+            .buttonStyle(.plain)
+            .font(OpsType.ui(11, weight: .semibold))
+            .foregroundStyle(AgentHomeCommandPalette.ink)
+            .padding(.horizontal, 13)
+            .frame(height: 32)
+            .background(Color.white.opacity(0.62))
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(AgentHomeCommandPalette.hairline.opacity(0.82), lineWidth: 1)
+            )
+    }
+}
+
+private struct AgentHomeCommandFooterButton: View {
+    let label: String
+    let icon: String
+    let prominent: Bool
+    let iconOnly: Bool
+    let action: () -> Void
+
+    init(
+        _ label: String,
+        icon: String,
+        prominent: Bool = false,
+        iconOnly: Bool = false,
+        action: @escaping () -> Void
+    ) {
+        self.label = label
+        self.icon = icon
+        self.prominent = prominent
+        self.iconOnly = iconOnly
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                Image(systemName: icon)
+                    .font(OpsType.ui(11, weight: .medium))
+                if !iconOnly {
+                    Text(label)
+                        .font(OpsType.ui(11, weight: .medium))
+                }
+            }
+            .foregroundStyle(prominent ? Color.white : AgentHomeCommandPalette.ink)
+            .padding(.horizontal, iconOnly ? 9 : 12)
+            .frame(height: 34)
+            .background(prominent ? AgentHomeCommandPalette.ink : AgentHomeCommandPalette.card)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(prominent ? .clear : AgentHomeCommandPalette.hairline.opacity(0.75), lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(iconOnly ? label : "")
+    }
+}
+
 private struct AgentHomeCapturePage: View {
     @ObservedObject var settings: LiveSettings
     @ObservedObject var permissionManager: PermissionManager
@@ -940,7 +2155,7 @@ private struct AgentHomeCapturePage: View {
                         value: "\(traySnapshot.totalCount)",
                         detail: "Agent drains eligible assets",
                         icon: "tray.full",
-                        tint: traySnapshot.totalCount > 0 ? OpsTint.amber.color : OpsInk.muted
+                        tint: traySnapshot.totalCount > 0 ? AgentTheme.accent : OpsInk.muted
                     )
                 }
 
@@ -990,7 +2205,7 @@ private struct AgentHomeTrayPage: View {
             VStack(alignment: .leading, spacing: OpsSpacing.xxxl) {
                 LazyVGrid(columns: AgentHomeGrid.columns, alignment: .leading, spacing: OpsSpacing.xl) {
                     AgentHomeMetricCard(title: "Screenshots", value: "\(traySnapshot.screenshotCount)", detail: "\(traySnapshot.pinnedScreenshotCount) pinned", icon: "photo.on.rectangle", tint: OpsInk.statusInfo)
-                    AgentHomeMetricCard(title: "Clips", value: "\(traySnapshot.clipCount)", detail: "\(traySnapshot.pinnedClipCount) pinned", icon: "film.stack", tint: OpsTint.amber.color)
+                    AgentHomeMetricCard(title: "Clips", value: "\(traySnapshot.clipCount)", detail: "\(traySnapshot.pinnedClipCount) pinned", icon: "film.stack", tint: AgentTheme.accent)
                     AgentHomeMetricCard(title: "Latest live asset", value: traySnapshot.latestLabel, detail: "Manifest snapshot", icon: "clock.arrow.circlepath", tint: OpsInk.muted)
                     AgentHomeMetricCard(title: "Durable library", value: "\(libraryCount)", detail: "\(storageSize) local audio", icon: "books.vertical", tint: OpsInk.statusOk)
                 }
@@ -1034,7 +2249,7 @@ private struct AgentHomeDictationPage: View {
             VStack(alignment: .leading, spacing: OpsSpacing.xxxl) {
                 LazyVGrid(columns: AgentHomeGrid.columns, alignment: .leading, spacing: OpsSpacing.xl) {
                     AgentHomeMetricCard(title: "Microphone", value: microphoneLabel, detail: microphoneModeLabel, icon: "mic.fill", tint: OpsInk.statusInfo)
-                    AgentHomeMetricCard(title: "Model", value: settings.selectedModelId, detail: "Talkie transcription stack", icon: "waveform.badge.magnifyingglass", tint: OpsTint.amber.color)
+                    AgentHomeMetricCard(title: "Model", value: settings.selectedModelId, detail: "Talkie transcription stack", icon: "waveform.badge.magnifyingglass", tint: AgentTheme.accent)
                     AgentHomeMetricCard(title: "Routing", value: settings.routingMode.displayName, detail: settings.pressEnterAfterPaste ? "Press Enter after paste" : "No auto-submit", icon: "arrow.right.doc.on.clipboard", tint: OpsInk.statusOk)
                     AgentHomeMetricCard(title: "History", value: "\(dictationCount)", detail: "\(storageSize) local audio", icon: "clock.arrow.circlepath", tint: OpsInk.muted)
                 }
@@ -1115,7 +2330,7 @@ private struct AgentHomeOverlaysPage: View {
         AgentHomePageScaffold(title: "Overlays", subtitle: "Live visual feedback owned by Agent at runtime.") {
             VStack(alignment: .leading, spacing: OpsSpacing.xxxl) {
                 LazyVGrid(columns: AgentHomeGrid.columns, alignment: .leading, spacing: OpsSpacing.xl) {
-                    AgentHomeMetricCard(title: "Top overlay", value: settings.effectiveOverlayStyle.displayName, detail: settings.overlayPosition.displayName, icon: "rectangle.inset.topright.filled", tint: OpsTint.amber.color)
+                    AgentHomeMetricCard(title: "Top overlay", value: settings.effectiveOverlayStyle.displayName, detail: settings.overlayPosition.displayName, icon: "rectangle.inset.topright.filled", tint: AgentTheme.accent)
                     AgentHomeMetricCard(title: "Pill", value: settings.pillEnabled ? "Enabled" : "Disabled", detail: settings.pillPosition.displayName, icon: "capsule.portrait", tint: settings.pillEnabled ? OpsInk.statusOk : OpsInk.dim)
                     AgentHomeMetricCard(title: "All screens", value: settings.pillShowOnAllScreens ? "Yes" : "No", detail: "Floating pill", icon: "display.2", tint: OpsInk.statusInfo)
                 }
@@ -1158,7 +2373,7 @@ private struct AgentHomeServerPage: View {
                     AgentHomeMetricCard(title: "Bridge", value: serverStatus.processState.rawValue, detail: serverStatus.lastHealthCheckOk ? "Healthy" : "Health pending", icon: "server.rack", tint: serverTint)
                     AgentHomeMetricCard(title: "PID", value: serverStatus.pid.map(String.init) ?? "—", detail: uptimeLabel, icon: "number", tint: OpsInk.muted)
                     AgentHomeMetricCard(title: "Runtime", value: runtimePing?.runtimeName ?? "Offline", detail: runtimePing?.runtimeId ?? "No ping", icon: "cpu", tint: runtimePing == nil ? OpsInk.statusError : OpsInk.statusOk)
-                    AgentHomeMetricCard(title: "Jobs", value: "\(jobs.count)", detail: "\(jobs.filter { $0.status == .running || $0.status == .waiting }.count) active", icon: "list.bullet.rectangle", tint: OpsTint.amber.color)
+                    AgentHomeMetricCard(title: "Jobs", value: "\(jobs.count)", detail: "\(jobs.filter { $0.status == .running || $0.status == .waiting }.count) active", icon: "list.bullet.rectangle", tint: AgentTheme.accent)
                 }
 
                 OpsCard {
@@ -1745,11 +2960,11 @@ private struct AgentHomeEditorialHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: OpsSpacing.sm) {
             HStack(spacing: OpsSpacing.sm) {
-                OpsStatusDot(color: OpsTint.amber.color, size: OpsDot.tiny)
+                OpsStatusDot(color: AgentTheme.accent, size: OpsDot.tiny)
                 Text(eyebrow.uppercased())
                     .font(OpsType.mono(OpsSize.micro, weight: .bold))
                     .tracking(2.0)
-                    .foregroundStyle(OpsTint.amber.color)
+                    .foregroundStyle(AgentTheme.accent)
             }
 
             Text(title)
@@ -1980,7 +3195,7 @@ private enum AgentBayPalette {
     static let bg     = opsAdaptive(light: c(243, 239, 226), dark: c(31, 29, 24))
     static let strip  = opsAdaptive(light: c(237, 232, 214), dark: c(38, 35, 28))
     static let edge   = opsAdaptive(light: c(226, 218, 198), dark: c(58, 53, 42))
-    static let accent = opsAdaptive(light: c(154, 106, 34),  dark: c(201, 150, 74)) // brass
+    static let accent = opsAdaptive(light: c(154, 106, 34), dark: c(201, 150, 74)) // brass
     static let ink      = OpsInk.ink
     static let inkFaint = OpsInk.muted
     static let inkSubtle = OpsInk.dim
@@ -2082,11 +3297,11 @@ private struct AgentHomeSectionHeader: View {
         HStack(alignment: .top, spacing: OpsSpacing.md) {
             Image(systemName: icon)
                 .font(OpsType.ui(OpsSize.base, weight: .semibold))
-                .foregroundStyle(OpsTint.amber.color)
+                .foregroundStyle(AgentTheme.accent)
                 .frame(width: 22, height: 22)
                 .background(
                     RoundedRectangle(cornerRadius: OpsRadius.standard, style: .continuous)
-                        .fill(OpsSurface.tintFill(OpsTint.amber.color))
+                        .fill(OpsSurface.tintFill(AgentTheme.accent))
                 )
 
             VStack(alignment: .leading, spacing: 2) {
@@ -2150,7 +3365,7 @@ private struct AgentHomeRouteButton: View {
             HStack(spacing: OpsSpacing.md) {
                 Image(systemName: section.icon)
                     .font(OpsType.ui(OpsSize.base, weight: .semibold))
-                    .foregroundStyle(OpsTint.amber.color)
+                    .foregroundStyle(AgentTheme.accent)
                     .frame(width: 22)
 
                 VStack(alignment: .leading, spacing: 1) {
@@ -2245,23 +3460,23 @@ private struct AgentHomeLibrarySlideSheet<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     private var usesBottomSheet: Bool {
-        availableSize.width < 620
+        availableSize.width < 560
     }
 
     private var panelWidth: CGFloat {
-        let maxAvailable = max(320, availableSize.width - 32)
-        return min(560, min(maxAvailable, max(360, availableSize.width * 0.84)))
+        let inset: CGFloat = usesBottomSheet ? 12 : 36
+        return max(0, min(1_040, availableSize.width - inset))
     }
 
     private var panelHeight: CGFloat {
-        let maxAvailable = max(320, availableSize.height - 24)
-        return min(maxAvailable, max(360, availableSize.height * 0.84))
+        let inset: CGFloat = usesBottomSheet ? 10 : 32
+        return max(0, min(820, availableSize.height - inset))
     }
 
     var body: some View {
         ZStack {
             Button(action: onDismiss) {
-                Color.black.opacity(0.16)
+                Color.black.opacity(0.24)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -2271,14 +3486,11 @@ private struct AgentHomeLibrarySlideSheet<Content: View>: View {
                 VStack(spacing: 0) {
                     Spacer(minLength: 0)
                     panel
-                        .frame(height: panelHeight)
+                        .frame(width: panelWidth, height: panelHeight)
                 }
             } else {
-                HStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    panel
-                        .frame(width: panelWidth)
-                }
+                panel
+                    .frame(width: panelWidth, height: panelHeight)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -2288,29 +3500,20 @@ private struct AgentHomeLibrarySlideSheet<Content: View>: View {
     private var panel: some View {
         content()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(OpsInk.bg)
-            .clipShape(RoundedRectangle(cornerRadius: usesBottomSheet ? OpsRadius.card : 0, style: .continuous))
-            .overlay(edgeRule, alignment: usesBottomSheet ? .top : .leading)
+            .background(OpsInk.bg.opacity(0.94))
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(OpsHairline.standard, lineWidth: OpsStroke.thin)
+            )
             .overlay(closeButton, alignment: .topTrailing)
             .shadow(
-                color: Color.black.opacity(usesBottomSheet ? 0.22 : 0.18),
-                radius: usesBottomSheet ? 18 : 24,
-                x: usesBottomSheet ? 0 : -8,
-                y: usesBottomSheet ? -8 : 0
+                color: Color.black.opacity(0.24),
+                radius: 26,
+                x: 0,
+                y: 10
             )
-    }
-
-    @ViewBuilder
-    private var edgeRule: some View {
-        if usesBottomSheet {
-            Rectangle()
-                .fill(OpsHairline.standard)
-                .frame(height: 1)
-        } else {
-            Rectangle()
-                .fill(OpsHairline.standard)
-                .frame(width: 1)
-        }
     }
 
     private var closeButton: some View {
@@ -2330,7 +3533,7 @@ private struct AgentHomeLibrarySlideSheet<Content: View>: View {
         }
         .buttonStyle(.plain)
         .help("Close preview")
-        .padding(OpsSpacing.xl)
+        .padding(OpsSpacing.lg)
     }
 }
 
@@ -2340,71 +3543,135 @@ private struct AgentHomeLibraryDetailPane: View {
 
     @State private var copiedItemID: UUID?
 
+    private static let metadataRailThreshold: CGFloat = 660
+
     var body: some View {
         GeometryReader { proxy in
-            let contentWidth = max(0, proxy.size.width - OpsSpacing.xxl * 2)
+            if let item {
+                let usesMetadataRail = proxy.size.width >= Self.metadataRailThreshold
 
-            VStack(alignment: .leading, spacing: 0) {
-                if let item {
+                if usesMetadataRail {
+                    let railWidth = metadataRailWidth(for: proxy.size.width)
+
+                    HStack(spacing: 0) {
+                        previewStage(for: item)
+                            .frame(
+                                width: max(0, proxy.size.width - railWidth - 1),
+                                height: proxy.size.height
+                            )
+
+                        Rectangle()
+                            .fill(OpsHairline.standard)
+                            .frame(width: 1)
+
+                        ScrollView {
+                            metadataRail(for: item)
+                                .padding(OpsSpacing.xxxl)
+                                .frame(maxWidth: .infinity, alignment: .topLeading)
+                        }
+                        .frame(width: railWidth)
+                        .frame(maxHeight: .infinity)
+                        .background(OpsInk.surface.opacity(0.74))
+                    }
+                    .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+                } else {
                     ScrollView {
-                        detailContent(for: item, availableWidth: contentWidth)
-                            .frame(width: contentWidth, alignment: .topLeading)
-                            .padding(OpsSpacing.xxl)
-                            .frame(width: proxy.size.width, alignment: .topLeading)
+                        VStack(alignment: .leading, spacing: 0) {
+                            previewStage(for: item)
+                                .frame(
+                                    width: proxy.size.width,
+                                    height: stackedPreviewHeight(for: item, in: proxy.size)
+                                )
+
+                            Rectangle()
+                                .fill(OpsHairline.standard)
+                                .frame(height: 1)
+
+                            metadataRail(for: item)
+                                .padding(OpsSpacing.xxxl)
+                                .frame(maxWidth: .infinity, alignment: .topLeading)
+                                .background(OpsInk.surface.opacity(0.74))
+                        }
+                        .frame(width: proxy.size.width, alignment: .topLeading)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .clipped()
-                    .background(OpsInk.bg)
-                } else {
-                    AgentHomeEmptyInset(
-                        title: "Select a library item",
-                        detail: "Recordings and captures show a compact read-only summary here."
-                    )
-                    .padding(OpsSpacing.xxl)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
+            } else {
+                AgentHomeEmptyInset(
+                    title: "Select a library item",
+                    detail: "Recordings and captures show a compact read-only summary here."
+                )
+                .padding(OpsSpacing.xxl)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(OpsInk.bg)
         }
+        .background(OpsInk.bg)
+    }
+
+    private func metadataRailWidth(for availableWidth: CGFloat) -> CGFloat {
+        min(286, max(228, availableWidth * 0.32))
+    }
+
+    private func stackedPreviewHeight(for item: TalkieObject, in size: CGSize) -> CGFloat {
+        if previewMedia(for: item) != nil {
+            return min(430, max(250, size.width * 0.62))
+        }
+        return min(380, max(270, size.height * 0.46))
     }
 
     @ViewBuilder
-    private func detailContent(for item: TalkieObject, availableWidth: CGFloat) -> some View {
-        let usesVisualReadout = item.agentHomeHasVisualPreview
-        let mediaHeight = if usesVisualReadout {
-            min(430, max(280, availableWidth * 0.52))
+    private func previewStage(for item: TalkieObject) -> some View {
+        if let media = previewMedia(for: item) {
+            AgentHomeMediaPreview(
+                media: media,
+                maxPixelSize: 1_100,
+                style: .libraryStage
+            )
         } else {
-            min(300, max(200, availableWidth * 0.34))
-        }
-
-        if usesVisualReadout {
-            VStack(alignment: .leading, spacing: OpsSpacing.xxl) {
-                header(for: item)
-
-                mediaPreview(for: item, height: mediaHeight)
-
-                metadataGrid(for: item)
-
-                if item.agentHomeTextPreview != nil {
-                    textPreview(for: item)
-                }
-            }
-        } else {
-            VStack(alignment: .leading, spacing: OpsSpacing.xxl) {
-                header(for: item)
-                if item.agentHomeHasVisualPreview {
-                    mediaPreview(for: item, height: mediaHeight)
-                }
-                facts(for: item)
-                media(for: item)
-                textPreview(for: item)
-            }
+            textStage(for: item)
         }
     }
 
-    private func header(for item: TalkieObject) -> some View {
-        VStack(alignment: .leading, spacing: OpsSpacing.lg) {
+    private func textStage(for item: TalkieObject) -> some View {
+        ZStack(alignment: .topLeading) {
+            OpsInk.surface
+
+            VStack(alignment: .leading, spacing: OpsSpacing.xxl) {
+                HStack(spacing: OpsSpacing.md) {
+                    Image(systemName: item.type == .dictation ? "waveform" : item.type.icon)
+                        .font(OpsType.ui(OpsSize.md, weight: .semibold))
+                        .foregroundStyle(tint(for: item.type))
+
+                    Text(item.type == .dictation ? "DICTATION PREVIEW" : "CONTENT PREVIEW")
+                        .font(OpsType.mono(OpsSize.micro, weight: .bold))
+                        .tracking(1.3)
+                        .foregroundStyle(OpsInk.dim)
+                }
+
+                Rectangle()
+                    .fill(OpsHairline.standard)
+                    .frame(height: 1)
+
+                ScrollView {
+                    Text(item.agentHomeCopyableText ?? item.agentHomeDisplayTitle)
+                        .font(OpsType.ui(OpsSize.lg))
+                        .foregroundStyle(OpsInk.ink)
+                        .lineSpacing(5)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+            }
+            .padding(OpsSpacing.huge)
+        }
+        .overlay {
+            Rectangle()
+                .stroke(OpsHairline.subtle, lineWidth: OpsStroke.thin)
+        }
+    }
+
+    private func metadataRail(for item: TalkieObject) -> some View {
+        VStack(alignment: .leading, spacing: OpsSpacing.xxxl) {
             HStack(alignment: .center, spacing: OpsSpacing.md) {
                 Image(systemName: item.type.icon)
                     .font(OpsType.ui(OpsSize.lg, weight: .semibold))
@@ -2427,40 +3694,47 @@ private struct AgentHomeLibraryDetailPane: View {
                 }
 
                 Spacer(minLength: 0)
+
+                Color.clear
+                    .frame(width: 26, height: 1)
             }
 
             Text(item.agentHomeDisplayTitle)
                 .font(OpsType.ui(OpsSize.xl, weight: .semibold))
                 .foregroundStyle(OpsInk.ink)
-                .lineLimit(3)
 
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: OpsSpacing.md) {
-                    actions(for: item)
+            VStack(alignment: .leading, spacing: OpsSpacing.md) {
+                OpsButton("Open in Talkie", icon: "arrow.up.forward.app", style: .secondary) {
+                    onOpenInTalkie(item)
                 }
 
+                if item.agentHomeCopyableText != nil {
+                    OpsButton(
+                        copiedItemID == item.id ? "Copied" : "Copy Text",
+                        icon: copiedItemID == item.id ? "checkmark" : "doc.on.doc",
+                        style: .ghost
+                    ) {
+                        copyText(for: item)
+                    }
+                }
+            }
+
+            metadata(for: item)
+
+            if previewMedia(for: item) != nil,
+               let preview = item.agentHomeTextPreview {
                 VStack(alignment: .leading, spacing: OpsSpacing.md) {
-                    actions(for: item)
+                    OpsSectionLabel("Preview")
+                    Text(preview)
+                        .font(OpsType.ui(OpsSize.sm))
+                        .foregroundStyle(OpsInk.muted)
+                        .lineSpacing(4)
+                        .lineLimit(10)
+                        .textSelection(.enabled)
                 }
             }
         }
-    }
-
-    @ViewBuilder
-    private func actions(for item: TalkieObject) -> some View {
-        OpsButton("Open in Talkie", icon: "arrow.up.forward.app", style: .secondary) {
-            onOpenInTalkie(item)
-        }
-
-        if item.agentHomeCopyableText != nil {
-            OpsButton(
-                copiedItemID == item.id ? "Copied" : "Copy Text",
-                icon: copiedItemID == item.id ? "checkmark" : "doc.on.doc",
-                style: .ghost
-            ) {
-                copyText(for: item)
-            }
-        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     private func copyText(for item: TalkieObject) {
@@ -2477,77 +3751,52 @@ private struct AgentHomeLibraryDetailPane: View {
         }
     }
 
-    @ViewBuilder
-    private func mediaPreview(for item: TalkieObject, height: CGFloat = 220) -> some View {
-        if item.agentHomeHasVisualPreview {
-            AgentHomeMediaPreview(media: CaptureMediaFileResolver.primaryMedia(for: item), maxPixelSize: 760)
-                .frame(height: height)
+    private func previewMedia(for item: TalkieObject) -> CaptureMediaAsset? {
+        if let clip = item.clips.first,
+           let url = CaptureMediaFileResolver.clipURL(filename: clip.filename) {
+            return .video(url)
         }
+        if let context = item.visualContexts.first,
+           let url = CaptureMediaFileResolver.visualContextSourceURL(for: context) {
+            return .video(url)
+        }
+        return CaptureMediaFileResolver.primaryMedia(for: item)
     }
 
-    private func metadataGrid(for item: TalkieObject) -> some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .top, spacing: OpsSpacing.xl) {
-                facts(for: item)
-                    .frame(maxWidth: .infinity)
-                media(for: item)
-                    .frame(maxWidth: .infinity)
-            }
+    private func metadata(for item: TalkieObject) -> some View {
+        let appName = item.appContext?.name?.agentHomeTrimmed ?? ""
+        let source = appName.isEmpty ? item.source.displayName : appName
 
-            VStack(alignment: .leading, spacing: OpsSpacing.xl) {
-                facts(for: item)
-                media(for: item)
-            }
-        }
-    }
-
-    private func facts(for item: TalkieObject) -> some View {
-        AgentHomeKeyValueStack {
-            OpsKVRow("Source", value: item.source.displayName)
-            OpsKVRow("Created", value: item.createdAt.formatted(date: .abbreviated, time: .shortened))
-            OpsKVRow("Duration", value: item.duration > 0 ? Self.formatDuration(item.duration) : "-")
-            OpsKVRow("Words", value: item.wordCount > 0 ? "\(item.wordCount)" : "-")
-            OpsKVRow("Status", value: item.transcriptionStatus.displayName)
-        }
-    }
-
-    @ViewBuilder
-    private func media(for item: TalkieObject) -> some View {
-        if item.hasAudio || !item.screenshots.isEmpty || !item.clips.isEmpty || !item.attachments.isEmpty {
-            AgentHomeKeyValueStack {
-                OpsKVRow("Audio", value: item.hasAudio ? "Available" : "-")
-                OpsKVRow("Screenshots", value: "\(item.screenshots.count)")
-                OpsKVRow("Clips", value: "\(item.clips.count)")
-                OpsKVRow("Attachments", value: "\(item.attachments.count)")
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func textPreview(for item: TalkieObject) -> some View {
-        if let preview = item.agentHomeTextPreview {
-            VStack(alignment: .leading, spacing: OpsSpacing.md) {
-                OpsSectionLabel("Preview")
-                Text(preview)
-                    .font(OpsType.ui(OpsSize.sm))
-                    .foregroundStyle(OpsInk.muted)
-                    .lineSpacing(4)
-                    .textSelection(.enabled)
-            }
-        } else {
-            AgentHomeEmptyInset(
-                title: "No text preview",
-                detail: "Open the item in Talkie for the full detail surface, media, and editing actions."
+        return AgentHomeKeyValueStack {
+            OpsKVRow("Source", value: source, valueLineLimit: nil)
+            OpsKVRow(
+                "Created",
+                value: item.createdAt.formatted(date: .abbreviated, time: .shortened),
+                valueLineLimit: nil
             )
+            OpsKVRow(
+                "Duration",
+                value: item.duration > 0 ? Self.formatDuration(item.duration) : "-",
+                valueLineLimit: nil
+            )
+            OpsKVRow("Words", value: item.wordCount > 0 ? "\(item.wordCount)" : "-", valueLineLimit: nil)
+            OpsKVRow("Status", value: item.transcriptionStatus.displayName, valueLineLimit: nil)
+
+            if item.hasAudio || !item.screenshots.isEmpty || !item.clips.isEmpty || !item.attachments.isEmpty {
+                OpsKVRow("Audio", value: item.hasAudio ? "Available" : "-", valueLineLimit: nil)
+                OpsKVRow("Screenshots", value: "\(item.screenshots.count)", valueLineLimit: nil)
+                OpsKVRow("Clips", value: "\(item.clips.count)", valueLineLimit: nil)
+                OpsKVRow("Attachments", value: "\(item.attachments.count)", valueLineLimit: nil)
+            }
         }
     }
 
     private func tint(for type: TalkieObjectType) -> Color {
         switch type {
         case .memo:
-            return OpsTint.amber.color
+            return AgentTheme.accent
         case .dictation:
-            return OpsTint.cyan.color
+            return AgentTheme.brandAccent
         case .note:
             return OpsInk.statusInfo
         case .capture, .selection:
@@ -2657,13 +3906,13 @@ private struct AgentHomeCapturePreviewTile: View {
             .background {
                 if isSelected {
                     RoundedRectangle(cornerRadius: OpsRadius.standard, style: .continuous)
-                        .fill(OpsSurface.tintFill(OpsTint.amber.color))
+                        .fill(OpsSurface.tintFill(AgentTheme.accent))
                 }
             }
             .overlay {
                 RoundedRectangle(cornerRadius: OpsRadius.standard, style: .continuous)
                     .stroke(
-                        isSelected ? OpsSurface.tintBorder(OpsTint.amber.color) : Color.clear,
+                        isSelected ? OpsSurface.tintBorder(AgentTheme.accent) : Color.clear,
                         lineWidth: OpsStroke.thin
                     )
             }
@@ -2673,11 +3922,40 @@ private struct AgentHomeCapturePreviewTile: View {
     }
 }
 
+private enum AgentHomeMediaPreviewStyle: Equatable {
+    case standard
+    case captureCard(durationLabel: String?)
+    case libraryStage
+
+    var fillsFrame: Bool {
+        if case .captureCard = self { return true }
+        return false
+    }
+
+    var durationLabel: String? {
+        if case .captureCard(let durationLabel) = self { return durationLabel }
+        return nil
+    }
+
+    var usesBackdrop: Bool {
+        self == .libraryStage
+    }
+}
+
 private struct AgentHomeMediaPreview: View {
     let media: CaptureMediaAsset?
     var maxPixelSize: CGFloat = 420
+    var style: AgentHomeMediaPreviewStyle = .standard
 
     @State private var image: NSImage?
+
+    private var usesCinematicVideoTreatment: Bool {
+        style.fillsFrame && media?.isVideo == true
+    }
+
+    private var showsCenteredPlayButton: Bool {
+        media?.isVideo == true && (usesCinematicVideoTreatment || style.usesBackdrop)
+    }
 
     private var cacheKey: String {
         guard let media else { return "none" }
@@ -2690,25 +3968,90 @@ private struct AgentHomeMediaPreview: View {
                 .fill(OpsSurface.inset)
 
             if let image {
-                Image(nsImage: image)
-                    .interpolation(.medium)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if style.usesBackdrop {
+                    GeometryReader { proxy in
+                        ZStack {
+                            Image(nsImage: image)
+                                .interpolation(.medium)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: proxy.size.width, height: proxy.size.height)
+                                .clipped()
+                                .blur(radius: 24)
+                                .scaleEffect(1.16)
+                                .opacity(0.34)
+
+                            OpsInk.bg.opacity(0.42)
+
+                            Image(nsImage: image)
+                                .interpolation(.high)
+                                .resizable()
+                                .scaledToFit()
+                                .padding(OpsSpacing.huge)
+                                .frame(width: proxy.size.width, height: proxy.size.height)
+                                .shadow(color: Color.black.opacity(0.18), radius: 12, y: 5)
+                        }
+                    }
+                } else if style.fillsFrame {
+                    GeometryReader { proxy in
+                        Image(nsImage: image)
+                            .interpolation(.medium)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: proxy.size.width, height: proxy.size.height)
+                            .clipped()
+                            .blur(radius: usesCinematicVideoTreatment ? 7 : 0)
+                            .scaleEffect(usesCinematicVideoTreatment ? 1.08 : 1)
+                    }
+                } else {
+                    Image(nsImage: image)
+                        .interpolation(.medium)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             } else {
                 AgentHomeMediaPlaceholder(isVideo: media?.isVideo == true)
             }
 
-            LinearGradient(
-                colors: [
-                    .white.opacity(0.18),
-                    .clear,
-                    OpsInk.ink.opacity(0.08),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .allowsHitTesting(false)
+            if style.usesBackdrop {
+                LinearGradient(
+                    colors: [OpsInk.bg.opacity(0.08), .clear, OpsInk.ink.opacity(0.04)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .allowsHitTesting(false)
+            } else {
+                LinearGradient(
+                    colors: [
+                        .white.opacity(0.18),
+                        .clear,
+                        OpsInk.ink.opacity(0.08),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .allowsHitTesting(false)
+            }
+
+            if showsCenteredPlayButton {
+                if usesCinematicVideoTreatment {
+                    Color.black.opacity(0.14)
+                        .allowsHitTesting(false)
+                }
+
+                Image(systemName: "play.fill")
+                    .font(OpsType.ui(style.usesBackdrop ? 16 : 13, weight: .bold))
+                    .foregroundStyle(Color.white)
+                    .frame(
+                        width: style.usesBackdrop ? 46 : 38,
+                        height: style.usesBackdrop ? 46 : 38
+                    )
+                    .background(Circle().fill(Color.black.opacity(0.55)))
+                    .overlay(Circle().stroke(Color.white.opacity(0.34), lineWidth: 1))
+                    .shadow(color: Color.black.opacity(0.24), radius: 6, y: 2)
+                    .allowsHitTesting(false)
+            }
         }
         .clipShape(RoundedRectangle(cornerRadius: OpsRadius.standard, style: .continuous))
         .overlay {
@@ -2717,12 +4060,22 @@ private struct AgentHomeMediaPreview: View {
         }
         .overlay(alignment: .topTrailing) {
             if media?.isVideo == true {
-                Image(systemName: "play.fill")
-                    .font(OpsType.ui(OpsSize.micro, weight: .bold))
-                    .foregroundStyle(OpsInk.ink)
-                    .padding(5)
-                    .background(Circle().fill(OpsInk.surface.opacity(0.82)))
-                    .padding(5)
+                if style == .standard {
+                    Image(systemName: "play.fill")
+                        .font(OpsType.ui(OpsSize.micro, weight: .bold))
+                        .foregroundStyle(OpsInk.ink)
+                        .padding(5)
+                        .background(Circle().fill(OpsInk.surface.opacity(0.82)))
+                        .padding(5)
+                } else if let durationLabel = style.durationLabel {
+                    Text(durationLabel)
+                        .font(OpsType.mono(8, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.92))
+                        .padding(.horizontal, 7)
+                        .frame(height: 20)
+                        .background(Capsule().fill(Color.black.opacity(0.58)))
+                        .padding(7)
+                }
             }
         }
         .task(id: cacheKey) {

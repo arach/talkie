@@ -24,7 +24,7 @@ final class MicrophoneCapture: AgentAudioCapture {
     private var engine: AVAudioEngine?
     private var audioFile: AVAudioFile?
     private var tempFileURL: URL?
-    private var onChunk: (([String]) -> Void)?  // Callback receives segment file paths
+    private var onChunk: (@MainActor ([String]) -> Void)?  // Callback receives segment file paths
     private var isCapturing = false
     private var fileCreated = false
     private var bufferCount = 0  // Track buffer count for debugging
@@ -56,7 +56,7 @@ final class MicrophoneCapture: AgentAudioCapture {
         }
     }
 
-    func startCapture(onChunk: @escaping ([String]) -> Void) {
+    func startCapture(onChunk: @escaping @MainActor ([String]) -> Void) {
         guard !isCapturing else {
             log.warning("Already capturing")
             return
@@ -364,13 +364,16 @@ final class MicrophoneCapture: AgentAudioCapture {
 
         // Deliver the file path - caller is responsible for cleanup after transcription
         if let fileURL = tempFileURL {
+            let chunkCallback = onChunk
             // Check file size to validate recording
             if let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
                let size = attrs[.size] as? Int {
                 log.info("Captured audio file", detail: "\(fileURL.lastPathComponent) (\(size) bytes)")
 
                 if size > 1000 {
-                    onChunk?([fileURL.path])  // Pass path, not data - engine reads directly
+                    Task { @MainActor in
+                        chunkCallback?([fileURL.path])  // Pass path, not data - engine reads directly
+                    }
                 } else {
                     log.warning("Audio file too small", detail: "\(size) bytes, likely empty recording")
                     try? FileManager.default.removeItem(at: fileURL)

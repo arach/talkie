@@ -86,7 +86,7 @@ public enum CaptureIslandPlacement: String, CaseIterable, Codable, Identifiable,
 /// durable channel — read at Talkie launch — and this notification is the live
 /// signal when Talkie is already running.
 public enum TalkieNotchBridge {
-    public static let surfaceSettingsDidChange = "to.talkie.app.agent.notchSurfaceSettings"
+    public static let surfaceSettingsDidChange = "to.talkie.agent.notchSurfaceSettings"
 }
 
 /// All settings keys used by Agent settings
@@ -178,16 +178,6 @@ public enum AgentSettingsKey {
     public static let symbolicMappingEnabled = "symbolicMappingEnabled"
     public static let fillerRemovalEnabled = "fillerRemovalEnabled"
 
-    // MARK: Ambient Mode
-    public static let ambientEnabled = "ambientEnabled"
-    public static let ambientWakePhrase = "ambientWakePhrase"
-    public static let ambientEndPhrase = "ambientEndPhrase"
-    public static let ambientCancelPhrase = "ambientCancelPhrase"
-    public static let ambientBufferDuration = "ambientBufferDuration"
-    public static let ambientEnableChimes = "ambientEnableChimes"
-    public static let ambientUseStreamingASR = "ambientUseStreamingASR"
-    public static let ambientUseBatchASR = "ambientUseBatchASR"
-
     // MARK: LLM / Polish
     public static let polishProvider = "polishProvider"      // "anthropic" or "openai"
     public static let polishModel = "polishModel"            // e.g., "gpt-4o-mini", "claude-3-haiku-20240307"
@@ -223,7 +213,6 @@ public enum AgentSettingsKey {
     public static let askOnInterstitialDismiss = "askOnInterstitialDismiss"
 
     // MARK: Feature Flags
-    public static let featureAmbientModeEnabled = "feature_ambient_mode_enabled"
     public static let featureCaptureEnabled = "feature_capture_enabled"
     public static let featureNotchComposerEnabled = "feature_notch_composer_enabled"
     public static let featureVoiceForegroundingEnabled = "feature_voice_foregrounding_enabled"

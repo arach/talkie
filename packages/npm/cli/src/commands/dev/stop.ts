@@ -1,4 +1,4 @@
-import type { Command } from "commander";
+import type { Command } from "../../gunshi-command";
 import { getFormatOptions, output } from "../../format";
 import { SERVICES, resolveService, getUid, type TalkieService } from "./services";
 
@@ -67,7 +67,7 @@ function stopProdService(service: TalkieService): StopResult {
   const uid = getUid();
 
   // Derive the prod launchd label from the prod bundle ID
-  // Production agents/engines register as e.g. "to.talkie.app.agent", "to.talkie.app.engine"
+  // Production agents/engines register as e.g. "to.talkie.agent", "to.talkie.app.engine"
   const listResult = Bun.spawnSync(["launchctl", "list"]);
   const lines = listResult.stdout.toString().split("\n");
 

@@ -410,7 +410,7 @@ export const STUDIO_PAGES: StudioPage[] = [
     family: "agent",
     status: "wip",
     swift: ["apps/macos/TalkieAgent/TalkieAgent/Views/Home/AgentHomeShellView.swift"],
-    blurb: "Home / library surface in light OPS: Talkie-homepage eyebrow + serif headline, lean KPI stat row (Stats vocabulary), recent-library list/detail split. Home + History variants.",
+    blurb: "Talkie's cool Scope chassis with steel Agent chrome and one signal-blue active color: same family, distinct runtime instrument. Home + History variants.",
   },
   {
     href: "/mac-agent-home",
@@ -430,7 +430,7 @@ export const STUDIO_PAGES: StudioPage[] = [
     family: "agent",
     status: "concept",
     swift: ["apps/macos/TalkieAgent/TalkieAgent/Views/Home/AgentHomeView.swift"],
-    blurb: "Conversations tab revamp: no top status strip, quiet new-conversation + agent picker, per-conversation settings top-right, active agent beside the input, adapters demoted to a subtle footer entry.",
+    blurb: "Signal-blue conversation surface on Talkie's cool Scope chassis: quiet new-conversation flow, active agent beside the input, and adapters demoted to a subtle footer entry.",
   },
   {
     href: "/mac-agent-tray",
@@ -473,6 +473,61 @@ export const STUDIO_PAGES: StudioPage[] = [
     platform: "iphone",
     family: "home",
     status: "shipped",
+  },
+  {
+    href: "/home-cockpit",
+    label: "Home · Cockpit v2",
+    bucket: "surfaces",
+    platform: "iphone",
+    family: "home",
+    status: "concept",
+    swift: ["apps/ios/Talkie iOS/Views/Next/HomeNextView.swift"],
+    blurb:
+      "Cockpit content pass — TAKES / ENGINE / SYSTEMS lanes on real iOS sources, 12-day Life-in-Dots, LED marquee, REC VU override. Layout frozen.",
+  },
+  {
+    href: "/led-messenger",
+    label: "LED Messenger",
+    bucket: "surfaces",
+    platform: "iphone",
+    family: "home",
+    status: "concept",
+    swift: ["apps/ios/Talkie iOS/Views/Next/HomeNextView.swift"],
+    blurb:
+      "Non-animating dot-matrix message board — a place to write a short greeting to the user in a generated 5×7 LED font. Live writer + material variants (pitch / cell / bloom / ghost grid). Static.",
+  },
+  {
+    href: "/cockpit-grid",
+    label: "Home · Cockpit Grid",
+    bucket: "surfaces",
+    platform: "iphone",
+    family: "home",
+    status: "concept",
+    swift: ["apps/ios/Talkie iOS/Views/Next/HomeNextView.swift"],
+    blurb:
+      "Cockpit converged — three full-width rows: the Message Line (amber-CRT Terminal, the settled treatment) over the Take Log (recent captures as a tape-log readout) over the Roll (full-width contribution calendar, ~18 weeks, current streak run lit amber). Matrix LED board kept in ledBoard.tsx for /led-messenger. Static.",
+  },
+  {
+    href: "/cockpit-compact",
+    label: "Home · Cockpit Compact",
+    bucket: "surfaces",
+    platform: "iphone",
+    family: "home",
+    status: "concept",
+    swift: ["apps/ios/Talkie iOS/Views/Next/HomeNextView.swift"],
+    blurb:
+      "How small can the cockpit get and keep its soul — vertical-footprint study. Compact forms (Strip 36pt · Line + Micro-Roll 70pt · Ticker Fusion 38pt · HUD Strip 38pt · Instrument 80/64pt — the v2 hardware charm recovered as bezel + Life-in-Dots + 12-seg meter) vs. the shipped Two-Row incumbent (231pt), each seated in a ghosted Home column so the Recents-above-the-fold trade-off is countable. First-run standby is designed, not dimmed (Standby Voice + Ghost Cells + amber Today Seed). Settled Terminal + Roll material, frozen. Static.",
+  },
+  {
+    href: "/cockpit-two-row",
+    label: "Home · Cockpit Two-Row",
+    bucket: "surfaces",
+    platform: "iphone",
+    family: "home",
+    status: "concept",
+    swift: ["apps/ios/Talkie iOS/Views/Next/HomeNextView.swift"],
+    blurb:
+      "The converged cockpit — the BEZEL ON metal wrap (the frame) around the Message Line (header dropped: no TALKIE repeat, no clock, no status word) over a user-toggled big section: THE ROLL (18×7 calendar) ⁄ GAUGES (TAKES count + Meter · TIME m:ss + Meter · STRK Life-in-Dots — instruments, not a Take Log replay). A right-docked Docked Readout replaces the clock (STRK n / take count · with + without). The Toggle is a tiny hardware two-position Bay Selector, drawn static in both positions. The Message Line travels ghosted non-Home contexts (Library · Ask AI · Settings) as a Strip System. Header dropped → the Console is 220pt, under the 231pt baseline (~4.1 Recents rows vs 3.8). Settled amber-CRT Terminal + Roll + instrument material, frozen. Static.",
   },
   {
     href: "/library",
