@@ -114,14 +114,6 @@ final class AudioCaptureService: AgentAudioCapture {
         getDefaultInputDeviceID() != 0
     }
 
-    private static var voiceForegroundingFlagEnabled: Bool {
-        if let override = ProcessInfo.processInfo.environment["TALKIE_VOICE_FOREGROUNDING"]?.lowercased() {
-            return ["1", "true", "yes", "on"].contains(override)
-        }
-
-        return TalkieSharedSettings.object(forKey: AgentSettingsKey.featureVoiceForegroundingEnabled) as? Bool ?? false
-    }
-
     // MARK: - AVAudioEngine (owned directly)
 
     private var engine: AVAudioEngine?
@@ -138,9 +130,6 @@ final class AudioCaptureService: AgentAudioCapture {
     // MARK: - Components (kept)
 
     private let fileWriter = AudioFileWriter()
-    private let archiver = AudioArchiver()
-    private let voiceForegroundProcessor = VoiceForegroundProcessor()
-    private var voiceForegroundingEnabledForSession = false
 
     /// Dedicated queue for audio engine setup to avoid blocking MainActor during HAL initialization
     /// This queue is recreated on reboot() to recover from stuck HAL operations
@@ -159,6 +148,7 @@ final class AudioCaptureService: AgentAudioCapture {
     private var captureToken = UUID()
     private var retryCount = 0
     private var bufferCount = 0
+    private var expectedNextInputSampleTime: AVAudioFramePosition?
     private var fileCreated = false
     private var fallbackCaptureSession: FallbackCaptureSession?
 
@@ -487,8 +477,7 @@ final class AudioCaptureService: AgentAudioCapture {
         silentBufferCount = 0
         silenceAlerted = false
         firstBufferReceived = false
-        voiceForegroundingEnabledForSession = false
-        voiceForegroundProcessor.reset()
+        expectedNextInputSampleTime = nil
 
         // Reset UI level immediately
         Task { @MainActor in
@@ -496,10 +485,9 @@ final class AudioCaptureService: AgentAudioCapture {
             AudioLevelMonitor.shared.resetSilenceTracking()
         }
 
-        // Finalize OFF the main thread. fileWriter.finalize() reads each segment
-        // fully into memory, resamples it (compressSegment), and F_FULLFSYNCs the
-        // result — hundreds of ms for a multi-minute clip. Running it on the main
-        // thread froze the run loop (and the recording-stop animation with it).
+        // Finalize OFF the main thread. fileWriter.finalize() closes and F_FULLFSYNCs
+        // each source-quality segment. Running it on the main thread can freeze the
+        // run loop (and the recording-stop animation with it).
         // The setup queue is serial, so this stays ordered ahead of the next
         // startCapture(); the tap was already removed by retireEngine() above, so
         // fileWriter has no other writer touching it.
@@ -646,8 +634,7 @@ final class AudioCaptureService: AgentAudioCapture {
         retiredEngines.removeAll()
         rebootAfterRecording = false
         rebootAfterRecordingReason = nil
-        voiceForegroundingEnabledForSession = false
-        voiceForegroundProcessor.reset()
+        expectedNextInputSampleTime = nil
         state = .cold
     }
 
@@ -759,12 +746,7 @@ final class AudioCaptureService: AgentAudioCapture {
         silentBufferCount = 0
         silenceAlerted = false
         firstBufferReceived = false
-        voiceForegroundProcessor.reset()
-        voiceForegroundingEnabledForSession = Self.voiceForegroundingFlagEnabled
-
-        if voiceForegroundingEnabledForSession {
-            log.info("Experimental voice foregrounding enabled")
-        }
+        expectedNextInputSampleTime = nil
 
         Task { @MainActor in
             AudioLevelMonitor.shared.resetSilenceTracking()
@@ -1047,6 +1029,11 @@ final class AudioCaptureService: AgentAudioCapture {
             return
         }
 
+        log.info(
+            "Audio capture route ready",
+            detail: "device=\(deviceName), uid=\(deviceSelection.uid), hardware=\(Int(hwFormat.sampleRate))Hz/\(hwFormat.channelCount)ch"
+        )
+
         // Create temp file path for PCM recording (file created lazily on first buffer)
         let tempDir = FileManager.default.temporaryDirectory
         let filename = UUID().uuidString
@@ -1059,9 +1046,9 @@ final class AudioCaptureService: AgentAudioCapture {
         buffersPerSecond = hwFormat.sampleRate / bufferSize
 
         // Install tap with nil format - let AVAudioEngine auto-negotiate
-        inputNode.installTap(onBus: 0, bufferSize: AudioCaptureConfiguration.bufferSize, format: nil) { [weak self] buffer, _ in
+        inputNode.installTap(onBus: 0, bufferSize: AudioCaptureConfiguration.bufferSize, format: nil) { [weak self] buffer, time in
             guard let self, self.isRecordingActive else { return }
-            self.handleBuffer(buffer)
+            self.handleBuffer(buffer, time: time)
         }
         logTiming("tap installed")
 
@@ -1133,7 +1120,7 @@ final class AudioCaptureService: AgentAudioCapture {
         }
     }
 
-    private func handleBuffer(_ buffer: AVAudioPCMBuffer) {
+    private func handleBuffer(_ buffer: AVAudioPCMBuffer, time: AVAudioTime? = nil) {
         #if DEBUG
         // Simulate no buffers for testing recovery
         if AudioCaptureService.simulateNoBuffers {
@@ -1143,6 +1130,20 @@ final class AudioCaptureService: AgentAudioCapture {
         #endif
 
         bufferCount += 1
+
+        if let time, time.isSampleTimeValid {
+            if let expectedNextInputSampleTime {
+                let missingFrames = time.sampleTime - expectedNextInputSampleTime
+                if missingFrames != 0 {
+                    let missingMilliseconds = Double(missingFrames) / buffer.format.sampleRate * 1_000
+                    log.warning(
+                        "Audio input discontinuity",
+                        detail: "gapFrames=\(missingFrames), gapMs=\(Int(missingMilliseconds)), buffer=\(bufferCount), format=\(Int(buffer.format.sampleRate))Hz/\(buffer.format.channelCount)ch"
+                    )
+                }
+            }
+            expectedNextInputSampleTime = time.sampleTime + AVAudioFramePosition(buffer.frameLength)
+        }
 
         if !firstBufferReceived {
             firstBufferReceived = true
@@ -1159,9 +1160,7 @@ final class AudioCaptureService: AgentAudioCapture {
             #endif
         }
 
-        let bufferForWriting = voiceForegroundingEnabledForSession
-            ? (voiceForegroundProcessor.process(buffer) ?? buffer)
-            : buffer
+        let bufferForWriting = buffer
 
         // Create file lazily on first buffer - ensures format matches exactly
         if !fileCreated, let fileURL = currentRecordingURL {
@@ -1526,20 +1525,6 @@ final class AudioCaptureService: AgentAudioCapture {
             object: self,
             userInfo: ["message": message]
         )
-    }
-
-    private func archiveRecording(_ pcmURL: URL) {
-        archiver.archiveToAAC(pcmPath: pcmURL, deleteOriginal: true) { result in
-            switch result {
-            case .success(let aacURL, _, let compressedSize):
-                log.debug("Archived to AAC", detail: "\(aacURL.lastPathComponent) (\(compressedSize) bytes)")
-            case .failed(let reason):
-                // File may have been moved to AudioStorage before archiving started - not critical
-                log.debug("Archive skipped", detail: reason)
-            case .skipped(let reason):
-                log.debug("Archive skipped", detail: reason)
-            }
-        }
     }
 
     private func setupConfigObserver(for engine: AVAudioEngine) {
@@ -2021,133 +2006,5 @@ final class AudioCaptureService: AgentAudioCapture {
         )
 
         return status == noErr && dataSize > 0
-    }
-}
-
-private final class VoiceForegroundProcessor {
-    private struct ChannelState {
-        var previousInput: Float = 0
-        var previousOutput: Float = 0
-        var noiseFloor: Float = 0.012
-    }
-
-    private let cutoffFrequency: Double = 120
-    private let speechFloor: Float = 0.012
-    private let targetRMS: Float = 0.16
-    private let maxSpeechGain: Float = 5
-    private let backgroundAttenuation: Float = 0.65
-    private let limiterKnee: Float = 0.85
-    private let limiterCeiling: Float = 0.98
-
-    private var channelStates: [ChannelState] = []
-
-    func reset() {
-        channelStates.removeAll(keepingCapacity: true)
-    }
-
-    func process(_ input: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
-        guard input.frameLength > 0,
-              let sourceChannels = input.floatChannelData,
-              let output = input.audioCaptureDeepCopy(),
-              let outputChannels = output.floatChannelData else {
-            return nil
-        }
-
-        let channelCount = Int(input.format.channelCount)
-        let frameCount = Int(input.frameLength)
-        ensureStateCount(channelCount)
-
-        let highPassAlpha = highPassAlpha(sampleRate: input.format.sampleRate)
-
-        for channelIndex in 0..<channelCount {
-            let source = sourceChannels[channelIndex]
-            let destination = outputChannels[channelIndex]
-            var state = channelStates[channelIndex]
-            var sumSquares: Float = 0
-
-            for frameIndex in 0..<frameCount {
-                let sample = source[frameIndex]
-                let filtered = highPassAlpha * (state.previousOutput + sample - state.previousInput)
-                state.previousInput = sample
-                state.previousOutput = filtered
-                destination[frameIndex] = filtered
-                sumSquares += filtered * filtered
-            }
-
-            let rms = (sumSquares / Float(frameCount)).squareRoot()
-            let speechThreshold = max(speechFloor, state.noiseFloor * 1.45)
-            let speechLikely = rms >= speechThreshold
-
-            if speechLikely {
-                state.noiseFloor = max(speechFloor, min(state.noiseFloor * 1.005, state.noiseFloor + 0.0005))
-            } else {
-                let smoothing: Float = rms > state.noiseFloor ? 0.02 : 0.08
-                state.noiseFloor = (state.noiseFloor * (1 - smoothing)) + (max(rms, 0.0005) * smoothing)
-            }
-
-            let gain: Float
-            if speechLikely {
-                gain = min(maxSpeechGain, max(1, targetRMS / max(rms, 0.001)))
-            } else {
-                gain = backgroundAttenuation
-            }
-
-            for frameIndex in 0..<frameCount {
-                destination[frameIndex] = limit(destination[frameIndex] * gain)
-            }
-
-            channelStates[channelIndex] = state
-        }
-
-        return output
-    }
-
-    private func ensureStateCount(_ channelCount: Int) {
-        guard channelStates.count != channelCount else { return }
-        channelStates = Array(repeating: ChannelState(), count: channelCount)
-    }
-
-    private func highPassAlpha(sampleRate: Double) -> Float {
-        guard sampleRate > 0 else { return 0.95 }
-        let dt = 1 / sampleRate
-        let rc = 1 / (2 * Double.pi * cutoffFrequency)
-        return Float(rc / (rc + dt))
-    }
-
-    private func limit(_ sample: Float) -> Float {
-        let magnitude = abs(sample)
-        guard magnitude > limiterKnee else { return sample }
-
-        let sign: Float = sample < 0 ? -1 : 1
-        let excess = magnitude - limiterKnee
-        let compressed = limiterKnee + (excess / (1 + (excess / max(0.001, limiterCeiling - limiterKnee))))
-
-        return sign * min(limiterCeiling, compressed)
-    }
-}
-
-private extension AVAudioPCMBuffer {
-    func audioCaptureDeepCopy() -> AVAudioPCMBuffer? {
-        guard let copy = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameLength) else {
-            return nil
-        }
-
-        copy.frameLength = frameLength
-
-        let sourcePointer = UnsafeMutablePointer<AudioBufferList>(mutating: audioBufferList)
-        let sourceBuffers = UnsafeMutableAudioBufferListPointer(sourcePointer)
-        let destinationBuffers = UnsafeMutableAudioBufferListPointer(copy.mutableAudioBufferList)
-
-        for index in 0..<Int(sourceBuffers.count) {
-            guard let sourceData = sourceBuffers[index].mData,
-                  let destinationData = destinationBuffers[index].mData else {
-                continue
-            }
-
-            memcpy(destinationData, sourceData, Int(sourceBuffers[index].mDataByteSize))
-            destinationBuffers[index].mDataByteSize = sourceBuffers[index].mDataByteSize
-        }
-
-        return copy
     }
 }

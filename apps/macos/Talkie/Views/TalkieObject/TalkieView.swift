@@ -601,6 +601,7 @@ struct TalkieView: View {
             editedTranscript: $editedTranscript,
             showJSON: $showJSON,
             isRetranscribing: isRetranscribing,
+            transcriptVersions: transcriptVersions,
             onTranscriptChange: {
                 if isAlwaysEditable {
                     scheduleSave()
@@ -1072,6 +1073,7 @@ struct TalkieView: View {
     // MARK: - Retranscription
 
     private func retranscribe(modelId: String) {
+        log.info("Retranscription selected: id=\(recording.id.uuidString), model=\(modelId)")
         isRetranscribing = true
 
         Task {
@@ -1115,6 +1117,7 @@ struct TalkieView: View {
         do {
             let versions = try await repository.fetchTranscriptVersions(for: recording.id)
             transcriptVersions = versions
+            log.info("Loaded transcript versions: id=\(recording.id.uuidString), count=\(versions.count)")
         } catch {
             log.error("Failed to fetch transcript versions: \(error.localizedDescription)")
         }

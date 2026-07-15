@@ -816,6 +816,7 @@ struct RecordingTranscriptCard: View {
     let isEditing: Bool
     @Binding var editedTranscript: String
     let isRetranscribing: Bool
+    let transcriptVersions: [TranscriptVersionModel]
     let onTranscriptChange: () -> Void
     let onRetranscribe: (String) -> Void
     /// Optional seek hook fired when a paragraph timestamp is clicked.
@@ -832,6 +833,7 @@ struct RecordingTranscriptCard: View {
     @State private var copied = false
     @State private var toolTrayHovered = false
     @State private var copyChipHovered = false
+    @State private var versionsExpanded = false
 
     private var hasTranscriptionData: Bool {
         recording.timedTranscription != nil || recording.isMemo || recording.isDictation || recording.isSelection
@@ -939,7 +941,15 @@ struct RecordingTranscriptCard: View {
                 jsonDismissalRow
             }
 
+            if recording.hasAudio && !showJSON {
+                transcriptActionRow
+            }
+
             contentArea
+
+            if !transcriptVersions.isEmpty && versionsExpanded && !showJSON {
+                transcriptVersionsList
+            }
 
             // Tool tray (Quick Open into Notion / ChatGPT / Notes / etc.)
             // demoted for now — re-add when the affordance lands in the
@@ -962,6 +972,88 @@ struct RecordingTranscriptCard: View {
                 } else {
                     RoundedRectangle(cornerRadius: CornerRadius.md)
                         .stroke((showAccent ? Color.accentColor : Theme.current.foreground).opacity(showAccent ? 0.28 : 0.12), lineWidth: showAccent ? 1 : BorderWidth.thin)
+                }
+            }
+        }
+    }
+
+    private var transcriptActionRow: some View {
+        HStack(spacing: Spacing.sm) {
+            Menu {
+                Section("Parakeet") {
+                    Button("V3 (25 languages, fast)") { onRetranscribe("parakeet:v3") }
+                    Button("V2 (English, most accurate)") { onRetranscribe("parakeet:v2") }
+                }
+                Section("Whisper") {
+                    Button("Small (balanced)") { onRetranscribe("whisper:openai_whisper-small") }
+                    Button("Large V3 (best quality)") { onRetranscribe("whisper:distil-whisper_distil-large-v3") }
+                }
+            } label: {
+                Label(
+                    isRetranscribing ? "Retranscribing…" : "Retranscribe",
+                    systemImage: isRetranscribing ? "waveform" : "arrow.clockwise"
+                )
+            }
+            .disabled(isRetranscribing)
+
+            if !transcriptVersions.isEmpty {
+                Button {
+                    versionsExpanded.toggle()
+                } label: {
+                    Label(
+                        "Versions (\(transcriptVersions.count))",
+                        systemImage: versionsExpanded ? "chevron.up" : "clock.arrow.circlepath"
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+
+            Spacer()
+        }
+        .font(settings.fontSMMedium)
+        .padding(.vertical, Spacing.sm)
+        .overlay(alignment: .bottom) {
+            ThemedScopeRule(.subtle)
+        }
+    }
+
+    private var transcriptVersionsList: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(transcriptVersions) { version in
+                HStack(alignment: .top, spacing: Spacing.md) {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        HStack(spacing: Spacing.sm) {
+                            Text("VERSION \(version.version)")
+                                .font(settings.fontXSMedium)
+                            Text(version.sourceDescription)
+                                .font(settings.fontXS)
+                                .foregroundStyle(Theme.current.foregroundMuted)
+                            Text(version.createdAt, style: .relative)
+                                .font(settings.fontXS)
+                                .foregroundStyle(Theme.current.foregroundMuted)
+                        }
+
+                        Text(version.content)
+                            .font(settings.contentFontBody)
+                            .foregroundStyle(Theme.current.foregroundSecondary)
+                            .lineLimit(4)
+                            .textSelection(.enabled)
+                    }
+
+                    Spacer(minLength: Spacing.sm)
+
+                    Button("Copy", systemImage: "doc.on.doc") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(version.content, forType: .string)
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.plain)
+                    .help("Copy transcript version")
+                }
+                .padding(.vertical, Spacing.md)
+
+                if version.id != transcriptVersions.last?.id {
+                    ThemedScopeRule(.subtle)
                 }
             }
         }

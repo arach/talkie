@@ -90,6 +90,9 @@ final class AgentCaptureMarkupController {
             },
             onDelete: { [weak self] in
                 self?.delete(item: item, updatesLibrary: updatesLibrary)
+            },
+            onOpenInTalkie: { [weak self] in
+                self?.openInTalkie(item: item, sourceImage: sourceImage)
             }
         )
 
@@ -192,6 +195,37 @@ final class AgentCaptureMarkupController {
         log.info("Agent quick markup deleted", detail: item.fileURL.lastPathComponent)
     }
 
+    private func openInTalkie(item: AgentLiveTrayItem, sourceImage: CGImage) {
+        let document = CaptureMarkupDocument(
+            imageWidth: Double(sourceImage.width),
+            imageHeight: Double(sourceImage.height),
+            layers: overlay?.layers ?? []
+        )
+
+        do {
+            try CaptureMarkupStorage.save(document, forImageURL: item.fileURL)
+        } catch {
+            log.error(
+                "Agent quick markup handoff save failed: \(error.localizedDescription)",
+                detail: item.fileURL.path
+            )
+            return
+        }
+
+        var components = URLComponents()
+        components.scheme = TalkieEnvironment.current.talkieURLScheme
+        components.host = "capture"
+        components.path = "/markup"
+        components.queryItems = [URLQueryItem(name: "path", value: item.fileURL.path)]
+        guard let url = components.url, NSWorkspace.shared.open(url) else {
+            log.error("Agent quick markup handoff failed to open Talkie", detail: item.fileURL.path)
+            return
+        }
+
+        log.info("Agent quick markup handed off to Talkie", detail: item.fileURL.lastPathComponent)
+        dismiss()
+    }
+
     private func bakeIfNeeded(
         item: AgentLiveTrayItem,
         sourceImage: CGImage,
@@ -257,7 +291,8 @@ final class AgentCaptureMarkupController {
         placement: AgentCaptureMarkupPlacement,
         onDone: @escaping () -> Void,
         onCancel: @escaping () -> Void,
-        onDelete: @escaping () -> Void
+        onDelete: @escaping () -> Void,
+        onOpenInTalkie: @escaping () -> Void
     ) {
         let view = AgentCaptureMarkupBackgroundView(
             title: title,
@@ -274,7 +309,8 @@ final class AgentCaptureMarkupController {
             },
             onDone: onDone,
             onCancel: onCancel,
-            onDelete: onDelete
+            onDelete: onDelete,
+            onOpenInTalkie: onOpenInTalkie
         )
         view.frame = NSRect(origin: .zero, size: placement.surfaceRect.size)
 
@@ -639,10 +675,16 @@ final class AgentCaptureMarkupController {
         let deleteRect = CGRect(
             x: surface.minX + 12,
             y: buttonY,
-            width: 64,
+            width: 94,
             height: 22
         )
-        return [deleteRect]
+        let openInTalkieRect = CGRect(
+            x: deleteRect.maxX + 8,
+            y: buttonY,
+            width: 100,
+            height: 22
+        )
+        return [deleteRect, openInTalkieRect]
     }
 
     private static func relativeImageRect(for placement: AgentCaptureMarkupPlacement) -> NSRect {
@@ -880,6 +922,7 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
     private let onDone: () -> Void
     private let onCancel: () -> Void
     private let onDelete: () -> Void
+    private let onOpenInTalkie: () -> Void
     private var lastDragScreenPoint: NSPoint?
     private var activeDragMode: DragMode?
 
@@ -892,7 +935,8 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         onZoom: @escaping (CGFloat) -> Void,
         onDone: @escaping () -> Void,
         onCancel: @escaping () -> Void,
-        onDelete: @escaping () -> Void
+        onDelete: @escaping () -> Void,
+        onOpenInTalkie: @escaping () -> Void
     ) {
         self.title = title
         self.image = image
@@ -903,6 +947,7 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         self.onDone = onDone
         self.onCancel = onCancel
         self.onDelete = onDelete
+        self.onOpenInTalkie = onOpenInTalkie
         super.init(frame: .zero)
         wantsLayer = true
     }
@@ -919,6 +964,7 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         addCursorRect(dragRegion, cursor: .openHand)
         addCursorRect(cancelButtonRect, cursor: .pointingHand)
         addCursorRect(deleteButtonRect, cursor: .pointingHand)
+        addCursorRect(openInTalkieButtonRect, cursor: .pointingHand)
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -929,6 +975,10 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         }
         if deleteButtonRect.contains(point) {
             onDelete()
+            return
+        }
+        if openInTalkieButtonRect.contains(point) {
+            onOpenInTalkie()
             return
         }
         if let edges = resizeEdges(at: point) {
@@ -1017,6 +1067,7 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         drawTitle(in: titleRect)
         drawChromeButtons()
         drawDeleteControl()
+        drawOpenInTalkieControl()
         drawResizeGrip()
 
         let imageClip = NSBezierPath(
@@ -1114,10 +1165,20 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
     private func drawDeleteControl() {
         drawButton(
             rect: deleteButtonRect,
-            title: "Delete",
+            title: "Delete Capture",
             foreground: NSColor.systemRed.withAlphaComponent(0.92),
             fill: NSColor.systemRed.withAlphaComponent(0.12),
             border: NSColor.systemRed.withAlphaComponent(0.42)
+        )
+    }
+
+    private func drawOpenInTalkieControl() {
+        drawButton(
+            rect: openInTalkieButtonRect,
+            title: "Open in Talkie",
+            foreground: NSColor.white.withAlphaComponent(0.88),
+            fill: NSColor(calibratedRed: 0.22, green: 0.31, blue: 0.62, alpha: 0.36),
+            border: NSColor(calibratedRed: 0.55, green: 0.63, blue: 1.0, alpha: 0.42)
         )
     }
 
@@ -1321,7 +1382,16 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         NSRect(
             x: bottomToolbarRect.minX + 12,
             y: bottomToolbarRect.midY - 11,
-            width: 64,
+            width: 94,
+            height: 22
+        )
+    }
+
+    private var openInTalkieButtonRect: NSRect {
+        NSRect(
+            x: deleteButtonRect.maxX + 8,
+            y: bottomToolbarRect.midY - 11,
+            width: 100,
             height: 22
         )
     }

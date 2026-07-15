@@ -407,9 +407,10 @@
       ctx.fillStyle = "#FFFFFF";
       ctx.strokeStyle = "rgba(79, 125, 255, 0.95)";
       ctx.lineWidth = 1.4;
-      if (layer.frame) {
+      const frameHandles = frameHandlePoints(layer);
+      if (frameHandles.length) {
         const handleSize = 8;
-        for (const handle of frameHandlePoints(layer)) {
+        for (const handle of frameHandles) {
           ctx.beginPath();
           ctx.rect(handle.x - handleSize / 2, handle.y - handleSize / 2, handleSize, handleSize);
           ctx.fill();
