@@ -98,6 +98,7 @@ final class TalkieUITestsScreenshots: XCTestCase {
         }
         app.launchArguments += spec.launchArguments
         app.launch()
+        dismissSystemAlertsIfNeeded()
 
         // Navigate to the target screen (if the spec requires taps)
         spec.navigate?(app)
@@ -109,6 +110,7 @@ final class TalkieUITestsScreenshots: XCTestCase {
             "\(spec.name): ready element should exist"
         )
 
+        dismissSystemAlertsIfNeeded()
         snapshot(spec.name, timeWaitingForIdle: 0)
     }
 
@@ -261,5 +263,140 @@ extension TalkieUITestsScreenshots {
         XCTAssertTrue(voiceButton.waitForExistence(timeout: 10), "Voice command tray button should exist")
         voiceButton.tap()
         XCTAssertTrue(app.buttons["Accept"].firstMatch.waitForExistence(timeout: 10), "Voice command button should produce a mock diff")
+    }
+}
+
+// MARK: - Home Ask AI Console
+
+extension TalkieUITestsScreenshots {
+    func testHomeAskTalkieFlowScreenshots() {
+        app.terminate()
+        app.launchEnvironment["FASTLANE_SNAPSHOT"] = "1"
+        app.launchArguments = [
+            "-FASTLANE_SNAPSHOT",
+            "--screenshotSkipSplash",
+            "--screenshotTheme", "scope",
+            "--askaiNoProviders",
+        ]
+        app.launch()
+        dismissSystemAlertsIfNeeded()
+
+        let commandField = app.textFields["home.command-field"].firstMatch
+        XCTAssertTrue(
+            commandField.waitForExistence(timeout: 10),
+            "Home Ask Talkie field should exist"
+        )
+        if !commandField.isHittable {
+            app.swipeUp()
+        }
+        commandField.tap()
+        snapshot("state-home-ask-focused", timeWaitingForIdle: 0)
+
+        let prompt = "Help me outline the launch plan"
+        commandField.typeText(prompt)
+
+        let sendButton = app.buttons["home.command-send"].firstMatch
+        XCTAssertTrue(sendButton.waitForExistence(timeout: 3), "Home Ask Talkie send should exist")
+        sendButton.tap()
+
+        let askPromptField = app.textFields["askai.prompt-field"].firstMatch
+        XCTAssertTrue(
+            askPromptField.waitForExistence(timeout: 10),
+            "Home prompt should route into Ask AI"
+        )
+        XCTAssertEqual(askPromptField.value as? String, prompt)
+        XCTAssertTrue(
+            app.buttons["askai.open-ai-keys"].waitForExistence(timeout: 3),
+            "Missing credentials should offer a direct AI Keys recovery action"
+        )
+        snapshot("state-ask-ai-from-home", timeWaitingForIdle: 0)
+    }
+}
+
+// MARK: - App Preview Capture
+
+/// Deterministic, real-app performances used by `scripts/app-preview.sh`.
+///
+/// These tests intentionally linger on the meaningful beats so `simctl`
+/// screen recordings can be trimmed into a 15–30 second App Preview without
+/// relying on microphone input or production data.
+extension TalkieUITestsScreenshots {
+    func testAppPreviewCaptureFlow() async {
+        app.terminate()
+        app.launchEnvironment["FASTLANE_SNAPSHOT"] = "1"
+        app.launchArguments = [
+            "-FASTLANE_SNAPSHOT",
+            "--screenshotSkipSplash",
+            "--screenshotTheme", "scope",
+            "--celebrateFirstSave",
+            "--animateRecordingWaveform",
+        ]
+        app.launch()
+        dismissSystemAlertsIfNeeded()
+
+        let firstMemo = app.buttons["memo.row"].firstMatch
+        XCTAssertTrue(firstMemo.waitForExistence(timeout: 10), "Preview home should be ready")
+        try? await Task.sleep(for: .seconds(2))
+
+        let record = app.otherElements["dock.record"].firstMatch
+        if record.waitForExistence(timeout: 2) {
+            record.tap()
+        } else {
+            app.buttons["dock.record"].firstMatch.tap()
+        }
+
+        let save = app.buttons["recording.save"].firstMatch
+        XCTAssertTrue(save.waitForExistence(timeout: 8), "Preview recorder should be ready")
+        try? await Task.sleep(for: .seconds(6))
+        save.tap()
+        // The saved-state celebration dismisses into memo detail. Avoid tying
+        // the capture to the detail screen's accessibility container type;
+        // that hierarchy differs between simulator runtimes while the visual
+        // transition remains deterministic.
+        try? await Task.sleep(for: .seconds(6))
+        let savedTranscript = app.staticTexts.containing(
+            NSPredicate(format: "label CONTAINS %@", "launch checklist is ready")
+        ).firstMatch
+        XCTAssertTrue(
+            savedTranscript.waitForExistence(timeout: 3),
+            "Saved memo detail should show the post-recording transcript"
+        )
+        try? await Task.sleep(for: .seconds(1))
+    }
+
+    func testAppPreviewComposeFlow() async {
+        app.terminate()
+        app.launchEnvironment["FASTLANE_SNAPSHOT"] = "1"
+        app.launchArguments = [
+            "-FASTLANE_SNAPSHOT",
+            "--screenshotSkipSplash",
+            "--screenshotTheme", "scope",
+            "--composeState", "idle",
+        ]
+        app.launch()
+        dismissSystemAlertsIfNeeded()
+
+        let composeHeader = app.staticTexts.containing(
+            NSPredicate(format: "label CONTAINS %@", "COMPOSE WITH")
+        ).firstMatch
+        XCTAssertTrue(composeHeader.waitForExistence(timeout: 10), "Preview compose screen should be ready")
+        try? await Task.sleep(for: .seconds(2))
+
+        let startDictation = app.buttons["Start dictation"].firstMatch
+        XCTAssertTrue(startDictation.waitForExistence(timeout: 5), "Inline dictation should be available")
+        startDictation.tap()
+        try? await Task.sleep(for: .seconds(4))
+
+        let stopDictation = app.buttons["Stop dictation"].firstMatch
+        if stopDictation.waitForExistence(timeout: 3) {
+            stopDictation.tap()
+        }
+
+        let voiceCommand = app.buttons["Voice command"].firstMatch
+        XCTAssertTrue(voiceCommand.waitForExistence(timeout: 5), "Voice command should be available")
+        voiceCommand.tap()
+
+        XCTAssertTrue(app.buttons["Accept"].firstMatch.waitForExistence(timeout: 10), "Preview diff should appear")
+        try? await Task.sleep(for: .seconds(5))
     }
 }

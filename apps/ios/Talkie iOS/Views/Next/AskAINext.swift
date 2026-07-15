@@ -16,6 +16,9 @@ struct AskAINext: View {
     @StateObject private var session = AskAISession()
     @StateObject private var dictation = AskDictationController()
     @ObservedObject private var reachability = NetworkReachability.shared
+    @ObservedObject private var credentials = AICredentialStore.shared
+    @State private var bridgeManager = BridgeManager.shared
+    @State private var showingAIKeys = false
 
     private let presets: [AskAIPreset] = [
         AskAIPreset(
@@ -44,7 +47,17 @@ struct AskAINext: View {
                 header
                 divider
 
-                if networkStatus != .ok {
+                if let configurationRecovery {
+                    AskAIRecoveryBanner(
+                        headline: configurationRecovery.headline,
+                        detail: configurationRecovery.detail,
+                        onOpenAIKeys: { showingAIKeys = true },
+                        onPairMac: openMacPairing
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.top, 10)
+                    .transition(.opacity)
+                } else if networkStatus != .ok {
                     NetworkStatusBanner(status: networkStatus, onRetry: retrySend)
                         .padding(.horizontal, 16)
                         .padding(.top, 10)
@@ -58,13 +71,22 @@ struct AskAINext: View {
         }
         .onAppear {
             bindShellVoice()
-            consumePendingPrompt()
+            consumePendingRequest()
         }
         .onDisappear {
+            session.persistDraft()
             dictation.cancel()
             chrome.voiceCommandHandler = { transcript in
                 AppShellRouter.shared.submitVoiceCommand(transcript)
             }
+        }
+        .sheet(isPresented: $showingAIKeys, onDismiss: {
+            if session.readiness.isReady {
+                session.clearResolvedConfigurationFailure()
+                isPromptFocused = true
+            }
+        }) {
+            AICredentialsNext(onClose: { showingAIKeys = false })
         }
     }
 
@@ -73,8 +95,24 @@ struct AskAINext: View {
             Text("TALKIE · ASK AI")
                 .talkieType(.wordmark)
                 .foregroundStyle(theme.colors.textPrimary.opacity(0.78))
+                .accessibilityIdentifier("askai.header")
 
             Spacer()
+
+            if !session.turns.isEmpty {
+                Button(action: startNewConversation) {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+                        .frame(width: 28, height: 28)
+                        .background(
+                            Circle()
+                                .fill(theme.currentTheme.chrome.accent.opacity(0.1))
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("New Ask AI conversation")
+            }
 
             Button(action: { AppShellRouter.shared.openHome() }) {
                 Text("×")
@@ -129,13 +167,39 @@ struct AskAINext: View {
     }
 
     private var idleState: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 18) {
             Spacer(minLength: 36)
 
-            Text("What would you like to ask?")
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 11, weight: .semibold))
+                Text("ASK TALKIE")
+                    .talkieType(.channelLabelTiny)
+            }
+            .foregroundStyle(theme.currentTheme.chrome.accent)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background {
+                Capsule()
+                    .fill(theme.currentTheme.chrome.accent.opacity(0.1))
+                    .overlay {
+                        Capsule().strokeBorder(
+                            theme.currentTheme.chrome.accent.opacity(0.3),
+                            lineWidth: theme.currentTheme.chrome.hairlineWidth
+                        )
+                    }
+            }
+
+            Text("What can I help move forward?")
                 .talkieType(.headline)
                 .foregroundStyle(theme.colors.textPrimary)
                 .multilineTextAlignment(.center)
+
+            Text("Ask a question, shape a rough thought, or turn it into a next step.")
+                .talkieType(.preview)
+                .foregroundStyle(theme.colors.textSecondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 300)
 
             LazyVGrid(
                 columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)],
@@ -166,14 +230,6 @@ struct AskAINext: View {
             Text("OR · TYPE · DICTATE ·")
                 .talkieType(.channelLabelSmall)
                 .foregroundStyle(theme.colors.textTertiary)
-
-            if let errorMessage = session.errorMessage {
-                Text(errorMessage)
-                    .talkieType(.hint)
-                    .foregroundStyle(Color.recording)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
-            }
 
             Spacer(minLength: 48)
         }
@@ -212,7 +268,14 @@ struct AskAINext: View {
                         .foregroundStyle(AskDictationStrip.amber)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 case .idle:
-                    TextField("Ask anything…", text: $session.prompt, axis: .vertical)
+                    TextField(
+                        "Ask anything…",
+                        text: Binding(
+                            get: { session.prompt },
+                            set: { session.updatePrompt($0) }
+                        ),
+                        axis: .vertical
+                    )
                         .talkieType(.preview)
                         .foregroundStyle(theme.colors.textPrimary)
                         .lineLimit(1...4)
@@ -221,6 +284,7 @@ struct AskAINext: View {
                         .submitLabel(.send)
                         .onSubmit(sendPrompt)
                         .disabled(session.isThinking)
+                        .accessibilityIdentifier("askai.prompt-field")
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -331,24 +395,28 @@ struct AskAINext: View {
         }
     }
 
-    private func consumePendingPrompt() {
-        guard let pending = AppShellRouter.shared.pendingAskAIPrompt?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !pending.isEmpty
-        else { return }
+    private func consumePendingRequest() {
+        guard let request = AppShellRouter.shared.pendingAskAIRequest else { return }
+        AppShellRouter.shared.pendingAskAIRequest = nil
 
-        let autoSend = AppShellRouter.shared.pendingAskAIAutoSend
-        AppShellRouter.shared.pendingAskAIPrompt = nil
-        AppShellRouter.shared.pendingAskAIAutoSend = false
+        let prompt = request.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prompt.isEmpty else { return }
 
-        if autoSend {
-            // Voice path — speak, land, answer. No manual SEND step.
-            session.submitVoiceTranscript(pending)
+        if request.startsNewSession {
+            session.reset()
+        }
+
+        if request.autoSend {
+            session.submitVoiceTranscript(prompt)
         } else {
-            // Typed command-bar path — seed the composer and let the user
-            // review before sending.
-            session.receiveVoicePrompt(pending)
+            session.receiveVoicePrompt(prompt)
             isPromptFocused = true
         }
+    }
+
+    private func startNewConversation() {
+        session.reset()
+        isPromptFocused = true
     }
 
     private func applyPreset(_ preset: AskAIPreset) {
@@ -356,32 +424,53 @@ struct AskAINext: View {
         isPromptFocused = true
     }
 
-    /// Status the offline / request-failed banner observes. Paint-side
-    /// derives this from session.errorMessage. Codex layers a real
-    /// NetworkReachability observer on top to drive .offline when the
-    /// device has lost the network entirely.
+    private var configurationRecovery: (headline: String, detail: String)? {
+        _ = credentials.setProviderIDs
+        _ = bridgeManager.isPaired
+
+        if case .credentialsRejected(let providerName) = session.failure {
+            return (
+                "Update \(providerName) access",
+                session.failure?.localizedDescription ?? "The saved credential needs attention."
+            )
+        }
+
+        if session.failure == .configurationRequired || !session.readiness.isReady {
+            return (
+                "Connect an AI provider",
+                "Add a key on this iPhone or pair a Mac. Your prompt will stay here while you set it up."
+            )
+        }
+
+        return nil
+    }
+
     private var networkStatus: NetworkStatus {
         if reachability.status == .offline {
             return .offline
         }
-        if let message = session.errorMessage, !message.isEmpty {
-            return .requestFailed(message: message)
+        if let failure = session.failure, !failure.needsConfiguration {
+            return .requestFailed(message: failure.localizedDescription)
         }
         return .ok
     }
 
     private func retrySend() {
-        session.errorMessage = nil
-        if !session.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-           session.canSend {
-            sendPrompt()
-        }
+        session.retry()
     }
 
     private func sendPrompt() {
-        guard session.canSend else { return }
+        guard session.canSend else {
+            session.send()
+            return
+        }
         isPromptFocused = false
         session.send()
+    }
+
+    private func openMacPairing() {
+        session.persistDraft()
+        AppShellRouter.shared.openConnectionCenter()
     }
 
     private func scrollToLatest(_ proxy: ScrollViewProxy) {
@@ -389,226 +478,6 @@ struct AskAINext: View {
         withAnimation(.easeOut(duration: 0.22)) {
             proxy.scrollTo(id, anchor: .bottom)
         }
-    }
-}
-
-@MainActor
-private final class AskAISession: ObservableObject {
-    @Published var turns: [AskAITurn] = []
-    @Published var prompt = ""
-    @Published var isThinking = false
-    @Published var errorMessage: String?
-
-    private let store = AskAISessionStore.shared
-    private let bridgeManager = BridgeManager.shared
-    private let appSettings = TalkieAppSettings.shared
-    private var lastPreset: AskAIPreset?
-    private var lastModel: String?
-
-    var canSend: Bool {
-        !isThinking && !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    var lastTurnID: AskAITurn.ID? { turns.last?.id }
-
-    var nextTurnCode: String { Self.code(for: turns.count + 1) }
-
-    init() {
-        guard let snapshot = store.load() else { return }
-        turns = snapshot.turns.filter { !$0.isThinking }
-        lastPreset = snapshot.lastPreset
-        lastModel = snapshot.lastModel
-    }
-
-    func receiveVoicePrompt(_ transcript: String) {
-        let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        prompt = trimmed
-    }
-
-    func applyPreset(_ preset: AskAIPreset) {
-        prompt = preset.template
-        lastPreset = preset
-        persist()
-    }
-
-    func send() {
-        let instruction = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !instruction.isEmpty, !isThinking else { return }
-        prompt = ""
-        dispatch(instruction: instruction)
-    }
-
-    /// Send a voice-originated transcript straight through as a turn. Kept
-    /// separate from `send()` so it never disturbs whatever the user may
-    /// have already typed into the composer, and so voice can auto-send
-    /// without routing through the text buffer.
-    func submitVoiceTranscript(_ transcript: String) {
-        let instruction = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !instruction.isEmpty, !isThinking else { return }
-        dispatch(instruction: instruction)
-    }
-
-    private func dispatch(instruction: String) {
-        errorMessage = nil
-
-        let userTurn = AskAITurn(
-            code: Self.code(for: turns.count + 1),
-            speaker: .user,
-            body: instruction,
-            createdAt: .now
-        )
-        turns.append(userTurn)
-
-        let thinkingTurn = AskAITurn(
-            code: Self.code(for: turns.count + 1),
-            speaker: .talkie,
-            body: "Thinking…",
-            createdAt: .now,
-            model: preferredModelLabel,
-            latency: "0.0s",
-            tokens: nil,
-            isThinking: true
-        )
-        turns.append(thinkingTurn)
-        isThinking = true
-        persist()
-
-        Task {
-            let startedAt = Date()
-            do {
-                let result = try await runAI(instruction: instruction)
-                let elapsed = Date().timeIntervalSince(startedAt)
-                await MainActor.run {
-                    replaceThinkingTurn(
-                        id: thinkingTurn.id,
-                        body: result.responseText,
-                        providerName: result.providerName,
-                        modelId: result.modelId,
-                        latency: Self.latencyString(elapsed),
-                        tokens: Self.estimatedTokens(for: result.responseText)
-                    )
-                    isThinking = false
-                    persist()
-                }
-            } catch {
-                await MainActor.run {
-                    replaceThinkingTurn(
-                        id: thinkingTurn.id,
-                        body: "I couldn't complete that request. \(error.localizedDescription)",
-                        providerName: "Talkie",
-                        modelId: preferredModelLabel,
-                        latency: Self.latencyString(Date().timeIntervalSince(startedAt)),
-                        tokens: nil
-                    )
-                    errorMessage = error.localizedDescription
-                    isThinking = false
-                    persist()
-                }
-            }
-        }
-    }
-
-    private func runAI(instruction: String) async throws -> CaptureAICommandResult {
-        let context = conversationContext(excludingCurrentInstruction: instruction)
-
-        if let phoneProvider = TalkieAIProviderResolver.shared.configuredProvider() {
-            return try await CaptureAICommandService.shared.run(
-                context: context,
-                instruction: instruction,
-                title: "Ask AI",
-                sourceDescription: "Ask AI conversation",
-                provider: phoneProvider
-            )
-        }
-
-        if bridgeManager.isPaired {
-            let provider = try await bridgeManager.composeBorrowedProvider(
-                providerId: appSettings.composeDirectProviderId,
-                modelId: appSettings.composeDirectModelId
-            )
-            return try await CaptureAICommandService.shared.run(
-                context: context,
-                instruction: instruction,
-                title: "Ask AI",
-                sourceDescription: "Ask AI conversation",
-                provider: provider
-            )
-        }
-
-        throw BridgeError.messageFailed("Set up AI credentials in Settings -> AI, or pair a Mac provider.")
-    }
-
-    private func conversationContext(excludingCurrentInstruction instruction: String) -> String {
-        let priorTurns = turns.filter { turn in
-            !(turn.speaker == .user && turn.body == instruction && !turn.isThinking)
-        }
-
-        guard !priorTurns.isEmpty else {
-            return "No prior turns. Answer the user's first Ask AI prompt directly."
-        }
-
-        let transcript = priorTurns
-            .filter { !$0.isThinking }
-            .map { turn in
-                "\(turn.speaker.label): \(turn.body)"
-            }
-            .joined(separator: "\n\n")
-
-        return transcript.isEmpty
-            ? "No prior turns. Answer the user's first Ask AI prompt directly."
-            : transcript
-    }
-
-    private func replaceThinkingTurn(
-        id: AskAITurn.ID,
-        body: String,
-        providerName: String,
-        modelId: String,
-        latency: String,
-        tokens: Int?
-    ) {
-        guard let index = turns.firstIndex(where: { $0.id == id }) else { return }
-        turns[index] = AskAITurn(
-            id: id,
-            code: turns[index].code,
-            speaker: .talkie,
-            body: body,
-            createdAt: turns[index].createdAt,
-            providerName: providerName,
-            model: modelId,
-            latency: latency,
-            tokens: tokens,
-            isThinking: false
-        )
-    }
-
-    private var preferredModelLabel: String {
-        TalkieAIProviderResolver.shared.configuredProvider()?.modelId
-            ?? appSettings.composeDirectModelId
-    }
-
-    private func persist() {
-        lastModel = preferredModelLabel
-        let snapshot = AskAISessionSnapshot(
-            turns: turns,
-            lastPreset: lastPreset,
-            lastModel: lastModel,
-            lastTurnID: lastTurnID
-        )
-        Task { await store.save(snapshot) }
-    }
-
-    private static func code(for index: Int) -> String {
-        "T" + String(index).leftPadded(toLength: 2, with: "0")
-    }
-
-    private static func latencyString(_ value: TimeInterval) -> String {
-        max(0, value).formatted(.number.precision(.fractionLength(1))) + "s"
-    }
-
-    private static func estimatedTokens(for text: String) -> Int {
-        max(1, Int(ceil(Double(text.count) / 4.0)))
     }
 }
 
@@ -1088,12 +957,5 @@ private struct AskVUBars: View {
                 ctx.fill(Path(roundedRect: rect, cornerRadius: 1), with: .color(color))
             }
         }
-    }
-}
-
-private extension String {
-    func leftPadded(toLength targetLength: Int, with character: Character) -> String {
-        guard count < targetLength else { return self }
-        return String(repeating: String(character), count: targetLength - count) + self
     }
 }

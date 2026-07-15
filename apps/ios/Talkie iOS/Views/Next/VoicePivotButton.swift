@@ -14,6 +14,7 @@ import SwiftUI
 
 struct VoicePivotButton: View {
     @EnvironmentObject private var chrome: ShellChrome
+    @EnvironmentObject private var router: AppShellRouter
     @ObservedObject private var theme = ThemeManager.shared
 
     /// 350ms matches iOS context-menu feel - long enough that a
@@ -69,10 +70,12 @@ struct VoicePivotButton: View {
                 }
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        // 12pt bottom inset puts this 56pt button's vertical center at
-        // ~40pt above the bottom edge, matching the LiquidGlassTray and
-        // both bottom complication circles.
-        .padding(.bottom, 12)
+        // Compose owns a contextual rail at the bottom. Raise the pivot into
+        // the dedicated cursor/keyboard lane so quick transforms and diff
+        // actions remain fully visible beneath it. Other surfaces keep the
+        // original bottom-center placement.
+        .padding(.bottom, router.isComposeSurface ? 55 : 12)
+        .animation(.easeOut(duration: 0.2), value: router.isComposeSurface)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityHint(accessibilityHint)
     }

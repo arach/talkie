@@ -550,18 +550,10 @@ final class AppShellRouter: ObservableObject {
     /// AppShellNext consumes this, creates the VoiceMemo, and routes
     /// to the new detail surface.
     @Published var pendingNewMemoText: String?
-    /// Prompt routed into the next Ask AI surface. Set by `openAskAISeeded`
-    /// — typically the fallthrough path when a voice command lands on a
-    /// surface with no specific intent handler. AskAINext consumes +
-    /// clears this on appear.
-    @Published var pendingAskAIPrompt: String?
-    /// Whether the pending Ask AI prompt should send itself the instant the
-    /// surface appears (`true`) or just seed the composer for the user to
-    /// review + hit SEND (`false`). Voice-originated prompts auto-send;
-    /// typed command-bar submits seed-and-wait, preserving their prior
-    /// review-before-send behavior. Consumed + reset alongside
-    /// `pendingAskAIPrompt`.
-    @Published var pendingAskAIAutoSend: Bool = false
+    /// Request routed into the next Ask AI surface. Callers can choose
+    /// whether the prompt is only staged for review or sent immediately,
+    /// and whether it should begin a clean conversation.
+    @Published var pendingAskAIRequest: AskAISeedRequest?
     /// Signals that the next Compose surface should auto-focus its
     /// editor on appear (popping the embedded Talkie keyboard).
     /// ComposeNextView consumes + clears this on appear.
@@ -720,19 +712,19 @@ final class AppShellRouter: ObservableObject {
         pendingNewMemoText = text
     }
 
-    /// Open Ask AI with the prompt pre-filled. Used as the fallthrough
-    /// target when a voice command lands on a surface that has no
-    /// specific intent handler — the user gets a fresh Ask AI session
-    /// seeded with what they said.
-    ///
-    /// `autoSend` = true fires the prompt immediately on appear (the
-    /// walkie-talkie / voice path — you spoke, so it should answer, not
-    /// wait for a second tap). `autoSend` = false seeds the composer and
-    /// lets the user review before hitting SEND (the typed command-bar
-    /// path keeps this behavior).
-    func openAskAISeeded(prompt: String, autoSend: Bool = false) {
-        pendingAskAIPrompt = prompt
-        pendingAskAIAutoSend = autoSend
+    /// Open Ask AI with a routed prompt. Home and release-to-send voice
+    /// commands can dispatch immediately; editing surfaces can still stage
+    /// text for review by using the default arguments.
+    func openAskAISeeded(
+        prompt: String,
+        autoSend: Bool = false,
+        startsNewSession: Bool = false
+    ) {
+        pendingAskAIRequest = AskAISeedRequest(
+            prompt: prompt,
+            autoSend: autoSend,
+            startsNewSession: startsNewSession
+        )
         openAskAI()
     }
 
@@ -747,10 +739,18 @@ final class AppShellRouter: ObservableObject {
             activeComposeStore?.voiceCommandReceived(transcript)
             return
         }
-        // Voice-originated — the user spoke and released, so answer
-        // immediately instead of parking the transcript behind a SEND tap.
-        openAskAISeeded(prompt: transcript, autoSend: true)
+        openAskAISeeded(
+            prompt: transcript,
+            autoSend: true,
+            startsNewSession: true
+        )
     }
+}
+
+struct AskAISeedRequest: Equatable {
+    let prompt: String
+    let autoSend: Bool
+    let startsNewSession: Bool
 }
 
 /// Payload routed into the ReadAloud surface from any "Listen"

@@ -93,3 +93,38 @@ the REVIEW below recommends the specular treatment.
 Claude review artifact:
 
 - `design/studio/app/home/REVIEW-2026-07-01-visual.md`
+
+## Ask Talkie Console (2026-07-14)
+
+The middle Home control now has one primary job and one explicit alternate
+mode. **Ask** is the default: it offers Plan, Draft, and Think starters and
+sends a typed prompt directly into a fresh Ask AI conversation. **Find** is a
+deliberate mode that filters Recents live, rather than silently borrowing the
+same text binding.
+
+This removes two conflicting affordances from the prior Home shape:
+
+- Quick no longer repeats Ask AI; its fourth action is Search, which focuses
+  Find mode.
+- The command bar no longer shows a microphone that starts a voice memo.
+  Release-to-send voice commands remain owned by the shell voice pivot.
+
+The Ask AI destination now receives a structured seed request (stage or send,
+continue or start fresh), has a clearer first-run proposition, and exposes a
+new-conversation action after a thread begins.
+
+Inference stays reusable and separate from this Home intent. The iOS
+`InferenceService` accepts structured system/user/assistant messages, prefers
+an exact provider configured on the phone, and otherwise sends the same
+messages to the paired Mac's configured-inference route. On macOS that route
+uses TalkieAgentServer's existing Gateway provider registry; Scout remains the
+agent/session handoff boundary. Mac provider credentials never need to be
+copied onto the phone for this flow.
+
+Swift sources:
+
+- `apps/ios/Talkie iOS/Views/Next/HomeNextView.swift`
+- `apps/ios/Talkie iOS/Views/Next/AppShellNext.swift`
+- `apps/ios/Talkie iOS/Views/Next/AskAINext.swift`
+- `apps/ios/Talkie iOS/Services/Inference/InferenceService.swift`
+- `apps/macos/TalkieServer/src/bridge/routes/configured-inference.ts`

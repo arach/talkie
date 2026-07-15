@@ -70,14 +70,7 @@ enum TalkieAIProviderCredentialOCRService {
     }
 
     static func candidates(in text: String) -> [TalkieAIProviderCredentialOCRCandidate] {
-        let compacted = text
-            .components(separatedBy: .whitespacesAndNewlines)
-            .joined()
-        var searchSpaces = [text]
-
-        if compacted.contains("sk-") || compacted.contains("gsk_") {
-            searchSpaces.append(compacted)
-        }
+        let searchSpaces = [text] + lineBreakCompactedKeyStrings(in: text)
 
         var candidates: [TalkieAIProviderCredentialOCRCandidate] = []
         var seen = Set<String>()
@@ -102,26 +95,22 @@ enum TalkieAIProviderCredentialOCRService {
             return completeCandidate
         }
 
-        let compacted = text
-            .components(separatedBy: .whitespacesAndNewlines)
-            .joined()
+        let searchSpaces = [text] + lineBreakCompactedKeyStrings(in: text)
+        let openAIDrafts = searchSpaces.flatMap {
+            drafts(in: $0, providerId: "openai", pattern: #"sk-[A-Za-z0-9_-]{8,}"#)
+        }
 
-        if let openAI = drafts(in: compacted, providerId: "openai", pattern: #"sk-[A-Za-z0-9_-]{8,}"#).first {
+        if let openAI = openAIDrafts.max(by: { $0.apiKey.count < $1.apiKey.count }) {
             return openAI
         }
 
-        return drafts(in: compacted, providerId: "groq", pattern: #"gsk_[A-Za-z0-9_-]{8,}"#).first
+        return searchSpaces
+            .flatMap { drafts(in: $0, providerId: "groq", pattern: #"gsk_[A-Za-z0-9_-]{8,}"#) }
+            .max(by: { $0.apiKey.count < $1.apiKey.count })
     }
 
     static func keyFragments(in text: String) -> [String] {
-        let compacted = text
-            .components(separatedBy: .whitespacesAndNewlines)
-            .joined()
-        var searchSpaces = [text]
-
-        if compacted.contains("sk-") || compacted.contains("gsk_") {
-            searchSpaces.append(compacted)
-        }
+        let searchSpaces = [text] + lineBreakCompactedKeyStrings(in: text)
 
         var fragments: [String] = []
         var seen = Set<String>()
@@ -305,6 +294,63 @@ enum TalkieAIProviderCredentialOCRService {
 
             return fragment
         }
+    }
+
+    /// Rejoins OCR fragments only when a provider-prefixed token is followed
+    /// by whole lines that still look like key material. Compacting every
+    /// whitespace boundary also swallowed labels and adjacent keys, producing
+    /// strings such as `sk-...middlesk-...end`.
+    private static func lineBreakCompactedKeyStrings(in text: String) -> [String] {
+        let lines = text.components(separatedBy: .newlines)
+        let patterns = [#"sk-[A-Za-z0-9_-]+"#, #"gsk_[A-Za-z0-9_-]+"#]
+        var compacted: [String] = []
+        var seen = Set<String>()
+
+        for lineIndex in lines.indices {
+            for pattern in patterns {
+                guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+                let line = lines[lineIndex]
+                let range = NSRange(line.startIndex..<line.endIndex, in: line)
+
+                for match in regex.matches(in: line, range: range) {
+                    guard let matchRange = Range(match.range, in: line) else { continue }
+                    let firstFragment = cleanedAPIKey(String(line[matchRange]))
+                    var candidate = firstFragment
+
+                    for nextLine in lines.index(after: lineIndex)..<lines.endIndex {
+                        let continuation = lines[nextLine]
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+                        guard isLikelyLineBreakContinuation(continuation) else { break }
+                        candidate += continuation
+                    }
+
+                    guard candidate != firstFragment,
+                          seen.insert(candidate).inserted else { continue }
+                    compacted.append(candidate)
+                }
+            }
+        }
+
+        return compacted
+    }
+
+    private static func isLikelyLineBreakContinuation(_ fragment: String) -> Bool {
+        guard (4...64).contains(fragment.count),
+              fragment.allSatisfy({ character in
+                  character.isLetter || character.isNumber || character == "_" || character == "-"
+              }) else {
+            return false
+        }
+
+        let letters = fragment.filter(\.isLetter)
+        let hasDigitOrSeparator = fragment.contains { character in
+            character.isNumber || character == "_" || character == "-"
+        }
+        let isUppercaseRun = !letters.isEmpty && letters.allSatisfy(\.isUppercase)
+        let hasMixedCase = letters.contains(where: \.isUppercase) && letters.contains(where: \.isLowercase)
+
+        return hasDigitOrSeparator || isUppercaseRun || (hasMixedCase && fragment.count >= 10)
     }
 
     private static func isLikelyKeyFragment(_ fragment: String) -> Bool {
