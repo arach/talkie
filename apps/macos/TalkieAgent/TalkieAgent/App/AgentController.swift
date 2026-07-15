@@ -676,11 +676,30 @@ final class AgentController: ObservableObject {
                 log.error("════════════════════════════════════════════════════════════")
                 log.error("🔄 AUTO-REBOOTING AUDIO SYSTEM after \(consecutiveFailures) consecutive failures")
                 log.error("════════════════════════════════════════════════════════════")
-                AppLogger.shared.log(.audio, "Rebooting audio system", detail: "\(consecutiveFailures) consecutive failures")
+                AppLogger.shared.log(
+                    .audio,
+                    "Rebooting audio system",
+                    detail: "\(consecutiveFailures) consecutive failures",
+                    level: .notice
+                )
                 consecutiveFailures = 0
                 justRebooted = true  // Track that we're about to reboot
-                Task {
-                    await audio.reboot()
+                FloatingPillController.shared.showNotice("Resetting mic...")
+                SoundManager.shared.playMicRecoveryStarted()
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    let result = await self.audio.reboot()
+                    switch result {
+                    case .success:
+                        FloatingPillController.shared.showNotice("Mic reset - try again")
+                        SoundManager.shared.playMicRecoverySucceeded()
+                    case .successDegraded:
+                        FloatingPillController.shared.showNotice("Mic reset - still recovering")
+                        SoundManager.shared.playMicRecoveryDegraded()
+                    case .failed:
+                        FloatingPillController.shared.showError("Mic reset failed - check Audio Settings")
+                        SoundManager.shared.playMicRecoveryFailed()
+                    }
                 }
             }
         }
@@ -1419,15 +1438,17 @@ final class AgentController: ObservableObject {
         }
 
         audio.startCapture { [weak self] audioPaths in
-            // Use @MainActor to ensure processDidFire check-then-set is atomic
+            guard let self else { return }
+            // The capture callback is MainActor-isolated, so claim the one-shot
+            // synchronously before the safety watchdog can observe stale state.
+            guard !self.processDidFire else {
+                log.warning("process() already fired for this recording, ignoring duplicate callback")
+                return
+            }
+            self.processDidFire = true
+
             Task { @MainActor [weak self] in
-                guard let self = self else { return }
-                // One-shot guard: prevent duplicate process() calls
-                guard !self.processDidFire else {
-                    log.warning("process() already fired for this recording, ignoring duplicate callback")
-                    return
-                }
-                self.processDidFire = true
+                guard let self else { return }
                 if self.state == .transcribing {
                     try? await Task.sleep(for: .milliseconds(90))
                 }
@@ -1679,11 +1700,43 @@ final class AgentController: ObservableObject {
             self?.audio.stopCapture()
         }
 
-        // Safety timeout: if no audio file is produced, reset to idle with error
+        // Safety timeout: finalization is asynchronous and can legitimately exceed
+        // two seconds on a degraded HAL. Wait while the capture service reports
+        // active finalization, but retain an upper bound for a genuinely stuck queue.
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(2))
             guard let self else { return }
-            guard self.state == .transcribing, self.pendingAudioFilename == nil, !self.isCancelled else { return }
+            guard self.state == .transcribing,
+                  self.pendingAudioFilename == nil,
+                  !self.processDidFire,
+                  !self.isCancelled else { return }
+
+            if self.audio.isFinalizingCapture {
+                log.warning("Audio finalization exceeded 2s; extending completion wait")
+                FloatingPillController.shared.showNotice("Finishing recording...")
+            }
+
+            // 2s initial wait + up to 28s while finalization remains active.
+            for _ in 0..<112 where self.audio.isFinalizingCapture {
+                try? await Task.sleep(for: .milliseconds(250))
+                guard self.state == .transcribing,
+                      self.pendingAudioFilename == nil,
+                      !self.processDidFire,
+                      !self.isCancelled else { return }
+            }
+
+            guard !self.audio.isFinalizingCapture else {
+                self.handleCaptureError("Audio finalization timed out")
+                return
+            }
+
+            // Let a completion callback already enqueued on MainActor claim the
+            // one-shot before treating the absence of output as a capture failure.
+            await Task.yield()
+            guard self.state == .transcribing,
+                  self.pendingAudioFilename == nil,
+                  !self.processDidFire,
+                  !self.isCancelled else { return }
             self.handleCaptureError("No audio captured")
         }
     }

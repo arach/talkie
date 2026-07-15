@@ -52,6 +52,15 @@ extension OSLogEntryLog.Level {
     }
 }
 
+private extension EventType {
+    var defaultLogLevel: OSLogEntryLog.Level {
+        switch self {
+        case .error: .error
+        default: .info
+        }
+    }
+}
+
 // MARK: - App Logger (Unified logging - os.log + in-memory)
 
 @MainActor
@@ -63,9 +72,17 @@ final class AppLogger: ObservableObject {
 
     private init() {}
 
-    /// Log a message - logs to console, in-memory, AND file for cross-app viewing
-    /// Warnings and errors use critical mode (immediate flush) with file:line context
-    func log(_ category: EventType, _ message: String, detail: String? = nil, level: OSLogEntryLog.Level = .info, file: String = #file, line: Int = #line) {
+    /// Log a message - logs to console, in-memory, AND file for cross-app viewing.
+    /// Error events default to error severity; callers can still override the level explicitly.
+    func log(
+        _ category: EventType,
+        _ message: String,
+        detail: String? = nil,
+        level explicitLevel: OSLogEntryLog.Level? = nil,
+        file: String = #file,
+        line: Int = #line
+    ) {
+        let level = explicitLevel ?? category.defaultLogLevel
         let timestamp = Date().formatted(.dateTime.hour().minute().second().secondFraction(.fractional(2)))
         let filename = URL(fileURLWithPath: file).deletingPathExtension().lastPathComponent
         let levelStr = switch level {
@@ -107,7 +124,7 @@ final class AppLogger: ObservableObject {
         }
 
         // Feed to TalkieReporter for error report context
-        let fullMessage = detail != nil ? "\(message): \(detail!)" : message
+        let fullMessage = detail.map { "\(message): \($0)" } ?? message
         let logLine = "[\(timestamp)] \(levelStr) [\(category.rawValue)] \(fullMessage) <- \(filename):\(line)"
         TalkieReporter.shared.addLog(logLine)
     }
