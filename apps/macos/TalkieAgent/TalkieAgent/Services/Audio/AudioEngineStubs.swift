@@ -63,11 +63,11 @@ final class UnifiedAudioCapture: AgentAudioCapture {
     var onError: ((Error) -> Void)?
 
     /// Chunk callback for AgentAudioCapture
-    private var onChunk: (([String]) -> Void)?
+    private var onChunk: (@MainActor ([String]) -> Void)?
 
     // MARK: - AgentAudioCapture Protocol
 
-    func startCapture(onChunk: @escaping ([String]) -> Void) {
+    func startCapture(onChunk: @escaping @MainActor ([String]) -> Void) {
         self.onChunk = onChunk
         // Stub - no actual capture
     }

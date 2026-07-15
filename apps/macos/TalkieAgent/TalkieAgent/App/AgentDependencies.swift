@@ -15,14 +15,19 @@ enum AudioRebootResult {
 // MARK: - Protocols
 
 protocol AgentAudioCapture {
-    func startCapture(onChunk: @escaping ([String]) -> Void)  // Receives segment file paths
+    func startCapture(onChunk: @escaping @MainActor ([String]) -> Void)  // Receives segment file paths
     func stopCapture()
     func requestCheckpoint()
+    var isFinalizingCapture: Bool { get }
     var currentSegmentIndex: Int { get }
     var onSegmentCompleted: ((AudioWriterSegment) -> Void)? { get set }
     var onCaptureError: ((String) -> Void)? { get set }  // Called when capture fails to start
     @discardableResult
     func reboot() async -> AudioRebootResult  // Full audio system reset
+}
+
+extension AgentAudioCapture {
+    var isFinalizingCapture: Bool { false }
 }
 
 protocol AgentRouter {
@@ -45,12 +50,14 @@ final class StubAudioCapture: AgentAudioCapture {
     var onCaptureError: ((String) -> Void)?
     var currentSegmentIndex: Int { 0 }
 
-    func startCapture(onChunk: @escaping ([String]) -> Void) {
+    func startCapture(onChunk: @escaping @MainActor ([String]) -> Void) {
         logger.info("Audio capture started")
         // Simulate listening for 2 seconds, then deliver a "buffer"
         timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { _ in
             logger.info("Audio buffer captured")
-            onChunk(["/tmp/stub-audio.m4a"])  // Stub path
+            Task { @MainActor in
+                onChunk(["/tmp/stub-audio.m4a"])  // Stub path
+            }
         }
     }
 

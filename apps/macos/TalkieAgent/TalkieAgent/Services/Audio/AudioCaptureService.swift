@@ -149,7 +149,7 @@ final class AudioCaptureService: AgentAudioCapture {
     // MARK: - Recording State
 
     private var currentRecordingURL: URL?
-    private var onChunk: (([String]) -> Void)?
+    private var onChunk: (@MainActor ([String]) -> Void)?
     var onSegmentCompleted: ((AudioWriterSegment) -> Void)? {
         get { onSegmentCompletedCallback }
         set { onSegmentCompletedCallback = newValue }
@@ -161,6 +161,8 @@ final class AudioCaptureService: AgentAudioCapture {
     private var bufferCount = 0
     private var fileCreated = false
     private var fallbackCaptureSession: FallbackCaptureSession?
+
+    var isFinalizingCapture: Bool { state == .finalizing }
 
     /// A fixed microphone can pass lightweight HAL checks and still fail inside
     /// AVAudioEngine.start(). Suppress it briefly after that failure so the next
@@ -311,7 +313,7 @@ final class AudioCaptureService: AgentAudioCapture {
 
     /// Start capturing audio
     /// - Parameter onChunk: Callback with file path when recording completes
-    func startCapture(onChunk: @escaping ([String]) -> Void) {
+    func startCapture(onChunk: @escaping @MainActor ([String]) -> Void) {
         self.onChunk = onChunk
         fileWriter.segmentDuration = MainActor.assumeIsolated { LiveSettings.shared.segmentDuration }
 
@@ -352,7 +354,11 @@ final class AudioCaptureService: AgentAudioCapture {
     /// Simulate mic capture by feeding audio from file(s) through the buffer pipeline.
     /// Runs the full path: handleBuffer → segmentation → compression → transcription.
     /// No real mic is used. Runs faster than real-time.
-    func simulateCapture(filePaths: [String], segmentDuration: TimeInterval? = nil, onChunk: @escaping ([String]) -> Void) {
+    func simulateCapture(
+        filePaths: [String],
+        segmentDuration: TimeInterval? = nil,
+        onChunk: @escaping @MainActor ([String]) -> Void
+    ) {
         self.onChunk = onChunk
 
         // Override segment duration if requested
@@ -519,9 +525,10 @@ final class AudioCaptureService: AgentAudioCapture {
     /// Main-thread tail of `stopCapture`, run after the heavy file finalize has
     /// completed on the audio setup queue. Validates the finalized recording,
     /// hands it off for transcription, and finishes the (cheap) teardown.
+    @MainActor
     private func finishStopCapture(
         result: AudioWriterResult?,
-        chunkCallback: (([String]) -> Void)?,
+        chunkCallback: (@MainActor ([String]) -> Void)?,
         stopStart: CFTimeInterval
     ) {
         func logTiming(_ step: String) {
