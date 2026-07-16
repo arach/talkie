@@ -58,6 +58,8 @@ apps/ios/fastlane/marketing/.upload/
 !apps/ios/fastlane/screenshots/raw/en-US/iPhone\ 17\ Pro\ Max-05_Keyboard.png
 !apps/ios/fastlane/screenshots/raw/en-US/iPhone\ 17\ Pro\ Max-state-dictating.png
 !apps/ios/fastlane/screenshots/raw/en-US/iPhone\ 17\ Pro\ Max-state-diff.png
+!apps/ios/fastlane/screenshots/iPad\ Pro\ 13-inch\ \(M5\)/01_Home.png
+!apps/ios/fastlane/screenshots/Apple\ Watch\ Series\ 11\ \(46mm\)/00_WatchHome.png
 
 # macOS
 .DS_Store
