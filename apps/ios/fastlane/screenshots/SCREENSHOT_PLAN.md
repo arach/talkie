@@ -20,7 +20,7 @@ the app (settings), and uses the custom keyboard (keyboard).
 
 - iPhone 17 Pro Max (6.9") — `apps/ios/fastlane/screenshots/iPhone 17 Pro Max/XX_Name.png`
 - iPad Pro 13-inch (M5) — `apps/ios/fastlane/screenshots/iPad Pro 13-inch (M5)/XX_Name.png`
-- Apple Watch Ultra 3 (49mm) — `apps/ios/fastlane/screenshots/Apple Watch Ultra 3 (49mm)/00_WatchHome.png`
+- Apple Watch Series 11 (46mm) — `apps/ios/fastlane/screenshots/Apple Watch Series 11 (46mm)/00_WatchHome.png`
 
 ## Current status
 
@@ -40,7 +40,7 @@ the app (settings), and uses the custom keyboard (keyboard).
 - 04_Settings: ✅ Direct settings route
 - 05_Keyboard: ✅ Compose keyboard surface
 
-### Apple Watch Ultra 3 (49mm)
+### Apple Watch Series 11 (46mm)
 - 00_WatchHome: ✅ Watch home screen
 
 ## Keyboard extension setup
@@ -88,10 +88,10 @@ runs the six App Store screenshot tests, copies images from the SnapshotHelper
 cache, and verifies dimensions.
 
 Watch screenshots are currently captured manually after building and installing
-the `TalkieWatch Watch App` scheme on an Apple Watch Ultra 3 simulator:
+the `TalkieWatch Watch App` scheme on an Apple Watch Series 11 simulator:
 
 ```bash
-xcrun simctl io <WATCH_UDID> screenshot "apps/ios/fastlane/screenshots/Apple Watch Ultra 3 (49mm)/00_WatchHome.png"
+xcrun simctl io <WATCH_UDID> screenshot "apps/ios/fastlane/screenshots/Apple Watch Series 11 (46mm)/00_WatchHome.png"
 ```
 
 ## Principle
