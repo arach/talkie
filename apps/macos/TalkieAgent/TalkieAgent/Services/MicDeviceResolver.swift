@@ -239,13 +239,20 @@ struct MicDeviceResolver {
         let sizeStatus = AudioObjectGetPropertyDataSize(deviceID, &propertyAddress, 0, nil, &dataSize)
         guard sizeStatus == noErr, dataSize > 0 else { return false }
 
-        let bufferList = UnsafeMutablePointer<AudioBufferList>.allocate(capacity: 1)
-        defer { bufferList.deallocate() }
+        // AudioBufferList has a trailing variable-length buffer array. Allocate
+        // the byte count reported by CoreAudio before asking it to fill the list.
+        let bufferListStorage = UnsafeMutableRawPointer.allocate(
+            byteCount: Int(dataSize),
+            alignment: MemoryLayout<AudioBufferList>.alignment
+        )
+        bufferListStorage.initializeMemory(as: UInt8.self, repeating: 0, count: Int(dataSize))
+        defer { bufferListStorage.deallocate() }
 
-        let status = AudioObjectGetPropertyData(deviceID, &propertyAddress, 0, nil, &dataSize, bufferList)
+        let status = AudioObjectGetPropertyData(deviceID, &propertyAddress, 0, nil, &dataSize, bufferListStorage)
         guard status == noErr else { return false }
 
-        return bufferList.pointee.mNumberBuffers > 0
+        let bufferList = bufferListStorage.bindMemory(to: AudioBufferList.self, capacity: 1)
+        return UnsafeMutableAudioBufferListPointer(bufferList).contains { $0.mNumberChannels > 0 }
     }
 
     private func getDeviceUID(_ deviceID: AudioDeviceID) -> String? {

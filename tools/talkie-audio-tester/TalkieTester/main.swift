@@ -106,14 +106,18 @@ func getAudioInputDevices() -> [AudioDevice] {
         result = AudioObjectGetPropertyDataSize(deviceID, &inputPropertyAddress, 0, nil, &bufferListSize)
         guard result == noErr else { continue }
 
-        let bufferListPtr = UnsafeMutablePointer<AudioBufferList>.allocate(capacity: 1)
-        defer { bufferListPtr.deallocate() }
+        let bufferListStorage = UnsafeMutableRawPointer.allocate(
+            byteCount: Int(bufferListSize),
+            alignment: MemoryLayout<AudioBufferList>.alignment
+        )
+        bufferListStorage.initializeMemory(as: UInt8.self, repeating: 0, count: Int(bufferListSize))
+        defer { bufferListStorage.deallocate() }
 
-        result = AudioObjectGetPropertyData(deviceID, &inputPropertyAddress, 0, nil, &bufferListSize, bufferListPtr)
+        result = AudioObjectGetPropertyData(deviceID, &inputPropertyAddress, 0, nil, &bufferListSize, bufferListStorage)
         guard result == noErr else { continue }
 
-        let bufferList = bufferListPtr.pointee
-        guard bufferList.mNumberBuffers > 0 else { continue }
+        let bufferList = bufferListStorage.bindMemory(to: AudioBufferList.self, capacity: 1)
+        guard UnsafeMutableAudioBufferListPointer(bufferList).contains(where: { $0.mNumberChannels > 0 }) else { continue }
 
         // Get device name
         var namePropertyAddress = AudioObjectPropertyAddress(
