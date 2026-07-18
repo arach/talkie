@@ -1,5 +1,5 @@
 import type { Command } from "../gunshi-command";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { getFormatOptions, output } from "../format";
@@ -7,6 +7,14 @@ import { getFormatOptions, output } from "../format";
 const APP_NAME = "Talkie.app";
 const APP_PATH = `/Applications/${APP_NAME}`;
 const PLIST_PATH = `${APP_PATH}/Contents/Info.plist`;
+const PROD_AGENT_PATH = `${APP_PATH}/Contents/Library/LoginItems/TalkieAgent.app`;
+const DEV_AGENT_PATH = join(
+  homedir(),
+  "Applications",
+  "dev",
+  "Talkie",
+  "TalkieAgent.app"
+);
 const BRIDGE_PORT = 8765;
 const LOCAL_AUTH_TOKEN_FILE = join(
   homedir(),
@@ -298,6 +306,244 @@ function checkAppRunning(): boolean {
   return run(["pgrep", "-x", "Talkie"]).exitCode === 0;
 }
 
+type AgentFlavor = "production" | "dev" | "other";
+
+interface AgentProcess {
+  pid: number;
+  appPath: string | null;
+  flavor: AgentFlavor;
+}
+
+interface AgentCommandOptions {
+  dev?: boolean;
+  production?: boolean;
+  restart?: boolean;
+}
+
+interface AgentLaunchResult {
+  launched: boolean;
+  alreadyRunning: boolean;
+  restarted: boolean;
+  flavor: AgentFlavor;
+  path: string;
+  version: string | null;
+  build: string | null;
+  pids: number[];
+  error?: string;
+}
+
+function agentFlavor(appPath: string | null): AgentFlavor {
+  if (appPath === DEV_AGENT_PATH) return "dev";
+  if (appPath === PROD_AGENT_PATH) return "production";
+  return "other";
+}
+
+function agentAppPathFromCommand(command: string | null): string | null {
+  if (!command) return null;
+  const executableSuffix = "/Contents/MacOS/TalkieAgent";
+  const suffixIndex = command.indexOf(executableSuffix);
+  return suffixIndex >= 0 ? command.slice(0, suffixIndex) : null;
+}
+
+function getAgentProcesses(): AgentProcess[] {
+  const result = run(["pgrep", "-x", "TalkieAgent"]);
+  if (result.exitCode !== 0) return [];
+
+  return result.stdout
+    .toString()
+    .trim()
+    .split("\n")
+    .map((value) => Number.parseInt(value, 10))
+    .filter(Number.isFinite)
+    .map((pid) => {
+      const command = commandOutput(["ps", "-o", "command=", "-p", String(pid)]);
+      const appPath = agentAppPathFromCommand(command);
+      return { pid, appPath, flavor: agentFlavor(appPath) };
+    });
+}
+
+function agentMetadata(appPath: string): { version: string | null; build: string | null } {
+  const plistPath = `${appPath}/Contents/Info.plist`;
+  return {
+    version: commandOutput(["plutil", "-extract", "CFBundleShortVersionString", "raw", "-o", "-", plistPath]),
+    build: commandOutput(["plutil", "-extract", "CFBundleVersion", "raw", "-o", "-", plistPath]),
+  };
+}
+
+function agentBinaryModificationTime(appPath: string): number {
+  try {
+    return statSync(`${appPath}/Contents/MacOS/TalkieAgent`).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+
+function compareVersionStrings(left: string | null, right: string | null): number {
+  const leftParts = left?.split(".").map((part) => Number.parseInt(part, 10)) ?? [];
+  const rightParts = right?.split(".").map((part) => Number.parseInt(part, 10)) ?? [];
+  const count = Math.max(leftParts.length, rightParts.length);
+
+  for (let index = 0; index < count; index += 1) {
+    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
+    if (difference !== 0) return difference;
+  }
+  return 0;
+}
+
+function resolveAgentPath(options: AgentCommandOptions): string | null {
+  if (options.dev) return existsSync(DEV_AGENT_PATH) ? DEV_AGENT_PATH : null;
+  if (options.production) return existsSync(PROD_AGENT_PATH) ? PROD_AGENT_PATH : null;
+
+  const installed = [PROD_AGENT_PATH, DEV_AGENT_PATH].filter((path) => existsSync(path));
+  installed.sort((a, b) => {
+    const versionOrder = compareVersionStrings(
+      agentMetadata(b).version,
+      agentMetadata(a).version
+    );
+    return versionOrder !== 0
+      ? versionOrder
+      : agentBinaryModificationTime(b) - agentBinaryModificationTime(a);
+  });
+  return installed[0] ?? null;
+}
+
+function stopAgentProcesses(): void {
+  for (const process of getAgentProcesses()) {
+    run(["kill", "-TERM", String(process.pid)]);
+  }
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (getAgentProcesses().length === 0) return;
+    Bun.sleepSync(100);
+  }
+
+  for (const process of getAgentProcesses()) {
+    run(["kill", "-KILL", String(process.pid)]);
+  }
+  Bun.sleepSync(100);
+}
+
+function emitAgentLaunchResult(result: AgentLaunchResult, cmd: Command): void {
+  const fmt = getFormatOptions(cmd.optsWithGlobals());
+
+  if (fmt.pretty) {
+    if (result.error) {
+      console.log(`  ${YELLOW}!${RESET} ${result.error}`);
+    } else if (result.alreadyRunning) {
+      console.log(
+        `  ${GREEN}✓${RESET} TalkieAgent is already running ${DIM}(${result.flavor}${result.version ? ` v${result.version}` : ""}, PID ${result.pids.join(", ")})${RESET}`
+      );
+    } else {
+      const action = result.restarted ? "Restarted" : "Launched";
+      console.log(
+        `  ${GREEN}✓${RESET} ${action} TalkieAgent ${DIM}(${result.flavor}${result.version ? ` v${result.version}` : ""}, PID ${result.pids.join(", ")})${RESET}`
+      );
+    }
+  } else {
+    output(result, fmt);
+  }
+
+  if (result.error) process.exitCode = 1;
+}
+
+function launchAgent(options: AgentCommandOptions, cmd: Command): void {
+  const running = getAgentProcesses();
+
+  if (options.dev && options.production) {
+    emitAgentLaunchResult({
+      launched: false,
+      alreadyRunning: false,
+      restarted: false,
+      flavor: "other",
+      path: "",
+      version: null,
+      build: null,
+      pids: running.map((process) => process.pid),
+      error: "Choose either --dev or --production, not both.",
+    }, cmd);
+    return;
+  }
+
+  const appPath = resolveAgentPath(options);
+
+  if (!appPath) {
+    const error = options.dev
+      ? `TalkieAgent dev build not found at ${DEV_AGENT_PATH}. Build it with apps/macos/run.sh first.`
+      : options.production
+        ? `Production TalkieAgent not found inside ${APP_PATH}. Run talkie install first.`
+        : "TalkieAgent is not installed. Run talkie install first.";
+    emitAgentLaunchResult({
+      launched: false,
+      alreadyRunning: false,
+      restarted: false,
+      flavor: options.dev ? "dev" : options.production ? "production" : "other",
+      path: options.dev ? DEV_AGENT_PATH : options.production ? PROD_AGENT_PATH : "",
+      version: null,
+      build: null,
+      pids: [],
+      error,
+    }, cmd);
+    return;
+  }
+
+  const flavor = agentFlavor(appPath);
+  const metadata = agentMetadata(appPath);
+  const matching = running.filter((process) => process.appPath === appPath);
+  const conflicting = running.filter((process) => process.appPath !== appPath);
+
+  if (!options.restart && matching.length > 0 && conflicting.length === 0) {
+    emitAgentLaunchResult({
+      launched: false,
+      alreadyRunning: true,
+      restarted: false,
+      flavor,
+      path: appPath,
+      ...metadata,
+      pids: matching.map((process) => process.pid),
+    }, cmd);
+    return;
+  }
+
+  const replacingExistingAgent = running.length > 0;
+  if (options.restart || conflicting.length > 0) stopAgentProcesses();
+
+  const open = run(["open", "-g", appPath]);
+  if (open.exitCode !== 0) {
+    emitAgentLaunchResult({
+      launched: false,
+      alreadyRunning: false,
+      restarted: options.restart === true || replacingExistingAgent,
+      flavor,
+      path: appPath,
+      ...metadata,
+      pids: [],
+      error: open.stderr.toString().trim() || "macOS could not open TalkieAgent.",
+    }, cmd);
+    return;
+  }
+
+  let launched: AgentProcess[] = [];
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    launched = getAgentProcesses().filter((process) => process.appPath === appPath);
+    if (launched.length > 0) break;
+    Bun.sleepSync(100);
+  }
+
+  const error = launched.length === 0
+    ? "macOS accepted the launch request, but TalkieAgent did not stay running."
+    : undefined;
+  emitAgentLaunchResult({
+    launched: launched.length > 0,
+    alreadyRunning: false,
+    restarted: options.restart === true || replacingExistingAgent,
+    flavor,
+    path: appPath,
+    ...metadata,
+    pids: launched.map((process) => process.pid),
+    error,
+  }, cmd);
+}
+
 function printCheck(ok: boolean, label: string, detail?: string): void {
   const mark = ok ? `${GREEN}✓${RESET}` : `${YELLOW}!${RESET}`;
   const suffix = detail ? ` ${DIM}${detail}${RESET}` : "";
@@ -306,10 +552,34 @@ function printCheck(ok: boolean, label: string, detail?: string): void {
 
 function registerOpenCommand(program: Command): void {
   program
-    .command("open")
-    .description("Open Talkie.app")
-    .action((_opts, cmd) => {
+    .command("open [target]")
+    .description("Open Talkie.app, or use `talkie open agent` for TalkieAgent")
+    .option("--dev", "open the stable local TalkieAgent development build")
+    .option("--production", "open the TalkieAgent embedded in /Applications/Talkie.app")
+    .option("--restart", "restart TalkieAgent before opening it")
+    .action((target: string | undefined, opts: AgentCommandOptions, cmd) => {
+      const normalizedTarget = target?.toLowerCase();
+      if (normalizedTarget === "agent" || normalizedTarget === "talkieagent") {
+        launchAgent(opts, cmd);
+        return;
+      }
+
       const fmt = getFormatOptions(cmd.optsWithGlobals());
+      if (normalizedTarget && normalizedTarget !== "app" && normalizedTarget !== "talkie") {
+        const error = `Unknown app target: ${target}. Available: app, agent`;
+        if (fmt.pretty) console.log(`  ${YELLOW}!${RESET} ${error}`);
+        else output({ opened: false, target, error }, fmt);
+        process.exitCode = 1;
+        return;
+      }
+      if (opts.dev || opts.production || opts.restart) {
+        const error = "--dev, --production, and --restart are only supported with `talkie open agent`.";
+        if (fmt.pretty) console.log(`  ${YELLOW}!${RESET} ${error}`);
+        else output({ opened: false, target: "app", error }, fmt);
+        process.exitCode = 1;
+        return;
+      }
+
       const installed = getInstalledVersion();
       const ok = installed ? openUrl(APP_PATH) : false;
 
@@ -326,6 +596,16 @@ function registerOpenCommand(program: Command): void {
 
       if (!ok) process.exit(1);
     });
+}
+
+function registerAgentCommand(program: Command): void {
+  program
+    .command("agent")
+    .description("Launch TalkieAgent without opening the main Talkie window")
+    .option("--dev", "launch the stable local development build")
+    .option("--production", "launch the helper embedded in /Applications/Talkie.app")
+    .option("--restart", "restart all running TalkieAgent instances before launch")
+    .action((opts: AgentCommandOptions, cmd) => launchAgent(opts, cmd));
 }
 
 function registerProCommand(program: Command): void {
@@ -782,6 +1062,7 @@ function registerCompanionCommand(program: Command): void {
 
 export function registerAppCommand(program: Command): void {
   registerOpenCommand(program);
+  registerAgentCommand(program);
   registerProCommand(program);
   registerWhereCommand(program);
   registerDoctorCommand(program);

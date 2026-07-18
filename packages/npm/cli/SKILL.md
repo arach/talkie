@@ -126,6 +126,17 @@ talkie stats
 
 Returns: dictation counts (today/week/total), word counts, streak days, top apps.
 
+### app — Launch Talkie and TalkieAgent
+
+```bash
+talkie open                 # Open Talkie.app
+talkie agent                # Launch TalkieAgent in the background
+talkie agent --restart      # Restart a stuck agent
+talkie agent --dev          # Launch the stable local dev install
+talkie agent --production   # Launch the helper embedded in Talkie.app
+talkie open agent           # Equivalent agent launch route
+```
+
 ## Output Formats
 
 **JSON (default)** — Machine-readable, pipes to `jq`:
