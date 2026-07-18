@@ -26,6 +26,7 @@ export function createProgram(): Command {
 
   Quick start:
     talkie open               open Talkie.app
+    talkie agent              launch TalkieAgent in the background
     talkie doctor             check app, CLI, and companion setup
     talkie companion          show App Store QR for iPhone/iPad
     talkie pair               show Mac Bridge pairing QR (iOS app companion)
