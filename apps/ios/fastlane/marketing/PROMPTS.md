@@ -2,7 +2,27 @@
 
 Mode: built-in image generation. The resulting images are used only as
 background material; the Talkie UI, icon, and typography are composed from
-project sources by `compose.swift`.
+project sources by `compose.swift` and `compose-ipad.swift`.
+
+## Graphite instrument panel
+
+Reference role: the supplied dark audio-component image was used only as a
+style and mood reference. The generated panel is an original design.
+
+```text
+Use case: ads-marketing
+Asset type: background plate for a 13-inch iPad App Store screenshot campaign, 4:3 landscape
+Input images: Image 1 is a style and mood reference only; do not reproduce its exact object or layout
+Primary request: create an original low-key industrial product-photography backdrop that makes a voice-and-AI app feel like a precise physical instrument
+Scene/backdrop: a front-facing matte graphite and midnight-navy control surface in a black studio, with a large clean recessed rectangular field occupying most of the center and right side for later placement of a real app screenshot; sparse abstract circular controls and tiny amber indicator lights confined to the far edges
+Style/medium: photorealistic premium industrial design photography, understated 1980s hi-fi and modern audio-tool character, original design
+Composition/framing: straight-on 4:3 landscape, generous clean negative space in the upper-left for a short headline, large uninterrupted central display recess, crisp silhouette, no perspective distortion
+Lighting/mood: deep black low-key studio lighting, thin cool rim highlights, restrained warm amber glints, quiet and exact rather than flashy
+Color palette: graphite, blue-black, near-black, muted brass and amber accents
+Materials/textures: fine powder-coated metal, subtle anodized aluminum, smoked glass, tiny machined details
+Constraints: background plate only; no app UI; no iPad or tablet; no recognizable product; no logos; no trademarks; no words; no letters; no numbers; no watermark
+Avoid: copying Image 1's exact hardware, bright neon, cyberpunk styling, excessive controls, clutter, visible brand identity, beige paper textures
+```
 
 ## Ivory waveform
 

@@ -87,6 +87,16 @@ final class TalkieUITestsScreenshots: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
+        let environment = ProcessInfo.processInfo.environment
+        let simulatorName = environment["SIMULATOR_DEVICE_NAME"] ?? ""
+        let isIPadSimulator = simulatorName.localizedStandardContains("iPad")
+        if environment["TALKIE_SCREENSHOT_ORIENTATION"] == "landscape" || isIPadSimulator {
+            XCUIDevice.shared.orientation = .landscapeLeft
+            waitForOrientation { $0.isLandscape }
+        } else {
+            XCUIDevice.shared.orientation = .portrait
+            waitForOrientation { $0.isPortrait }
+        }
         setupSnapshot(app, waitForAnimations: false)
         app.launchArguments += ["-FASTLANE_SNAPSHOT"]
     }
@@ -294,6 +304,7 @@ extension TalkieUITestsScreenshots {
 
         let prompt = "Help me outline the launch plan"
         commandField.typeText(prompt)
+        Snapshot.snapshot("state-home-ask-ready", timeWaitingForIdle: 0)
 
         let sendButton = app.buttons["home.command-send"].firstMatch
         XCTAssertTrue(sendButton.waitForExistence(timeout: 3), "Home Ask Talkie send should exist")
@@ -310,6 +321,16 @@ extension TalkieUITestsScreenshots {
             "Missing credentials should offer a direct AI Keys recovery action"
         )
         snapshot("state-ask-ai-from-home", timeWaitingForIdle: 0)
+    }
+}
+
+private func waitForOrientation(
+    timeout: TimeInterval = 2,
+    matches: (UIDeviceOrientation) -> Bool
+) {
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline, !matches(XCUIDevice.shared.orientation) {
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     }
 }
 

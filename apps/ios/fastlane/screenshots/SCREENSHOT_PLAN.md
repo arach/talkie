@@ -1,9 +1,11 @@
 # App Store Screenshot Plan
 
 ## Narrative
-A user opens Talkie, sees what it does (splash), sees their memos (home),
-records a new one (recording), views the result (memo detail), configures
-the app (settings), and uses the custom keyboard (keyboard).
+
+The iPhone sequence moves from capture through composition, review, control,
+and the custom keyboard. The iPad sequence is landscape-first and emphasizes
+the full voice workspace: Home, recording, dictation, Ask AI, edit review, and
+dictation anywhere.
 
 ## Screens (6 total, same across all devices)
 
@@ -19,7 +21,7 @@ the app (settings), and uses the custom keyboard (keyboard).
 ## Devices
 
 - iPhone 17 Pro Max (6.9") — `apps/ios/fastlane/screenshots/iPhone 17 Pro Max/XX_Name.png`
-- iPad Pro 13-inch (M5) — `apps/ios/fastlane/screenshots/iPad Pro 13-inch (M5)/XX_Name.png`
+- iPad Pro 13-inch (M5), landscape (2752x2064) — `apps/ios/fastlane/screenshots/iPad Pro 13-inch (M5)/XX_Name.png`
 - Apple Watch Series 11 (46mm) — `apps/ios/fastlane/screenshots/Apple Watch Series 11 (46mm)/00_WatchHome.png`
 
 ## Current status
@@ -33,12 +35,17 @@ the app (settings), and uses the custom keyboard (keyboard).
 - 05_Keyboard: ✅ Compose keyboard surface
 
 ### iPad Pro 13-inch (M5)
-- 00_Splash: ✅ Modern splash screen
-- 01_Home: ✅ Seeded home screen
+
+- 01_Home: ✅ Seeded landscape workspace
 - 02_Recording: ✅ Recording sheet with waveform
-- 03_MemoDetail: ✅ Seeded memo detail
-- 04_Settings: ✅ Direct settings route
+- state-dictating: ✅ Live dictation on the Compose surface
+- state-home-ask-ready: ✅ Populated Home Ask Talkie command bar
+- state-diff: ✅ Visible AI edit review
 - 05_Keyboard: ✅ Compose keyboard surface
+
+The harness also captures splash, settings, and intermediate Compose / Ask AI
+states for QA. `fastlane/marketing/compose-ipad.swift` selects the six frames
+that belong on the product page.
 
 ### Apple Watch Series 11 (46mm)
 - 00_WatchHome: ✅ Watch home screen
