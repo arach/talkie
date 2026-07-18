@@ -326,7 +326,7 @@ jobs:
           xcrun altool "${upload_args[@]}"
 
       - name: Attach build to App Store version
-        if: ${{ !inputs.upload_binary || inputs.wait_for_processing }}
+        if: ${{ inputs.upload_binary && inputs.wait_for_processing }}
         shell: bash
         run: |
           set -euo pipefail
