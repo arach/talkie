@@ -1,6 +1,6 @@
 {
   "name": "@talkie/cli",
-  "version": "0.4.9",
+  "version": "0.4.10",
   "description": "Talkie CLI for macOS — voice memos, dictations, screenshots, screen clips, search, and agent workflows",
   "type": "module",
   "bin": {
