@@ -1063,9 +1063,20 @@ final class AudioCaptureService: AgentAudioCapture {
         let bufferSize = Double(AudioCaptureConfiguration.bufferSize)
         buffersPerSecond = hwFormat.sampleRate / bufferSize
 
-        // Use the verified input format so a stale default aggregate cannot
-        // negotiate a tap format from its output side.
-        inputNode.installTap(onBus: 0, bufferSize: AudioCaptureConfiguration.bufferSize, format: hwFormat) { [weak self] buffer, _ in
+        // Re-read the input format immediately before installing the tap. hwFormat
+        // was captured on the setup queue; if a device reconfiguration slipped in
+        // during the main-queue hop, the cached format would no longer match the
+        // node and installTap(format:) throws an uncatchable exception. Reading it
+        // here keeps the tap bound to the current input side (never the stale
+        // aggregate's output side, which is what a nil format would negotiate).
+        let tapFormat = inputNode.inputFormat(forBus: 0)
+        if tapFormat.sampleRate != hwFormat.sampleRate || tapFormat.channelCount != hwFormat.channelCount {
+            log.warning(
+                "Input format drifted between setup and tap install",
+                detail: "was \(Int(hwFormat.sampleRate))Hz/\(hwFormat.channelCount)ch, now \(Int(tapFormat.sampleRate))Hz/\(tapFormat.channelCount)ch"
+            )
+        }
+        inputNode.installTap(onBus: 0, bufferSize: AudioCaptureConfiguration.bufferSize, format: tapFormat) { [weak self] buffer, _ in
             guard let self, self.isRecordingActive else { return }
             self.handleBuffer(buffer)
         }
