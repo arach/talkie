@@ -31,7 +31,7 @@ struct GitDocumentRepo {
         process.arguments = args
         let pipe = Pipe()
         process.standardOutput = pipe
-        process.standardError = Pipe()   // swallow stderr
+        process.standardError = FileHandle.nullDevice   // discard stderr — no unread buffer to deadlock on
         do { try process.run() } catch { return (-1, "") }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
