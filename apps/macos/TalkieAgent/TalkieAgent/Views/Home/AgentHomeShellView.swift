@@ -268,6 +268,8 @@ struct AgentHomeShellView: View {
                 filter: libraryFilter,
                 onOpenSettings: openSettings
             )
+        case .editor:
+            MarkdownStudioView(dictation: AgentStudioDictationProvider())
         case .capture:
             AgentHomeCapturePage(
                 settings: settings,
@@ -458,6 +460,7 @@ private enum AgentHomeShellSection: String, CaseIterable, Hashable {
     // Primary rail
     case home          // dashboard: status + recent history + quick actions
     case library       // presented as "History"
+    case editor        // Talkie Markdown — voice-notes editor (embedded webview)
     case conversations
     case permissions
     case logs
@@ -475,6 +478,7 @@ private enum AgentHomeShellSection: String, CaseIterable, Hashable {
         switch self {
         case .home: return "Home"
         case .library: return "History"
+        case .editor: return "Editor"
         case .conversations: return "Conversations"
         case .permissions: return "Permissions"
         case .more: return "More"
@@ -492,6 +496,7 @@ private enum AgentHomeShellSection: String, CaseIterable, Hashable {
         switch self {
         case .home: return "Status & recent history"
         case .library: return "History + media"
+        case .editor: return "Markdown · voice notes"
         case .conversations: return "Talk to the agent"
         case .permissions: return "macOS access"
         case .more: return "Capture · Dictation · Server..."
@@ -509,6 +514,7 @@ private enum AgentHomeShellSection: String, CaseIterable, Hashable {
         switch self {
         case .home: return "house"
         case .library: return "clock.arrow.circlepath"
+        case .editor: return "square.and.pencil"
         case .conversations: return "bubble.left.and.bubble.right"
         case .permissions: return "lock.shield"
         case .more: return "ellipsis"
@@ -526,6 +532,7 @@ private enum AgentHomeShellSection: String, CaseIterable, Hashable {
         switch self {
         case .home: return "house.fill"
         case .library: return "clock.arrow.circlepath"
+        case .editor: return "square.and.pencil"
         case .conversations: return "bubble.left.and.bubble.right.fill"
         case .permissions: return "lock.shield.fill"
         case .more: return "ellipsis"
@@ -555,6 +562,7 @@ private enum AgentHomeShellSection: String, CaseIterable, Hashable {
         return [
             entry(.home),
             entry(.library),
+            entry(.editor),
             entry(.conversations),
             entry(.permissions),
             entry(.logs),
@@ -626,6 +634,7 @@ private struct AgentHomeCommandRail: View {
     private let sections: [AgentHomeShellSection] = [
         .home,
         .library,
+        .editor,
         .conversations,
         .permissions,
         .logs,
@@ -2832,6 +2841,8 @@ private struct AgentHomeInspectorContent: View {
             return "At a glance: runtime status, recent history, and quick actions."
         case .library:
             return "Read-only view of Talkie's shared library history."
+        case .editor:
+            return "Talkie Markdown — a voice-first notes editor with live preview and local revisions."
         case .capture:
             return "Live context and capture options that Agent can own end-to-end."
         case .tray:
