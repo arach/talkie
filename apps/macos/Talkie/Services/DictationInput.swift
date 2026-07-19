@@ -46,6 +46,7 @@ public enum DictationInputPurpose: String {
     case terminalDictation
     case skillsChatDictation
     case captureMarkupDictation
+    case markdownEditorDictation
 
     var displayName: String {
         switch self {
@@ -69,6 +70,8 @@ public enum DictationInputPurpose: String {
             return "Skills chat dictation"
         case .captureMarkupDictation:
             return "Capture markup dictation"
+        case .markdownEditorDictation:
+            return "Markdown editor dictation"
         }
     }
 }
@@ -595,6 +598,29 @@ public final class DictationInput {
         try await Task.detached(priority: .userInitiated) {
             try engine.start()
         }.value
+    }
+}
+
+// MARK: - Markdown editor adapter
+
+/// Bridges the Talkie Markdown editor (in TalkieKit) to the app's real
+/// dictation engine. TalkieKit declares the `MarkdownStudioDictating` seam;
+/// `DictationInput` lives in the app target, so this thin adapter is what
+/// actually captures + transcribes voice for the editor's Dictate actions.
+@MainActor
+final class StudioDictationProvider: MarkdownStudioDictating {
+    var audioLevel: Float { DictationInput.shared.audioLevel }
+
+    func start() async throws {
+        try await DictationInput.shared.startCapture(purpose: .markdownEditorDictation)
+    }
+
+    func stop() async throws -> (text: String, audioURL: URL) {
+        try await DictationInput.shared.stopAndTranscribePersistent()
+    }
+
+    func cancel() {
+        DictationInput.shared.cancel()
     }
 }
 

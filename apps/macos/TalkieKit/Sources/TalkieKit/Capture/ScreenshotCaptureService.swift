@@ -252,7 +252,10 @@ public final class ScreenshotCaptureService {
         }
     }
 
-    public func captureScreenRegion(screenRect: CGRect) async -> CGImage? {
+    public func captureScreenRegion(
+        screenRect: CGRect,
+        excludingWindowIDs: [CGWindowID] = []
+    ) async -> CGImage? {
         let midPoint = NSPoint(x: screenRect.midX, y: screenRect.midY)
         guard let nsScreen = NSScreen.screens.first(where: { NSMouseInRect(midPoint, $0.frame, false) })
                 ?? NSScreen.main else {
@@ -282,7 +285,9 @@ public final class ScreenshotCaptureService {
                 return nil
             }
 
-            let filter = SCContentFilter(display: display, excludingWindows: [])
+            let excludedIDs = Set(excludingWindowIDs)
+            let excludedWindows = content.windows.filter { excludedIDs.contains($0.windowID) }
+            let filter = SCContentFilter(display: display, excludingWindows: excludedWindows)
             let config = SCStreamConfiguration()
             let scale = nsScreen.backingScaleFactor
             config.width = max(1, Int((screenRect.width * scale).rounded(.toNearestOrAwayFromZero)))

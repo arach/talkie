@@ -33,6 +33,7 @@ let package = Package(
                 .copy("Resources/ComposeWebEditor"),
                 .copy("Resources/Context"),
                 .copy("Resources/Fonts"),
+                .copy("Resources/MarkdownStudio"),
             ]),
         .testTarget(
             name: "TalkieKitTests",

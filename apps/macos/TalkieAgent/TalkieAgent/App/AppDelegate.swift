@@ -46,7 +46,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private let desktopInkPassthroughHotKey = HotKeyManager(signature: "\(sig)DP", hotkeyID: 19)  // Draw <-> arrange
     private let desktopMagnifierHotKey = HotKeyManager(signature: "\(sig)DM", hotkeyID: 20)  // Freeze a region into a desktop magnifier
     private let markupEmergencyHotKey = HotKeyManager(signature: "\(sig)MX", hotkeyID: 22)  // Force-dismiss capture markup
-    private var desktopInkTapMonitor: ModifierTapMonitor?  // Bare left/right Ctrl taps for ink
 
     private struct AgentMenuInputState {
         var name: String
@@ -1521,8 +1520,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         // Desktop ink: draw straight on the desktop, then snap and the marks
         // bake in. Toggle the layer (Hyper+N) and flip draw <-> arrange so you
-        // can move windows under the ink (Hyper+H). Hyper+D is dictation; bare
-        // left/right Ctrl triggers are being explored as a conflict-free option.
+        // can move windows under the ink (Hyper+H). Keep both actions behind
+        // deliberate chords because the ink layer intercepts the whole screen.
         let inkToggle = Self.loadHotkeyConfig(
             key: "hotkeyCapture.desktopInk",
             fallbackKeyCode: 45,                   // N — toggle ink layer
@@ -1540,23 +1539,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             Task { @MainActor in self?.toggleDesktopInkPassthrough() }
         }
         log.info("Desktop ink hotkeys registered: toggle keyCode=\(inkToggle.keyCode) arrange keyCode=\(inkArrange.keyCode)")
-
-        // Bare-modifier triggers: tap LEFT Ctrl to toggle the ink layer, RIGHT
-        // Ctrl to flip draw <-> arrange. Conflict-free dedicated keys; only a
-        // clean solitary tap fires (see ModifierTapMonitor), so normal Ctrl use
-        // is untouched. Runs alongside the Hyper hotkeys above.
-        let tapMonitor = ModifierTapMonitor(watching: [.leftControl, .rightControl])
-        tapMonitor.onTap = { [weak self] side in
-            Task { @MainActor in
-                switch side {
-                case .leftControl: self?.toggleDesktopInk()
-                case .rightControl: self?.toggleDesktopInkPassthrough()
-                }
-            }
-        }
-        tapMonitor.start()
-        desktopInkTapMonitor = tapMonitor
-        log.info("Desktop ink bare-Ctrl taps armed: left=toggle right=arrange")
 
         // The screenshot button in the ink toolbar snaps a region; strokes bake
         // in via executeAgentScreenshotCapture's desktop-ink path.
@@ -2202,8 +2184,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         desktopInkPassthroughHotKey.unregisterAll()
         desktopMagnifierHotKey.unregisterAll()
         markupEmergencyHotKey.unregisterAll()
-        desktopInkTapMonitor?.stop()
-        desktopInkTapMonitor = nil
     }
 
     private func registerSelectionQuickHotkey() {

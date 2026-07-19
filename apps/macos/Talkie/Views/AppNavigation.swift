@@ -41,6 +41,7 @@ extension NSNotification.Name {
 enum NavigationSection: Hashable {
     case home           // Main Talkie home/dashboard
     case drafts         // Quick text editing with voice dictation and AI polish (was scratchPad)
+    case markdownStudio // Talkie Markdown — embedded markdown dictation editor (shared TalkieKit surface)
     case notes          // Standalone notes (screenshots, text snippets)
     case allMemos       // All Memos view (unified components)
     case recordings     // Unified recordings view (memos + dictations from recordings table)
@@ -75,6 +76,7 @@ extension NavigationSection {
         switch self {
         case .home: return "Home"
         case .drafts: return "Compose"
+        case .markdownStudio: return "Editor"
         case .notes: return "Notes"
         case .allMemos: return "AllMemos"
         case .recordings: return "Library"
@@ -614,7 +616,7 @@ struct AppNavigation: View {
 
     private var usesTwoColumns: Bool {
         switch selectedSection {
-        case .home, .drafts, .notes, .models, .allowedCommands, .aiResults, .allMemos,
+        case .home, .drafts, .markdownStudio, .notes, .models, .allowedCommands, .aiResults, .allMemos,
              .recordings, .liveDashboard, .dictations, .systemConsole, .pendingActions,
              .recentlyDeleted, .activityLog, .contextRules, .screenshots:
             return true
@@ -922,6 +924,7 @@ struct AppNavigation: View {
         entries.append(.item(SidebarItem(id: .home, title: "Home", icon: "house", selectedIcon: "house.fill")))
         entries.append(.item(SidebarItem(id: .recordings, title: "Library", icon: "rectangle.stack", selectedIcon: "rectangle.stack.fill")))
         entries.append(.item(SidebarItem(id: .screenshots, title: "Markup", icon: "pencil.tip.crop.circle")))
+        entries.append(.item(SidebarItem(id: .markdownStudio, title: "Editor", icon: "doc.richtext", selectedIcon: "doc.richtext.fill")))
         #if DEBUG
         if showLegacyScreens {
             entries.append(.item(SidebarItem(id: .allMemos, title: "Memos", icon: "square.stack", selectedIcon: "square.stack.fill")))
@@ -1104,6 +1107,8 @@ struct AppNavigation: View {
                     } else {
                         DraftsScreen()
                     }
+                case .markdownStudio:
+                    MarkdownStudioView(dictation: StudioDictationProvider())
                 case .notes:
                     if SettingsManager.shared.isScopeTheme {
                         // Scope ships Notes as its own surface — a two-

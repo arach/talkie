@@ -38,6 +38,34 @@
       return canvasToPoint(control);
     }
 
+    function elbowCornerPoint(layer) {
+      if (!layer || !layer.from || !layer.to) return null;
+      return { x: layer.to.x, y: layer.from.y };
+    }
+
+    function swoopControlPoints(layer) {
+      if (!layer || !layer.from || !layer.to) return null;
+      const from = pointToCanvas(layer.from);
+      const to = pointToCanvas(layer.to);
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance < 0.0001) return null;
+      const normalX = -dy / distance;
+      const normalY = dx / distance;
+      const offset = distance * Number(layer.curveOffset || 0.18);
+      return {
+        first: canvasToPoint({
+          x: from.x + dx * 0.28 + normalX * offset,
+          y: from.y + dy * 0.28 + normalY * offset,
+        }),
+        second: canvasToPoint({
+          x: from.x + dx * 0.72 - normalX * offset * 0.75,
+          y: from.y + dy * 0.72 - normalY * offset * 0.75,
+        }),
+      };
+    }
+
     function paddedRect(rect, pixels) {
       if (!rect) return null;
       const dx = pixels / Math.max(1, drawableWidth());
@@ -54,8 +82,16 @@
       if (layer.frame) return paddedRect(layer.frame, 6);
       if (layer.from && layer.to) {
         const points = [layer.from, layer.to];
-        const control = layers.arrowStyleForLayer(layer) === "curved" ? arrowControlPoint(layer) : null;
+        const style = layers.arrowStyleForLayer(layer);
+        const control = style === "curved" ? arrowControlPoint(layer) : null;
         if (control) points.push(control);
+        if (style === "elbow") {
+          const corner = elbowCornerPoint(layer);
+          if (corner) points.push(corner);
+        } else if (style === "swoop") {
+          const controls = swoopControlPoints(layer);
+          if (controls) points.push(controls.first, controls.second);
+        }
         return paddedRect(layers.normalizedRectFromPoints(points), 10);
       }
       if (layer.points && layer.points.length) {
@@ -106,9 +142,43 @@
       return minDistance;
     }
 
+    function distanceToCubicCurve(point, layer) {
+      const controls = swoopControlPoints(layer);
+      if (!controls) return Infinity;
+      let minDistance = Infinity;
+      let previous = layer.from;
+      for (let step = 1; step <= 32; step += 1) {
+        const t = step / 32;
+        const inv = 1 - t;
+        const current = {
+          x: inv * inv * inv * layer.from.x
+            + 3 * inv * inv * t * controls.first.x
+            + 3 * inv * t * t * controls.second.x
+            + t * t * t * layer.to.x,
+          y: inv * inv * inv * layer.from.y
+            + 3 * inv * inv * t * controls.first.y
+            + 3 * inv * t * t * controls.second.y
+            + t * t * t * layer.to.y,
+        };
+        minDistance = Math.min(minDistance, distanceToSegment(point, previous, current));
+        previous = current;
+      }
+      return minDistance;
+    }
+
     function distanceToArrowPath(point, layer) {
-      if (layers.arrowStyleForLayer(layer) === "curved") {
+      const style = layers.arrowStyleForLayer(layer);
+      if (style === "curved") {
         return distanceToQuadraticCurve(point, layer);
+      }
+      if (style === "swoop") return distanceToCubicCurve(point, layer);
+      if (style === "elbow") {
+        const corner = elbowCornerPoint(layer);
+        if (!corner) return Infinity;
+        return Math.min(
+          distanceToSegment(point, layer.from, corner),
+          distanceToSegment(point, corner, layer.to)
+        );
       }
       return distanceToSegment(point, layer.from, layer.to);
     }
@@ -120,7 +190,9 @@
       }
       if (layer.kind === "arrow" && layer.from && layer.to) {
         const width = Number(layer.strokeWidth || 4);
-        const threshold = layers.arrowStyleForLayer(layer) === "shaped" ? Math.max(18, width * 4) : Math.max(14, width + 10);
+        const pointer = layer.pointerEnd || layer.pointerStyle;
+        const isRibbon = pointer === "grow" || pointer === "block" || layers.arrowStyleForLayer(layer) === "shaped";
+        const threshold = isRibbon ? Math.max(18, width * 4) : Math.max(14, width + 10);
         return distanceToArrowPath(point, layer) <= threshold;
       }
       if (layer.kind === "ink" && layer.points && layer.points.length > 1) {
@@ -239,6 +311,7 @@
       rectContains,
       distanceToSegment,
       distanceToQuadraticCurve,
+      distanceToCubicCurve,
       distanceToArrowPath,
       layerContainsPoint,
       hitTestLayer,

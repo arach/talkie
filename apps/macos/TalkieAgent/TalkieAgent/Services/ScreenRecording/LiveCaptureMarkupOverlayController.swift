@@ -6,7 +6,10 @@
 //
 
 import AppKit
+import CoreImage
+import ImageIO
 import TalkieKit
+import UniformTypeIdentifiers
 import WebKit
 
 @MainActor
@@ -496,6 +499,10 @@ final class LiveCaptureMarkupOverlayController: NSObject {
             }
         case "liveMarkup.capture":
             onCapture?()
+        case "liveMarkup.sampleMaterial":
+            if let requestID = message.requestID, let rect = message.rect {
+                sampleAdaptiveGlass(requestID: requestID, webRect: rect)
+            }
         case "liveMarkup.cancel":
             onCancel?()
             dismiss(discardLayers: true)
@@ -522,6 +529,45 @@ final class LiveCaptureMarkupOverlayController: NSObject {
             return "\"\""
         }
         return encoded
+    }
+
+    private static func jsJSON<T: Encodable>(_ value: T) -> String? {
+        guard let data = try? JSONEncoder().encode(value) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private func sampleAdaptiveGlass(requestID: String, webRect: CGRect) {
+        guard let panel else { return }
+        let localRect = webRect.standardized.intersection(NSRect(origin: .zero, size: panel.frame.size))
+        guard !localRect.isNull, localRect.width >= 1, localRect.height >= 1 else { return }
+
+        let screenRect = CGRect(
+            x: panel.frame.minX + localRect.minX,
+            y: panel.frame.maxY - localRect.maxY,
+            width: localRect.width,
+            height: localRect.height
+        )
+        let excludedWindowIDs = [panel, passthroughControlsPanel]
+            .compactMap { window -> CGWindowID? in
+                guard let window else { return nil }
+                return CGWindowID(window.windowNumber)
+            }
+        let panelNumber = panel.windowNumber
+
+        Task { @MainActor [weak self] in
+            guard let image = await ScreenshotCaptureService.shared.captureScreenRegion(
+                screenRect: screenRect,
+                excludingWindowIDs: excludedWindowIDs
+            ), let sample = AdaptiveGlassSample.make(
+                requestID: requestID,
+                image: image,
+                pointWidth: screenRect.width
+            ), let json = Self.jsJSON(sample),
+              self?.panel?.windowNumber == panelNumber else {
+                return
+            }
+            self?.evaluate("window.talkieLiveMarkup && window.talkieLiveMarkup.applyMaterialSample(\(json));")
+        }
     }
 
     private func applyCurrentToolState() {
@@ -685,6 +731,8 @@ private final class LiveCapturePassthroughControlsView: NSView {
 private struct LiveCaptureMarkupBridgeMessage {
     let name: String
     let layers: [CaptureMarkupLayer]
+    let requestID: String?
+    let rect: CGRect?
 
     static func parse(_ body: Any) -> LiveCaptureMarkupBridgeMessage? {
         guard let dict = body as? [String: Any],
@@ -702,7 +750,23 @@ private struct LiveCaptureMarkupBridgeMessage {
             layers = []
         }
 
-        return LiveCaptureMarkupBridgeMessage(name: name, layers: layers)
+        return LiveCaptureMarkupBridgeMessage(
+            name: name,
+            layers: layers,
+            requestID: dict["requestID"] as? String,
+            rect: decodeRect(dict["rect"])
+        )
+    }
+
+    private static func decodeRect(_ raw: Any?) -> CGRect? {
+        guard let raw = raw as? [String: Any],
+              let x = (raw["x"] as? NSNumber)?.doubleValue,
+              let y = (raw["y"] as? NSNumber)?.doubleValue,
+              let width = (raw["width"] as? NSNumber)?.doubleValue,
+              let height = (raw["height"] as? NSNumber)?.doubleValue else {
+            return nil
+        }
+        return CGRect(x: x, y: y, width: width, height: height)
     }
 
     private static func decodeLayers(_ raw: Any) -> [CaptureMarkupLayer] {
@@ -712,5 +776,144 @@ private struct LiveCaptureMarkupBridgeMessage {
             return []
         }
         return decoded
+    }
+}
+
+@MainActor
+private struct AdaptiveGlassSample: Encodable {
+    let requestID: String
+    let textColor: String
+    let backgroundColor: String
+    let backgroundAlpha: Double
+    let borderColor: String
+    let borderAlpha: Double
+    let borderWidth: Double
+    let backgroundBlur: Double
+    let shadowColor: String
+    let shadowBlur: Double
+    let shadowOffsetY: Double
+    let backdropDataURL: String?
+
+    private static let analysisSize = 16
+    private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+
+    static func make(requestID: String, image: CGImage, pointWidth: CGFloat) -> AdaptiveGlassSample? {
+        guard let statistics = statistics(for: image) else { return nil }
+        let luminance = statistics.luminance
+        let activity = min(1, statistics.deviation / 0.24)
+        let nearMidtone = max(0, 1 - abs(luminance - 0.5) / 0.5)
+        let usesLightMaterial = luminance >= 0.58
+        let alpha = min(
+            0.78,
+            (usesLightMaterial ? 0.46 : 0.50) + activity * 0.20 + nearMidtone * 0.05
+        )
+        let blur = 10 + activity * 13
+        let background = usesLightMaterial
+            ? mixedHex(base: (0.97, 0.98, 1), sample: statistics.averageColor, sampleAmount: 0.18)
+            : mixedHex(base: (0.055, 0.065, 0.085), sample: statistics.averageColor, sampleAmount: 0.24)
+        let pixelScale = max(1, CGFloat(image.width) / max(1, pointWidth))
+
+        return AdaptiveGlassSample(
+            requestID: requestID,
+            textColor: usesLightMaterial ? "#15171B" : "#F8F7F3",
+            backgroundColor: background,
+            backgroundAlpha: alpha,
+            borderColor: "#FFFFFF",
+            borderAlpha: usesLightMaterial ? 0.62 : 0.30,
+            borderWidth: activity > 0.62 ? 0.9 : 0.75,
+            backgroundBlur: blur,
+            shadowColor: usesLightMaterial ? "rgba(24, 28, 36, 0.18)" : "rgba(0, 0, 0, 0.28)",
+            shadowBlur: 10 + activity * 8,
+            shadowOffsetY: 3,
+            backdropDataURL: blurredDataURL(image: image, radius: blur * pixelScale)
+        )
+    }
+
+    private static func statistics(
+        for image: CGImage
+    ) -> (luminance: Double, deviation: Double, averageColor: (Double, Double, Double))? {
+        let count = analysisSize * analysisSize
+        var pixels = [UInt8](repeating: 0, count: count * 4)
+        let rendered = pixels.withUnsafeMutableBytes { bytes -> Bool in
+            guard let context = CGContext(
+                data: bytes.baseAddress,
+                width: analysisSize,
+                height: analysisSize,
+                bitsPerComponent: 8,
+                bytesPerRow: analysisSize * 4,
+                space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
+            ) else {
+                return false
+            }
+            context.interpolationQuality = .medium
+            context.draw(image, in: CGRect(x: 0, y: 0, width: analysisSize, height: analysisSize))
+            return true
+        }
+        guard rendered else { return nil }
+
+        var red = 0.0
+        var green = 0.0
+        var blue = 0.0
+        var luminances: [Double] = []
+        luminances.reserveCapacity(count)
+        for index in 0..<count {
+            let offset = index * 4
+            let r = Double(pixels[offset]) / 255
+            let g = Double(pixels[offset + 1]) / 255
+            let b = Double(pixels[offset + 2]) / 255
+            red += r
+            green += g
+            blue += b
+            luminances.append(0.2126 * r + 0.7152 * g + 0.0722 * b)
+        }
+        let divisor = Double(count)
+        let averageLuminance = luminances.reduce(0, +) / divisor
+        let variance = luminances.reduce(0) { partial, value in
+            let difference = value - averageLuminance
+            return partial + difference * difference
+        } / divisor
+        return (
+            averageLuminance,
+            sqrt(variance),
+            (red / divisor, green / divisor, blue / divisor)
+        )
+    }
+
+    private static func mixedHex(
+        base: (Double, Double, Double),
+        sample: (Double, Double, Double),
+        sampleAmount: Double
+    ) -> String {
+        func channel(_ base: Double, _ sample: Double) -> Int {
+            Int((min(1, max(0, base * (1 - sampleAmount) + sample * sampleAmount)) * 255).rounded())
+        }
+        func hex(_ value: Int) -> String {
+            let component = String(value, radix: 16, uppercase: true)
+            return component.count == 1 ? "0\(component)" : component
+        }
+        return "#\(hex(channel(base.0, sample.0)))\(hex(channel(base.1, sample.1)))\(hex(channel(base.2, sample.2)))"
+    }
+
+    private static func blurredDataURL(image: CGImage, radius: CGFloat) -> String? {
+        let input = CIImage(cgImage: image)
+        let blurred = input
+            .clampedToExtent()
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: radius])
+            .cropped(to: input.extent)
+        guard let output = ciContext.createCGImage(blurred, from: input.extent) else { return nil }
+
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            data as CFMutableData,
+            UTType.png.identifier as CFString,
+            1,
+            nil
+        ) else {
+            return nil
+        }
+        CGImageDestinationAddImage(destination, output, nil)
+        guard CGImageDestinationFinalize(destination) else { return nil }
+        return "data:image/png;base64,\((data as Data).base64EncodedString())"
     }
 }

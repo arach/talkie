@@ -31,67 +31,107 @@
     resizeCanvas,
     eventPoint,
     pointToCanvas,
+    rectToCanvas,
   } = geometry;
 
   const noteStylePresets = {
     sticky: {
       id: "sticky",
-      textColor: "#1C1D21",
-      backgroundColor: "#F8F6F2",
-      backgroundAlpha: 0.97,
-      borderColor: "#DFA13A",
-      borderAlpha: 0.30,
-      borderWidth: 1,
-      cornerRadius: 5,
-      fontSize: 14,
-      lineHeight: 20,
+      textColor: "#24231F",
+      backgroundColor: "#FFFDF8",
+      backgroundAlpha: 0.96,
+      borderColor: "#8E8067",
+      borderAlpha: 0.22,
+      borderWidth: 0.75,
+      cornerRadius: 4,
+      fontSize: 13.5,
+      lineHeight: 19,
       paddingX: 11,
-      paddingY: 9,
+      paddingY: 8,
       bold: false,
       shadow: true,
-      shadowColor: "rgba(7, 9, 13, 0.16)",
-      shadowBlur: 10,
-      shadowOffsetY: 3,
-      editorBackground: "rgba(248, 246, 242, 0.97)",
-      editorShadow: "0 4px 14px rgba(7, 9, 13, 0.18)",
+      shadowColor: "rgba(7, 9, 13, 0.12)",
+      shadowBlur: 8,
+      shadowOffsetY: 2,
+      editorBackground: "rgba(255, 253, 248, 0.96)",
+      editorShadow: "0 3px 12px rgba(7, 9, 13, 0.14)",
     },
     bubble: {
       id: "bubble",
-      textColor: "#1A1D26",
-      backgroundColor: "#FFFFFF",
-      backgroundAlpha: 0.96,
-      borderColor: "#C5CCD6",
-      borderAlpha: 0.55,
-      borderWidth: 1,
-      cornerRadius: 8,
+      textColor: "#1C2230",
+      backgroundColor: "#F7FAFF",
+      backgroundAlpha: 0.95,
+      borderColor: "#8A9BB5",
+      borderAlpha: 0.28,
+      borderWidth: 0.75,
+      cornerRadius: 12,
       fontSize: 14,
-      lineHeight: 20,
-      paddingX: 12,
-      paddingY: 9,
+      lineHeight: 21,
+      paddingX: 13,
+      paddingY: 10,
       bold: false,
       shadow: true,
-      shadowColor: "rgba(14, 18, 28, 0.12)",
-      shadowBlur: 10,
+      shadowColor: "rgba(14, 18, 28, 0.10)",
+      shadowBlur: 12,
       shadowOffsetY: 3,
     },
     glass: {
       id: "glass",
-      textColor: "#F2F3F5",
-      backgroundColor: "#16181D",
-      backgroundAlpha: 0.92,
+      textColor: "#F6F1E8",
+      backgroundColor: "#17191E",
+      backgroundAlpha: 0.62,
       borderColor: "#FFFFFF",
-      borderAlpha: 0.12,
-      borderWidth: 1,
-      cornerRadius: 6,
-      fontSize: 14,
-      lineHeight: 20,
-      paddingX: 12,
-      paddingY: 9,
+      borderAlpha: 0.26,
+      borderWidth: 0.75,
+      cornerRadius: 8,
+      fontSize: 13.5,
+      lineHeight: 19,
+      paddingX: 11,
+      paddingY: 8,
       bold: false,
       shadow: true,
-      shadowColor: "rgba(0, 0, 0, 0.22)",
+      shadowColor: "rgba(0, 0, 0, 0.20)",
       shadowBlur: 12,
-      shadowOffsetY: 4,
+      shadowOffsetY: 3,
+      backgroundBlur: 14,
+    },
+    caption: {
+      id: "caption",
+      textColor: "#111318",
+      backgroundColor: "#FFFFFF",
+      backgroundAlpha: 0.78,
+      borderColor: "#FFFFFF",
+      borderAlpha: 0.35,
+      borderWidth: 0.5,
+      cornerRadius: 2,
+      fontSize: 13,
+      lineHeight: 18,
+      paddingX: 9,
+      paddingY: 6,
+      bold: true,
+      shadow: true,
+      shadowColor: "rgba(0, 0, 0, 0.18)",
+      shadowBlur: 8,
+      shadowOffsetY: 2,
+    },
+    signal: {
+      id: "signal",
+      textColor: "#0D213B",
+      backgroundColor: "#DCEAFF",
+      backgroundAlpha: 0.95,
+      borderColor: "#4F7DFF",
+      borderAlpha: 0.45,
+      borderWidth: 0.75,
+      cornerRadius: 6,
+      fontSize: 13.5,
+      lineHeight: 19,
+      paddingX: 11,
+      paddingY: 8,
+      bold: false,
+      shadow: true,
+      shadowColor: "rgba(26, 55, 110, 0.14)",
+      shadowBlur: 10,
+      shadowOffsetY: 3,
     },
   };
 
@@ -99,27 +139,28 @@
     solid: {
       id: "solid",
       lineDash: [],
-      pointerEnd: "open",
-      pointerStyle: "open",
       shadow: false,
     },
     dashed: {
       id: "dashed",
       lineDash: [12, 9],
-      pointerEnd: "open",
-      pointerStyle: "open",
       shadow: false,
     },
     glow: {
       id: "glow",
       lineDash: [],
-      pointerEnd: "filled",
-      pointerStyle: "filled",
       shadow: true,
       shadowColor: "rgba(255, 255, 255, 0.42)",
       shadowBlur: 14,
       shadowOffsetY: 4,
     },
+  };
+
+  const fillStylePresets = {
+    none: { id: "none", alpha: 0 },
+    wash: { id: "wash", alpha: 0.10 },
+    tint: { id: "tint", alpha: 0.22 },
+    solid: { id: "solid", alpha: 0.82 },
   };
 
   const arrowStylePresets = {
@@ -130,17 +171,31 @@
       id: "curved",
       curveOffset: 0.2,
     },
+    elbow: {
+      id: "elbow",
+    },
+    swoop: {
+      id: "swoop",
+      curveOffset: 0.22,
+    },
     shaped: {
       id: "shaped",
-      pointerEnd: "filled",
-      pointerStyle: "filled",
     },
   };
 
+  const pointerStylePresets = {
+    open: { id: "open" },
+    filled: { id: "filled" },
+    grow: { id: "grow" },
+    block: { id: "block" },
+  };
+
   const noteStyleLabels = {
-    sticky: "Sticky",
+    sticky: "Paper",
     bubble: "Bubble",
     glass: "Glass",
+    caption: "Caption",
+    signal: "Signal",
   };
 
   const lineStyleLabels = {
@@ -149,10 +204,26 @@
     glow: "Glow",
   };
 
+  const fillStyleLabels = {
+    none: "None",
+    wash: "Wash",
+    tint: "Tint",
+    solid: "Solid",
+  };
+
   const arrowStyleLabels = {
     straight: "Straight",
     curved: "Curve",
+    elbow: "Elbow",
+    swoop: "Swoop",
     shaped: "Block",
+  };
+
+  const pointerStyleLabels = {
+    open: "Open",
+    filled: "Fill",
+    grow: "Grow",
+    block: "Block",
   };
 
   const toolLabels = {
@@ -219,8 +290,16 @@
     return lineStylePresets[state.lineStyle] || lineStylePresets.solid;
   }
 
+  function currentFillPreset() {
+    return fillStylePresets[state.fillStyle] || fillStylePresets.wash;
+  }
+
   function currentArrowPreset() {
     return arrowStylePresets[state.arrowStyle] || arrowStylePresets.straight;
+  }
+
+  function currentPointerPreset() {
+    return pointerStylePresets[state.pointerStyle] || pointerStylePresets.open;
   }
 
   function colorWithAlpha(hexColor, alpha) {
@@ -244,6 +323,119 @@
     element.style.boxShadow = preset.shadow
       ? preset.editorShadow || `0 ${Number(preset.shadowOffsetY || 8)}px ${Number(preset.shadowBlur || 18) + 10}px ${preset.shadowColor || "rgba(0, 0, 0, 0.26)"}`
       : "none";
+    element.style.backgroundImage = "none";
+    element.style.backgroundSize = "cover";
+    element.style.backgroundPosition = "center";
+  }
+
+  function materialStyleFromSample(sample) {
+    return {
+      textColor: sample.textColor,
+      backgroundColor: sample.backgroundColor,
+      backgroundAlpha: sample.backgroundAlpha,
+      borderColor: sample.borderColor,
+      borderAlpha: sample.borderAlpha,
+      borderWidth: sample.borderWidth,
+      backgroundBlur: sample.backgroundBlur,
+      shadow: true,
+      shadowColor: sample.shadowColor,
+      shadowBlur: sample.shadowBlur,
+      shadowOffsetY: sample.shadowOffsetY,
+    };
+  }
+
+  function applyMaterialStyleToEditor(element, sample) {
+    if (!element || !sample) return;
+    element.style.color = sample.textColor;
+    element.style.borderColor = colorWithAlpha(sample.borderColor, sample.borderAlpha);
+    element.style.borderWidth = `${Number(sample.borderWidth || 0.75)}px`;
+    element.style.boxShadow = `0 ${Number(sample.shadowOffsetY || 3)}px ${Number(sample.shadowBlur || 12)}px ${sample.shadowColor}`;
+    const tint = colorWithAlpha(sample.backgroundColor, sample.backgroundAlpha);
+    element.style.backgroundColor = tint;
+    element.style.backgroundImage = sample.backdropDataURL
+      ? `linear-gradient(${tint}, ${tint}), url(${JSON.stringify(sample.backdropDataURL)})`
+      : "none";
+  }
+
+  function applyMaterialStyleToLayer(layer, sample) {
+    if (!layer || !sample) return;
+    Object.assign(layer, materialStyleFromSample(sample));
+  }
+
+  function installMaterialBackdrop(layerID, sample) {
+    if (!layerID || !sample || !sample.backdropDataURL) return;
+    const image = new Image();
+    image.onload = () => {
+      state.materialBackdrops.set(layerID, {
+        image,
+        blur: Number(sample.backgroundBlur || 0),
+      });
+      render();
+    };
+    image.src = sample.backdropDataURL;
+  }
+
+  function requestGlassMaterialForCanvasRect(rect, target) {
+    if (!rect || rect.width < 1 || rect.height < 1) return null;
+    state.materialRequestSequence += 1;
+    const requestID = `glass-${state.materialRequestSequence}`;
+    state.materialRequests.set(requestID, target);
+    if (target.kind === "layer") {
+      state.latestMaterialRequestByLayer.set(target.layerID, requestID);
+    }
+    post("liveMarkup.sampleMaterial", {
+      requestID,
+      rect: {
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+      },
+    });
+    return requestID;
+  }
+
+  function requestGlassMaterialForLayer(layer) {
+    if (!layer || layer.kind !== "label" || layer.noteStyle !== "glass" || !layer.frame) return null;
+    return requestGlassMaterialForCanvasRect(rectToCanvas(layer.frame), {
+      kind: "layer",
+      layerID: layer.id,
+    });
+  }
+
+  function requestGlassMaterialForEditor(active) {
+    if (!active || active.noteStyle !== "glass" || !active.element.isConnected) return null;
+    const rect = active.element.getBoundingClientRect();
+    const requestID = requestGlassMaterialForCanvasRect(rect, { kind: "editor" });
+    active.materialRequestID = requestID;
+    return requestID;
+  }
+
+  function applyMaterialSample(sample) {
+    if (!sample || !sample.requestID) return;
+    const target = state.materialRequests.get(sample.requestID);
+    state.materialRequests.delete(sample.requestID);
+    if (!target) return;
+
+    if (target.kind === "editor") {
+      const active = state.noteEditor;
+      if (!active || active.materialRequestID !== sample.requestID || active.noteStyle !== "glass") return;
+      active.materialStyle = materialStyleFromSample(sample);
+      active.backdropDataURL = sample.backdropDataURL;
+      applyMaterialStyleToEditor(active.element, sample);
+      return;
+    }
+
+    if (target.kind === "layer") {
+      if (state.latestMaterialRequestByLayer.get(target.layerID) !== sample.requestID) return;
+      state.latestMaterialRequestByLayer.delete(target.layerID);
+      const layer = state.layers.find((candidate) => candidate.id === target.layerID);
+      if (!layer || layer.noteStyle !== "glass") return;
+      applyMaterialStyleToLayer(layer, sample);
+      installMaterialBackdrop(layer.id, sample);
+      render();
+      sendUpdate();
+    }
   }
 
   function isTypingTarget(target) {
@@ -289,7 +481,9 @@
     duplicateLayer,
     applyNotePresetToLayer,
     applyLinePresetToLayer,
+    applyFillPresetToLayer,
     applyArrowPresetToLayer,
+    applyPointerPresetToLayer,
   } = layers;
 
   const hitTesting = markup.HitTesting.createHitTesting({ state, layers, geometry });
@@ -414,7 +608,9 @@
       return;
     }
     const linePreset = currentLinePreset();
+    const fillPreset = currentFillPreset();
     const arrowPreset = currentArrowPreset();
+    const pointerPreset = currentPointerPreset();
     const base = {
       tool: state.tool,
       start: point,
@@ -425,9 +621,12 @@
       mode: state.mode,
       lineStyle: state.lineStyle,
       lineDash: linePreset.lineDash,
+      fillStyle: fillPreset.id,
+      fillColor: state.color,
+      fillAlpha: fillPreset.alpha,
       pointerStart: "none",
-      pointerEnd: arrowPreset.pointerEnd || linePreset.pointerEnd,
-      pointerStyle: arrowPreset.pointerStyle || linePreset.pointerStyle,
+      pointerEnd: pointerPreset.id,
+      pointerStyle: pointerPreset.id,
       arrowStyle: arrowPreset.id,
       curveOffset: arrowPreset.curveOffset,
       shadow: linePreset.shadow,
@@ -508,6 +707,7 @@
 
   function finishPointer(event) {
     if (state.dragging) {
+      const draggedLayerID = state.dragging.layerId;
       if (event && canvas.hasPointerCapture(event.pointerId)) {
         canvas.releasePointerCapture(event.pointerId);
       }
@@ -517,6 +717,10 @@
       canvas.style.cursor = point ? cursorForSelectPoint(point) : "default";
       render();
       sendUpdate();
+      const draggedLayer = state.layers.find((layer) => layer.id === draggedLayerID);
+      if (draggedLayer && draggedLayer.noteStyle === "glass") {
+        requestGlassMaterialForLayer(draggedLayer);
+      }
       return;
     }
 
@@ -687,6 +891,8 @@
       return;
     }
     const preset = noteStylePresets[active.noteStyle || state.noteStyle] || noteStylePresets.sticky;
+    const style = active.materialStyle ? { ...preset, ...active.materialStyle } : preset;
+    const noteStyle = active.noteStyle || state.noteStyle;
     const layer = {
       id: uuid(),
       kind: "label",
@@ -694,12 +900,12 @@
       text,
       label: text,
       color: state.color,
-      textColor: preset.textColor,
-      backgroundColor: preset.backgroundColor,
-      backgroundAlpha: preset.backgroundAlpha,
-      borderColor: preset.borderColor,
-      borderAlpha: preset.borderAlpha,
-      borderWidth: preset.borderWidth,
+      textColor: style.textColor,
+      backgroundColor: style.backgroundColor,
+      backgroundAlpha: style.backgroundAlpha,
+      borderColor: style.borderColor,
+      borderAlpha: style.borderAlpha,
+      borderWidth: style.borderWidth,
       cornerRadius: preset.cornerRadius,
       paddingX: preset.paddingX,
       paddingY: preset.paddingY,
@@ -707,12 +913,13 @@
       lineHeight: preset.lineHeight,
       fontFamily: "sans",
       bold: preset.bold,
-      shadow: preset.shadow,
-      shadowColor: preset.shadowColor,
-      shadowBlur: preset.shadowBlur,
-      shadowOffsetY: preset.shadowOffsetY,
+      backgroundBlur: style.backgroundBlur,
+      shadow: style.shadow,
+      shadowColor: style.shadowColor,
+      shadowBlur: style.shadowBlur,
+      shadowOffsetY: style.shadowOffsetY,
       intent: active.mode || state.mode,
-      noteStyle: active.noteStyle || state.noteStyle,
+      noteStyle,
       stylePreset: preset.id,
       author: "user",
       visible: true,
@@ -720,10 +927,17 @@
       endTime: nowSeconds(),
     };
     state.layers.push(layer);
+    if (noteStyle === "glass" && active.backdropDataURL) {
+      installMaterialBackdrop(layer.id, {
+        backdropDataURL: active.backdropDataURL,
+        backgroundBlur: style.backgroundBlur,
+      });
+    }
     state.redoStack = [];
     state.selectedLayerId = layer.id;
     render();
     sendUpdate();
+    if (noteStyle === "glass") requestGlassMaterialForLayer(layer);
   }
 
   function startNoteEditor(point) {
@@ -761,7 +975,12 @@
       }
     });
     element.addEventListener("blur", () => closeNoteEditor(true));
-    requestAnimationFrame(() => element.focus());
+    requestAnimationFrame(() => {
+      if (state.noteEditor && state.noteEditor.element === element) {
+        requestGlassMaterialForEditor(state.noteEditor);
+      }
+      element.focus();
+    });
   }
 
   if (dock) {
@@ -791,9 +1010,21 @@
         return;
       }
 
+      const fillStyle = button.getAttribute("data-fill-style");
+      if (fillStyle) {
+        setFillStyle(fillStyle);
+        return;
+      }
+
       const arrowStyle = button.getAttribute("data-arrow-style");
       if (arrowStyle) {
         setArrowStyle(arrowStyle);
+        return;
+      }
+
+      const pointerStyle = button.getAttribute("data-pointer-style");
+      if (pointerStyle) {
+        setPointerStyle(pointerStyle);
         return;
       }
 
@@ -861,8 +1092,14 @@
     controls.querySelectorAll(".line-style").forEach((el) => {
       el.classList.toggle("active", el.getAttribute("data-line-style") === state.lineStyle);
     });
+    controls.querySelectorAll(".fill-style").forEach((el) => {
+      el.classList.toggle("active", el.getAttribute("data-fill-style") === state.fillStyle);
+    });
     controls.querySelectorAll(".arrow-style").forEach((el) => {
       el.classList.toggle("active", el.getAttribute("data-arrow-style") === state.arrowStyle);
+    });
+    controls.querySelectorAll(".pointer-style").forEach((el) => {
+      el.classList.toggle("active", el.getAttribute("data-pointer-style") === state.pointerStyle);
     });
     controls.querySelectorAll(".style-toggle").forEach((el) => {
       el.classList.toggle("active", state.styleOpen);
@@ -903,11 +1140,20 @@
     if (state.noteEditor) {
       state.noteEditor.noteStyle = noteStyle;
       state.noteEditor.element.dataset.noteStyle = noteStyle;
+      state.noteEditor.materialStyle = null;
+      state.noteEditor.backdropDataURL = null;
       applyNotePresetToEditor(state.noteEditor.element, preset);
+      if (noteStyle === "glass") requestGlassMaterialForEditor(state.noteEditor);
     }
-    if (applyNotePresetToLayer(selectedLayer(), preset)) {
+    const layer = selectedLayer();
+    if (applyNotePresetToLayer(layer, preset)) {
+      if (layer && noteStyle !== "glass") {
+        state.materialBackdrops.delete(layer.id);
+        state.latestMaterialRequestByLayer.delete(layer.id);
+      }
       render();
       sendUpdate();
+      if (layer && noteStyle === "glass") requestGlassMaterialForLayer(layer);
     }
     syncToolbarState();
   }
@@ -923,11 +1169,33 @@
     syncToolbarState();
   }
 
+  function setFillStyle(fillStyle) {
+    if (!fillStylePresets[fillStyle]) return;
+    state.fillStyle = fillStyle;
+    document.body.dataset.fillStyle = fillStyle;
+    if (applyFillPresetToLayer(selectedLayer(), currentFillPreset())) {
+      render();
+      sendUpdate();
+    }
+    syncToolbarState();
+  }
+
   function setArrowStyle(arrowStyle) {
     if (!arrowStylePresets[arrowStyle]) return;
     state.arrowStyle = arrowStyle;
     document.body.dataset.arrowStyle = arrowStyle;
     if (applyArrowPresetToLayer(selectedLayer(), currentArrowPreset())) {
+      render();
+      sendUpdate();
+    }
+    syncToolbarState();
+  }
+
+  function setPointerStyle(pointerStyle) {
+    if (!pointerStylePresets[pointerStyle]) return;
+    state.pointerStyle = pointerStyle;
+    document.body.dataset.pointerStyle = pointerStyle;
+    if (applyPointerPresetToLayer(selectedLayer(), currentPointerPreset())) {
       render();
       sendUpdate();
     }
@@ -955,21 +1223,23 @@
   function styleSummaryForTool(tool = state.tool) {
     const note = noteStyleLabels[state.noteStyle] || state.noteStyle;
     const line = lineStyleLabels[state.lineStyle] || state.lineStyle;
+    const fill = fillStyleLabels[state.fillStyle] || state.fillStyle;
     const arrow = arrowStyleLabels[state.arrowStyle] || state.arrowStyle;
+    const pointer = pointerStyleLabels[state.pointerStyle] || state.pointerStyle;
     const width = `${Number(state.strokeWidth)}px`;
     switch (tool) {
     case "note":
-      return `Note · ${note} · ${width}`;
+      return note;
     case "arrow":
-      return `Arrow · ${arrow} · ${line} · ${width}`;
+      return `${arrow} · ${pointer} · ${line} · ${width}`;
     case "line":
-      return `Line · ${line} · ${width}`;
+      return `${line} · ${width}`;
     case "ink":
-      return `Pen · ${line} · ${width}`;
+      return `${line} · ${width}`;
     case "rect":
-      return `Rect · ${line} · ${width}`;
+      return `${fill} · ${line} · ${width}`;
     case "ellipse":
-      return `Circle · ${line} · ${width}`;
+      return `${fill} · ${line} · ${width}`;
     default:
       return "Move and reshape";
     }
@@ -977,6 +1247,13 @@
 
   function setColor(color) {
     state.color = color;
+    const layer = selectedLayer();
+    if (layer && isStrokeEditableLayer(layer)) {
+      layer.color = color;
+      if (["rect", "ellipse"].includes(layer.kind)) layer.fillColor = color;
+      render();
+      sendUpdate();
+    }
     syncToolbarState();
   }
 
@@ -1107,7 +1384,13 @@
     }
     if (isTypingTarget(event.target)) return;
     const key = event.key.toLowerCase();
-    if (event.key === "Escape" || key === "x") {
+    if (!event.metaKey && !event.ctrlKey && !event.altKey && key === "v") {
+      setTool("select");
+      event.preventDefault();
+    } else if (event.key === "Escape" && state.tool !== "select") {
+      setTool("select");
+      event.preventDefault();
+    } else if (event.key === "Escape" || key === "x") {
       post("liveMarkup.cancel", {});
     } else if (event.key === "Enter") {
       post("liveMarkup.done", {
@@ -1130,7 +1413,10 @@
     setStrokeWidth,
     setNoteStyle,
     setLineStyle,
+    setFillStyle,
     setArrowStyle,
+    setPointerStyle,
+    applyMaterialSample,
     setStyleOpen,
     setContext,
     setDrawableRect,
@@ -1142,6 +1428,9 @@
     clear() {
       state.layers = [];
       state.redoStack = [];
+      state.materialBackdrops.clear();
+      state.materialRequests.clear();
+      state.latestMaterialRequestByLayer.clear();
       render();
       sendUpdate();
     },
@@ -1153,7 +1442,9 @@
   document.body.dataset.mode = state.mode;
   document.body.dataset.noteStyle = state.noteStyle;
   document.body.dataset.lineStyle = state.lineStyle;
+  document.body.dataset.fillStyle = state.fillStyle;
   document.body.dataset.arrowStyle = state.arrowStyle;
+  document.body.dataset.pointerStyle = state.pointerStyle;
   document.body.dataset.styleOpen = state.styleOpen ? "true" : "false";
   setContext(state.context);
   setStyleOpen(state.styleOpen);

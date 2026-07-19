@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Talkie Markdown</title>
+  <link rel="stylesheet" href="studio.css" />
+</head>
+<body>
+  <div id="studio" class="studio" data-mode="split" data-revisions="open">
+
+    <!-- ═══════════════ TOOLBAR ═══════════════ -->
+    <header class="toolbar">
+      <!-- row 1 · document identity + view -->
+      <div class="tb-row tb-row-1">
+        <div class="doc-id">
+          <div class="doc-title-line">
+            <span class="doc-title" id="docTitle">Home screen — redesign notes</span>
+            <span class="badge-md">.md</span>
+          </div>
+          <div class="doc-meta">
+            <span class="meta save" id="saveStatus"><span class="dot dot-green"></span><span id="saveLabel">Saved · autosync</span></span>
+            <span class="meta-sep"></span>
+            <span class="meta" id="wordCount">0 words</span>
+            <span class="meta-sep"></span>
+            <span class="meta" id="editedAt">Edited just now</span>
+          </div>
+        </div>
+        <span class="spacer"></span>
+        <button class="btn ghost" id="historyBtn" title="Toggle revision history">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 1 2.3 5.6"/><path d="M4 12H2M4 12V9"/><path d="M12 8v4l3 2"/></svg>
+          History<span class="acc" id="historyVersion">v1</span>
+        </button>
+        <div class="segmented" id="viewSeg" role="tablist" aria-label="Editor view">
+          <button data-mode="split" class="active" role="tab">Split</button>
+          <button data-mode="preview" role="tab">Preview</button>
+          <button data-mode="source" role="tab">Source</button>
+        </div>
+      </div>
+
+      <!-- row 2 · format tools + voice cluster -->
+      <div class="tb-row tb-row-2">
+        <div class="format-group" id="formatGroup">
+          <button class="fmt serif b1" data-cmd="h1" title="Heading 1">H1</button>
+          <button class="fmt serif b2" data-cmd="h2" title="Heading 2">H2</button>
+          <span class="fmt-sep"></span>
+          <button class="fmt serif strong" data-cmd="bold" title="Bold (⌘B)">B</button>
+          <button class="fmt serif italic" data-cmd="italic" title="Italic (⌘I)">I</button>
+          <span class="fmt-sep"></span>
+          <button class="fmt" data-cmd="ul" title="Bullet list"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg></button>
+          <button class="fmt" data-cmd="ol" title="Numbered list"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 6h11M10 12h11M10 18h11"/><path d="M3 6h.01M3 11.5c0-1 1.6-1 1.6 0 0 .7-1.6 1.6-1.6 2.5h2M3 16.5h1.6v3.5"/></svg></button>
+          <button class="fmt" data-cmd="quote" title="Quote"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5v6a4 4 0 0 0 4 4M6 5H3.5M6 5h2.5M6 8v3a8 8 0 0 0 8 8h1.5"/></svg></button>
+          <span class="fmt-sep"></span>
+          <button class="fmt" data-cmd="link" title="Link (⌘K)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/></svg></button>
+          <button class="fmt" data-cmd="code" title="Code"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4"/></svg></button>
+          <button class="fmt" data-cmd="task" title="Task item"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M8 12l3 3 5-6"/></svg></button>
+        </div>
+
+        <span class="spacer"></span>
+
+        <div class="voice-cluster" id="voiceCluster">
+          <button class="btn ghost" id="blockifyBtn" title="Wrap the selection into a memo block">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20s2-1 4-3M9 15l7-7 3 3-7 7z"/></svg>
+            Blockify
+          </button>
+
+          <button class="btn surface" id="dictateBlockBtn" title="Record a dictation block (audio-bound)">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><rect x="10.5" y="7.5" width="3" height="5" rx="1.5"/><path d="M9 11.5a3 3 0 0 0 6 0M12 14.5v1.5"/></svg>
+            Dictate block
+          </button>
+
+          <button class="btn primary" id="dictateBtn" title="Dictate at the cursor">
+            <span class="dictate-idle">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="10" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v3"/></svg>Dictate
+            </span>
+            <span class="dictate-live"><span class="pulse"></span>Listening…</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ═══════════════ SPLIT BODY ═══════════════ -->
+    <div class="split" id="split">
+      <!-- SOURCE (CodeMirror 6, from the shipped Talkie editor core) -->
+      <section class="pane source-pane" id="sourcePane">
+        <div class="pane-head">
+          <span class="ph-title">Markdown</span>
+          <span class="ph-sub">source</span>
+          <span class="spacer"></span>
+          <span class="ph-meta" id="srcMeta">UTF-8 · LF</span>
+        </div>
+        <div class="pane-body">
+          <div id="editor" role="textbox" aria-multiline="true" aria-label="Markdown source"></div>
+        </div>
+      </section>
+
+      <!-- divider -->
+      <div class="divider" id="divider" aria-hidden="true"><span class="grip"><i></i><i></i><i></i></span></div>
+
+      <!-- PREVIEW (rendered markdown) -->
+      <section class="pane preview-pane" id="previewPane">
+        <div class="pane-head">
+          <span class="ph-title">Preview</span>
+          <span class="ph-sub">rendered</span>
+          <span class="spacer"></span>
+          <span class="ph-live"><span class="dot dot-acc"></span>live</span>
+        </div>
+        <div class="pane-body">
+          <article class="preview" id="preview"></article>
+        </div>
+      </section>
+
+      <!-- REVISIONS -->
+      <aside class="revisions" id="revisions">
+        <div class="rev-head">
+          <span class="rev-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 1 2.3 5.6"/><path d="M4 12H2M4 12V9"/><path d="M12 8v4l3 2"/></svg></span>
+          <span class="rev-title">Revisions</span>
+          <span class="spacer"></span>
+          <span class="rev-total" id="revTotal">1 total</span>
+        </div>
+        <div class="rev-current">
+          <div class="rev-current-card">
+            <div class="rcc-top">
+              <span class="rcc-v" id="rccVersion">v1</span>
+              <span class="rcc-badge">Current</span>
+              <span class="spacer"></span>
+              <span class="rcc-when">Now · you</span>
+            </div>
+            <div class="rcc-sub">Working draft · auto-saved locally</div>
+            <div class="rcc-actions">
+              <button class="btn ink sm" id="saveVersionBtn">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11l3 3v13H5z"/><path d="M9 4v5h6"/></svg>Save version
+              </button>
+              <button class="btn surface sm" id="compareBtn">Compare</button>
+            </div>
+          </div>
+        </div>
+        <div class="rev-section-label">Earlier</div>
+        <div class="rev-list" id="revList"></div>
+        <div class="rev-foot"><span class="dot dot-green"></span>Local only · no cloud</div>
+      </aside>
+    </div>
+
+    <!-- ═══════════════ COMPARE (revision diff takeover) ═══════════════ -->
+    <section class="compare" id="compare">
+      <div class="compare-head">
+        <div class="cmp-ident">
+          <button class="cmp-chip" id="cmpChipA" title="Older side">—</button>
+          <button class="cmp-swap" id="cmpSwap" title="Swap sides">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4L4 7l3 3M4 7h13M17 20l3-3-3-3M20 17H7"/></svg>
+          </button>
+          <button class="cmp-chip cmp-chip-b" id="cmpChipB" title="Newer side">Current</button>
+          <span class="cmp-summary" id="cmpSummary"></span>
+        </div>
+        <span class="spacer"></span>
+        <div class="cmp-stepper" id="cmpStepper">
+          <button id="cmpPrev" title="Previous change (p)"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
+          <span id="cmpStepLabel">no changes</span>
+          <button id="cmpNext" title="Next change (n)"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
+        </div>
+        <button class="btn ink sm" id="cmpRestore">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 1 2.3 5.6"/><path d="M4 12H2M4 12V9"/></svg>Restore
+        </button>
+        <button class="btn ghost sm" id="cmpDone" title="Back to editor (Esc)">Done</button>
+      </div>
+      <div class="compare-scroll">
+        <article class="compare-body preview" id="compareBody"></article>
+      </div>
+    </section>
+
+    <!-- ═══════════════ FLOATING DICTATION HUD ═══════════════ -->
+    <div class="hud" id="hud" hidden>
+      <div class="hud-cmd" id="hudCmd">
+        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14l5-10 2 7h9"/></svg>
+        <span id="hudCmdText">listening…</span>
+      </div>
+      <div class="hud-bar">
+        <span class="hud-rec"><span class="rec-dot"></span>Rec</span>
+        <span class="hud-time" id="hudTime">00:00</span>
+        <div class="hud-eq" id="hudEq"></div>
+        <button class="hud-stop" id="hudStop" title="Stop dictation">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- marked (MIT) — robust markdown parsing, vendored, no build step -->
+  <script src="vendor/marked.min.js"></script>
+  <!-- shipped Talkie CodeMirror 6 editor core (source pane). Provides window.TalkieEditor. -->
+  <script src="../ComposeWebEditor/editor.js"></script>
+  <!-- studio chrome: toolbar, preview, revisions, HUD, bridge -->
+  <script src="studio.js"></script>
+</body>
+</html>
