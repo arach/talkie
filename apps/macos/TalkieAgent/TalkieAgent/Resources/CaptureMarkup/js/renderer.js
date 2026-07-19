@@ -111,6 +111,213 @@
       drawArrowHead(control, to, width, pointerStyleForLayer(layer, "end"));
     }
 
+    function drawElbowArrow(layer, from, to, width) {
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      if (Math.abs(dx) < 8 || Math.abs(dy) < 8) {
+        drawStraightArrow(layer, from, to, width);
+        return;
+      }
+      const corner = { x: to.x, y: from.y };
+      const radius = Math.min(18, Math.abs(dx) * 0.28, Math.abs(dy) * 0.28);
+      const before = { x: corner.x - Math.sign(dx) * radius, y: corner.y };
+      const after = { x: corner.x, y: corner.y + Math.sign(dy) * radius };
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(before.x, before.y);
+      ctx.quadraticCurveTo(corner.x, corner.y, after.x, after.y);
+      ctx.lineTo(to.x, to.y);
+      applyLayerShadow(layer);
+      ctx.stroke();
+      clearLayerShadow();
+      ctx.setLineDash([]);
+      drawArrowHead(before, from, width, pointerStyleForLayer(layer, "start"));
+      drawArrowHead(after, to, width, pointerStyleForLayer(layer, "end"));
+    }
+
+    function swoopControlPoints(layer, from, to) {
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance < 0.0001) return { first: from, second: to };
+      const normalX = -dy / distance;
+      const normalY = dx / distance;
+      const offset = distance * Number(layer.curveOffset || 0.18);
+      return {
+        first: {
+          x: from.x + dx * 0.28 + normalX * offset,
+          y: from.y + dy * 0.28 + normalY * offset,
+        },
+        second: {
+          x: from.x + dx * 0.72 - normalX * offset * 0.75,
+          y: from.y + dy * 0.72 - normalY * offset * 0.75,
+        },
+      };
+    }
+
+    function addSwoopPath(layer, from, to) {
+      const controls = swoopControlPoints(layer, from, to);
+      ctx.moveTo(from.x, from.y);
+      ctx.bezierCurveTo(
+        controls.first.x,
+        controls.first.y,
+        controls.second.x,
+        controls.second.y,
+        to.x,
+        to.y
+      );
+      return controls;
+    }
+
+    function drawSwoopArrow(layer, from, to, width) {
+      ctx.save();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 0.12;
+      ctx.lineWidth = Math.max(width + 3, width * 2.4);
+      ctx.beginPath();
+      addSwoopPath(layer, from, to);
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.beginPath();
+      const controls = addSwoopPath(layer, from, to);
+      applyLayerShadow(layer);
+      ctx.stroke();
+      clearLayerShadow();
+      ctx.setLineDash([]);
+      drawArrowHead(controls.first, from, width, pointerStyleForLayer(layer, "start"));
+      drawArrowHead(controls.second, to, width, pointerStyleForLayer(layer, "end"));
+    }
+
+    function sampledArrowPath(layer, from, to, steps = 40) {
+      const style = arrowStyleForLayer(layer);
+      if (style === "curved") {
+        const control = arrowControlPointPixels(layer);
+        if (!control) return [from, to];
+        return Array.from({ length: steps + 1 }, (_, index) => {
+          const t = index / steps;
+          const inv = 1 - t;
+          return {
+            x: inv * inv * from.x + 2 * inv * t * control.x + t * t * to.x,
+            y: inv * inv * from.y + 2 * inv * t * control.y + t * t * to.y,
+          };
+        });
+      }
+      if (style === "swoop") {
+        const controls = swoopControlPoints(layer, from, to);
+        return Array.from({ length: steps + 1 }, (_, index) => {
+          const t = index / steps;
+          const inv = 1 - t;
+          return {
+            x: inv * inv * inv * from.x
+              + 3 * inv * inv * t * controls.first.x
+              + 3 * inv * t * t * controls.second.x
+              + t * t * t * to.x,
+            y: inv * inv * inv * from.y
+              + 3 * inv * inv * t * controls.first.y
+              + 3 * inv * t * t * controls.second.y
+              + t * t * t * to.y,
+          };
+        });
+      }
+      return [from, to];
+    }
+
+    function ribbonBodyPoints(points, headLength) {
+      if (points.length < 2) return null;
+      const lengths = [0];
+      for (let index = 1; index < points.length; index += 1) {
+        lengths.push(lengths[index - 1] + Math.hypot(
+          points[index].x - points[index - 1].x,
+          points[index].y - points[index - 1].y
+        ));
+      }
+      const total = lengths[lengths.length - 1];
+      if (total < 18) return null;
+      const neckDistance = Math.max(total * 0.52, total - Math.min(headLength, total * 0.38));
+      let index = 1;
+      while (index < lengths.length && lengths[index] < neckDistance) index += 1;
+      const beforeIndex = Math.max(0, index - 1);
+      const afterIndex = Math.min(points.length - 1, index);
+      const span = Math.max(0.0001, lengths[afterIndex] - lengths[beforeIndex]);
+      const t = (neckDistance - lengths[beforeIndex]) / span;
+      const neck = {
+        x: points[beforeIndex].x + (points[afterIndex].x - points[beforeIndex].x) * t,
+        y: points[beforeIndex].y + (points[afterIndex].y - points[beforeIndex].y) * t,
+      };
+      return {
+        points: points.slice(0, afterIndex).concat(neck),
+        neck,
+        tip: points[points.length - 1],
+      };
+    }
+
+    function normalAt(points, index) {
+      const previous = points[Math.max(0, index - 1)];
+      const next = points[Math.min(points.length - 1, index + 1)];
+      const dx = next.x - previous.x;
+      const dy = next.y - previous.y;
+      const distance = Math.max(0.0001, Math.hypot(dx, dy));
+      return { x: -dy / distance, y: dx / distance };
+    }
+
+    function drawRibbonArrow(layer, from, to, width, style) {
+      const block = style === "block";
+      const headLength = Math.max(block ? 20 : 22, width * (block ? 5.2 : 5.4));
+      const body = ribbonBodyPoints(sampledArrowPath(layer, from, to), headLength);
+      if (!body) {
+        drawStraightArrow(layer, from, to, width);
+        return;
+      }
+
+      const startHalf = block ? Math.max(2.6, width * 0.95) : Math.max(0.55, width * 0.16);
+      const endHalf = block ? startHalf : Math.max(1.7, width * 0.88);
+      const headHalf = block
+        ? Math.max(7, endHalf * 2.05, width * 2.2)
+        : Math.max(7, endHalf * 1.75, width * 1.9);
+      const left = [];
+      const right = [];
+      body.points.forEach((point, index) => {
+        const progress = index / Math.max(1, body.points.length - 1);
+        const half = startHalf + (endHalf - startHalf) * Math.pow(progress, 0.78);
+        const normal = normalAt(body.points, index);
+        left.push({ x: point.x + normal.x * half, y: point.y + normal.y * half });
+        right.push({ x: point.x - normal.x * half, y: point.y - normal.y * half });
+      });
+      const neckNormal = normalAt(body.points.concat(body.tip), body.points.length - 1);
+      const headLeft = {
+        x: body.neck.x + neckNormal.x * headHalf,
+        y: body.neck.y + neckNormal.y * headHalf,
+      };
+      const headRight = {
+        x: body.neck.x - neckNormal.x * headHalf,
+        y: body.neck.y - neckNormal.y * headHalf,
+      };
+
+      ctx.save();
+      ctx.setLineDash([]);
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(left[0].x, left[0].y);
+      left.slice(1).forEach((point) => ctx.lineTo(point.x, point.y));
+      ctx.lineTo(headLeft.x, headLeft.y);
+      ctx.lineTo(body.tip.x, body.tip.y);
+      ctx.lineTo(headRight.x, headRight.y);
+      right.slice().reverse().forEach((point) => ctx.lineTo(point.x, point.y));
+      ctx.closePath();
+      applyLayerShadow(layer);
+      ctx.globalAlpha = 0.95;
+      ctx.fillStyle = ctx.strokeStyle;
+      ctx.fill();
+      clearLayerShadow();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = colorWithAlpha(layer.color || "#D03A1C", 0.9);
+      ctx.lineWidth = Math.max(0.8, width * 0.22);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     function drawShapedArrow(layer, from, to, width) {
       const dx = to.x - from.x;
       const dy = to.y - from.y;
@@ -173,9 +380,20 @@
     function drawArrowLayer(layer, width) {
       const from = pointToCanvas(layer.from);
       const to = pointToCanvas(layer.to);
+      const endPointer = pointerStyleForLayer(layer, "end");
+      if (endPointer === "grow" || endPointer === "block") {
+        drawRibbonArrow(layer, from, to, width, endPointer);
+        return;
+      }
       switch (arrowStyleForLayer(layer)) {
       case "curved":
         drawCurvedArrow(layer, from, to, width);
+        break;
+      case "elbow":
+        drawElbowArrow(layer, from, to, width);
+        break;
+      case "swoop":
+        drawSwoopArrow(layer, from, to, width);
         break;
       case "shaped":
         drawShapedArrow(layer, from, to, width);
@@ -187,7 +405,7 @@
     }
 
     function normalizedPointerStyle(value) {
-      return ["none", "open", "filled", "dot", "bar"].includes(value) ? value : "open";
+      return ["none", "open", "filled", "dot", "bar", "grow", "block"].includes(value) ? value : "open";
     }
 
     function pointerStyleForLayer(layer, endpoint) {
@@ -325,6 +543,14 @@
           0,
           Math.PI * 2
         );
+        const fillAlpha = Number(layer.fillAlpha || 0);
+        if (fillAlpha > 0) {
+          ctx.save();
+          ctx.globalAlpha = Math.min(1, Math.max(0, fillAlpha));
+          ctx.fillStyle = layer.fillColor || layer.color || "#D03A1C";
+          ctx.fill();
+          ctx.restore();
+        }
         applyLayerShadow(layer);
         ctx.stroke();
       } else if (layer.kind === "rect" && layer.frame) {
@@ -337,6 +563,14 @@
           Math.max(1, frame.width * drawableWidth()),
           Math.max(1, frame.height * drawableHeight())
         );
+        const fillAlpha = Number(layer.fillAlpha || 0);
+        if (fillAlpha > 0) {
+          ctx.save();
+          ctx.globalAlpha = Math.min(1, Math.max(0, fillAlpha));
+          ctx.fillStyle = layer.fillColor || layer.color || "#D03A1C";
+          ctx.fill();
+          ctx.restore();
+        }
         applyLayerShadow(layer);
         ctx.stroke();
       } else if (layer.kind === "arrow" && layer.from && layer.to) {
@@ -350,6 +584,15 @@
         ctx.font = noteFont(layer);
         const lines = wrapText(text, Math.max(10, rect.width - paddingX * 2));
         const backgroundAlpha = layer.backgroundColor ? Number(layer.backgroundAlpha || 0.96) : 1;
+        const materialBackdrop = state.materialBackdrops.get(layer.id);
+        if (layer.noteStyle === "glass" && materialBackdrop && materialBackdrop.image) {
+          ctx.save();
+          ctx.beginPath();
+          roundedRect(rect.x, rect.y, rect.width, rect.height, Number(layer.cornerRadius || 8));
+          ctx.clip();
+          ctx.drawImage(materialBackdrop.image, rect.x, rect.y, rect.width, rect.height);
+          ctx.restore();
+        }
         ctx.fillStyle = layer.backgroundColor || "#F8F6F2";
         ctx.strokeStyle = layer.borderColor || "#DFA13A";
         ctx.lineWidth = Number(layer.borderWidth || 1);

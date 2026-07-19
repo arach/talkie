@@ -65,6 +65,9 @@ func captureMarkupLayerStyleRoundTrip() throws {
         frame: CaptureMarkupRect(x: 0.1, y: 0.2, width: 0.3, height: 0.1),
         color: "#D03A1C",
         strokeWidth: 5,
+        fillStyle: "tint",
+        fillColor: "#D03A1C",
+        fillAlpha: 0.22,
         author: .user
     )
     let label = CaptureMarkupLayer(
@@ -79,6 +82,9 @@ func captureMarkupLayerStyleRoundTrip() throws {
     let decoded = try JSONDecoder().decode(CaptureMarkupDocument.self, from: data)
     #expect(decoded == document)
     #expect(decoded.layers[0].strokeWidth == 5)
+    #expect(decoded.layers[0].fillStyle == "tint")
+    #expect(decoded.layers[0].fillColor == "#D03A1C")
+    #expect(decoded.layers[0].fillAlpha == 0.22)
     #expect(decoded.layers[1].fontSize == 22)
 }
 
@@ -162,7 +168,9 @@ func captureMarkupPointerAndTextPresetRoundTrip() throws {
         backgroundColor: "#F4E8D4",
         backgroundAlpha: 0.94,
         borderColor: "#4F7DFF",
-        borderAlpha: 0.34
+        borderAlpha: 0.34,
+        backgroundBlur: 14,
+        noteStyle: "glass"
     )
     let document = CaptureMarkupDocument(imageWidth: 800, imageHeight: 600, layers: [arrow, label])
 
@@ -175,6 +183,8 @@ func captureMarkupPointerAndTextPresetRoundTrip() throws {
     #expect(decoded.layers[0].curveOffset == 0.24)
     #expect(decoded.layers[1].textPreset == "on-dark")
     #expect(decoded.layers[1].backgroundAlpha == 0.94)
+    #expect(decoded.layers[1].backgroundBlur == 14)
+    #expect(decoded.layers[1].noteStyle == "glass")
 }
 
 @Test("Capture markup patch (clone) round-trips source + frame")
@@ -231,7 +241,19 @@ func captureMarkupRenderEllipseAndInk() throws {
             CaptureMarkupLayer(
                 kind: .ellipse,
                 frame: CaptureMarkupRect(x: 0.15, y: 0.2, width: 0.5, height: 0.35),
-                strokeWidth: 3
+                strokeWidth: 3,
+                fillStyle: "wash",
+                fillColor: "#4F7DFF",
+                fillAlpha: 0.10
+            ),
+            CaptureMarkupLayer(
+                kind: .rect,
+                frame: CaptureMarkupRect(x: 0.56, y: 0.12, width: 0.34, height: 0.28),
+                color: "#D03A1C",
+                strokeWidth: 4,
+                fillStyle: "solid",
+                fillColor: "#D03A1C",
+                fillAlpha: 0.82
             ),
             CaptureMarkupLayer(
                 kind: .ink,
@@ -249,7 +271,7 @@ func captureMarkupRenderEllipseAndInk() throws {
     #expect(output?.height == 120)
 }
 
-@Test("Capture markup renders curved and shaped arrows without error")
+@Test("Capture markup renders all styled arrows without error")
 func captureMarkupRenderStyledArrows() throws {
     let image = makeSolidImage(width: 240, height: 160)
     let document = CaptureMarkupDocument(
@@ -270,18 +292,92 @@ func captureMarkupRenderStyledArrows() throws {
             CaptureMarkupLayer(
                 kind: .arrow,
                 from: CaptureMarkupPoint(x: 0.18, y: 0.84),
-                to: CaptureMarkupPoint(x: 0.84, y: 0.74),
+                to: CaptureMarkupPoint(x: 0.48, y: 0.74),
+                color: "#12A594",
+                strokeWidth: 3,
+                pointerEnd: "open",
+                arrowStyle: "elbow"
+            ),
+            CaptureMarkupLayer(
+                kind: .arrow,
+                from: CaptureMarkupPoint(x: 0.08, y: 0.48),
+                to: CaptureMarkupPoint(x: 0.78, y: 0.62),
+                color: "#DFA13A",
+                strokeWidth: 4,
+                pointerEnd: "filled",
+                pointerStyle: "filled",
+                arrowStyle: "swoop",
+                curveOffset: 0.22
+            ),
+            CaptureMarkupLayer(
+                kind: .arrow,
+                from: CaptureMarkupPoint(x: 0.52, y: 0.86),
+                to: CaptureMarkupPoint(x: 0.90, y: 0.76),
                 color: "#4F7DFF",
                 strokeWidth: 6,
                 pointerEnd: "filled",
                 pointerStyle: "filled",
                 arrowStyle: "shaped"
             ),
+            CaptureMarkupLayer(
+                kind: .arrow,
+                from: CaptureMarkupPoint(x: 0.08, y: 0.30),
+                to: CaptureMarkupPoint(x: 0.68, y: 0.14),
+                color: "#D03A1C",
+                strokeWidth: 4,
+                pointerEnd: "grow",
+                pointerStyle: "grow",
+                arrowStyle: "straight"
+            ),
+            CaptureMarkupLayer(
+                kind: .arrow,
+                from: CaptureMarkupPoint(x: 0.42, y: 0.92),
+                to: CaptureMarkupPoint(x: 0.92, y: 0.42),
+                color: "#4F7DFF",
+                strokeWidth: 5,
+                pointerEnd: "block",
+                pointerStyle: "block",
+                arrowStyle: "curved",
+                curveOffset: 0.18
+            ),
         ]
     )
     let output = CaptureMarkupRenderer.render(image: image, document: document, scale: 1)
     #expect(output?.width == 240)
     #expect(output?.height == 160)
+}
+
+@Test("Capture markup renders refined note presets without error")
+func captureMarkupRenderRefinedNotes() throws {
+    let image = makeSolidImage(width: 300, height: 180)
+    let styles = ["sticky", "bubble", "glass", "caption", "signal"]
+    let layers = styles.enumerated().map { index, style in
+        CaptureMarkupLayer(
+            kind: .label,
+            frame: CaptureMarkupRect(x: 0.06, y: 0.05 + Double(index) * 0.18, width: 0.42, height: 0.13),
+            text: style.capitalized,
+            textColor: style == "glass" ? "#F6F1E8" : "#1C2230",
+            backgroundColor: style == "glass" ? "#17191E" : "#FFFDF8",
+            backgroundAlpha: 0.94,
+            borderColor: "#DFA13A",
+            borderAlpha: 0.24,
+            borderWidth: 0.75,
+            cornerRadius: style == "bubble" ? 12 : 4,
+            paddingX: 11,
+            paddingY: 8,
+            backgroundBlur: style == "glass" ? 14 : nil,
+            noteStyle: style,
+            shadow: true,
+            shadowColor: "rgba(0, 0, 0, 0.16)",
+            shadowBlur: 8,
+            shadowOffsetY: 2,
+            author: .user
+        )
+    }
+    let document = CaptureMarkupDocument(imageWidth: 300, imageHeight: 180, layers: layers)
+    let output = CaptureMarkupRenderer.render(image: image, document: document, scale: 1)
+    #expect(output?.width == 300)
+    #expect(output?.height == 180)
 }
 
 @Test("Capture markup renders a patch (clone) layer without error")

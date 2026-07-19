@@ -164,12 +164,22 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
     public var textColor: String?
     public var backgroundColor: String?
     public var backgroundAlpha: Double?
+    /// Optional interior treatment for rectangle and ellipse annotations.
+    /// `fillStyle` is the named UI treatment; color/alpha are persisted so
+    /// renderers do not need to know the preset table.
+    public var fillStyle: String?
+    public var fillColor: String?
+    public var fillAlpha: Double?
     public var borderColor: String?
     public var borderAlpha: Double?
     public var borderWidth: Double?
     public var cornerRadius: Double?
     public var paddingX: Double?
     public var paddingY: Double?
+    /// Radius in screen points for an adaptive material backdrop. The live
+    /// overlay samples and blurs the pixels beneath the label; the headless
+    /// renderer repeats the blur from the source image during export.
+    public var backgroundBlur: Double?
     /// Optional visual preset/effect hints for live markup. Renderers that do
     /// not know these fields can ignore them and still draw the base layer.
     public var intent: String?
@@ -182,12 +192,14 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
     public var shadowBlur: Double?
     public var shadowOffsetY: Double?
     /// Arrow endpoint styling. Values are "none" | "open" | "filled" | "dot"
-    /// | "bar". Optional preserves legacy arrows: end pointer only unless
-    /// `label == "line"`.
+    /// | "bar" | "grow" | "block". Grow and block are filled body treatments
+    /// whose geometry follows `arrowStyle`. Optional preserves legacy arrows:
+    /// end pointer only unless `label == "line"`.
     public var pointerStart: String?
     public var pointerEnd: String?
     public var pointerStyle: String?
-    /// Arrow body/path styling. Values are "straight" | "curved" | "shaped".
+    /// Arrow body/path styling. Values are "straight" | "curved" | "elbow"
+    /// | "swoop" | "shaped".
     /// Optional preserves legacy straight arrows.
     public var arrowStyle: String?
     public var curveOffset: Double?
@@ -230,12 +242,16 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         case textColor
         case backgroundColor
         case backgroundAlpha
+        case fillStyle
+        case fillColor
+        case fillAlpha
         case borderColor
         case borderAlpha
         case borderWidth
         case cornerRadius
         case paddingX
         case paddingY
+        case backgroundBlur
         case intent
         case stylePreset
         case noteStyle
@@ -285,12 +301,16 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         textColor: String? = nil,
         backgroundColor: String? = nil,
         backgroundAlpha: Double? = nil,
+        fillStyle: String? = nil,
+        fillColor: String? = nil,
+        fillAlpha: Double? = nil,
         borderColor: String? = nil,
         borderAlpha: Double? = nil,
         borderWidth: Double? = nil,
         cornerRadius: Double? = nil,
         paddingX: Double? = nil,
         paddingY: Double? = nil,
+        backgroundBlur: Double? = nil,
         intent: String? = nil,
         stylePreset: String? = nil,
         noteStyle: String? = nil,
@@ -338,12 +358,16 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         self.textColor = textColor
         self.backgroundColor = backgroundColor
         self.backgroundAlpha = backgroundAlpha
+        self.fillStyle = fillStyle
+        self.fillColor = fillColor
+        self.fillAlpha = fillAlpha
         self.borderColor = borderColor
         self.borderAlpha = borderAlpha
         self.borderWidth = borderWidth
         self.cornerRadius = cornerRadius
         self.paddingX = paddingX
         self.paddingY = paddingY
+        self.backgroundBlur = backgroundBlur
         self.intent = intent
         self.stylePreset = stylePreset
         self.noteStyle = noteStyle
@@ -394,12 +418,16 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         textColor = try container.decodeIfPresent(String.self, forKey: .textColor)
         backgroundColor = try container.decodeIfPresent(String.self, forKey: .backgroundColor)
         backgroundAlpha = try container.decodeIfPresent(Double.self, forKey: .backgroundAlpha)
+        fillStyle = try container.decodeIfPresent(String.self, forKey: .fillStyle)
+        fillColor = try container.decodeIfPresent(String.self, forKey: .fillColor)
+        fillAlpha = try container.decodeIfPresent(Double.self, forKey: .fillAlpha)
         borderColor = try container.decodeIfPresent(String.self, forKey: .borderColor)
         borderAlpha = try container.decodeIfPresent(Double.self, forKey: .borderAlpha)
         borderWidth = try container.decodeIfPresent(Double.self, forKey: .borderWidth)
         cornerRadius = try container.decodeIfPresent(Double.self, forKey: .cornerRadius)
         paddingX = try container.decodeIfPresent(Double.self, forKey: .paddingX)
         paddingY = try container.decodeIfPresent(Double.self, forKey: .paddingY)
+        backgroundBlur = try container.decodeIfPresent(Double.self, forKey: .backgroundBlur)
         intent = try container.decodeIfPresent(String.self, forKey: .intent)
         stylePreset = try container.decodeIfPresent(String.self, forKey: .stylePreset)
         noteStyle = try container.decodeIfPresent(String.self, forKey: .noteStyle)

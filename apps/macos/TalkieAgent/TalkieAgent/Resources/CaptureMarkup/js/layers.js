@@ -85,6 +85,9 @@
           strokeWidth: creating.strokeWidth,
           lineStyle: creating.lineStyle,
           lineDash: creating.lineDash,
+          fillStyle: creating.fillStyle,
+          fillColor: creating.fillColor,
+          fillAlpha: creating.fillAlpha,
           shadow: creating.shadow,
           shadowColor: creating.shadowColor,
           shadowBlur: creating.shadowBlur,
@@ -128,6 +131,8 @@
       copy.id = uuid();
       copy.author = "user";
       copy.visible = true;
+      const backdrop = state.materialBackdrops.get(layer.id);
+      if (backdrop) state.materialBackdrops.set(copy.id, backdrop);
       return copy;
     }
 
@@ -144,6 +149,7 @@
       layer.cornerRadius = preset.cornerRadius;
       layer.paddingX = preset.paddingX;
       layer.paddingY = preset.paddingY;
+      layer.backgroundBlur = preset.backgroundBlur;
       layer.fontSize = preset.fontSize;
       layer.lineHeight = preset.lineHeight;
       layer.bold = preset.bold;
@@ -160,7 +166,6 @@
 
     function applyLinePresetToLayer(layer, preset) {
       if (!layer || !["ink", "rect", "ellipse", "arrow"].includes(layer.kind) || !preset) return false;
-      const lineLayer = isLineLayer(layer);
       layer.lineStyle = preset.id;
       layer.lineDash = preset.lineDash;
       layer.stylePreset = preset.id;
@@ -168,12 +173,14 @@
       layer.shadowColor = preset.shadowColor;
       layer.shadowBlur = preset.shadowBlur;
       layer.shadowOffsetY = preset.shadowOffsetY;
-      if (layer.kind === "arrow") {
-        layer.pointerStart = "none";
-        layer.pointerEnd = lineLayer ? "none" : preset.pointerEnd;
-        layer.pointerStyle = lineLayer ? "none" : preset.pointerStyle;
-        if (lineLayer) layer.label = "line";
-      }
+      return true;
+    }
+
+    function applyFillPresetToLayer(layer, preset) {
+      if (!layer || !["rect", "ellipse"].includes(layer.kind) || !preset) return false;
+      layer.fillStyle = preset.id;
+      layer.fillColor = layer.color;
+      layer.fillAlpha = preset.alpha;
       return true;
     }
 
@@ -181,10 +188,14 @@
       if (!layer || layer.kind !== "arrow" || isLineLayer(layer) || !preset) return false;
       layer.arrowStyle = preset.id;
       layer.curveOffset = preset.curveOffset;
-      if (preset.pointerEnd) {
-        layer.pointerEnd = preset.pointerEnd;
-        layer.pointerStyle = preset.pointerStyle || preset.pointerEnd;
-      }
+      return true;
+    }
+
+    function applyPointerPresetToLayer(layer, preset) {
+      if (!layer || layer.kind !== "arrow" || isLineLayer(layer) || !preset) return false;
+      layer.pointerStart = "none";
+      layer.pointerEnd = preset.id;
+      layer.pointerStyle = preset.id;
       return true;
     }
 
@@ -200,7 +211,9 @@
       duplicateLayer,
       applyNotePresetToLayer,
       applyLinePresetToLayer,
+      applyFillPresetToLayer,
       applyArrowPresetToLayer,
+      applyPointerPresetToLayer,
     };
   }
 

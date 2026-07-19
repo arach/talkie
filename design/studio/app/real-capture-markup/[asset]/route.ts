@@ -5,7 +5,15 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-const allowedAssets = new Set(["overlay.html", "overlay.css", "overlay.js"]);
+const moduleAssets = new Set([
+  "state.js",
+  "geometry.js",
+  "layers.js",
+  "hitTesting.js",
+  "renderer.js",
+  "bridge.js",
+]);
+const allowedAssets = new Set(["overlay.html", "overlay.css", "overlay.js", ...moduleAssets]);
 
 const contentTypes: Record<string, string> = {
   "overlay.html": "text/html; charset=utf-8",
@@ -36,7 +44,10 @@ export async function GET(
     return new NextResponse("Not found", { status: 404 });
   }
 
-  const file = await readFile(path.join(overlayDir, asset), "utf8");
+  const file = await readFile(
+    moduleAssets.has(asset) ? path.join(overlayDir, "js", asset) : path.join(overlayDir, asset),
+    "utf8"
+  );
   const body = asset === "overlay.html"
     ? injectStudioHost(file, new URL(request.url).searchParams.get("theme"))
     : file;
@@ -44,7 +55,7 @@ export async function GET(
   return new NextResponse(body, {
     headers: {
       "Cache-Control": "no-store",
-      "Content-Type": contentTypes[asset] ?? "text/plain; charset=utf-8",
+      "Content-Type": contentTypes[asset] ?? (asset.endsWith(".js") ? "application/javascript; charset=utf-8" : "text/plain; charset=utf-8"),
     },
   });
 }
@@ -64,8 +75,8 @@ function injectStudioHost(html: string, theme: string | null) {
   </script>`;
   const themeStyle = `<style>${themeCss(theme)}</style>`;
   return html
-    .replace("</head>", `${themeStyle}</head>`)
-    .replace('<script src="overlay.js"></script>', `${bridge}\n  <script src="overlay.js"></script>`);
+    .replace('let base = "js/";', 'let base = "";')
+    .replace("</head>", `${themeStyle}\n${bridge}</head>`);
 }
 
 function themeCss(theme: string | null) {

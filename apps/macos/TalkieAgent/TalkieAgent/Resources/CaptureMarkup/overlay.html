@@ -29,23 +29,47 @@
     <div class="style-panel" id="style-panel" hidden>
       <div class="style-group note-options">
         <span class="style-label">Note</span>
-        <button type="button" class="note-style active" data-note-style="sticky" title="Sticky note">Sticky</button>
+        <button type="button" class="note-style active" data-note-style="sticky" title="Warm paper note">Paper</button>
         <button type="button" class="note-style" data-note-style="bubble" title="Rounded note">Bubble</button>
         <button type="button" class="note-style" data-note-style="glass" title="Glass note">Glass</button>
+        <button type="button" class="note-style" data-note-style="caption" title="Compact caption note">Caption</button>
+        <button type="button" class="note-style" data-note-style="signal" title="Cool signal note">Signal</button>
       </div>
 
-      <div class="style-group line-options">
+      <div class="style-group stroke-options">
         <span class="style-label">Line</span>
-        <button type="button" class="line-style active" data-line-style="solid" title="Solid line">Solid</button>
-        <button type="button" class="line-style" data-line-style="dashed" title="Dashed line">Dash</button>
-        <button type="button" class="line-style" data-line-style="glow" title="Glow line">Glow</button>
+        <button type="button" class="line-style active" data-line-style="solid" title="Solid stroke">Solid</button>
+        <button type="button" class="line-style" data-line-style="dashed" title="Dashed stroke">Dash</button>
+        <button type="button" class="line-style" data-line-style="glow" title="Glow stroke">Glow</button>
+        <span class="style-separator" aria-hidden="true"></span>
+        <button type="button" class="width" data-width="0.5" title="Hairline stroke">XS</button>
+        <button type="button" class="width" data-width="2" title="Fine stroke">S</button>
+        <button type="button" class="width active" data-width="4" title="Medium stroke">M</button>
+        <button type="button" class="width" data-width="7" title="Heavy stroke">H</button>
+        <button type="button" class="width" data-width="11" title="Extra heavy stroke">XL</button>
+      </div>
+
+      <div class="style-group fill-options">
+        <span class="style-label">Fill</span>
+        <button type="button" class="fill-style" data-fill-style="none" title="Outline only">None</button>
+        <button type="button" class="fill-style active" data-fill-style="wash" title="Light transparent fill">Wash</button>
+        <button type="button" class="fill-style" data-fill-style="tint" title="Stronger transparent fill">Tint</button>
+        <button type="button" class="fill-style" data-fill-style="solid" title="Nearly solid fill">Solid</button>
       </div>
 
       <div class="style-group arrow-options">
-        <span class="style-label">Arrow</span>
-        <button type="button" class="arrow-style active" data-arrow-style="straight" title="Straight arrow">Straight</button>
-        <button type="button" class="arrow-style" data-arrow-style="curved" title="Curved arrow">Curve</button>
-        <button type="button" class="arrow-style" data-arrow-style="shaped" title="Shaped arrow">Block</button>
+        <span class="style-label">Path</span>
+        <button type="button" class="arrow-style active" data-arrow-style="straight" title="Straight path">Straight</button>
+        <button type="button" class="arrow-style" data-arrow-style="curved" title="Curved path">Curve</button>
+        <button type="button" class="arrow-style" data-arrow-style="swoop" title="Swooping path">Swoop</button>
+      </div>
+
+      <div class="style-group pointer-options">
+        <span class="style-label">Pointer</span>
+        <button type="button" class="pointer-style active" data-pointer-style="open" title="Open pointer">Open</button>
+        <button type="button" class="pointer-style" data-pointer-style="filled" title="Filled pointer">Fill</button>
+        <button type="button" class="pointer-style" data-pointer-style="grow" title="Stroke grows into a wider triangular pointer">Grow</button>
+        <button type="button" class="pointer-style" data-pointer-style="block" title="Block pointer with a broad triangular head">Block</button>
       </div>
 
       <div class="style-group compact shared-options">
@@ -56,19 +80,11 @@
         <button type="button" class="swatch swatch-light" data-color="#FFFFFF" title="White"></button>
       </div>
 
-      <div class="style-group compact shared-options">
-        <span class="style-label">Stroke</span>
-        <button type="button" class="width" data-width="0.5" title="Hairline stroke">XS</button>
-        <button type="button" class="width" data-width="2" title="Fine stroke">S</button>
-        <button type="button" class="width active" data-width="4" title="Medium stroke">M</button>
-        <button type="button" class="width" data-width="7" title="Heavy stroke">H</button>
-        <button type="button" class="width" data-width="11" title="Extra heavy stroke">XL</button>
-      </div>
     </div>
 
     <div class="toolbar" id="toolbar">
       <div class="tool-segment" role="group" aria-label="Markup tools">
-        <button type="button" class="tool" data-tool="select" title="Select and move — Option-T, S; Option-drag copies" aria-label="Select and move">
+        <button type="button" class="tool" data-tool="select" title="Select and move — V or Escape; Option-T, S; Option-drag copies" aria-label="Select and move">
           <svg class="icon" viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M3.2 2.4 L3.2 12.6 L6 9.9 L8 13.8 L9.7 13 L7.7 9.2 L11.6 9.2 Z"/></svg>
         </button>
         <button type="button" class="tool active" data-tool="ink" title="Pen — Option-T, P" aria-label="Pen">

@@ -11,6 +11,7 @@ import AppKit
 import UIKit
 #endif
 import CoreGraphics
+import CoreImage
 import Foundation
 
 /// Output format for a materialized markup export. The markup itself stays a
@@ -38,6 +39,7 @@ public enum CaptureMarkupExportFormat: String, Sendable, CaseIterable {
 }
 
 public enum CaptureMarkupRenderer {
+    private static let materialCIContext = CIContext(options: [.useSoftwareRenderer: false])
     /// Render the source image + computed layers into a flat bitmap.
     ///
     /// `scale` multiplies the output pixel dimensions (1 = native capture size,
@@ -219,6 +221,10 @@ public enum CaptureMarkupRenderer {
             if layer.kind == .highlight {
                 context.setFillColor(color.copy(alpha: layer.label == "BLUR" ? 0.32 : 0.12) ?? color)
                 context.fill(rect)
+            } else if let fillAlpha = layer.fillAlpha, fillAlpha > 0 {
+                let fillColor = parseColor(layer.fillColor ?? layer.color)
+                context.setFillColor(fillColor.copy(alpha: CGFloat(min(1, max(0, fillAlpha)))) ?? fillColor)
+                context.fill(rect)
             }
             context.setStrokeColor(color)
             context.setLineWidth(strokeLineWidth(layer, size: size))
@@ -231,6 +237,11 @@ public enum CaptureMarkupRenderer {
         case .ellipse:
             guard let frame = layer.frame else { return }
             let rect = frame.pixelRect(in: size)
+            if let fillAlpha = layer.fillAlpha, fillAlpha > 0 {
+                let fillColor = parseColor(layer.fillColor ?? layer.color)
+                context.setFillColor(fillColor.copy(alpha: CGFloat(min(1, max(0, fillAlpha)))) ?? fillColor)
+                context.fillEllipse(in: rect)
+            }
             context.setStrokeColor(color)
             context.setLineWidth(strokeLineWidth(layer, size: size))
             strokeWithEffects(layer, in: context, size: size) {
@@ -258,19 +269,47 @@ public enum CaptureMarkupRenderer {
             let lineWidth = strokeLineWidth(layer, size: size)
             context.setStrokeColor(color)
             context.setLineWidth(lineWidth)
-            switch arrowStyle(for: layer) {
-            case "curved":
-                drawCurvedArrow(layer: layer, start: start, end: end, color: color, in: context, size: size, lineWidth: lineWidth)
-            case "shaped":
-                drawShapedArrow(layer: layer, start: start, end: end, color: color, in: context, size: size, lineWidth: lineWidth)
-            default:
-                drawStraightArrow(layer: layer, start: start, end: end, color: color, in: context, size: size, lineWidth: lineWidth)
+            let endPointer = pointer(for: layer, endpoint: .end)
+            if endPointer == "grow" || endPointer == "block" {
+                drawRibbonArrow(
+                    layer: layer,
+                    start: start,
+                    end: end,
+                    color: color,
+                    in: context,
+                    size: size,
+                    lineWidth: lineWidth,
+                    style: endPointer
+                )
+            } else {
+                switch arrowStyle(for: layer) {
+                case "curved":
+                    drawCurvedArrow(layer: layer, start: start, end: end, color: color, in: context, size: size, lineWidth: lineWidth)
+                case "elbow":
+                    drawElbowArrow(layer: layer, start: start, end: end, color: color, in: context, size: size, lineWidth: lineWidth)
+                case "swoop":
+                    drawSwoopArrow(layer: layer, start: start, end: end, color: color, in: context, size: size, lineWidth: lineWidth)
+                case "shaped":
+                    drawShapedArrow(layer: layer, start: start, end: end, color: color, in: context, size: size, lineWidth: lineWidth)
+                default:
+                    drawStraightArrow(layer: layer, start: start, end: end, color: color, in: context, size: size, lineWidth: lineWidth)
+                }
             }
             if let label = layer.label, label != "line" {
                 drawLabel(label, near: CGRect(origin: end, size: .zero), in: context, size: size)
             }
         case .label:
             guard let frame = layer.frame, let text = layer.text ?? layer.label else { return }
+            if layer.noteStyle == "glass", let blur = layer.backgroundBlur, blur > 0 {
+                drawAdaptiveGlassBackdrop(
+                    image: image,
+                    rect: frame.pixelRect(in: size),
+                    blur: CGFloat(blur) * max(1, size.width / 1200),
+                    cornerRadius: CGFloat(layer.cornerRadius ?? 8) * max(1, size.width / 1200),
+                    in: context,
+                    size: size
+                )
+            }
             drawLabel(
                 text,
                 near: frame.pixelRect(in: size),
@@ -288,11 +327,77 @@ public enum CaptureMarkupRenderer {
                 backgroundAlpha: layer.backgroundAlpha,
                 borderColorHex: layer.borderColor,
                 borderAlpha: layer.borderAlpha,
+                borderWidth: layer.borderWidth,
+                cornerRadius: layer.cornerRadius,
+                paddingX: layer.paddingX,
+                paddingY: layer.paddingY,
+                shadow: layer.shadow ?? false,
+                shadowColorHex: layer.shadowColor,
+                shadowBlur: layer.shadowBlur,
+                shadowOffsetY: layer.shadowOffsetY,
                 inPlace: true
             )
         case .guide:
             drawGuides(layer: layer, color: color, in: context, size: size)
         }
+    }
+
+    private static func drawAdaptiveGlassBackdrop(
+        image: CGImage,
+        rect: CGRect,
+        blur: CGFloat,
+        cornerRadius: CGFloat,
+        in context: CGContext,
+        size: CGSize
+    ) {
+        let sourceScaleX = CGFloat(image.width) / max(1, size.width)
+        let sourceScaleY = CGFloat(image.height) / max(1, size.height)
+        let sourceRect = CGRect(
+            x: rect.minX * sourceScaleX,
+            y: rect.minY * sourceScaleY,
+            width: rect.width * sourceScaleX,
+            height: rect.height * sourceScaleY
+        )
+        let expansion = max(2, blur * max(sourceScaleX, sourceScaleY) * 2)
+        let imageBounds = CGRect(x: 0, y: 0, width: image.width, height: image.height)
+        let cropRect = sourceRect
+            .insetBy(dx: -expansion, dy: -expansion)
+            .intersection(imageBounds)
+            .integral
+        guard !cropRect.isNull, cropRect.width >= 1, cropRect.height >= 1,
+              let cropped = image.cropping(to: cropRect) else {
+            return
+        }
+
+        let input = CIImage(cgImage: cropped)
+        let blurred = input
+            .clampedToExtent()
+            .applyingFilter(
+                "CIGaussianBlur",
+                parameters: [kCIInputRadiusKey: blur * max(sourceScaleX, sourceScaleY)]
+            )
+            .cropped(to: input.extent)
+        guard let output = materialCIContext.createCGImage(blurred, from: input.extent) else { return }
+
+        let destination = CGRect(
+            x: cropRect.minX / sourceScaleX,
+            y: cropRect.minY / sourceScaleY,
+            width: cropRect.width / sourceScaleX,
+            height: cropRect.height / sourceScaleY
+        )
+        let clipPath = CGPath(
+            roundedRect: rect,
+            cornerWidth: cornerRadius,
+            cornerHeight: cornerRadius,
+            transform: nil
+        )
+        context.saveGState()
+        context.addPath(clipPath)
+        context.clip()
+        context.translateBy(x: destination.minX, y: destination.minY + destination.height)
+        context.scaleBy(x: 1, y: -1)
+        context.draw(output, in: CGRect(origin: .zero, size: destination.size))
+        context.restoreGState()
     }
 
     private static func layerInImageBasis(
@@ -373,7 +478,7 @@ public enum CaptureMarkupRenderer {
     private static func normalizedPointerStyle(_ value: String?) -> String {
         guard let value else { return "open" }
         switch value {
-        case "none", "open", "filled", "dot", "bar":
+        case "none", "open", "filled", "dot", "bar", "grow", "block":
             return value
         default:
             return "open"
@@ -385,7 +490,7 @@ public enum CaptureMarkupRenderer {
             return "straight"
         }
         switch layer.arrowStyle {
-        case "curved", "shaped":
+        case "curved", "elbow", "swoop", "shaped":
             return layer.arrowStyle ?? "straight"
         default:
             return "straight"
@@ -447,6 +552,270 @@ public enum CaptureMarkupRenderer {
         }
         drawPointer(pointer(for: layer, endpoint: .start), at: start, from: control, color: color, in: context, size: size, lineWidth: lineWidth)
         drawPointer(pointer(for: layer, endpoint: .end), at: end, from: control, color: color, in: context, size: size, lineWidth: lineWidth)
+    }
+
+    private static func drawElbowArrow(
+        layer: CaptureMarkupLayer,
+        start: CGPoint,
+        end: CGPoint,
+        color: CGColor,
+        in context: CGContext,
+        size: CGSize,
+        lineWidth: CGFloat
+    ) {
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        guard abs(dx) >= 8, abs(dy) >= 8 else {
+            drawStraightArrow(layer: layer, start: start, end: end, color: color, in: context, size: size, lineWidth: lineWidth)
+            return
+        }
+        let corner = CGPoint(x: end.x, y: start.y)
+        let radius = min(18, abs(dx) * 0.28, abs(dy) * 0.28)
+        let signedXRadius = dx < 0 ? -radius : radius
+        let signedYRadius = dy < 0 ? -radius : radius
+        let before = CGPoint(x: corner.x - signedXRadius, y: corner.y)
+        let after = CGPoint(x: corner.x, y: corner.y + signedYRadius)
+
+        context.beginPath()
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
+        context.move(to: start)
+        context.addLine(to: before)
+        context.addQuadCurve(to: after, control: corner)
+        context.addLine(to: end)
+        strokeWithEffects(layer, in: context, size: size) {
+            context.strokePath()
+        }
+        drawPointer(pointer(for: layer, endpoint: .start), at: start, from: before, color: color, in: context, size: size, lineWidth: lineWidth)
+        drawPointer(pointer(for: layer, endpoint: .end), at: end, from: after, color: color, in: context, size: size, lineWidth: lineWidth)
+    }
+
+    private static func swoopControlPoints(
+        layer: CaptureMarkupLayer,
+        start: CGPoint,
+        end: CGPoint
+    ) -> (first: CGPoint, second: CGPoint) {
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let distance = hypot(dx, dy)
+        guard distance > 0.0001 else { return (start, end) }
+        let normalX = -dy / distance
+        let normalY = dx / distance
+        let offset = distance * CGFloat(layer.curveOffset ?? 0.18)
+        return (
+            CGPoint(
+                x: start.x + dx * 0.28 + normalX * offset,
+                y: start.y + dy * 0.28 + normalY * offset
+            ),
+            CGPoint(
+                x: start.x + dx * 0.72 - normalX * offset * 0.75,
+                y: start.y + dy * 0.72 - normalY * offset * 0.75
+            )
+        )
+    }
+
+    private static func addSwoopPath(
+        layer: CaptureMarkupLayer,
+        start: CGPoint,
+        end: CGPoint,
+        to context: CGContext
+    ) -> (first: CGPoint, second: CGPoint) {
+        let controls = swoopControlPoints(layer: layer, start: start, end: end)
+        context.move(to: start)
+        context.addCurve(to: end, control1: controls.first, control2: controls.second)
+        return controls
+    }
+
+    private static func drawSwoopArrow(
+        layer: CaptureMarkupLayer,
+        start: CGPoint,
+        end: CGPoint,
+        color: CGColor,
+        in context: CGContext,
+        size: CGSize,
+        lineWidth: CGFloat
+    ) {
+        context.saveGState()
+        context.setStrokeColor(color.copy(alpha: 0.12) ?? color)
+        context.setLineWidth(max(lineWidth + 3, lineWidth * 2.4))
+        context.setLineCap(.round)
+        context.beginPath()
+        _ = addSwoopPath(layer: layer, start: start, end: end, to: context)
+        context.strokePath()
+        context.restoreGState()
+
+        context.beginPath()
+        context.setStrokeColor(color)
+        context.setLineWidth(lineWidth)
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
+        let controls = addSwoopPath(layer: layer, start: start, end: end, to: context)
+        strokeWithEffects(layer, in: context, size: size) {
+            context.strokePath()
+        }
+        drawPointer(pointer(for: layer, endpoint: .start), at: start, from: controls.first, color: color, in: context, size: size, lineWidth: lineWidth)
+        drawPointer(pointer(for: layer, endpoint: .end), at: end, from: controls.second, color: color, in: context, size: size, lineWidth: lineWidth)
+    }
+
+    private static func sampledArrowPath(
+        layer: CaptureMarkupLayer,
+        start: CGPoint,
+        end: CGPoint,
+        steps: Int = 40
+    ) -> [CGPoint] {
+        switch arrowStyle(for: layer) {
+        case "curved":
+            let control = curvedArrowControlPoint(layer: layer, start: start, end: end)
+            return (0...steps).map { index in
+                let t = CGFloat(index) / CGFloat(steps)
+                let inverse = 1 - t
+                return CGPoint(
+                    x: inverse * inverse * start.x + 2 * inverse * t * control.x + t * t * end.x,
+                    y: inverse * inverse * start.y + 2 * inverse * t * control.y + t * t * end.y
+                )
+            }
+        case "swoop":
+            let controls = swoopControlPoints(layer: layer, start: start, end: end)
+            return (0...steps).map { index in
+                let t = CGFloat(index) / CGFloat(steps)
+                let inverse = 1 - t
+                return CGPoint(
+                    x: inverse * inverse * inverse * start.x
+                        + 3 * inverse * inverse * t * controls.first.x
+                        + 3 * inverse * t * t * controls.second.x
+                        + t * t * t * end.x,
+                    y: inverse * inverse * inverse * start.y
+                        + 3 * inverse * inverse * t * controls.first.y
+                        + 3 * inverse * t * t * controls.second.y
+                        + t * t * t * end.y
+                )
+            }
+        default:
+            return [start, end]
+        }
+    }
+
+    private static func ribbonBodyPoints(
+        _ points: [CGPoint],
+        headLength: CGFloat
+    ) -> (points: [CGPoint], neck: CGPoint, tip: CGPoint)? {
+        guard points.count >= 2, let tip = points.last else { return nil }
+        var lengths: [CGFloat] = [0]
+        for index in 1..<points.count {
+            lengths.append(lengths[index - 1] + hypot(
+                points[index].x - points[index - 1].x,
+                points[index].y - points[index - 1].y
+            ))
+        }
+        guard let total = lengths.last, total >= 18 else { return nil }
+        let neckDistance = max(total * 0.52, total - min(headLength, total * 0.38))
+        var index = 1
+        while index < lengths.count, lengths[index] < neckDistance {
+            index += 1
+        }
+        let beforeIndex = max(0, index - 1)
+        let afterIndex = min(points.count - 1, index)
+        let span = max(0.0001, lengths[afterIndex] - lengths[beforeIndex])
+        let progress = (neckDistance - lengths[beforeIndex]) / span
+        let neck = CGPoint(
+            x: points[beforeIndex].x + (points[afterIndex].x - points[beforeIndex].x) * progress,
+            y: points[beforeIndex].y + (points[afterIndex].y - points[beforeIndex].y) * progress
+        )
+        return (Array(points[..<afterIndex]) + [neck], neck, tip)
+    }
+
+    private static func normal(at index: Int, in points: [CGPoint]) -> CGPoint {
+        let previous = points[max(0, index - 1)]
+        let next = points[min(points.count - 1, index + 1)]
+        let dx = next.x - previous.x
+        let dy = next.y - previous.y
+        let distance = max(0.0001, hypot(dx, dy))
+        return CGPoint(x: -dy / distance, y: dx / distance)
+    }
+
+    private static func drawRibbonArrow(
+        layer: CaptureMarkupLayer,
+        start: CGPoint,
+        end: CGPoint,
+        color: CGColor,
+        in context: CGContext,
+        size: CGSize,
+        lineWidth: CGFloat,
+        style: String
+    ) {
+        let block = style == "block"
+        let headLength = max(block ? 20 : 22, lineWidth * (block ? 5.2 : 5.4))
+        guard let body = ribbonBodyPoints(
+            sampledArrowPath(layer: layer, start: start, end: end),
+            headLength: headLength
+        ) else {
+            var fallback = layer
+            fallback.pointerEnd = "filled"
+            fallback.pointerStyle = "filled"
+            drawStraightArrow(layer: fallback, start: start, end: end, color: color, in: context, size: size, lineWidth: lineWidth)
+            return
+        }
+
+        let startHalf = block ? max(2.6, lineWidth * 0.95) : max(0.55, lineWidth * 0.16)
+        let endHalf = block ? startHalf : max(1.7, lineWidth * 0.88)
+        let headHalf = block
+            ? max(7, endHalf * 2.05, lineWidth * 2.2)
+            : max(7, endHalf * 1.75, lineWidth * 1.9)
+        var left: [CGPoint] = []
+        var right: [CGPoint] = []
+        for (index, point) in body.points.enumerated() {
+            let progress = CGFloat(index) / CGFloat(max(1, body.points.count - 1))
+            let half = startHalf + (endHalf - startHalf) * pow(progress, 0.78)
+            let perpendicular = normal(at: index, in: body.points)
+            left.append(CGPoint(
+                x: point.x + perpendicular.x * half,
+                y: point.y + perpendicular.y * half
+            ))
+            right.append(CGPoint(
+                x: point.x - perpendicular.x * half,
+                y: point.y - perpendicular.y * half
+            ))
+        }
+        let neckPath = body.points + [body.tip]
+        let neckNormal = normal(at: body.points.count - 1, in: neckPath)
+        let headLeft = CGPoint(
+            x: body.neck.x + neckNormal.x * headHalf,
+            y: body.neck.y + neckNormal.y * headHalf
+        )
+        let headRight = CGPoint(
+            x: body.neck.x - neckNormal.x * headHalf,
+            y: body.neck.y - neckNormal.y * headHalf
+        )
+
+        let path = CGMutablePath()
+        guard let first = left.first else { return }
+        path.move(to: first)
+        for point in left.dropFirst() { path.addLine(to: point) }
+        path.addLine(to: headLeft)
+        path.addLine(to: body.tip)
+        path.addLine(to: headRight)
+        for point in right.reversed() { path.addLine(to: point) }
+        path.closeSubpath()
+
+        context.saveGState()
+        if layer.shadow == true {
+            let baseUnit = max(1, size.width / 600)
+            let shadowColor = parseColor(layer.shadowColor ?? "rgba(0, 0, 0, 0.28)")
+            let offset = CGSize(width: 0, height: CGFloat(layer.shadowOffsetY ?? 5) * baseUnit)
+            context.setShadow(offset: offset, blur: CGFloat(layer.shadowBlur ?? 12) * baseUnit, color: shadowColor)
+        }
+        context.addPath(path)
+        context.setFillColor(color.copy(alpha: 0.95) ?? color)
+        context.fillPath()
+        context.restoreGState()
+
+        context.saveGState()
+        context.addPath(path)
+        context.setStrokeColor(color.copy(alpha: 0.9) ?? color)
+        context.setLineWidth(max(0.8, lineWidth * 0.22))
+        context.setLineJoin(.round)
+        context.strokePath()
+        context.restoreGState()
     }
 
     private static func drawShapedArrow(
@@ -682,6 +1051,14 @@ public enum CaptureMarkupRenderer {
         backgroundAlpha: Double? = nil,
         borderColorHex: String? = nil,
         borderAlpha: Double? = nil,
+        borderWidth: Double? = nil,
+        cornerRadius: Double? = nil,
+        paddingX: Double? = nil,
+        paddingY: Double? = nil,
+        shadow: Bool = false,
+        shadowColorHex: String? = nil,
+        shadowBlur: Double? = nil,
+        shadowOffsetY: Double? = nil,
         inPlace: Bool = false
     ) {
         #if canImport(AppKit)
@@ -721,7 +1098,11 @@ public enum CaptureMarkupRenderer {
             .foregroundColor: textColor,
         ]
         let measured = (text as NSString).size(withAttributes: attrs)
-        let padding = CGSize(width: 8, height: 5)
+        let styleUnit = max(1, size.width / 1200)
+        let padding = CGSize(
+            width: CGFloat(paddingX ?? 8) * styleUnit,
+            height: CGFloat(paddingY ?? 5) * styleUnit
+        )
         // In-place labels anchor at their frame's top-left; tags float just
         // above the shape they annotate. Coordinates are top-left (the render
         // context is already flipped), so no inversion math is needed.
@@ -736,24 +1117,39 @@ public enum CaptureMarkupRenderer {
         }
         let labelRect = CGRect(
             origin: labelTopLeft,
-            size: CGSize(
-                width: measured.width + padding.width * 2,
-                height: measured.height + padding.height * 2
-            )
+            size: inPlace
+                ? rect.size
+                : CGSize(
+                    width: measured.width + padding.width * 2,
+                    height: measured.height + padding.height * 2
+                )
         )
 
         if !style.plain {
-            context.setFillColor(parseColor(style.backgroundColorHex).copy(alpha: style.backgroundAlpha) ?? parseColor(style.backgroundColorHex))
-            context.addPath(
-                CGPath(roundedRect: labelRect, cornerWidth: 6, cornerHeight: 6, transform: nil)
+            let radius = CGFloat(cornerRadius ?? 6) * styleUnit
+            let labelPath = CGPath(
+                roundedRect: labelRect,
+                cornerWidth: radius,
+                cornerHeight: radius,
+                transform: nil
             )
+            context.saveGState()
+            if shadow {
+                let shadowColor = parseColor(shadowColorHex ?? "rgba(0, 0, 0, 0.18)")
+                context.setShadow(
+                    offset: CGSize(width: 0, height: CGFloat(shadowOffsetY ?? 2) * styleUnit),
+                    blur: CGFloat(shadowBlur ?? 8) * styleUnit,
+                    color: shadowColor
+                )
+            }
+            context.setFillColor(parseColor(style.backgroundColorHex).copy(alpha: style.backgroundAlpha) ?? parseColor(style.backgroundColorHex))
+            context.addPath(labelPath)
             context.fillPath()
+            context.restoreGState()
             if style.borderAlpha > 0 {
                 context.setStrokeColor(parseColor(style.borderColorHex).copy(alpha: style.borderAlpha) ?? parseColor(style.borderColorHex))
-                context.setLineWidth(max(1, size.width / 1200))
-                context.addPath(
-                    CGPath(roundedRect: labelRect, cornerWidth: 6, cornerHeight: 6, transform: nil)
-                )
+                context.setLineWidth(max(0.5, CGFloat(borderWidth ?? 1) * styleUnit))
+                context.addPath(labelPath)
                 context.strokePath()
             }
         }

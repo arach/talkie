@@ -159,11 +159,11 @@ body[data-protected-dock="true"] .surface-actions {
 
 .style-panel {
   flex-wrap: nowrap;
-  max-width: min(820px, calc(100vw - 28px));
-  padding: 6px 9px;
+  max-width: min(1060px, calc(100vw - 28px));
+  padding: 4px 7px;
   overflow: hidden;
-  row-gap: 5px;
-  column-gap: 10px;
+  row-gap: 4px;
+  column-gap: 7px;
 }
 
 .style-panel[hidden] {
@@ -171,11 +171,12 @@ body[data-protected-dock="true"] .surface-actions {
 }
 
 .style-panel button {
-  height: 22px;
-  padding: 0 6px;
+  height: 20px;
+  padding: 0 5px;
   border-radius: var(--r-key);
   background: transparent;
   box-shadow: none;
+  font-size: 10px;
 }
 
 .style-panel button:hover {
@@ -267,7 +268,9 @@ button:focus-visible {
 .width.active,
 .note-style.active,
 .line-style.active,
-.arrow-style.active {
+.fill-style.active,
+.arrow-style.active,
+.pointer-style.active {
   color: var(--talkie-accent-bright);
   background: var(--active-fill);
   box-shadow: inset 0 0 0 1px var(--active-edge);
@@ -355,12 +358,15 @@ body[data-tool="select"] .style-toggle {
 }
 
 body[data-tool="note"] .style-group.note-options,
-body[data-tool="ink"] .style-group.line-options,
-body[data-tool="rect"] .style-group.line-options,
-body[data-tool="ellipse"] .style-group.line-options,
-body[data-tool="line"] .style-group.line-options,
-body[data-tool="arrow"] .style-group.line-options,
+body[data-tool="ink"] .style-group.stroke-options,
+body[data-tool="rect"] .style-group.stroke-options,
+body[data-tool="ellipse"] .style-group.stroke-options,
+body[data-tool="rect"] .style-group.fill-options,
+body[data-tool="ellipse"] .style-group.fill-options,
+body[data-tool="line"] .style-group.stroke-options,
+body[data-tool="arrow"] .style-group.stroke-options,
 body[data-tool="arrow"] .style-group.arrow-options,
+body[data-tool="arrow"] .style-group.pointer-options,
 body[data-tool="note"] .style-group.shared-options,
 body[data-tool="ink"] .style-group.shared-options,
 body[data-tool="rect"] .style-group.shared-options,
@@ -375,9 +381,9 @@ body[data-tool="arrow"] .style-group.shared-options {
 }
 
 .style-label {
-  padding: 0 5px 0 1px;
+  padding: 0 2px 0 0;
   color: rgba(223, 161, 58, 0.70);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
   line-height: 1;
   letter-spacing: 0;
@@ -386,8 +392,25 @@ body[data-tool="arrow"] .style-group.shared-options {
 
 .note-style,
 .line-style,
-.arrow-style {
-  padding: 0 6px;
+.fill-style,
+.arrow-style,
+.pointer-style {
+  padding: 0 5px;
+}
+
+.style-group + .style-group::before {
+  width: 1px;
+  height: 14px;
+  margin-right: 4px;
+  background: rgba(255, 255, 255, 0.10);
+  content: "";
+}
+
+.style-separator {
+  width: 1px;
+  height: 14px;
+  margin: 0 2px;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 /* Square sample chips. */
@@ -461,6 +484,8 @@ body[data-agent-compact-dock="true"] .glyph-action {
 body[data-agent-compact-dock="true"] .tool,
 body[data-agent-compact-dock="true"] .note-style,
 body[data-agent-compact-dock="true"] .line-style,
+body[data-agent-compact-dock="true"] .arrow-style,
+body[data-agent-compact-dock="true"] .pointer-style,
 body[data-agent-compact-dock="true"] .action,
 body[data-agent-compact-dock="true"] .width,
 body[data-agent-compact-dock="true"] .style-toggle {
@@ -485,7 +510,7 @@ body[data-agent-compact-dock="true"] .style-toggle {
 
 body[data-agent-compact-dock="true"] .style-panel {
   gap: 7px;
-  max-width: min(820px, calc(100vw - 12px));
+  max-width: min(1060px, calc(100vw - 12px));
   padding: 4px 7px;
 }
 
