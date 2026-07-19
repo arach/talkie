@@ -45,6 +45,21 @@ apps/ios/fastlane/Preview.html
 apps/ios/fastlane/screenshots/**/*.png
 apps/ios/fastlane/test_output
 apps/ios/fastlane/api_key.json
+apps/ios/fastlane/marketing/.upload/
+
+# Intentional App Store marketing sources and final exports
+!apps/ios/fastlane/marketing/output/
+!apps/ios/fastlane/marketing/output/*.png
+!apps/ios/fastlane/screenshots/raw/
+!apps/ios/fastlane/screenshots/raw/en-US/
+!apps/ios/fastlane/screenshots/raw/en-US/iPhone\ 17\ Pro\ Max-01_Home.png
+!apps/ios/fastlane/screenshots/raw/en-US/iPhone\ 17\ Pro\ Max-02_Recording.png
+!apps/ios/fastlane/screenshots/raw/en-US/iPhone\ 17\ Pro\ Max-04_Settings.png
+!apps/ios/fastlane/screenshots/raw/en-US/iPhone\ 17\ Pro\ Max-05_Keyboard.png
+!apps/ios/fastlane/screenshots/raw/en-US/iPhone\ 17\ Pro\ Max-state-dictating.png
+!apps/ios/fastlane/screenshots/raw/en-US/iPhone\ 17\ Pro\ Max-state-diff.png
+!apps/ios/fastlane/screenshots/iPad\ Pro\ 13-inch\ \(M5\)/01_Home.png
+!apps/ios/fastlane/screenshots/Apple\ Watch\ Series\ 11\ \(46mm\)/00_WatchHome.png
 
 # macOS
 .DS_Store
@@ -79,6 +94,8 @@ Config/signing.env
 .codex/
 .codex-build/
 output/
+!apps/ios/fastlane/marketing/output/
+!apps/ios/fastlane/marketing/output/*.png
 
 # IDE
 .vscode/

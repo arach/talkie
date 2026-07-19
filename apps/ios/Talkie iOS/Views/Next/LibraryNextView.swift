@@ -543,8 +543,8 @@ private struct LibraryRow: View {
 
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(item.title)
-                        .talkieType(.listTitle)
-                        .foregroundStyle(theme.colors.textPrimary)
+                        .talkieType(isContentPreview ? .preview : .listTitle)
+                        .foregroundStyle(isContentPreview ? theme.colors.textSecondary : theme.colors.textPrimary)
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .layoutPriority(1)
@@ -567,6 +567,11 @@ private struct LibraryRow: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 11)
         }
+    }
+
+    private var isContentPreview: Bool {
+        if case .typed = item.source { return true }
+        return false
     }
 
     private func syncIcon(for status: LibraryFeed.SyncStatus) -> String {

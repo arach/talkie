@@ -251,15 +251,21 @@ final class AudioDeviceManager: ObservableObject {
 
         guard status == noErr, dataSize > 0 else { return false }
 
-        let bufferListPointer = UnsafeMutablePointer<AudioBufferList>.allocate(capacity: 1)
-        defer { bufferListPointer.deallocate() }
+        // AudioBufferList has a trailing variable-length buffer array. CoreAudio
+        // reports its complete byte size, which can exceed one AudioBufferList.
+        let bufferListStorage = UnsafeMutableRawPointer.allocate(
+            byteCount: Int(dataSize),
+            alignment: MemoryLayout<AudioBufferList>.alignment
+        )
+        bufferListStorage.initializeMemory(as: UInt8.self, repeating: 0, count: Int(dataSize))
+        defer { bufferListStorage.deallocate() }
 
-        let getStatus = AudioObjectGetPropertyData(deviceID, &propertyAddress, 0, nil, &dataSize, bufferListPointer)
+        let getStatus = AudioObjectGetPropertyData(deviceID, &propertyAddress, 0, nil, &dataSize, bufferListStorage)
 
         guard getStatus == noErr else { return false }
 
-        let bufferList = bufferListPointer.pointee
-        return bufferList.mNumberBuffers > 0
+        let bufferList = bufferListStorage.bindMemory(to: AudioBufferList.self, capacity: 1)
+        return UnsafeMutableAudioBufferListPointer(bufferList).contains { $0.mNumberChannels > 0 }
     }
 
     private func getDeviceName(_ deviceID: AudioDeviceID) -> String? {

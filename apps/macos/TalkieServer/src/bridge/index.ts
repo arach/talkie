@@ -42,6 +42,7 @@ import {
   composeBorrowedProviderRoute,
   composeDirectOptionsRoute,
 } from "./routes/compose";
+import { configuredInferenceRoute } from "./routes/configured-inference";
 import { ingestRoute } from "./routes/ingest";
 import { ttsRoute } from "./routes/tts";
 import { headlessRoute, headlessStatusRoute } from "./routes/headless";
@@ -267,6 +268,12 @@ export const bridge = new Elysia({ name: "bridge" })
   .post("/compose/provider", async ({ request }) => {
     const body = await readJsonBody(request);
     return composeBorrowedProviderRoute(request.headers.get("X-Device-ID"), body);
+  })
+
+  // ===== Reusable Inference =====
+  .post("/inference/configured", async ({ request }) => {
+    const body = await readJsonBody(request);
+    return configuredInferenceRoute(body);
   })
 
   // ===== Content Ingestion =====

@@ -1,6 +1,10 @@
 name: Release Package npm
 
 on:
+  pull_request:
+    paths:
+      - 'packages/npm/cli/**'
+      - '.github/workflows/release-package-npm.yml'
   push:
     tags:
       - 'npm-v*'
@@ -40,7 +44,7 @@ jobs:
         run: bun run build
 
       - name: Package dry run
-        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.publish }}
+        if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.publish) }}
         run: npm publish --dry-run --access public
 
       - name: Publish to npm

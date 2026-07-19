@@ -44,6 +44,7 @@ export class OpenAIProvider implements Provider {
     const useNewTokenParam =
       model.startsWith("o1") ||
       model.startsWith("o3") ||
+      model.startsWith("o4") ||
       model.startsWith("gpt-5") ||
       model.startsWith("gpt-4o");
 
@@ -51,11 +52,21 @@ export class OpenAIProvider implements Provider {
     const supportsTemperature =
       !model.startsWith("o1") &&
       !model.startsWith("o3") &&
+      !model.startsWith("o4") &&
       !model.startsWith("gpt-5");
+
+    const usesDeveloperRole =
+      model.startsWith("o1") ||
+      model.startsWith("o3") ||
+      model.startsWith("o4") ||
+      model.startsWith("gpt-5");
 
     const payload: OpenAIRequest = {
       model: model,
-      messages: request.messages,
+      messages: request.messages.map((message) => ({
+        role: usesDeveloperRole && message.role === "system" ? "developer" : message.role,
+        content: message.content,
+      })),
       temperature: supportsTemperature ? request.temperature : undefined,
       stream: false,
     };

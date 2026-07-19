@@ -30,6 +30,22 @@ actor DirectAIClient {
         systemPrompt: String,
         userPrompt: String
     ) async throws -> String {
+        try await complete(
+            provider: provider,
+            messages: [
+                InferenceMessage(role: .system, content: systemPrompt),
+                InferenceMessage(role: .user, content: userPrompt),
+            ]
+        )
+    }
+
+    /// Run a structured multi-turn conversation. Ask AI uses this overload so
+    /// providers receive actual user/assistant roles instead of a transcript
+    /// flattened into a synthetic "captured text" prompt.
+    func complete(
+        provider: ComposeBorrowedProvider,
+        messages: [InferenceMessage]
+    ) async throws -> String {
         guard let entry = AIProviderCatalog.provider(provider.providerId) else {
             throw DirectAIError.unsupportedProvider(provider.providerName)
         }
@@ -37,11 +53,15 @@ actor DirectAIClient {
         switch entry.apiStyle {
         case .openAICompatible:
             return try await completeOpenAICompatible(
-                entry: entry, provider: provider, systemPrompt: systemPrompt, userPrompt: userPrompt
+                entry: entry,
+                provider: provider,
+                messages: messages
             )
         case .anthropic:
             return try await completeAnthropic(
-                entry: entry, provider: provider, systemPrompt: systemPrompt, userPrompt: userPrompt
+                entry: entry,
+                provider: provider,
+                messages: messages
             )
         }
     }
@@ -51,8 +71,7 @@ actor DirectAIClient {
     private func completeOpenAICompatible(
         entry: AIProviderCatalog.Provider,
         provider: ComposeBorrowedProvider,
-        systemPrompt: String,
-        userPrompt: String
+        messages: [InferenceMessage]
     ) async throws -> String {
         // OpenAI's reasoning models (o1/o3/o4/gpt-5) take a `developer` role and
         // reject `temperature` / `max_tokens` (they want `max_completion_tokens`).
@@ -60,12 +79,21 @@ actor DirectAIClient {
         // params, so scope the special-casing to the OpenAI provider.
         let isOpenAIReasoning = entry.id == "openai" && Self.isReasoningModel(provider.modelId)
 
+        let chatMessages = messages.compactMap { message -> ChatMessage? in
+            let content = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !content.isEmpty else { return nil }
+
+            let role = if isOpenAIReasoning && message.role == .system {
+                "developer"
+            } else {
+                message.role.rawValue
+            }
+            return ChatMessage(role: role, content: content)
+        }
+
         let body = OpenAIChatRequest(
             model: provider.modelId,
-            messages: [
-                ChatMessage(role: isOpenAIReasoning ? "developer" : "system", content: systemPrompt),
-                ChatMessage(role: "user", content: userPrompt),
-            ],
+            messages: chatMessages,
             temperature: isOpenAIReasoning ? nil : defaultTemperature,
             maxTokens: isOpenAIReasoning ? nil : defaultMaxTokens,
             maxCompletionTokens: isOpenAIReasoning ? defaultMaxTokens : nil,
@@ -89,14 +117,24 @@ actor DirectAIClient {
     private func completeAnthropic(
         entry: AIProviderCatalog.Provider,
         provider: ComposeBorrowedProvider,
-        systemPrompt: String,
-        userPrompt: String
+        messages: [InferenceMessage]
     ) async throws -> String {
+        let systemPrompt = messages
+            .filter { $0.role == .system }
+            .map(\.content)
+            .joined(separator: "\n\n")
+        let conversation = messages.compactMap { message -> AnthropicMessage? in
+            guard message.role != .system else { return nil }
+            let content = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !content.isEmpty else { return nil }
+            return AnthropicMessage(role: message.role.rawValue, content: content)
+        }
+
         let body = AnthropicMessagesRequest(
             model: provider.modelId,
             maxTokens: defaultMaxTokens,
             system: systemPrompt,
-            messages: [AnthropicMessage(role: "user", content: userPrompt)]
+            messages: conversation
         )
 
         var headers = entry.extraHeaders
@@ -104,9 +142,12 @@ actor DirectAIClient {
         headers["anthropic-version"] = AIProviderCatalog.anthropicVersion
 
         let response: AnthropicMessagesResponse = try await send(url: entry.chatURL, headers: headers, body: body)
-        guard let content = response.content.first(where: { $0.type == "text" })?.text?
-            .trimmingCharacters(in: .whitespacesAndNewlines), !content.isEmpty
-        else {
+        let content = response.content
+            .filter { $0.type == "text" }
+            .compactMap(\.text)
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty else {
             throw DirectAIError.emptyResponse(provider.providerName)
         }
         return content

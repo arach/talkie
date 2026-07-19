@@ -1694,11 +1694,9 @@ final class AgentController: ObservableObject {
         stateMachine.transition(.stopRecording)
 
         recordingEndTime = Date()
-        Task { @MainActor [weak self] in
-            await Task.yield()
-            try? await Task.sleep(for: .milliseconds(16))
-            self?.audio.stopCapture()
-        }
+        // Cancel capture setup immediately. Deferring this leaves a window where
+        // an already-released key can still finish installing an audio tap.
+        audio.stopCapture()
 
         // Safety timeout: finalization is asynchronous and can legitimately exceed
         // two seconds on a degraded HAL. Wait while the capture service reports

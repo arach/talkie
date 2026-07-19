@@ -37,9 +37,20 @@ struct AIProviderEntry: Identifiable, Equatable {
 }
 
 struct AICredentialsNext: View {
+    let onClose: @MainActor () -> Void
+
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var credentials = AICredentialStore.shared
     @State private var editing: AIProviderEntry?
+
+    @MainActor
+    init() {
+        self.onClose = { AppShellRouter.shared.openSettings() }
+    }
+
+    init(onClose: @escaping @MainActor () -> Void) {
+        self.onClose = onClose
+    }
 
     var body: some View {
         ZStack {
@@ -91,12 +102,21 @@ struct AICredentialsNext: View {
                     if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         try? credentials.clear(provider.id)
                     } else {
-                        try? credentials.set(value, for: provider.id)
+                        do {
+                            try credentials.set(value, for: provider.id)
+                            ComposeProviderCredentialStore.shared.delete(providerId: provider.id)
+                        } catch {
+                            AppLogger.ai.warning(
+                                "AI key save failed",
+                                detail: error.localizedDescription
+                            )
+                        }
                     }
                     editing = nil
                 },
                 onClear: {
                     try? credentials.clear(provider.id)
+                    ComposeProviderCredentialStore.shared.delete(providerId: provider.id)
                     editing = nil
                 }
             )
@@ -113,7 +133,7 @@ struct AICredentialsNext: View {
 
             Spacer()
 
-            Button(action: { AppShellRouter.shared.openSettings() }) {
+            Button(action: onClose) {
                 Image(systemName: "xmark")
                     .font(.system(size: 13))
                     .foregroundStyle(theme.colors.textTertiary)

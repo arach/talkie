@@ -88,6 +88,7 @@ function showWelcome() {
   // Commands tree
   const rows = [
     ["open", "npx @talkie/app open", ""],
+    ["agent", "npx @talkie/app agent", "launch TalkieAgent"],
     ["pro", "npx @talkie/app pro", "Pro Tools onboarding"],
     ["pair", "npx @talkie/app pair", "connect iPhone/iPad"],
     ["doctor", "npx @talkie/app doctor", "check setup"],

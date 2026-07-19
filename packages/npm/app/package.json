@@ -1,6 +1,6 @@
 {
   "name": "@talkie/app",
-  "version": "0.4.8",
+  "version": "0.4.9",
   "description": "Install Talkie for macOS — voice-first productivity suite",
   "bin": {
     "talkie": "./talkie.js"
@@ -27,7 +27,7 @@
     "darwin"
   ],
   "dependencies": {
-    "@talkie/cli": "^0.4.7",
+    "@talkie/cli": "^0.4.10",
     "@talkie/client": "^0.1.1"
   }
 }

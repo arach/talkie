@@ -11,7 +11,7 @@
 //
 
 import XCTest
-@testable import Talkie
+@testable import Talkie_iOS
 
 final class TalkieAIProviderCredentialOCRServiceTests: XCTestCase {
 

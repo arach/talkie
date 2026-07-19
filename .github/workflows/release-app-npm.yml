@@ -1,0 +1,45 @@
+name: Release @talkie/app npm
+
+on:
+  pull_request:
+    paths:
+      - 'packages/npm/app/**'
+      - '.github/workflows/release-app-npm.yml'
+  push:
+    tags:
+      - 'npm-app-v*'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish to npm instead of running the package dry-run'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/npm/app
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Package dry run
+        if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.publish) }}
+        run: npm publish --dry-run --access public
+
+      - name: Publish to npm
+        if: ${{ github.event_name == 'push' || inputs.publish }}
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

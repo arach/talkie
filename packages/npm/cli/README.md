@@ -53,6 +53,7 @@ cd packages/npm/cli && bun install && bun link
 ```bash
 talkie doctor                 # app, CLI, permissions, services
 talkie open                   # launch Talkie.app
+talkie agent                  # launch TalkieAgent in the background
 talkie memos --limit 5        # recent voice memos
 talkie screenshots 3 --paths  # tray screenshot paths
 talkie clips 5 --paths        # tray screen clips
@@ -221,6 +222,8 @@ Dictation counts, word totals, streaks, and top apps.
 | `talkie install --check` | Compare installed vs latest |
 | `talkie uninstall` | Remove Talkie.app from `/Applications` |
 | `talkie open` | Open Talkie.app |
+| `talkie agent` | Launch the newest installed TalkieAgent (`--restart`, `--dev`, or `--production`) |
+| `talkie open agent` | Alias-style route to launch TalkieAgent |
 | `talkie pro` | Open Pro Tools onboarding |
 | `talkie where` | Show app, CLI, and data paths |
 | `talkie doctor` | Permissions, services, Pro Tools readiness |

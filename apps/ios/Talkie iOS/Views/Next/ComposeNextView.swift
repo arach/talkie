@@ -99,14 +99,6 @@ struct ComposeNextView: View {
                 .padding(.bottom, 6)
             }
 
-            if compose.state != .diff {
-                QuickTransforms(
-                    state: compose.state,
-                    onTap: { compose.applyTransform($0) },
-                    onCommand: { compose.toggleVoiceCommand() }
-                )
-            }
-
             ActionTray(
                 state: compose.state,
                 onAccept: { compose.acceptDiff() },
@@ -116,6 +108,18 @@ struct ComposeNextView: View {
                     NotificationCenter.default.post(name: .composeNextEditorToggleKeyboard, object: nil)
                 }
             )
+
+            // Keep the contextual action rail below the center Talkie pivot.
+            // In review, ActionTray itself is the bottom rail; while writing,
+            // the cursor/keyboard lane holds the pivot and quick transforms
+            // become the final row beneath it.
+            if compose.state != .diff {
+                QuickTransforms(
+                    state: compose.state,
+                    onTap: { compose.applyTransform($0) },
+                    onCommand: { compose.toggleVoiceCommand() }
+                )
+            }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if keyboardController.isVisible {
@@ -1072,7 +1076,7 @@ private struct DocumentBody: View {
                         isEditable: state == .idle || state == .dictating,
                         textColor: UIColor(theme.colors.textPrimary),
                         accentColor: UIColor(theme.currentTheme.chrome.accent),
-                        contentBottomInset: 72
+                        contentBottomInset: state == .dictating ? 116 : 72
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     // Win the card's full height ahead of the trailing
@@ -1082,11 +1086,6 @@ private struct DocumentBody: View {
                     .layoutPriority(1)
                     .padding(.horizontal, 14)
                     .padding(.top, 12)
-
-                    if state == .dictating, let dictationPreview {
-                        DictationPreviewStrip(preview: dictationPreview)
-                            .padding(.horizontal, 16)
-                    }
 
                     if state == .listening, let voiceCommand {
                         ListeningStrip(commandText: voiceCommand)
@@ -1107,18 +1106,21 @@ private struct DocumentBody: View {
             // out of the way while scrolling down so it stops covering
             // the text you're reading, glides back on scroll-up.
             if state == .idle || state == .dictating {
-                EditorBottomChromeFade()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .allowsHitTesting(false)
+                VStack(spacing: 8) {
+                    if state == .dictating, let dictationPreview {
+                        DictationPreviewStrip(preview: dictationPreview)
+                            .padding(.horizontal, 30)
+                    }
 
-                ComposeFloatingTools(state: state, onMic: onMic)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .padding(.bottom, 14)
-                    .opacity(isMicVisible ? 1 : 0)
-                    .scaleEffect(isMicVisible ? 1 : 0.85, anchor: .bottom)
-                    .offset(y: isMicVisible ? 0 : 16)
-                    .allowsHitTesting(isMicVisible)
-                    .animation(.easeOut(duration: 0.2), value: isMicVisible)
+                    ComposeFloatingTools(state: state, onMic: onMic)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .padding(.bottom, 14)
+                .opacity(isMicVisible ? 1 : 0)
+                .scaleEffect(isMicVisible ? 1 : 0.85, anchor: .bottom)
+                .offset(y: isMicVisible ? 0 : 16)
+                .allowsHitTesting(isMicVisible)
+                .animation(.easeOut(duration: 0.2), value: isMicVisible)
             }
         }
         .padding(.top, 6)
@@ -1132,29 +1134,6 @@ private struct DocumentBody: View {
                     .strokeBorder(theme.currentTheme.chrome.edgeFaint,
                                   lineWidth: theme.currentTheme.chrome.hairlineWidth)
             )
-    }
-}
-
-private struct EditorBottomChromeFade: View {
-    @ObservedObject private var theme = ThemeManager.shared
-
-    var body: some View {
-        VStack(spacing: 0) {
-            LinearGradient(
-                colors: [
-                    theme.colors.cardBackground.opacity(0),
-                    theme.colors.cardBackground.opacity(0.14),
-                    theme.colors.cardBackground.opacity(0.24),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 50)
-
-            Rectangle()
-                .fill(theme.colors.cardBackground.opacity(0.18))
-                .frame(height: 18)
-        }
     }
 }
 
@@ -1375,11 +1354,7 @@ private struct InlineMicButton: View {
             ZStack {
                 Image(systemName: state == .dictating ? "stop.fill" : "mic.fill")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(
-                        state == .dictating
-                            ? theme.currentTheme.chrome.accent
-                            : theme.chrome.action
-                    )
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
             }
             .frame(width: 31, height: 30)
             .background(commandKeyBackground(isActive: state == .dictating))
@@ -1390,11 +1365,11 @@ private struct InlineMicButton: View {
 
     private func commandKeyBackground(isActive: Bool = false) -> some View {
         RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous)
-            .fill(theme.chrome.panelAlt)
+            .fill(theme.currentTheme.chrome.accentTint)
             .overlay(
                 RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous)
                     .strokeBorder(
-                        isActive ? theme.currentTheme.chrome.accent.opacity(0.42) : theme.chrome.edgeFaint,
+                        isActive ? theme.currentTheme.chrome.accent.opacity(0.52) : theme.currentTheme.chrome.accentStrong,
                         lineWidth: theme.currentTheme.chrome.hairlineWidth
                     )
             )
@@ -1413,7 +1388,7 @@ private struct ComposeFloatingTools: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        // Deck-style rail: one dark bed with tight command groups. The mic is
+        // Quick-actions rail: one paper-and-hairline bed with tight command groups. The mic is
         // pinned to the true center so it lines up with the cursor pad below.
         ZStack {
             HStack(spacing: 0) {
@@ -1456,7 +1431,7 @@ private struct ComposeFloatingTools: View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(theme.chrome.action)
+                .foregroundStyle(theme.currentTheme.chrome.action)
                 .frame(width: 31, height: 30)
                 .background(commandKeyBackground)
         }
@@ -1471,7 +1446,7 @@ private struct ComposeFloatingTools: View {
         } label: {
             Text("space")
                 .font(.system(size: 10.5, weight: .medium, design: .rounded))
-                .foregroundStyle(theme.chrome.action)
+                .foregroundStyle(theme.currentTheme.chrome.action)
                 .frame(width: 54, height: 30)
                 .background(commandKeyBackground)
         }
@@ -1481,27 +1456,22 @@ private struct ComposeFloatingTools: View {
 
     private var commandKeyBackground: some View {
         RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous)
-            .fill(theme.chrome.panelAlt)
+            .fill(theme.colors.cardBackground)
             .overlay(
                 RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous)
-                    .strokeBorder(theme.chrome.edgeFaint,
+                    .strokeBorder(theme.currentTheme.chrome.edgeFaint,
                                   lineWidth: theme.currentTheme.chrome.hairlineWidth)
             )
     }
 
     private var railBackground: some View {
         RoundedRectangle(cornerRadius: CornerRadius.sm + 4, style: .continuous)
-            .fill(.ultraThinMaterial)
+            .fill(theme.colors.cardBackground)
             .overlay(
                 RoundedRectangle(cornerRadius: CornerRadius.sm + 4, style: .continuous)
-                    .fill(theme.chrome.panel.opacity(0.48))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: CornerRadius.sm + 4, style: .continuous)
-                    .strokeBorder(theme.chrome.panelEdge,
+                    .strokeBorder(theme.currentTheme.chrome.edge,
                                   lineWidth: theme.currentTheme.chrome.hairlineWidth)
             )
-            .shadow(color: .black.opacity(0.22), radius: 10, x: 0, y: 5)
     }
 }
 
@@ -2322,14 +2292,12 @@ private struct ComposeNotesListSheet: View {
                                     Image(systemName: note.id == activeID ? "checkmark.circle.fill" : "doc.text")
                                         .foregroundStyle(note.id == activeID ? theme.currentTheme.chrome.accent : theme.colors.textTertiary)
                                     VStack(alignment: .leading, spacing: 3) {
-                                        Text(note.title)
-                                            .foregroundStyle(theme.colors.textPrimary)
-                                            .lineLimit(1)
                                         Text(note.preview)
-                                            .foregroundStyle(theme.colors.textTertiary)
+                                            .talkieType(.preview)
+                                            .foregroundStyle(theme.colors.textPrimary)
                                             .lineLimit(2)
                                         Text(note.modifiedLabel)
-                                            .font(.caption2)
+                                            .talkieType(.channelLabelTiny)
                                             .foregroundStyle(theme.colors.textTertiary)
                                     }
                                 }
@@ -2567,23 +2535,19 @@ private struct ActionTray: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
         } else {
-            // Lower chrome row: the summon floats bottom-left (shell), the
-            // cursor pad sits in the middle as the hero, and the keyboard
-            // toggle caps the right. The editing tools + mic live on the
-            // floating row above this — not here.
-            ZStack {
+            // The global Talkie pivot occupies the center of this lane. Keep
+            // the cursor and keyboard controls on its flanks so all three
+            // remain visible and tappable.
+            HStack {
                 joystickButton
-
-                HStack {
-                    Spacer()
-                    trayButton(
-                        size: 48,
-                        systemImage: "keyboard",
-                        accessibilityLabel: "Keyboard",
-                        accessibilityID: "compose.keyboard.toggle",
-                        action: onKeyboard
-                    )
-                }
+                Spacer()
+                trayButton(
+                    size: 48,
+                    systemImage: "keyboard",
+                    accessibilityLabel: "Keyboard",
+                    accessibilityID: "compose.keyboard.toggle",
+                    action: onKeyboard
+                )
             }
             .padding(.horizontal, 16)
             .padding(.top, 4)

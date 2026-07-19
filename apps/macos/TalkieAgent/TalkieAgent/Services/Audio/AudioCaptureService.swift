@@ -949,15 +949,13 @@ final class AudioCaptureService: AgentAudioCapture {
             switch bindingResult {
             case .ready:
                 break
-            case .changed(let requiresSettle):
-                if requiresSettle {
-                    log.debug("Waiting for input device binding to settle", detail: "\(Int(self.deviceReconfigurationSettleDelay * 1000))ms")
-                    Thread.sleep(forTimeInterval: self.deviceReconfigurationSettleDelay)
-                    guard self.captureToken == token else {
-                        log.debug("Audio setup cancelled after device binding settle - token mismatch")
-                        newEngine.stop()
-                        return
-                    }
+            case .changed:
+                log.debug("Waiting for input device binding to settle", detail: "\(Int(self.deviceReconfigurationSettleDelay * 1000))ms")
+                Thread.sleep(forTimeInterval: self.deviceReconfigurationSettleDelay)
+                guard self.captureToken == token else {
+                    log.debug("Audio setup cancelled after device binding settle - token mismatch")
+                    newEngine.stop()
+                    return
                 }
             case .failed:
                 DispatchQueue.main.async { [weak self] in
@@ -1065,8 +1063,20 @@ final class AudioCaptureService: AgentAudioCapture {
         let bufferSize = Double(AudioCaptureConfiguration.bufferSize)
         buffersPerSecond = hwFormat.sampleRate / bufferSize
 
-        // Install tap with nil format - let AVAudioEngine auto-negotiate
-        inputNode.installTap(onBus: 0, bufferSize: AudioCaptureConfiguration.bufferSize, format: nil) { [weak self] buffer, _ in
+        // Re-read the input format immediately before installing the tap. hwFormat
+        // was captured on the setup queue; if a device reconfiguration slipped in
+        // during the main-queue hop, the cached format would no longer match the
+        // node and installTap(format:) throws an uncatchable exception. Reading it
+        // here keeps the tap bound to the current input side (never the stale
+        // aggregate's output side, which is what a nil format would negotiate).
+        let tapFormat = inputNode.inputFormat(forBus: 0)
+        if tapFormat.sampleRate != hwFormat.sampleRate || tapFormat.channelCount != hwFormat.channelCount {
+            log.warning(
+                "Input format drifted between setup and tap install",
+                detail: "was \(Int(hwFormat.sampleRate))Hz/\(hwFormat.channelCount)ch, now \(Int(tapFormat.sampleRate))Hz/\(tapFormat.channelCount)ch"
+            )
+        }
+        inputNode.installTap(onBus: 0, bufferSize: AudioCaptureConfiguration.bufferSize, format: tapFormat) { [weak self] buffer, _ in
             guard let self, self.isRecordingActive else { return }
             self.handleBuffer(buffer)
         }
@@ -1598,7 +1608,7 @@ final class AudioCaptureService: AgentAudioCapture {
 
     private enum InputDeviceBindingResult {
         case ready
-        case changed(requiresSettle: Bool)
+        case changed
         case failed
     }
 
@@ -1661,7 +1671,7 @@ final class AudioCaptureService: AgentAudioCapture {
 
         guard let verifiedDeviceID = currentInputDeviceID(for: audioUnit) else {
             log.warning("Selected microphone bound but could not verify", detail: selection.name)
-            return .changed(requiresSettle: true)
+            return .changed
         }
 
         let verifiedName = getDeviceName(verifiedDeviceID) ?? "unknown"
@@ -1670,7 +1680,7 @@ final class AudioCaptureService: AgentAudioCapture {
             "🎤 Engine using device: \(verifiedName) (ID: \(verifiedDeviceID))",
             detail: matches ? "✅ bound selected microphone" : "⚠️ still mismatch with \(selection.name)"
         )
-        return matches ? .changed(requiresSettle: !bindingDefaultAggregate) : .failed
+        return matches ? .changed : .failed
     }
 
     private func isDefaultInputAggregate(_ deviceID: AudioDeviceID, name: String) -> Bool {

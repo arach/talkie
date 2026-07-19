@@ -29,6 +29,8 @@ struct HomeNextView: View {
     @ObservedObject private var recordingSheet = RecordingSheetController.shared
     @StateObject private var feed: HomeFeed
     @FocusState private var isCommandFocused: Bool
+    @State private var commandMode: HomeCommandMode = .ask
+    @State private var askPrompt = ""
 
     init(feed: HomeFeed? = nil) {
         _feed = StateObject(wrappedValue: feed ?? HomeFeed())
@@ -42,11 +44,13 @@ struct HomeNextView: View {
                 HomeCockpit(model: feed.cockpit)
                     .padding(.horizontal, 12)
 
-                HomeFrequentActionsStrip()
+                HomeFrequentActionsStrip(onSearch: focusSearch)
                     .padding(.horizontal, 12)
 
                 HomeCommandBar(
-                    query: $feed.searchText,
+                    prompt: $askPrompt,
+                    searchText: $feed.searchText,
+                    mode: $commandMode,
                     isFocused: $isCommandFocused
                 )
                     .padding(.horizontal, 12)
@@ -101,15 +105,21 @@ struct HomeNextView: View {
     private func handleDeepLinkAction(_ action: DeepLinkAction) {
         switch action {
         case .search(let query):
+            commandMode = .search
             feed.searchText = query
             isCommandFocused = true
             deepLinkManager.clearAction()
         case .openSearch:
-            isCommandFocused = true
+            focusSearch()
             deepLinkManager.clearAction()
         default:
             break
         }
+    }
+
+    private func focusSearch() {
+        commandMode = .search
+        isCommandFocused = true
     }
 
     private func openICloudSettings() {
@@ -382,77 +392,259 @@ private enum HomeTacticalPalette {
 
 // MARK: - Command center
 
+private enum HomeCommandMode: String {
+    case ask
+    case search
+
+    var label: String {
+        switch self {
+        case .ask: "ASK"
+        case .search: "FIND"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .ask: "sparkles"
+        case .search: "magnifyingglass"
+        }
+    }
+
+    var placeholder: String {
+        switch self {
+        case .ask: "Ask Talkie anything"
+        case .search: "Search your captures"
+        }
+    }
+}
+
+private struct HomeAskShortcut: Identifiable {
+    let label: String
+    let prompt: String
+
+    var id: String { label }
+
+    static let all = [
+        HomeAskShortcut(label: "PLAN", prompt: "Help me turn this into a practical plan: "),
+        HomeAskShortcut(label: "DRAFT", prompt: "Draft a clear message about: "),
+        HomeAskShortcut(label: "THINK", prompt: "Help me think through: "),
+    ]
+}
+
 private struct HomeCommandBar: View {
-    @Binding var query: String
+    @Binding var prompt: String
+    @Binding var searchText: String
+    @Binding var mode: HomeCommandMode
     @FocusState.Binding var isFocused: Bool
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(HomeTacticalPalette.accent)
-                .frame(width: 22, height: 22)
-
-            TextField("Ask, find, send, or route...", text: $query)
-                .talkieType(.fieldLabel)
-                .foregroundStyle(theme.colors.textPrimary)
-                .submitLabel(.go)
-                .focused($isFocused)
-                .onSubmit(submit)
-
-            Button(action: startRecording) {
-                Image(systemName: "mic")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(theme.colors.textSecondary)
-                    .frame(width: 30, height: 30)
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Button(action: toggleMode) {
+                    HStack(spacing: 5) {
+                        Image(systemName: mode.icon)
+                            .font(.system(size: 11, weight: .semibold))
+                        Text(mode.label)
+                            .talkieType(.channelLabelTiny)
+                    }
+                    .foregroundStyle(mode == .ask ? HomeTacticalPalette.accent : theme.colors.textSecondary)
+                    .padding(.horizontal, 9)
+                    .frame(height: 30)
                     .background {
-                        Circle()
-                            .fill(theme.colors.cardBackground.opacity(0.72))
+                        Capsule()
+                            .fill(mode == .ask ? HomeTacticalPalette.accentSoft : theme.currentTheme.chrome.edgeFaint)
                             .overlay {
-                                Circle().strokeBorder(
-                                    theme.currentTheme.chrome.edgeFaint,
+                                Capsule().strokeBorder(
+                                    mode == .ask ? HomeTacticalPalette.accentEdge : theme.currentTheme.chrome.edgeFaint,
                                     lineWidth: theme.currentTheme.chrome.hairlineWidth
                                 )
                             }
                     }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(mode == .ask ? "Switch to search" : "Switch to Ask AI")
+                .accessibilityIdentifier("home.command-mode")
+
+                TextField(mode.placeholder, text: activeText)
+                    .talkieType(.fieldLabel)
+                    .foregroundStyle(theme.colors.textPrimary)
+                    .submitLabel(mode == .ask ? .send : .search)
+                    .focused($isFocused)
+                    .onSubmit(submit)
+                    .accessibilityIdentifier("home.command-field")
+
+                Button(action: submit) {
+                    Image(systemName: trailingIcon)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(trailingForeground)
+                        .frame(width: 32, height: 32)
+                        .background {
+                            Circle()
+                                .fill(trailingBackground)
+                                .overlay {
+                                    Circle().strokeBorder(
+                                        trailingBorder,
+                                        lineWidth: theme.currentTheme.chrome.hairlineWidth
+                                    )
+                                }
+                        }
+                }
+                .buttonStyle(.plain)
+                .disabled(mode == .ask && trimmedActiveText.isEmpty)
+                .accessibilityLabel(mode == .ask ? "Send to Ask AI" : "Finish searching")
+                .accessibilityIdentifier("home.command-send")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Start recording")
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
+
+            Rectangle()
+                .fill(theme.currentTheme.chrome.edgeFaint)
+                .frame(height: theme.currentTheme.chrome.hairlineWidth)
+
+            commandRail
+                .frame(height: 34)
+                .padding(.horizontal, 11)
         }
-        .padding(.leading, 12)
-        .padding(.trailing, 7)
-        .padding(.vertical, 7)
         .background {
-            Capsule()
-                .fill(theme.colors.cardBackground.opacity(0.82))
+            RoundedRectangle(cornerRadius: 14)
+                .fill(theme.colors.cardBackground.opacity(0.9))
                 .overlay {
-                    Capsule()
-                        .fill(HomeTacticalPalette.accentSoft.opacity(isFocused ? 1 : 0.46))
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(HomeTacticalPalette.accentSoft.opacity(mode == .ask ? (isFocused ? 0.7 : 0.28) : 0))
                 }
                 .overlay {
-                    Capsule()
+                    RoundedRectangle(cornerRadius: 14)
                         .strokeBorder(
-                            isFocused ? HomeTacticalPalette.accentEdge : theme.currentTheme.chrome.edgeFaint,
+                            isFocused && mode == .ask ? HomeTacticalPalette.accentEdge : theme.currentTheme.chrome.edgeFaint,
                             lineWidth: isFocused ? 1 : theme.currentTheme.chrome.hairlineWidth
                         )
                 }
         }
-        .shadow(color: Color.black.opacity(0.08), radius: 9, x: 0, y: 5)
-        .accessibilityIdentifier("home.command-bar")
+        .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
+        .animation(.easeOut(duration: 0.18), value: mode)
+        .animation(.easeOut(duration: 0.18), value: isFocused)
+    }
+
+    @ViewBuilder
+    private var commandRail: some View {
+        if mode == .ask {
+            HStack(spacing: 6) {
+                Text("START WITH")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textTertiary)
+
+                ForEach(HomeAskShortcut.all) { shortcut in
+                    Button(shortcut.label) {
+                        prompt = shortcut.prompt
+                        isFocused = true
+                    }
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textSecondary)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Start with \(shortcut.label.capitalized)")
+                }
+
+                Spacer(minLength: 4)
+
+                Button(action: switchToSearch) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("RECENTS")
+                        .talkieType(.channelLabelTiny)
+                }
+                .foregroundStyle(theme.colors.textTertiary)
+                .buttonStyle(.plain)
+                .accessibilityLabel("Search Recents")
+            }
+        } else {
+            HStack(spacing: 8) {
+                Text(searchText.isEmpty ? "RECENTS FILTER LIVE" : "FILTERING RECENTS")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textTertiary)
+
+                Spacer()
+
+                if !searchText.isEmpty {
+                    Button("CLEAR") { searchText = "" }
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(theme.currentTheme.chrome.action)
+                        .buttonStyle(.plain)
+                }
+
+                Button("ASK AI", action: switchToAsk)
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(HomeTacticalPalette.accent)
+                    .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var activeText: Binding<String> {
+        mode == .ask ? $prompt : $searchText
+    }
+
+    private var trimmedActiveText: String {
+        activeText.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var trailingIcon: String {
+        if mode == .ask { return "arrow.up" }
+        return isFocused ? "keyboard.chevron.compact.down" : "magnifyingglass"
+    }
+
+    private var trailingForeground: Color {
+        if mode == .ask {
+            return trimmedActiveText.isEmpty ? theme.colors.textTertiary : theme.colors.cardBackground
+        }
+        return theme.colors.textSecondary
+    }
+
+    private var trailingBackground: Color {
+        if mode == .ask, !trimmedActiveText.isEmpty { return HomeTacticalPalette.accent }
+        return theme.currentTheme.chrome.edgeFaint
+    }
+
+    private var trailingBorder: Color {
+        mode == .ask && !trimmedActiveText.isEmpty
+            ? HomeTacticalPalette.accentEdge
+            : theme.currentTheme.chrome.edgeFaint
     }
 
     private func submit() {
-        let command = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !command.isEmpty else {
+        guard mode == .ask else {
             isFocused = false
             return
         }
-        AppShellRouter.shared.openAskAISeeded(prompt: command)
+
+        let command = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !command.isEmpty else { return }
+        prompt = ""
+        isFocused = false
+        let isReadyToSend = InferenceService.shared.readiness.isReady
+        AppShellRouter.shared.openAskAISeeded(
+            prompt: command,
+            autoSend: isReadyToSend,
+            startsNewSession: true
+        )
     }
 
-    private func startRecording() {
-        RecordingSheetController.shared.isPresented = true
+    private func toggleMode() {
+        if mode == .ask {
+            switchToSearch()
+        } else {
+            switchToAsk()
+        }
+    }
+
+    private func switchToSearch() {
+        mode = .search
+        isFocused = true
+    }
+
+    private func switchToAsk() {
+        mode = .ask
+        isFocused = true
     }
 }
 
@@ -561,32 +753,73 @@ private enum CockpitMessage {
     }
 }
 
+private struct HomeActivityEvent: Identifiable {
+    let time: String
+    let title: String
+    let kind: String
+
+    var id: String { "\(time)-\(title)" }
+}
+
 private struct HomeCockpit: View {
     let model: HomeFeed.CockpitModel
     @ObservedObject private var parakeet = ParakeetModelManager.shared
+    @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        // No eyebrow label — the Bezel reads as an instrument on its own. The
-        // whole-Console tap routes below; the Bay Selector is a nested Button so
-        // toggling the bay never fires this outer tap.
-        Button(action: open) {
-            CockpitScreen(model: model, parakeetDownloading: parakeetDownloading)
-                .frame(maxWidth: .infinity)
-                .bezelChassis(
-                    padding: HomeCockpitMetrics.bezelPad,
-                    corner: HomeCockpitMetrics.bezelCorner,
-                    metal: true,
-                    fill: HomeTacticalPalette.matte
-                )
+        if isScreenshotMode {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("· TODAY")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textSecondary)
+                    .padding(.leading, 4)
+
+                Button(action: open) {
+                    VStack(spacing: 8) {
+                        HomeActivityScreen(events: screenshotEvents)
+
+                        Text("3 COMPLETED TODAY · LATEST 5 MIN AGO")
+                            .talkieType(.channelLabelTiny)
+                            .foregroundStyle(theme.colors.textTertiary)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .softCard(
+                        padding: 10,
+                        corner: 14,
+                        emphasis: .edge,
+                        fill: HomeTacticalPalette.matte
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Today's Talkie activity: roadmap memo recorded, product brief summarized, follow-up added to Reminders")
+                .accessibilityHint("Shows today's completed Talkie activity")
+            }
+        } else {
+            // The production cockpit retains master's latest Roll/Gauges bay.
+            Button(action: open) {
+                CockpitScreen(model: model, parakeetDownloading: parakeetDownloading)
+                    .frame(maxWidth: .infinity)
+                    .bezelChassis(
+                        padding: HomeCockpitMetrics.bezelPad,
+                        corner: HomeCockpitMetrics.bezelCorner,
+                        metal: true,
+                        fill: HomeTacticalPalette.matte
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(accessibilitySummary)
+            .accessibilityHint(model.isEmpty ? "Opens the recorder to capture your first take" : "Opens your library")
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(accessibilitySummary)
-        .accessibilityHint(model.isEmpty ? "Opens the recorder to capture your first take" : "Opens your library")
     }
 
     private var parakeetDownloading: Bool {
         if case .downloading = parakeet.state { return true }
         return false
+    }
+
+    private var isScreenshotMode: Bool {
+        ProcessInfo.processInfo.arguments.contains("-FASTLANE_SNAPSHOT")
     }
 
     // Routing: nominal → the Library (the tape this instrument summarizes);
@@ -597,6 +830,14 @@ private struct HomeCockpit: View {
         } else {
             AppShellRouter.shared.openLibrary()
         }
+    }
+
+    private var screenshotEvents: [HomeActivityEvent] {
+        [
+            HomeActivityEvent(time: "9:36", title: "Roadmap memo recorded", kind: "VOICE"),
+            HomeActivityEvent(time: "9:18", title: "Product brief summarized", kind: "AI"),
+            HomeActivityEvent(time: "8:54", title: "Follow-up added to Reminders", kind: "ACTION"),
+        ]
     }
 
     // Describes both bay pages regardless of which is up: the message line, the
@@ -610,6 +851,110 @@ private struct HomeCockpit: View {
         let todayPart = model.todayTakes == 1 ? "1 take today" : "\(model.todayTakes) takes today"
         let totalPart = model.totalTakes == 1 ? "1 take on tape" : "\(model.totalTakes) takes on tape"
         return "Cockpit. \(message). \(totalPart). \(streakPart). \(todayPart)."
+    }
+
+}
+
+/// Screenshot-mode event log. Unlike the production communication cockpit,
+/// this shows discrete outcomes in time order—no synthetic levels or telemetry.
+private struct HomeActivityScreen: View {
+    let events: [HomeActivityEvent]
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        let hairline = max(theme.currentTheme.chrome.hairlineWidth, 0.8)
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+
+        VStack(spacing: 8) {
+            HStack {
+                Text("TALKIE")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(HomeTacticalPalette.screenInkFaint)
+                Spacer()
+                Text("ACTIVITY")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(HomeTacticalPalette.accent)
+                Spacer()
+                Text("9:41")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(HomeTacticalPalette.screenInkFaint)
+            }
+
+            VStack(spacing: 0) {
+                ForEach(events.enumerated(), id: \.element.id) { index, event in
+                    HomeActivityRow(event: event, showsDivider: index < events.count - 1)
+                }
+            }
+            .background(Color.white.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(HomeTacticalPalette.accent.opacity(0.14), lineWidth: 1)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .background {
+            ZStack {
+                HomeTacticalPalette.screen
+                LinearGradient(
+                    colors: [Color.white.opacity(0.08), Color.black.opacity(0.20)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                RadialGradient(
+                    colors: [HomeTacticalPalette.accent.opacity(0.18), .clear],
+                    center: UnitPoint(x: 0.72, y: 0.36),
+                    startRadius: 0,
+                    endRadius: 140
+                )
+            }
+        }
+        .clipShape(shape)
+        .overlay {
+            shape.strokeBorder(HomeTacticalPalette.accentEdge, lineWidth: hairline)
+        }
+    }
+}
+
+private struct HomeActivityRow: View {
+    let event: HomeActivityEvent
+    let showsDivider: Bool
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Text(event.time)
+                .talkieType(.timestamp)
+                .foregroundStyle(HomeTacticalPalette.screenInkFaint)
+                .frame(width: 34, alignment: .leading)
+
+            Circle()
+                .fill(HomeTacticalPalette.accent)
+                .frame(width: 5, height: 5)
+                .shadow(color: HomeTacticalPalette.accent.opacity(0.65), radius: 3)
+
+            Text(event.title)
+                .talkieType(.preview)
+                .foregroundStyle(HomeTacticalPalette.screenInk)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text(event.kind)
+                .talkieType(.channelLabelTiny)
+                .foregroundStyle(HomeTacticalPalette.accent)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 8)
+        .overlay(alignment: .bottom) {
+            if showsDivider {
+                Rectangle()
+                    .fill(Color.white.opacity(0.08))
+                    .frame(height: 0.5)
+                    .padding(.leading, 52)
+            }
+        }
     }
 }
 
@@ -1215,6 +1560,8 @@ private struct RollCell: View {
 // MARK: - Frequent actions (above recents)
 
 private struct HomeFrequentActionsStrip: View {
+    let onSearch: () -> Void
+
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
@@ -1239,15 +1586,12 @@ private struct HomeFrequentActionsStrip: View {
                     AppShellRouter.shared.openCameraCapture()
                 }
                 divider
-                actionCell(label: "ASK AI", icon: "sparkles") {
-                    AppShellRouter.shared.openAskAI()
-                }
+                actionCell(label: "SEARCH", icon: "magnifyingglass", action: onSearch)
             }
             .frame(height: 56)
-            // Chrome tier — raised metal chassis. Machined sheen + composite
-            // bezel shadow read as "lifted metal" above the recessed Recent
-            // screen below it. Replaces the flat fill/stroke/whisper-shadow.
-            .bezelChassis(padding: 0, corner: 12, metal: true)
+            // A clean framed control rail. The hairline gives it enough
+            // structure without repeating the cockpit's heavy depth cues.
+            .softCard(padding: 0, corner: 12, emphasis: .faint)
         }
     }
 
@@ -1279,7 +1623,7 @@ private struct HomeFrequentActionsStrip: View {
 
     private func iconColor(label: String) -> Color {
         switch label {
-        case "RECORD", "ASK AI":
+        case "RECORD", "SEARCH":
             return HomeTacticalPalette.accent
         default:
             return theme.currentTheme.chrome.action
@@ -1537,10 +1881,15 @@ private struct RecentSection: View {
                     }
                 }
             }
-            // Screen tier — recessed glass. Sinks below the raised Quick deck
-            // above it; the inner top shadow + firmer frame read as content
-            // sitting behind the panel face. Keeps card ink so rows stay legible.
-            .recessedScreen(corner: 10)
+            // Recents are a quiet reading surface, not another instrument
+            // screen. A flat fill and hairline frame preserve grouping without
+            // casting a gray falloff over the first row.
+            .softCard(
+                padding: 0,
+                corner: 10,
+                emphasis: .faint,
+                fill: theme.colors.cardBackground.opacity(0.72)
+            )
         }
     }
 
@@ -1616,8 +1965,8 @@ private struct RecentRow: View {
 
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(item.title)
-                        .talkieType(.listTitle)
-                        .foregroundStyle(theme.colors.textPrimary)
+                        .talkieType(.preview)
+                        .foregroundStyle(isContentPreview ? theme.colors.textSecondary : theme.colors.textPrimary)
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .layoutPriority(1)
@@ -1653,6 +2002,11 @@ private struct RecentRow: View {
         }
         .frame(height: HomeRecentMetrics.rowHeight)
         .accessibilityElement(children: .combine)
+    }
+
+    private var isContentPreview: Bool {
+        if case .typed = item.source { return true }
+        return false
     }
 
     private func syncIcon(for status: HomeFeed.SyncStatus) -> String {

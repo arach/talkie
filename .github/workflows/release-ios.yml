@@ -16,6 +16,16 @@ on:
         required: false
         default: true
         type: boolean
+      upload_screenshots:
+        description: 'Replace the English App Store screenshots with the checked-in marketing set'
+        required: false
+        default: false
+        type: boolean
+      upload_app_preview:
+        description: 'Replace the English 6.9-inch iPhone App Preview'
+        required: false
+        default: false
+        type: boolean
       wait_for_processing:
         description: 'Wait for App Store Connect processing to complete'
         required: false
@@ -133,6 +143,78 @@ jobs:
             --key-id "$APP_STORE_CONNECT_KEY_ID" \
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
             --private-key-path "$APP_STORE_CONNECT_API_KEY_PATH"
+
+      - name: Set up Ruby for marketing upload
+        if: ${{ inputs.upload_screenshots || inputs.upload_app_preview }}
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+
+      - name: Upload App Store screenshots
+        if: ${{ inputs.upload_screenshots }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          gem install fastlane --version 2.237.0 --no-document
+          ruby -e '
+            spec = Gem::Specification.find_by_name("fastlane", "2.237.0")
+            path = File.join(spec.full_gem_path, "spaceship/lib/spaceship/connect_api/models/app.rb")
+            source = File.read(path)
+            needle = "Spaceship::ConnectAPI::AppStoreVersion::AppVersionState::PREPARE_FOR_SUBMISSION,\n            Spaceship::ConnectAPI::AppStoreVersion::AppVersionState::DEVELOPER_REJECTED,"
+            replacement = "Spaceship::ConnectAPI::AppStoreVersion::AppVersionState::PREPARE_FOR_SUBMISSION,\n            Spaceship::ConnectAPI::AppStoreVersion::AppVersionState::READY_FOR_REVIEW,\n            Spaceship::ConnectAPI::AppStoreVersion::AppVersionState::DEVELOPER_REJECTED,"
+            patched = source.sub(needle, replacement)
+            abort "Fastlane editable-version patch did not apply" if patched == source
+            File.write(path, patched)
+          '
+
+          api_key_json="$RUNNER_TEMP/fastlane-api-key.json"
+          export FASTLANE_API_KEY_JSON="$api_key_json"
+          ruby -rbase64 -rjson -e '
+            payload = {
+              key_id: ENV.fetch("APP_STORE_CONNECT_KEY_ID"),
+              issuer_id: ENV.fetch("APP_STORE_CONNECT_ISSUER_ID"),
+              key: Base64.strict_encode64(File.binread(ENV.fetch("APP_STORE_CONNECT_API_KEY_PATH"))),
+              is_key_content_base64: true,
+              in_house: false
+            }
+            File.write(ENV.fetch("FASTLANE_API_KEY_JSON"), JSON.generate(payload))
+          '
+          chmod 600 "$api_key_json"
+          ruby -rjson -e '
+            payload = JSON.parse(File.read(ENV.fetch("FASTLANE_API_KEY_JSON")))
+            abort "Invalid Fastlane API key JSON" unless payload.values_at("key_id", "issuer_id", "key").all? { |value| !value.to_s.empty? }
+          '
+
+          apps/ios/fastlane/marketing/prepare-upload.sh
+          (
+            cd apps/ios
+            unset APP_STORE_CONNECT_API_KEY_PATH
+            TALKIE_APP_STORE_VERSION="$VERSION" \
+              TALKIE_FASTLANE_API_KEY_PATH="$api_key_json" \
+              fastlane deliver
+          )
+
+      - name: Upload App Preview
+        if: ${{ inputs.upload_app_preview }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          gem install fastlane --version 2.237.0 --no-document
+          preview_args=(
+            --bundle-id "$TALKIE_APP_IDENTIFIER"
+            --version "$VERSION"
+            --path apps/ios/fastlane/marketing/app-preview/output/Talkie-App-Preview-6.9-inch.mp4
+            --key-id "$APP_STORE_CONNECT_KEY_ID"
+            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID"
+            --private-key-path "$APP_STORE_CONNECT_API_KEY_PATH"
+          )
+          if [ "${{ inputs.wait_for_processing }}" = "true" ]; then
+            preview_args+=(--wait-for-processing)
+          fi
+
+          ruby scripts/asc-upload-app-preview.rb "${preview_args[@]}"
 
       - name: Sync version metadata
         if: ${{ inputs.upload_binary }}

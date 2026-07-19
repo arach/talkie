@@ -210,9 +210,10 @@ final class BridgeManager {
     private(set) var isInstallingDependencies = false
 
     private enum RefreshSchedule {
-        static let statusRefreshInterval: TimeInterval = 15
-        static let backgroundPairingInterval: TimeInterval = 60
-        static let activePendingPairingInterval: TimeInterval = 15
+        static let statusRefreshInterval: TimeInterval = 5
+        static let backgroundPairingInterval: TimeInterval = 5
+        static let activePendingPairingInterval: TimeInterval = 5
+        static let pairingRefreshTolerance: TimeInterval = 1
         static let pairableHealthFreshnessWindow: TimeInterval = 35
     }
 
@@ -1322,7 +1323,8 @@ final class BridgeManager {
         }
         let now = Date()
         if let lastBackgroundPairingRefreshAt,
-           now.timeIntervalSince(lastBackgroundPairingRefreshAt) < interval {
+           now.timeIntervalSince(lastBackgroundPairingRefreshAt)
+               < max(0, interval - RefreshSchedule.pairingRefreshTolerance) {
             return
         }
 

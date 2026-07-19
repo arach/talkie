@@ -58,6 +58,13 @@ actor BridgeClient {
         encryptionKey != nil && (serverSupportsEncryption || encryptionRequired)
     }
 
+    /// Pairing is the bootstrap that establishes the server-side device key.
+    /// It must stay plaintext even after `/health` advertises v2 encryption,
+    /// because the server cannot decrypt a device payload it has not registered.
+    static func supportsTransportEncryption(for path: String) -> Bool {
+        path != "/pair"
+    }
+
     /// Whether stream frames should be sealed/opened — gated on the server
     /// advertising per-frame stream support, or on the per-Mac pin. Old servers
     /// that never advertised encStream → plaintext streams, unchanged (fully
@@ -613,6 +620,37 @@ actor BridgeClient {
         return try JSONDecoder().decode(ComposeRevisionEnvelope.self, from: data)
     }
 
+    func configuredInference(messages: [InferenceMessage]) async throws -> InferenceResult {
+        let body = ConfiguredInferenceRequest(
+            messages: messages,
+            temperature: 0.3,
+            maxTokens: 2048
+        )
+        let data = try await post("/inference/configured", body: body, timeout: 90)
+        let envelope = try JSONDecoder().decode(ConfiguredInferenceEnvelope.self, from: data)
+
+        guard envelope.ok, let result = envelope.result else {
+            let message = envelope.error ?? "Mac inference failed"
+            switch envelope.errorCode {
+            case .configurationRequired:
+                throw InferenceError.configurationRequired
+            case .credentialsRejected:
+                throw InferenceError.credentialsRejected(providerName: "Paired Mac")
+            case .network:
+                throw InferenceError.network(message: message)
+            case .requestFailed, .none:
+                throw InferenceError.request(message: message)
+            }
+        }
+
+        return InferenceResult(
+            content: result.content,
+            providerName: result.providerName,
+            modelId: result.modelId,
+            route: .mac
+        )
+    }
+
     func composeCommand(
         body: ComposeCommandRequest
     ) async throws -> ComposeCommandEnvelope {
@@ -740,7 +778,7 @@ actor BridgeClient {
 
         // Seal the request body and ask the server to seal its response (v2).
         // Encrypt before signing so the HMAC covers the ciphertext that is sent.
-        let encrypted = shouldEncrypt
+        let encrypted = shouldEncrypt && Self.supportsTransportEncryption(for: path)
         if encrypted, let plaintextBody = request.httpBody {
             request.httpBody = try seal(plaintextBody)
             request.setValue("2", forHTTPHeaderField: "X-Enc")
@@ -1241,6 +1279,33 @@ struct ComposeRevisionRequest: Codable {
     let instruction: String
 }
 
+struct ConfiguredInferenceRequest: Codable {
+    let messages: [InferenceMessage]
+    let temperature: Double?
+    let maxTokens: Int?
+}
+
+struct ConfiguredInferenceEnvelope: Codable {
+    let ok: Bool
+    let result: ConfiguredInferenceWireResult?
+    let error: String?
+    let errorCode: ConfiguredInferenceErrorCode?
+}
+
+enum ConfiguredInferenceErrorCode: String, Codable {
+    case configurationRequired = "configuration_required"
+    case credentialsRejected = "credentials_rejected"
+    case network
+    case requestFailed = "request_failed"
+}
+
+struct ConfiguredInferenceWireResult: Codable {
+    let content: String
+    let providerId: String
+    let providerName: String
+    let modelId: String
+}
+
 struct ComposeCommandRequest: Codable {
     let context: String
     let instruction: String
@@ -1322,7 +1387,7 @@ struct ComposeCommandResult: Codable {
     let fallbackReason: String?
 }
 
-struct ComposeBorrowedProvider: Codable {
+struct ComposeBorrowedProvider: Codable, Sendable {
     let providerId: String
     let providerName: String
     let modelId: String

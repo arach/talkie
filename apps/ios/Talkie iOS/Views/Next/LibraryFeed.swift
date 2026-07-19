@@ -221,11 +221,10 @@ final class LibraryFeed: ObservableObject {
     private static func noteEntries(from notes: [ComposeNote]) -> [Entry] {
         notes.map { note in
             let updatedAt = note.lastModified ?? note.createdAt ?? .distantPast
-            let title = cleanTitle(note.title, fallback: title(from: note.content ?? "", fallback: "Untitled note"))
             let item = Item(
                 id: note.id?.uuidString ?? note.objectID.uriRepresentation().absoluteString,
                 source: .typed,
-                title: title,
+                title: ComposeNoteStore.displayText(from: note.content),
                 preview: preview(note.content),
                 relativeTime: relativeListTime(from: updatedAt),
                 syncStatus: nil,

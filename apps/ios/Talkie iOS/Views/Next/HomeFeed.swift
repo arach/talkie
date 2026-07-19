@@ -427,17 +427,16 @@ private extension HomeFeed {
         }
 
         let noteEntries = notes.map { note in
-            let title = cleanTitle(note.title, fallback: "Untitled note")
             return Entry(
                 id: note.id?.uuidString ?? note.objectID.uriRepresentation().absoluteString,
                 kind: "Compose",
                 origin: .composeNote,
                 source: .typed,
-                title: title,
+                title: ComposeNoteStore.displayText(from: note.content),
                 preview: preview(note.content),
                 meta: nil,
                 syncStatus: nil,
-                wordCount: wordCount(note.content ?? title),
+                wordCount: wordCount(note.content ?? ""),
                 durationSeconds: 0,
                 updatedAt: note.lastModified ?? note.createdAt ?? .distantPast
             )

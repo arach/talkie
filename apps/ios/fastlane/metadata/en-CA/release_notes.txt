@@ -1,3 +1,6 @@
-- New punctuation overlay on the Talkie keyboard, long press the PUNC key for quick access to common punctuation and symbols
-- Improved memo detail layout with cleaner metadata display
-- Bug fixes and stability improvements
+Talkie 2.5.33 makes it faster to turn a thought into an answer.
+
+• Start Ask AI from Home with Plan, Draft, and Think shortcuts.
+• Keep questions in reusable sessions and recover clearly when an AI provider needs setup.
+• Enjoy a cleaner Home layout, refined recording experience, and refreshed launch screen.
+• Includes reliability improvements across iPhone, iPad, and Mac-connected inference.
