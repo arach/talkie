@@ -16,6 +16,9 @@
   --soft:rgba(196,125,28,0.12); --soft2:rgba(196,125,28,0.20); --accline:rgba(196,125,28,0.42);
   --surface:#fffdf8; --source:#f3efe4; --canvas:#f4f1e9; --panel:#faf6ec; --status:#eeeae1;
   --edge:rgba(64,46,22,0.14); --edge2:rgba(64,46,22,0.07);
+  /* revision ink — amber = new voice, pencil terracotta = the editor's strike (no green) */
+  --rev-add:#c47d1c; --rev-add-wash:rgba(196,125,28,0.16); --rev-add-soft:rgba(196,125,28,0.10);
+  --rev-del:#a34d2a; --rev-del-ink:#6a5d4e; --rev-del-wash:rgba(163,77,42,0.08);
   --serif:'Talkie Display','Cormorant Garamond','Iowan Old Style',Georgia,serif;
   --sans:'Talkie Sans','Inter',-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;
   --mono:'Talkie Mono','JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
@@ -245,6 +248,61 @@ body {
 .studio[data-mode="source"] .preview-pane,
 .studio[data-mode="source"] .divider { display:none; }
 .studio[data-revisions="closed"] .revisions { display:none; }
+
+/* ══ COMPARE (revision diff takeover) ══ */
+.compare { display:none; flex:1 1 auto; min-height:0; flex-direction:column; background:var(--surface); }
+.studio[data-mode="compare"] .split { display:none; }
+.studio[data-mode="compare"] .compare { display:flex; }
+
+.compare-head { display:flex; align-items:center; gap:12px; padding:9px 16px; background:var(--panel); border-bottom:1px solid var(--edge); flex:0 0 auto; }
+.cmp-ident { display:flex; align-items:center; gap:8px; }
+.cmp-chip { display:inline-flex; align-items:center; gap:6px; padding:5px 11px; border-radius:8px; border:1px solid var(--edge); background:var(--surface); color:var(--ink2); font-family:var(--mono); font-size:10.5px; font-weight:600; letter-spacing:0.04em; cursor:pointer; white-space:nowrap; }
+.cmp-chip:hover { border-color:var(--accline); color:var(--ink); }
+.cmp-chip-b { border-color:var(--accline); color:var(--acc); background:var(--soft); }
+.cmp-swap { width:28px; height:28px; border-radius:8px; border:1px solid var(--edge); background:var(--surface); color:var(--dim); display:inline-flex; align-items:center; justify-content:center; cursor:pointer; flex:0 0 auto; }
+.cmp-swap:hover { color:var(--acc); border-color:var(--accline); }
+.cmp-summary { font-family:var(--mono); font-size:9.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--faint); margin-left:4px; }
+.cmp-stepper { display:inline-flex; align-items:center; gap:4px; padding:2px; border-radius:9px; border:1px solid var(--edge); background:var(--surface); }
+.cmp-stepper button { width:26px; height:24px; border:0; background:transparent; color:var(--ink2); border-radius:6px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; }
+.cmp-stepper button:hover { background:var(--soft); color:var(--acc); }
+.cmp-stepper button:disabled { opacity:0.3; pointer-events:none; }
+#cmpStepLabel { font-family:var(--mono); font-size:10px; letter-spacing:0.04em; color:var(--dim); min-width:64px; text-align:center; }
+.btn.sm { padding:6px 11px; font-size:11.5px; }
+.compare-scroll { flex:1 1 auto; min-height:0; overflow:auto; }
+.compare-body { max-width:940px; margin:0; padding:12px 40px 120px 0; }
+
+/* segments — a code-editor-style gutter (+ / − / ~) makes it unmistakably a
+   diff, not the preview. The gutter rule runs continuously down the left. */
+.rev-seg { display:grid; grid-template-columns:44px 1fr; align-items:stretch; margin:0; scroll-margin-top:72px; }
+.seg-gutter { font-family:var(--mono); font-size:13px; font-weight:700; line-height:1; text-align:center; padding-top:8px; color:transparent; border-right:2px solid var(--edge2); user-select:none; }
+.seg-content { min-width:0; padding:6px 0 6px 26px; }
+.seg-content > :first-child { margin-top:0 !important; }
+
+.rev-seg.added { background:var(--rev-add-soft); }
+.rev-seg.removed { background:var(--rev-del-wash); }
+.rev-seg.added .seg-gutter { color:var(--rev-add); border-right-color:var(--rev-add); }
+.rev-seg.removed .seg-gutter { color:var(--rev-del); border-right-color:var(--rev-del); }
+.rev-seg.changed .seg-gutter { color:var(--rev-add); border-right-color:var(--rev-add); }
+/* removed prose recedes: faded ink + a fine pencil strike (never inside a card) */
+.rev-seg.removed .seg-content p, .rev-seg.removed .seg-content li, .rev-seg.removed .seg-content h1, .rev-seg.removed .seg-content h2, .rev-seg.removed .seg-content h3, .rev-seg.removed .seg-content blockquote { color:var(--rev-del-ink) !important; text-decoration:line-through; text-decoration-color:rgba(163,77,42,0.55); text-decoration-thickness:1px; }
+.rev-seg.pulse .seg-gutter { animation:tk-gutpulse .6s ease-out; }
+@keyframes tk-gutpulse { 0%{ background:var(--rev-add-wash);} 100%{ background:transparent;} }
+
+/* word-level ink: insertion advances (highlighter), deletion recedes (struck) */
+.rev-ins { background:var(--rev-add-wash); border-radius:3px; padding:0 2px; box-decoration-break:clone; -webkit-box-decoration-break:clone; }
+.rev-del { color:var(--rev-del-ink); text-decoration:line-through; text-decoration-color:rgba(163,77,42,0.6); text-decoration-thickness:1px; opacity:0.85; }
+
+/* atomic-block badges (tk cards, code fences, tables) */
+.seg-badge { display:inline-flex; align-items:center; margin:0 0 -4px 0; font-family:var(--mono); font-size:8.5px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase; padding:2px 8px; border-radius:999px; }
+.rev-seg.added .seg-badge { color:var(--rev-add); background:var(--soft); border:1px solid var(--accline); }
+.rev-seg.removed .seg-badge { color:var(--rev-del); background:var(--rev-del-wash); border:1px solid rgba(163,77,42,0.35); }
+.rev-seg.changed .seg-badge { color:var(--rev-add); background:transparent; border:1px dashed var(--accline); }
+/* a removed dictation/memo card ghosts as a whole unit — never strike inside it */
+.rev-seg.removed .dictation, .rev-seg.removed .memo { opacity:0.5; }
+.rev-seg.removed .dictation .dc-quote, .rev-seg.removed .memo .mc-body { text-decoration:none; color:var(--rev-del-ink); }
+.rev-seg.changed .dictation { border-style:dashed; }
+
+.compare-empty { max-width:760px; margin:0 auto; padding:80px 40px; text-align:center; font-family:var(--serif); font-size:18px; font-style:italic; color:var(--dim); }
 
 /* responsive: collapse to single pane on narrow windows */
 @media (max-width:900px) {

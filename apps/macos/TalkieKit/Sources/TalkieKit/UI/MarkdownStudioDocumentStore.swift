@@ -135,6 +135,26 @@ public final class MarkdownStudioDocumentStore {
         return repo.commitAll(subject: Self.title(for: kind), kind: kind)
     }
 
+    // MARK: - Compare (diff two revisions)
+
+    /// The document's text at a given commit (id from `revisionsPayload`).
+    /// `"working"` returns the current working draft.
+    public func documentText(at id: String) -> String? {
+        if id == "working" { return text }
+        return repo.blob(id, path: Self.documentFileName)
+    }
+
+    /// Block-aware diff payload for `window.TalkieStudio.setCompare(...)`.
+    /// `fromId` is the older (A) side, `toId` the newer (B) side; either may be
+    /// `"working"` for the live draft.
+    public func comparePayload(fromId: String, toId: String) -> [String: Any]? {
+        guard let old = documentText(at: fromId), let new = documentText(at: toId) else { return nil }
+        var payload = MarkdownDiff.comparePayload(old: old, new: new)
+        payload["from"] = fromId
+        payload["to"] = toId
+        return payload
+    }
+
     // MARK: - JS payload
 
     /// Payload for `window.TalkieStudio.setRevisions(...)`.

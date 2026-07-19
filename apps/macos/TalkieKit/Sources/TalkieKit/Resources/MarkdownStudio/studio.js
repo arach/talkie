@@ -140,7 +140,9 @@
   // ── DOM refs ───────────────────────────────────────────────────────────
   var studioEl, preview, wordCount, srcMeta, saveStatus, saveLabel, editedAt,
     docTitle, historyVersion, viewSeg, revList, revTotal, historyVersionEls,
-    hud, hudTime, hudEq, hudCmdText, rccVersion;
+    hud, hudTime, hudEq, hudCmdText, rccVersion,
+    compareBody, cmpChipA, cmpChipB, cmpSwap, cmpSummary, cmpStepLabel,
+    cmpPrev, cmpNext, cmpRestore, cmpDone;
 
   // ── live preview ───────────────────────────────────────────────────────
   var curText = "", lastRendered = null, renderTimer = null, savedTimer = null;
@@ -209,10 +211,16 @@
   };
 
   // ── view modes ─────────────────────────────────────────────────────────
+  var prevMode = "split";
   function setMode(m) {
+    if (m !== "compare" && studioEl.dataset.mode === "compare") cmpActive = false;
+    if (m !== "compare") prevMode = m;
     studioEl.dataset.mode = m;
     viewSeg.querySelectorAll("button").forEach(function (b) { b.classList.toggle("active", b.dataset.mode === m); });
-    try { window.dispatchEvent(new Event("resize")); if (m !== "preview") ed().focus(); } catch (e) { /* noop */ }
+    try {
+      window.dispatchEvent(new Event("resize"));
+      if (m === "split" || m === "source") ed().focus();
+    } catch (e) { /* noop */ }
   }
 
   // ── revisions ──────────────────────────────────────────────────────────
@@ -225,25 +233,172 @@
     created: { label: "Created", icon: MIC, tone: "acc" }
   };
   function toneColor(tone) { return tone === "green" ? "#3f9b5f" : tone === "muted" ? "var(--faint)" : "var(--acc)"; }
+  var revData = null;
   function renderRevItem(r) {
     var k = KIND[r.kind] || KIND.manual;
     var delta = r.delta ? '<span class="r-delta" style="color:' + (r.deltaTone === "green" ? "#3f9b5f" : "var(--faint)") + '">' + esc(r.delta) + "</span>" : "";
-    return '<div class="rev-item"><div class="track"><span class="mark" style="background:' + toneColor(k.tone) + '"></span></div>' +
+    var id = r.id != null ? r.id : r.v;
+    return '<div class="rev-item" data-id="' + esc(id) + '" title="Compare this version with Current"><div class="track"><span class="mark" style="background:' + toneColor(k.tone) + '"></span></div>' +
       '<div class="body"><div class="r-top"><span class="r-v">' + esc(r.v) + "</span>" + delta + "</div>" +
       '<div class="r-title">' + esc(r.title || k.label) + "</div>" +
       '<div class="r-foot"><span class="r-badge">' + k.icon + k.label + "</span>" +
       '<span class="r-time">' + esc(r.time || "") + "</span>" +
-      '<button class="r-restore" data-id="' + esc(r.id != null ? r.id : r.v) + '">Restore</button></div></div></div>';
+      '<button class="r-restore" data-id="' + esc(id) + '">Restore</button></div></div></div>';
   }
   function setRevisions(data) {
     data = data || {};
+    revData = data;
     var cur = data.current || "v1";
     historyVersion.textContent = cur; rccVersion.textContent = cur;
     revTotal.textContent = (data.total != null ? data.total : (data.items ? data.items.length + 1 : 1)) + " total";
     revList.innerHTML = (data.items || []).map(renderRevItem).join("");
     revList.querySelectorAll(".r-restore").forEach(function (btn) {
-      btn.addEventListener("click", function () { studioNative({ type: "restore", id: btn.dataset.id }); });
+      btn.addEventListener("click", function (ev) { ev.stopPropagation(); studioNative({ type: "restore", id: btn.dataset.id }); });
     });
+    // Row click compares this version with Current (re-points A while in Compare).
+    revList.querySelectorAll(".rev-item").forEach(function (row) {
+      row.addEventListener("click", function () {
+        if (cmpActive) { cmpA = row.dataset.id; requestCompare(); }
+        else openCompare(row.dataset.id, "working");
+      });
+    });
+    if (cmpActive) refreshChips();
+  }
+
+  // ── compare (revision diff) ──────────────────────────────────────────────
+  var cmpActive = false, cmpA = null, cmpB = "working", cmpPayload = null, changeEls = [], stepIdx = -1;
+  var OINS = "", CINS = "", ODEL = "", CDEL = "";
+
+  function revLabel(id) {
+    if (id === "working" || id == null) return "Current";
+    var items = (revData && revData.items) || [];
+    for (var i = 0; i < items.length; i++) { if (String(items[i].id) === String(id)) return items[i].v + " · " + (items[i].time || ""); }
+    return "version";
+  }
+  function refreshChips() {
+    if (cmpChipA) cmpChipA.textContent = revLabel(cmpA);
+    if (cmpChipB) cmpChipB.textContent = revLabel(cmpB);
+    if (cmpRestore) {
+      var restorable = cmpA && cmpA !== "working";
+      cmpRestore.style.display = restorable ? "" : "none";
+      // the button is <svg/> + a trailing text node — retarget just the text
+      var short = revLabelShort(cmpA);
+      cmpRestore.lastChild.textContent = short ? "Restore " + short : "Restore";
+    }
+  }
+  function revLabelShort(id) {
+    if (id === "working") return "";
+    var items = (revData && revData.items) || [];
+    for (var i = 0; i < items.length; i++) { if (String(items[i].id) === String(id)) return items[i].v; }
+    return "";
+  }
+  function openCompare(aId, bId) {
+    cmpActive = true; cmpA = aId; cmpB = bId || "working";
+    compareBody.innerHTML = '<div class="compare-empty">Comparing…</div>';
+    setMode("compare");
+    refreshChips();
+    requestCompare();
+  }
+  function requestCompare() {
+    refreshChips();
+    if (IN_APP) sendNative({ type: "compare", from: cmpA, to: cmpB });
+  }
+  function exitCompare() { setMode(prevMode === "compare" ? "split" : prevMode); }
+  function swapSides() { var t = cmpA; cmpA = cmpB; cmpB = t; requestCompare(); }
+
+  // merged markdown from word ops, wrapping ins/del runs in PUA sentinels
+  function mergedFromWordOps(ops) {
+    var out = "", isFirst = true, lastNL = false, cur = "eq";
+    function openTag(t) { return t === "ins" ? OINS : t === "del" ? ODEL : ""; }
+    function closeTag(t) { return t === "ins" ? CINS : t === "del" ? CDEL : ""; }
+    for (var i = 0; i < ops.length; i++) {
+      var w = ops[i].w, t = ops[i].t;
+      if (w === "\n") { if (cur !== "eq") { out += closeTag(cur); cur = "eq"; } out += "\n"; isFirst = true; lastNL = true; continue; }
+      var space = !isFirst && !lastNL;
+      if (t !== cur) {
+        if (cur !== "eq") out += closeTag(cur);
+        if (space) { out += " "; space = false; }
+        if (t !== "eq") out += openTag(t);
+        cur = t;
+      } else if (space) { out += " "; }
+      out += w; isFirst = false; lastNL = false;
+    }
+    if (cur !== "eq") out += closeTag(cur);
+    return out;
+  }
+  function unsentinel(html) {
+    return html.split(OINS).join('<mark class="rev-ins">').split(CINS).join("</mark>")
+      .split(ODEL).join('<del class="rev-del">').split(CDEL).join("</del>");
+  }
+  function badgeKind(kind) { return kind === "dictation" || kind === "memo" || kind === "code" || kind === "table"; }
+  var GUT = { added: "+", removed: "−", changed: "~", eq: "" };  // − is U+2212
+
+  // one diff row: [gutter glyph] | [rendered content]
+  function segRow(status, kind, inner) {
+    return '<div class="rev-seg ' + status + '" data-kind="' + esc(kind) + '">' +
+      '<div class="seg-gutter" aria-hidden="true">' + (GUT[status] || "") + "</div>" +
+      '<div class="seg-content">' + inner + "</div></div>";
+  }
+
+  function renderSegment(seg) {
+    var status = seg.status, kind = seg.kind || "other";
+    if (status === "equal") return segRow("eq", kind, renderMarkdown(seg.b || ""));
+
+    var badge = "";
+    if (badgeKind(kind)) {
+      var label = status === "added" ? "Added" : status === "removed" ? "Removed" : "Edited";
+      badge = '<span class="seg-badge">' + label + "</span>";
+    }
+    if (status === "added") return segRow("added", kind, badge + renderMarkdown(seg.b || ""));
+    if (status === "removed") return segRow("removed", kind, badge + renderMarkdown(seg.a || ""));
+
+    // changed
+    if (seg.wordOps && seg.wordOps.length) {
+      var changedCount = 0;
+      for (var i = 0; i < seg.wordOps.length; i++) if (seg.wordOps[i].t !== "eq") changedCount++;
+      var churn = seg.wordOps.length ? changedCount / seg.wordOps.length : 0;
+      if (churn > 0.6) {
+        // too churned to word-dice — stack removed above added
+        return segRow("removed", kind, renderMarkdown(seg.a || "")) +
+          segRow("added", kind, renderMarkdown(seg.b || ""));
+      }
+      return segRow("changed", kind, unsentinel(renderMarkdown(mergedFromWordOps(seg.wordOps))));
+    }
+    // atomic changed (dictation / memo / code / table) — show the new one, badged
+    return segRow("changed", kind, badge + renderMarkdown(seg.b || seg.a || ""));
+  }
+
+  function setCompare(payload) {
+    cmpPayload = payload || {};
+    if (payload && payload.from != null) cmpA = payload.from;
+    if (payload && payload.to != null) cmpB = payload.to;
+    refreshChips();
+    var segs = (payload && payload.segments) || [];
+    if (payload && payload.identical) {
+      compareBody.innerHTML = '<div class="compare-empty">These two versions are identical.</div>';
+    } else {
+      compareBody.innerHTML = segs.map(renderSegment).join("");
+    }
+    var st = (payload && payload.stats) || { added: 0, removed: 0, changed: 0 };
+    cmpSummary.textContent = st.added + " added · " + st.changed + " changed · " + st.removed + " removed";
+    // build change list for the stepper
+    changeEls = Array.prototype.slice.call(compareBody.querySelectorAll(".rev-seg.added, .rev-seg.removed, .rev-seg.changed"));
+    stepIdx = -1;
+    updateStepper();
+  }
+  function updateStepper() {
+    var n = changeEls.length;
+    cmpStepLabel.textContent = n === 0 ? "no changes" : (stepIdx < 0 ? n + " changes" : (stepIdx + 1) + " of " + n);
+    cmpPrev.disabled = n === 0 || stepIdx <= 0;
+    cmpNext.disabled = n === 0 || stepIdx >= n - 1;
+  }
+  function stepChange(dir) {
+    if (!changeEls.length) return;
+    stepIdx = Math.max(0, Math.min(changeEls.length - 1, (stepIdx < 0 ? (dir > 0 ? 0 : changeEls.length - 1) : stepIdx + dir)));
+    var el = changeEls[stepIdx];
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    el.classList.remove("pulse"); void el.offsetWidth; el.classList.add("pulse");
+    updateStepper();
   }
 
   // ── dictation (real: Swift owns record → transcribe → insert) ───────────
@@ -390,6 +545,7 @@
     setDictationState: setDictationState,
     setDictationLevel: setDictationLevel,
     setDictationAvailable: setDictationAvailable,
+    setCompare: setCompare,
     setDocTitle: function (t) { if (docTitle) docTitle.textContent = t; },
     setEditedLabel: function (t) { if (editedAt) editedAt.textContent = t; }
   };
@@ -446,6 +602,9 @@
     viewSeg = $("viewSeg"); revList = $("revList"); revTotal = $("revTotal");
     hud = $("hud"); hudTime = $("hudTime"); hudEq = $("hudEq"); hudCmdText = $("hudCmdText");
     rccVersion = $("rccVersion");
+    compareBody = $("compareBody"); cmpChipA = $("cmpChipA"); cmpChipB = $("cmpChipB");
+    cmpSwap = $("cmpSwap"); cmpSummary = $("cmpSummary"); cmpStepLabel = $("cmpStepLabel");
+    cmpPrev = $("cmpPrev"); cmpNext = $("cmpNext"); cmpRestore = $("cmpRestore"); cmpDone = $("cmpDone");
 
     // view modes
     viewSeg.querySelectorAll("button").forEach(function (b) { b.addEventListener("click", function () { setMode(b.dataset.mode); }); });
@@ -464,9 +623,29 @@
     $("hudStop").addEventListener("click", stopDictate);
     // revisions actions
     $("saveVersionBtn").addEventListener("click", function () { studioNative({ type: "saveVersion", reason: "manual" }); });
+    // compare: current-card Compare = newest earlier version vs Current
+    $("compareBtn").addEventListener("click", function () {
+      var items = (revData && revData.items) || [];
+      if (!items.length) return;
+      openCompare(items[0].id, "working");
+    });
+    cmpSwap.addEventListener("click", swapSides);
+    cmpPrev.addEventListener("click", function () { stepChange(-1); });
+    cmpNext.addEventListener("click", function () { stepChange(1); });
+    cmpDone.addEventListener("click", exitCompare);
+    cmpRestore.addEventListener("click", function () {
+      if (cmpA && cmpA !== "working") { studioNative({ type: "restore", id: cmpA }); exitCompare(); }
+    });
 
     // keyboard shortcuts (CM6 owns ⌘Z/⌘⇧Z; we add ⌘B/⌘I/⌘K)
     document.addEventListener("keydown", function (e) {
+      // compare navigation (read-only view — bare keys are safe)
+      if (cmpActive && !(e.metaKey || e.ctrlKey || e.altKey)) {
+        var kk = e.key.toLowerCase();
+        if (e.key === "Escape") { e.preventDefault(); exitCompare(); return; }
+        if (kk === "n" || e.key === "ArrowDown") { e.preventDefault(); stepChange(1); return; }
+        if (kk === "p" || e.key === "ArrowUp") { e.preventDefault(); stepChange(-1); return; }
+      }
       if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
       var k = e.key.toLowerCase(), fn = null;
       if (k === "b") fn = COMMANDS.bold; else if (k === "i") fn = COMMANDS.italic; else if (k === "k") fn = COMMANDS.link;

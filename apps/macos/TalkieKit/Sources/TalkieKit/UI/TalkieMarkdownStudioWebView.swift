@@ -164,6 +164,12 @@ public struct TalkieMarkdownStudioWebView: NSViewRepresentable {
             case "dictateCancel":
                 cancelDictation()
 
+            case "compare":
+                guard let from = body["from"] as? String, let to = body["to"] as? String else { return }
+                if let payload = store.comparePayload(fromId: from, toId: to) {
+                    evaluate("window.TalkieStudio?.setCompare(\(jsonObject(payload)));")
+                }
+
             case "focus":
                 webView?.window?.makeFirstResponder(webView)
 

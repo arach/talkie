@@ -141,6 +141,33 @@
       </aside>
     </div>
 
+    <!-- ═══════════════ COMPARE (revision diff takeover) ═══════════════ -->
+    <section class="compare" id="compare">
+      <div class="compare-head">
+        <div class="cmp-ident">
+          <button class="cmp-chip" id="cmpChipA" title="Older side">—</button>
+          <button class="cmp-swap" id="cmpSwap" title="Swap sides">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4L4 7l3 3M4 7h13M17 20l3-3-3-3M20 17H7"/></svg>
+          </button>
+          <button class="cmp-chip cmp-chip-b" id="cmpChipB" title="Newer side">Current</button>
+          <span class="cmp-summary" id="cmpSummary"></span>
+        </div>
+        <span class="spacer"></span>
+        <div class="cmp-stepper" id="cmpStepper">
+          <button id="cmpPrev" title="Previous change (p)"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
+          <span id="cmpStepLabel">no changes</span>
+          <button id="cmpNext" title="Next change (n)"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
+        </div>
+        <button class="btn ink sm" id="cmpRestore">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 1 2.3 5.6"/><path d="M4 12H2M4 12V9"/></svg>Restore
+        </button>
+        <button class="btn ghost sm" id="cmpDone" title="Back to editor (Esc)">Done</button>
+      </div>
+      <div class="compare-scroll">
+        <article class="compare-body preview" id="compareBody"></article>
+      </div>
+    </section>
+
     <!-- ═══════════════ FLOATING DICTATION HUD ═══════════════ -->
     <div class="hud" id="hud" hidden>
       <div class="hud-cmd" id="hudCmd">
