@@ -68,8 +68,8 @@ enum CaptureDestinationSettings {
 enum CaptureBarResult {
     case screenshot(CaptureMode)     // A/S/D in screenshot mode
     case screenshotMarkup(CaptureMode) // A/S/D in screenshot mode, then open Agent quick markup
-    case screenshotRegion(CGRect)    // Region was selected by the armed overlay
-    case screenshotMarkupRegion(CGRect) // Region selected by armed overlay, then open Agent quick markup
+    case screenshotRegion(CaptureRegionSelection) // Region was selected by the armed overlay
+    case screenshotMarkupRegion(CaptureRegionSelection) // Region selected by armed overlay, then open Agent quick markup
     case screenRecord(CaptureMode)   // A/S/D in video mode
     case toggleCamera                // C key
     case saveSelection               // N key

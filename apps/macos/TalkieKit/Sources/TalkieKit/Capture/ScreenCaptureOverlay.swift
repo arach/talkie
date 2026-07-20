@@ -30,6 +30,20 @@ public final class ScreenCaptureOverlay {
         freezesDesktop: Bool = false,
         onModeSwitch: ((CaptureBarMode) -> Void)? = nil
     ) async -> CGRect? {
+        await selectRegionSelection(
+            freezesDesktop: freezesDesktop,
+            allowsScrollingCapture: false,
+            onModeSwitch: onModeSwitch
+        )?.rect
+    }
+
+    /// Select a screen region while optionally exposing Shift as a modifier
+    /// for capturing the scrollable content underneath the selected viewport.
+    public func selectRegionSelection(
+        freezesDesktop: Bool = false,
+        allowsScrollingCapture: Bool = true,
+        onModeSwitch: ((CaptureBarMode) -> Void)? = nil
+    ) async -> CaptureRegionSelection? {
         let prearmedCursor = CursorLease(cursor: OverlayView.cursor(for: .region))
         prearmedCursor.activate()
 
@@ -52,7 +66,7 @@ public final class ScreenCaptureOverlay {
         return await withCheckedContinuation { continuation in
             let view = OverlayView(mode: .region)
             var didResume = false
-            let resume: (CGRect?) -> Void = { result in
+            let resume: (CaptureRegionSelection?) -> Void = { result in
                 guard !didResume else { return }
                 didResume = true
                 prearmedCursor.deactivate()
@@ -61,6 +75,7 @@ public final class ScreenCaptureOverlay {
             view.onRegionSelected = { resume($0) }
             view.onCancelled = { resume(nil) }
             view.onModeSwitch = onModeSwitch
+            view.allowsScrollingCapture = allowsScrollingCapture
             view.frozenSnapshot = frozenBackground
             showOverlay(with: view, on: screen)
             prearmedCursor.deactivate()
@@ -218,13 +233,14 @@ private final class OverlayView: NSView {
 
     let mode: OverlayMode
 
-    var onRegionSelected: ((CGRect) -> Void)?
+    var onRegionSelected: ((CaptureRegionSelection) -> Void)?
     var onWindowSelected: ((CGWindowID) -> Void)?
     var onCancelled: (() -> Void)?
     var onDismiss: (() -> Void)?
     var onModeSwitch: ((CaptureBarMode) -> Void)?
 
     var screenOrigin: CGPoint = .zero
+    var allowsScrollingCapture = false
 
     /// Pre-captured still of the desktop the overlay is sitting on. When
     /// present (region mode), it's painted as the view background so the
@@ -237,6 +253,7 @@ private final class OverlayView: NSView {
     private var dragCurrent: NSPoint?
     private var lastDragDrawRect: NSRect = .zero
     private var suppressWindowSnapping = false
+    private var scrollingModifierActive = false
     private var highlightedWindowID: CGWindowID?
     private var highlightedWindowFrame: CGRect?
     private var pendingWindowHoverUpdate = false
@@ -357,6 +374,7 @@ private final class OverlayView: NSView {
         dragCurrent = nil
         lastDragDrawRect = .zero
         suppressWindowSnapping = false
+        scrollingModifierActive = false
         deactivateCursor()
     }
 
@@ -421,7 +439,15 @@ private final class OverlayView: NSView {
             crosshair.stroke()
         }
 
-        let label = "\(Int(rect.width)) x \(Int(rect.height))"
+        let sizeLabel = "\(Int(rect.width)) x \(Int(rect.height))"
+        let label: String
+        if allowsScrollingCapture {
+            label = scrollingModifierActive
+                ? "\(sizeLabel)  ·  Scrolling capture  ·  Esc stops"
+                : "\(sizeLabel)  ·  Hold ⇧ to scroll"
+        } else {
+            label = sizeLabel
+        }
         let attrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .medium),
             .foregroundColor: NSColor.white,
@@ -562,6 +588,7 @@ private final class OverlayView: NSView {
         let point = convert(event.locationInWindow, from: nil)
         refreshWindowCandidatesForCurrentScreen(forceRefresh: true)
         suppressWindowSnapping = event.modifierFlags.contains(.option)
+        scrollingModifierActive = allowsScrollingCapture && event.modifierFlags.contains(.shift)
         dragStart = point
         dragCurrent = point
         lastDragDrawRect = dragInvalidationRect(
@@ -582,6 +609,7 @@ private final class OverlayView: NSView {
         let previousRect = lastDragDrawRect
         let nextPoint = convert(event.locationInWindow, from: nil)
         suppressWindowSnapping = event.modifierFlags.contains(.option)
+        scrollingModifierActive = allowsScrollingCapture && event.modifierFlags.contains(.shift)
         dragCurrent = nextPoint
         let nextRect = dragInvalidationRect(
             for: start,
@@ -597,6 +625,7 @@ private final class OverlayView: NSView {
         overlayCursor.set()
         refreshWindowCandidatesForCurrentScreen(forceRefresh: false)
         suppressWindowSnapping = event.modifierFlags.contains(.option)
+        scrollingModifierActive = allowsScrollingCapture && event.modifierFlags.contains(.shift)
 
         let rect = regionSelection(start: start, current: current).rect
         guard rect.width > 5, rect.height > 5 else {
@@ -615,8 +644,9 @@ private final class OverlayView: NSView {
             width: rect.width,
             height: rect.height
         )
+        let behavior: RegionCaptureBehavior = scrollingModifierActive ? .scrollingContent : .visibleContent
         complete()
-        onRegionSelected?(screenRect)
+        onRegionSelected?(CaptureRegionSelection(rect: screenRect, behavior: behavior))
     }
 
     override func flagsChanged(with event: NSEvent) {
@@ -628,6 +658,7 @@ private final class OverlayView: NSView {
         overlayCursor.set()
         let previousRect = lastDragDrawRect
         suppressWindowSnapping = event.modifierFlags.contains(.option)
+        scrollingModifierActive = allowsScrollingCapture && event.modifierFlags.contains(.shift)
         let nextRect = dragInvalidationRect(
             for: start,
             current: current,

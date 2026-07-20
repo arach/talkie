@@ -103,6 +103,8 @@ public enum CaptureFilenameFormatter {
             return joined(["Window", appName, distinct(windowTitle, from: appName)])
         case "region":
             return "Region"
+        case "scrolling-region":
+            return "Scrolling Region"
         case "fullscreen":
             return joined(["Fullscreen", displayName])
         case "camera":

@@ -220,8 +220,10 @@ final class CaptureHUDController: CaptureChordController {
         panel.state.markupDestinationEnabled ? .screenshotMarkup(mode) : .screenshot(mode)
     }
 
-    private func screenshotRegionResult(for rect: CGRect) -> CaptureBarResult {
-        panel.state.markupDestinationEnabled ? .screenshotMarkupRegion(rect) : .screenshotRegion(rect)
+    private func screenshotRegionResult(for selection: CaptureRegionSelection) -> CaptureBarResult {
+        panel.state.markupDestinationEnabled
+            ? .screenshotMarkupRegion(selection)
+            : .screenshotRegion(selection)
     }
 
     private func tearDown() {
@@ -252,14 +254,17 @@ final class CaptureHUDController: CaptureChordController {
         armedRegionOverlay = overlay
         armedRegionTask = Task { @MainActor [weak self] in
             guard !Task.isCancelled else { return }
-            let rect = await overlay.selectRegion(freezesDesktop: false)
+            let selection = await overlay.selectRegionSelection(
+                freezesDesktop: false,
+                allowsScrollingCapture: true
+            )
             guard !Task.isCancelled else { return }
             if self?.armedRegionOverlay === overlay {
                 self?.armedRegionOverlay = nil
                 self?.armedRegionTask = nil
             }
-            if let rect {
-                resume(self?.screenshotRegionResult(for: rect))
+            if let selection {
+                resume(self?.screenshotRegionResult(for: selection))
             } else {
                 resume(nil)
             }

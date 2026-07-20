@@ -25,7 +25,8 @@ public final class ScreenshotCaptureService {
 
     public func captureStandalone(
         mode: CaptureMode,
-        preselectedRegion: CGRect? = nil
+        preselectedRegion: CGRect? = nil,
+        preselectedRegionBehavior: RegionCaptureBehavior = .visibleContent
     ) async -> CaptureResult? {
         guard await hasScreenRecordingPermission() else {
             log.warning(
@@ -46,6 +47,7 @@ public final class ScreenshotCaptureService {
         var appBundleID: String?
         var displayName: String?
         var captureRect: CGRect?
+        var captureMode = mode.rawValue
 
         switch mode {
         case .fullscreen:
@@ -59,14 +61,18 @@ public final class ScreenshotCaptureService {
             displayName = result.displayName
             captureRect = result.rect
         case .region:
-            guard let result = await captureRegion(preselectedRect: preselectedRegion) else {
+            guard let result = await captureRegion(
+                preselectedRect: preselectedRegion,
+                preselectedBehavior: preselectedRegionBehavior
+            ) else {
                 if captureHotPathLoggingEnabled {
                     log.info("Standalone screenshot capture cancelled or failed")
                 }
                 return nil
             }
             image = result.image
-            captureRect = result.rect
+            captureRect = result.selection.rect
+            captureMode = result.selection.behavior.captureModeValue
         case .window:
             guard let result = await captureWindow() else {
                 if captureHotPathLoggingEnabled {
@@ -109,6 +115,7 @@ public final class ScreenshotCaptureService {
             appName: appName,
             appBundleID: appBundleID,
             displayName: displayName,
+            captureMode: captureMode,
             captureRect: captureRect
         )
     }
@@ -136,37 +143,181 @@ public final class ScreenshotCaptureService {
 
     // MARK: - Region Capture
 
-    private func captureRegion(preselectedRect: CGRect? = nil) async -> (image: CGImage, rect: CGRect)? {
+    private func captureRegion(
+        preselectedRect: CGRect? = nil,
+        preselectedBehavior: RegionCaptureBehavior = .visibleContent
+    ) async -> (image: CGImage, selection: CaptureRegionSelection)? {
         // The freeze still (if any) is consumed by this region capture; release
         // it on exit so a stale frame can't leak into the next capture.
         defer { CaptureFreezeStore.shared.clear() }
 
-        let selectedRect: CGRect
+        let selection: CaptureRegionSelection
         if let preselectedRect {
-            selectedRect = preselectedRect
+            selection = CaptureRegionSelection(rect: preselectedRect, behavior: preselectedBehavior)
         } else {
             let overlay = ScreenCaptureOverlay()
-            guard let rect = await overlay.selectRegion(freezesDesktop: true) else {
+            guard let selected = await overlay.selectRegionSelection(
+                freezesDesktop: true,
+                allowsScrollingCapture: true
+            ) else {
                 return nil
             }
-            selectedRect = rect
+            selection = selected
+        }
+
+        if selection.behavior == .scrollingContent {
+            // A frozen selection still cannot participate in a scrolling
+            // sequence. Start from the live pixels after the overlay closes.
+            CaptureFreezeStore.shared.clear()
+            guard let image = await captureScrollingRegion(screenRect: selection.rect) else {
+                log.error("Scrolling region capture failed")
+                return nil
+            }
+            return (image: image, selection: selection)
         }
 
         // Freeze-first: crop from the still captured before the overlay stole
         // focus, so a menu/popover that closed when the crosshair appeared is
         // still in the shot. Falls back to a live read when there's no still
         // (capture failed or the mouse crossed displays).
-        if let frozen = await CaptureFreezeStore.shared.crop(screenRect: selectedRect) {
-            return (image: frozen, rect: selectedRect)
+        if let frozen = await CaptureFreezeStore.shared.crop(screenRect: selection.rect) {
+            return (image: frozen, selection: selection)
         }
 
-        let image = await captureScreenRegion(screenRect: selectedRect)
+        let image = await captureScreenRegion(screenRect: selection.rect)
         guard let image else {
             log.error("Region capture failed: unable to capture selected rect")
             return nil
         }
 
-        return (image: image, rect: selectedRect)
+        return (image: image, selection: selection)
+    }
+
+    // MARK: - Scrolling Region Capture
+
+    private func captureScrollingRegion(screenRect: CGRect) async -> CGImage? {
+        let progressOverlay = ScrollingCaptureProgressOverlay(screenRect: screenRect)
+        progressOverlay.show()
+        defer { progressOverlay.dismiss() }
+
+        let originalPointer = CGEvent(source: nil)?.location
+        if let target = quartzPoint(forCocoaPoint: CGPoint(x: screenRect.midX, y: screenRect.midY)) {
+            CGWarpMouseCursorPosition(target)
+        }
+        defer {
+            if let originalPointer {
+                CGWarpMouseCursorPosition(originalPointer)
+            }
+        }
+
+        let stopSignal = ScrollingCaptureStopSignal()
+        let escapeMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
+            guard event.keyCode == 53 else { return }
+            Task { @MainActor in stopSignal.requestStop() }
+        }
+        defer {
+            if let escapeMonitor {
+                NSEvent.removeMonitor(escapeMonitor)
+            }
+        }
+
+        // Generic scroll views do not expose a portable content offset, so
+        // drive a few large upward scrolls to clamp at their beginning.
+        let boundaryDistance = max(Int(screenRect.height * 12), 12_000)
+        for _ in 0..<3 {
+            guard postScroll(deltaY: boundaryDistance) else { break }
+            try? await Task.sleep(for: .milliseconds(70))
+        }
+        try? await Task.sleep(for: .milliseconds(350))
+
+        guard let firstFrame = await captureScreenRegion(
+            screenRect: screenRect,
+            excludingWindowIDs: progressOverlay.excludedWindowIDs
+        ) else {
+            return nil
+        }
+        progressOverlay.markViewportCaptured(1)
+        var stitcher = ScrollingCaptureStitcher(firstFrame: firstFrame)
+        let pageDistance = max(Int(screenRect.height * 0.62), 80)
+
+        for viewportIndex in 2...40 {
+            if stopSignal.isStopped { break }
+            guard await postEasedScroll(deltaY: -pageDistance) else { break }
+            try? await Task.sleep(for: .milliseconds(290))
+            guard !stopSignal.isStopped,
+                  let nextFrame = await captureScreenRegion(
+                    screenRect: screenRect,
+                    excludingWindowIDs: progressOverlay.excludedWindowIDs
+                  ) else {
+                break
+            }
+
+            var appendResult = stitcher.append(nextFrame)
+            if appendResult == .unaligned {
+                // Lazy content and momentum can still be settling at the first
+                // read. Give it one quiet retry before ending at the last
+                // verified seam rather than producing a corrupted composite.
+                try? await Task.sleep(for: .milliseconds(250))
+                if let settledFrame = await captureScreenRegion(
+                    screenRect: screenRect,
+                    excludingWindowIDs: progressOverlay.excludedWindowIDs
+                ) {
+                    appendResult = stitcher.append(settledFrame)
+                }
+            }
+
+            switch appendResult {
+            case .appended:
+                progressOverlay.markViewportCaptured(viewportIndex)
+                continue
+            case .unchanged, .unaligned, .sizeChanged, .reachedPixelLimit:
+                return stitcher.makeImage()
+            }
+        }
+
+        return stitcher.makeImage()
+    }
+
+    private func postEasedScroll(deltaY: Int) async -> Bool {
+        let deltas = ScrollingCaptureMotion.easeOutDeltas(totalDistance: deltaY)
+        guard !deltas.isEmpty else { return false }
+
+        for (index, delta) in deltas.enumerated() {
+            guard postScroll(deltaY: delta) else { return false }
+            if index < deltas.count - 1 {
+                try? await Task.sleep(for: .milliseconds(15))
+            }
+        }
+        return true
+    }
+
+    private func postScroll(deltaY: Int) -> Bool {
+        let bounded = min(max(deltaY, Int(Int32.min)), Int(Int32.max))
+        guard let source = CGEventSource(stateID: .combinedSessionState),
+              let event = CGEvent(
+                scrollWheelEvent2Source: source,
+                units: .pixel,
+                wheelCount: 1,
+                wheel1: Int32(bounded),
+                wheel2: 0,
+                wheel3: 0
+              ) else {
+            return false
+        }
+        event.post(tap: .cghidEventTap)
+        return true
+    }
+
+    private func quartzPoint(forCocoaPoint point: CGPoint) -> CGPoint? {
+        guard let screen = NSScreen.screens.first(where: { NSMouseInRect(point, $0.frame, false) }),
+              let displayIDValue = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
+            return nil
+        }
+        let displayBounds = CGDisplayBounds(CGDirectDisplayID(displayIDValue.uint32Value))
+        return CGPoint(
+            x: displayBounds.minX + point.x - screen.frame.minX,
+            y: displayBounds.minY + screen.frame.maxY - point.y
+        )
     }
 
     // MARK: - Window Capture
@@ -412,6 +563,15 @@ public final class ScreenshotCaptureService {
         context.interpolationQuality = .high
         context.draw(image, in: CGRect(x: 0, y: 0, width: targetWidth, height: targetHeight))
         return context.makeImage()
+    }
+}
+
+@MainActor
+private final class ScrollingCaptureStopSignal {
+    private(set) var isStopped = false
+
+    func requestStop() {
+        isStopped = true
     }
 }
 #endif

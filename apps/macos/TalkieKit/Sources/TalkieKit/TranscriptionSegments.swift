@@ -66,7 +66,7 @@ public struct TimedTranscription: Codable, Sendable {
 public struct RecordingScreenshot: Codable, Sendable, Equatable {
     public let filename: String
     public let timestampMs: Int       // ms from recording start
-    public let captureMode: String    // "region", "fullscreen", "window"
+    public let captureMode: String    // "region", "scrolling-region", "fullscreen", "window"
     public let width: Int?
     public let height: Int?
     public let windowTitle: String?

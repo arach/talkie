@@ -1716,10 +1716,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             _ = await executeAgentScreenshotCapture(mode: mode)
         case .screenshotMarkup(let mode):
             _ = await executeAgentScreenshotCapture(mode: mode, opensMarkup: true)
-        case .screenshotRegion(let rect):
-            _ = await executeAgentScreenshotCapture(mode: .region, preselectedRegion: rect)
-        case .screenshotMarkupRegion(let rect):
-            _ = await executeAgentScreenshotCapture(mode: .region, preselectedRegion: rect, opensMarkup: true)
+        case .screenshotRegion(let selection):
+            _ = await executeAgentScreenshotCapture(
+                mode: .region,
+                preselectedRegion: selection.rect,
+                regionBehavior: selection.behavior
+            )
+        case .screenshotMarkupRegion(let selection):
+            _ = await executeAgentScreenshotCapture(
+                mode: .region,
+                preselectedRegion: selection.rect,
+                regionBehavior: selection.behavior,
+                opensMarkup: true
+            )
         case .screenRecord(let mode):
             await ScreenRecordingController.shared.startRecording(mode: mode)
         case .toggleCamera:
@@ -1773,6 +1782,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private func executeAgentScreenshotCapture(
         mode: CaptureMode,
         preselectedRegion: CGRect? = nil,
+        regionBehavior: RegionCaptureBehavior = .visibleContent,
         opensMarkup: Bool = false
     ) async -> Bool {
         // The ink overlay sits above the capture's own selection UI and is key,
@@ -1783,7 +1793,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         guard let captured = await ScreenshotCaptureService.shared.captureStandalone(
             mode: mode,
-            preselectedRegion: preselectedRegion
+            preselectedRegion: preselectedRegion,
+            preselectedRegionBehavior: regionBehavior
         ) else {
             if inkYielded { DesktopInkController.shared.endCaptureYield() }
             return false
@@ -1806,7 +1817,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         let recordedLive = agentController?.recordLiveScreenshot(
             imageData: result.data,
             capturedAt: result.capturedAt,
-            captureMode: mode.rawValue,
+            captureMode: result.captureMode,
             width: result.width,
             height: result.height,
             windowTitle: result.windowTitle,
@@ -1819,7 +1830,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             data: result.data,
             id: captureID,
             capturedAt: result.capturedAt,
-            captureMode: mode.rawValue,
+            captureMode: result.captureMode,
             width: result.width,
             height: result.height,
             windowTitle: result.windowTitle,
@@ -1834,7 +1845,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         ScreenRecordingController.shared.recordScreenshotHighlight(
             capturedAt: result.capturedAt,
             filename: persisted.filename,
-            captureMode: mode.rawValue,
+            captureMode: result.captureMode,
             width: result.width,
             height: result.height,
             windowTitle: result.windowTitle,
@@ -1844,7 +1855,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         )
         log.info(
             "Agent screenshot captured",
-            detail: "mode=\(mode.rawValue) file=\(persisted.filename) live=\(recordedLive)"
+            detail: "mode=\(result.captureMode) file=\(persisted.filename) live=\(recordedLive)"
         )
         let item = AgentLiveTrayItem(
             id: captureID,
@@ -1853,7 +1864,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             filename: persisted.filename,
             width: result.width,
             height: result.height,
-            captureMode: mode.rawValue,
+            captureMode: result.captureMode,
             windowTitle: result.windowTitle,
             appName: result.appName,
             appBundleID: result.appBundleID,
@@ -1956,6 +1967,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             appName: result.appName,
             appBundleID: result.appBundleID,
             displayName: result.displayName,
+            captureMode: result.captureMode,
             captureRect: result.captureRect
         )
         return (merged, true)

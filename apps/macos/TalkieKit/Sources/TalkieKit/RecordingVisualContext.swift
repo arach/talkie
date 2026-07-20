@@ -94,7 +94,7 @@ public struct RecordingVisualContext: Codable, Sendable, Equatable, Identifiable
 
     public static func isScreenCaptureMode(_ captureMode: String?) -> Bool {
         guard let captureMode else { return false }
-        return ["fullscreen", "region", "window"].contains(captureMode)
+        return ["fullscreen", "region", "scrolling-region", "window"].contains(captureMode)
     }
 }
 

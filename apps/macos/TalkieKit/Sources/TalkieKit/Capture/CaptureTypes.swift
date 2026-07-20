@@ -7,6 +7,28 @@ public enum CaptureMode: String, Sendable {
     case window
 }
 
+public enum RegionCaptureBehavior: String, Sendable, Equatable {
+    case visibleContent
+    case scrollingContent
+
+    public var captureModeValue: String {
+        switch self {
+        case .visibleContent: "region"
+        case .scrollingContent: "scrolling-region"
+        }
+    }
+}
+
+public struct CaptureRegionSelection: Sendable {
+    public let rect: CGRect
+    public let behavior: RegionCaptureBehavior
+
+    public init(rect: CGRect, behavior: RegionCaptureBehavior = .visibleContent) {
+        self.rect = rect
+        self.behavior = behavior
+    }
+}
+
 public enum CaptureBarMode: String, CaseIterable, Sendable {
     case screenshot
     case video
@@ -28,6 +50,9 @@ public struct CaptureResult {
     public let appName: String?
     public let appBundleID: String?
     public let displayName: String?
+    /// Stable persisted mode value. Region captures can refine the broad
+    /// `CaptureMode.region` target into `scrolling-region`.
+    public let captureMode: String
     /// Screen-points rect (global AppKit coords) the capture covers, for
     /// fullscreen/region modes. `nil` for window captures, which have no
     /// screen-relative frame. Used to rebase desktop-ink layers onto the shot.
@@ -44,6 +69,7 @@ public struct CaptureResult {
         appName: String?,
         appBundleID: String?,
         displayName: String?,
+        captureMode: String = "region",
         captureRect: CGRect? = nil
     ) {
         self.data = data
@@ -56,6 +82,7 @@ public struct CaptureResult {
         self.appName = appName
         self.appBundleID = appBundleID
         self.displayName = displayName
+        self.captureMode = captureMode
         self.captureRect = captureRect
     }
 }
