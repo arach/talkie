@@ -270,7 +270,18 @@ struct ConsoleScreen: View {
         }
     }
 
+    /// × on a tab chip / "End Session": stops the session but keeps the
+    /// tab's `.talkierc` definition on disk so the tab can be relaunched
+    /// later. Deleting the definition is a separate explicit action
+    /// (`deleteScopeTab`, context menu → Delete Tab).
     private func closeScopeTab(_ tab: TabDefinition) {
+        hoveredTabID = nil
+        pool.close(tabId: tab.id)
+    }
+
+    /// Explicit delete: end the session AND remove the tab's `.talkierc`
+    /// definition from disk, then fall back to a neighboring tab.
+    private func deleteScopeTab(_ tab: TabDefinition) {
         let wasActive = tab.id == registry.activeTabId
         let fallbackTabId = wasActive ? neighboringTabId(afterClosing: tab.id) : nil
 
@@ -413,7 +424,10 @@ struct ConsoleScreen: View {
     private func scopeInlineTabChip(_ tab: TabDefinition, number: Int) -> some View {
         let isActive = tab.id == registry.activeTabId
         let isHovered = hoveredTabID == tab.id
-        let showsClose = !tab.readOnly && (isHovered || isActive)
+        // × ends the running session — only meaningful (and only shown)
+        // when there's a live session to end. The tab definition itself
+        // stays; deleting it is the context menu's destructive action.
+        let showsClose = !tab.readOnly && pool.hasSession(tab.id) && (isHovered || isActive)
         let label = tabDisplayLabel(tab, number: number)
 
         return HStack(spacing: 1) {
@@ -444,7 +458,7 @@ struct ConsoleScreen: View {
                 .contentShape(Rectangle())
                 .opacity(showsClose ? 1 : 0)
                 .allowsHitTesting(showsClose)
-                .help("Close \(label)")
+                .help("End \(label) session")
             }
         }
         .padding(.horizontal, 4)
@@ -458,7 +472,10 @@ struct ConsoleScreen: View {
         )
         .contextMenu {
             if !tab.readOnly {
-                Button("Close Tab") { closeScopeTab(tab) }
+                Button("End Session") { closeScopeTab(tab) }
+                    .disabled(!pool.hasSession(tab.id))
+                Button("Delete Tab", role: .destructive) { deleteScopeTab(tab) }
+                Divider()
             }
             Button("Restart Session") { pool.restart(tab: tab, registry: registry) }
             Divider()
