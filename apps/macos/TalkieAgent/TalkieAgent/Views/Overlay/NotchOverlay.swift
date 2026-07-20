@@ -19,6 +19,32 @@ struct NotchInfo {
     static let defaultMenuBarHeight: CGFloat = 24
     static let defaultNotchWidth: CGFloat = 180
 
+    /// Cached default-screen detection for hot paths (every recording state
+    /// transition runs it). Invalidated when screen parameters change.
+    @MainActor private static var cachedDetection: NotchInfo?
+    @MainActor private static var screenObserverInstalled = false
+
+    @MainActor
+    static func detectCached() -> NotchInfo {
+        if !screenObserverInstalled {
+            screenObserverInstalled = true
+            NotificationCenter.default.addObserver(
+                forName: NSApplication.didChangeScreenParametersNotification,
+                object: nil,
+                queue: .main
+            ) { _ in
+                MainActor.assumeIsolated {
+                    cachedDetection = nil
+                }
+            }
+        }
+
+        if let cachedDetection { return cachedDetection }
+        let info = detect()
+        cachedDetection = info
+        return info
+    }
+
     let hasNotch: Bool
     let notchWidth: CGFloat
     let notchHeight: CGFloat  // Height of menu bar / notch area

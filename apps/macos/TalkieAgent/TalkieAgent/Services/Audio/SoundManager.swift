@@ -77,19 +77,36 @@ final class SoundManager {
 
     private var activeSounds: [NSSound] = []
 
+    /// SystemSoundID per sound name, created once and reused. Creating a new
+    /// ID per play leaked the previous one and cost filesystem lookups on the
+    /// hotkey hot path. IDs live for the app lifetime (≤14 sounds).
+    private var cachedSoundIDs: [String: SystemSoundID] = [:]
+
     private init() {}
 
     func play(_ sound: TalkieSound) {
         guard let name = sound.systemSoundName else { return }
 
-        if let soundURL = Self.systemSoundURL(named: name) {
-            var soundID: SystemSoundID = 0
-            AudioServicesCreateSystemSoundID(soundURL as CFURL, &soundID)
+        if let soundID = cachedSoundID(named: name) {
             AudioServicesPlaySystemSound(soundID)
         } else {
             // Fallback to NSSound
             NSSound(named: NSSound.Name(name))?.play()
         }
+    }
+
+    private func cachedSoundID(named name: String) -> SystemSoundID? {
+        if let cached = cachedSoundIDs[name] {
+            return cached
+        }
+
+        guard let soundURL = Self.systemSoundURL(named: name) else { return nil }
+        var soundID: SystemSoundID = 0
+        guard AudioServicesCreateSystemSoundID(soundURL as CFURL, &soundID) == noErr else {
+            return nil
+        }
+        cachedSoundIDs[name] = soundID
+        return soundID
     }
 
     func playStart() {

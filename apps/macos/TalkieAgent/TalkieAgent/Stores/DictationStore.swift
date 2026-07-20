@@ -232,6 +232,13 @@ struct Utterance: Identifiable, Codable, Hashable {
 
 // MARK: - Context Capture
 
+/// End-of-recording context snapshot (frontmost app + window title)
+struct DictationEndContext: Sendable {
+    let appBundleID: String?
+    let appName: String?
+    let windowTitle: String?
+}
+
 @MainActor
 struct ContextCapture {
     /// Our own bundle identifier
@@ -251,16 +258,26 @@ struct ContextCapture {
 
     /// Fill in end context on existing metadata (when recording stops)
     static func fillEndContext(in metadata: inout DictationMetadata) {
-        // Get frontmost app info
-        if let frontApp = NSWorkspace.shared.frontmostApplication {
-            metadata.endAppBundleID = frontApp.bundleIdentifier
-            metadata.endAppName = frontApp.localizedName
+        let snapshot = captureEndContext()
+        if snapshot.appBundleID != nil || snapshot.appName != nil {
+            metadata.endAppBundleID = snapshot.appBundleID
+            metadata.endAppName = snapshot.appName
         }
-
-        // Try to get active window title
-        if let windowTitle = getActiveWindowTitle() {
+        if let windowTitle = snapshot.windowTitle {
             metadata.endWindowTitle = windowTitle
         }
+    }
+
+    /// Snapshot the end context (frontmost app + AX window title) without
+    /// mutating metadata, so callers can capture it concurrently and apply
+    /// the result later.
+    static func captureEndContext() -> DictationEndContext {
+        let frontApp = NSWorkspace.shared.frontmostApplication
+        return DictationEndContext(
+            appBundleID: frontApp?.bundleIdentifier,
+            appName: frontApp?.localizedName,
+            windowTitle: getActiveWindowTitle()
+        )
     }
 
     /// Get the current frontmost app for later activation

@@ -223,7 +223,7 @@ final class AgentController: ObservableObject {
             // observes state for menu/chrome coordination, but this path is
             // the latency-sensitive one.
             RecordingOverlayController.shared.elapsedTime = elapsed
-            let notchActive = NotchInfo.detect().hasNotch && LiveSettings.shared.notchOverlayEnabled
+            let notchActive = NotchInfo.detectCached().hasNotch && LiveSettings.shared.notchOverlayEnabled
             if notchActive {
                 NotchOverlayController.shared.updateState(newState)
                 RecordingOverlayController.shared.hide()
@@ -1447,12 +1447,10 @@ final class AgentController: ObservableObject {
             }
             self.processDidFire = true
 
+            // stop() transitions to .transcribing before audio.stopCapture(),
+            // so process() can run immediately — no settle needed here.
             Task { @MainActor [weak self] in
-                guard let self else { return }
-                if self.state == .transcribing {
-                    try? await Task.sleep(for: .milliseconds(90))
-                }
-                await self.process(segmentPaths: audioPaths)
+                await self?.process(segmentPaths: audioPaths)
             }
         }
 
@@ -1861,20 +1859,12 @@ final class AgentController: ObservableObject {
         ProcessingMilestones.shared.markFileSaved(filename: audioFilename)
         logTiming("Milestone: file saved")
 
-        // Capture end context IMMEDIATELY when recording stops
-        // This captures where the user is NOW (may be different from start)
-        if var context = capturedContext {
-            ContextCapture.fillEndContext(in: &context)
-            capturedContext = context
-
-            // Log if context changed
-            if context.contextChanged {
-                let startApp = context.activeAppName ?? "?"
-                let endApp = context.endAppName ?? "?"
-                AppLogger.shared.log(.system, "Context changed", detail: "\(startApp) → \(endApp)")
-            }
-        }
-        logTiming("End context captured")
+        // Capture end context (frontmost app + AX window title) concurrently
+        // with transcription. The AX title lookup is a synchronous main-thread
+        // call that used to sit between stop and engine submit on the hot path;
+        // the task runs during the transcription await instead.
+        let endContextTask = Task { ContextCapture.captureEndContext() }
+        logTiming("End context capture scheduled")
 
         // Calculate recording duration
         let recordStart = recordingStartTime ?? pipelineStart
@@ -1971,6 +1961,9 @@ final class AgentController: ObservableObject {
                 }
             }
             logTiming("Engine returned")
+
+            applyEndContext(await endContextTask.value)
+            logTiming("End context applied")
 
             // Build merged result that the rest of the pipeline can use unchanged
             let result = Transcript(
@@ -2324,19 +2317,18 @@ final class AgentController: ObservableObject {
                         pasteTimestamp: nil
                     )
 
-                    let storedRecordingId = await Self.persistDictationRecording(
-                        utterance: utterance,
-                        segmentsJSON: segmentsJSON,
-                        screenshotsJSON: prepared.screenshotsJSON,
-                        clipsJSON: prepared.clipsJSON,
-                        captureSessionId: capturedRecordingId,
-                        recordingStartedAt: capturedRecordingStartedAt,
-                        recordingEndedAt: capturedRecordingEndedAt,
-                        attachTrayAssetsInBackground: false
-                    )
-
-                    if storedRecordingId != nil {
-                        logTiming("Database stored (context rule: auto-refine)")
+                    // Persist concurrently with the paste (see normal flow below).
+                    let persistTask = Task.detached {
+                        await Self.persistDictationRecording(
+                            utterance: utterance,
+                            segmentsJSON: segmentsJSON,
+                            screenshotsJSON: prepared.screenshotsJSON,
+                            clipsJSON: prepared.clipsJSON,
+                            captureSessionId: capturedRecordingId,
+                            recordingStartedAt: capturedRecordingStartedAt,
+                            recordingEndedAt: capturedRecordingEndedAt,
+                            attachTrayAssetsInBackground: false
+                        )
                     }
 
                     let deliveryText = Self.renderDictationDeliveryText(
@@ -2353,6 +2345,11 @@ final class AgentController: ObservableObject {
                     let routeEnd = Date()
                     let routeTimestamp = routeEnd.timeIntervalSince1970
                     logTiming("Router finished (\(pasteMs)ms)")
+
+                    let storedRecordingId = await persistTask.value
+                    if storedRecordingId != nil {
+                        logTiming("Database stored (context rule: auto-refine)")
+                    }
                     metadata.wasRouted = routeSucceeded
                     if routeSucceeded {
                         SoundManager.shared.playPasted()
@@ -2532,19 +2529,18 @@ final class AgentController: ObservableObject {
                         pasteTimestamp: nil
                     )
 
-                    let storedRecordingId = await Self.persistDictationRecording(
-                        utterance: utterance,
-                        segmentsJSON: segmentsJSON,
-                        screenshotsJSON: prepared.screenshotsJSON,
-                        clipsJSON: prepared.clipsJSON,
-                        captureSessionId: capturedRecordingId,
-                        recordingStartedAt: capturedRecordingStartedAt,
-                        recordingEndedAt: capturedRecordingEndedAt,
-                        attachTrayAssetsInBackground: false
-                    )
-
-                    if storedRecordingId != nil {
-                        logTiming("Database stored (context rule: protocol-processor)")
+                    // Persist concurrently with the paste (see normal flow below).
+                    let persistTask = Task.detached {
+                        await Self.persistDictationRecording(
+                            utterance: utterance,
+                            segmentsJSON: segmentsJSON,
+                            screenshotsJSON: prepared.screenshotsJSON,
+                            clipsJSON: prepared.clipsJSON,
+                            captureSessionId: capturedRecordingId,
+                            recordingStartedAt: capturedRecordingStartedAt,
+                            recordingEndedAt: capturedRecordingEndedAt,
+                            attachTrayAssetsInBackground: false
+                        )
                     }
 
                     let deliveryText = Self.renderDictationDeliveryText(
@@ -2561,6 +2557,11 @@ final class AgentController: ObservableObject {
                     let routeEnd = Date()
                     let routeTimestamp = routeEnd.timeIntervalSince1970
                     logTiming("Router finished (\(pasteMs)ms)")
+
+                    let storedRecordingId = await persistTask.value
+                    if storedRecordingId != nil {
+                        logTiming("Database stored (context rule: protocol-processor)")
+                    }
                     metadata.wasRouted = routeSucceeded
                     if routeSucceeded {
                         SoundManager.shared.playPasted()
@@ -2735,19 +2736,20 @@ final class AgentController: ObservableObject {
                     pasteTimestamp: nil
                 )
 
-                let storedRecordingId = await Self.persistDictationRecording(
-                    utterance: utterance,
-                    segmentsJSON: segmentsJSON,
-                    screenshotsJSON: prepared.screenshotsJSON,
-                    clipsJSON: prepared.clipsJSON,
-                    captureSessionId: capturedRecordingId,
-                    recordingStartedAt: capturedRecordingStartedAt,
-                    recordingEndedAt: capturedRecordingEndedAt,
-                    attachTrayAssetsInBackground: false
-                )
-
-                if storedRecordingId != nil {
-                    logTiming("Database stored")
+                // Persist concurrently with the paste — the DB write no longer
+                // gates delivery. Joined after the router returns; markPasted
+                // in the detached task below still runs strictly after both.
+                let persistTask = Task.detached {
+                    await Self.persistDictationRecording(
+                        utterance: utterance,
+                        segmentsJSON: segmentsJSON,
+                        screenshotsJSON: prepared.screenshotsJSON,
+                        clipsJSON: prepared.clipsJSON,
+                        captureSessionId: capturedRecordingId,
+                        recordingStartedAt: capturedRecordingStartedAt,
+                        recordingEndedAt: capturedRecordingEndedAt,
+                        attachTrayAssetsInBackground: false
+                    )
                 }
 
                 let deliveryText = Self.renderDictationDeliveryText(
@@ -2765,6 +2767,11 @@ final class AgentController: ObservableObject {
                 let routeEnd = Date()
                 let routeTimestamp = routeEnd.timeIntervalSince1970
                 logTiming("Router finished (\(pasteMs)ms)")
+
+                let storedRecordingId = await persistTask.value
+                if storedRecordingId != nil {
+                    logTiming("Database stored")
+                }
                 metadata.wasRouted = routeSucceeded
                 if routeSucceeded {
                     SoundManager.shared.playPasted()
@@ -2832,6 +2839,8 @@ final class AgentController: ObservableObject {
             }
 
         } catch {
+            applyEndContext(await endContextTask.value)
+
             log.error("Transcription error: \(error.localizedDescription)")
             AppLogger.shared.log(.error, "Transcription failed", detail: "\(error.localizedDescription)\(traceSuffix)")
 
@@ -2888,6 +2897,21 @@ final class AgentController: ObservableObject {
     }
 
     // MARK: - Metadata Helpers
+
+    /// Merge a concurrently captured end-context snapshot into capturedContext.
+    private func applyEndContext(_ snapshot: DictationEndContext) {
+        guard var context = capturedContext else { return }
+        context.endAppBundleID = snapshot.appBundleID
+        context.endAppName = snapshot.appName
+        context.endWindowTitle = snapshot.windowTitle
+        capturedContext = context
+
+        if context.contextChanged {
+            let startApp = context.activeAppName ?? "?"
+            let endApp = context.endAppName ?? "?"
+            AppLogger.shared.log(.system, "Context changed", detail: "\(startApp) → \(endApp)")
+        }
+    }
 
     /// Build metadata dictionary with rich context for database storage
     private func buildMetadataDict(from metadata: DictationMetadata) -> [String: String]? {

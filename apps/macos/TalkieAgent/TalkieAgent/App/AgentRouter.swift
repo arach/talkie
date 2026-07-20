@@ -182,13 +182,6 @@ struct TranscriptInsertionTarget {
 
 struct TranscriptRouter: AgentRouter {
     private static let postPasteSubmitDelay: Duration = .milliseconds(180)
-    private static let modifierReleasePoll: Duration = .milliseconds(20)
-    private static let maxModifierReleaseWait: TimeInterval = 0.25
-    private static let blockingModifierFlags: NSEvent.ModifierFlags = [
-        .command,
-        .option,
-        .control
-    ]
 
     var mode: RoutingMode = .paste
 
@@ -236,13 +229,11 @@ struct TranscriptRouter: AgentRouter {
                 }
             }
 
-            let modifierWaitStartedAt = Date()
-            let modifiersReleased = await waitForModifierReleaseBeforePaste()
-            log.info("Transcript router modifier wait finished in \(Self.elapsedMs(since: modifierWaitStartedAt))ms (released=\(modifiersReleased), elapsed \(Self.elapsedMs(since: routeStartedAt))ms)")
-            if !modifiersReleased {
-                log.warning("Continuing paste after modifier release timeout using isolated shortcut events")
-            }
-            // Paste: clipboard + simulated Cmd+V
+            // Paste: clipboard + simulated Cmd+V. No wait for physical modifier
+            // release: the paste posts through an isolated CGEventSource with
+            // explicit modifier events, so a still-held hotkey chord cannot
+            // contaminate the synthetic shortcut (this was already the shipped
+            // behavior whenever the old release-poll timed out).
             let pasteStartedAt = Date()
             let pasted = simulatePaste()
             log.info("Transcript router posted paste in \(Self.elapsedMs(since: pasteStartedAt))ms (elapsed \(Self.elapsedMs(since: routeStartedAt))ms)")
@@ -279,57 +270,6 @@ struct TranscriptRouter: AgentRouter {
 
         log.info("Copied: \(text.prefix(50))...")
         return true
-    }
-
-    private func waitForModifierReleaseBeforePaste() async -> Bool {
-        let startedAt = Date()
-        var lastFlags = Self.currentBlockingModifierFlags()
-        guard !lastFlags.isEmpty else { return true }
-
-        log.info("Waiting for physical hotkey modifiers to release before paste: \(Self.describeModifiers(lastFlags))")
-        while !Task.isCancelled {
-            let activeFlags = Self.currentBlockingModifierFlags()
-
-            if activeFlags.isEmpty {
-                let waitedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
-                if waitedMs > 40 {
-                    log.info("Waited \(waitedMs)ms for hotkey modifiers to release before paste")
-                }
-                return true
-            }
-
-            lastFlags = activeFlags
-            if Date().timeIntervalSince(startedAt) >= Self.maxModifierReleaseWait {
-                log.warning("Timed out waiting for hotkey modifiers to release before paste: \(Self.describeModifiers(lastFlags))")
-                return false
-            }
-
-            try? await Task.sleep(for: Self.modifierReleasePoll)
-        }
-
-        log.warning("Cancelled synthetic paste while physical modifiers remain active: \(Self.describeModifiers(lastFlags))")
-        return false
-    }
-
-    private static func currentBlockingModifierFlags() -> NSEvent.ModifierFlags {
-        // NSEvent.modifierFlags can retain synthetic flags from a global hotkey
-        // event. Read the HID state so Caps Lock -> Hyper transports don't
-        // make paste wait forever after the physical key is released.
-        let flags = CGEventSource.flagsState(.hidSystemState)
-        var modifiers: NSEvent.ModifierFlags = []
-        if flags.contains(.maskControl) { modifiers.insert(.control) }
-        if flags.contains(.maskAlternate) { modifiers.insert(.option) }
-        if flags.contains(.maskCommand) { modifiers.insert(.command) }
-        return modifiers.intersection(Self.blockingModifierFlags)
-    }
-
-    private static func describeModifiers(_ flags: NSEvent.ModifierFlags) -> String {
-        var parts: [String] = []
-        if flags.contains(.control) { parts.append("control") }
-        if flags.contains(.option) { parts.append("option") }
-        if flags.contains(.shift) { parts.append("shift") }
-        if flags.contains(.command) { parts.append("command") }
-        return parts.isEmpty ? "none" : parts.joined(separator: "+")
     }
 
     private static func elapsedMs(since start: Date) -> Int {
