@@ -7,17 +7,18 @@
 //  baseline; this surface is the editorial echo of that pill across
 //  the available canvas.
 //
-//  Studio source of truth:
-//    design/studio/app/mac-recording-state/page.tsx
+//  Studio sources of truth:
+//    design/studio/app/mac-recording-state/light-instrument.tsx (disc + glass)
+//    design/studio/app/mac-record-to-memo/page.tsx (wave → transcript transition)
 //
-//  Two variants ship side-by-side, swappable at runtime via the
+//  Three variants ship side-by-side, swappable at runtime via the
 //  `recordingCompanion.variant` defaults key:
 //
-//    .wave         — animated amber ink flourish bracketed by hairlines
-//                    and an eyebrow; constant phase speed for a
-//                    "traversing" feel; amplitude smoothed with an
-//                    exponential moving average so voice modulation
-//                    breathes rather than jumps.
+//    .wave         — voice-adaptive amber flourish on a frosted glass
+//                    disc (light-instrument sizing, heavy pour); corner
+//                    chrome rests near-invisible until hover; on stop the
+//                    wave settles into a baseline rule and the transcript
+//                    emerges in place (record-to-memo choreography).
 //    .frontispiece — book title page: hairline rules bracket eyebrow
 //                    + monumental serif timer + italic byline + flourish.
 //
@@ -46,12 +47,34 @@ enum RecordingCompanionVariant: String, CaseIterable {
     }
 }
 
+// MARK: - Coordinator
+
+/// Shared collapse state between the companion surface and the chrome-bar
+/// pill, so the pill can tell whether its click means "stop" (the disc is
+/// up) or "bring the disc back" (the recording is living in the capsule).
+@MainActor
+@Observable
+final class RecordingCompanionCoordinator {
+    static let shared = RecordingCompanionCoordinator()
+
+    /// True while the recording surface is collapsed to the PiP capsule
+    /// (manual minimize or auto-collapse after navigating away).
+    var isCollapsed = false
+
+    /// Incremented by the chrome-bar pill to ask the surface to expand.
+    var expandRequestCount = 0
+
+    private init() {}
+}
+
 // MARK: - Surface
 
 struct RecordingCompanionSurface: View {
     let windowID: UUID
 
     private var controller: MemoRecordingController { MemoRecordingController.shared }
+
+    @Environment(\.navigationState) private var navigationState
 
     @AppStorage("recordingCompanion.variant")
     private var variantRaw: String = RecordingCompanionVariant.wave.rawValue
@@ -71,6 +94,33 @@ struct RecordingCompanionSurface: View {
     /// sees the wave → memo emergence.
     @State private var minimized: Bool = false
 
+    /// Section where the active recording began. Leaving it collapses
+    /// the surface into the PiP capsule automatically — the recording
+    /// follows you around the app — and returning brings the disc back.
+    /// Cleared when the recording ends.
+    @State private var recordingHomeSection: NavigationSection?
+
+    /// One-shot override behind the capsule's expand affordance and the
+    /// chrome-bar pill: brings the disc back even away from the
+    /// recording's home section. Cleared on the next navigation, which
+    /// re-collapses to the capsule if the user wanders off again.
+    @State private var expandOverride = false
+
+    private let coordinator = RecordingCompanionCoordinator.shared
+
+    /// Auto-collapse: recording is live but the user has navigated away
+    /// from where it started.
+    private var autoMinimized: Bool {
+        guard controller.state.isRecording, let home = recordingHomeSection else { return false }
+        return navigationState.selectedSection != home
+    }
+
+    /// Effective collapse — manual or automatic, unless an explicit
+    /// expand is currently overriding both.
+    private var isCollapsed: Bool {
+        (minimized || autoMinimized) && !expandOverride
+    }
+
     private var isVisible: Bool {
         guard ownsPresentation else { return false }
 
@@ -85,11 +135,20 @@ struct RecordingCompanionSurface: View {
         return ownerID == windowID
     }
 
-    /// PiP only shows while we're actively recording. As soon as the
-    /// transition kicks off (.processing → .complete), force the full
-    /// surface back so the user sees the wave settle and transcript emerge.
+    /// PiP only shows while we're actively recording (manually minimized
+    /// or auto-collapsed by navigating away). As soon as the transition
+    /// kicks off (.processing → .complete), force the full surface back
+    /// so the user sees the wave settle and transcript emerge.
     private var shouldShowPip: Bool {
-        minimized && controller.state.isRecording
+        isCollapsed && controller.state.isRecording
+    }
+
+    /// Expand from the capsule — shared by the capsule's ↗ button and
+    /// the chrome-bar pill. The override holds the disc up until the
+    /// user navigates again, which re-arms the auto-collapse.
+    private func expandFromCapsule() {
+        minimized = false
+        expandOverride = true
     }
 
     var body: some View {
@@ -101,6 +160,11 @@ struct RecordingCompanionSurface: View {
                 } else {
                     content
                         .overlay(alignment: .topLeading) { minimizeButton }
+                        // Dock under the chrome bar — the disc is a
+                        // companion strip, not a modal covering the
+                        // whole canvas height.
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .padding(.top, 24)
                         .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .center)))
                 }
             }
@@ -114,7 +178,22 @@ struct RecordingCompanionSurface: View {
             // whole point of the surface; never hide it behind a pill.
             if newValue != "recording" {
                 minimized = false
+                expandOverride = false
             }
+        }
+        .onChange(of: navigationState.selectedSection) {
+            // Moving on re-arms the auto-collapse — an explicit expand
+            // only holds until the user moves on.
+            expandOverride = false
+        }
+        .onChange(of: coordinator.expandRequestCount) {
+            expandFromCapsule()
+        }
+        .onChange(of: shouldShowPip) { _, collapsed in
+            coordinator.isCollapsed = collapsed
+        }
+        .onAppear {
+            coordinator.isCollapsed = shouldShowPip
         }
     }
 
@@ -124,7 +203,7 @@ struct RecordingCompanionSurface: View {
     private var pipMount: some View {
         RecordingPipCapsule(
             controller: controller,
-            onExpand: { minimized = false }
+            onExpand: expandFromCapsule
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
         .padding(.trailing, Spacing.md)
@@ -165,10 +244,20 @@ struct RecordingCompanionSurface: View {
                     holdAfterComplete = false
                 }
             }
-        } else if token != "complete" {
+        } else {
             // Any non-complete state (idle / recording / preparing /
             // processing / error) — drop the post-complete hold.
             holdAfterComplete = false
+        }
+
+        // Track where the recording lives so leaving the section can
+        // auto-collapse the surface into the PiP capsule.
+        if token == "preparing" || token == "recording" {
+            if recordingHomeSection == nil {
+                recordingHomeSection = navigationState.selectedSection
+            }
+        } else if token == "idle" || token == "error" {
+            recordingHomeSection = nil
         }
     }
 
@@ -195,6 +284,24 @@ private enum TransitionPhase {
     case settling    // wave is now a flat baseline; transcription in flight
     case emerging    // transcript revealing left→right along the baseline
     case complete    // transcript fully revealed; surface holds before dismissal
+}
+
+/// Geometry for the wave disc. Between the studio light-instrument
+/// (560×184) and the first port (980×~310) — big enough to feel like
+/// an instrument, small enough to stay a companion strip.
+private enum WaveLayout {
+    static let waveWidth: CGFloat = 700
+    static let waveHeight: CGFloat = 150
+    static let cardMaxWidth: CGFloat = 820
+    /// Exact card height. Must be explicit — a `minHeight` frame lets
+    /// the chrome layer's Spacer stretch the glass sheet to the full
+    /// height the overlay proposes. Taller than the first port (250) so
+    /// the live transcript gets its own lane below the wave instead of
+    /// colliding with the caption/STOP row.
+    static let cardHeight: CGFloat = 320
+    static let cardHPadding: CGFloat = 44
+    static let cardVPadding: CGFloat = 30
+    static let transcriptMaxWidth: CGFloat = 700
 }
 
 private struct WaveOnlyContent: View {
@@ -226,32 +333,47 @@ private struct WaveOnlyContent: View {
 
     var body: some View {
         ZStack {
+            // The wave owns the card's vertical center, nudged up so it
+            // clears the bottom deck's transcript lane. Chrome (top row
+            // + bottom deck) layers above it.
             waveAndTranscript
+                .offset(y: -16)
             chromeLayer
         }
-        .padding(.horizontal, 64)
-        .padding(.vertical, 44)
-        .frame(maxWidth: 980, minHeight: 220)
-        // Glass card: material blur underneath, then an adaptive tint.
-        // Light themes keep the editorial paper tone; dark themes shift
-        // to a graphite instrument surface so the companion belongs on
-        // the Pro canvas instead of glowing like a light sheet.
+        .padding(.horizontal, WaveLayout.cardHPadding)
+        .padding(.vertical, WaveLayout.cardVPadding)
+        .frame(maxWidth: WaveLayout.cardMaxWidth)
+        .frame(height: WaveLayout.cardHeight)
+        // Glass disc: deeper blur + a heavier pour than the first port,
+        // per the studio light-instrument recipe (blur 64 · saturate 1.6
+        // · white gradient 0.82 → 0.55). The disc reads as its own
+        // surface — the canvas stops leaking through.
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(.ultraThinMaterial)
+                .fill(.thinMaterial)
                 .overlay(
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(RecordingCompanionTokens.paper.opacity(0.58))
+                        .fill(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: RecordingCompanionTokens.paper.opacity(0.82), location: 0.00),
+                                    .init(color: RecordingCompanionTokens.paper.opacity(0.68), location: 0.50),
+                                    .init(color: RecordingCompanionTokens.paper.opacity(0.55), location: 1.00),
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
                 )
-                .shadow(color: RecordingCompanionTokens.cardShadow, radius: 24, y: 8)
+                .shadow(color: RecordingCompanionTokens.cardShadow, radius: 24, y: 9)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .strokeBorder(
                     LinearGradient(
                         colors: [
-                            RecordingCompanionTokens.edgeHighlight.opacity(0.32),
-                            RecordingCompanionTokens.edgeLowlight.opacity(0.16),
+                            RecordingCompanionTokens.edgeHighlight.opacity(0.45),
+                            RecordingCompanionTokens.edgeLowlight.opacity(0.12),
                         ],
                         startPoint: .top,
                         endPoint: .bottom
@@ -277,12 +399,13 @@ private struct WaveOnlyContent: View {
         return isHoveringCard ? 1.0 : restOpacity
     }
 
-    /// STOP pill visibility. Same gating as details — we only show STOP
-    /// while .recording (after that the user can't stop something that
-    /// is already on its way to becoming a memo).
+    /// STOP pill visibility. Stays essentially fully visible while
+    /// recording — the way out of the surface shouldn't be a hover
+    /// secret (rest 0.92 → 1.0 on hover). Hidden after .recording:
+    /// there's nothing left to stop once the transition starts.
     private var stopOpacity: Double {
         guard phase == .recording else { return 0 }
-        return isHoveringCard ? 1.0 : restOpacity
+        return isHoveringCard ? 1.0 : 0.92
     }
 
     // MARK: - Pieces
@@ -291,10 +414,33 @@ private struct WaveOnlyContent: View {
         VStack(spacing: 0) {
             topChromeRow
             Spacer(minLength: 0)
-            bottomChromeRow
+            bottomDeck
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
+    }
+
+    /// Bottom deck: the live-transcript ticker gets its own full-width
+    /// lane above the caption/STOP row, left-aligned with the caption so
+    /// the whole deck shares one left edge. The original overlap came
+    /// from the ticker living in the wave's VStack while the caption row
+    /// floated into the same band from the chrome ZStack — two layouts,
+    /// one strip of space. STOP sits at the right end of the caption
+    /// row and stays visible (see `stopOpacity`).
+    private var bottomDeck: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            liveTranscriptLine
+            HStack(alignment: .center, spacing: 12) {
+                DiscCaption(text: captionText, active: phase == .recording)
+                    .animation(.easeOut(duration: 0.24), value: captionText)
+                Spacer(minLength: 0)
+                DiscStop(action: stopRecording)
+                    .opacity(stopOpacity)
+                    .allowsHitTesting(phase == .recording)
+            }
+        }
+        .animation(.easeOut(duration: 0.20), value: isHoveringCard)
+        .animation(.easeOut(duration: 0.24), value: phase)
     }
 
     private var topChromeRow: some View {
@@ -311,29 +457,88 @@ private struct WaveOnlyContent: View {
         .animation(.easeOut(duration: 0.24), value: phase)
     }
 
-    private var bottomChromeRow: some View {
-        HStack(alignment: .center, spacing: 12) {
-            DiscCaption(text: captionText, active: phase == .recording)
-                .animation(.easeOut(duration: 0.24), value: captionText)
-            Spacer(minLength: 0)
-            DiscStop(action: stopRecording)
-                .opacity(stopOpacity)
-                .allowsHitTesting(phase == .recording && isHoveringCard)
-        }
-        .animation(.easeOut(duration: 0.20), value: isHoveringCard)
-        .animation(.easeOut(duration: 0.24), value: phase)
-    }
-
     /// The wave and the emerging transcript share the same vertical slot,
     /// so as the wave collapses into a baseline the text appears in the
     /// same place — the wave literally becomes the writing.
     private var waveAndTranscript: some View {
         ZStack {
             animatedWave
+            baselineRule
             emergingTranscript
         }
-        .frame(width: 880, height: 196)
+        .frame(width: WaveLayout.waveWidth, height: WaveLayout.waveHeight)
         .allowsHitTesting(false)
+    }
+
+    /// Amber rule at the wave's midline. The wave settles INTO this line
+    /// rather than vanishing (the record-to-memo port note). While
+    /// transcription runs, a bright segment travels along it — the quiet
+    /// "still working" signal. As the transcript types in, the line
+    /// fades out so the text never fights the rule.
+    private var baselineRule: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            Rectangle()
+                .fill(amberGradient)
+                .frame(width: WaveLayout.waveWidth, height: 1.2)
+                .overlay {
+                    shimmerSegment(t: t)
+                }
+                .opacity(baselineOpacity)
+        }
+    }
+
+    /// Traveling bright segment while `.settling` — a "transcribing"
+    /// pulse sweeping left → right along the steady baseline.
+    private func shimmerSegment(t: TimeInterval) -> some View {
+        let sweep = CGFloat((t / 1.6).truncatingRemainder(dividingBy: 1))
+        let x = (sweep - 0.5) * (WaveLayout.waveWidth + 80)
+        return Capsule()
+            .fill(RecordingCompanionTokens.amberGlow)
+            .frame(width: 56, height: 3)
+            .blur(radius: 1.5)
+            .offset(x: x)
+            .opacity(phase == .settling ? 1 : 0)
+    }
+
+    private var baselineOpacity: Double {
+        switch phase {
+        case .recording, .stopping:
+            // Fade in smoothly as the wave flattens through ~0.08 → 0.04.
+            let t = (0.08 - amplitude) / 0.04
+            return 0.85 * Double(min(max(t, 0), 1))
+        case .settling:
+            return 0.85
+        case .emerging:
+            // The line hands the slot to the text — gone by ~40% reveal.
+            return 0.85 * Double(max(0, 1 - emergeProgress * 2.5))
+        case .complete:
+            return 0
+        }
+    }
+
+    /// Real-time transcription confirmation — the "it's hearing you"
+    /// ticker. Lives in its own full-width lane at the top of the bottom
+    /// deck, left-aligned with the caption row beneath it, so the text
+    /// never overlaps the card chrome. The lane height is always
+    /// reserved so the card never jumps when the first words land; the
+    /// line fades in with the first update and fades out as the wave
+    /// starts to settle. Rendering is a `DecryptTicker` — incoming text
+    /// streams in fast bursts with a glyph-cycling head.
+    private var liveTranscriptLine: some View {
+        DecryptTicker(target: controller.liveTranscript)
+            .lineLimit(1)
+            .truncationMode(.head)  // ticker — the newest words stay visible
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: 20)
+            .opacity(liveLineOpacity)
+            .animation(.easeOut(duration: 0.3), value: controller.liveTranscript.isEmpty)
+            .animation(.easeOut(duration: 0.24), value: phase)
+    }
+
+    private var liveLineOpacity: Double {
+        guard phase == .recording, !controller.liveTranscript.isEmpty else { return 0 }
+        return 0.9
     }
 
     private var animatedWave: some View {
@@ -342,16 +547,33 @@ private struct WaveOnlyContent: View {
             // Negative phase advance flows the wave right→left across
             // the canvas (matches how the user reads "audio is being
             // captured" — leading edge enters from the right). Bumped
-            // from 1.5 → 2.6 so the motion feels alive against an
-            // amplitude that's already breathing on voice level.
-            let phaseSpeed: CGFloat = -2.6
+            // toward the studio's livelier traversal.
+            let phaseSpeed: CGFloat = -3.6
+            // Organic breathing on top of the voice envelope so the wave
+            // shimmers between syllables. Multiplicative — silence stays
+            // calm because it scales with the level-driven amplitude.
+            let breath = 1 + 0.06 * sin(t * 1.6) + 0.04 * sin(t * 3.9 + 1.1)
 
             InkFlourishShape(
-                amplitude: amplitude,
+                amplitude: amplitude * breath,
                 phase: CGFloat(t) * phaseSpeed
             )
             .stroke(amberGradient, lineWidth: waveStroke)
             .shadow(color: RecordingCompanionTokens.amberGlow.opacity(waveGlow), radius: 3)
+            .opacity(waveOpacity)
+        }
+    }
+
+    /// The wave hands its midline to the baseline rule as it flattens —
+    /// otherwise the flattened stroke lingers as a second line behind
+    /// the emerging text. Crossfades with `baselineOpacity`.
+    private var waveOpacity: Double {
+        switch phase {
+        case .recording, .stopping:
+            let t = (0.08 - amplitude) / 0.04
+            return 1 - Double(min(max(t, 0), 1))
+        case .settling, .emerging, .complete:
+            return 0
         }
     }
 
@@ -367,33 +589,46 @@ private struct WaveOnlyContent: View {
 
     private var waveGlow: Double {
         switch phase {
-        case .recording: return 0.34
+        // Loud voice blooms; quiet voice stays crisp. Tracks the
+        // smoothed envelope so the glow breathes with the amplitude.
+        case .recording: return 0.20 + 0.30 * Double(min(amplitude, 1))
         case .stopping: return 0.20
         case .settling, .emerging, .complete: return 0.0
         }
     }
 
-    /// Transcript text reveals along the wave's baseline via a left→right
-    /// mask scale paired with a 6pt baseline rise. Mirrors the studio
-    /// mock's `clip-path` + `translateY` pattern.
+    /// Transcript text reveals along the wave's baseline via a feathered
+    /// left→right sweep paired with a 6pt baseline rise — letters
+    /// dissolve in instead of being clipped mid-glyph. The baseline
+    /// rule is already fading by the time the first words land, so the
+    /// ending is just the letters.
     private var emergingTranscript: some View {
         Text(transcript)
             .font(RecordingCompanionFonts.serif(size: 22))
             .foregroundColor(RecordingCompanionTokens.ink)
             .multilineTextAlignment(.center)
-            .lineLimit(3)
+            .lineLimit(4)
             .truncationMode(.tail)
-            .frame(maxWidth: 720)
+            .frame(maxWidth: WaveLayout.transcriptMaxWidth)
             .padding(.horizontal, 16)
             .offset(y: (1 - emergeProgress) * 6)
             .opacity(emergeProgress > 0 ? Double(emergeProgress) : 0)
             .mask(
                 GeometryReader { geo in
-                    Rectangle()
-                        .frame(
-                            width: max(0, geo.size.width * emergeProgress),
-                            height: geo.size.height
-                        )
+                    let feather: CGFloat = 36
+                    let head = (geo.size.width + feather) * emergeProgress - feather
+                    let solidEnd = max(0, min(1, head / geo.size.width))
+                    let fadeEnd = max(0, min(1, (head + feather) / geo.size.width))
+                    LinearGradient(
+                        stops: [
+                            .init(color: .white, location: 0),
+                            .init(color: .white, location: solidEnd),
+                            .init(color: .clear, location: fadeEnd),
+                            .init(color: .clear, location: 1),
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
                 }
             )
     }
@@ -489,11 +724,11 @@ private struct WaveOnlyContent: View {
                 }
             }
             phase = .emerging
-            withAnimation(.timingCurve(0.22, 0.61, 0.36, 1.0, duration: 1.10)) {
+            withAnimation(.timingCurve(0.22, 0.61, 0.36, 1.0, duration: 0.85)) {
                 emergeProgress = 1
             }
             Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(1100))
+                try? await Task.sleep(for: .milliseconds(850))
                 if phase == .emerging {
                     phase = .complete
                 }
@@ -516,23 +751,122 @@ private struct WaveOnlyContent: View {
         // so the wave can settle / hold cleanly.
         //
         // Asymmetric attack / release:
-        //  - attack 0.28: wave reacts quickly to a loud syllable —
-        //    user sees their voice land in real time
-        //  - release 0.08: tail decays slow so the wave breathes back
-        //    to baseline instead of chattering
+        //  - attack 0.50: the wave snaps onto a loud syllable almost
+        //    immediately — voice modulation reads in real time
+        //  - release 0.16: the tail lets go faster than before so quiet
+        //    gaps between words actually read as gaps
         //
-        // Range widened to 0.18 → 1.00 (was 0.30 → 0.80) so quiet voice
-        // reads as quiet and a strong "hey" punches the wave near the
-        // top of its visual range. Gamma 0.72 gives conversational voice
-        // more travel while still preserving loud/quiet contrast.
+        // Gamma 0.55 (was 0.72) opens up travel for conversational
+        // voice — normal speech swings the wave through most of its
+        // range instead of hovering mid-amplitude. Floor 0.16 keeps a
+        // whisper of motion at true silence.
         while !Task.isCancelled {
             try? await Task.sleep(for: .milliseconds(16))
             guard phase == .recording else { continue }
             let raw = CGFloat(min(max(controller.audioLevel, 0), 1))
-            let shaped = pow(raw, 0.72)
-            let desired = 0.18 + shaped * 0.82
-            let blend: CGFloat = desired > amplitude ? 0.34 : 0.10
+            let shaped = pow(raw, 0.55)
+            let desired = 0.16 + shaped * 0.84
+            let blend: CGFloat = desired > amplitude ? 0.50 : 0.16
             amplitude = amplitude * (1 - blend) + desired * blend
+        }
+    }
+}
+
+// MARK: - Live decrypt ticker
+
+/// Live-transcript ticker with a typewriter cadence and a decrypt head.
+///
+/// Two ideas stacked:
+///   1. Typewriter catch-up — incoming transcript isn't stamped onto
+///      the lane the moment it arrives; it's queued and typed out in
+///      fast bursts (the bigger the backlog, the more chars per tick),
+///      so each new phrase reads as a little stream instead of a jumpy
+///      whole-line replace.
+///   2. Decrypt head — the newest few characters spend a handful of
+///      ticks cycling random glyphs (mono, amber) before locking into
+///      the settled serif text. Reads as "listening AND decoding"
+///      without slowing the stream down.
+///
+/// Live transcription sometimes revises its own tail; when the target
+/// stops sharing our typed prefix we resync to the common prefix and
+/// retype from there.
+private struct DecryptTicker: View {
+    /// The live transcript as reported by the controller.
+    let target: String
+
+    /// Fully locked-in text (serif italic, faint ink).
+    @State private var committed: String = ""
+
+    /// Newest characters still cycling glyphs before they lock.
+    @State private var head: [(ch: Character, cycles: Int)] = []
+
+    /// Ticker cadence. ~24ms keeps the scramble smooth without paying
+    /// for a full 60fps TimelineView on a one-line readout.
+    private let tickInterval = Duration.milliseconds(24)
+
+    /// Ticks a character spends scrambling before it locks.
+    private let glyphCycles = 3
+
+    /// Glyph pool for the decrypt head — lowercase plus a few marks so
+    /// the scramble reads as decoding, not static.
+    private let scramblePool: [Character] = Array("abcdefghjkmnpqrstuvwxyz·•×+")
+
+    var body: some View {
+        (Text(committed.isEmpty && head.isEmpty ? " " : committed)
+            .font(RecordingCompanionFonts.serifItalic(size: 15))
+            .foregroundColor(RecordingCompanionTokens.inkFaint)
+        + Text(scrambledHead)
+            .font(RecordingCompanionFonts.mono(size: 12))
+            .foregroundColor(RecordingCompanionTokens.amber.opacity(0.85)))
+        .task { await pump() }
+    }
+
+    /// The decrypt head rendered: settled spaces pass through, letters
+    /// show a random pool glyph (re-rolled every tick's re-render).
+    private var scrambledHead: String {
+        String(head.map { entry in
+            entry.ch.isWhitespace ? entry.ch : (scramblePool.randomElement() ?? "·")
+        })
+    }
+
+    @MainActor
+    private func pump() async {
+        while !Task.isCancelled {
+            try? await Task.sleep(for: tickInterval)
+            tick()
+        }
+    }
+
+    private func tick() {
+        // Live transcription revises its tail — resync to the shared
+        // prefix and retype whatever changed.
+        let typed = committed + String(head.map { $0.ch })
+        if !target.hasPrefix(typed) {
+            committed = String(typed.commonPrefix(with: target))
+            head = []
+        }
+
+        // Age the decrypt head; locked chars join the settled text.
+        for i in head.indices { head[i].cycles -= 1 }
+        while let first = head.first, first.cycles <= 0 {
+            committed.append(first.ch)
+            head.removeFirst()
+        }
+
+        // Pull new chars — the deeper the backlog, the more per tick,
+        // so long updates stream in fast bursts instead of lagging.
+        let typedCount = committed.count + head.count
+        let backlog = target.count - typedCount
+        guard backlog > 0 else { return }
+        let pull = min(backlog, max(1, backlog / 6))
+        let start = target.index(target.startIndex, offsetBy: typedCount)
+        let end = target.index(start, offsetBy: pull)
+        for ch in target[start..<end] {
+            if ch.isWhitespace {
+                committed.append(ch)
+            } else {
+                head.append((ch, glyphCycles))
+            }
         }
     }
 }
@@ -653,9 +987,9 @@ private struct RecordingPipCapsule: View {
             try? await Task.sleep(for: .milliseconds(16))
             guard controller.state.isRecording else { continue }
             let raw = CGFloat(min(max(controller.audioLevel, 0), 1))
-            let shaped = pow(raw, 0.72)
-            let desired = 0.18 + shaped * 0.64
-            let blend: CGFloat = desired > amplitude ? 0.34 : 0.10
+            let shaped = pow(raw, 0.55)
+            let desired = 0.16 + shaped * 0.64
+            let blend: CGFloat = desired > amplitude ? 0.50 : 0.16
             amplitude = amplitude * (1 - blend) + desired * blend
         }
     }
@@ -1058,7 +1392,7 @@ private enum RecordingCompanionTokens {
         dark: RGB(0.090, 0.087, 0.078)
     )
     static let cardShadow = adaptive(
-        light: RGB(0.000, 0.000, 0.000, alpha: 0.10),
+        light: RGB(0.000, 0.000, 0.000, alpha: 0.12),
         dark: RGB(0.000, 0.000, 0.000, alpha: 0.34)
     )
 
