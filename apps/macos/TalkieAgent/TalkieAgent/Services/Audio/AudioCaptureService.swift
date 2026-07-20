@@ -129,6 +129,15 @@ final class AudioCaptureService: AgentAudioCapture {
     private var isRecordingActive = false
     private var currentDeviceUID: String?
 
+    /// Engine pre-created at idle so a hotkey press skips fresh AVAudioEngine
+    /// creation + inputNode HAL initialization (typically 100-500ms, up to
+    /// seconds via IPC to coreaudiod). The prepared engine is never started,
+    /// so the mic-in-use indicator stays off until start(). Invalidated when
+    /// the system default input device changes.
+    private var preparedEngine: AVAudioEngine?
+    private var preparedEngineDefaultInputID: AudioDeviceID = 0
+    private var defaultInputListenerInstalled = false
+
     /// Engines that have been stopped but may still have an active IO thread.
     /// CoreAudio's IOWorkLoop runs on its own thread and can outlive engine.stop().
     /// We hold strong references here to prevent deallocation until the next recording
@@ -315,7 +324,13 @@ final class AudioCaptureService: AgentAudioCapture {
     /// - Parameter onChunk: Callback with file path when recording completes
     func startCapture(onChunk: @escaping @MainActor ([String]) -> Void) {
         self.onChunk = onChunk
-        fileWriter.segmentDuration = MainActor.assumeIsolated { LiveSettings.shared.segmentDuration }
+        let (segmentDuration, selectedModelId) = MainActor.assumeIsolated {
+            (LiveSettings.shared.segmentDuration, LiveSettings.shared.selectedModelId)
+        }
+        fileWriter.segmentDuration = segmentDuration
+        // Parakeet trims trailing silence and appends a chirp tail in the
+        // engine; only Whisper needs the 1.5s pad to avoid end-of-clip cutoff.
+        fileWriter.trailingSilenceEnabled = !selectedModelId.hasPrefix("parakeet")
 
         // Can start from warm, cold, or error state
         if state == .error {
@@ -332,10 +347,12 @@ final class AudioCaptureService: AgentAudioCapture {
         resetVisualLevelPublisher()
 
         if state == .cold {
-            // Cold start: need async warmUp, then start capture
+            // Cold start: need async warmUp, then start capture.
+            // Skip idle engine preparation — the capture setup enqueued right
+            // after would otherwise wait behind a redundant HAL init.
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                let warmed = await self.warmUp()
+                let warmed = await self.warmUp(prepareEngine: false)
                 guard warmed else {
                     self.onCaptureErrorCallback?("Failed to initialize audio capture")
                     return
@@ -597,6 +614,9 @@ final class AudioCaptureService: AgentAudioCapture {
             Task {
                 await self.reboot()
             }
+        } else {
+            // Pre-warm an engine for the next recording while idle.
+            prepareIdleEngineIfNeeded()
         }
     }
 
@@ -608,11 +628,19 @@ final class AudioCaptureService: AgentAudioCapture {
 
     // MARK: - Pre-warming
 
-    /// Prepare for recording
-    /// With simplified architecture, this just starts device observation.
+    /// Prepare for recording: mark the service ready and (optionally) pre-create
+    /// an AVAudioEngine with its HAL initialized so the next hotkey press skips
+    /// the expensive inputNode setup.
+    /// - Parameter prepareEngine: When false, skip idle engine preparation.
+    ///   Used by the cold-start capture path, where a capture setup is enqueued
+    ///   immediately after warm-up and an idle preparation would only add a
+    ///   second, serial HAL initialization ahead of it.
     @discardableResult
-    func warmUp() async -> Bool {
+    func warmUp(prepareEngine: Bool = true) async -> Bool {
         guard state == .cold || state == .error else {
+            if state == .warm && prepareEngine {
+                prepareIdleEngineIfNeeded()
+            }
             return state == .warm
         }
 
@@ -627,10 +655,98 @@ final class AudioCaptureService: AgentAudioCapture {
             // This allows the UI to show a helpful message rather than silently failing
         }
 
-        // Mark as ready - engine created fresh for each recording
         state = .warm
+        installDefaultInputChangeListenerIfNeeded()
+        if prepareEngine {
+            prepareIdleEngineIfNeeded()
+        }
         log.info("Audio capture service ready")
         return true
+    }
+
+    /// Pre-create an engine and touch its inputNode on the setup queue so HAL
+    /// initialization happens at idle instead of on the next hotkey press.
+    /// The engine is never started here — no audio IO, no mic indicator.
+    private func prepareIdleEngineIfNeeded() {
+        guard preparedEngine == nil, state == .warm else { return }
+        let defaultInputID = getDefaultInputDeviceID()
+        guard defaultInputID != 0 else { return }
+
+        audioSetupQueue.async { [weak self] in
+            guard let self else { return }
+            // A capture start or another preparation may have raced us onto
+            // the serial queue; skip if the service is no longer idle.
+            guard self.state == .warm, self.preparedEngine == nil else { return }
+
+            let prepStart = CACurrentMediaTime()
+            let newEngine = AVAudioEngine()
+            _ = newEngine.inputNode  // synchronous HAL initialization (the expensive part)
+            let ms = Int((CACurrentMediaTime() - prepStart) * 1000)
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                guard self.state == .warm, self.preparedEngine == nil else {
+                    // Recording started (or service shut down) while we were
+                    // preparing — let this engine deallocate; it never ran.
+                    return
+                }
+                self.preparedEngine = newEngine
+                self.preparedEngineDefaultInputID = defaultInputID
+                log.info("Prepared idle audio engine", detail: "HAL init \(ms)ms")
+            }
+        }
+    }
+
+    /// Consume the idle-prepared engine when it is still valid for this start.
+    /// Returns nil (and discards a stale engine) when the default input moved
+    /// or the capture just re-pinned the system default — those need a fresh
+    /// engine so HAL initializes against the new routing.
+    private func takePreparedEngine(systemDefaultJustChanged: Bool) -> AVAudioEngine? {
+        guard let prepared = preparedEngine else { return nil }
+
+        guard !systemDefaultJustChanged else {
+            discardPreparedEngine(reason: "system default input re-pinned for capture")
+            return nil
+        }
+        guard preparedEngineDefaultInputID == getDefaultInputDeviceID() else {
+            discardPreparedEngine(reason: "default input changed since preparation")
+            return nil
+        }
+
+        preparedEngine = nil
+        preparedEngineDefaultInputID = 0
+        return prepared
+    }
+
+    private func discardPreparedEngine(reason: String) {
+        guard preparedEngine != nil else { return }
+        preparedEngine = nil
+        preparedEngineDefaultInputID = 0
+        log.debug("Discarded prepared audio engine", detail: reason)
+    }
+
+    /// Invalidate the prepared engine when the system default input changes,
+    /// then re-prepare against the new device.
+    private func installDefaultInputChangeListenerIfNeeded() {
+        guard !defaultInputListenerInstalled else { return }
+        defaultInputListenerInstalled = true
+
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultInputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            DispatchQueue.main
+        ) { [weak self] _, _ in
+            guard let self else { return }
+            guard self.state == .warm else { return }
+            self.discardPreparedEngine(reason: "default input device changed")
+            self.prepareIdleEngineIfNeeded()
+        }
     }
 
     /// Shut down the service
@@ -648,6 +764,7 @@ final class AudioCaptureService: AgentAudioCapture {
 
         isRecordingActive = false
         retireEngine()
+        discardPreparedEngine(reason: "teardown")
         finishFallbackCaptureSession()
         // On full teardown, clear retired engines too (service is shutting down)
         retiredEngines.removeAll()
@@ -889,6 +1006,10 @@ final class AudioCaptureService: AgentAudioCapture {
 
         halSetupEnteredQueue = false
 
+        // Consume the idle-prepared engine when valid — its inputNode HAL is
+        // already initialized, so the setup below is nearly instant.
+        let idlePreparedEngine = takePreparedEngine(systemDefaultJustChanged: changedSystemDefaultInput)
+
         // Do expensive AVAudioEngine setup on dedicated queue to avoid blocking MainActor
         // Accessing engine.inputNode triggers synchronous CoreAudio HAL initialization
         // that can take 1-3 seconds via IPC to coreaudiod
@@ -911,19 +1032,20 @@ final class AudioCaptureService: AgentAudioCapture {
             }
 
             if changedSystemDefaultInput {
-                log.debug("Waiting for system input change to settle", detail: "\(Int(self.deviceReconfigurationSettleDelay * 1000))ms")
-                Thread.sleep(forTimeInterval: self.deviceReconfigurationSettleDelay)
+                self.waitForInputRouteSettled(targetDeviceID: deviceSelection.deviceID, token: token)
                 guard self.captureToken == token else {
                     log.debug("Audio setup cancelled after system input settle - token mismatch")
                     return
                 }
             }
 
-            // Create fresh audio engine
-            let newEngine = AVAudioEngine()
-            logSetupTiming("engine created")
+            // Use the idle-prepared engine when available (HAL already
+            // initialized at idle), otherwise create a fresh one.
+            let newEngine = idlePreparedEngine ?? AVAudioEngine()
+            logSetupTiming(idlePreparedEngine != nil ? "engine reused (idle-prepared)" : "engine created")
 
-            // Pre-warm inputNode - this is the expensive HAL initialization
+            // Touch inputNode - the expensive HAL initialization for a fresh
+            // engine, effectively free for an idle-prepared one.
             // Doing it here on the setup queue keeps MainActor responsive
             #if DEBUG
             let halStart = CACurrentMediaTime()
@@ -950,8 +1072,7 @@ final class AudioCaptureService: AgentAudioCapture {
             case .ready:
                 break
             case .changed:
-                log.debug("Waiting for input device binding to settle", detail: "\(Int(self.deviceReconfigurationSettleDelay * 1000))ms")
-                Thread.sleep(forTimeInterval: self.deviceReconfigurationSettleDelay)
+                self.waitForInputFormatSettled(inputNode: inputNode, token: token)
                 guard self.captureToken == token else {
                     log.debug("Audio setup cancelled after device binding settle - token mismatch")
                     newEngine.stop()
@@ -1148,6 +1269,64 @@ final class AudioCaptureService: AgentAudioCapture {
                 }
             }
         }
+    }
+
+    // MARK: - Device Reconfiguration Settling
+
+    /// After switching the system default input, confirm CoreAudio applied the
+    /// change (default-input property reads back the target and the device
+    /// answers property queries) instead of blind-sleeping the full settle
+    /// delay. The old 650ms delay remains as the timeout fallback; a short
+    /// grace period after confirmation lets coreaudiod finish re-routing.
+    /// Blocks the calling thread — call on audioSetupQueue only, never MainActor.
+    private func waitForInputRouteSettled(targetDeviceID: AudioDeviceID, token: UUID) {
+        let start = CACurrentMediaTime()
+        let deadline = start + deviceReconfigurationSettleDelay
+        var confirmed = false
+
+        while CACurrentMediaTime() < deadline {
+            guard captureToken == token else { return }
+            if getDefaultInputDeviceID() == targetDeviceID, isDeviceResponding(targetDeviceID) {
+                confirmed = true
+                break
+            }
+            Thread.sleep(forTimeInterval: 0.025)
+        }
+
+        if confirmed {
+            Thread.sleep(forTimeInterval: 0.05)
+            let ms = Int((CACurrentMediaTime() - start) * 1000)
+            log.debug("Input route settled", detail: "confirmed in \(ms)ms")
+        } else {
+            log.debug("Input route settle timed out", detail: "\(Int(deviceReconfigurationSettleDelay * 1000))ms fallback elapsed")
+        }
+    }
+
+    /// After re-binding the input device on the audio unit, wait until the
+    /// input node reports a valid, stable hardware format (two matching reads)
+    /// instead of blind-sleeping the full settle delay. The old 650ms delay
+    /// remains as the timeout fallback.
+    /// Blocks the calling thread — call on audioSetupQueue only, never MainActor.
+    private func waitForInputFormatSettled(inputNode: AVAudioInputNode, token: UUID) {
+        let start = CACurrentMediaTime()
+        let deadline = start + deviceReconfigurationSettleDelay
+        var previous: (sampleRate: Double, channels: AVAudioChannelCount)?
+
+        while CACurrentMediaTime() < deadline {
+            guard captureToken == token else { return }
+            let format = inputNode.inputFormat(forBus: 0)
+            let current = (sampleRate: format.sampleRate, channels: format.channelCount)
+            if current.sampleRate > 0, current.channels > 0,
+               let previous, previous == current {
+                let ms = Int((CACurrentMediaTime() - start) * 1000)
+                log.debug("Input format settled", detail: "\(Int(current.sampleRate))Hz/\(current.channels)ch in \(ms)ms")
+                return
+            }
+            previous = current
+            Thread.sleep(forTimeInterval: 0.03)
+        }
+
+        log.debug("Input format settle timed out", detail: "\(Int(deviceReconfigurationSettleDelay * 1000))ms fallback elapsed")
     }
 
     private func handleBuffer(_ buffer: AVAudioPCMBuffer) {

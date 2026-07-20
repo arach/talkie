@@ -28,6 +28,12 @@ final class AudioFileWriter: AudioWriterProtocol {
     /// Segment duration in seconds. 0 = no segmentation.
     var segmentDuration: TimeInterval = 0
 
+    /// Whether finalize() appends the trailing-silence pad. Whisper needs it
+    /// to avoid cutting off the last words; Parakeet trims trailing silence
+    /// and appends its own chirp tail in the engine, so callers can skip the
+    /// pad (and the wasted write/convert bytes) when Parakeet is selected.
+    var trailingSilenceEnabled = true
+
     /// Callback fired when a segment is completed and compressed (on background queue)
     var onSegmentCompleted: ((AudioWriterSegment) -> Void)?
 
@@ -556,7 +562,8 @@ final class AudioFileWriter: AudioWriterProtocol {
 
     /// Write trailing silence to prevent transcription cutoff
     private func writeTrailingSilence() {
-        guard let audioFile = audioFile,
+        guard trailingSilenceEnabled,
+              let audioFile = audioFile,
               let format = fileFormat,
               bufferCount > 0 else { return }
 
