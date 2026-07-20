@@ -77,6 +77,22 @@ private final class SessionBridge: NSObject, ManagedAgentConsoleSession.Listener
     private weak var controller: TermBridgeKitTerminalController?
     private var appearance: ManagedAgentTerminalAppearance = .default
 
+    /// In-flight scrollback replay. Replays feed the Ghostty surface
+    /// synchronously, so a large transcript must be sliced (see
+    /// `startReplay`) — one 600 KB shot used to beachball the main
+    /// thread for seconds on Console entry.
+    private var replayTask: Task<Void, Never>?
+
+    /// True while a replay is mid-flight; live output queues behind it
+    /// in `pendingLiveChunks` so bytes stay in order.
+    private var isReplaying = false
+    private var pendingLiveChunks: [Data] = []
+
+    /// Replay slice size. Small enough that each synchronous
+    /// parse+refresh+draw stays well under a frame budget; the
+    /// `Task.yield()` between slices lets the runloop turn.
+    private static let replaySliceSize = 32 * 1024
+
     func bind(session: ManagedAgentConsoleSession, controller: TermBridgeKitTerminalController) {
         if self.session !== session {
             self.session?.detach(listener: self)
@@ -107,6 +123,11 @@ private final class SessionBridge: NSObject, ManagedAgentConsoleSession.Listener
     }
 
     func unbind() {
+        replayTask?.cancel()
+        replayTask = nil
+        isReplaying = false
+        pendingLiveChunks.removeAll()
+
         session?.detach(listener: self)
         session = nil
 
@@ -124,18 +145,57 @@ private final class SessionBridge: NSObject, ManagedAgentConsoleSession.Listener
 
     nonisolated func consoleSession(_ session: ManagedAgentConsoleSession, didResetTranscript transcript: Data) {
         Task { @MainActor [weak self] in
-            self?.controller?.processRemoteOutput(Data("\u{1B}c".utf8))
-            if let sequence = self?.appearance.theme.applyEscapeSequence {
-                self?.controller?.processRemoteOutput(Data(sequence.utf8))
-            }
-            guard !transcript.isEmpty else { return }
-            self?.controller?.processRemoteOutput(transcript)
+            self?.startReplay(transcript)
         }
     }
 
     nonisolated func consoleSession(_ session: ManagedAgentConsoleSession, didReceiveOutput chunk: Data) {
         Task { @MainActor [weak self] in
-            self?.controller?.processRemoteOutput(chunk)
+            guard let self else { return }
+            // A replay in flight owns the byte stream — queue live
+            // output behind it so slices and live chunks can't
+            // interleave out of order.
+            if self.isReplaying {
+                self.pendingLiveChunks.append(chunk)
+            } else {
+                self.controller?.processRemoteOutput(chunk)
+            }
+        }
+    }
+
+    /// Replays the session scrollback into the terminal. Sliced with a
+    /// runloop yield between slices: `processRemoteOutput` synchronously
+    /// parses + refreshes + draws on the main thread, so feeding the
+    /// full (up to ~600 KB) buffer in one call freezes the UI for
+    /// seconds. Splitting mid-escape-sequence is safe — the Ghostty
+    /// parser is a stateful byte stream, same as raw PTY chunks.
+    private func startReplay(_ transcript: Data) {
+        replayTask?.cancel()
+        replayTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.isReplaying = true
+            defer { self.isReplaying = false }
+
+            self.controller?.processRemoteOutput(Data("\u{1B}c".utf8))
+            self.controller?.processRemoteOutput(Data(self.appearance.theme.applyEscapeSequence.utf8))
+
+            var offset = 0
+            while offset < transcript.count {
+                if Task.isCancelled { return }
+                let end = min(offset + Self.replaySliceSize, transcript.count)
+                self.controller?.processRemoteOutput(transcript.subdata(in: offset..<end))
+                offset = end
+                if end < transcript.count {
+                    await Task.yield()
+                }
+            }
+
+            // Flush live output that queued behind the replay.
+            let pending = self.pendingLiveChunks
+            self.pendingLiveChunks.removeAll()
+            for chunk in pending {
+                self.controller?.processRemoteOutput(chunk)
+            }
         }
     }
 }
