@@ -48,6 +48,10 @@ struct TOHeaderSection: View {
     var processingWorkflowIDs: Set<UUID> = []
     var onExecuteWorkflow: (Workflow) -> Void = { _ in }
     var onShowWorkflowPicker: () -> Void = {}
+    /// Applies a rewritten transcript from the formatting quick actions
+    /// (paragraph pass / filler removal). The parent routes it through
+    /// its standard save gate so the change lands in content_history.
+    var onApplyTranscript: ((String) -> Void)? = nil
     var isDirty: Bool = false
     var showSavedBadge: Bool = false
     var onTitleChange: (() -> Void)? = nil
@@ -65,6 +69,16 @@ struct TOHeaderSection: View {
     /// Briefly flips the Copy chip to "COPIED" after a successful copy,
     /// then reverts. Mirrors the studio's `studioCopyButton` pattern.
     @State private var copied: Bool = false
+
+    /// Transient label text for the Format / Clean chips when the action
+    /// was a no-op (e.g. "Already structured", "No fillers") so the
+    /// chip itself reports why nothing changed.
+    @State private var formatFlash: String? = nil
+    @State private var cleanFlash: String? = nil
+
+    /// True while the Apple Intelligence paragraph pass is running —
+    /// swaps the Format chip's glyph for a spinner.
+    @State private var isFormattingTranscript = false
 
     // MARK: - Body
     //
@@ -445,6 +459,13 @@ struct TOHeaderSection: View {
             if let showJSON {
                 jsonToggleChip(showJSON: showJSON)
             }
+            // Formatting quick actions — paragraph pass (Apple
+            // Intelligence) and filler-word removal (deterministic).
+            // Memo-only; they rewrite the transcript in place via
+            // `onApplyTranscript`.
+            if recording.isMemo, onApplyTranscript != nil {
+                transcriptFormattingActions
+            }
             if recording.isMemo {
                 memoWorkflowActions
             }
@@ -513,6 +534,132 @@ struct TOHeaderSection: View {
             hoveredLabel = hovering ? hoverKey : (hoveredLabel == hoverKey ? nil : hoveredLabel)
         }
         .help(isProcessing ? "Running \(workflow.name)" : "Run \(workflow.name)")
+    }
+
+    // MARK: - Transcript Formatting Quick Actions
+
+    /// Format + Clean chips. Format runs the conservative Apple
+    /// Intelligence paragraph pass (`TextFormattingService`); Clean
+    /// strips filler words deterministically. Both rewrite the
+    /// transcript in place via `onApplyTranscript`.
+    @ViewBuilder
+    private var transcriptFormattingActions: some View {
+        formatChip
+        inlineActionButton(
+            label: cleanFlash ?? "Clean",
+            icon: "text.badge.minus",
+            action: removeFillerWords
+        )
+    }
+
+    /// Format chip — styled like the workflow chips so the spinner swap
+    /// reads the same way a running workflow does. Label flashes the
+    /// skip reason (e.g. "Already structured") when the pass is a no-op.
+    @ViewBuilder
+    private var formatChip: some View {
+        let active = hoveredLabel == "Format"
+        let fg = active ? Theme.current.foreground : Theme.current.foregroundSecondary
+        let border = active ? Theme.current.foreground.opacity(0.16) : Theme.current.foreground.opacity(0.10)
+
+        Button(action: runTranscriptFormat) {
+            HStack(spacing: 5) {
+                if isFormattingTranscript {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .frame(width: 11, height: 11)
+                } else {
+                    Image(systemName: "text.alignleft")
+                        .font(.system(size: 11, weight: .regular))
+                        .frame(width: 11, height: 11)
+                }
+
+                Text((formatFlash ?? "Format").uppercased())
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .tracking(1.6)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: 160, alignment: .leading)
+            }
+            .foregroundColor(fg)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(active ? Theme.current.foreground.opacity(0.06) : Color.clear)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 3)
+                            .stroke(border, lineWidth: 0.5)
+                    )
+            )
+            .animation(.easeOut(duration: 0.12), value: active)
+        }
+        .buttonStyle(.plain)
+        .disabled(isFormattingTranscript)
+        .onHover { hovering in
+            hoveredLabel = hovering ? "Format" : (hoveredLabel == "Format" ? nil : hoveredLabel)
+        }
+        .help(isFormattingTranscript ? "Formatting transcript" : "Add paragraph breaks (Apple Intelligence)")
+    }
+
+    /// Apple Intelligence paragraph pass. Skips (with a flashed reason)
+    /// when the service deems the text too short, already structured,
+    /// or otherwise not worth rewriting.
+    private func runTranscriptFormat() {
+        guard let onApplyTranscript,
+              let text = recording.text, !text.isEmpty,
+              !isFormattingTranscript else { return }
+        isFormattingTranscript = true
+        Task { @MainActor in
+            let result = await TextFormattingService.shared.formatTranscriptIfUseful(text)
+            isFormattingTranscript = false
+            if result.didFormat {
+                onApplyTranscript(result.activeText)
+            } else {
+                flashFormat(result.stepSubtitle)
+            }
+        }
+    }
+
+    /// Deterministic filler-word removal — no model, instant.
+    private func removeFillerWords() {
+        guard let onApplyTranscript,
+              let text = recording.text, !text.isEmpty else { return }
+        let cleaned = strippingFillerWords(from: text)
+        if cleaned == text {
+            flashClean("No fillers")
+        } else {
+            onApplyTranscript(cleaned)
+        }
+    }
+
+    /// Briefly swaps the Format chip label to `message`, then reverts.
+    private func flashFormat(_ message: String) {
+        withAnimation(.easeOut(duration: 0.12)) { formatFlash = message }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(1600))
+            withAnimation(.easeOut(duration: 0.18)) { formatFlash = nil }
+        }
+    }
+
+    /// Briefly swaps the Clean chip label to `message`, then reverts.
+    private func flashClean(_ message: String) {
+        withAnimation(.easeOut(duration: 0.12)) { cleanFlash = message }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(1600))
+            withAnimation(.easeOut(duration: 0.18)) { cleanFlash = nil }
+        }
+    }
+
+    /// Conservative filler pass: strips um/uh/erm/ah/er tokens plus any
+    /// comma glued to them, then repairs the whitespace and punctuation
+    /// spacing the removal leaves behind. Anything unrecognized stays.
+    private func strippingFillerWords(from text: String) -> String {
+        var result = text.replacing(/(?i)\b(?:um+|uh+|erm+|ah+|er)\b[ \t]*,?[ \t]*/) { _ in " " }
+        result = result.replacing(/[ \t]{2,}/, with: " ")
+        result = result.replacing(/\ +([,.!?;:])/) { match in String(match.output.1) }
+        result = result.replacing(/[ \t]+\n/, with: "\n")
+        result = result.replacing(/\n[ \t]+/, with: "\n")
+        return result
     }
 
     /// Continue-memo chip — replaces the stranded red dot that used to

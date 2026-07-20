@@ -354,6 +354,7 @@ struct TalkieView: View {
             processingWorkflowIDs: processingWorkflowIDs,
             onExecuteWorkflow: executeWorkflow,
             onShowWorkflowPicker: { showingWorkflowPicker = true },
+            onApplyTranscript: { applyTranscriptRevision($0) },
             isDirty: isDirty,
             showSavedBadge: showSavedBadge,
             onTitleChange: titleChangeAction
@@ -650,6 +651,15 @@ struct TalkieView: View {
     }
 
     // MARK: - Provenance Actions
+
+    /// Applies a formatting quick-action result from the header chips
+    /// (paragraph pass, filler removal). Routes through the standard
+    /// save gate so the change lands in content_history as an AI
+    /// revision and the body re-renders from `editedTranscript`.
+    private func applyTranscriptRevision(_ newText: String) {
+        editedTranscript = newText
+        saveNow(forRecordingId: recording.id, source: .aiRevision)
+    }
 
     /// Append provenance text to canonical transcript, mark segment as applied.
     /// Canonical text is user-owned — this only runs on explicit user action.
