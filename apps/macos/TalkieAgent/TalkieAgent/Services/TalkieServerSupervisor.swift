@@ -9,9 +9,26 @@
 
 import Foundation
 import TalkieKit
+import UserNotifications
 
 @MainActor
 final class TalkieAgentServerSupervisor {
+    enum PairingNotification {
+        static let categoryIdentifier = "talkie-agent-bridge-pairing"
+        static let approveActionIdentifier = "talkie-agent-bridge-pairing-approve"
+        static let rejectActionIdentifier = "talkie-agent-bridge-pairing-reject"
+        static let deviceIDUserInfoKey = "talkieBridgeDeviceID"
+    }
+
+    private struct PendingPairing: Decodable {
+        let deviceId: String
+        let name: String
+    }
+
+    private struct PendingPairingEnvelope: Decodable {
+        let pending: [PendingPairing]
+    }
+
     private struct ServerHealthSnapshot: Decodable {
         let status: String
         let version: String
@@ -41,17 +58,21 @@ final class TalkieAgentServerSupervisor {
 
     // Health
     private var healthTimer: Timer?
+    private var pairingTimer: Timer?
     private var consecutiveFailures = 0
     private var restartCount = 0
     private var backoffInterval: TimeInterval = 10
     private var lastHealthCheckOk = false
     private var lastError: String?
     private var processState: TalkieAgentServerStatus.ProcessState = .stopped
+    private var isRefreshingPairings = false
+    private var notifiedPendingPairingIDs: Set<String> = []
 
     // Guards
     private var isStarting = false
     private let maxConsecutiveFailures = 10
     private let healthyProbeInterval: TimeInterval = 30
+    private let pairingProbeInterval: TimeInterval = 5
     private let minBackoff: TimeInterval = 10
     private let maxBackoff: TimeInterval = 300
     private let rolloverAdoptionAttempts = 24
@@ -249,6 +270,7 @@ final class TalkieAgentServerSupervisor {
     func stop() async {
         log.info("TalkieAgentServerSupervisor: stopping")
         stopHealthTimer()
+        stopPairingTimer()
         NearbyBridgeAdvertiser.shared.stop()
         updateState(.stopped)
 
@@ -280,6 +302,7 @@ final class TalkieAgentServerSupervisor {
     /// Synchronous stop for applicationWillTerminate
     func stopSync() {
         stopHealthTimer()
+        stopPairingTimer()
         NearbyBridgeAdvertiser.shared.stop()
         processState = .stopped
 
@@ -298,6 +321,16 @@ final class TalkieAgentServerSupervisor {
         await stop()
         try? await Task.sleep(for: .seconds(1))
         await start()
+    }
+
+    @discardableResult
+    func approvePairing(_ deviceID: String) async -> Bool {
+        await respondToPairing(deviceID, action: "approve")
+    }
+
+    @discardableResult
+    func rejectPairing(_ deviceID: String) async -> Bool {
+        await respondToPairing(deviceID, action: "reject")
     }
 
     // MARK: - Health Check
@@ -328,6 +361,7 @@ final class TalkieAgentServerSupervisor {
 
         case .conflict(let reason):
             NearbyBridgeAdvertiser.shared.stop()
+            stopPairingTimer()
             lastHealthCheckOk = false
             lastError = reason
             process = nil
@@ -341,6 +375,7 @@ final class TalkieAgentServerSupervisor {
     }
 
     private func handleHealthFailure(_ reason: String) async {
+        stopPairingTimer()
         consecutiveFailures += 1
         lastHealthCheckOk = false
         lastError = reason
@@ -405,6 +440,7 @@ final class TalkieAgentServerSupervisor {
 
             case .conflict(let reason):
                 NearbyBridgeAdvertiser.shared.stop()
+                stopPairingTimer()
                 updateState(.error, error: reason)
                 return
 
@@ -548,6 +584,128 @@ final class TalkieAgentServerSupervisor {
         backoffInterval = minBackoff
         lastHealthCheckOk = true
         startAdvertiser()
+        startPairingTimer()
+    }
+
+    // MARK: - Pairing Approval
+
+    private func startPairingTimer() {
+        stopPairingTimer()
+        pairingTimer = Timer.scheduledTimer(withTimeInterval: pairingProbeInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                await self?.refreshPendingPairings()
+            }
+        }
+        Task { @MainActor [weak self] in
+            await self?.refreshPendingPairings()
+        }
+    }
+
+    private func stopPairingTimer() {
+        pairingTimer?.invalidate()
+        pairingTimer = nil
+    }
+
+    private func refreshPendingPairings() async {
+        guard processState == .running, !isRefreshingPairings else { return }
+        isRefreshingPairings = true
+        defer { isRefreshingPairings = false }
+
+        do {
+            let (data, response) = try await bridgeRequest(path: "/pair/pending")
+            guard (200..<300).contains(response.statusCode) else {
+                throw URLError(.badServerResponse)
+            }
+
+            let decoded = try JSONDecoder().decode(PendingPairingEnvelope.self, from: data)
+            let pendingIDs = Set(decoded.pending.map(\.deviceId))
+            let newPairings = decoded.pending.filter { !notifiedPendingPairingIDs.contains($0.deviceId) }
+            let resolvedPairingIDs = notifiedPendingPairingIDs.subtracting(pendingIDs)
+            notifiedPendingPairingIDs.formIntersection(pendingIDs)
+
+            if !resolvedPairingIDs.isEmpty {
+                let notificationIDs = resolvedPairingIDs.map { "talkie-agent-bridge-pairing-\($0)" }
+                let center = UNUserNotificationCenter.current()
+                center.removeDeliveredNotifications(withIdentifiers: notificationIDs)
+                center.removePendingNotificationRequests(withIdentifiers: notificationIDs)
+            }
+
+            for pairing in newPairings {
+                postPairingNotification(pairing)
+                notifiedPendingPairingIDs.insert(pairing.deviceId)
+            }
+        } catch {
+            log.warning("TalkieAgentServerSupervisor: pending pairing refresh failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func respondToPairing(_ deviceID: String, action: String) async -> Bool {
+        let encodedDeviceID = deviceID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? deviceID
+        do {
+            let (_, response) = try await bridgeRequest(
+                path: "/pair/\(encodedDeviceID)/\(action)",
+                method: "POST"
+            )
+            guard (200..<300).contains(response.statusCode) else {
+                throw URLError(.badServerResponse)
+            }
+
+            notifiedPendingPairingIDs.remove(deviceID)
+            let completedAction = action == "approve" ? "Approved" : "Rejected"
+            log.info("TalkieAgentServerSupervisor: \(completedAction) pairing for device \(deviceID)")
+            await refreshPendingPairings()
+            return true
+        } catch {
+            log.error("TalkieAgentServerSupervisor: failed to \(action) pairing for device \(deviceID): \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    private func postPairingNotification(_ pairing: PendingPairing) {
+        let content = UNMutableNotificationContent()
+        content.title = "Approve Talkie device?"
+        content.body = "\(pairing.name) wants to use Mac Bridge on this Mac."
+        content.sound = .default
+        content.threadIdentifier = PairingNotification.categoryIdentifier
+        content.categoryIdentifier = PairingNotification.categoryIdentifier
+        content.userInfo = [PairingNotification.deviceIDUserInfoKey: pairing.deviceId]
+
+        let request = UNNotificationRequest(
+            identifier: "talkie-agent-bridge-pairing-\(pairing.deviceId)",
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request) { [weak self] error in
+            guard let error else { return }
+            Task { @MainActor in
+                self?.log.warning("TalkieAgentServerSupervisor: failed to show pairing notification: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func bridgeRequest(
+        path: String,
+        method: String = "GET"
+    ) async throws -> (Data, HTTPURLResponse) {
+        guard let url = URL(string: "http://127.0.0.1:\(port)\(path)") else {
+            throw URLError(.badURL)
+        }
+
+        let tokenURL = URL.applicationSupportDirectory
+            .appending(path: "Talkie/Bridge/.config/.local-auth-token")
+        let token = try String(contentsOf: tokenURL, encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else { throw URLError(.userAuthenticationRequired) }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.timeoutInterval = 5
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let response = response as? HTTPURLResponse else {
+            throw URLError(.badServerResponse)
+        }
+        return (data, response)
     }
 
     private func startAdvertiser() {

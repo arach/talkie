@@ -148,6 +148,12 @@ final class MemoRecordingController {
     }
     var elapsedTime: TimeInterval = 0
     var audioLevel: Float = 0  // For waveform visualization
+
+    /// Live partial transcript for the recording surface. Preview only —
+    /// fed by `LiveTranscriptMonitor` on a parallel mic tap; stays empty
+    /// when the preview is unavailable. The canonical transcript still
+    /// comes from the post-stop pipeline.
+    var liveTranscript: String { LiveTranscriptMonitor.shared.transcript }
     var captureStatusMessage: String?
 
     /// Window that owns the large recording presentation for the active memo.
@@ -257,6 +263,7 @@ final class MemoRecordingController {
             return
         }
         state = .recording
+        startLiveTranscriptPreview()
     }
 
     /// Start recording audio for an existing note/recording
@@ -308,6 +315,7 @@ final class MemoRecordingController {
             return
         }
         state = .recording
+        startLiveTranscriptPreview()
     }
 
     /// Start recording a continuation segment for an existing memo
@@ -356,6 +364,7 @@ final class MemoRecordingController {
             return
         }
         state = .recording
+        startLiveTranscriptPreview()
 
         Log(.audio).info("Started continuation recording for memo \(memoId.uuidString.prefix(8))")
     }
@@ -382,6 +391,7 @@ final class MemoRecordingController {
         originalAudioURL = nil
         targetNoteId = nil
         recordingId = nil
+        stopLiveTranscriptPreview(clearingTranscript: true)
 
         state = .idle
     }
@@ -400,6 +410,7 @@ final class MemoRecordingController {
         // levelTimer merged into main timer
         captureStatusMessage = nil
         isRecoveringAudioCapture = false
+        stopLiveTranscriptPreview()
 
         guard let tempURL = tempAudioURL else {
             failStoppedRecording("No recording found")
@@ -574,6 +585,7 @@ final class MemoRecordingController {
         recordingId = nil
         targetNoteId = nil
         continuingMemoId = nil
+        stopLiveTranscriptPreview(clearingTranscript: true)
 
         state = .idle
     }
@@ -598,12 +610,26 @@ final class MemoRecordingController {
         tempAudioURL = nil
         originalAudioURL = nil
         presentationOwnerID = nil
+        stopLiveTranscriptPreview(clearingTranscript: true)
     }
 
     // MARK: - Private Methods
 
     private func claimPresentationOwner() {
         presentationOwnerID = NavigationState.activeWindowID
+    }
+
+    /// Kick the live transcript preview. Fire-and-forget — first-time
+    /// model load takes seconds and must never gate the record path.
+    private func startLiveTranscriptPreview() {
+        Task { await LiveTranscriptMonitor.shared.start() }
+    }
+
+    /// Stop the live transcript preview. Keeps the last text by default
+    /// so the surface can hold it while the wave settles; cancel/reset
+    /// paths clear it.
+    private func stopLiveTranscriptPreview(clearingTranscript: Bool = false) {
+        Task { await LiveTranscriptMonitor.shared.stop(clearingTranscript: clearingTranscript) }
     }
 
     private var memoRecordingArtifactsDirectory: URL {
@@ -884,6 +910,7 @@ final class MemoRecordingController {
         captureStatusMessage = nil
         isRecoveringAudioCapture = false
         audioCaptureRecoveryAttempts = 0
+        stopLiveTranscriptPreview(clearingTranscript: true)
 
         if removeTempFile {
             markArtifact(status: .cancelled)

@@ -6,11 +6,12 @@ import Carbon.HIToolbox
 import Combine
 import ScreenCaptureKit
 import UniformTypeIdentifiers
+import UserNotifications
 
 private let log = Log(.system)
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate, NSPopoverDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate, NSPopoverDelegate, @preconcurrency UNUserNotificationCenterDelegate {
     private var statusItem: NSStatusItem!
     private var agentStatusMenu: NSMenu?
     private var agentMenuPopover: NSPopover?
@@ -206,6 +207,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         // Configure unified logger first
         TalkieLogger.configure(source: .talkieLive, mirrorToOSLogInDebug: true)
 
+        UNUserNotificationCenter.current().delegate = self
+        setupBridgePairingNotificationActions()
+        requestNotificationPermissions()
+
         do {
             try TalkieHelperRuntimeStateStore.writeCurrentProcess(for: .agent)
         } catch {
@@ -233,6 +238,105 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         scheduleAgentMenuPrewarm()
         configureSelectionFeedback()
         trackSelectionSourceApp()
+    }
+
+    private func setupBridgePairingNotificationActions() {
+        UNUserNotificationCenter.current().getNotificationCategories { categories in
+            let approve = UNNotificationAction(
+                identifier: TalkieAgentServerSupervisor.PairingNotification.approveActionIdentifier,
+                title: "Approve",
+                options: [.authenticationRequired]
+            )
+            let reject = UNNotificationAction(
+                identifier: TalkieAgentServerSupervisor.PairingNotification.rejectActionIdentifier,
+                title: "Reject",
+                options: [.authenticationRequired, .destructive]
+            )
+            let category = UNNotificationCategory(
+                identifier: TalkieAgentServerSupervisor.PairingNotification.categoryIdentifier,
+                actions: [approve, reject],
+                intentIdentifiers: [],
+                options: []
+            )
+            var categories = categories
+            categories.update(with: category)
+            UNUserNotificationCenter.current().setNotificationCategories(categories)
+        }
+    }
+
+    private func requestNotificationPermissions() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+            Task { @MainActor in
+                if let error {
+                    log.warning("TalkieAgent notification permission request failed: \(error.localizedDescription)")
+                } else if granted {
+                    log.info("TalkieAgent notifications authorized")
+                } else {
+                    log.info("TalkieAgent notifications not authorized")
+                }
+            }
+        }
+    }
+
+    private func openTalkiePairingSettings() {
+        guard let url = URL(string: "\(TalkieEnvironment.current.talkieURLScheme)://settings/sync") else {
+            return
+        }
+        NSWorkspace.shared.open(url)
+    }
+
+    // MARK: - UNUserNotificationCenterDelegate
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound])
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let content = response.notification.request.content
+        guard content.categoryIdentifier == TalkieAgentServerSupervisor.PairingNotification.categoryIdentifier,
+              let deviceID = content.userInfo[TalkieAgentServerSupervisor.PairingNotification.deviceIDUserInfoKey] as? String else {
+            completionHandler()
+            return
+        }
+
+        switch response.actionIdentifier {
+        case TalkieAgentServerSupervisor.PairingNotification.approveActionIdentifier:
+            Task { @MainActor in
+                let approved = await TalkieAgentServerSupervisor.shared.approvePairing(deviceID)
+                if approved {
+                    center.removeDeliveredNotifications(withIdentifiers: [response.notification.request.identifier])
+                } else {
+                    openTalkiePairingSettings()
+                }
+                completionHandler()
+            }
+
+        case TalkieAgentServerSupervisor.PairingNotification.rejectActionIdentifier:
+            Task { @MainActor in
+                let rejected = await TalkieAgentServerSupervisor.shared.rejectPairing(deviceID)
+                if rejected {
+                    center.removeDeliveredNotifications(withIdentifiers: [response.notification.request.identifier])
+                } else {
+                    openTalkiePairingSettings()
+                }
+                completionHandler()
+            }
+
+        case UNNotificationDefaultActionIdentifier:
+            openTalkiePairingSettings()
+            completionHandler()
+
+        default:
+            completionHandler()
+        }
     }
 
     /// Setup that runs after boot sequence completes

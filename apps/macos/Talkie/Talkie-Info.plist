@@ -37,6 +37,8 @@
 	<string>Talkie uses the camera when you capture camera clips or attach camera media during recordings.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Talkie needs access to your microphone to record voice memos for transcription.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Talkie uses Apple Speech to show a live transcript while you record a voice memo.</string>
 	<key>NSScreenCaptureUsageDescription</key>
 	<string>Talkie needs Screen Recording access when you capture screenshots or screen recordings.</string>
 	<key>TalkieCloudKitContainerIdentifier</key>

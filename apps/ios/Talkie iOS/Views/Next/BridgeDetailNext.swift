@@ -48,14 +48,14 @@ struct BridgeDetailNext: View {
                         }
 
                         if bridgeNetworkStatus != .ok {
-                            NetworkStatusBanner(status: bridgeNetworkStatus, onRetry: reconnect)
+                            NetworkStatusBanner(status: bridgeNetworkStatus, onRetry: recoverConnection)
                                 .transition(.opacity)
                         }
 
                         if bridgeNetworkStatus == .ok,
                            let errorMessage = bridgeManager.errorMessage,
                            bridgeManager.status == .error {
-                            ErrorBanner(message: errorMessage) { reconnect() }
+                            ErrorBanner(message: errorMessage) { recoverConnection() }
                         }
 
                         statusSection
@@ -236,7 +236,7 @@ struct BridgeDetailNext: View {
                 if bridgeManager.status == .connected {
                     bridgeManager.disconnect()
                 } else {
-                    reconnect()
+                    recoverConnection()
                 }
             }
             .disabled(isReconnecting || bridgeManager.status == .connecting)
@@ -622,6 +622,9 @@ struct BridgeDetailNext: View {
     }
 
     private var reconnectTitle: String {
+        if bridgeManager.pairingNeedsRefresh {
+            return "Re-pair Mac"
+        }
         if isReconnecting || bridgeManager.status == .connecting {
             return "Reconnecting"
         }
@@ -669,13 +672,21 @@ struct BridgeDetailNext: View {
         }
     }
 
+    private func recoverConnection() {
+        if bridgeManager.pairingNeedsRefresh {
+            showingQRPairing = true
+        } else {
+            reconnect()
+        }
+    }
+
     // MARK: - Pairing phase derivation
 
     /// Derives the current pairing phase from BridgeManager + local
     /// UI state. The banner uses this to highlight the active step
     /// and mark previous steps as done.
     private var currentPhase: PairingPhase {
-        if bridgeManager.status == .error {
+        if bridgeManager.status == .error || bridgeManager.pairingNeedsRefresh {
             return .error
         }
         if bridgeManager.status == .connected {

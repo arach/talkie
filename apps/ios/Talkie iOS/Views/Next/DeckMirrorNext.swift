@@ -312,6 +312,18 @@ struct DeckMirrorNext: View {
                 .buttonStyle(.plain)
                 .accessibilityHint(emptyStateActionHint)
 
+                if bridgeManager.isPaired,
+                   bridgeManager.status != .connected,
+                   !bridgeManager.pairingNeedsRefresh {
+                    Button(action: openPairingRecovery) {
+                        Label("Pair or repair Mac", systemImage: "qrcode.viewfinder")
+                            .talkieType(.fieldLabel)
+                            .foregroundStyle(theme.colors.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Opens Mac discovery and pairing code options")
+                }
+
                 Spacer()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -323,15 +335,21 @@ struct DeckMirrorNext: View {
         if !bridgeManager.isPaired {
             return "Pair a Mac to mirror its Command Deck here."
         }
+        if bridgeManager.pairingNeedsRefresh {
+            return "This Mac no longer recognizes this device. Pair it again to load its Command Deck."
+        }
         if bridgeManager.status != .connected {
             return "Connect to your paired Mac to load its Command Deck."
         }
-        return "The Mac is connected, but this phone has not received the deck yet."
+        return "The Mac is connected, but this device has not received the deck yet."
     }
 
     private var emptyStateActionTitle: String {
         if !bridgeManager.isPaired {
             return "Pair Mac"
+        }
+        if bridgeManager.pairingNeedsRefresh {
+            return "Re-pair Mac"
         }
         if bridgeManager.status == .connected {
             return "Refresh Deck"
@@ -341,6 +359,9 @@ struct DeckMirrorNext: View {
 
     private var emptyStateActionIcon: String {
         if !bridgeManager.isPaired {
+            return "qrcode.viewfinder"
+        }
+        if bridgeManager.pairingNeedsRefresh {
             return "qrcode.viewfinder"
         }
         if bridgeManager.status == .connected {
@@ -353,16 +374,23 @@ struct DeckMirrorNext: View {
         if !bridgeManager.isPaired {
             return "Opens Mac pairing"
         }
+        if bridgeManager.pairingNeedsRefresh {
+            return "Opens Mac discovery and pairing code options"
+        }
         return "Connects to the paired Mac and refreshes Deck"
     }
 
     private func emptyStateAction() {
-        if !bridgeManager.isPaired {
-            AppShellRouter.shared.openBridgeDetail()
+        if !bridgeManager.isPaired || bridgeManager.pairingNeedsRefresh {
+            openPairingRecovery()
             return
         }
 
         warmDeckConnection()
+    }
+
+    private func openPairingRecovery() {
+        AppShellRouter.shared.openBridgeDetail()
     }
 
     private func currentSpace(in board: DeckBoardSnapshot) -> DeckSpace? {

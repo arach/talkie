@@ -7,7 +7,6 @@
 
 import Foundation
 import Darwin
-import UserNotifications
 import TalkieKit
 
 private let log = Log(.system)
@@ -223,7 +222,6 @@ final class BridgeManager {
     private var isStartingBridge = false  // Prevents concurrent start attempts
     private var resolvedBridgeHost: String?
     private var lastPairableHealthAt: Date?
-    private var notifiedPendingPairingIDs: Set<String> = []
 
     // MARK: - DEBUG Helpers
 
@@ -653,7 +651,8 @@ final class BridgeManager {
         }
     }
 
-    func approvePairing(_ deviceId: String) async {
+    @discardableResult
+    func approvePairing(_ deviceId: String) async -> Bool {
         do {
             let endpoint = "/pair/\(deviceId)/approve"
             let (data, response, url) = try await bridgeRequest(path: endpoint, method: "POST")
@@ -662,12 +661,16 @@ final class BridgeManager {
             log.info("Approved pairing for device: \(deviceId)")
             await refreshPendingPairings()
             await refreshDevices()
+            return true
         } catch {
             log.error("Failed to approve pairing: \(error.localizedDescription)")
+            errorMessage = "Could not approve the pairing request. Open iOS settings and try again."
+            return false
         }
     }
 
-    func rejectPairing(_ deviceId: String) async {
+    @discardableResult
+    func rejectPairing(_ deviceId: String) async -> Bool {
         do {
             let endpoint = "/pair/\(deviceId)/reject"
             let (data, response, url) = try await bridgeRequest(path: endpoint, method: "POST")
@@ -675,8 +678,11 @@ final class BridgeManager {
 
             log.info("Rejected pairing for device: \(deviceId)")
             await refreshPendingPairings()
+            return true
         } catch {
             log.error("Failed to reject pairing: \(error.localizedDescription)")
+            errorMessage = "Could not reject the pairing request. Open iOS settings and try again."
+            return false
         }
     }
 
@@ -1005,39 +1011,11 @@ final class BridgeManager {
             }
 
             let decoded = try JSONDecoder().decode(PendingResponse.self, from: data)
-            let previousNotifiedIDs = notifiedPendingPairingIDs
             pendingPairings = decoded.pending
             lastBackgroundPairingRefreshAt = Date()
-            let pendingIDs = Set(decoded.pending.map(\.deviceId))
-            notifiedPendingPairingIDs.formIntersection(pendingIDs)
-
-            for pairing in decoded.pending where !previousNotifiedIDs.contains(pairing.deviceId) {
-                notifyPendingPairing(pairing)
-                notifiedPendingPairingIDs.insert(pairing.deviceId)
-            }
         } catch {
             pendingPairings = []
-            notifiedPendingPairingIDs.removeAll()
             log.error("Failed to refresh pending pairings: \(error.localizedDescription)")
-        }
-    }
-
-    private func notifyPendingPairing(_ pairing: PendingPairing) {
-        let content = UNMutableNotificationContent()
-        content.title = "Approve Talkie iPhone?"
-        content.body = "\(pairing.name) wants to refresh its Mac Bridge pairing."
-        content.sound = .default
-
-        let request = UNNotificationRequest(
-            identifier: "talkie-bridge-pairing-\(pairing.deviceId)",
-            content: content,
-            trigger: nil
-        )
-
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error {
-                log.warning("Failed to show pending pairing notification: \(error.localizedDescription)")
-            }
         }
     }
 

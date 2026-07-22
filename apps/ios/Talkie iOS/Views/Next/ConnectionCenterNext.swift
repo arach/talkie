@@ -98,7 +98,8 @@ final class ConnectionCenterStore: ObservableObject {
             iCloudStatus: iCloudStatus.status,
             iCloudSyncEnabled: appSettings.iCloudSyncEnabled,
             bridgeIsPaired: bridgeManager.isPaired,
-            bridgeStatus: bridgeManager.status
+            bridgeStatus: bridgeManager.status,
+            bridgePairingNeedsRefresh: bridgeManager.pairingNeedsRefresh
         )
     }
 
@@ -125,6 +126,7 @@ final class ConnectionCenterStore: ObservableObject {
             _ = appSettings.iCloudSyncEnabled
             _ = bridgeManager.isPaired
             _ = bridgeManager.status
+            _ = bridgeManager.pairingNeedsRefresh
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 self?.rebuildRows()
@@ -141,7 +143,8 @@ final class ConnectionCenterStore: ObservableObject {
                     iCloudStatus: iCloudStatus.status,
                     iCloudSyncEnabled: appSettings.iCloudSyncEnabled,
                     bridgeIsPaired: bridgeManager.isPaired,
-                    bridgeStatus: bridgeManager.status
+                    bridgeStatus: bridgeManager.status,
+                    bridgePairingNeedsRefresh: bridgeManager.pairingNeedsRefresh
                 ))
             }
         )
@@ -164,7 +167,8 @@ final class ConnectionCenterStore: ObservableObject {
         iCloudStatus: iCloudStatus,
         iCloudSyncEnabled: Bool,
         bridgeIsPaired: Bool,
-        bridgeStatus: BridgeManager.ConnectionStatus
+        bridgeStatus: BridgeManager.ConnectionStatus,
+        bridgePairingNeedsRefresh: Bool
     ) -> Row.Status {
         switch kind {
         case .local:
@@ -182,6 +186,9 @@ final class ConnectionCenterStore: ObservableObject {
             }
         case .macBridge:
             guard bridgeIsPaired else { return .notSetUp }
+            if bridgePairingNeedsRefresh {
+                return .error("Re-pair required")
+            }
             switch bridgeStatus {
             case .connected:
                 return .connected
@@ -310,7 +317,7 @@ struct ConnectionCenterNext: View {
                 Spacer(minLength: 8)
 
                 HStack(spacing: 4) {
-                    Text(bridgeManager.isPaired ? "Open" : "Pair Mac")
+                    Text(deckRemoteActionTitle)
                         .talkieType(.fieldLabel)
                     Image(systemName: "chevron.right")
                         .font(.system(size: 10, weight: .semibold))
@@ -335,15 +342,26 @@ struct ConnectionCenterNext: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Command Deck")
-        .accessibilityHint(bridgeManager.isPaired ? "Opens the Mac remote" : "Opens Mac pairing")
+        .accessibilityHint(
+            bridgeManager.isPaired && !bridgeManager.pairingNeedsRefresh
+                ? "Opens the Mac remote"
+                : "Opens Mac pairing"
+        )
     }
 
     private func openDeckRemote() {
-        if bridgeManager.isPaired {
+        if bridgeManager.isPaired && !bridgeManager.pairingNeedsRefresh {
             AppShellRouter.shared.openDeck()
         } else {
             openBridgeDetail()
         }
+    }
+
+    private var deckRemoteActionTitle: String {
+        if bridgeManager.pairingNeedsRefresh {
+            return "Re-pair Mac"
+        }
+        return bridgeManager.isPaired ? "Open" : "Pair Mac"
     }
 
     private var deckRemoteStatus: String {

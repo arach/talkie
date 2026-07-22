@@ -187,6 +187,12 @@ final class BridgeManager {
         isPaired && (status == .disconnected || status == .error)
     }
 
+    /// The Mac rejected the saved device identity, so retrying the same
+    /// credentials cannot succeed. Surfaces a re-pair action to the UI.
+    var pairingNeedsRefresh: Bool {
+        lastConnectionAuthFailed
+    }
+
     var activePairedMac: PairedMac? {
         let bridgeConfiguration = configurationStore.configuration.bridge
         let mac = bridgeConfiguration.pairedMacs.first(where: { $0.id == bridgeConfiguration.activePairedMacID })
@@ -677,11 +683,11 @@ final class BridgeManager {
             retryCount = maxRetries
         } catch BridgeError.httpError(401, detail: _) {
             lastConnectionAuthFailed = true
-            status = .disconnected
+            status = .error
             if awaitingPairingApproval {
-                errorMessage = "Approve this iPhone on your Mac to finish pairing."
+                errorMessage = "Approve this device on your Mac to finish pairing."
             } else {
-                errorMessage = "Mac pairing needs to be refreshed."
+                errorMessage = "This Mac no longer recognizes this device. Scan a fresh pairing code to reconnect."
             }
             retryCount = 0
         } catch {
@@ -819,6 +825,7 @@ final class BridgeManager {
             lastSuccessfulContactAt = nil
             awaitingPairingApproval = false
             errorMessage = nil
+            lastConnectionAuthFailed = false
             stopPendingPairingApprovalMonitor()
 
             Task {
@@ -875,6 +882,9 @@ final class BridgeManager {
 
     func removePairedMac(id: String) {
         let wasActive = activePairedMacID == id
+        if wasActive {
+            lastConnectionAuthFailed = false
+        }
         disconnect()
 
         privateKeyStore.delete(id: id)
