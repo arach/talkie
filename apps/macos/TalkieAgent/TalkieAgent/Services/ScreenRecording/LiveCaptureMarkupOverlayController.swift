@@ -21,6 +21,8 @@ final class LiveCaptureMarkupOverlayController: NSObject {
     /// host runs region selection and bakes the strokes in. Recording leaves
     /// this nil (it commits via Done instead).
     var onCapture: (() -> Void)?
+    /// Agent quick markup can provide local OCR-backed text redaction.
+    var onAutoBlurText: (() -> Void)?
     /// Called for keyboard-level safety exits that need owner cleanup beyond
     /// the web overlay itself, such as agent quick-markup chrome panels.
     var onDismissRequest: (() -> Void)?
@@ -41,6 +43,10 @@ final class LiveCaptureMarkupOverlayController: NSObject {
 
     var usesCompactDock = false {
         didSet { applyCompactDockMode() }
+    }
+
+    var supportsAutoBlurText = false {
+        didSet { applyAutoBlurTextAvailability() }
     }
 
     var additionalMousePassthroughScreenRects: (() -> [CGRect])? {
@@ -67,6 +73,7 @@ final class LiveCaptureMarkupOverlayController: NSObject {
     private var localSafeAreaMouseMonitor: Any?
     private var globalSafeAreaMouseMonitor: Any?
     private var captureYieldActive = false
+    private var sourceImageDataURL: String?
     private let protectedCornerSize = CGSize(width: 96, height: 96)
 
     /// Lets clicks fall through to the apps beneath while keeping strokes
@@ -241,6 +248,36 @@ final class LiveCaptureMarkupOverlayController: NSObject {
     func setStrokeWidth(_ width: Double) {
         selectedStrokeWidth = width
         evaluate("window.talkieLiveMarkup && window.talkieLiveMarkup.setStrokeWidth(\(width));")
+    }
+
+    /// A lightweight preview copy lets the transparent web overlay pixelate
+    /// the actual source pixels while the native image remains underneath.
+    func setSourceImage(_ image: CGImage?) {
+        guard let image,
+              let data = NSBitmapImageRep(cgImage: image).representation(
+                using: .jpeg,
+                properties: [.compressionFactor: 0.58]
+              ) else {
+            sourceImageDataURL = nil
+            applySourceImage()
+            return
+        }
+        sourceImageDataURL = "data:image/jpeg;base64,\(data.base64EncodedString())"
+        applySourceImage()
+    }
+
+    func setAutoBlurTextRunning(_ running: Bool) {
+        let value = running ? "true" : "false"
+        evaluate("window.talkieLiveMarkup && window.talkieLiveMarkup.setAutoBlurTextRunning(\(value));")
+    }
+
+    func replaceAutoBlurTextLayers(_ layers: [CaptureMarkupLayer]) {
+        guard let data = try? JSONEncoder().encode(layers),
+              let json = String(data: data, encoding: .utf8) else {
+            setAutoBlurTextRunning(false)
+            return
+        }
+        evaluate("window.talkieLiveMarkup && window.talkieLiveMarkup.replaceAutoBlurTextLayers(\(json));")
     }
 
     func undo() {
@@ -503,6 +540,8 @@ final class LiveCaptureMarkupOverlayController: NSObject {
             if let requestID = message.requestID, let rect = message.rect {
                 sampleAdaptiveGlass(requestID: requestID, webRect: rect)
             }
+        case "liveMarkup.autoBlurText":
+            onAutoBlurText?()
         case "liveMarkup.cancel":
             onCancel?()
             dismiss(discardLayers: true)
@@ -579,6 +618,8 @@ final class LiveCaptureMarkupOverlayController: NSObject {
         applyDockVisibility()
         applyWindowChromeVisibility()
         applyCompactDockMode()
+        applyAutoBlurTextAvailability()
+        applySourceImage()
     }
 
     private func applyDrawableRect() {
@@ -616,6 +657,16 @@ final class LiveCaptureMarkupOverlayController: NSObject {
 
     private func applyCompactDockMode() {
         setWebCompactDockEnabled(usesCompactDock)
+    }
+
+    private func applyAutoBlurTextAvailability() {
+        let value = supportsAutoBlurText ? "true" : "false"
+        evaluate("window.talkieLiveMarkup && window.talkieLiveMarkup.setAutoBlurTextAvailable(\(value));")
+    }
+
+    private func applySourceImage() {
+        let value = sourceImageDataURL.map(Self.jsString) ?? "null"
+        evaluate("window.talkieLiveMarkup && window.talkieLiveMarkup.setSourceImage(\(value));")
     }
 }
 

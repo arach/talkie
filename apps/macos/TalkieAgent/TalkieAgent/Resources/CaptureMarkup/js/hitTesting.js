@@ -13,6 +13,7 @@
 
     const frameHandleGrabPixels = 18;
     const segmentHandleGrabPixels = 20;
+    const minimumResizeSpanPixels = 12;
 
     function arrowControlPointPixels(layer) {
       if (!layer || !layer.from || !layer.to) return null;
@@ -214,9 +215,34 @@
       return null;
     }
 
+    function expandedResizeFrame(frame) {
+      if (!frame) return null;
+      const minWidth = minimumResizeSpanPixels / Math.max(1, drawableWidth());
+      const minHeight = minimumResizeSpanPixels / Math.max(1, drawableHeight());
+      let width = Math.max(frame.width, minWidth);
+      let height = Math.max(frame.height, minHeight);
+      let x = frame.x - (width - frame.width) / 2;
+      let y = frame.y - (height - frame.height) / 2;
+      x = clamp(x, 0, Math.max(0, 1 - width));
+      y = clamp(y, 0, Math.max(0, 1 - height));
+      width = Math.min(width, 1 - x);
+      height = Math.min(height, 1 - y);
+      return { x, y, width, height };
+    }
+
+    function resizeFrameForLayer(layer) {
+      if (!layer || layer.visible === false) return null;
+      if (layer.frame) return layer.frame;
+      if (layer.points && layer.points.length) {
+        return expandedResizeFrame(layers.normalizedRectFromPoints(layer.points));
+      }
+      return null;
+    }
+
     function frameHandlePoints(layer) {
-      if (!layer || !layer.frame) return [];
-      const frame = rectToCanvas(layer.frame);
+      const resizeFrame = resizeFrameForLayer(layer);
+      if (!resizeFrame) return [];
+      const frame = rectToCanvas(resizeFrame);
       const left = frame.x;
       const top = frame.y;
       const right = frame.x + frame.width;
@@ -285,7 +311,7 @@
     function selectedHandleAt(point) {
       const layer = layers.selectedLayer();
       if (!layer) return null;
-      if (layer.frame) {
+      if (resizeFrameForLayer(layer)) {
         const handle = frameHandleAt(point, layer);
         return handle ? { kind: "frame", handle, layer } : null;
       }
@@ -315,6 +341,7 @@
       distanceToArrowPath,
       layerContainsPoint,
       hitTestLayer,
+      resizeFrameForLayer,
       frameHandlePoints,
       frameHandleAt,
       segmentHandlePoints,

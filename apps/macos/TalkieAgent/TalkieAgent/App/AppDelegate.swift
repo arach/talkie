@@ -672,6 +672,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         menu.addItem(NSMenuItem.separator())
 
+        let screenshotItem = NSMenuItem(title: "Screenshot...", action: #selector(captureScreenshotFromMenu), keyEquivalent: "")
+        screenshotItem.target = self
+        screenshotItem.image = NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "Screenshot")
+        menu.addItem(screenshotItem)
+
+        let screenRecordingItem = NSMenuItem(title: "Screen Recording...", action: #selector(captureScreenRecordingFromMenu), keyEquivalent: "")
+        screenRecordingItem.target = self
+        screenRecordingItem.image = NSImage(systemSymbolName: "record.circle", accessibilityDescription: "Screen Recording")
+        menu.addItem(screenRecordingItem)
+
+        menu.addItem(NSMenuItem.separator())
+
         let historyItem = NSMenuItem(title: "Show History", action: #selector(showHistory), keyEquivalent: "h")
         historyItem.keyEquivalentModifierMask = [.option, .command]
         historyItem.target = self
@@ -1024,6 +1036,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                     guard let self else { return }
                     self.dismissAgentMenuPopover()
                     self.toggleListeningFromMenu()
+                }
+            },
+            captureScreenshot: { [weak self] in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.dismissAgentMenuPopover()
+                    await self.handleAgentCaptureChord(initialMode: .screenshot)
+                }
+            },
+            captureScreenRecording: { [weak self] in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.dismissAgentMenuPopover()
+                    await self.handleAgentCaptureChord(initialMode: .video)
                 }
             },
             openHome: { [weak self] in
@@ -2546,6 +2572,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     @objc private func toggleListeningFromMenu() {
         toggleListening(interstitial: false, hotkeyTimestamp: nil)
+    }
+
+    @objc private func captureScreenshotFromMenu() {
+        Task { @MainActor [weak self] in
+            await self?.handleAgentCaptureChord(initialMode: .screenshot)
+        }
+    }
+
+    @objc private func captureScreenRecordingFromMenu() {
+        Task { @MainActor [weak self] in
+            await self?.handleAgentCaptureChord(initialMode: .video)
+        }
     }
 
     private func toggleListening(interstitial: Bool, hotkeyTimestamp: HotKeyTimestamp? = nil) {

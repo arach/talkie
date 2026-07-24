@@ -37,6 +37,40 @@ func captureMarkupApplyOps() {
     #expect(document.layers.isEmpty)
 }
 
+@Test("Auto blur converts OCR observations into padded privacy layers")
+func captureMarkupAutoBlurLayers() throws {
+    let result = OCRGeometryResult(
+        imageWidth: 1000,
+        imageHeight: 500,
+        observations: [
+            OCRTextObservation(
+                text: "private@example.com",
+                boundingBox: CaptureMarkupRect(x: 0.2, y: 0.7, width: 0.3, height: 0.08),
+                confidence: 0.94
+            ),
+            OCRTextObservation(
+                text: "low confidence",
+                boundingBox: CaptureMarkupRect(x: 0.1, y: 0.1, width: 0.2, height: 0.05),
+                confidence: 0.1
+            ),
+        ],
+        fullText: "private@example.com"
+    )
+
+    let layers = CaptureMarkupAutoBlur.layers(for: result)
+    let layer = try #require(layers.first)
+    let frame = try #require(layer.frame)
+    #expect(layers.count == 1)
+    #expect(layer.kind == .highlight)
+    #expect(layer.label == CaptureMarkupAutoBlur.layerLabel)
+    #expect(layer.stylePreset == CaptureMarkupAutoBlur.stylePreset)
+    #expect(layer.author == .user)
+    #expect(frame.x < 0.2)
+    #expect(frame.y < 0.22)
+    #expect(frame.width > 0.3)
+    #expect(frame.height > 0.08)
+}
+
 @Test("Capture markup layer decode supplies agent defaults")
 func captureMarkupLayerDecodeDefaults() throws {
     let data = """
@@ -391,6 +425,27 @@ func captureMarkupRenderPatch() throws {
                 kind: .patch,
                 frame: CaptureMarkupRect(x: 0.5, y: 0.1, width: 0.3, height: 0.3),
                 source: CaptureMarkupRect(x: 0.0, y: 0.0, width: 0.3, height: 0.3)
+            ),
+        ]
+    )
+    let output = CaptureMarkupRenderer.render(image: image, document: document, scale: 1)
+    #expect(output?.width == 200)
+    #expect(output?.height == 120)
+}
+
+@Test("Capture markup renders privacy blur without error")
+func captureMarkupRenderPrivacyBlur() throws {
+    let image = makeSolidImage(width: 200, height: 120)
+    let document = CaptureMarkupDocument(
+        imageWidth: 200,
+        imageHeight: 120,
+        layers: [
+            CaptureMarkupLayer(
+                kind: .highlight,
+                frame: CaptureMarkupRect(x: 0.2, y: 0.2, width: 0.5, height: 0.3),
+                stylePreset: CaptureMarkupAutoBlur.stylePreset,
+                label: CaptureMarkupAutoBlur.layerLabel,
+                author: .user
             ),
         ]
     )

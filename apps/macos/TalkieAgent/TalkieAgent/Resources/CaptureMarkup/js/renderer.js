@@ -512,6 +512,46 @@
       ctx.lineTo(last.x, last.y);
     }
 
+    function drawPrivacyBlur(layer) {
+      const rect = rectToCanvas(layer.frame);
+      if (rect.width < 1 || rect.height < 1) return;
+
+      const source = state.sourceImage;
+      if (source && source.naturalWidth > 0 && source.naturalHeight > 0) {
+        const sample = document.createElement("canvas");
+        sample.width = Math.max(1, Math.ceil(rect.width / 12));
+        sample.height = Math.max(1, Math.ceil(rect.height / 12));
+        const sampleContext = sample.getContext("2d");
+        const frame = layer.frame;
+        sampleContext.drawImage(
+          source,
+          frame.x * source.naturalWidth,
+          frame.y * source.naturalHeight,
+          frame.width * source.naturalWidth,
+          frame.height * source.naturalHeight,
+          0,
+          0,
+          sample.width,
+          sample.height
+        );
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(sample, rect.x, rect.y, rect.width, rect.height);
+      } else {
+        const cell = Math.max(6, Math.min(14, Math.floor(Math.min(rect.width, rect.height) / 4)));
+        for (let y = 0; y < rect.height; y += cell) {
+          for (let x = 0; x < rect.width; x += cell) {
+            const shade = 72 + ((Math.floor(x / cell) * 17 + Math.floor(y / cell) * 29) % 46);
+            ctx.fillStyle = `rgb(${shade}, ${shade}, ${shade})`;
+            ctx.fillRect(rect.x + x, rect.y + y, Math.min(cell, rect.width - x), Math.min(cell, rect.height - y));
+          }
+        }
+      }
+
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.24)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, Math.max(0, rect.width - 1), Math.max(0, rect.height - 1));
+    }
+
     function drawLayer(layer) {
       if (layer.visible === false) return;
       const width = Number(layer.strokeWidth || 4);
@@ -573,6 +613,8 @@
         }
         applyLayerShadow(layer);
         ctx.stroke();
+      } else if (layer.kind === "highlight" && layer.frame && layer.label === "BLUR") {
+        drawPrivacyBlur(layer);
       } else if (layer.kind === "arrow" && layer.from && layer.to) {
         drawArrowLayer(layer, width);
       } else if (layer.kind === "label" && layer.frame) {
@@ -650,9 +692,10 @@
       ctx.fillStyle = "#FFFFFF";
       ctx.strokeStyle = "rgba(79, 125, 255, 0.95)";
       ctx.lineWidth = 1.4;
-      if (layer.frame) {
+      const frameHandles = frameHandlePoints(layer);
+      if (frameHandles.length) {
         const handleSize = 8;
-        for (const handle of frameHandlePoints(layer)) {
+        for (const handle of frameHandles) {
           ctx.beginPath();
           ctx.rect(handle.x - handleSize / 2, handle.y - handleSize / 2, handleSize, handleSize);
           ctx.fill();

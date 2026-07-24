@@ -371,6 +371,8 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
                     captureMarkupPanelDidReportError("Could not save the markup: \(error.localizedDescription)")
                 }
             }
+        case "markup.autoBlurText":
+            autoBlurText()
         case "markup.stats":
             syncChrome(
                 layerCount: message.layerCount ?? layerCount,
@@ -393,6 +395,35 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
             }
         default:
             break
+        }
+    }
+
+    private func autoBlurText() {
+        guard let imageURL, let webSession else { return }
+        webSession.setAutoBlurTextRunning(true)
+        Task {
+            defer {
+                webSession.setAutoBlurTextRunning(false)
+            }
+            do {
+                let geometry = try await VisionOCRService.shared.recognizeTextWithGeometry(
+                    atURL: imageURL
+                )
+                let layers = CaptureMarkupAutoBlur.layers(for: geometry)
+                webSession.replaceAutoBlurTextLayers(layers)
+                log.info(
+                    "Capture markup blurred detected text",
+                    detail: "\(layers.count) regions"
+                )
+            } catch VisionOCRError.noTextFound {
+                webSession.replaceAutoBlurTextLayers([])
+                log.info("Capture markup auto blur found no text")
+            } catch {
+                log.error(
+                    "Capture markup auto blur failed",
+                    detail: error.localizedDescription
+                )
+            }
         }
     }
 
