@@ -219,7 +219,17 @@ public enum CaptureMarkupRenderer {
             guard let frame = layer.frame else { return }
             let rect = frame.pixelRect(in: size)
             if layer.kind == .highlight {
-                context.setFillColor(color.copy(alpha: layer.label == "BLUR" ? 0.32 : 0.12) ?? color)
+                if layer.label == CaptureMarkupAutoBlur.layerLabel {
+                    drawPrivacyBlur(
+                        frame: frame,
+                        destinationRect: rect,
+                        sourceImage: image,
+                        in: context,
+                        outputSize: size
+                    )
+                    return
+                }
+                context.setFillColor(color.copy(alpha: 0.12) ?? color)
                 context.fill(rect)
             } else if let fillAlpha = layer.fillAlpha, fillAlpha > 0 {
                 let fillColor = parseColor(layer.fillColor ?? layer.color)
@@ -397,6 +407,54 @@ public enum CaptureMarkupRenderer {
         context.translateBy(x: destination.minX, y: destination.minY + destination.height)
         context.scaleBy(x: 1, y: -1)
         context.draw(output, in: CGRect(origin: .zero, size: destination.size))
+        context.restoreGState()
+    }
+
+    private static func drawPrivacyBlur(
+        frame: CaptureMarkupRect,
+        destinationRect: CGRect,
+        sourceImage: CGImage,
+        in context: CGContext,
+        outputSize: CGSize
+    ) {
+        let sourceSize = CGSize(width: sourceImage.width, height: sourceImage.height)
+        let sourceRect = frame.pixelRect(in: sourceSize)
+            .intersection(CGRect(origin: .zero, size: sourceSize))
+            .integral
+        guard sourceRect.width >= 1,
+              sourceRect.height >= 1,
+              let cropped = sourceImage.cropping(to: sourceRect) else {
+            return
+        }
+
+        let input = CIImage(cgImage: cropped)
+        let pixelScale = max(8, min(input.extent.width, input.extent.height) / 10)
+        guard let filter = CIFilter(name: "CIPixellate") else { return }
+        filter.setValue(input, forKey: kCIInputImageKey)
+        filter.setValue(pixelScale, forKey: kCIInputScaleKey)
+        guard let output = filter.outputImage?.cropped(to: input.extent),
+              let pixelated = materialCIContext.createCGImage(output, from: input.extent) else {
+            return
+        }
+
+        // Markup drawing is already in a top-left coordinate system. Unflip
+        // locally so the CGImage crop is not mirrored inside the blur frame.
+        context.saveGState()
+        context.translateBy(x: destinationRect.minX, y: destinationRect.maxY)
+        context.scaleBy(x: 1, y: -1)
+        context.interpolationQuality = .none
+        context.draw(
+            pixelated,
+            in: CGRect(origin: .zero, size: destinationRect.size)
+        )
+        context.restoreGState()
+
+        // A subtle edge makes the editable region discoverable without
+        // re-exposing any source pixels.
+        context.saveGState()
+        context.setStrokeColor(CGColor(gray: 1, alpha: 0.16))
+        context.setLineWidth(max(1, outputSize.width / 1600))
+        context.stroke(destinationRect)
         context.restoreGState()
     }
 

@@ -40,6 +40,8 @@ struct AgentMenuRecentItem: Identifiable, Sendable {
 
 struct AgentMenuActions {
     var toggleRecording: () -> Void
+    var captureScreenshot: () -> Void
+    var captureScreenRecording: () -> Void
     var openHome: () -> Void
     var openTalkie: () -> Void
     var openSettings: () -> Void
@@ -238,13 +240,16 @@ struct AgentMenuPopoverView: View {
     private static let sectionTitleHeight: CGFloat = 12
     private static let sectionTitleSpacing: CGFloat = 4
     private static let captureRowHeight: CGFloat = 44
+    private static let captureToolsHeight: CGFloat = sectionTitleHeight + bareSectionTitleSpacing + 42
     private static let commandRowHeight: CGFloat = 40
     private static let recentGrabsHeight: CGFloat = 78
     private static let recentRowHeight: CGFloat = 26
     private static let emptyRowHeight: CGFloat = 32
     private static let toolGridHeight: CGFloat = 90
     private static let bareSectionTitleSpacing: CGFloat = 5
-    private static let maxPopoverHeight: CGFloat = 535
+    // Fits the five-item recent list plus the optional permissions row without
+    // clipping the second row of tools at the rounded popover edge.
+    private static let maxPopoverHeight: CGFloat = 588
 
     let model: AgentMenuModel
     let actions: AgentMenuActions
@@ -264,6 +269,7 @@ struct AgentMenuPopoverView: View {
         let sectionHeader = sectionTitleHeight + sectionTitleSpacing
 
         let captureHeight = captureRowHeight + (model.permissionsGranted ? 0 : sectionSpacing + commandRowHeight)
+        let captureToolsHeight = Self.captureToolsHeight
         let recentGrabsSectionHeight = sectionHeader + recentGrabsHeight
         let recentRows = model.isLoadingData || model.recentItems.isEmpty
             ? emptyRowHeight
@@ -271,8 +277,9 @@ struct AgentMenuPopoverView: View {
         let recentSectionHeight = sectionHeader + recentRows
         let toolsHeight = sectionTitleHeight + bareSectionTitleSpacing + toolGridHeight
 
-        var sectionHeights = [
+        let sectionHeights = [
             captureHeight,
+            captureToolsHeight,
             recentGrabsSectionHeight,
             recentSectionHeight,
             toolsHeight,
@@ -294,6 +301,7 @@ struct AgentMenuPopoverView: View {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 8) {
                     captureSection
+                    screenCaptureSection
                     recentGrabsSection
                     recentSection
                     toolsSection
@@ -454,6 +462,31 @@ struct AgentMenuPopoverView: View {
                         action: { actions.copyRecent(item.text) }
                     )
                 }
+            }
+        }
+    }
+
+    private var screenCaptureSection: some View {
+        AgentMenuBareSection(title: "Capture") {
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: 6),
+                    GridItem(.flexible(), spacing: 6),
+                ],
+                spacing: 6
+            ) {
+                AgentMenuToolTile(
+                    title: "Screenshot",
+                    systemImage: "camera.viewfinder",
+                    tint: skin.accent,
+                    action: actions.captureScreenshot
+                )
+                AgentMenuToolTile(
+                    title: "Screen Recording",
+                    systemImage: "record.circle",
+                    tint: skin.rec,
+                    action: actions.captureScreenRecording
+                )
             }
         }
     }
@@ -1498,6 +1531,8 @@ private struct AgentMenuEmptyRow: View {
         ),
         actions: AgentMenuActions(
             toggleRecording: {},
+            captureScreenshot: {},
+            captureScreenRecording: {},
             openHome: {},
             openTalkie: {},
             openSettings: {},

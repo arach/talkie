@@ -4,6 +4,8 @@
   const dock = document.getElementById("markup-dock");
   const toolbar = document.getElementById("toolbar");
   const stylePanel = document.getElementById("style-panel");
+  const selectionActions = document.getElementById("selection-actions");
+  const selectionMenu = document.getElementById("selection-menu");
   const windowChrome = document.querySelectorAll(".window-close, .surface-actions");
   const query = new URLSearchParams(window.location.search);
   const initialContext = query.get("context") === "desktopInk" ? "desktopInk" : "recording";
@@ -230,6 +232,7 @@
     select: "Select",
     ink: "Pen",
     rect: "Rectangle",
+    blur: "Blur",
     ellipse: "Circle",
     line: "Line",
     arrow: "Arrow",
@@ -494,6 +497,7 @@
     cursorForFrameHandle,
     selectedHandleAt,
     cursorForSelectPoint,
+    resizeFrameForLayer,
   } = hitTesting;
 
   const renderer = markup.Renderer.createRenderer({
@@ -509,7 +513,32 @@
     wrapText,
     render: renderMarkup,
   } = renderer;
-  render = renderMarkup;
+  render = () => {
+    renderMarkup();
+    syncSelectionUI();
+  };
+
+  function closeSelectionMenu() {
+    if (selectionMenu) selectionMenu.hidden = true;
+  }
+
+  function syncSelectionUI() {
+    if (!selectionActions) return;
+    const layer = selectedLayer();
+    const bounds = layer ? layerBounds(layer) : null;
+    const shouldShow = state.tool === "select" && bounds && !state.dragging;
+    selectionActions.hidden = !shouldShow;
+    if (!shouldShow) return;
+
+    const topRight = pointToCanvas({
+      x: bounds.x + bounds.width,
+      y: bounds.y,
+    });
+    const width = selectionActions.offsetWidth || 34;
+    const height = selectionActions.offsetHeight || 34;
+    selectionActions.style.left = `${clamp(topRight.x - width, 8, Math.max(8, window.innerWidth - width - 8))}px`;
+    selectionActions.style.top = `${clamp(topRight.y - height - 8, 8, Math.max(8, window.innerHeight - height - 8))}px`;
+  }
 
   function noteFrameForText(text, point, preset = currentNotePreset()) {
     ctx.save();
@@ -560,6 +589,7 @@
 
   canvas.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) return;
+    closeSelectionMenu();
     if (dock && dock.contains(event.target)) return;
     if (!eventInsideDrawable(event)) return;
     if (state.styleOpen) setStyleOpen(false);
@@ -599,6 +629,7 @@
         canvas.setPointerCapture(event.pointerId);
       }
       render();
+      syncToolbarState();
       event.preventDefault();
       return;
     }
@@ -763,6 +794,28 @@
 
   canvas.addEventListener("pointerup", finishPointer);
   canvas.addEventListener("pointercancel", finishPointer);
+  canvas.addEventListener("contextmenu", (event) => {
+    if (!eventInsideDrawable(event)) return;
+    event.preventDefault();
+    closeNoteEditor(true);
+    const layer = hitTestLayer(eventPoint(event));
+    if (!layer) {
+      state.selectedLayerId = null;
+      closeSelectionMenu();
+      render();
+      return;
+    }
+
+    setTool("select");
+    state.selectedLayerId = layer.id;
+    render();
+    if (!selectionMenu) return;
+    selectionMenu.hidden = false;
+    const width = selectionMenu.offsetWidth || 156;
+    const height = selectionMenu.offsetHeight || 132;
+    selectionMenu.style.left = `${clamp(event.clientX, 8, Math.max(8, window.innerWidth - width - 8))}px`;
+    selectionMenu.style.top = `${clamp(event.clientY, 8, Math.max(8, window.innerHeight - height - 8))}px`;
+  });
 
   function constrainDelta(bounds, dx, dy) {
     if (!bounds) return { dx, dy };
@@ -814,9 +867,29 @@
 
   function resizeLayerFrame(layerId, original, handle, dx, dy) {
     const index = state.layers.findIndex((layer) => layer.id === layerId);
-    if (index < 0 || !original.frame) return;
+    if (index < 0) return;
+    const originalResizeFrame = resizeFrameForLayer(original);
+    if (!originalResizeFrame) return;
     const next = cloneLayer(original);
-    next.frame = resizedFrame(original.frame, handle, dx, dy);
+    const nextResizeFrame = resizedFrame(originalResizeFrame, handle, dx, dy);
+    if (original.frame) {
+      next.frame = nextResizeFrame;
+    } else if (original.points) {
+      const width = Math.max(0.000001, originalResizeFrame.width);
+      const height = Math.max(0.000001, originalResizeFrame.height);
+      next.points = original.points.map((point) => ({
+        x: clamp(
+          nextResizeFrame.x + ((point.x - originalResizeFrame.x) / width) * nextResizeFrame.width,
+          0,
+          1
+        ),
+        y: clamp(
+          nextResizeFrame.y + ((point.y - originalResizeFrame.y) / height) * nextResizeFrame.height,
+          0,
+          1
+        ),
+      }));
+    }
     state.layers[index] = next;
   }
 
@@ -1045,6 +1118,23 @@
     });
   }
 
+  [selectionActions, selectionMenu].filter(Boolean).forEach((element) => {
+    element.addEventListener("pointerdown", (event) => event.stopPropagation());
+    element.addEventListener("contextmenu", (event) => event.preventDefault());
+    element.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-selection-action]");
+      if (!button) return;
+      event.stopPropagation();
+      performSelectionAction(button.getAttribute("data-selection-action"));
+    });
+  });
+
+  document.addEventListener("pointerdown", (event) => {
+    if (selectionMenu && !selectionMenu.hidden && !selectionMenu.contains(event.target)) {
+      closeSelectionMenu();
+    }
+  });
+
   windowChrome.forEach((element) => {
     element.addEventListener("pointerdown", (event) => {
       event.stopPropagation();
@@ -1061,6 +1151,8 @@
   function performAction(action) {
     if (action === "toggle-style") {
       if (optionTools.has(state.tool)) setStyleOpen(!state.styleOpen);
+    } else if (action === "auto-blur-text") {
+      requestAutoBlurText();
     } else if (action === "undo") {
       undo();
     } else if (action === "redo") {
@@ -1072,6 +1164,63 @@
     } else if (action === "cancel") {
       cancel();
     }
+  }
+
+  function requestAutoBlurText() {
+    if (!state.autoBlurTextAvailable || state.autoBlurTextRunning) return;
+    setAutoBlurTextRunning(true);
+    post("liveMarkup.autoBlurText", {});
+  }
+
+  function setAutoBlurTextAvailable(available) {
+    state.autoBlurTextAvailable = Boolean(available);
+    document.querySelectorAll('[data-action="auto-blur-text"]').forEach((button) => {
+      button.hidden = !state.autoBlurTextAvailable;
+      button.disabled = !state.autoBlurTextAvailable || state.autoBlurTextRunning;
+    });
+  }
+
+  function setAutoBlurTextRunning(running) {
+    state.autoBlurTextRunning = Boolean(running);
+    document.querySelectorAll('[data-action="auto-blur-text"]').forEach((button) => {
+      button.disabled = !state.autoBlurTextAvailable || state.autoBlurTextRunning;
+      button.setAttribute("aria-busy", state.autoBlurTextRunning ? "true" : "false");
+      button.title = state.autoBlurTextRunning ? "Detecting text…" : "Blur all detected text";
+    });
+  }
+
+  function replaceAutoBlurTextLayers(layers) {
+    const incoming = Array.isArray(layers) ? layers : [];
+    state.layers = state.layers.filter((layer) => layer.stylePreset !== "auto-blur-text");
+    state.layers.push(...incoming);
+    state.redoStack = [];
+    state.selectedLayerId = incoming.length ? incoming[incoming.length - 1].id : null;
+    if (incoming.length) setTool("select");
+    setAutoBlurTextRunning(false);
+    render();
+    sendUpdate();
+  }
+
+  function setSourceImage(dataURL) {
+    state.sourceImageURL = typeof dataURL === "string" ? dataURL : null;
+    if (!state.sourceImageURL) {
+      state.sourceImage = null;
+      render();
+      return;
+    }
+    const requestedURL = state.sourceImageURL;
+    const image = new Image();
+    image.onload = () => {
+      if (state.sourceImageURL !== requestedURL) return;
+      state.sourceImage = image;
+      render();
+    };
+    image.onerror = () => {
+      if (state.sourceImageURL !== requestedURL) return;
+      state.sourceImage = null;
+      render();
+    };
+    image.src = requestedURL;
   }
 
   function syncToolbarState() {
@@ -1121,9 +1270,10 @@
   }
 
   function setTool(tool) {
-    if (!["select", "ink", "rect", "ellipse", "line", "arrow", "note"].includes(tool)) return;
+    if (!["select", "ink", "rect", "blur", "ellipse", "line", "arrow", "note"].includes(tool)) return;
     closeNoteEditor(true);
     state.dragging = null;
+    closeSelectionMenu();
     document.body.classList.remove("dragging");
     canvas.style.cursor = "";
     state.tool = tool;
@@ -1238,6 +1388,8 @@
       return `${line} · ${width}`;
     case "rect":
       return `${fill} · ${line} · ${width}`;
+    case "blur":
+      return "Privacy blur";
     case "ellipse":
       return `${fill} · ${line} · ${width}`;
     default:
@@ -1288,6 +1440,9 @@
     case "r":
       setTool("rect");
       break;
+    case "b":
+      setTool("blur");
+      break;
     case "c":
       setTool("ellipse");
       break;
@@ -1320,6 +1475,7 @@
     if (!state.layers.some((layer) => layer.id === state.selectedLayerId)) {
       state.selectedLayerId = null;
     }
+    syncToolbarState();
     render();
     sendUpdate();
   }
@@ -1330,8 +1486,59 @@
     if (!layer) return;
     state.layers.push(layer);
     state.selectedLayerId = layer.id;
+    syncToolbarState();
     render();
     sendUpdate();
+  }
+
+  function deleteSelectedLayer() {
+    closeNoteEditor(false);
+    const index = state.layers.findIndex((layer) => layer.id === state.selectedLayerId);
+    if (index < 0) return;
+    state.layers.splice(index, 1);
+    state.selectedLayerId = null;
+    state.redoStack = [];
+    syncToolbarState();
+    render();
+    sendUpdate();
+  }
+
+  function duplicateSelectedLayer() {
+    const layer = selectedLayer();
+    if (!layer) return;
+    const copy = duplicateLayer(layer);
+    const dx = 12 / Math.max(1, drawableWidth());
+    const dy = 12 / Math.max(1, drawableHeight());
+    const moved = movedLayer(copy, dx, dy);
+    state.layers.push(moved);
+    state.selectedLayerId = moved.id;
+    state.redoStack = [];
+    render();
+    sendUpdate();
+  }
+
+  function reorderSelectedLayer(destination) {
+    const index = state.layers.findIndex((layer) => layer.id === state.selectedLayerId);
+    if (index < 0) return;
+    const [layer] = state.layers.splice(index, 1);
+    if (destination === "front") state.layers.push(layer);
+    else state.layers.unshift(layer);
+    state.redoStack = [];
+    render();
+    sendUpdate();
+  }
+
+  function performSelectionAction(action) {
+    closeSelectionMenu();
+    if (action === "delete") {
+      deleteSelectedLayer();
+    } else if (action === "duplicate") {
+      duplicateSelectedLayer();
+    } else if (action === "bring-front") {
+      reorderSelectedLayer("front");
+    } else if (action === "send-back") {
+      reorderSelectedLayer("back");
+    }
   }
 
   function done() {
@@ -1370,6 +1577,11 @@
   }
 
   window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && selectionMenu && !selectionMenu.hidden) {
+      closeSelectionMenu();
+      event.preventDefault();
+      return;
+    }
     if (isToolChordStart(event)) {
       beginToolChord();
       event.preventDefault();
@@ -1401,6 +1613,11 @@
       redo();
     } else if ((event.metaKey || event.ctrlKey) && key === "z") {
       undo();
+    } else if (event.key === "Delete" || event.key === "Backspace") {
+      if (selectedLayer()) {
+        event.preventDefault();
+        deleteSelectedLayer();
+      }
     } else if (event.metaKey || event.ctrlKey || event.altKey) {
       return;
     }
@@ -1419,9 +1636,15 @@
     applyMaterialSample,
     setStyleOpen,
     setContext,
+    setSourceImage,
+    setAutoBlurTextAvailable,
+    setAutoBlurTextRunning,
+    replaceAutoBlurTextLayers,
     setDrawableRect,
     undo,
     redo,
+    deleteSelectedLayer,
+    duplicateSelectedLayer,
     done,
     capture,
     cancel,
@@ -1431,6 +1654,8 @@
       state.materialBackdrops.clear();
       state.materialRequests.clear();
       state.latestMaterialRequestByLayer.clear();
+      state.selectedLayerId = null;
+      syncToolbarState();
       render();
       sendUpdate();
     },

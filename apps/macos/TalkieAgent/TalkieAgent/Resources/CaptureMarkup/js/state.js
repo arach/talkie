@@ -25,6 +25,9 @@
       latestMaterialRequestByLayer: new Map(),
       materialRequestSequence: 0,
       drawableRect: null,
+      sourceImage: null,
+      autoBlurTextAvailable: false,
+      autoBlurTextRunning: false,
       lastPointer: { x: 0.5, y: 0.5 },
       startedAt: performance.now(),
     };
