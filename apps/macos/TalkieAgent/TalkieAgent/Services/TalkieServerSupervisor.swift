@@ -485,14 +485,35 @@ final class TalkieAgentServerSupervisor {
             let snapshot = try JSONDecoder().decode(ServerHealthSnapshot.self, from: data)
             if !snapshot.pairingReady {
                 let occupant = await portOccupantDescription()
-                let suffix = occupant.map { " (\($0))" } ?? ""
-                return .conflict("Port \(port) is serving a bridge that is not pairable\(suffix). Stop the other bridge before pairing devices.")
+                return .conflict(nonPairableBridgeMessage(snapshot: snapshot, occupant: occupant))
             }
 
             return .ready
         } catch {
             return .notReady
         }
+    }
+
+    private func nonPairableBridgeMessage(snapshot: ServerHealthSnapshot, occupant: String?) -> String {
+        var details = [
+            "mode=\(snapshot.mode)",
+            "host=\(snapshot.hostname)",
+            "instance=\(snapshot.instanceId)",
+        ]
+
+        if let occupant, !occupant.isEmpty {
+            details.append(occupant)
+        }
+
+        let detail = details.joined(separator: ", ")
+        let legacyHint: String
+        if snapshot.mode == "local_dev" {
+            legacyHint = " This usually means a stale legacy launchd job such as com.talkie.bridge-dev is serving local-dev traffic on the production pairing port. Run bridge doctor, then reinstall or remove the legacy bridge plists."
+        } else {
+            legacyHint = " Stop the other bridge before pairing devices."
+        }
+
+        return "Port \(port) is serving a TalkieServer that is not pairable (\(detail)).\(legacyHint)"
     }
 
     private func portOccupantDescription() async -> String? {

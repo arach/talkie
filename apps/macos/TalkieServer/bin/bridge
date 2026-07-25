@@ -10,6 +10,7 @@
 #   bridge dev         - Start dev bridge (port 8767, --local mode)
 #   bridge dev:stop    - Stop dev bridge
 #   bridge status      - Show status of both services
+#   bridge doctor      - Validate launchd and health guardrails
 #   bridge logs        - Tail production logs
 #   bridge logs:dev    - Tail dev logs
 #   bridge dns         - Add /etc/hosts entries (requires sudo)
@@ -24,10 +25,14 @@ LAUNCHD_DIR="$BRIDGE_DIR/launchd"
 LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
 LOG_DIR="$HOME/Library/Logs/TalkieBridge"
 
-PROD_PLIST="com.talkie.bridge.plist"
-DEV_PLIST="com.talkie.bridge-dev.plist"
-PROD_LABEL="com.talkie.bridge"
-DEV_LABEL="com.talkie.bridge-dev"
+PROD_PLIST="to.talkie.bridge.plist"
+DEV_PLIST="to.talkie.bridge.dev.plist"
+PROD_LABEL="to.talkie.bridge"
+DEV_LABEL="to.talkie.bridge.dev"
+LEGACY_PROD_PLIST="com.talkie.bridge.plist"
+LEGACY_DEV_PLIST="com.talkie.bridge-dev.plist"
+LEGACY_PROD_LABEL="com.talkie.bridge"
+LEGACY_DEV_LABEL="com.talkie.bridge-dev"
 
 # DNS entry - single subdomain, different ports
 HOSTS_MARKER="# TalkieBridge DNS"
@@ -90,6 +95,65 @@ healthy_url_for_port() {
     return 1
 }
 
+json_field() {
+    local json="$1"
+    local field="$2"
+
+    if command -v jq > /dev/null 2>&1; then
+        echo "$json" | jq -r --arg field "$field" 'if has($field) then .[$field] else empty end' 2>/dev/null || true
+        return
+    fi
+
+    if command -v python3 > /dev/null 2>&1; then
+        JSON_PAYLOAD="$json" JSON_FIELD="$field" python3 -c 'import json, os; value=json.loads(os.environ["JSON_PAYLOAD"]).get(os.environ["JSON_FIELD"]); print(str(value).lower() if isinstance(value, bool) else value) if value is not None else None' 2>/dev/null || true
+    fi
+}
+
+legacy_plist_paths() {
+    echo "$LAUNCH_AGENTS/$LEGACY_PROD_PLIST"
+    echo "$LAUNCH_AGENTS/$LEGACY_DEV_PLIST"
+}
+
+stop_loaded_label() {
+    local label="$1"
+    launchctl stop "$label" 2>/dev/null || true
+    launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+    launchctl unload "$LAUNCH_AGENTS/$label.plist" 2>/dev/null || true
+}
+
+label_is_loaded() {
+    local label="$1"
+    launchctl print "gui/$(id -u)/$label" > /dev/null 2>&1
+}
+
+remove_legacy_plists() {
+    log_info "Removing legacy bridge launchd labels if present..."
+    stop_loaded_label "$LEGACY_PROD_LABEL"
+    stop_loaded_label "$LEGACY_DEV_LABEL"
+    rm -f "$LAUNCH_AGENTS/$LEGACY_PROD_PLIST"
+    rm -f "$LAUNCH_AGENTS/$LEGACY_DEV_PLIST"
+}
+
+health_is_pairable() {
+    local health="$1"
+    local mode pairing_ready
+    mode="$(json_field "$health" mode)"
+    pairing_ready="$(json_field "$health" pairingReady)"
+
+    [ "$mode" != "local_dev" ] && [ "$pairing_ready" != "false" ]
+}
+
+dev_plist_state() {
+    if [ ! -f "$LAUNCH_AGENTS/$DEV_PLIST" ]; then
+        echo "absent"
+    elif grep -q '<string>--port</string>' "$LAUNCH_AGENTS/$DEV_PLIST" \
+        && grep -q '<string>8767</string>' "$LAUNCH_AGENTS/$DEV_PLIST"; then
+        echo "ok"
+    else
+        echo "stale"
+    fi
+}
+
 ensure_log_dir() {
     mkdir -p "$LOG_DIR"
 }
@@ -102,6 +166,7 @@ install_plists() {
     # Stop services if running (prevents "service already loaded" errors)
     launchctl unload "$LAUNCH_AGENTS/$PROD_PLIST" 2>/dev/null || true
     launchctl unload "$LAUNCH_AGENTS/$DEV_PLIST" 2>/dev/null || true
+    remove_legacy_plists
 
     # Generate plists with correct paths for this machine
     generate_plist "$PROD_LABEL" "" "$LAUNCH_AGENTS/$PROD_PLIST" "bridge.log"
@@ -181,6 +246,7 @@ uninstall_plists() {
     # Stop services first
     launchctl unload "$LAUNCH_AGENTS/$PROD_PLIST" 2>/dev/null || true
     launchctl unload "$LAUNCH_AGENTS/$DEV_PLIST" 2>/dev/null || true
+    remove_legacy_plists
 
     # Remove plists
     rm -f "$LAUNCH_AGENTS/$PROD_PLIST"
@@ -204,7 +270,14 @@ start_prod() {
     sleep 1
     local health_url
     if health_url="$(healthy_url_for_port 8765)"; then
-        log_success "Production bridge running at ${health_url%/health}"
+        local health
+        health="$(curl -s "$health_url" 2>/dev/null)"
+        if health_is_pairable "$health"; then
+            log_success "Production bridge running at ${health_url%/health}"
+        else
+            log_error "Port 8765 is serving a non-pairable bridge; run: bridge doctor"
+            exit 1
+        fi
     else
         log_warn "Started but health check failed - check logs: bridge logs"
     fi
@@ -230,8 +303,15 @@ start_dev() {
     launchctl start "$DEV_LABEL" 2>/dev/null || true
 
     sleep 1
-    if curl -s http://localhost:8767/health > /dev/null 2>&1; then
+    local health
+    health="$(curl -s http://localhost:8767/health 2>/dev/null || true)"
+    if [ -n "$health" ] && [ "$(json_field "$health" mode)" = "local_dev" ]; then
         log_success "Dev bridge running at http://dev.usetalkie.com:8767"
+    elif [ -n "$health" ]; then
+        local service
+        service="$(json_field "$health" service)"
+        log_error "Port 8767 is serving ${service:-another service}, not the dev bridge"
+        exit 1
     else
         log_warn "Started but health check failed - check logs: bridge logs:dev"
     fi
@@ -254,8 +334,21 @@ show_status() {
     local health_url
     if health_url="$(healthy_url_for_port 8765)"; then
         local health=$(curl -s "$health_url" 2>/dev/null)
-        echo -e "${GREEN}●${NC} :8765 apps/ios/Tailscale"
-        echo "$health" | jq -r '"    Version: \(.version)  Host: \(.hostname)"' 2>/dev/null || echo "    Running"
+        local mode pairing_ready host version
+        mode="$(json_field "$health" mode)"
+        pairing_ready="$(json_field "$health" pairingReady)"
+        host="$(json_field "$health" hostname)"
+        version="$(json_field "$health" version)"
+
+        if health_is_pairable "$health"; then
+            echo -e "${GREEN}●${NC} :8765 apps/ios/Tailscale"
+        else
+            echo -e "${RED}●${NC} :8765 apps/ios/Tailscale - not pairable"
+        fi
+        echo "    Version: ${version:-unknown}  Host: ${host:-unknown}  Mode: ${mode:-unknown}  Pairing ready: ${pairing_ready:-unknown}"
+        if ! health_is_pairable "$health"; then
+            echo "    Fix: run bridge doctor; stale local-dev bridge may be occupying the production port."
+        fi
     else
         echo -e "${RED}○${NC} :8765 apps/ios/Tailscale - not running"
     fi
@@ -276,17 +369,48 @@ show_status() {
     # Dev (8767)
     if curl -s http://localhost:8767/health > /dev/null 2>&1; then
         local health=$(curl -s http://localhost:8767/health 2>/dev/null)
-        local service=$(echo "$health" | jq -r '.service // empty' 2>/dev/null)
+        local service=$(json_field "$health" service)
         if [ "$service" = "TalkieAgent" ]; then
             echo -e "${GREEN}●${NC} :8767 TalkieAgent"
-            echo "$health" | jq -r '"    Version: \(.version)"' 2>/dev/null || echo "    Running"
+            echo "    Version: $(json_field "$health" version)"
         else
+            local mode pairing_ready
+            mode="$(json_field "$health" mode)"
+            pairing_ready="$(json_field "$health" pairingReady)"
             echo -e "${GREEN}●${NC} :8767 Dev (local mode)"
-            echo "$health" | jq -r '"    Version: \(.version)"' 2>/dev/null || echo "    Running"
+            echo "    Version: $(json_field "$health" version)  Mode: ${mode:-unknown}  Pairing ready: ${pairing_ready:-unknown}"
         fi
     else
         echo -e "${RED}○${NC} :8767 Dev - not running"
     fi
+
+    echo ""
+
+    # launchd plist check
+    local dev_status
+    dev_status="$(dev_plist_state)"
+    case "$dev_status" in
+        ok)
+            echo -e "${GREEN}●${NC} Dev launchd plist pins --port 8767"
+            ;;
+        stale)
+            echo -e "${RED}●${NC} Dev launchd plist is stale - missing --port 8767"
+            ;;
+        *)
+            echo -e "${YELLOW}○${NC} Dev launchd plist not installed"
+            ;;
+    esac
+
+    while IFS= read -r legacy_path; do
+        if [ -f "$legacy_path" ]; then
+            echo -e "${YELLOW}●${NC} Legacy plist present: $legacy_path"
+        fi
+    done < <(legacy_plist_paths)
+    for legacy_label in "$LEGACY_PROD_LABEL" "$LEGACY_DEV_LABEL"; do
+        if label_is_loaded "$legacy_label"; then
+            echo -e "${YELLOW}●${NC} Legacy launchd label loaded: $legacy_label"
+        fi
+    done
 
     echo ""
 
@@ -298,6 +422,79 @@ show_status() {
     fi
 
     echo ""
+}
+
+doctor() {
+    local failures=0
+
+    echo ""
+    echo "TalkieBridge Doctor"
+    echo "===================="
+    echo ""
+
+    local legacy_found=0
+    while IFS= read -r legacy_path; do
+        if [ -f "$legacy_path" ]; then
+            log_error "Legacy launchd plist present: $legacy_path"
+            legacy_found=1
+        fi
+    done < <(legacy_plist_paths)
+    for legacy_label in "$LEGACY_PROD_LABEL" "$LEGACY_DEV_LABEL"; do
+        if label_is_loaded "$legacy_label"; then
+            log_error "Legacy launchd label loaded: $legacy_label"
+            legacy_found=1
+        fi
+    done
+    if [ "$legacy_found" -eq 1 ]; then
+        echo "  Run: bridge install   # rewrites canonical plists and removes legacy com.talkie.bridge* plists"
+        failures=$((failures + 1))
+    else
+        log_success "No legacy com.talkie.bridge* plists installed"
+    fi
+
+    local dev_state
+    dev_state="$(dev_plist_state)"
+    case "$dev_state" in
+        ok)
+            log_success "Dev bridge plist pins local mode to --port 8767"
+            ;;
+        stale)
+            log_error "Dev bridge plist is stale or malformed: missing --port 8767"
+            echo "  Run: bridge install"
+            failures=$((failures + 1))
+            ;;
+        *)
+            log_warn "Dev bridge plist is not installed"
+            ;;
+    esac
+
+    local health_url
+    if health_url="$(healthy_url_for_port 8765)"; then
+        local health mode pairing_ready host
+        health="$(curl -s "$health_url" 2>/dev/null)"
+        mode="$(json_field "$health" mode)"
+        pairing_ready="$(json_field "$health" pairingReady)"
+        host="$(json_field "$health" hostname)"
+
+        if health_is_pairable "$health"; then
+            log_success ":8765 is pairable (host=${host:-unknown}, mode=${mode:-unknown})"
+        else
+            log_error ":8765 is not pairable (host=${host:-unknown}, mode=${mode:-unknown}, pairingReady=${pairing_ready:-unknown})"
+            echo "  This is the failure mode that makes Agent Home show SERVER ERROR."
+            echo "  Stop the stale local-dev listener and reinstall bridge plists."
+            failures=$((failures + 1))
+        fi
+    else
+        log_warn ":8765 is not currently listening"
+    fi
+
+    echo ""
+    if [ "$failures" -eq 0 ]; then
+        log_success "Doctor passed"
+    else
+        log_error "Doctor found $failures issue(s)"
+        return 1
+    fi
 }
 
 tail_logs() {
@@ -380,6 +577,7 @@ show_help() {
     echo "  dev:stop     Stop dev"
     echo "  restart      Restart production"
     echo "  status       Show all services"
+    echo "  doctor       Validate launchd plists and pairing health"
     echo ""
     echo "Logs:"
     echo "  logs         Tail production logs"
@@ -420,6 +618,9 @@ case "${1:-}" in
         ;;
     status)
         show_status
+        ;;
+    doctor)
+        doctor
         ;;
     logs)
         tail_logs
