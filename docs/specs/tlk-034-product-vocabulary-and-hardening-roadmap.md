@@ -111,7 +111,7 @@ product discussion.
 | **Dictation** | A live voice-input session whose primary outcome is text inserted into another context. It may later be promoted to a memo. | Voice is being captured for immediate text input. | A synonym for memo, recording, transcript, or conversation. |
 | **Note** | A durable, editable, text-first Talkie record. It may contain dictated segments and may be promoted to a memo. | The user is composing or preserving text as the primary material. | A generic label for annotations, drafts, transcripts, or every text field. |
 | **Recording** | A time-bounded act of acquiring audio or video, and by context its resulting time-based media. Qualify the modality outside a context where it is unmistakable. | Saying **voice recording**, **memo recording**, or **screen recording**. | A synonym for memo, dictation, transcript, or every media item. |
-| **Capture** | The act or session of acquiring visual context from a display, window, or region. | Naming an action such as “Capture region” or a state such as “Capturing.” | The durable file, the tray, the capture source, or the destination. |
+| **Capture** | The act or session of acquiring visual context from a display, window, or region. | Naming an action such as “Capture region” or a state such as “Capturing.” | A generic name for the resulting media item, the tray, the capture source, or the destination. The persisted `TalkieObjectType.capture` case is an intentional storage-name exception documented below. |
 | **Screenshot** | A still-image media item produced by a screen capture. | Referring to the resulting image or an image-specific action. | The umbrella term for clips, recordings, imported media, or capture UI. |
 | **Screen recording** | A time-based visual media item, and by context the session that creates it. | Referring to recorded screen video. | Bare “recording” where it could be confused with voice recording. |
 | **Tray** | A temporary holding state for captured or selected media before the user attaches, delivers, saves, copies, or clears it. | The user can inspect or manipulate held items. | A durable library, an automatic delivery queue, or a visual component. |
@@ -133,6 +133,24 @@ product discussion.
 | **Library** | The durable, reviewable collection of Talkie records and saved media. |
 | **Receipt** | Durable evidence of what a delivery attempted and what outcome Talkie can truthfully claim. |
 | **Transcript** | Text derived from audio. A transcript can belong to a memo or dictation; it is not the session itself. |
+
+### Storage vocabulary and product mapping
+
+`TalkieObject` is the persisted content model shared by Talkie targets. It is an
+engineering/storage name, not a label that should appear in ordinary product
+copy. Its shipped `TalkieObjectType` cases map to product language as follows:
+
+| Storage case | Product meaning | Naming rule |
+| --- | --- | --- |
+| `memo` | Memo | The storage and product nouns align. |
+| `dictation` | Dictation | The storage and product nouns align. |
+| `note` | Note | The storage and product nouns align. |
+| `segment` | A durable child of a note that is not shown as a top-level record. | Treat **segment** as an internal structural noun; say **note segment** only where the hierarchy matters to the user. |
+| `selection` | Text captured through Quick Selection for local, time-limited processing. | Use **Quick Selection** for the feature and **selection** for the user-chosen text; do not present it as a durable library record. |
+| `capture` | A local, durable record containing a screenshot plus optional OCR or user text. | Keep `capture` as the persisted case for compatibility. In product copy, name the resulting **screenshot**, **media item**, or **capture record** according to context rather than treating every result as the capture act. |
+
+This mapping does not authorize renaming persisted enum cases, keys, routes,
+Codable fields, or public API contracts.
 
 ### Required qualifiers
 
@@ -220,7 +238,8 @@ stronger claim than the evidence permits.
    snapshots or request changes with commands.
 3. **Persist promises, not incidental UI state.** If Talkie has accepted
    responsibility for later delivery, that responsibility must survive a view
-   disappearing and should have an explicit restart policy.
+   disappearing and must have an explicit lifecycle-boundary matrix covering
+   Agent restart, Talkie restart, logout, update, and machine restart.
 4. **Make each state inspectable.** A user or diagnostic tool should be able to
    answer what is held, queued, in flight, delivered, failed, or unknown.
 5. **Separate source, payload, destination, and receipt.** These have different
@@ -262,12 +281,16 @@ truthful, recoverable answer to “what happened to it?”
 - tests for duplicate trigger, process interruption, unavailable target, partial
   batch failure, retry, and explicit cancellation
 - a diagnostic receipt that can explain the last attempt without private content
+- a reviewed lifecycle-boundary matrix for Agent restart, Talkie restart, logout,
+  update, and machine restart; each boundary must state whether queued work
+  survives and how non-survival is surfaced
 - runtime verification showing the queue is neither silently lost nor replayed
-  twice across the supported restart boundary
+  twice across every boundary the matrix declares supported
 
-**Dependency:** Uses the nouns and evidence levels in this document. It does not
-depend on deciding the final Agent/Talkie ownership boundary first, but the
-implementation must not make P0.2 harder.
+**Dependency:** Uses the nouns and evidence levels in this document. The state
+machine and failure semantics can be designed in parallel with P0.2, but durable
+queue implementation must not choose its authoritative writer until P0.2 records
+and accepts that ownership decision.
 
 #### P0.2 — Agent ↔ Talkie ownership
 
@@ -382,9 +405,10 @@ connected, degraded, unavailable, and permission-blocked.
 
 #### P1.8 — AI feature graduation
 
-Decide whether gated titles, summaries, tasks, keyboard transforms, voice
-foregrounding, and Watch assistance graduate, remain experimental, or are
-removed. Each decision needs latency, privacy, fallback, and failure criteria.
+Inventory gated titles, summaries, tasks, keyboard transforms, and voice
+foregrounding, first classifying each as shipped, gated, or speculative. Then
+decide whether each candidate graduates, remains experimental, or is removed.
+Each decision needs latency, privacy, fallback, and failure criteria.
 
 **Acceptance evidence:** a feature card for each candidate naming value,
 required context, model/provider, local/cloud boundary, latency budget, fallback,
@@ -394,8 +418,9 @@ failure UX, and graduation decision.
 
 #### P1.9 — Cross-platform continuity — deferred
 
-The atlas identified Deck mirror, workspaces, sync-conflict handling, and other
-partial cross-platform surfaces as candidates to finish or remove.
+The atlas identified Deck mirror, workspaces, sync-conflict handling, Watch
+assistance, `HomeNextStub`, and other partial or legacy cross-platform surfaces as
+candidates to finish or remove.
 
 **Decision for this track:** Deferred. The user explicitly asked to leave iOS
 alone. Documentation may record an interface dependency needed by macOS, but no
@@ -417,10 +442,11 @@ errors that identify configuration versus provider versus network failure.
 
 #### P2.11 — Legacy removal
 
-Retire TalkieLive residue, the old notch composer, disabled views,
-`HomeNextStub`, and obsolete navigation notifications only after ownership and
-caller evidence establish that they are no longer serving a real path. Keep
-aliases only for verified callers or bounded migration windows.
+Retire TalkieLive residue, the old notch composer, disabled macOS views, and
+obsolete macOS navigation notifications only after ownership and caller evidence
+establish that they are no longer serving a real path. Keep aliases only for
+verified callers or bounded migration windows. iOS-only legacy candidates,
+including `HomeNextStub`, remain deferred under P1.9.
 
 **Acceptance evidence:** each deletion cites its replacement, caller search,
 runtime verification, migration window, and rollback story. “Appears unused” is
@@ -440,8 +466,9 @@ first; docs match the checked-in topology and supported launch modes.
 
 #### P2.13 — Surface vocabulary
 
-Adopt this document’s distinctions for memo, dictation, capture, note, draft,
-history, shelf, tray, target, queue, and delivery. Start with an inventory; change
+Adopt this document’s distinctions for memo, dictation, capture, note, selection,
+segment, draft, history, shelf, tray, target, queue, and delivery, including the
+explicit `TalkieObject` storage mappings above. Start with an inventory; change
 copy in coherent slices and do not mechanically rename persisted keys, API fields,
 routes, or internal types.
 
@@ -490,7 +517,8 @@ P0.2 and the relevant replacement evidence.
 This vocabulary is ready to become canonical when:
 
 - product and engineering agree on the product/storage distinction for every
-  term in the canonical table
+  term in the canonical table, and every shipped `TalkieObjectType` case has an
+  explicit product-language mapping
 - P0.1 uses queue, delivery, target, and receipt consistently
 - P0.2 uses owner, command, snapshot, and durable store consistently
 - the Studio feature atlas links this document and presents the same priorities
