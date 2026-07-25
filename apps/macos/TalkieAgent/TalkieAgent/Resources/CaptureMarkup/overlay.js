@@ -3,6 +3,7 @@
   const ctx = canvas.getContext("2d");
   const dock = document.getElementById("markup-dock");
   const toolbar = document.getElementById("toolbar");
+  const dockGrip = document.getElementById("dock-grip");
   const stylePanel = document.getElementById("style-panel");
   const selectionActions = document.getElementById("selection-actions");
   const selectionMenu = document.getElementById("selection-menu");
@@ -1056,6 +1057,229 @@
     });
   }
 
+  const dockEdgeStorageKey = "talkie.capture-markup.dock-edge";
+  const dockPositionStorageKey = "talkie.capture-markup.dock-position";
+  let dockPosition = null;
+
+  function clearFreeDockPosition() {
+    dockPosition = null;
+    delete document.body.dataset.dockPlacement;
+    if (!dock) return;
+    dock.style.removeProperty("left");
+    dock.style.removeProperty("right");
+    dock.style.removeProperty("top");
+    dock.style.removeProperty("bottom");
+    dock.style.removeProperty("width");
+  }
+
+  function setDockEdge(edge, persist = false) {
+    const nextEdge = edge === "top" ? "top" : "bottom";
+    clearFreeDockPosition();
+    document.body.dataset.dockEdge = nextEdge;
+    if (dockGrip) {
+      const destination = nextEdge === "top" ? "bottom" : "top";
+      dockGrip.title = `Drag toolbar freely, or click to move it to the ${destination}`;
+      dockGrip.setAttribute("aria-label", `Move toolbar; click to dock at the ${destination}`);
+    }
+    if (persist) {
+      try {
+        window.localStorage.setItem(dockEdgeStorageKey, nextEdge);
+        window.localStorage.removeItem(dockPositionStorageKey);
+      } catch (_error) {
+        // Persistence is optional in hardened web views.
+      }
+    }
+  }
+
+  function preferredDockEdge(clientY) {
+    return clientY < window.innerHeight / 2 ? "top" : "bottom";
+  }
+
+  function dockViewportInset() {
+    return document.body.dataset.agentCompactDock === "true" ? 3 : 12;
+  }
+
+  function visibleDockContentRect() {
+    if (!dock) return null;
+    const children = Array.from(dock.children).filter(element => !element.hidden);
+    if (children.length === 0) return dock.getBoundingClientRect();
+    const rects = children.map(element => element.getBoundingClientRect());
+    const left = Math.min(...rects.map(rect => rect.left));
+    const top = Math.min(...rects.map(rect => rect.top));
+    const right = Math.max(...rects.map(rect => rect.right));
+    const bottom = Math.max(...rects.map(rect => rect.bottom));
+    return { left, top, right, bottom, width: right - left, height: bottom - top };
+  }
+
+  function activateFreeDockPosition(left, top) {
+    if (!dock) return;
+    document.body.dataset.dockPlacement = "free";
+    dock.style.left = `${left}px`;
+    dock.style.right = "auto";
+    dock.style.top = `${top}px`;
+    dock.style.bottom = "auto";
+    dock.style.width = "max-content";
+  }
+
+  function clampDockPosition(left, top) {
+    const rect = dock.getBoundingClientRect();
+    const inset = dockViewportInset();
+    return {
+      left: clamp(left, inset, Math.max(inset, window.innerWidth - rect.width - inset)),
+      top: clamp(top, inset, Math.max(inset, window.innerHeight - rect.height - inset)),
+    };
+  }
+
+  function persistDockPosition() {
+    if (!dock || !dockPosition) return;
+    const rect = dock.getBoundingClientRect();
+    const inset = dockViewportInset();
+    const availableX = Math.max(1, window.innerWidth - rect.width - inset * 2);
+    const availableY = Math.max(1, window.innerHeight - rect.height - inset * 2);
+    const normalized = {
+      x: clamp((dockPosition.left - inset) / availableX, 0, 1),
+      y: clamp((dockPosition.top - inset) / availableY, 0, 1),
+    };
+    try {
+      window.localStorage.setItem(dockPositionStorageKey, JSON.stringify(normalized));
+    } catch (_error) {
+      // Persistence is optional in hardened web views.
+    }
+  }
+
+  function setDockPosition(left, top, persist = false) {
+    if (!dock) return;
+    activateFreeDockPosition(left, top);
+    dockPosition = clampDockPosition(left, top);
+    dock.style.left = `${dockPosition.left}px`;
+    dock.style.top = `${dockPosition.top}px`;
+    document.body.dataset.dockEdge = preferredDockEdge(
+      dockPosition.top + dock.getBoundingClientRect().height / 2
+    );
+    if (dockGrip) {
+      dockGrip.title = "Drag toolbar";
+      dockGrip.setAttribute("aria-label", "Move toolbar");
+    }
+    if (persist) persistDockPosition();
+  }
+
+  function restoreDockPosition() {
+    if (!dock) return false;
+    try {
+      const stored = JSON.parse(window.localStorage.getItem(dockPositionStorageKey));
+      if (!Number.isFinite(stored?.x) || !Number.isFinite(stored?.y)) return false;
+      activateFreeDockPosition(0, 0);
+      const rect = dock.getBoundingClientRect();
+      const inset = dockViewportInset();
+      const availableX = Math.max(0, window.innerWidth - rect.width - inset * 2);
+      const availableY = Math.max(0, window.innerHeight - rect.height - inset * 2);
+      setDockPosition(
+        inset + clamp(stored.x, 0, 1) * availableX,
+        inset + clamp(stored.y, 0, 1) * availableY
+      );
+      return true;
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  if (dockGrip) {
+    let dragStartPoint = null;
+    let dragPointerOffset = null;
+    let dragStartEdge = "bottom";
+    let dragStartedFree = false;
+    let dragStartPosition = null;
+    let dragMoved = false;
+    let suppressNextClick = false;
+
+    dockGrip.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      dragStartPoint = { x: event.clientX, y: event.clientY };
+      dragStartEdge = document.body.dataset.dockEdge === "top" ? "top" : "bottom";
+      dragStartedFree = document.body.dataset.dockPlacement === "free";
+      dragStartPosition = dragStartedFree && dockPosition ? { ...dockPosition } : null;
+      if (!dragStartedFree) {
+        const contentRect = visibleDockContentRect();
+        setDockPosition(contentRect.left, contentRect.top);
+      }
+      const dockRect = dock.getBoundingClientRect();
+      dragPointerOffset = {
+        x: event.clientX - dockRect.left,
+        y: event.clientY - dockRect.top,
+      };
+      dragMoved = false;
+      dockGrip.setPointerCapture(event.pointerId);
+      document.body.dataset.dockDragging = "true";
+    });
+
+    dockGrip.addEventListener("pointermove", (event) => {
+      if (!dockGrip.hasPointerCapture(event.pointerId) || !dragStartPoint || !dragPointerOffset) return;
+      event.preventDefault();
+      const deltaX = event.clientX - dragStartPoint.x;
+      const deltaY = event.clientY - dragStartPoint.y;
+      dragMoved = dragMoved || Math.hypot(deltaX, deltaY) >= 5;
+      if (dragMoved) {
+        setDockPosition(
+          event.clientX - dragPointerOffset.x,
+          event.clientY - dragPointerOffset.y
+        );
+      }
+    });
+
+    const finishDockDrag = (event, cancelled = false) => {
+      if (!dockGrip.hasPointerCapture(event.pointerId)) return;
+      dockGrip.releasePointerCapture(event.pointerId);
+      delete document.body.dataset.dockDragging;
+      if (cancelled || !dragMoved) {
+        if (dragStartedFree && dragStartPosition) {
+          setDockPosition(dragStartPosition.left, dragStartPosition.top);
+        } else {
+          setDockEdge(dragStartEdge);
+        }
+      } else {
+        persistDockPosition();
+      }
+      suppressNextClick = dragMoved;
+      dragStartPoint = null;
+      dragPointerOffset = null;
+      dragStartPosition = null;
+    };
+    dockGrip.addEventListener("pointerup", finishDockDrag);
+    dockGrip.addEventListener("pointercancel", (event) => finishDockDrag(event, true));
+    dockGrip.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (suppressNextClick) {
+        suppressNextClick = false;
+        return;
+      }
+      setDockEdge(document.body.dataset.dockEdge === "top" ? "bottom" : "top", true);
+    });
+    dockGrip.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowUp") {
+        setDockEdge("top", true);
+      } else if (event.key === "ArrowDown") {
+        setDockEdge("bottom", true);
+      } else if (event.key === "Enter" || event.key === " ") {
+        setDockEdge(document.body.dataset.dockEdge === "top" ? "bottom" : "top", true);
+      } else {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+    });
+  }
+
+  if (dock && typeof ResizeObserver !== "undefined") {
+    const dockResizeObserver = new ResizeObserver(() => {
+      if (document.body.dataset.dockPlacement !== "free" || !dockPosition) return;
+      requestAnimationFrame(() => setDockPosition(dockPosition.left, dockPosition.top));
+    });
+    dockResizeObserver.observe(dock);
+  }
+
   if (dock) {
     dock.addEventListener("pointerdown", (event) => {
       event.stopPropagation();
@@ -1661,7 +1885,12 @@
     },
   });
 
-  window.addEventListener("resize", resizeCanvas);
+  window.addEventListener("resize", () => {
+    resizeCanvas();
+    if (document.body.dataset.dockPlacement === "free" && dockPosition) {
+      setDockPosition(dockPosition.left, dockPosition.top);
+    }
+  });
   resizeCanvas();
   document.body.dataset.tool = state.tool;
   document.body.dataset.mode = state.mode;
@@ -1673,5 +1902,13 @@
   document.body.dataset.styleOpen = state.styleOpen ? "true" : "false";
   setContext(state.context);
   setStyleOpen(state.styleOpen);
+  requestAnimationFrame(() => {
+    if (restoreDockPosition()) return;
+    try {
+      setDockEdge(window.localStorage.getItem(dockEdgeStorageKey));
+    } catch (_error) {
+      setDockEdge("bottom");
+    }
+  });
   post("liveMarkup.ready", {});
 })();

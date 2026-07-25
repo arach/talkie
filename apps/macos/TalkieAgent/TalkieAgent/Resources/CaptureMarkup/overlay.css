@@ -6,11 +6,12 @@
   --talkie-accent-bright: #F5C96D;
   --talkie-ink: #0E0F12;
 
-  /* Slate · flat opaque charcoal — no gradient, no translucency, no blur. */
-  --surface: #16181D;
+  /* Raised cool graphite, intentionally distinct from the near-black bezel. */
+  --surface: #242932;
+  --surface-hover: #2C323D;
 
   /* the recessed well behind the segmented tool keys */
-  --well: rgba(0, 0, 0, 0.22);
+  --well: rgba(5, 7, 10, 0.52);
 
   /* flat accent active: faint tint + crisp 1px square inset border.
      No rounded bottom rule. */
@@ -18,8 +19,8 @@
   --active-edge: rgba(223, 161, 58, 0.62);
 
   /* hairline structure */
-  --hairline: rgba(255, 255, 255, 0.11);
-  --hairline-soft: rgba(255, 255, 255, 0.08);
+  --hairline: rgba(255, 255, 255, 0.16);
+  --hairline-soft: rgba(255, 255, 255, 0.10);
 
   /* squared radius scale */
   --r-panel: 6px;
@@ -27,7 +28,7 @@
   --r-key: 3px;
 
   /* one flat lift, not a float */
-  --lift: 0 4px 16px rgba(0, 0, 0, 0.42);
+  --lift: 0 6px 18px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.055);
 }
 
 html,
@@ -90,6 +91,17 @@ body[data-protected-dock="true"] .markup-dock {
   bottom: 54px;
 }
 
+body[data-dock-edge="top"] .markup-dock {
+  top: 26px;
+  bottom: auto;
+  flex-direction: column-reverse;
+}
+
+body[data-dock-dragging="true"] .toolbar {
+  border-color: rgba(223, 161, 58, 0.52);
+  box-shadow: 0 9px 24px rgba(0, 0, 0, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
 body[data-protected-dock="true"] .window-close,
 body[data-protected-dock="true"] .surface-actions {
   top: 8px;
@@ -121,7 +133,7 @@ body[data-protected-dock="true"] .surface-actions {
 
 .window-close:hover {
   color: rgba(255, 255, 255, 0.86);
-  background: #1E2128;
+  background: var(--surface-hover);
 }
 
 .surface-actions {
@@ -160,6 +172,31 @@ body[data-protected-dock="true"] .surface-actions {
 .toolbar {
   flex-wrap: nowrap;
   max-width: min(684px, calc(100vw - 28px));
+  border-color: rgba(255, 255, 255, 0.18);
+  background: var(--surface);
+}
+
+.dock-grip {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 28px;
+  padding: 0;
+  flex: 0 0 18px;
+  color: rgba(255, 255, 255, 0.34);
+  cursor: grab;
+  touch-action: none;
+}
+
+.dock-grip:hover {
+  color: var(--talkie-accent-bright);
+  background: rgba(223, 161, 58, 0.10);
+}
+
+.dock-grip:active,
+body[data-dock-dragging="true"] .dock-grip {
+  color: var(--talkie-accent-bright);
+  cursor: grabbing;
 }
 
 .style-panel {
@@ -546,6 +583,12 @@ body[data-agent-compact-dock="true"][data-protected-dock="true"] .markup-dock {
   gap: 4px;
 }
 
+body[data-agent-compact-dock="true"][data-dock-edge="top"] .markup-dock,
+body[data-agent-compact-dock="true"][data-protected-dock="true"][data-dock-edge="top"] .markup-dock {
+  top: 3px;
+  bottom: auto;
+}
+
 body[data-agent-compact-dock="true"] .toolbar {
   gap: 4px;
   max-width: min(684px, calc(100vw - 12px));
@@ -557,6 +600,12 @@ body[data-agent-compact-dock="true"] .action,
 body[data-agent-compact-dock="true"] .width,
 body[data-agent-compact-dock="true"] .style-toggle {
   height: 24px;
+}
+
+body[data-agent-compact-dock="true"] .dock-grip {
+  width: 16px;
+  height: 24px;
+  flex-basis: 16px;
 }
 
 body[data-agent-compact-dock="true"] .tool,
