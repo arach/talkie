@@ -136,9 +136,10 @@ product discussion.
 
 ### Storage vocabulary and product mapping
 
-`TalkieObject` is the persisted content model shared by Talkie targets. It is an
-engineering/storage name, not a label that should appear in ordinary product
-copy. Its shipped `TalkieObjectType` cases map to product language as follows:
+`TalkieObject` is the persisted content model shared by the macOS Talkie
+targets. It is an engineering/storage name, not a label that should appear in
+ordinary product copy. Its shipped `TalkieObjectType` cases map to product
+language as follows:
 
 | Storage case | Product meaning | Naming rule |
 | --- | --- | --- |
