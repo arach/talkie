@@ -718,7 +718,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         clearCaptureTargetMenuItem = clearTargetItem
 
         menu.addItem(NSMenuItem.separator())
-
         let historyItem = NSMenuItem(title: "Show History", action: #selector(showHistory), keyEquivalent: "h")
         historyItem.keyEquivalentModifierMask = [.option, .command]
         historyItem.target = self
@@ -803,19 +802,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     private func showAgentMenuPopover(from button: NSStatusBarButton) {
         let openStart = CFAbsoluteTimeGetCurrent()
-        let initialModel = makeAgentMenuModel(refreshPermissions: false, loadSlowData: false)
         let wasPrewarmed = agentMenuPopover != nil
-        let popover = prepareAgentMenuPopover(with: initialModel)
+        let popover: NSPopover
+        let modelMs: Int
+        let prepareMs: Int
+        if let preparedPopover = agentMenuPopover {
+            // The prepared host is kept current as data changes. Reuse it
+            // directly so a status-item click never rebuilds SwiftUI or reads
+            // live services while the app is busy booting/transcribing.
+            popover = preparedPopover
+            modelMs = 0
+            prepareMs = 0
+        } else {
+            let modelStart = CFAbsoluteTimeGetCurrent()
+            let initialModel = cachedAgentMenuModel
+                ?? makeAgentMenuModel(refreshPermissions: false, loadSlowData: false)
+            modelMs = Int((CFAbsoluteTimeGetCurrent() - modelStart) * 1000)
+
+            let prepareStart = CFAbsoluteTimeGetCurrent()
+            popover = prepareAgentMenuPopover(with: initialModel)
+            prepareMs = Int((CFAbsoluteTimeGetCurrent() - prepareStart) * 1000)
+        }
 
         agentMenuPopover = popover
+        let showStart = CFAbsoluteTimeGetCurrent()
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        let showMs = Int((CFAbsoluteTimeGetCurrent() - showStart) * 1000)
+
+        let windowStart = CFAbsoluteTimeGetCurrent()
         popover.contentViewController?.view.window?.sharingType = .readOnly
         popover.contentViewController?.view.window?.makeKey()
+        let windowMs = Int((CFAbsoluteTimeGetCurrent() - windowStart) * 1000)
 
         let firstPaintMs = Int((CFAbsoluteTimeGetCurrent() - openStart) * 1000)
         log.info(
             "Agent menu popover shown",
-            detail: "firstPaintMs=\(firstPaintMs) prewarmed=\(wasPrewarmed) cached=\(cachedAgentMenuModel != nil)"
+            detail: """
+            firstPaintMs=\(firstPaintMs) modelMs=\(modelMs) prepareMs=\(prepareMs) \
+            showMs=\(showMs) windowMs=\(windowMs) prewarmed=\(wasPrewarmed) \
+            cached=\(cachedAgentMenuModel != nil)
+            """
         )
 
         refreshAgentMenuPopoverAsync(reason: "open", openedAt: openStart)
@@ -842,29 +868,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     private func prepareAgentMenuPopover(with model: AgentMenuModel) -> NSPopover {
+        let prepareStart = CFAbsoluteTimeGetCurrent()
+        let reusedPopover = agentMenuPopover != nil
         let popover = agentMenuPopover ?? NSPopover()
         popover.delegate = self
         popover.behavior = .transient
         // Match the popover chrome (menus, scrollbars) to the active tray skin.
         popover.appearance = NSAppearance(named: AgentTraySkin.current().isDark ? .darkAqua : .aqua)
         popover.contentSize = AgentMenuPopoverView.preferredContentSize(for: model)
+        let shellMs = Int((CFAbsoluteTimeGetCurrent() - prepareStart) * 1000)
 
+        let actionsStart = CFAbsoluteTimeGetCurrent()
+        let actions = makeAgentMenuActions()
+        let actionsMs = Int((CFAbsoluteTimeGetCurrent() - actionsStart) * 1000)
+
+        let hostStart = CFAbsoluteTimeGetCurrent()
+        let reusedHost: Bool
         if let hostingController = popover.contentViewController as? NSHostingController<AgentMenuPopoverView> {
+            reusedHost = true
             hostingController.rootView = AgentMenuPopoverView(
                 model: model,
-                actions: makeAgentMenuActions()
+                actions: actions
             )
         } else {
+            reusedHost = false
             popover.contentViewController = NSHostingController(
                 rootView: AgentMenuPopoverView(
                     model: model,
-                    actions: makeAgentMenuActions()
+                    actions: actions
                 )
             )
         }
+        let hostMs = Int((CFAbsoluteTimeGetCurrent() - hostStart) * 1000)
+
+        // NSHostingController can defer its first SwiftUI layout until the
+        // popover is shown. Materialize it here so that cost stays off the
+        // status-item click path as well.
+        let layoutStart = CFAbsoluteTimeGetCurrent()
+        materializeAgentMenuPopover(popover)
+        let layoutMs = Int((CFAbsoluteTimeGetCurrent() - layoutStart) * 1000)
 
         agentMenuPopover = popover
+        let totalMs = Int((CFAbsoluteTimeGetCurrent() - prepareStart) * 1000)
+        log.info(
+            "Agent menu popover prepared",
+            detail: "totalMs=\(totalMs) shellMs=\(shellMs) actionsMs=\(actionsMs) hostMs=\(hostMs) layoutMs=\(layoutMs) reusedPopover=\(reusedPopover) reusedHost=\(reusedHost)"
+        )
         return popover
+    }
+
+    private func materializeAgentMenuPopover(_ popover: NSPopover) {
+        // Once visible, NSPopover owns the hosting view's geometry so its
+        // content stays aligned with the status-item anchor during updates.
+        guard !popover.isShown else { return }
+        guard let contentView = popover.contentViewController?.view else { return }
+        contentView.frame = NSRect(origin: .zero, size: popover.contentSize)
+        contentView.layoutSubtreeIfNeeded()
     }
 
     func popoverDidClose(_ notification: Notification) {
@@ -1011,7 +1070,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     private func updateAgentMenuPopoverContent(with model: AgentMenuModel) {
-        guard let popover = agentMenuPopover, popover.isShown else { return }
+        // Keep the hidden prewarmed host current. The status-item click path
+        // can then present it immediately without rebuilding the SwiftUI tree.
+        guard let popover = agentMenuPopover else { return }
         popover.contentSize = AgentMenuPopoverView.preferredContentSize(for: model)
 
         if let hostingController = popover.contentViewController as? NSHostingController<AgentMenuPopoverView> {
@@ -1019,15 +1080,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 model: model,
                 actions: makeAgentMenuActions()
             )
-            return
+        } else {
+            popover.contentViewController = NSHostingController(
+                rootView: AgentMenuPopoverView(
+                    model: model,
+                    actions: makeAgentMenuActions()
+                )
+            )
         }
 
-        popover.contentViewController = NSHostingController(
-            rootView: AgentMenuPopoverView(
-                model: model,
-                actions: makeAgentMenuActions()
-            )
-        )
+        materializeAgentMenuPopover(popover)
     }
 
     private nonisolated static func loadAgentMenuDeferredData() -> AgentMenuDeferredData {

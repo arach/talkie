@@ -67,7 +67,8 @@ enum BayScheme: String, CaseIterable {
     var trace: Color {
         switch self {
         case .amber:                              return ScopeKind.dict
-        case .carbon:                             return Color.hex("FF9D33")
+        // A slightly hotter lit-phosphor amber for the glowing-tube read.
+        case .carbon:                             return Color.hex("EA9233")
         case .pearl, .porcelain, .aluminum:       return Color.hex("D49236")
         case .chiffon, .vellum, .paper:           return ScopeBrass.solid
         }
@@ -75,7 +76,13 @@ enum BayScheme: String, CaseIterable {
 
     /// Glow halo. Light schemes disable glow - printed surfaces don't
     /// emit light, so the halo would just look smudgy.
-    var traceGlow: Color { isLight ? .clear : trace.opacity(0.50) }
+    var traceGlow: Color {
+        switch self {
+        case .amber:  return trace.opacity(0.50)   // amber stat numbers ride a full phosphor halo (== ScopePanel.traceGlow)
+        case .carbon: return trace.opacity(0.36)   // carbon's readout is white — a lighter warm bloom keeps the numbers crisp
+        default:      return .clear                // light schemes: printed surfaces don't emit
+        }
+    }
 
     /// Background graticule tint - barely-there.
     var traceFaint: Color { trace.opacity(isLight ? 0.06 : 0.08) }
@@ -85,7 +92,8 @@ enum BayScheme: String, CaseIterable {
     var edge: Color {
         switch self {
         case .amber:                 return trace.opacity(0.10)
-        case .carbon:                return Color.white.opacity(0.06)
+        // Warm-taupe chrome separates the gunmetal face without reading as signal.
+        case .carbon:                return Color.hex("D3C4A8").opacity(0.12)
         case .pearl, .chiffon:       return trace.opacity(0.10)   // lightest - kept restrained
         case .porcelain, .vellum:    return trace.opacity(0.12)
         case .aluminum, .paper:      return trace.opacity(0.18)   // most saturated of the light family
@@ -96,7 +104,8 @@ enum BayScheme: String, CaseIterable {
     var edgeStrong: Color {
         switch self {
         case .amber:                 return trace.opacity(0.28)
-        case .carbon:                return trace.opacity(0.32)
+        // Brackets stay neutral so amber remains reserved for signal.
+        case .carbon:                return Color.hex("D3C4A8").opacity(0.22)
         case .pearl, .chiffon:       return trace.opacity(0.28)
         case .porcelain, .vellum:    return trace.opacity(0.34)
         case .aluminum, .paper:      return trace.opacity(0.40)
@@ -115,8 +124,13 @@ enum BayScheme: String, CaseIterable {
     /// Bay panel base fill. Mirrors `--scheme-bg` from studio.
     var panelBg: Color {
         switch self {
-        case .amber:      return Color.hex("14181A")
-        case .carbon:     return Color.hex("0E0F10")
+        // Dark bays mirror the refined `ScopePanel` instrument palette
+        // (warm gunmetal, lifted off the dark page for separation). Kept
+        // in sync by hand — AMBER == ScopePanel.bg; CARBON is the darker
+        // electronics sibling, still lifted clear of the `#0E1012` page so
+        // it no longer vanishes into it.
+        case .amber:      return Color.hex("1A1918")
+        case .carbon:     return Color.hex("161514")
         case .pearl:      return Color.hex("F5F8FA")
         case .porcelain:  return Color.hex("EAEEF1")
         case .aluminum:   return Color.hex("D6DBE0")
@@ -155,7 +169,7 @@ enum BayScheme: String, CaseIterable {
     var inkSubtle: Color {
         switch self {
         case .amber:      return Color.hex("6B7A75")
-        case .carbon:     return Color.hex("8A8478")
+        case .carbon:     return Color.hex("787163")   // align to ScopeInk.subtle — crisper stat→metadata separation below inkFaint, de-browned a touch
         case .pearl:      return Color.hex("8A8F96")
         case .porcelain:  return Color.hex("787D84")
         case .aluminum:   return Color.hex("4F545B")
@@ -172,9 +186,9 @@ enum BayScheme: String, CaseIterable {
         let stops: [(String, Double)] = {
             switch self {
             case .amber:
-                return [("1F2426", 0.0), ("1A1F22", 0.35), ("0F1416", 1.0)]
+                return [("262422", 0.0), ("1D1B19", 0.35), ("100F0E", 1.0)]
             case .carbon:
-                return [("1A1B1C", 0.0), ("141516", 0.45), ("08090A", 1.0)]
+                return [("211F1D", 0.0), ("181614", 0.45), ("0C0B0A", 1.0)]
             case .pearl:
                 return [("FBFCFE", 0.0), ("F2F5F7", 0.60), ("E5E9ED", 1.0)]
             case .porcelain:
@@ -200,9 +214,9 @@ enum BayScheme: String, CaseIterable {
         let stops: [(String, Double)] = {
             switch self {
             case .amber:
-                return [("0D1113", 0.0), ("161B1E", 0.55), ("1E2528", 1.0)]
+                return [("0E0D0C", 0.0), ("1A1917", 0.55), ("24221F", 1.0)]
             case .carbon:
-                return [("060708", 0.0), ("131415", 0.55), ("1C1D1E", 1.0)]
+                return [("0B0A09", 0.0), ("161513", 0.55), ("201E1B", 1.0)]
             case .pearl:
                 return [("ECEFF2", 0.0), ("F5F8FA", 0.55), ("FBFDFE", 1.0)]
             case .porcelain:

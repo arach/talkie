@@ -18,6 +18,7 @@ struct TOTranscriptSection: View {
     @Binding var editedTranscript: String
     @Binding var showJSON: Bool
     var isRetranscribing: Bool = false
+    var transcriptVersions: [TranscriptVersionModel] = []
     var onTranscriptChange: () -> Void = {}
     var onImmediateSave: () -> Void = {}
     var onRetranscribe: (String) -> Void = { _ in }
@@ -68,6 +69,7 @@ struct TOTranscriptSection: View {
                 isEditing: isEditing,
                 editedTranscript: $editedTranscript,
                 isRetranscribing: isRetranscribing,
+                transcriptVersions: transcriptVersions,
                 onTranscriptChange: { onTranscriptChange() },
                 onRetranscribe: { modelId in onRetranscribe(modelId) },
                 onTimestampSeek: onTimestampSeek,

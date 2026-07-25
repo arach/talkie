@@ -18,6 +18,8 @@ final class SystemRoutes: RouteGroup {
 
     private init() {}
 
+    private static let log = Log(.ui)
+
     lazy var routes: [Route] = {
         var routes: [Route] = [
         // MARK: - Navigation
@@ -102,6 +104,10 @@ final class SystemRoutes: RouteGroup {
             let idString = params["id"] ?? params["recordingId"]
             let id = idString.flatMap(UUID.init(uuidString:))
             let prefersNewWindow = Self.boolParam(params["newWindow"])
+
+            Self.log.info(
+                "Library route: id=\(id?.uuidString ?? "none"), newWindow=\(prefersNewWindow), existingWindows=\(NSApp.windows.count)"
+            )
 
             Self.presentMainWindow(prefersNewWindow: prefersNewWindow)
             if prefersNewWindow {
@@ -467,15 +473,40 @@ final class SystemRoutes: RouteGroup {
             return
         }
 
-        if let window = NSApp.windows.first(where: { $0.canBecomeMain }) {
-            if window.isMiniaturized {
-                window.deminiaturize(nil)
-            }
-            window.makeKeyAndOrderFront(nil)
+        if presentExistingMainWindow() {
             return
         }
 
-        _ = performNewWindowCommand()
+        // On a cold URL launch, SwiftUI creates the WindowGroup's first window
+        // shortly after the Apple Event reaches us. Creating one synchronously
+        // here races that startup window and leaves the user with two windows.
+        // Give the normal scene a moment to appear, then create a window only
+        // for the genuine "app is running with every window closed" case.
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2.5))
+            if !presentExistingMainWindow() {
+                _ = performNewWindowCommand()
+            }
+        }
+    }
+
+    @discardableResult
+    private static func presentExistingMainWindow() -> Bool {
+        let windows = NSApp.windows.filter { $0.canBecomeMain }
+        guard let destination = windows.first(where: { $0.isKeyWindow })
+            ?? windows.first(where: { $0.isMainWindow })
+            ?? windows.first else { return false }
+
+        present(destination)
+        log.info("Presented existing Talkie window; availableMainWindows=\(windows.count)")
+        return true
+    }
+
+    private static func present(_ window: NSWindow) {
+        if window.isMiniaturized {
+            window.deminiaturize(nil)
+        }
+        window.makeKeyAndOrderFront(nil)
     }
 
     private static func performNewWindowCommand() -> Bool {

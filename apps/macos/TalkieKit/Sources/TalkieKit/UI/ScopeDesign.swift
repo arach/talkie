@@ -47,6 +47,26 @@ private extension Color {
         return Color.hex(lightHex)
         #endif
     }
+
+    /// Adaptive color where each mode carries its own hue AND alpha. Used for
+    /// hairlines/edges so dark mode can run a warmer, slightly stronger line
+    /// (readable against gunmetal) while light mode stays byte-identical to
+    /// the historical cool-ink-at-opacity values.
+    static func scopeAdaptive(
+        light lightHex: String, lightAlpha: Double,
+        dark darkHex: String, darkAlpha: Double
+    ) -> Color {
+        #if canImport(AppKit)
+        return Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
+            let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            return isDark
+                ? NSColor(scopeHex: darkHex).withAlphaComponent(darkAlpha)
+                : NSColor(scopeHex: lightHex).withAlphaComponent(lightAlpha)
+        }))
+        #else
+        return Color.hex(lightHex).opacity(lightAlpha)
+        #endif
+    }
 }
 
 #if canImport(AppKit)
@@ -77,21 +97,30 @@ private extension NSColor {
 public enum ScopeCanvas {
     /// Primary page background — cool-gray page substrate from the
     /// 2026-05-21 Scope canon. Frosted instrument case; never blue.
-    public static let canvas = Color.scopeAdaptive(light: "F8F8F7", dark: "0E0F10")
-    /// "Bay" — sidebar / embedded structural surface. One step down
-    /// from canvas so it reads as a distinct surface, no yellow.
-    /// Mapped to `tacticalBackgroundSecondary` in SettingsManager.
-    public static let canvasAlt = Color.scopeAdaptive(light: "ECECEB", dark: "17191B")
+    ///
+    /// Dark mode: the deepest step of the ladder. The rest of the
+    /// surface ladder (bay → card → pane → hover) is now spaced in
+    /// clear, even luminance steps ABOVE this page so cards and panels
+    /// read as lifted instrument surfaces rather than black-on-black.
+    /// A faint blue-over-red cast keeps the gunmetal feel; never a
+    /// saturated blue.
+    public static let canvas = Color.scopeAdaptive(light: "F8F8F7", dark: "0E1012")
+    /// "Bay" — sidebar / embedded structural surface. Lifted a clear
+    /// step above the page so the sidebar reads as its own bay, no
+    /// yellow. Mapped to `tacticalBackgroundSecondary` in SettingsManager.
+    public static let canvasAlt = Color.scopeAdaptive(light: "ECECEB", dark: "181B1E")
     /// Raised Home panel — mirrors Studio's `SCOPE.pane` in light mode
-    /// and uses an opaque gunmetal pane in dark mode. This avoids
-    /// translucent white overlays flattening into gray on dark canvas.
-    public static let pane = Color.scopeAdaptive(light: "F1F1F0", dark: "171C1E")
-    /// Hover lift for pane-backed rows and cards.
-    public static let paneHover = Color.scopeAdaptive(light: "EFEFEE", dark: "1F272A")
-    /// Card surface — cool neutral pane lift / mild emphasis.
-    public static let surface = Color.scopeAdaptive(light: "EFEFEE", dark: "14181A")
+    /// and uses an opaque gunmetal pane in dark mode. Sits above the
+    /// card surface so raised panels visibly separate from the page.
+    public static let pane = Color.scopeAdaptive(light: "F1F1F0", dark: "20252A")
+    /// Hover lift for pane-backed rows and cards — top of the ladder.
+    public static let paneHover = Color.scopeAdaptive(light: "EFEFEE", dark: "272D33")
+    /// Card surface — cool neutral pane lift / mild emphasis. Now a
+    /// genuine lift above canvas + bay so list cards stop sinking into
+    /// the page (the old value read a touch darker than the bay).
+    public static let surface = Color.scopeAdaptive(light: "EFEFEE", dark: "1C2023")
     /// 85% canvas — for floating overlays / pill chrome.
-    public static let canvasOverlay = Color.scopeAdaptive(light: "F8F8F7", dark: "0E0F10").opacity(0.85)
+    public static let canvasOverlay = Color.scopeAdaptive(light: "F8F8F7", dark: "0E1012").opacity(0.85)
 }
 
 // MARK: - Ink (text)
@@ -106,10 +135,13 @@ public enum ScopeInk {
     public static let dim      = Color.scopeAdaptive(light: "1F2123", dark: "DCD6CC")
     /// Body / paragraph — neutral slate.
     public static let muted    = Color.scopeAdaptive(light: "4D5256", dark: "B8B2A4")
-    /// Secondary / captions — neutral mid.
-    public static let faint    = Color.scopeAdaptive(light: "737878", dark: "8A8478")
-    /// Tertiary / metadata — neutral light.
-    public static let subtle   = Color.scopeAdaptive(light: "9A9E9E", dark: "6F695F")
+    /// Secondary / captions — neutral mid. Dark step lifted slightly and
+    /// de-browned so captions stay legible against the lifted card ladder
+    /// without climbing into body-text territory.
+    public static let faint    = Color.scopeAdaptive(light: "737878", dark: "938C7E")
+    /// Tertiary / metadata — neutral light. Dark step lifted just enough
+    /// that timestamps/counts read as present-but-quiet rather than lost.
+    public static let subtle   = Color.scopeAdaptive(light: "9A9E9E", dark: "787163")
 }
 
 // MARK: - Edges (hairlines)
@@ -118,16 +150,23 @@ public enum ScopeInk {
 /// homepage edge-* tokens. Derived from the new cool ink primary so
 /// hairlines no longer carry warm-brown tint.
 public enum ScopeEdge {
-    private static let base = Color.scopeAdaptive(light: "0F1112", dark: "F0EDE6")
+    // Light mode keeps the cool near-black ink hairline at its historical
+    // opacities. Dark mode switches to a restrained warm-taupe line, run a
+    // step stronger: the old cool-white-at-8-14% edges vanished against the
+    // near-black page, which is what read as "flat / floating." The warm
+    // base pairs with the amber/brass accents so borders feel intentional
+    // and part of the warm-instrument chrome, not an afterthought.
+    private static let lightBase = "0F1112"
+    private static let darkBase  = "D3C4A8"
 
     /// 30% — strong, framed cards.
-    public static let strong  = base.opacity(0.30)
+    public static let strong  = Color.scopeAdaptive(light: lightBase, lightAlpha: 0.30, dark: darkBase, darkAlpha: 0.32)
     /// 20% — default card / row border.
-    public static let normal  = base.opacity(0.20)
+    public static let normal  = Color.scopeAdaptive(light: lightBase, lightAlpha: 0.20, dark: darkBase, darkAlpha: 0.22)
     /// 14% — section divider.
-    public static let faint   = base.opacity(0.14)
+    public static let faint   = Color.scopeAdaptive(light: lightBase, lightAlpha: 0.14, dark: darkBase, darkAlpha: 0.16)
     /// 8% — graticule lines, ultra-subtle dividers.
-    public static let subtle  = base.opacity(0.08)
+    public static let subtle  = Color.scopeAdaptive(light: lightBase, lightAlpha: 0.08, dark: darkBase, darkAlpha: 0.10)
 }
 
 // MARK: - Scope Rule — reusable hairline view
@@ -259,16 +298,19 @@ public enum ScopeTrace {
 /// copper now that the canvas is cooler and amber is genuinely an
 /// accent (used sparsely against a neutral ladder, it should pop).
 public enum ScopeAmber {
-    /// Solid amber — canonical website copper.
-    public static let solid = Color.hex("C47D1C")
+    /// Solid amber — canonical website copper in light; nudged a touch
+    /// brighter/warmer in dark so the accent lifts off the deeper gunmetal
+    /// surfaces instead of muddying into them. All washes/glows derive
+    /// from this base so they track the same per-mode hue.
+    public static let solid = Color.scopeAdaptive(light: "C47D1C", dark: "D98A2B")
     /// 6% tint — button background washes.
-    public static let tint = Color.hex("C47D1C").opacity(0.06)
+    public static let tint = solid.opacity(0.06)
     /// 4% tint — even quieter background.
-    public static let tintSubtle = Color.hex("C47D1C").opacity(0.04)
+    public static let tintSubtle = solid.opacity(0.04)
     /// Glow halo for amber text / dots (use as shadow color).
-    public static let glow = Color.hex("C47D1C").opacity(0.22)
+    public static let glow = solid.opacity(0.22)
     /// Brighter glow for dots / focal points.
-    public static let glowStrong = Color.hex("C47D1C").opacity(0.32)
+    public static let glowStrong = solid.opacity(0.32)
 }
 
 // MARK: - Brass (warm instrument metal)
@@ -300,16 +342,26 @@ public enum ScopeKind {
 /// like an instrument bay sunk into a brushed console. Amber phosphor
 /// trace on cool charcoal — gunmetal, not tobacco.
 public enum ScopePanel {
-    /// Panel background — cool charcoal with the merest blue cast.
-    /// Replaces the warm-graphite `#3A332A` (which was a local
-    /// invention that drifted up and warm from the website's
-    /// `#1C1814`). The bay now reads as gunmetal sunk into a
-    /// neutral page, not graphite-brown.
-    public static let bg     = Color.hex("14181A")
-    /// Panel background — deeper for stat tiles, etc.
-    public static let bgAlt  = Color.hex("0E1214")
+    /// Panel background — warm gunmetal instrument face. Two moves over
+    /// the previous cool `#14181A`:
+    ///   1. LIFTED (~+6 luma) so the bay reads as a raised instrument
+    ///      surface against the now-dark page. On the revised canvas
+    ///      ladder the page is `#0E1012`; the old bay sat almost on top
+    ///      of it and read flat/floating (the same failure the ScopeEdge
+    ///      pass fixed for hairlines). It now lands in the surface/pane
+    ///      luma band (canvasAlt `181B1E` → surface `1C2023`).
+    ///   2. WARMED — the cast flips from "merest blue" to a restrained
+    ///      warm-neutral (r≥g≥b by ~2). This is deliberate bichromatic
+    ///      tension: a warm instrument face embedded in the cool console
+    ///      page, which is the whole Scope premise and pairs with the
+    ///      amber phosphor. It is a 2-point lean, NOT the tobacco/graphite
+    ///      `#3A332A` (delta 16) that was purged — still gunmetal.
+    public static let bg     = Color.hex("1A1918")
+    /// Panel background — deeper recess for stat tiles, etc. Warm-neutral,
+    /// a clear step below `bg` so inset tiles read as genuinely recessed.
+    public static let bgAlt  = Color.hex("141312")
     /// Panel background — deepest recess (most-inset surfaces).
-    public static let bgDeep = Color.hex("0A0D0E")
+    public static let bgDeep = Color.hex("0D0C0B")
 
     /// Panel text — cool off-white against the dark.
     public static let ink       = Color.hex("E8ECEA")
@@ -329,11 +381,16 @@ public enum ScopePanel {
     public static let traceDim   = Color.hex("E89A3C").opacity(0.18)
     public static let traceFaint = Color.hex("E89A3C").opacity(0.08)
 
+    /// Amber-phosphor edges. Nudged a step stronger across the board:
+    /// against the lifted warm bay the old alphas under-read, so borders
+    /// and dividers looked incidental. The bump keeps the hue (the edge
+    /// is part of the lit-instrument chrome, not a neutral hairline) while
+    /// giving panels intentional definition and better tonal separation.
     public enum Edge {
-        public static let strong = Color.hex("E89A3C").opacity(0.24)
-        public static let normal = Color.hex("E89A3C").opacity(0.15)
-        public static let faint  = Color.hex("E89A3C").opacity(0.08)
-        public static let subtle = Color.hex("E89A3C").opacity(0.06)
+        public static let strong = Color.hex("E89A3C").opacity(0.28)
+        public static let normal = Color.hex("E89A3C").opacity(0.18)
+        public static let faint  = Color.hex("E89A3C").opacity(0.10)
+        public static let subtle = Color.hex("E89A3C").opacity(0.07)
     }
 
     /// CRT scanline tint (very low alpha — overlay). One notch quieter
@@ -347,9 +404,12 @@ public enum ScopePanel {
     /// of the panel.
     public static let stripTop = LinearGradient(
         stops: [
-            .init(color: Color.hex("1F2426"), location: 0.0),
-            .init(color: Color.hex("1A1F22"), location: 0.35),
-            .init(color: Color.hex("0F1416"), location: 1.0)
+            // Warm gunmetal, widened highlight→shadow travel (~22 luma vs
+            // the old ~16) so the cover reads as brushed metal catching
+            // light from above rather than a flat tinted band.
+            .init(color: Color.hex("262422"), location: 0.0),
+            .init(color: Color.hex("1D1B19"), location: 0.35),
+            .init(color: Color.hex("100F0E"), location: 1.0)
         ],
         startPoint: .top,
         endPoint: .bottom
@@ -362,9 +422,13 @@ public enum ScopePanel {
     /// bottom rail).
     public static let stripBottom = LinearGradient(
         stops: [
-            .init(color: Color.hex("0D1113"), location: 0.0),
-            .init(color: Color.hex("161B1E"), location: 0.55),
-            .init(color: Color.hex("1E2528"), location: 1.0)
+            // Warm gunmetal recess: shadow at the top seam, catch-light at
+            // the bottom lip. Asymmetric direction vs. `stripTop` so the
+            // two rails read as different fabricated pieces (top cover vs.
+            // bottom sill).
+            .init(color: Color.hex("0E0D0C"), location: 0.0),
+            .init(color: Color.hex("1A1917"), location: 0.55),
+            .init(color: Color.hex("24221F"), location: 1.0)
         ],
         startPoint: .top,
         endPoint: .bottom
