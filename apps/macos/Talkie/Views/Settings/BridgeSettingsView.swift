@@ -1165,13 +1165,14 @@ struct SSHPhonePairingGuideSheet: View {
     @State private var remoteLoginStatus = SSHRemoteLoginStatus.unknown
     @State private var qrPayload: String?
     @State private var qrImage: NSImage?
+    @State private var qrRenderState = QRCodeRenderState.idle
     @State private var isPreparing = false
     @State private var isRefreshingStatus = false
     @State private var errorMessage: String?
     @State private var showingLargeQRCode = false
     @State private var prepareTask: Task<Void, Never>?
     @State private var statusRefreshTask: Task<Void, Never>?
-    @State private var qrRefreshTask: Task<Void, Never>?
+    @State private var fingerprintRefreshTask: Task<Void, Never>?
     @State private var qrImageTask: Task<Void, Never>?
 
     var body: some View {
@@ -1195,9 +1196,6 @@ struct SSHPhonePairingGuideSheet: View {
         .frame(width: 720, height: 780)
         .background(Theme.current.background)
         .task {
-            await refreshPairingState()
-        }
-        .onChange(of: bridgeManager.tailscaleStatus) { _, _ in
             refreshStatus()
         }
         .sheet(isPresented: $showingLargeQRCode) {
@@ -1211,7 +1209,7 @@ struct SSHPhonePairingGuideSheet: View {
         .onDisappear {
             prepareTask?.cancel()
             statusRefreshTask?.cancel()
-            qrRefreshTask?.cancel()
+            fingerprintRefreshTask?.cancel()
             qrImageTask?.cancel()
         }
     }
@@ -1414,13 +1412,26 @@ struct SSHPhonePairingGuideSheet: View {
                             .buttonStyle(.plain)
                         }
                     }
-                } else if qrPayload != nil {
+                } else if qrRenderState == .rendering {
                     HStack(spacing: 8) {
                         ProgressView()
                             .controlSize(.small)
                         Text("Rendering QR code...")
                             .font(Theme.current.fontXS)
                             .foregroundColor(Theme.current.foregroundSecondary)
+                    }
+                } else if qrPayload != nil {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Talkie couldn’t render this QR code.")
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundSecondary)
+
+                        Button("Try Again") {
+                            renderQRCode()
+                        }
+                        .buttonStyle(.plain)
+                        .font(Theme.current.fontXSMedium)
+                        .foregroundColor(.blue)
                     }
                 } else {
                     Text("The QR appears here as soon as step 1 is finished.")
@@ -1590,7 +1601,9 @@ struct SSHPhonePairingGuideSheet: View {
     }
 
     private var localBonjourHostname: String? {
-        TalkieNetworkRouteClassifier.localBonjourHostname(from: Host.current().name)
+        TalkieNetworkRouteClassifier.localBonjourHostname(
+            from: ProcessInfo.processInfo.hostName
+        )
     }
 
     private func connectionRouteDescription(for host: String) -> String {
@@ -1618,7 +1631,7 @@ struct SSHPhonePairingGuideSheet: View {
 
     private func prepareSSHAccess() {
         statusRefreshTask?.cancel()
-        qrRefreshTask?.cancel()
+        fingerprintRefreshTask?.cancel()
 
         prepareTask = Task { @MainActor in
             isPreparing = true
@@ -1628,21 +1641,23 @@ struct SSHPhonePairingGuideSheet: View {
                 isPreparing = false
             }
 
-            await bridgeManager.refreshNonNetworkStatusNow()
             let connection = preferredPairingConnection
 
             do {
                 ensureTalkieServerEnabledForPairing()
-                let prepared = try await Task.detached(priority: .userInitiated) {
+                let prepareTask = Task.detached(priority: .userInitiated) {
                     try await SSHKeyQRCodeProvisioner.prepare(connection: connection)
-                }.value
-                let currentRemoteLoginStatus = await Task.detached(priority: .userInitiated) {
+                }
+                let remoteLoginTask = Task.detached(priority: .userInitiated) {
                     SSHRemoteLoginStatus.current()
-                }.value
+                }
+                let prepared = try await prepareTask.value
                 guard !Task.isCancelled else { return }
                 status = prepared.status
-                remoteLoginStatus = currentRemoteLoginStatus
                 setQRCodePayload(prepared.payload)
+                let currentRemoteLoginStatus = await remoteLoginTask.value
+                guard !Task.isCancelled else { return }
+                remoteLoginStatus = currentRemoteLoginStatus
             } catch {
                 guard !Task.isCancelled else { return }
                 errorMessage = error.localizedDescription
@@ -1651,70 +1666,62 @@ struct SSHPhonePairingGuideSheet: View {
         }
     }
 
-    private func refreshPairingState() async {
-        await bridgeManager.refreshNonNetworkStatusNow()
-        refreshStatus()
-    }
-
     private func refreshStatus() {
         statusRefreshTask?.cancel()
-        qrRefreshTask?.cancel()
+        fingerprintRefreshTask?.cancel()
         isRefreshingStatus = true
+        let connection = preferredPairingConnection
 
         statusRefreshTask = Task { @MainActor in
-            let result = await Task.detached(priority: .userInitiated) {
+            defer {
+                isRefreshingStatus = false
+            }
+
+            let inspectionTask = Task.detached(priority: .userInitiated) {
                 do {
-                    let snapshot = SSHAccessSnapshot(
-                        status: try SSHKeyQRCodeProvisioner.status(),
-                        remoteLoginStatus: SSHRemoteLoginStatus.current()
+                    return Result<SSHKeyQRCodeProvisioner.Inspection, Error>.success(
+                        try SSHKeyQRCodeProvisioner.inspect(connection: connection)
                     )
-                    return Result<SSHAccessSnapshot, Error>.success(snapshot)
                 } catch {
-                    return Result<SSHAccessSnapshot, Error>.failure(error)
+                    return Result<SSHKeyQRCodeProvisioner.Inspection, Error>.failure(error)
                 }
-            }.value
+            }
+            let remoteLoginTask = Task.detached(priority: .userInitiated) {
+                SSHRemoteLoginStatus.current()
+            }
+            let result = await inspectionTask.value
 
             guard !Task.isCancelled else { return }
 
             switch result {
-            case .success(let snapshot):
-                status = snapshot.status
-                remoteLoginStatus = snapshot.remoteLoginStatus
+            case .success(let inspection):
+                status = inspection.status
                 errorMessage = nil
 
-                if snapshot.status.isReady {
-                    refreshQRCodePayload()
-                } else {
-                    setQRCodePayload(nil)
+                setQRCodePayload(inspection.payload)
+                if inspection.status.isReady {
+                    refreshFingerprint()
                 }
             case .failure(let error):
                 status = .unconfigured
-                remoteLoginStatus = await Task.detached(priority: .userInitiated) {
-                    SSHRemoteLoginStatus.current()
-                }.value
                 setQRCodePayload(nil)
                 errorMessage = error.localizedDescription
             }
 
-            isRefreshingStatus = false
+            let currentRemoteLoginStatus = await remoteLoginTask.value
+            guard !Task.isCancelled else { return }
+            remoteLoginStatus = currentRemoteLoginStatus
         }
     }
 
-    private func refreshQRCodePayload() {
-        let connection = preferredPairingConnection
-        qrRefreshTask = Task { @MainActor in
-            do {
-                let prepared = try await Task.detached(priority: .userInitiated) {
-                    try await SSHKeyQRCodeProvisioner.prepare(connection: connection)
-                }.value
-                guard !Task.isCancelled else { return }
-                status = prepared.status
-                setQRCodePayload(prepared.payload)
-            } catch {
-                guard !Task.isCancelled else { return }
-                setQRCodePayload(nil)
-                errorMessage = error.localizedDescription
-            }
+    private func refreshFingerprint() {
+        fingerprintRefreshTask?.cancel()
+        fingerprintRefreshTask = Task { @MainActor in
+            let refreshedStatus = await Task.detached(priority: .utility) {
+                try? SSHKeyQRCodeProvisioner.status()
+            }.value
+            guard !Task.isCancelled, let refreshedStatus, refreshedStatus.isReady else { return }
+            status = refreshedStatus
         }
     }
 
@@ -1745,15 +1752,29 @@ struct SSHPhonePairingGuideSheet: View {
         qrPayload = payload
         qrImageTask?.cancel()
         qrImage = nil
+        qrRenderState = .idle
 
-        guard let link = pairingImportLinkString(for: payload) else {
+        renderQRCode()
+    }
+
+    private func renderQRCode() {
+        qrImageTask?.cancel()
+
+        guard let link = pairingImportLinkString else {
+            qrRenderState = .idle
             return
         }
 
+        qrRenderState = .rendering
         qrImageTask = Task { @MainActor in
-            let image = QRCodeImageFactory.makeImage(from: link, size: 236)
+            let result = await Task.detached(priority: .userInitiated) {
+                QRCodeRenderResult(
+                    image: QRCodeImageFactory.makeImage(from: link, size: 236)
+                )
+            }.value
             guard !Task.isCancelled else { return }
-            qrImage = image
+            qrImage = result.image
+            qrRenderState = result.image == nil ? .failed : .idle
         }
     }
 
@@ -1803,6 +1824,16 @@ private enum PairingChecklistState: Equatable {
         case .upcoming: return Theme.current.foregroundSecondary
         }
     }
+}
+
+private enum QRCodeRenderState {
+    case idle
+    case rendering
+    case failed
+}
+
+private struct QRCodeRenderResult: @unchecked Sendable {
+    let image: NSImage?
 }
 
 private struct SSHAccessSnapshot: Sendable {
@@ -1914,6 +1945,11 @@ enum SSHKeyQRCodeProvisioner {
         let payload: String
     }
 
+    struct Inspection: Sendable {
+        let status: Status
+        let payload: String?
+    }
+
     private static let keyFileName = "iphone-terminal-ed25519"
     private static let keyDirectory = URL.applicationSupportDirectory
         .appending(path: "Talkie")
@@ -1978,7 +2014,9 @@ enum SSHKeyQRCodeProvisioner {
     }
 
     fileprivate static var defaultLabel: String {
-        "Talkie SSH for \(Host.current().localizedName ?? "This Mac")"
+        let hostName = ProcessInfo.processInfo.hostName
+        let displayName = hostName.split(separator: ".").first.map(String.init) ?? "This Mac"
+        return "Talkie SSH for \(displayName)"
     }
 
     private static var remoteCompanionBootstrapSnippet: String {
@@ -2015,14 +2053,16 @@ exec "$ZSH_BIN" -f -i
         let connection: ConnectionDetails?
     }
 
-    static func status() throws -> Status {
+    static func status(includeFingerprint: Bool = true) throws -> Status {
         let hasPrivateKey = FileManager.default.fileExists(atPath: keyURL.path)
         let hasPublicKey = FileManager.default.fileExists(atPath: publicKeyURL.path)
         let hasKeyPair = hasPrivateKey && hasPublicKey
 
         let publicKey = hasKeyPair ? try normalizedContents(of: publicKeyURL) : nil
         let isAuthorized = try publicKey.map(isAuthorized(publicKey:)) ?? false
-        let fingerprint = hasKeyPair ? try fingerprint(for: publicKeyURL) : nil
+        let fingerprint = hasKeyPair && includeFingerprint
+            ? try fingerprint(for: publicKeyURL)
+            : nil
 
         return Status(
             label: defaultLabel,
@@ -2035,6 +2075,18 @@ exec "$ZSH_BIN" -f -i
         )
     }
 
+    static func inspect(connection: ConnectionDetails? = nil) throws -> Inspection {
+        let status = try status(includeFingerprint: false)
+        guard status.isReady else {
+            return Inspection(status: status, payload: nil)
+        }
+
+        return Inspection(
+            status: status,
+            payload: try payloadString(status: status, connection: connection)
+        )
+    }
+
     static func prepare(connection: ConnectionDetails? = nil) async throws -> PreparedKey {
         try ensureKeyPair()
         let publicKey = try normalizedContents(of: publicKeyURL)
@@ -2042,27 +2094,33 @@ exec "$ZSH_BIN" -f -i
         if shouldInstallRemoteHelper(for: connection) {
             try ensureRemoteHelperInstalled()
         }
-        let privateKey = try normalizedContents(of: keyURL)
         let status = try status()
-
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        let payload = QRPayload(
-            protocol: "talkie-ssh-key-v2",
-            label: status.label,
-            privateKey: privateKey,
-            connection: connection
-        )
-        let payloadData = try encoder.encode(payload)
-        guard let payloadString = String(data: payloadData, encoding: .utf8) else {
-            throw SSHKeyProvisioningError.invalidPayload
-        }
+        let payloadString = try payloadString(status: status, connection: connection)
         bridgeSettingsLog.info(
             "Prepared direct SSH pairing payload",
             detail: "host=\(connection?.host ?? "none") user=\(connection?.username ?? "none")"
         )
 
         return PreparedKey(status: status, payload: payloadString)
+    }
+
+    private static func payloadString(
+        status: Status,
+        connection: ConnectionDetails?
+    ) throws -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let payload = QRPayload(
+            protocol: "talkie-ssh-key-v2",
+            label: status.label,
+            privateKey: try normalizedContents(of: keyURL),
+            connection: connection
+        )
+        let payloadData = try encoder.encode(payload)
+        guard let payloadString = String(data: payloadData, encoding: .utf8) else {
+            throw SSHKeyProvisioningError.invalidPayload
+        }
+        return payloadString
     }
 
     private static func shouldInstallRemoteHelper(for connection: ConnectionDetails?) -> Bool {
@@ -3108,8 +3166,15 @@ private struct SSHKeyQRCodeSheet: View {
 
 private enum QRCodeImageFactory {
     private static let context = CIContext()
+    private static let cache = NSCache<NSString, NSImage>()
 
     static func makeImage(from string: String, size: CGFloat = 200) -> NSImage? {
+        let digest = SHA256.hash(data: Data(string.utf8))
+        let cacheKey = "\(size):\(Data(digest).base64EncodedString())" as NSString
+        if let cachedImage = cache.object(forKey: cacheKey) {
+            return cachedImage
+        }
+
         let filter = CIFilter.qrCodeGenerator()
         filter.message = Data(string.utf8)
         filter.correctionLevel = "M"
@@ -3123,7 +3188,9 @@ private enum QRCodeImageFactory {
             return nil
         }
 
-        return NSImage(cgImage: cgImage, size: NSSize(width: size, height: size))
+        let image = NSImage(cgImage: cgImage, size: NSSize(width: size, height: size))
+        cache.setObject(image, forKey: cacheKey)
+        return image
     }
 }
 

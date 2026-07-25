@@ -44,11 +44,24 @@ struct ScopeHomeView: View {
     // Default follows appearance: a light printed-instrument bay in
     // light mode, the carbon electronics bay only in dark mode.
     @AppStorage("scopeAgentBay.scheme")    private var bayScheme: String = BayScheme.pearl.rawValue
-    @AppStorage("scopeAgentBay.migratedDefaultLightPanel") private var didMigrateBayDefaultToLightPanel: Bool = false
+    @AppStorage("scopeAgentBay.migratedAppearanceDefaultV2") private var didMigrateBayAppearanceDefault: Bool = false
     // Migration fallback: users with deprecated stored values
     // (graphite/pewter/ash/stone — dropped 2026-05-17) decode to nil
     // and should land on the appearance default, not the original amber.
-    private var currentScheme: BayScheme { BayScheme(rawValue: bayScheme) ?? defaultBayScheme }
+    private var currentScheme: BayScheme {
+        guard let storedScheme = BayScheme(rawValue: bayScheme) else {
+            return defaultBayScheme
+        }
+
+        // Before the V2 migration runs, render the appearance-appropriate
+        // default immediately so an old Pearl value cannot flash on a dark
+        // canvas. Once migrated, leave explicit Design Mode selections alone.
+        let appearanceIsLight = colorScheme != .dark
+        if !didMigrateBayAppearanceDefault, storedScheme.isLight != appearanceIsLight {
+            return defaultBayScheme
+        }
+        return storedScheme
+    }
 
     private var defaultBayScheme: BayScheme {
         colorScheme == .dark ? .carbon : .pearl
@@ -101,7 +114,7 @@ struct ScopeHomeView: View {
         .environment(\.cmdHeld, cmdHeld)
         .background(cmdShortcutBindings)
         .onAppear {
-            migrateDefaultBaySchemeIfNeeded()
+            migrateBayAppearanceDefaultIfNeeded()
             startCmdMonitor()
         }
         .onDisappear { stopCmdMonitor() }
@@ -149,14 +162,17 @@ struct ScopeHomeView: View {
         return "\(todayTotal) captures"
     }
 
-    private func migrateDefaultBaySchemeIfNeeded() {
-        guard !didMigrateBayDefaultToLightPanel else { return }
-        if BayScheme(rawValue: bayScheme) == nil {
-            bayScheme = defaultBayScheme.rawValue
-        } else if colorScheme != .dark, bayScheme == BayScheme.carbon.rawValue {
+    private func migrateBayAppearanceDefaultIfNeeded() {
+        guard !didMigrateBayAppearanceDefault else { return }
+
+        let appearanceIsLight = colorScheme != .dark
+        if let storedScheme = BayScheme(rawValue: bayScheme),
+           storedScheme.isLight == appearanceIsLight {
+            // Keep an existing scheme that already matches the appearance.
+        } else {
             bayScheme = defaultBayScheme.rawValue
         }
-        didMigrateBayDefaultToLightPanel = true
+        didMigrateBayAppearanceDefault = true
     }
 
     /// Streak + word count promoted to inline chrome — the longer

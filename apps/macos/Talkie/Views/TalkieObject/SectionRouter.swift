@@ -21,6 +21,7 @@ struct SectionRouter: View {
     @Binding var editedTranscript: String
     @Binding var showJSON: Bool
     var isRetranscribing: Bool = false
+    var transcriptVersions: [TranscriptVersionModel] = []
     var onTranscriptChange: () -> Void = {}
     var onImmediateSave: () -> Void = {}
     var onRetranscribe: (String) -> Void = { _ in }
@@ -87,6 +88,7 @@ struct SectionRouter: View {
                 editedTranscript: $editedTranscript,
                 showJSON: $showJSON,
                 isRetranscribing: isRetranscribing,
+                transcriptVersions: transcriptVersions,
                 onTranscriptChange: onTranscriptChange,
                 onImmediateSave: onImmediateSave,
                 onRetranscribe: onRetranscribe,

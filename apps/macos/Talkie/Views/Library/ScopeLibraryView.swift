@@ -705,6 +705,9 @@ struct ScopeLibraryView: View {
                                     Task { await viewModel.loadNextPage() }
                                 }
                             }
+                            .contextMenu {
+                                rowContextMenu(for: recording)
+                            }
                         }
                     }
 
@@ -719,6 +722,29 @@ struct ScopeLibraryView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func rowContextMenu(for recording: TalkieObject) -> some View {
+        if let imageURL = markupImageURL(for: recording) {
+            Button {
+                openMarkupImage(imageURL, for: recording)
+            } label: {
+                Label("Open in Markup", systemImage: "sparkles.rectangle.stack")
+            }
+        }
+    }
+
+    private func markupImageURL(for recording: TalkieObject) -> URL? {
+        guard case .image(let url) = CaptureMediaFileResolver.primaryMedia(for: recording) else {
+            return nil
+        }
+        return url
+    }
+
+    private func openMarkupImage(_ imageURL: URL, for recording: TalkieObject) {
+        selectRecording(recording.id, revealInspector: false)
+        CaptureMarkupCoordinator.shared.openAgentOwnedSession(imageURL: imageURL)
     }
 
     @ViewBuilder
