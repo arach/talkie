@@ -101,7 +101,9 @@ enum AgentRuntimeClientError: LocalizedError, Sendable {
 actor AgentRuntimeClient {
     static let shared = AgentRuntimeClient()
 
-    private let timeoutMs = 10_000
+    private let defaultTimeoutMs = 10_000
+    private let invokeTimeoutMs = 30_000
+    private let activityStatusTimeoutMs = 30_000
 
     func ping() async -> AgentRuntimePing? {
         do {
@@ -122,7 +124,10 @@ actor AgentRuntimeClient {
     }
 
     func invoke(_ invocation: AgentInvocation) async throws -> AgentRuntimeResult {
-        let response = try await send(NodeRuntimeRequest(op: "invoke", invocation: invocation))
+        let response = try await send(
+            NodeRuntimeRequest(op: "invoke", invocation: invocation),
+            timeoutMs: invokeTimeoutMs
+        )
         guard let activity = response.activity ?? response.job else {
             throw AgentRuntimeClientError.invalidResponse("Missing activity object.")
         }
@@ -134,6 +139,14 @@ actor AgentRuntimeClient {
             modelId: activity.modelId,
             jobState: AgentJobState(rawValue: activity.state) ?? .acked
         )
+    }
+
+    func activityStatus(sessionId: String) async throws -> AgentRuntimeActivitySnapshot? {
+        let response = try await send(
+            NodeRuntimeRequest(op: "activityStatus", sessionId: sessionId),
+            timeoutMs: activityStatusTimeoutMs
+        )
+        return response.activity ?? response.job
     }
 
     func cancel(sessionId: String) async {
@@ -196,7 +209,7 @@ private extension AgentRuntimeClient {
         }
     }
 
-    func send(_ request: NodeRuntimeRequest) async throws -> NodeRuntimeResponse {
+    func send(_ request: NodeRuntimeRequest, timeoutMs: Int? = nil) async throws -> NodeRuntimeResponse {
         let invocation = try resolveInvocation()
         let process = Process()
         let processBox = ProcessBox(process)
@@ -238,7 +251,7 @@ private extension AgentRuntimeClient {
             throw error
         }
 
-        let exitCode = try await awaitTermination(of: processBox)
+        let exitCode = try await awaitTermination(of: processBox, timeoutMs: timeoutMs ?? defaultTimeoutMs)
         let stdoutData = try await stdoutTask.value
         let stderrData = try await stderrTask.value
         let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
@@ -373,9 +386,7 @@ private extension AgentRuntimeClient {
         return candidates.first { fileManager.fileExists(atPath: $0.path(percentEncoded: false)) }
     }
 
-    func awaitTermination(of processBox: ProcessBox) async throws -> Int32 {
-        let timeoutMs = self.timeoutMs
-
+    func awaitTermination(of processBox: ProcessBox, timeoutMs: Int) async throws -> Int32 {
         return try await withThrowingTaskGroup(of: Int32.self) { group in
             group.addTask {
                 while processBox.process.isRunning {

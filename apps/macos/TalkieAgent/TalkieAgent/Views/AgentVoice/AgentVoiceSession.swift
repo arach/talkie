@@ -14,7 +14,7 @@
 //                or .error          (transcription or LLM failed)
 //      .receiving / .error  →  .ready  (user dismisses, panel hides)
 //      .receiving → .followUpRecording → .followUpOver → .thinking
-//                                      (in-panel continuation turn)
+//                                      (another in-panel agent turn)
 //
 //  Auto-play (Unit 3.1) — when enabled, the session triggers TTS
 //  automatically as soon as the reply lands. Persisted via
@@ -57,8 +57,9 @@ final class AgentVoiceSession: ObservableObject {
     private var startedAt: Date?
     private var elapsedTimer: Timer?
     private var pipelineTask: Task<Void, Never>?
-    private var executorReportTask: Task<Void, Never>?
-    private var latestTopLevelModel: AgentModelUse?
+    private var executorReportTasks: [String: Task<Void, Never>] = [:]
+    private var currentVoiceConversationId = "channel-\(AgentChannel.defaultChannel.code.lowercased())"
+    private var visibleExecutorSessionId: String?
 
     init() {
         self.autoPlayEnabled = TalkieSharedSettings.bool(forKey: AgentSettingsKey.agentVoiceAutoPlay)
@@ -67,7 +68,7 @@ final class AgentVoiceSession: ObservableObject {
     // MARK: - Lifecycle
 
     func prepareTransmission() {
-        resetCaptureState(clearsVisibleTurn: true, clearsContinuation: true)
+        resetCaptureState(clearsVisibleTurn: true, clearsContinuation: false)
         phase = .arming
         startedAt = Date()
         elapsedMs = 0
@@ -78,7 +79,7 @@ final class AgentVoiceSession: ObservableObject {
         startCapture(
             phase: .transmitting,
             clearsVisibleTurn: true,
-            clearsContinuation: true,
+            clearsContinuation: false,
             isLatched: false
         )
     }
@@ -137,13 +138,12 @@ final class AgentVoiceSession: ObservableObject {
     private func resetCaptureState(clearsVisibleTurn: Bool, clearsContinuation: Bool) {
         pipelineTask?.cancel()
         pipelineTask = nil
-        executorReportTask?.cancel()
-        executorReportTask = nil
         SelectionSpeechPlaybackController.shared.stop()
         meter?.stop()
         elapsedTimer?.invalidate()
         elapsedTimer = nil
         executorBranchState = .idle
+        visibleExecutorSessionId = nil
 
         transcript = nil
         errorMessage = nil
@@ -158,7 +158,6 @@ final class AgentVoiceSession: ObservableObject {
         }
         if clearsContinuation {
             continuationSessionId = nil
-            latestTopLevelModel = nil
         }
         offersVoiceRetry = false
         isLatchedTransmission = false
@@ -221,8 +220,6 @@ final class AgentVoiceSession: ObservableObject {
     func dismiss() {
         pipelineTask?.cancel()
         pipelineTask = nil
-        executorReportTask?.cancel()
-        executorReportTask = nil
         SelectionSpeechPlaybackController.shared.stop()
         meter?.stop()
         elapsedTimer?.invalidate()
@@ -237,6 +234,7 @@ final class AgentVoiceSession: ObservableObject {
         executorRuntimeName = nil
         routeMode = nil
         executorBranchState = .idle
+        visibleExecutorSessionId = nil
         toolInvocations = []
         offersVoiceRetry = false
         isLatchedTransmission = false
@@ -247,7 +245,7 @@ final class AgentVoiceSession: ObservableObject {
         startCapture(
             phase: .transmitting,
             clearsVisibleTurn: true,
-            clearsContinuation: true,
+            clearsContinuation: false,
             isLatched: true
         )
     }
@@ -314,15 +312,28 @@ final class AgentVoiceSession: ObservableObject {
         self.replyText = nil
         log.info("Agent voice transcript captured", detail: transcript)
 
-        if isFollowUp, continuationSessionId != nil {
-            await runFollowUp(invocationForFollowUp(text: transcript, source: "agent-voice-follow-up-voice"))
-            return
-        }
+        await runAgentTurn(
+            text: transcript,
+            durationMs: durationMs,
+            startedAt: startedAt,
+            source: isFollowUp ? "agent-voice-follow-up-voice" : "voice"
+        )
+    }
 
+    private func runAgentTurn(
+        text: String,
+        durationMs: Int,
+        startedAt: Date,
+        source: String
+    ) async {
         // 2. Top-level orchestration: multi-LLM routing + optional executor handoff.
+        let threadTarget = resolveThreadTarget(for: text)
         let draft = AgentVoiceTransmissionDraft(
-            userBody: transcript,
+            userBody: text,
             userDurationMs: durationMs,
+            conversationId: threadTarget.conversationId,
+            parentSessionId: threadTarget.parentSessionId,
+            source: source,
             startedAt: startedAt
         )
         let result: AgentVoiceTurnResult
@@ -341,13 +352,13 @@ final class AgentVoiceSession: ObservableObject {
         guard !Task.isCancelled else { return }
 
         let transmission = result.transmission
-        latestTopLevelModel = result.topLevelModel
         self.llmLatencyMs = transmission.latencyMs
         self.topLevelProviderName = transmission.topLevelProviderName
         self.topLevelModelId = transmission.topLevelModelId
         self.executorRuntimeName = transmission.executorRuntimeName
         if let executorSessionId = transmission.executorSessionId {
             self.continuationSessionId = executorSessionId
+            self.visibleExecutorSessionId = executorSessionId
         }
         self.routeMode = transmission.mode
         self.replyText = transmission.talkieBody
@@ -373,8 +384,6 @@ final class AgentVoiceSession: ObservableObject {
         guard !trimmed.isEmpty else { return }
 
         pipelineTask?.cancel()
-        executorReportTask?.cancel()
-        executorReportTask = nil
         SelectionSpeechPlaybackController.shared.stop()
         transcript = trimmed
         replyText = nil
@@ -385,68 +394,87 @@ final class AgentVoiceSession: ObservableObject {
         toolInvocations = []
         phase = .thinking
 
-        let invocation = invocationForFollowUp(text: trimmed, source: "agent-voice-follow-up")
-
         pipelineTask = Task { @MainActor [weak self] in
-            await self?.runFollowUp(invocation)
+            await self?.runAgentTurn(
+                text: trimmed,
+                durationMs: 0,
+                startedAt: Date(),
+                source: "agent-voice-follow-up"
+            )
         }
     }
 
-    private func invocationForFollowUp(text: String, source: String) -> AgentInvocation {
-        AgentInvocation(
-            id: UUID(),
-            channel: .defaultChannel,
-            transcript: text,
-            instruction: text,
-            topLevelModel: latestTopLevelModel ?? AgentModelUse(
-                providerId: "talkie-agent",
-                providerName: "Talkie Agent",
-                modelId: "agent-voice-follow-up"
-            ),
-            requestedAt: Date(),
-            conversationId: "channel-\(AgentChannel.defaultChannel.code.lowercased())",
-            parentSessionId: continuationSessionId,
-            source: source
+    private func resolveThreadTarget(for text: String) -> AgentVoiceThreadTarget {
+        if Self.explicitlyStartsNewThread(text) {
+            let conversationId = "voice-\(UUID().uuidString.lowercased())"
+            currentVoiceConversationId = conversationId
+            continuationSessionId = nil
+            log.info("Agent voice starting new conversation", detail: "conversation=\(conversationId)")
+            return AgentVoiceThreadTarget(conversationId: conversationId, parentSessionId: nil)
+        }
+
+        return AgentVoiceThreadTarget(
+            conversationId: currentVoiceConversationId,
+            parentSessionId: continuationSessionId
         )
     }
 
-    private func runFollowUp(_ invocation: AgentInvocation) async {
-        do {
-            let result = try await AgentRuntimeClient.shared.invoke(invocation)
-            if let sessionId = result.sessionId {
-                continuationSessionId = sessionId
-            }
-            let waitsForExecutor = result.sessionId != nil
-            executorRuntimeName = agentRuntimeDisplayName(for: result.providerId) ?? "Agent Runtime Dispatcher"
-            routeMode = .async
-            replyText = result.ack
-            executorBranchState = waitsForExecutor ? .working : .done
-            phase = .receiving
-            if autoPlayEnabled && !waitsForExecutor {
-                playReply()
-            }
+    private static func explicitlyStartsNewThread(_ text: String) -> Bool {
+        let normalized = text
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            .replacing("_", with: " ")
+            .replacing("-", with: " ")
 
-            let activity = try await waitForRuntimeActivity(sessionId: result.sessionId)
-            guard !Task.isCancelled else { return }
-
-            if let activity {
-                let applied = await applyExecutorResult(activity, fallbackError: "The follow-up failed.")
-                guard applied else { return }
-                return
-            }
-
-            executorBranchState = .done
-        } catch {
-            log.error("Agent voice follow-up failed", detail: error.localizedDescription)
-            await fail(error.localizedDescription)
+        let negatedPhrases = [
+            "do not start a new",
+            "don't start a new",
+            "dont start a new",
+            "not a new thread",
+            "not a new conversation",
+            "not a new chat",
+            "not a new session",
+            "no new thread",
+            "no new conversation",
+            "no new chat",
+            "no new session",
+        ]
+        if negatedPhrases.contains(where: { normalized.localizedStandardContains($0) }) {
+            return false
         }
+
+        let startPhrases = [
+            "start a new thread",
+            "start new thread",
+            "new thread",
+            "fresh thread",
+            "separate thread",
+            "start a new conversation",
+            "start new conversation",
+            "new conversation",
+            "fresh conversation",
+            "separate conversation",
+            "start a new chat",
+            "start new chat",
+            "new chat",
+            "fresh chat",
+            "separate chat",
+            "start a new session",
+            "start new session",
+            "new session",
+            "fresh session",
+            "separate session",
+        ]
+        return startPhrases.contains { normalized.localizedStandardContains($0) }
     }
 
     private func watchExecutorReport(sessionId: String) {
-        executorReportTask?.cancel()
-        executorBranchState = .working
-        executorReportTask = Task { @MainActor [weak self] in
+        if executorReportTasks[sessionId] != nil { return }
+        if visibleExecutorSessionId == sessionId {
+            executorBranchState = .working
+        }
+        executorReportTasks[sessionId] = Task { @MainActor [weak self] in
             await self?.reportBackWhenExecutorCompletes(sessionId: sessionId)
+            self?.executorReportTasks[sessionId] = nil
         }
     }
 
@@ -456,44 +484,58 @@ final class AgentVoiceSession: ObservableObject {
             guard !Task.isCancelled else { return }
 
             guard let activity else { return }
-            let applied = await applyExecutorResult(activity, fallbackError: "The agent did not finish cleanly.")
+            let updatesVisibleState = visibleExecutorSessionId == sessionId && phase != .ready
+            let applied = await applyExecutorResult(
+                activity,
+                fallbackError: "The agent did not finish cleanly.",
+                updatesVisibleState: updatesVisibleState
+            )
             guard applied else { return }
             log.info("Agent voice executor branch returned", detail: "session=\(activity.sessionId)")
         } catch {
             guard !Task.isCancelled else { return }
-            executorBranchState = .failed
+            if visibleExecutorSessionId == sessionId {
+                executorBranchState = .failed
+            }
             log.error("Agent voice executor report failed", detail: error.localizedDescription)
         }
     }
 
     private func applyExecutorResult(
         _ activity: AgentRuntimeActivitySnapshot,
-        fallbackError: String
+        fallbackError: String,
+        updatesVisibleState: Bool
     ) async -> Bool {
-        continuationSessionId = activity.sessionId
-        topLevelProviderName = activity.topLevelProviderName ?? topLevelProviderName
-        topLevelModelId = activity.topLevelModelId ?? topLevelModelId
-        executorRuntimeName = agentRuntimeDisplayName(for: activity.providerId)
-            ?? activity.runtimeName
-            ?? executorRuntimeName
-        routeMode = .async
+        if updatesVisibleState {
+            continuationSessionId = activity.sessionId
+            topLevelProviderName = activity.topLevelProviderName ?? topLevelProviderName
+            topLevelModelId = activity.topLevelModelId ?? topLevelModelId
+            executorRuntimeName = agentRuntimeDisplayName(for: activity.providerId)
+                ?? activity.runtimeName
+                ?? executorRuntimeName
+            routeMode = .async
+        }
 
         let state = activity.state.lowercased()
         if ["failed", "cancelled", "canceled"].contains(state) {
-            executorBranchState = .failed
-            await fail(activity.error ?? fallbackError)
+            if updatesVisibleState {
+                executorBranchState = .failed
+                await fail(activity.error ?? fallbackError)
+            }
             return false
         }
 
         let spokenSummary = activity.spokenSummary?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
         let fullOutput = activity.output?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
-        replyText = spokenSummary
-            ?? fullOutput
-            ?? "The agent replied."
-        executorBranchState = .done
-        phase = .receiving
+        if updatesVisibleState {
+            replyText = spokenSummary
+                ?? fullOutput
+                ?? "The agent replied."
+            executorBranchState = .done
+            phase = .receiving
+        }
         notifyReportBack(activity: activity, spokenSummary: spokenSummary, fullOutput: fullOutput)
-        if autoPlayEnabled {
+        if updatesVisibleState && autoPlayEnabled {
             playReply()
         }
         return true
@@ -527,13 +569,29 @@ final class AgentVoiceSession: ObservableObject {
         var lastPartialOutput = ""
         while Date().timeIntervalSince(startedAt) < 600 {
             guard !Task.isCancelled else { return nil }
-            let status = try await AgentRuntimeClient.shared.status()
-            if let activity = status.activities.first(where: { $0.sessionId == sessionId }) {
+            do {
+                guard let activity = try await AgentRuntimeClient.shared.activityStatus(sessionId: sessionId) else {
+                    try await Task.sleep(for: .milliseconds(600))
+                    continue
+                }
                 if Self.isTerminalRuntimeState(activity.state)
                     || Self.isTerminalRuntimeState(activity.agentSessionStatus) {
                     return activity
                 }
-                updatePartialRuntimeOutput(activity, previousOutput: &lastPartialOutput)
+                if visibleExecutorSessionId == sessionId {
+                    updatePartialRuntimeOutput(activity, previousOutput: &lastPartialOutput)
+                }
+            } catch AgentRuntimeClientError.runtimeTimedOut {
+                log.debug(
+                    "Agent voice report poll timed out; continuing to wait",
+                    detail: "session=\(sessionId)"
+                )
+            } catch AgentRuntimeClientError.runtimeFailed(let detail)
+                        where Self.isTransientRuntimePollFailure(detail) {
+                log.debug(
+                    "Agent voice report poll failed transiently; continuing to wait",
+                    detail: "session=\(sessionId) error=\(detail)"
+                )
             }
             try await Task.sleep(for: .milliseconds(600))
         }
@@ -565,6 +623,13 @@ final class AgentVoiceSession: ObservableObject {
             "timed-out",
             "timedout",
         ].contains(normalized)
+    }
+
+    private static func isTransientRuntimePollFailure(_ detail: String) -> Bool {
+        let normalized = detail
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+        return normalized.localizedStandardContains("timed out waiting for activity store lock")
+            || normalized.localizedStandardContains("resource temporarily unavailable")
     }
 
     private func updatePartialRuntimeOutput(
@@ -600,6 +665,11 @@ final class AgentVoiceSession: ObservableObject {
         let seconds = total.truncatingRemainder(dividingBy: 60)
         return String(format: "%d:%04.1f", minutes, seconds)
     }
+}
+
+private struct AgentVoiceThreadTarget {
+    let conversationId: String
+    let parentSessionId: String?
 }
 
 private extension String {

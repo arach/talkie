@@ -57,9 +57,9 @@ actor AgentVoiceOrchestrator {
                     instruction: route.executorInstruction ?? draft.userBody,
                     topLevelModel: topLevel,
                     requestedAt: Date(),
-                    conversationId: "channel-\(draft.channel.code.lowercased())",
-                    parentSessionId: nil,
-                    source: "voice"
+                    conversationId: draft.conversationId,
+                    parentSessionId: draft.parentSessionId,
+                    source: draft.source
                 )
                 let runtimeResult = try await runtime.invoke(invocation)
                 transmission.talkieBody = runtimeResult.ack
@@ -160,6 +160,9 @@ actor AgentVoiceOrchestrator {
 
         You are the top-level agent router. You are not the long-running agent worker.
         Decide whether the user's spoken turn should be answered immediately or handed to an agent runtime.
+        Threading is handled outside this router: the default is to continue the current agent conversation. If the user asks
+        for a new thread, fresh task, or separate conversation, preserve that intent in executorInstruction; do not invent
+        a follow-up/session ritual in the spoken reply.
 
         Return one JSON object and nothing else:
         {
@@ -181,6 +184,8 @@ actor AgentVoiceOrchestrator {
         """
         Channel: \(draft.channel.code) · \(draft.channel.label)
         Transmission: \(draft.code)
+        Conversation: \(draft.conversationId)
+        Parent session: \(draft.parentSessionId ?? "none")
         Hold duration: \(draft.userDurationMs)ms
 
         User said:
