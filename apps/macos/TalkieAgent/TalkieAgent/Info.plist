@@ -26,14 +26,14 @@
 		<key>to.talkie.agent.xpc.dev</key>
 		<true/>
 	</dict>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>TalkieAgent needs access to system audio when you choose to include system audio in a screen recording.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_talkie-bridge._tcp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>TalkieAgent uses your local network to advertise Mac Bridge to nearby Talkie devices.</string>
-	<key>NSAudioCaptureUsageDescription</key>
-	<string>TalkieAgent needs access to system audio when you choose to include system audio in a screen recording.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>TalkieAgent needs access to your microphone to capture and transcribe your voice recordings.</string>
 	<key>NSScreenCaptureUsageDescription</key>
