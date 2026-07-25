@@ -202,10 +202,16 @@ final class SoundManager {
 
     private var isAudioFeedbackEnabled: Bool {
         let settings = LiveSettings.shared
-        return settings.startSound != .none
+        let productionSoundsEnabled = settings.startSound != .none
             || settings.finishSound != .none
             || settings.pastedSound != .none
+
+        #if DEBUG
+        return productionSoundsEnabled
             || settings.cancelledSound != .none
+        #else
+        return productionSoundsEnabled
+        #endif
     }
 
     private static func systemSoundURL(named name: String) -> URL? {
