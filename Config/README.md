@@ -13,7 +13,7 @@ $EDITOR ~/.config/talkie/signing.env
 ```
 
 ```bash
-TALKIE_DEVELOPMENT_TEAM="D58PF38LQK"
+TALKIE_DEVELOPMENT_TEAM="2U83JFPW66"
 TALKIE_CODE_SIGNING_ALLOWED="YES"
 TALKIE_CODE_SIGNING_REQUIRED="YES"
 TALKIE_CODE_SIGN_IDENTITY="Apple Development"
@@ -27,7 +27,7 @@ available; an unsigned Agent is never installed over the stable dev app.
 Use `Signing.local.xcconfig` for Xcode settings that should vary by machine or Apple account, such as:
 
 ```xcconfig
-TALKIE_DEVELOPMENT_TEAM = D58PF38LQK
+TALKIE_DEVELOPMENT_TEAM = 2U83JFPW66
 TALKIE_CODE_SIGNING_ALLOWED = YES
 TALKIE_CODE_SIGNING_REQUIRED = YES
 ```

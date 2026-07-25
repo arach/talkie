@@ -529,28 +529,14 @@ stop_bundle_ids() {
     done
 }
 
-talkie_bundle_id() {
-    local app_id=$1
-    local env=$2
-    local project_prefix="${TALKIE_APP_IDENTIFIER:-to.talkie.app}"
-
-    if [ "$env" = "prod" ]; then
-        echo "$project_prefix.$app_id"
-    else
-        echo "$project_prefix.$app_id.$env"
-    fi
-}
-
 stop_talkie_app_family() {
     local product=$1
-    local app_id=$2
-    local bundle_id
+    local bundle_id=$2
     local xpc_label
     local dev_executable
     local legacy_dev_executable
     local build_executable
     local derived_executable_pattern
-    bundle_id=$(talkie_bundle_id "$app_id" "$RUN_ENV")
     xpc_label=$(get_xpc_service_name "$bundle_id")
     dev_executable="$DEV_APPS_DIR/$product.app/Contents/MacOS/$product"
     legacy_dev_executable="$LEGACY_DEV_APPS_DIR/$product.app/Contents/MacOS/$product"
@@ -613,13 +599,14 @@ sign_app_bundle() {
 
 stop_conflicting_instances() {
     local app=$1
+    local bundle_id=$2
 
     case "$app" in
         TalkieAgent|live)
-            stop_talkie_app_family "TalkieAgent" "agent"
+            stop_talkie_app_family "TalkieAgent" "$bundle_id"
             ;;
         Talkie|core|code)
-            stop_talkie_app_family "Talkie" "mac"
+            stop_talkie_app_family "Talkie" "$bundle_id"
             ;;
     esac
 }
@@ -930,7 +917,7 @@ build_app() {
 
     # Do not interrupt the running app until the replacement has built and its
     # signing identity has been proven safe for existing macOS privacy grants.
-    stop_conflicting_instances "$app"
+    stop_conflicting_instances "$app" "$bundle_id"
 
     install_dev_app_if_needed "$app_path" "$product" "$bundle_id" || return 1
     app_path="$RUNNABLE_APP_PATH"

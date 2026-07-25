@@ -222,15 +222,27 @@ final class AudioDeviceManager {
 
         guard status == noErr, dataSize > 0 else { return false }
 
-        let bufferListPointer = UnsafeMutablePointer<AudioBufferList>.allocate(capacity: 1)
-        defer { bufferListPointer.deallocate() }
+        let bufferListStorage = UnsafeMutableRawPointer.allocate(
+            byteCount: Int(dataSize),
+            alignment: MemoryLayout<AudioBufferList>.alignment
+        )
+        defer { bufferListStorage.deallocate() }
+        bufferListStorage.initializeMemory(as: UInt8.self, repeating: 0, count: Int(dataSize))
 
-        let getStatus = AudioObjectGetPropertyData(deviceID, &propertyAddress, 0, nil, &dataSize, bufferListPointer)
+        let getStatus = AudioObjectGetPropertyData(
+            deviceID,
+            &propertyAddress,
+            0,
+            nil,
+            &dataSize,
+            bufferListStorage
+        )
 
         guard getStatus == noErr else { return false }
 
-        let bufferList = bufferListPointer.pointee
-        return bufferList.mNumberBuffers > 0
+        let bufferListPointer = bufferListStorage.assumingMemoryBound(to: AudioBufferList.self)
+        let buffers = UnsafeMutableAudioBufferListPointer(bufferListPointer)
+        return buffers.contains { $0.mNumberChannels > 0 }
     }
 
     private func getDeviceName(_ deviceID: AudioDeviceID) -> String? {

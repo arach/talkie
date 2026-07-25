@@ -4,7 +4,7 @@
 //
 //  PCM audio file writing with instant teardown and segment rotation.
 //  Records as Linear PCM (WAV) for fast stop - no encoder flush needed.
-//  Segments are compressed to 16kHz int16 mono in the background.
+//  Segments retain the microphone's source sample rate and channels.
 //  Conforms to AudioWriterProtocol for unified audio capture.
 //
 
@@ -17,18 +17,12 @@ private let log = Log(.audio)
 /// Conforms to AudioWriterProtocol for use with unified audio capture system
 final class AudioFileWriter: AudioWriterProtocol {
 
-    // MARK: - Segment compression
-
-    private static let compressQueue = DispatchQueue(label: "to.talkie.app.audio.compress", qos: .utility)
-    private static let compressSampleRate: Double = 16000
-    private static let compressBitDepth: Int = 16
-
     // MARK: - Configuration
 
     /// Segment duration in seconds. 0 = no segmentation.
     var segmentDuration: TimeInterval = 0
 
-    /// Callback fired when a segment is completed and compressed (on background queue)
+    /// Callback fired when a source-quality segment is completed.
     var onSegmentCompleted: ((AudioWriterSegment) -> Void)?
 
     // MARK: - State
@@ -192,19 +186,13 @@ final class AudioFileWriter: AudioWriterProtocol {
             }
         }
 
-        // Compress ALL segments synchronously (runs once at stop — fast enough for ≤10min segments)
-        var compressedSegments: [AudioWriterSegment] = []
-        for segment in completedSegments.sorted(by: { $0.index < $1.index }) {
-            if let compressed = compressSegment(sourceURL: segment.url, index: segment.index, duration: segment.duration) {
-                compressedSegments.append(compressed)
-                emitCompletedSegmentIfNeeded(compressed)
-            } else {
-                compressedSegments.append(segment)
-                emitCompletedSegmentIfNeeded(segment)
-            }
+        // Keep the source-quality PCM files. These are the durable recordings users
+        // play back and may retranscribe later, so transcription-oriented downsampling
+        // must not destructively replace them.
+        let allSegments = completedSegments.sorted(by: { $0.index < $1.index })
+        for segment in allSegments {
+            emitCompletedSegmentIfNeeded(segment)
         }
-
-        let allSegments = compressedSegments
         let primaryURL: URL
         let totalSize: Int
 
@@ -229,9 +217,15 @@ final class AudioFileWriter: AudioWriterProtocol {
         let sampleRate = savedFormat?.sampleRate ?? 44100
 
         if allSegments.count > 1 {
-            log.info("Finalized audio: \(allSegments.count) segments", detail: "\(savedBufferCount) buffers, \(totalSize) bytes")
+            log.info(
+                "Finalized audio: \(allSegments.count) segments",
+                detail: "saved=\(Int(sampleRate))Hz/\(savedFormat?.channelCount ?? 0)ch PCM, \(savedBufferCount) buffers, \(totalSize) bytes"
+            )
         } else {
-            log.info("Finalized audio file", detail: "\(savedBufferCount) buffers, \(totalSize) bytes")
+            log.info(
+                "Finalized audio file",
+                detail: "saved=\(Int(sampleRate))Hz/\(savedFormat?.channelCount ?? 0)ch PCM, \(savedBufferCount) buffers, \(totalSize) bytes"
+            )
         }
 
         let result = AudioWriterResult(
@@ -326,7 +320,7 @@ final class AudioFileWriter: AudioWriterProtocol {
         let rotatedIndex = segmentIndex
         let rotatedDuration = segmentDurationSeconds
 
-        // Close current file — compression deferred to finalize() to avoid blocking audio thread
+        // Close current source-quality PCM file.
         audioFile = nil
 
         let size = fileSize(at: rotatedURL)
@@ -338,7 +332,7 @@ final class AudioFileWriter: AudioWriterProtocol {
         ))
         emitCompletedSegmentIfNeeded(completedSegments[completedSegments.count - 1])
 
-        log.info("Segment \(rotatedIndex) rotated", detail: "\(String(format: "%.0f", rotatedDuration))s \(size / 1024)KB — compression deferred")
+        log.info("Segment \(rotatedIndex) rotated", detail: "\(String(format: "%.0f", rotatedDuration))s \(size / 1024)KB — source quality retained")
 
         // Start new segment
         segmentIndex += 1
@@ -367,142 +361,6 @@ final class AudioFileWriter: AudioWriterProtocol {
         guard !emittedSegmentIndices.contains(segment.index) else { return }
         emittedSegmentIndices.insert(segment.index)
         onSegmentCompleted?(segment)
-    }
-
-    // MARK: - Compression (16kHz int16 mono)
-
-    private func compressSegment(sourceURL: URL, index: Int, duration: TimeInterval) -> AudioWriterSegment? {
-        let compressedURL = sourceURL.deletingPathExtension()
-            .appendingPathExtension("compressed.wav")
-
-        do {
-            let sourceFile = try AVAudioFile(forReading: sourceURL)
-            let srcFormat = sourceFile.processingFormat  // always float32
-            let totalFrames = AVAudioFrameCount(sourceFile.length)
-
-            guard totalFrames > 0 else {
-                log.warning("Compress: source file empty for segment \(index)")
-                return fallbackSegment(url: sourceURL, index: index, duration: duration)
-            }
-
-            let originalSize = fileSize(at: sourceURL)
-
-            // Read entire source into memory (fine for ≤10min segments)
-            guard let srcBuffer = AVAudioPCMBuffer(pcmFormat: srcFormat, frameCapacity: totalFrames) else {
-                return fallbackSegment(url: sourceURL, index: index, duration: duration)
-            }
-            try sourceFile.read(into: srcBuffer)
-
-            // Downmix to mono at source sample rate
-            let monoFormat = AVAudioFormat(
-                commonFormat: .pcmFormatFloat32,
-                sampleRate: srcFormat.sampleRate,
-                channels: 1,
-                interleaved: false
-            )!
-
-            let monoBuffer: AVAudioPCMBuffer
-            if srcFormat.channelCount == 1 {
-                monoBuffer = srcBuffer
-            } else {
-                guard let mb = AVAudioPCMBuffer(pcmFormat: monoFormat, frameCapacity: srcBuffer.frameLength) else {
-                    return fallbackSegment(url: sourceURL, index: index, duration: duration)
-                }
-                mb.frameLength = srcBuffer.frameLength
-                if let src = srcBuffer.floatChannelData, let dst = mb.floatChannelData {
-                    let frameCount = Int(srcBuffer.frameLength)
-                    let channelCount = Int(srcFormat.channelCount)
-                    memcpy(dst[0], src[0], frameCount * MemoryLayout<Float>.size)
-                    for ch in 1..<channelCount {
-                        for i in 0..<frameCount {
-                            dst[0][i] += src[ch][i]
-                        }
-                    }
-                    let scale = 1.0 / Float(channelCount)
-                    for i in 0..<frameCount {
-                        dst[0][i] *= scale
-                    }
-                }
-                monoBuffer = mb
-            }
-
-            // Resample mono → 16kHz
-            let targetFormat = AVAudioFormat(
-                commonFormat: .pcmFormatFloat32,
-                sampleRate: Self.compressSampleRate,
-                channels: 1,
-                interleaved: false
-            )!
-
-            guard let converter = AVAudioConverter(from: monoBuffer.format, to: targetFormat) else {
-                log.warning("Compress: cannot create converter for segment \(index)")
-                return fallbackSegment(url: sourceURL, index: index, duration: duration)
-            }
-
-            let ratio = Self.compressSampleRate / monoBuffer.format.sampleRate
-            let outputFrames = AVAudioFrameCount(ceil(Double(monoBuffer.frameLength) * ratio)) + 64
-            guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: outputFrames) else {
-                return fallbackSegment(url: sourceURL, index: index, duration: duration)
-            }
-
-            // Single-shot conversion with the full buffer
-            var inputConsumed = false
-            let status = try converter.convert(to: outputBuffer, error: nil) { _, outStatus in
-                if inputConsumed {
-                    outStatus.pointee = .endOfStream
-                    return nil
-                }
-                inputConsumed = true
-                outStatus.pointee = .haveData
-                return monoBuffer
-            }
-
-            guard status != .error, outputBuffer.frameLength > 0 else {
-                log.warning("Compress: converter returned no data for segment \(index)")
-                return fallbackSegment(url: sourceURL, index: index, duration: duration)
-            }
-
-            // Write compressed output as int16
-            let outputSettings: [String: Any] = [
-                AVFormatIDKey: kAudioFormatLinearPCM,
-                AVSampleRateKey: Self.compressSampleRate,
-                AVNumberOfChannelsKey: 1,
-                AVLinearPCMBitDepthKey: Self.compressBitDepth,
-                AVLinearPCMIsFloatKey: false,
-                AVLinearPCMIsBigEndianKey: false
-            ]
-
-            let outputFile = try AVAudioFile(forWriting: compressedURL, settings: outputSettings)
-            try outputFile.write(from: outputBuffer)
-
-            // Replace original with compressed
-            try FileManager.default.removeItem(at: sourceURL)
-            try FileManager.default.moveItem(at: compressedURL, to: sourceURL)
-
-            let compressedSize = fileSize(at: sourceURL)
-            let ratio_str = originalSize > 0 ? String(format: "%.0fx", Double(originalSize) / Double(max(compressedSize, 1))) : "?"
-            log.info("Compressed segment \(index)", detail: "\(originalSize / 1024)KB → \(compressedSize / 1024)KB (\(ratio_str), \(String(format: "%.0f", duration))s)")
-
-            return AudioWriterSegment(
-                url: sourceURL,
-                fileSize: compressedSize,
-                duration: duration,
-                index: index
-            )
-        } catch {
-            log.error("Compress failed for segment \(index)", error: error)
-            try? FileManager.default.removeItem(at: compressedURL)
-            return fallbackSegment(url: sourceURL, index: index, duration: duration)
-        }
-    }
-
-    private func fallbackSegment(url: URL, index: Int, duration: TimeInterval) -> AudioWriterSegment {
-        AudioWriterSegment(
-            url: url,
-            fileSize: fileSize(at: url),
-            duration: duration,
-            index: index
-        )
     }
 
     // MARK: - Private Helpers
