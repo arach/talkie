@@ -70,13 +70,6 @@ public enum RuntimeFeatureFlags {
             sharedSettingsKey: AgentSettingsKey.featureNotchComposerEnabled
         ),
         RuntimeFeatureFlagDefinition(
-            key: "enableVoiceForegrounding",
-            title: "Voice Foregrounding",
-            detail: "Experimental voice-over-background audio processing.",
-            defaultValue: false,
-            sharedSettingsKey: AgentSettingsKey.featureVoiceForegroundingEnabled
-        ),
-        RuntimeFeatureFlagDefinition(
             key: "showConnectionCenter",
             title: "Connection Center",
             detail: "iOS bridge and connection settings.",

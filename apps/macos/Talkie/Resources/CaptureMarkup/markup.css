@@ -96,6 +96,12 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
   border-color: rgba(79, 125, 255, 0.35);
 }
 
+.tool-btn.auto-blur-text[aria-busy="true"] {
+  color: #2449a6;
+  cursor: wait;
+  opacity: 0.62;
+}
+
 .tool-btn:disabled,
 [data-action="undo"]:disabled,
 [data-action="redo"]:disabled {

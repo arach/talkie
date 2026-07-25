@@ -90,6 +90,9 @@ final class AgentCaptureMarkupController {
             },
             onDelete: { [weak self] in
                 self?.delete(item: item, updatesLibrary: updatesLibrary)
+            },
+            onOpenInTalkie: { [weak self] in
+                self?.openInTalkie(item: item, sourceImage: sourceImage)
             }
         )
 
@@ -101,6 +104,8 @@ final class AgentCaptureMarkupController {
         overlay.showsDock = true
         overlay.showsWindowChrome = false
         overlay.usesCompactDock = true
+        overlay.supportsAutoBlurText = true
+        overlay.setSourceImage(sourceImage)
         overlay.onDone = { [weak self] layers in
             self?.finish(item: item, sourceImage: sourceImage, layers: layers, updatesLibrary: updatesLibrary)
         }
@@ -109,6 +114,10 @@ final class AgentCaptureMarkupController {
         }
         overlay.onDismissRequest = { [weak self] in
             self?.dismiss()
+        }
+        overlay.onAutoBlurText = { [weak self, weak overlay] in
+            guard let self, let overlay else { return }
+            self.autoBlurText(in: sourceImage, overlay: overlay)
         }
         overlay.additionalMousePassthroughScreenRects = { [weak self] in
             guard let placement = self?.currentPlacement else { return [] }
@@ -192,6 +201,64 @@ final class AgentCaptureMarkupController {
         log.info("Agent quick markup deleted", detail: item.fileURL.lastPathComponent)
     }
 
+    private func openInTalkie(item: AgentLiveTrayItem, sourceImage: CGImage) {
+        let document = CaptureMarkupDocument(
+            imageWidth: Double(sourceImage.width),
+            imageHeight: Double(sourceImage.height),
+            layers: overlay?.layers ?? []
+        )
+
+        do {
+            try CaptureMarkupStorage.save(document, forImageURL: item.fileURL)
+        } catch {
+            log.error(
+                "Agent quick markup handoff save failed: \(error.localizedDescription)",
+                detail: item.fileURL.path
+            )
+            return
+        }
+
+        var components = URLComponents()
+        components.scheme = TalkieEnvironment.current.talkieURLScheme
+        components.host = "capture"
+        components.path = "/markup"
+        components.queryItems = [URLQueryItem(name: "path", value: item.fileURL.path)]
+        guard let url = components.url, NSWorkspace.shared.open(url) else {
+            log.error("Agent quick markup handoff failed to open Talkie", detail: item.fileURL.path)
+            return
+        }
+
+        log.info("Agent quick markup handed off to Talkie", detail: item.fileURL.lastPathComponent)
+        dismiss()
+    }
+
+    private func autoBlurText(
+        in sourceImage: CGImage,
+        overlay requestedOverlay: LiveCaptureMarkupOverlayController
+    ) {
+        requestedOverlay.setAutoBlurTextRunning(true)
+        Task { @MainActor [weak self, weak requestedOverlay] in
+            guard let self, let requestedOverlay, self.overlay === requestedOverlay else { return }
+            do {
+                let result = try await VisionOCRService.shared.recognizeTextWithGeometry(in: sourceImage)
+                let blurLayers = CaptureMarkupAutoBlur.layers(for: result)
+                guard self.overlay === requestedOverlay else { return }
+                requestedOverlay.replaceAutoBlurTextLayers(blurLayers)
+                requestedOverlay.setAutoBlurTextRunning(false)
+                log.info("Agent quick markup auto-blurred text", detail: "regions=\(blurLayers.count)")
+            } catch VisionOCRError.noTextFound {
+                guard self.overlay === requestedOverlay else { return }
+                requestedOverlay.replaceAutoBlurTextLayers([])
+                requestedOverlay.setAutoBlurTextRunning(false)
+                log.info("Agent quick markup auto-blur found no text")
+            } catch {
+                guard self.overlay === requestedOverlay else { return }
+                requestedOverlay.setAutoBlurTextRunning(false)
+                log.error("Agent quick markup auto-blur failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
     private func bakeIfNeeded(
         item: AgentLiveTrayItem,
         sourceImage: CGImage,
@@ -257,7 +324,8 @@ final class AgentCaptureMarkupController {
         placement: AgentCaptureMarkupPlacement,
         onDone: @escaping () -> Void,
         onCancel: @escaping () -> Void,
-        onDelete: @escaping () -> Void
+        onDelete: @escaping () -> Void,
+        onOpenInTalkie: @escaping () -> Void
     ) {
         let view = AgentCaptureMarkupBackgroundView(
             title: title,
@@ -274,7 +342,8 @@ final class AgentCaptureMarkupController {
             },
             onDone: onDone,
             onCancel: onCancel,
-            onDelete: onDelete
+            onDelete: onDelete,
+            onOpenInTalkie: onOpenInTalkie
         )
         view.frame = NSRect(origin: .zero, size: placement.surfaceRect.size)
 
@@ -639,10 +708,16 @@ final class AgentCaptureMarkupController {
         let deleteRect = CGRect(
             x: surface.minX + 12,
             y: buttonY,
-            width: 64,
+            width: 94,
             height: 22
         )
-        return [deleteRect]
+        let openInTalkieRect = CGRect(
+            x: surface.maxX - 112,
+            y: buttonY,
+            width: 100,
+            height: 22
+        )
+        return [deleteRect, openInTalkieRect]
     }
 
     private static func relativeImageRect(for placement: AgentCaptureMarkupPlacement) -> NSRect {
@@ -840,7 +915,7 @@ private enum AgentCaptureMarkupLayout {
     static let bottomToolbarHeight: CGFloat = 30
     static let edgePadding: CGFloat = 4
     static let resizeHitSlop: CGFloat = 12
-    static let overlayResizePassthroughThickness: CGFloat = 10
+    static let overlayResizePassthroughThickness = resizeHitSlop
     static let resizeGripSize: CGFloat = 18
     static let minimumImageWidth: CGFloat = 220
     static let minimumImageHeight: CGFloat = 150
@@ -880,6 +955,7 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
     private let onDone: () -> Void
     private let onCancel: () -> Void
     private let onDelete: () -> Void
+    private let onOpenInTalkie: () -> Void
     private var lastDragScreenPoint: NSPoint?
     private var activeDragMode: DragMode?
 
@@ -892,7 +968,8 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         onZoom: @escaping (CGFloat) -> Void,
         onDone: @escaping () -> Void,
         onCancel: @escaping () -> Void,
-        onDelete: @escaping () -> Void
+        onDelete: @escaping () -> Void,
+        onOpenInTalkie: @escaping () -> Void
     ) {
         self.title = title
         self.image = image
@@ -903,6 +980,7 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         self.onDone = onDone
         self.onCancel = onCancel
         self.onDelete = onDelete
+        self.onOpenInTalkie = onOpenInTalkie
         super.init(frame: .zero)
         wantsLayer = true
     }
@@ -912,13 +990,18 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
     }
 
     override func resetCursorRects() {
-        addCursorRect(topResizeRect, cursor: .resizeUpDown)
-        addCursorRect(bottomResizeRect, cursor: .resizeUpDown)
-        addCursorRect(leftResizeRect, cursor: .resizeLeftRight)
-        addCursorRect(rightResizeRect, cursor: .resizeLeftRight)
+        addCursorRect(topLeftResizeRect, cursor: Self.northWestSouthEastResizeCursor)
+        addCursorRect(topRightResizeRect, cursor: Self.northEastSouthWestResizeCursor)
+        addCursorRect(bottomLeftResizeRect, cursor: Self.northEastSouthWestResizeCursor)
+        addCursorRect(bottomRightResizeRect, cursor: Self.northWestSouthEastResizeCursor)
+        addCursorRect(topEdgeResizeRect, cursor: .resizeUpDown)
+        addCursorRect(bottomEdgeResizeRect, cursor: .resizeUpDown)
+        addCursorRect(leftEdgeResizeRect, cursor: .resizeLeftRight)
+        addCursorRect(rightEdgeResizeRect, cursor: .resizeLeftRight)
         addCursorRect(dragRegion, cursor: .openHand)
         addCursorRect(cancelButtonRect, cursor: .pointingHand)
         addCursorRect(deleteButtonRect, cursor: .pointingHand)
+        addCursorRect(openInTalkieButtonRect, cursor: .pointingHand)
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -931,9 +1014,14 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
             onDelete()
             return
         }
+        if openInTalkieButtonRect.contains(point) {
+            onOpenInTalkie()
+            return
+        }
         if let edges = resizeEdges(at: point) {
             activeDragMode = .resize(edges)
             lastDragScreenPoint = screenPoint(for: event)
+            Self.resizeCursor(for: edges).set()
             return
         }
         guard dragRegion.contains(point) else {
@@ -943,6 +1031,7 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         }
         activeDragMode = .move
         lastDragScreenPoint = screenPoint(for: event)
+        NSCursor.closedHand.set()
     }
 
     override func mouseDragged(with event: NSEvent) {
@@ -965,6 +1054,7 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
     override func mouseUp(with event: NSEvent) {
         lastDragScreenPoint = nil
         activeDragMode = nil
+        window?.invalidateCursorRects(for: self)
     }
 
     func updateImageRect(_ imageRect: NSRect) {
@@ -1017,6 +1107,7 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         drawTitle(in: titleRect)
         drawChromeButtons()
         drawDeleteControl()
+        drawOpenInTalkieControl()
         drawResizeGrip()
 
         let imageClip = NSBezierPath(
@@ -1114,10 +1205,20 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
     private func drawDeleteControl() {
         drawButton(
             rect: deleteButtonRect,
-            title: "Delete",
+            title: "Delete Capture",
             foreground: NSColor.systemRed.withAlphaComponent(0.92),
             fill: NSColor.systemRed.withAlphaComponent(0.12),
             border: NSColor.systemRed.withAlphaComponent(0.42)
+        )
+    }
+
+    private func drawOpenInTalkieControl() {
+        drawButton(
+            rect: openInTalkieButtonRect,
+            title: "Open in Talkie",
+            foreground: NSColor.white.withAlphaComponent(0.88),
+            fill: NSColor(calibratedRed: 0.22, green: 0.31, blue: 0.62, alpha: 0.36),
+            border: NSColor(calibratedRed: 0.55, green: 0.63, blue: 1.0, alpha: 0.42)
         )
     }
 
@@ -1236,29 +1337,75 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         )
     }
 
-    private var leftResizeRect: NSRect {
-        NSRect(x: 0, y: 0, width: AgentCaptureMarkupLayout.resizeHitSlop, height: bounds.height)
-    }
-
-    private var rightResizeRect: NSRect {
+    private var topLeftResizeRect: NSRect {
         NSRect(
-            x: bounds.maxX - AgentCaptureMarkupLayout.resizeHitSlop,
-            y: 0,
+            x: bounds.minX,
+            y: bounds.maxY - AgentCaptureMarkupLayout.resizeHitSlop,
             width: AgentCaptureMarkupLayout.resizeHitSlop,
-            height: bounds.height
+            height: AgentCaptureMarkupLayout.resizeHitSlop
         )
     }
 
-    private var bottomResizeRect: NSRect {
-        NSRect(x: 0, y: 0, width: bounds.width, height: AgentCaptureMarkupLayout.resizeHitSlop)
+    private var topRightResizeRect: NSRect {
+        NSRect(
+            x: bounds.maxX - AgentCaptureMarkupLayout.resizeHitSlop,
+            y: bounds.maxY - AgentCaptureMarkupLayout.resizeHitSlop,
+            width: AgentCaptureMarkupLayout.resizeHitSlop,
+            height: AgentCaptureMarkupLayout.resizeHitSlop
+        )
     }
 
-    private var topResizeRect: NSRect {
+    private var bottomLeftResizeRect: NSRect {
         NSRect(
-            x: 0,
-            y: bounds.maxY - AgentCaptureMarkupLayout.resizeHitSlop,
-            width: bounds.width,
+            x: bounds.minX,
+            y: bounds.minY,
+            width: AgentCaptureMarkupLayout.resizeHitSlop,
             height: AgentCaptureMarkupLayout.resizeHitSlop
+        )
+    }
+
+    private var bottomRightResizeRect: NSRect {
+        NSRect(
+            x: bounds.maxX - AgentCaptureMarkupLayout.resizeHitSlop,
+            y: bounds.minY,
+            width: AgentCaptureMarkupLayout.resizeHitSlop,
+            height: AgentCaptureMarkupLayout.resizeHitSlop
+        )
+    }
+
+    private var topEdgeResizeRect: NSRect {
+        NSRect(
+            x: bounds.minX + AgentCaptureMarkupLayout.resizeHitSlop,
+            y: bounds.maxY - AgentCaptureMarkupLayout.resizeHitSlop,
+            width: max(1, bounds.width - AgentCaptureMarkupLayout.resizeHitSlop * 2),
+            height: AgentCaptureMarkupLayout.resizeHitSlop
+        )
+    }
+
+    private var bottomEdgeResizeRect: NSRect {
+        NSRect(
+            x: bounds.minX + AgentCaptureMarkupLayout.resizeHitSlop,
+            y: bounds.minY,
+            width: max(1, bounds.width - AgentCaptureMarkupLayout.resizeHitSlop * 2),
+            height: AgentCaptureMarkupLayout.resizeHitSlop
+        )
+    }
+
+    private var leftEdgeResizeRect: NSRect {
+        NSRect(
+            x: bounds.minX,
+            y: bounds.minY + AgentCaptureMarkupLayout.resizeHitSlop,
+            width: AgentCaptureMarkupLayout.resizeHitSlop,
+            height: max(1, bounds.height - AgentCaptureMarkupLayout.resizeHitSlop * 2)
+        )
+    }
+
+    private var rightEdgeResizeRect: NSRect {
+        NSRect(
+            x: bounds.maxX - AgentCaptureMarkupLayout.resizeHitSlop,
+            y: bounds.minY + AgentCaptureMarkupLayout.resizeHitSlop,
+            width: AgentCaptureMarkupLayout.resizeHitSlop,
+            height: max(1, bounds.height - AgentCaptureMarkupLayout.resizeHitSlop * 2)
         )
     }
 
@@ -1307,6 +1454,15 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         )
     }
 
+    private var deleteButtonRect: NSRect {
+        NSRect(
+            x: bottomToolbarRect.minX + 12,
+            y: bottomToolbarRect.midY - 11,
+            width: 94,
+            height: 22
+        )
+    }
+
     private var cancelButtonRect: NSRect {
         let title = titleRect
         return NSRect(
@@ -1317,11 +1473,11 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
         )
     }
 
-    private var deleteButtonRect: NSRect {
+    private var openInTalkieButtonRect: NSRect {
         NSRect(
-            x: bottomToolbarRect.minX + 12,
+            x: bottomToolbarRect.maxX - 112,
             y: bottomToolbarRect.midY - 11,
-            width: 64,
+            width: 100,
             height: 22
         )
     }
@@ -1373,6 +1529,37 @@ private final class AgentCaptureMarkupBackgroundView: NSView {
 
     private func screenPoint(for event: NSEvent) -> NSPoint? {
         window?.convertPoint(toScreen: event.locationInWindow)
+    }
+
+    private static let northWestSouthEastResizeCursor = diagonalResizeCursor(
+        symbolName: "arrow.up.left.and.arrow.down.right"
+    )
+
+    private static let northEastSouthWestResizeCursor = diagonalResizeCursor(
+        symbolName: "arrow.up.right.and.arrow.down.left"
+    )
+
+    private static func diagonalResizeCursor(symbolName: String) -> NSCursor {
+        let configuration = NSImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
+        let image = NSImage(
+            systemSymbolName: symbolName,
+            accessibilityDescription: "Resize"
+        )?.withSymbolConfiguration(configuration) ?? NSCursor.arrow.image
+        image.size = NSSize(width: 18, height: 18)
+        return NSCursor(image: image, hotSpot: NSPoint(x: 9, y: 9))
+    }
+
+    private static func resizeCursor(for edges: AgentCaptureMarkupResizeEdges) -> NSCursor {
+        if edges == [.top, .left] || edges == [.bottom, .right] {
+            return northWestSouthEastResizeCursor
+        }
+        if edges == [.top, .right] || edges == [.bottom, .left] {
+            return northEastSouthWestResizeCursor
+        }
+        if edges.contains(.top) || edges.contains(.bottom) {
+            return .resizeUpDown
+        }
+        return .resizeLeftRight
     }
 }
 

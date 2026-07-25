@@ -72,6 +72,25 @@ final class CaptureMarkupWebSession: NSObject {
         webView.evaluateJavaScript(script)
     }
 
+    func replaceAutoBlurTextLayers(_ layers: [CaptureMarkupLayer]) {
+        guard let webView,
+              let data = try? JSONEncoder().encode(layers),
+              let json = String(data: data, encoding: .utf8) else {
+            setAutoBlurTextRunning(false)
+            return
+        }
+        webView.evaluateJavaScript(
+            "window.talkieMarkup && window.talkieMarkup.replaceAutoBlurTextLayers(\(json));"
+        )
+    }
+
+    func setAutoBlurTextRunning(_ running: Bool) {
+        let value = running ? "true" : "false"
+        webView?.evaluateJavaScript(
+            "window.talkieMarkup && window.talkieMarkup.setAutoBlurTextRunning(\(value));"
+        )
+    }
+
     func clearSelection() {
         webView?.evaluateJavaScript("window.talkieMarkup && window.talkieMarkup.clearSelection();")
     }

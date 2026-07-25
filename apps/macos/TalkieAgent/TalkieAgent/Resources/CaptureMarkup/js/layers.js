@@ -76,6 +76,17 @@
           stylePreset: creating.stylePreset,
         };
       }
+      if (creating.tool === "blur") {
+        return {
+          id: "preview",
+          kind: "highlight",
+          frame: frameFromPoints(creating.start, creating.current),
+          color: "#646464",
+          label: "BLUR",
+          intent: "privacy",
+          stylePreset: "privacy-blur",
+        };
+      }
       if (creating.tool === "ellipse" || creating.tool === "rect") {
         return {
           id: "preview",

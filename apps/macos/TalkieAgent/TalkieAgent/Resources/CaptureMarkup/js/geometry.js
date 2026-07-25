@@ -51,7 +51,16 @@
     }
 
     function setDrawableRect(rect) {
-      state.drawableRect = rect ? sanitizeDrawableRect(rect) : null;
+      // Keep the host's requested geometry intact. During native live-resize,
+      // WKWebView can receive this update before its viewport has caught up;
+      // clamping here would permanently bake in the previous window size and
+      // make normalized markup appear to float away from the resized image.
+      state.drawableRect = rect ? {
+        x: Number(rect.x || 0),
+        y: Number(rect.y || 0),
+        width: Number(rect.width || viewportWidth()),
+        height: Number(rect.height || viewportHeight()),
+      } : null;
       const drawable = drawableRect();
       const hasReservedControls = drawable.y + drawable.height < viewportHeight() - 4;
       document.body.dataset.protectedDock = hasReservedControls ? "true" : "false";

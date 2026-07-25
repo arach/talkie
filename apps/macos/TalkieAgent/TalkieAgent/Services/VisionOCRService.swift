@@ -27,6 +27,13 @@ final class VisionOCRService {
     /// Recognize text in the given CGImage. Joins observations with newlines in
     /// top-to-bottom reading order.
     func recognizeText(in image: CGImage) async throws -> String {
+        let geometry = try await recognizeTextWithGeometry(in: image)
+        return geometry.fullText
+    }
+
+    /// Recognize text with normalized bounding boxes so markup can place
+    /// privacy blur layers directly over the detected text.
+    func recognizeTextWithGeometry(in image: CGImage) async throws -> OCRGeometryResult {
         try await withCheckedThrowingContinuation { continuation in
             let request = VNRecognizeTextRequest { request, error in
                 if let error {
@@ -48,12 +55,32 @@ final class VisionOCRService {
                     return lhs.boundingBox.minX < rhs.boundingBox.minX
                 }
 
-                let lines = sorted.compactMap { $0.topCandidates(1).first?.string }
-                let joined = lines.joined(separator: "\n")
+                let mapped = sorted.compactMap { observation -> OCRTextObservation? in
+                    guard let candidate = observation.topCandidates(1).first else { return nil }
+                    let box = observation.boundingBox
+                    return OCRTextObservation(
+                        text: candidate.string,
+                        boundingBox: CaptureMarkupRect(
+                            x: box.origin.x,
+                            y: box.origin.y,
+                            width: box.width,
+                            height: box.height
+                        ),
+                        confidence: candidate.confidence
+                    )
+                }
+                let joined = mapped.map(\.text).joined(separator: "\n")
                 if joined.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     continuation.resume(throwing: VisionOCRError.noTextFound)
                 } else {
-                    continuation.resume(returning: joined)
+                    continuation.resume(
+                        returning: OCRGeometryResult(
+                            imageWidth: Double(image.width),
+                            imageHeight: Double(image.height),
+                            observations: mapped,
+                            fullText: joined
+                        )
+                    )
                 }
             }
             request.recognitionLevel = .accurate
@@ -131,4 +158,3 @@ final class VisionOCRService {
         }
     }
 }
-

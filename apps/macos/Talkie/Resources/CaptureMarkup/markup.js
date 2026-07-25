@@ -12,6 +12,7 @@
     /** Layer ids explicitly tagged into the next agent message. */
     messageLayerIds: new Set(),
     activeTool: null,
+    autoBlurTextRunning: false,
     image: null,
     /** Existing-layer move drag (the original behaviour) — frame-based layers */
     drag: null,
@@ -253,6 +254,23 @@
       layerCount: state.document.layers.length,
       selection: selectionPayload(),
     });
+  }
+
+  function setAutoBlurTextRunning(running) {
+    state.autoBlurTextRunning = Boolean(running);
+    const button = toolToolbar.querySelector('[data-action="auto-blur-text"]');
+    if (!button) return;
+    button.disabled = state.autoBlurTextRunning;
+    button.setAttribute("aria-busy", state.autoBlurTextRunning ? "true" : "false");
+    button.title = state.autoBlurTextRunning ? "Detecting text…" : "Blur all detected text";
+    const label = button.querySelector(".label");
+    if (label) label.textContent = state.autoBlurTextRunning ? "Finding…" : "Blur text";
+  }
+
+  function requestAutoBlurText() {
+    if (state.autoBlurTextRunning) return;
+    setAutoBlurTextRunning(true);
+    post("markup.autoBlurText", { sessionId: state.sessionId });
   }
 
   // ---------------------------------------------------------------------------
@@ -1005,16 +1023,17 @@
     };
   }
 
-  // Blur is not in the TalkieKit schema. Phase-1 placeholder: a `highlight`
-  // layer labelled "BLUR" so the user sees a marked region. Replacing this
-  // with real blur requires Swift-side renderer support (out of scope).
-  function newBlurPlaceholderLayer(frame) {
+  // Privacy blur uses a schema-compatible highlight sentinel. Both the live
+  // canvas and TalkieKit's export renderer turn this layer into pixelation.
+  function newBlurLayer(frame) {
     return {
       id: uuid(),
       kind: "highlight",
       frame,
       color: "#646464",
       label: "BLUR",
+      intent: "privacy",
+      stylePreset: "privacy-blur",
       visible: true,
       author: "user",
     };
@@ -1323,24 +1342,16 @@
       case "highlight": {
         const r = framePx(layer, w, h);
         if (!r) break;
+        if (layer.kind === "highlight" && layer.label === "BLUR") {
+          drawPrivacyBlur(layer, r, w, h);
+          break;
+        }
         if (layer.kind === "highlight") {
           ctx.fillStyle = hexColor(layer.color, layer.label === "BLUR" ? 0.32 : 0.12);
           ctx.fillRect(r.x, r.y, r.w, r.h);
         }
         ctx.strokeStyle = hexColor(layer.color);
         ctx.strokeRect(r.x, r.y, r.w, r.h);
-        if (layer.label === "BLUR") {
-          // Render the "BLUR" placeholder tag in-corner so it's obvious this
-          // is a phase-1 marker, not a real blur effect.
-          ctx.fillStyle = "rgba(0,0,0,0.7)";
-          const tag = "BLUR";
-          ctx.font = `${Math.max(10, w / 160)}px ui-monospace, monospace`;
-          const tw = ctx.measureText(tag).width + 8;
-          const th = Math.max(14, w / 110);
-          ctx.fillRect(r.x, r.y, tw, th);
-          ctx.fillStyle = "#fff";
-          ctx.fillText(tag, r.x + 4, r.y + th - 4);
-        }
         break;
       }
       case "arrow": {
@@ -1485,6 +1496,37 @@
     }
     ctx.setLineDash([]);
     ctx.restore();
+  }
+
+  function drawPrivacyBlur(layer, rect, w, h) {
+    const frame = layer.frame;
+    const viewport = state.viewport;
+    const scale = viewport.imageScale || 1;
+    const sx = (frame.x * w - viewport.imageX) / scale;
+    const sy = (frame.y * h - viewport.imageY) / scale;
+    const sw = (frame.width * w) / scale;
+    const sh = (frame.height * h) / scale;
+
+    if (state.image && sw > 0 && sh > 0) {
+      const sample = document.createElement("canvas");
+      sample.width = Math.max(1, Math.ceil(rect.w / 12));
+      sample.height = Math.max(1, Math.ceil(rect.h / 12));
+      const sampleContext = sample.getContext("2d");
+      try {
+        sampleContext.drawImage(state.image, sx, sy, sw, sh, 0, 0, sample.width, sample.height);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(sample, rect.x, rect.y, rect.w, rect.h);
+      } catch (error) {
+        ctx.fillStyle = "rgb(86, 86, 86)";
+        ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+      }
+    } else {
+      ctx.fillStyle = "rgb(86, 86, 86)";
+      ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+    }
+    ctx.strokeStyle = "rgba(255,255,255,0.26)";
+    ctx.lineWidth = Math.max(1, w / 1200);
+    ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
   }
 
   function postSelection() {
@@ -2357,6 +2399,29 @@
       }
       render();
     },
+    replaceAutoBlurTextLayers(layers) {
+      const incoming = Array.isArray(layers) ? cloneDocument(layers) : [];
+      const viewport = state.viewport;
+      const basis = {
+        width: viewport.width,
+        height: viewport.height,
+        imageX: viewport.imageX,
+        imageY: viewport.imageY,
+        imageScale: viewport.imageScale,
+        imageW: state.image ? state.image.width : state.document.imageWidth,
+        imageH: state.image ? state.image.height : state.document.imageHeight,
+      };
+      incoming.forEach((layer) => migrateLayerFromImageBasis(layer, basis));
+      snapshotForUndo();
+      state.document.layers = state.document.layers.filter((layer) => layer.stylePreset !== "auto-blur-text");
+      state.document.layers.push(...incoming);
+      state.selectedLayerId = incoming.length ? incoming[incoming.length - 1].id : null;
+      setActiveTool(null);
+      setAutoBlurTextRunning(false);
+      debouncedUpdate();
+      render();
+    },
+    setAutoBlurTextRunning,
     exportDocument() { return attachViewportToDocument(state.document); },
     exportMessageLayers() {
       return state.document.layers.filter((layer) => state.messageLayerIds.has(layer.id));
@@ -2413,6 +2478,13 @@
     const saveButton = e.target.closest('[data-action="save"]');
     if (saveButton) {
       requestSave();
+      e.preventDefault();
+      return;
+    }
+
+    const autoBlurButton = e.target.closest('[data-action="auto-blur-text"]');
+    if (autoBlurButton) {
+      requestAutoBlurText();
       e.preventDefault();
       return;
     }
@@ -2907,7 +2979,7 @@
           c.tool === "line",
         );
       } else if (c.tool === "blur") {
-        layer = newBlurPlaceholderLayer(normalizedFrame(c.start, c.current));
+        layer = newBlurLayer(normalizedFrame(c.start, c.current));
       } else if (c.tool === "clone") {
         layer = newPatchLayer(normalizedFrame(c.start, c.current));
       }

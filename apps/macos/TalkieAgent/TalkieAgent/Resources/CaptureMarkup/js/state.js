@@ -19,6 +19,9 @@
       selectedLayerId: null,
       dragging: null,
       drawableRect: null,
+      sourceImage: null,
+      autoBlurTextAvailable: false,
+      autoBlurTextRunning: false,
       lastPointer: { x: 0.5, y: 0.5 },
       startedAt: performance.now(),
     };
