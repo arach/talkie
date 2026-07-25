@@ -46,6 +46,9 @@ struct AgentVoiceTransmissionDraft: Sendable {
     let code: String
     let userBody: String
     let userDurationMs: Int
+    let conversationId: String
+    let parentSessionId: String?
+    let source: String
     let startedAt: Date
 
     init(
@@ -54,6 +57,9 @@ struct AgentVoiceTransmissionDraft: Sendable {
         code: String = "T01",
         userBody: String,
         userDurationMs: Int,
+        conversationId: String = "channel-\(AgentChannel.defaultChannel.code.lowercased())",
+        parentSessionId: String? = nil,
+        source: String = "voice",
         startedAt: Date
     ) {
         self.id = id
@@ -61,6 +67,9 @@ struct AgentVoiceTransmissionDraft: Sendable {
         self.code = code
         self.userBody = userBody
         self.userDurationMs = userDurationMs
+        self.conversationId = conversationId
+        self.parentSessionId = parentSessionId
+        self.source = source
         self.startedAt = startedAt
     }
 }

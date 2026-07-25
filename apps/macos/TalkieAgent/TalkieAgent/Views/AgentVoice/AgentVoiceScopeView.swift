@@ -434,7 +434,7 @@ struct AgentVoiceScopeView: View {
                     .tracking(1.4)
                     .foregroundStyle(palette.inkSubtle)
                 if session.continuationSessionId != nil {
-                    Text("· SAME SESSION")
+                    Text("· CONTINUING")
                         .font(.system(size: 9, weight: .regular, design: .monospaced))
                         .tracking(1.4)
                         .foregroundStyle(palette.trace)
@@ -526,7 +526,7 @@ struct AgentVoiceScopeView: View {
 
     private var voiceFollowUpLabel: String {
         if executorBranchIsWorking { return "AGENT WORKING" }
-        return isRecordingFollowUp ? "STOP & SEND" : "TALK FOLLOW-UP"
+        return isRecordingFollowUp ? "STOP & SEND" : "TALK AGAIN"
     }
 
     private var voiceFollowUpBadge: String {
@@ -536,7 +536,7 @@ struct AgentVoiceScopeView: View {
 
     private var voiceFollowUpHelp: String {
         if executorBranchIsWorking { return "The agent is still working" }
-        return isRecordingFollowUp ? "Stop recording and send" : "Record a voice follow-up"
+        return isRecordingFollowUp ? "Stop recording and send" : "Record another voice turn"
     }
 
     private var followUpComposer: some View {
@@ -575,7 +575,7 @@ struct AgentVoiceScopeView: View {
             }
             .buttonStyle(.plain)
             .disabled(!canSendFollowUp)
-            .help("Send follow-up")
+            .help("Send turn")
         }
         .padding(.top, 2)
     }
@@ -782,7 +782,7 @@ struct AgentVoiceScopeView: View {
                 return "OUT · \(shortModelLabel(model))"
             }
             return "OUT"
-        case .followUpRecording: return "FOLLOW-UP"
+        case .followUpRecording: return "TALKING"
         case .followUpOver: return "SENDING"
         case .error: return "ERROR"
         }
@@ -824,7 +824,7 @@ struct AgentVoiceScopeView: View {
         case .over: return "PROCESSING…"
         case .thinking: return "ASKING AGENT…"
         case .receiving:
-            return executorBranchIsWorking ? "WAITING ON AGENT" : "FOLLOW UP OR DONE"
+            return executorBranchIsWorking ? "WAITING ON AGENT" : "TALK AGAIN OR DONE"
         case .followUpRecording: return "STOP TO SEND"
         case .followUpOver: return "PROCESSING…"
         case .error: return session.offersVoiceRetry ? "TALK OR DISMISS" : "DISMISS TO RESET"

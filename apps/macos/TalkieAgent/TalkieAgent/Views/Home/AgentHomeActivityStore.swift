@@ -885,6 +885,11 @@ final class AgentHomeActivityStore: ObservableObject {
             if didChange {
                 lastRefreshed = Date()
             }
+        } catch let error where Self.isTransientRuntimeRefreshFailure(error) {
+            agentHomeLog.warning(
+                "Agent Home runtime refresh timed out; preserving last known state",
+                detail: error.localizedDescription
+            )
         } catch {
             let didChange = runtimePing != nil || !agents.isEmpty || !executorJobs.isEmpty
             runtimePing = nil
@@ -897,6 +902,20 @@ final class AgentHomeActivityStore: ObservableObject {
                 "Agent Home could not refresh runtime status",
                 detail: error.localizedDescription
             )
+        }
+    }
+
+    private static func isTransientRuntimeRefreshFailure(_ error: Error) -> Bool {
+        switch error {
+        case AgentRuntimeClientError.runtimeTimedOut:
+            return true
+        case AgentRuntimeClientError.runtimeFailed(let detail):
+            let normalized = detail
+                .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            return normalized.localizedStandardContains("timed out waiting for activity store lock")
+                || normalized.localizedStandardContains("resource temporarily unavailable")
+        default:
+            return false
         }
     }
 

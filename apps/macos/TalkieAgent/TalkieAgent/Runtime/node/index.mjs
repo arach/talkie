@@ -177,13 +177,16 @@ async function handleLine(line) {
   }
 
   try {
-    const runtime = await runtimeInfo();
     switch (request?.op) {
       case 'ping':
-        writeResponse({ ok: true, pid: process.pid, version, runtime, agents: runtime.agents });
+        {
+          const runtime = await runtimeInfo();
+          writeResponse({ ok: true, pid: process.pid, version, runtime, agents: runtime.agents });
+        }
         break;
       case 'status':
         {
+          const runtime = await runtimeInfo();
           const activities = listActivities();
           writeResponse({
             ok: true,
@@ -198,12 +201,14 @@ async function handleLine(line) {
         break;
       case 'invoke':
         {
+          const runtime = await runtimeInfo();
           const activity = await invoke(request?.invocation ?? request?.job, runtime);
           writeResponse({ ok: true, runtime, activity, job: activity });
         }
         break;
       case 'startJob':
         {
+          const runtime = await runtimeInfo();
           const activity = await invoke(request?.job ?? request?.invocation, runtime);
           writeResponse({ ok: true, runtime, activity, job: activity });
         }
@@ -211,6 +216,7 @@ async function handleLine(line) {
       case 'retryInvocation':
       case 'retryJob':
         {
+          const runtime = await runtimeInfo();
           const activity = await retryInvocation(request?.sessionId, runtime);
           writeResponse({ ok: true, runtime, activity, job: activity });
         }
@@ -218,6 +224,7 @@ async function handleLine(line) {
       case 'runQueuedInvocations':
       case 'runQueuedJobs':
         {
+          const runtime = await runtimeInfo();
           const activities = await runQueuedInvocations(runtime);
           writeResponse({ ok: true, runtime, activities, jobs: activities });
         }
@@ -226,21 +233,21 @@ async function handleLine(line) {
       case 'listJobs':
         {
           const activities = listActivities();
-          writeResponse({ ok: true, runtime, activities, jobs: activities });
+          writeResponse({ ok: true, activities, jobs: activities });
         }
         break;
       case 'activityStatus':
       case 'jobStatus':
         {
           const activity = activityStatus(request?.sessionId);
-          writeResponse({ ok: true, runtime, activity, job: activity });
+          writeResponse({ ok: true, activity, job: activity });
         }
         break;
       case 'cancelInvocation':
       case 'cancelJob':
         {
           const activity = cancelInvocation(request?.sessionId);
-          writeResponse({ ok: true, runtime, activity, job: activity });
+          writeResponse({ ok: true, activity, job: activity });
         }
         break;
       default:
