@@ -588,6 +588,7 @@ final class AgentHomeActivityStore: ObservableObject {
     @Published private(set) var invokeError: String?
 
     private var refreshTimer: Timer?
+    private var initialRefreshTask: Task<Void, Never>?
     private let defaultConversationId = "agent-home-main"
 
     var activeJobs: [AgentHomeExecutorJob] {
@@ -676,7 +677,13 @@ final class AgentHomeActivityStore: ObservableObject {
     }
 
     func startRefreshing() {
-        refresh()
+        initialRefreshTask?.cancel()
+        initialRefreshTask = Task { @MainActor [weak self] in
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            self?.refresh()
+        }
+
         refreshTimer?.invalidate()
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
@@ -686,6 +693,8 @@ final class AgentHomeActivityStore: ObservableObject {
     }
 
     func stopRefreshing() {
+        initialRefreshTask?.cancel()
+        initialRefreshTask = nil
         refreshTimer?.invalidate()
         refreshTimer = nil
     }

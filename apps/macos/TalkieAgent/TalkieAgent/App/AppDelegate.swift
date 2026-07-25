@@ -65,6 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     // Event monitors (stored to allow cleanup if needed)
     private var controlKeyMonitor: Any?
+    private var agentHomePrewarmTask: Task<Void, Never>?
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         // Menu bar app - keep running when windows are closed
@@ -128,6 +129,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         // Sync setup that can't wait for boot
         setupStatusBar()
         setupMenu()
+        scheduleAgentHomePrewarm()
         configureSelectionFeedback()
         trackSelectionSourceApp()
     }
@@ -207,6 +209,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             NSEvent.removeMonitor(monitor)
             controlKeyMonitor = nil
         }
+
+        agentHomePrewarmTask?.cancel()
+        agentHomePrewarmTask = nil
     }
 
     // MARK: - URL Handling
@@ -268,104 +273,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     /// Create a custom menu bar icon.
-    /// - Recording: pill with mic + waveform (red background, white symbols)
-    /// - Idle, mic denied: mic symbol + small orange dot badge
-    /// - Idle, mic granted: plain mic symbol (template, adapts to system appearance)
+    /// - Recording: Talkie glyph tinted red
+    /// - Idle, mic denied: Talkie glyph tinted orange
+    /// - Idle, mic granted: Talkie glyph (template, adapts to system appearance)
     private func createMenuBarIcon(isRecording: Bool, hasMicPermission: Bool) -> NSImage {
         if isRecording {
-            // Recording: pill with mic + waveform
-            let height: CGFloat = 22      // Taller pill
-            let pillWidth: CGFloat = 40   // Wider pill
-
-            let image = NSImage(size: NSSize(width: pillWidth, height: height), flipped: false) { rect in
-                // Red pill background
-                let bgRect = rect.insetBy(dx: 1, dy: 1)
-                let cornerRadius = bgRect.height / 2  // Fully rounded ends
-
-                let bgPath = NSBezierPath(roundedRect: bgRect, xRadius: cornerRadius, yRadius: cornerRadius)
-                NSColor.systemRed.withAlphaComponent(0.9).setFill()
-                bgPath.fill()
-
-                // Symbol configuration
-                let symbolConfig = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold)
-
-                // Draw mic on the left
-                if let micSymbol = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: nil)?
-                    .withSymbolConfiguration(symbolConfig) {
-
-                    let micSize = NSSize(width: 11, height: 14)
-                    let micX: CGFloat = 6
-                    let micY = (height - micSize.height) / 2
-
-                    let micRect = NSRect(x: micX, y: micY, width: micSize.width, height: micSize.height)
-                    let tintedMic = micSymbol.tinted(with: .white)
-                    tintedMic.draw(in: micRect)
-                }
-
-                // Draw waveform on the right
-                if let waveSymbol = NSImage(systemSymbolName: "waveform", accessibilityDescription: nil)?
-                    .withSymbolConfiguration(symbolConfig) {
-
-                    let waveSize = NSSize(width: 16, height: 12)
-                    let waveX = pillWidth - waveSize.width - 5
-                    let waveY = (height - waveSize.height) / 2
-
-                    let waveRect = NSRect(x: waveX, y: waveY, width: waveSize.width, height: waveSize.height)
-                    let tintedWave = waveSymbol.tinted(with: .white)
-                    tintedWave.draw(in: waveRect)
-                }
-
-                return true
-            }
-
-            image.isTemplate = false  // Keep red color
-            return image
-
-        } else if !hasMicPermission {
-            // Idle + mic permission missing: mic icon with small orange warning dot in top-right
-            let menuBarHeight = NSStatusBar.system.thickness
-            let pointSize = min(15, menuBarHeight * 0.55)
-            let dotDiameter: CGFloat = 5
-            let iconWidth = pointSize + dotDiameter * 0.6
-            let iconHeight = pointSize + dotDiameter * 0.6
-            let iconSize = NSSize(width: iconWidth, height: iconHeight)
-
-            let image = NSImage(size: iconSize, flipped: false) { _ in
-                let symbolConfig = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .medium)
-                if let micSymbol = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Microphone permission missing")?
-                    .withSymbolConfiguration(symbolConfig) {
-                    let tinted = micSymbol.tinted(with: NSColor.labelColor)
-                    tinted.draw(in: NSRect(x: 0, y: 0, width: pointSize, height: iconHeight))
-                }
-
-                // Orange dot badge anchored to top-right corner of the mic
-                let dotX = iconWidth - dotDiameter
-                let dotY = iconHeight - dotDiameter
-                NSColor.systemOrange.setFill()
-                NSBezierPath(ovalIn: NSRect(x: dotX, y: dotY, width: dotDiameter, height: dotDiameter)).fill()
-
-                return true
-            }
-            image.isTemplate = false
-            return image
-
-        } else {
-            // Idle: just the mic icon, no background (minimalist)
-            // Scale to fit the actual menu bar height (varies: ~24pt non-notch, ~33pt M2 Air, ~38pt Pro)
-            let menuBarHeight = NSStatusBar.system.thickness
-            let pointSize = min(15, menuBarHeight * 0.55)
-            let symbolConfig = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .medium)
-
-            if let micSymbol = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Ready")?
-                .withSymbolConfiguration(symbolConfig) {
-                micSymbol.isTemplate = true  // Adapts to menu bar (light/dark mode)
-                return micSymbol
-            }
-
-            // Fallback
-            let fallback = NSImage(size: NSSize(width: 15, height: 15))
-            return fallback
+            return menuBarGlyphIcon(tint: .systemRed)
         }
+
+        if !hasMicPermission {
+            return menuBarGlyphIcon(tint: .systemOrange)
+        }
+
+        return menuBarGlyphIcon()
+    }
+
+    private func menuBarGlyphIcon(tint: NSColor? = nil) -> NSImage {
+        let menuBarHeight = NSStatusBar.system.thickness
+        let side = min(18, menuBarHeight * 0.65)
+
+        if let icon = NSImage(named: "MenuBarIcon")?.copy() as? NSImage {
+            icon.size = NSSize(width: side, height: side)
+            guard let tint else {
+                icon.isTemplate = true
+                return icon
+            }
+
+            icon.isTemplate = false
+            let tintedIcon = icon.tinted(with: tint)
+            tintedIcon.size = icon.size
+            tintedIcon.isTemplate = false
+            return tintedIcon
+        }
+
+        let symbolConfig = NSImage.SymbolConfiguration(pointSize: min(15, menuBarHeight * 0.55), weight: .medium)
+        if let fallback = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Ready")?
+            .withSymbolConfiguration(symbolConfig) {
+            guard let tint else {
+                fallback.isTemplate = true
+                return fallback
+            }
+
+            fallback.isTemplate = false
+            let tintedFallback = fallback.tinted(with: tint)
+            tintedFallback.size = fallback.size
+            tintedFallback.isTemplate = false
+            return tintedFallback
+        }
+
+        let fallback = NSImage(size: NSSize(width: side, height: side))
+        if tint == nil {
+            fallback.isTemplate = true
+        }
+
+        return fallback
     }
 
     private func updateStatusBarBadge(controlPressed: Bool) {
@@ -444,6 +405,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         // Set initial key equivalents from settings
         updateMenuKeyEquivalent()
+    }
+
+    private func scheduleAgentHomePrewarm() {
+        agentHomePrewarmTask?.cancel()
+        agentHomePrewarmTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(700))
+            guard !Task.isCancelled else { return }
+            AgentHomeController.shared.prewarm()
+        }
     }
 
     // MARK: - State Observation

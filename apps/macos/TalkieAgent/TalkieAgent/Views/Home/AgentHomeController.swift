@@ -22,18 +22,41 @@ final class AgentHomeController: NSObject, ObservableObject, NSWindowDelegate {
 
     private override init() {}
 
+    func prewarm() {
+        guard window == nil else { return }
+
+        let start = CFAbsoluteTimeGetCurrent()
+        _ = prepareWindow()
+        let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
+        agentHomeControllerLog.info(
+            "Agent Home prewarmed",
+            detail: "durationMs=\(elapsedMs)"
+        )
+    }
+
     func show() {
+        let start = CFAbsoluteTimeGetCurrent()
+        let wasPrewarmed = window != nil
+
         agentHomeControllerLog.info("Showing Agent Home")
         AgentAppPresentationController.shared.retainRegularPresentation(for: appPresentationClaim)
 
-        if let window {
-            if window.isMiniaturized {
-                window.deminiaturize(nil)
-            }
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
+        let homeWindow = prepareWindow()
+        if homeWindow.isMiniaturized {
+            homeWindow.deminiaturize(nil)
         }
+        homeWindow.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+
+        let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
+        agentHomeControllerLog.info(
+            "Agent Home visible",
+            detail: "prewarmed=\(wasPrewarmed) durationMs=\(elapsedMs)"
+        )
+    }
+
+    private func prepareWindow() -> NSWindow {
+        if let window { return window }
 
         let view = AgentHomeView(
             onDismiss: { [weak self] in
@@ -63,10 +86,9 @@ final class AgentHomeController: NSObject, ObservableObject, NSWindowDelegate {
         homeWindow.delegate = self
         homeWindow.setFrameAutosaveName("TalkieAgent.AgentHome")
         homeWindow.center()
-        homeWindow.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
 
         window = homeWindow
+        return homeWindow
     }
 
     func dismiss() {
