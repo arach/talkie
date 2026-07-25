@@ -12,6 +12,8 @@ import ImageIO
 import SwiftUI
 import TalkieKit
 
+private let agentHomeUXLog = Log(.ui)
+
 struct AgentHomeShellView: View {
     private static let inspectorAutoCollapseWidth: CGFloat = 900
 
@@ -3552,6 +3554,7 @@ private struct AgentHomeLibraryDetailPane: View {
     let item: TalkieObject?
     let onOpenInTalkie: (TalkieObject) -> Void
 
+    @ObservedObject private var playback = TalkieKit.AudioPlaybackManager.shared
     @State private var copiedItemID: UUID?
 
     private static let metadataRailThreshold: CGFloat = 660
@@ -3714,6 +3717,8 @@ private struct AgentHomeLibraryDetailPane: View {
                 .font(OpsType.ui(OpsSize.xl, weight: .semibold))
                 .foregroundStyle(OpsInk.ink)
 
+            audioPlayback(for: item)
+
             VStack(alignment: .leading, spacing: OpsSpacing.md) {
                 OpsButton("Open in Talkie", icon: "arrow.up.forward.app", style: .secondary) {
                     onOpenInTalkie(item)
@@ -3746,6 +3751,30 @@ private struct AgentHomeLibraryDetailPane: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private func audioPlayback(for item: TalkieObject) -> some View {
+        if let audioURL = item.agentHomeAudioURL {
+            VStack(alignment: .leading, spacing: OpsSpacing.sm) {
+                Text("AUDIO")
+                    .font(OpsType.mono(OpsSize.micro, weight: .bold))
+                    .tracking(1.1)
+                    .foregroundStyle(OpsInk.dim)
+
+                AudioPlayerCard(
+                    audioURL: audioURL,
+                    audioID: item.id.uuidString,
+                    playback: playback,
+                    compactMode: true
+                )
+            }
+            .onAppear {
+                agentHomeUXLog.info(
+                    "Audio playback available in Agent: id=\(item.id.uuidString), file=\(audioURL.lastPathComponent)"
+                )
+            }
+        }
     }
 
     private func copyText(for item: TalkieObject) {
@@ -4236,11 +4265,13 @@ private enum AgentHomeTalkieLibraryOpener {
         components.host = "library"
         components.queryItems = [
             URLQueryItem(name: "id", value: item.id.uuidString),
-            URLQueryItem(name: "recordingId", value: item.id.uuidString),
-            URLQueryItem(name: "newWindow", value: "1")
+            URLQueryItem(name: "recordingId", value: item.id.uuidString)
         ]
 
         guard let url = components.url else { return }
+        agentHomeUXLog.info(
+            "Opening library item in Talkie: id=\(item.id.uuidString), type=\(item.type.rawValue), hasAudio=\(item.hasAudio), newWindow=false"
+        )
         TalkieAppOpener.open(url)
     }
 }
@@ -4261,6 +4292,12 @@ private extension String {
 }
 
 private extension TalkieObject {
+    var agentHomeAudioURL: URL? {
+        guard let audioFilename else { return nil }
+        let url = AudioStorage.audioDirectory.appending(path: audioFilename)
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
     var agentHomeHasVisualPreview: Bool {
         type == .capture
             || !screenshots.isEmpty
