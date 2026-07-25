@@ -409,6 +409,7 @@ public enum CaptureMarkupRenderer {
         context.draw(output, in: CGRect(origin: .zero, size: destination.size))
         context.restoreGState()
     }
+
     private static func drawPrivacyBlur(
         frame: CaptureMarkupRect,
         destinationRect: CGRect,

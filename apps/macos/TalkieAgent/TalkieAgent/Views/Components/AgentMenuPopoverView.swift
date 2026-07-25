@@ -521,6 +521,7 @@ struct AgentMenuPopoverView: View {
             .compactMap { $0 }
             .joined(separator: " · ")
     }
+
     private var recentGrabsSection: some View {
         AgentMenuRecentGrabsSection(
             onOpenAll: actions.openAllGrabs,
