@@ -72,37 +72,136 @@ private enum VisualState: Equatable {
 
 // MARK: - Shared Surface
 
+/// Stable, semantic chrome for overlays that must remain legible regardless of
+/// the app or wallpaper beneath them. TalkieAgent chooses the tone from a
+/// small screen sample; other LivePill hosts can continue using system glass.
+public enum LiveGlassTone: Equatable, Sendable {
+    case pearl
+    case graphite
+
+    public var colorScheme: ColorScheme {
+        switch self {
+        case .pearl: .light
+        case .graphite: .dark
+        }
+    }
+
+    public var surface: Color {
+        switch self {
+        case .pearl: Color(red: 0.965, green: 0.973, blue: 0.976)
+        case .graphite: Color(red: 0.071, green: 0.086, blue: 0.094)
+        }
+    }
+
+    public var surfaceOpacity: Double {
+        switch self {
+        case .pearl: 0.72
+        case .graphite: 0.62
+        }
+    }
+
+    public var raisedSurface: Color {
+        switch self {
+        case .pearl: Color(red: 0.992, green: 0.988, blue: 0.976)
+        case .graphite: Color(red: 0.105, green: 0.125, blue: 0.133)
+        }
+    }
+
+    public var primaryText: Color {
+        switch self {
+        case .pearl: Color(red: 0.12, green: 0.14, blue: 0.15)
+        case .graphite: Color(red: 0.93, green: 0.95, blue: 0.94)
+        }
+    }
+
+    public var secondaryText: Color {
+        switch self {
+        case .pearl: Color(red: 0.34, green: 0.37, blue: 0.39)
+        case .graphite: Color(red: 0.59, green: 0.66, blue: 0.64)
+        }
+    }
+
+    public var edge: Color {
+        switch self {
+        case .pearl: Color.black.opacity(0.14)
+        case .graphite: Color.white.opacity(0.13)
+        }
+    }
+
+    public var highlight: Color {
+        switch self {
+        case .pearl: Color.white.opacity(0.82)
+        case .graphite: Color.white.opacity(0.10)
+        }
+    }
+
+    public var sheen: Color {
+        switch self {
+        case .pearl: Color.white.opacity(0.55)
+        case .graphite: Color.white.opacity(0.10)
+        }
+    }
+
+    public var outerEdge: Color {
+        switch self {
+        case .pearl: Color.black.opacity(0.12)
+        case .graphite: Color.black.opacity(0.35)
+        }
+    }
+
+    public var shadow: Color {
+        switch self {
+        case .pearl: Color.black.opacity(0.20)
+        case .graphite: Color.black.opacity(0.42)
+        }
+    }
+
+    public var contactShadow: Color {
+        switch self {
+        case .pearl: Color.black.opacity(0.12)
+        case .graphite: Color.black.opacity(0.22)
+        }
+    }
+
+    public var lockAccent: Color {
+        switch self {
+        case .pearl: Color(red: 0.08, green: 0.57, blue: 0.48)
+        case .graphite: Color(red: 0.31, green: 0.83, blue: 0.69)
+        }
+    }
+
+    public var recordingAccent: Color {
+        switch self {
+        case .pearl: Color(red: 0.88, green: 0.23, blue: 0.18)
+        case .graphite: Color(red: 1.0, green: 0.35, blue: 0.29)
+        }
+    }
+}
+
 public struct LiveGlassSurfaceModifier: ViewModifier {
     let cornerRadius: CGFloat
     let borderColor: Color
+    let tone: LiveGlassTone?
 
     public func body(content: Content) -> some View {
         content
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: cornerRadius)
-                            .fill(
-                                RadialGradient(
-                                    colors: [
-                                        Color.white.opacity(0.08),
-                                        Color.clear
-                                    ],
-                                    center: .top,
-                                    startRadius: 0,
-                                    endRadius: 40
-                                )
-                            )
-                    )
+                    .overlay {
+                        if let tone {
+                            RoundedRectangle(cornerRadius: cornerRadius)
+                                .fill(tone.surface.opacity(tone.surfaceOpacity))
+                        }
+                    }
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerRadius)
                             .fill(
                                 LinearGradient(
                                     colors: [
-                                        Color.white.opacity(0.12),
-                                        Color.white.opacity(0.02),
-                                        Color.black.opacity(0.05)
+                                        tone?.sheen ?? Color.white.opacity(0.12),
+                                        tone?.sheen.opacity(0.18) ?? Color.white.opacity(0.02),
+                                        Color.clear
                                     ],
                                     startPoint: .top,
                                     endPoint: .bottom
@@ -111,25 +210,31 @@ public struct LiveGlassSurfaceModifier: ViewModifier {
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerRadius)
-                            .stroke(borderColor, lineWidth: 0.5)
+                            .stroke(tone == nil ? borderColor : borderColor.opacity(0.72), lineWidth: 0.6)
                     )
+                    .overlay {
+                        if let tone {
+                            RoundedRectangle(cornerRadius: cornerRadius)
+                                .stroke(tone.outerEdge, lineWidth: 0.5)
+                        }
+                    }
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerRadius)
                             .stroke(
                                 LinearGradient(
                                     colors: [
-                                        Color.white.opacity(0.4),
-                                        Color.white.opacity(0.15),
+                                        tone?.highlight ?? Color.white.opacity(0.4),
+                                        tone?.highlight.opacity(0.28) ?? Color.white.opacity(0.15),
                                         Color.clear
                                     ],
                                     startPoint: .top,
                                     endPoint: .center
                                 ),
-                                lineWidth: 1
+                                lineWidth: tone == nil ? 1 : 0.7
                             )
                     )
-                    .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
-                    .shadow(color: Color.white.opacity(0.05), radius: 1, x: 0, y: -1)
+                    .shadow(color: tone?.shadow ?? Color.black.opacity(0.2), radius: tone == nil ? 8 : 10, x: 0, y: tone == nil ? 4 : 5)
+                    .shadow(color: tone?.contactShadow ?? Color.white.opacity(0.05), radius: tone == nil ? 1 : 2, x: 0, y: 1)
             )
     }
 }
@@ -137,12 +242,14 @@ public struct LiveGlassSurfaceModifier: ViewModifier {
 public extension View {
     func liveGlassSurface(
         borderColor: Color = Color.white.opacity(0.1),
-        cornerRadius: CGFloat = 8
+        cornerRadius: CGFloat = 8,
+        tone: LiveGlassTone? = nil
     ) -> some View {
         modifier(
             LiveGlassSurfaceModifier(
                 cornerRadius: cornerRadius,
-                borderColor: borderColor
+                borderColor: borderColor,
+                tone: tone
             )
         )
     }
@@ -173,6 +280,10 @@ public struct LivePill: View {
     // When not "Paste", shows an indicator during recording
     var captureIntent: String = "Paste"
 
+    // Screen-aware chrome for the floating overlay. Nil preserves the system
+    // material used by embedded/status-bar instances.
+    var glassTone: LiveGlassTone? = nil
+
     // Optional callbacks
     var onTap: (() -> Void)? = nil
     var onQueueTap: (() -> Void)? = nil  // Tapping the queue badge specifically
@@ -180,6 +291,7 @@ public struct LivePill: View {
 
     // MARK: - State
 
+    @Environment(\.colorScheme) private var colorScheme
     @State private var isHovered = false
     @State private var isShiftHeld = false
     @State private var isCommandHeld = false
@@ -200,6 +312,7 @@ public struct LivePill: View {
         forceExpanded: Bool = false,
         identifier: String? = nil,
         captureIntent: String = "Paste",
+        glassTone: LiveGlassTone? = nil,
         onTap: (() -> Void)? = nil,
         onQueueTap: (() -> Void)? = nil,
         onShiftToggle: (() -> Void)? = nil
@@ -216,6 +329,7 @@ public struct LivePill: View {
         self.forceExpanded = forceExpanded
         self.identifier = identifier
         self.captureIntent = captureIntent
+        self.glassTone = glassTone
         self.onTap = onTap
         self.onQueueTap = onQueueTap
         self.onShiftToggle = onShiftToggle
@@ -262,6 +376,25 @@ public struct LivePill: View {
         case .refining:
             return .refining
         }
+    }
+
+    private var stateAccent: Color {
+        if case .listening = visualState, let glassTone {
+            return glassTone.recordingAccent
+        }
+        return visualState.dotColor
+    }
+
+    private var primaryLabelColor: Color {
+        glassTone?.primaryText ?? TalkieTheme.textPrimary
+    }
+
+    private var secondaryLabelColor: Color {
+        glassTone?.secondaryText ?? TalkieTheme.textSecondary
+    }
+
+    private var tertiaryLabelColor: Color {
+        glassTone?.secondaryText.opacity(0.72) ?? TalkieTheme.textTertiary
     }
 
     // MARK: - Body
@@ -313,6 +446,7 @@ public struct LivePill: View {
                 TalkieLogger.info(.system, "[LivePill] \(tag)✓ Microphone available: \(newMic!)")
             }
         }
+        .environment(\.colorScheme, glassTone?.colorScheme ?? colorScheme)
     }
 
     // MARK: - Sliver Content (Collapsed)
@@ -351,13 +485,13 @@ public struct LivePill: View {
                 let glow = glowIntensity(for: timeline.date)
 
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(visualState.sliverColor.opacity(0.8 + phase * 0.2))
+                    .fill(stateAccent.opacity(0.8 + phase * 0.2))
                     .frame(width: visualState.sliverWidth * (1.0 + phase * 0.25), height: 3)
-                    .shadow(color: visualState.sliverColor.opacity(0.3 + glow * 0.4), radius: 2 + glow * 2)
+                    .shadow(color: stateAccent.opacity(0.3 + glow * 0.4), radius: 2 + glow * 2)
             }
         } else {
             RoundedRectangle(cornerRadius: 2)
-                .fill(visualState.sliverColor.opacity(0.6))
+                .fill(stateAccent.opacity(0.6))
                 .frame(width: visualState.sliverWidth, height: 2)
         }
     }
@@ -372,7 +506,15 @@ public struct LivePill: View {
         .padding(.leading, 10)
         .padding(.trailing, 12)
         .padding(.vertical, 2)
-        .liveGlassSurface(borderColor: visualState.borderColor)
+        .liveGlassSurface(
+            borderColor: glassTone.map { tone in
+                if case .listening = visualState {
+                    return tone.recordingAccent.opacity(0.46)
+                }
+                return tone.edge
+            } ?? visualState.borderColor,
+            tone: glassTone
+        )
         .contentShape(Rectangle())
     }
 
@@ -385,15 +527,15 @@ public struct LivePill: View {
                 let glow = glowIntensity(for: timeline.date)
 
                 Circle()
-                    .fill(visualState.dotColor)
+                    .fill(stateAccent)
                     .frame(width: 4, height: 4)
                     .scaleEffect(1.0 + phase * 0.35)
                     .opacity(0.75 + phase * 0.25)
-                    .shadow(color: visualState.dotColor.opacity(0.4 + glow * 0.4), radius: 2 + glow * 3)
+                    .shadow(color: stateAccent.opacity(0.4 + glow * 0.4), radius: 2 + glow * 3)
             }
         } else {
             Circle()
-                .fill(visualState.dotColor)
+                .fill(stateAccent)
                 .frame(width: 4, height: 4)
         }
     }
@@ -451,12 +593,12 @@ public struct LivePill: View {
                     Text(shortMicName(micName))
                         .font(.system(size: 8, weight: .medium))
                 }
-                .foregroundColor(TalkieTheme.textTertiary)
+                .foregroundColor(tertiaryLabelColor)
                 .help(micName)
             } else {
                 Text("REC")
                     .font(.system(size: 8, weight: .semibold))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(secondaryLabelColor)
             }
 
         case .listening(let interstitialHint):
@@ -481,7 +623,7 @@ public struct LivePill: View {
                     Text(formatTime(recordingDuration))
                         .font(.system(size: 9, weight: .medium, design: .monospaced))
                         .frame(minWidth: 24, alignment: .trailing)
-                        .foregroundColor(TalkieTheme.textPrimary)
+                        .foregroundColor(primaryLabelColor)
                     audioLevelIndicator
                 }
             }
@@ -494,10 +636,10 @@ public struct LivePill: View {
                     .foregroundColor(SemanticColor.warning)
                 if processingDuration > 0 {
                     Text("·")
-                        .foregroundColor(TalkieTheme.textTertiary)
+                        .foregroundColor(tertiaryLabelColor)
                     Text(formatTime(processingDuration))
                         .font(.system(size: 8, weight: .medium, design: .monospaced))
-                        .foregroundColor(TalkieTheme.textTertiary)
+                        .foregroundColor(tertiaryLabelColor)
                 }
             }
 
@@ -530,10 +672,10 @@ public struct LivePill: View {
 
         return ZStack(alignment: .bottom) {
             RoundedRectangle(cornerRadius: 1)
-                .fill(TalkieTheme.textTertiary.opacity(0.3))
+                .fill(tertiaryLabelColor.opacity(0.3))
                 .frame(width: 2, height: maxHeight)
             RoundedRectangle(cornerRadius: 1)
-                .fill(Color.red.opacity(0.6 + Double(sensitiveLevel) * 0.4))
+                .fill((glassTone?.recordingAccent ?? Color.red).opacity(0.6 + Double(sensitiveLevel) * 0.4))
                 .frame(width: 2, height: barHeight)
                 .animation(.easeOut(duration: 0.25), value: audioLevel)  // Smooth transition at 2Hz
         }

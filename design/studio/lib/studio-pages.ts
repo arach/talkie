@@ -318,6 +318,19 @@ export const STUDIO_PAGES: StudioPage[] = [
     ],
   },
   {
+    href: "/mac-capture-target-confirmation",
+    label: "Capture Target Confirm",
+    bucket: "surfaces",
+    platform: "mac",
+    family: "capture",
+    status: "concept",
+    blurb: "Screen-aware target-lock acknowledgement above the input (graphite/pearl/sampled) + separate persistent locked badge. Confirms the lock, never a send. Ports to CaptureTargetLockOverlay.swift + ScreenAwareOverlayAppearance.swift.",
+    swift: [
+      "apps/macos/TalkieAgent/TalkieAgent/Views/Overlay/CaptureTargetLockOverlay.swift",
+      "apps/macos/TalkieAgent/TalkieAgent/Views/Overlay/ScreenAwareOverlayAppearance.swift",
+    ],
+  },
+  {
     href: "/mac-command-palette",
     label: "Command Palette",
     bucket: "surfaces",

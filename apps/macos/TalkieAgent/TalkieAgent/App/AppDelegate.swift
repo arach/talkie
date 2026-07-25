@@ -47,6 +47,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private let desktopInkPassthroughHotKey = HotKeyManager(signature: "\(sig)DP", hotkeyID: 19)  // Draw <-> arrange
     private let desktopMagnifierHotKey = HotKeyManager(signature: "\(sig)DM", hotkeyID: 20)  // Freeze a region into a desktop magnifier
     private let markupEmergencyHotKey = HotKeyManager(signature: "\(sig)MX", hotkeyID: 22)  // Force-dismiss capture markup
+    private let captureTargetLockHotKey = HotKeyManager(signature: "\(sig)TP", hotkeyID: 16)  // Pin current prompt
+    private let captureTargetJumpHotKey = HotKeyManager(signature: "\(sig)TJ", hotkeyID: 23)  // Jump to pinned prompt
 
     private struct AgentMenuInputState {
         var name: String
@@ -60,7 +62,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         var recentItems: [AgentMenuRecentItem]
     }
     private let pasteChordHotKeyManager = HotKeyManager(signature: "\(sig)PV", hotkeyID: 15)  // Quick Paste chord
-    private let pasteLastScreenshotHotKey = HotKeyManager(signature: "\(sig)PF", hotkeyID: 16)  // Paste last screenshot
     private let agentVoiceHotKeyManager = HotKeyManager(signature: "\(sig)WT", hotkeyID: 17)  // Hyper+T agent voice panel (TLK-020)
     private let captureHotPathLoggingEnabled = ProcessInfo.processInfo.environment["CAPTURE_PERF"] == "1"
     private static let walkieHotkeyKeyCode: UInt32 = 17
@@ -79,6 +80,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private var lastPTTEnabled: Bool?
     private var lastSelectionQuickHotkey: HotkeyConfig?
     private var lastExternalSelectionSourceApp: NSRunningApplication?
+    private var lastAgentMenuSourceApplication: NSRunningApplication?
+    private var lockCaptureTargetMenuItem: NSMenuItem?
+    private var jumpToCaptureTargetMenuItem: NSMenuItem?
+    private var clearCaptureTargetMenuItem: NSMenuItem?
     private var isAgentCaptureChordActive = false
     private var isAgentDirectScreenshotCaptureActive = false
     private var isAgentPasteChordActive = false
@@ -369,6 +374,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             queue: .main
         ) { _ in
             ToastOverlayController.shared.showPermissionBlocked()
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: .captureTargetJumpRequested,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                await self?.jumpToCaptureTarget()
+            }
         }
 
         // Create core pipeline with pre-warmed audio capture
@@ -684,6 +699,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         menu.addItem(NSMenuItem.separator())
 
+        let lockTargetItem = NSMenuItem(title: "Pin Capture Target", action: #selector(lockCaptureTargetFromMenu), keyEquivalent: "")
+        lockTargetItem.target = self
+        lockTargetItem.image = NSImage(systemSymbolName: "pin.fill", accessibilityDescription: "Pin Capture Target")
+        menu.addItem(lockTargetItem)
+        lockCaptureTargetMenuItem = lockTargetItem
+
+        let jumpTargetItem = NSMenuItem(title: "Jump to Capture Target", action: #selector(jumpToCaptureTargetFromMenu), keyEquivalent: "")
+        jumpTargetItem.target = self
+        jumpTargetItem.image = NSImage(systemSymbolName: "arrow.turn.down.right", accessibilityDescription: "Jump to Capture Target")
+        menu.addItem(jumpTargetItem)
+        jumpToCaptureTargetMenuItem = jumpTargetItem
+
+        let clearTargetItem = NSMenuItem(title: "Clear Capture Target", action: #selector(clearCaptureTargetFromMenu), keyEquivalent: "")
+        clearTargetItem.target = self
+        clearTargetItem.image = NSImage(systemSymbolName: "pin.slash", accessibilityDescription: "Clear Capture Target")
+        menu.addItem(clearTargetItem)
+        clearCaptureTargetMenuItem = clearTargetItem
+
+        menu.addItem(NSMenuItem.separator())
+
         let historyItem = NSMenuItem(title: "Show History", action: #selector(showHistory), keyEquivalent: "h")
         historyItem.keyEquivalentModifierMask = [.option, .command]
         historyItem.target = self
@@ -730,6 +765,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             log.warning("Agent menu status item click ignored because the button was unavailable")
             return
         }
+
+        rememberAgentMenuSourceApplication()
 
         let event = NSApp.currentEvent
         if event == nil {
@@ -855,6 +892,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         let isLoadingData = !loadSlowData && cachedModel == nil
         let resolvedDeferredData = deferredData ?? (loadSlowData ? Self.loadAgentMenuDeferredData() : nil)
         let failedQueueCount = resolvedDeferredData?.failedQueueCount ?? cachedModel?.failedQueueCount ?? 0
+        let captureTarget = CaptureTargetController.shared
+        let targetCandidate = captureTargetCandidateApplication
+        let captureTargetLockShortcut = Self.loadHotkeyConfig(
+            key: AgentSettingsKey.captureTargetLockHotkey,
+            fallbackKeyCode: 35,
+            fallbackModifiers: Self.hyperModifiers
+        )
+        let captureTargetJumpShortcut = Self.loadHotkeyConfig(
+            key: AgentSettingsKey.captureTargetJumpHotkey,
+            fallbackKeyCode: 38,
+            fallbackModifiers: Self.hyperModifiers
+        )
 
         let stateTitle: String
         let stateDetail: String
@@ -902,6 +951,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             inputDevicesReady: inputState.ready,
             isSystemDefaultInput: inputState.systemDefault,
             inputDevices: inputState.devices,
+            captureTargetName: captureTarget.appName,
+            captureTargetDetail: captureTarget.windowTitle ?? captureTarget.inputRole,
+            captureTargetCount: captureTarget.captureCount,
+            captureTargetCandidateName: targetCandidate?.localizedName,
+            captureTargetLockShortcut: HotkeyConfig(
+                keyCode: captureTargetLockShortcut.keyCode,
+                modifiers: captureTargetLockShortcut.modifiers
+            ).displayString,
+            captureTargetJumpShortcut: HotkeyConfig(
+                keyCode: captureTargetJumpShortcut.keyCode,
+                modifiers: captureTargetJumpShortcut.modifiers
+            ).displayString,
             failedQueueCount: failedQueueCount,
             recentItems: recentItems,
             isLoadingData: isLoadingData
@@ -1052,6 +1113,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                     await self.handleAgentCaptureChord(initialMode: .video)
                 }
             },
+            lockCaptureTarget: { [weak self] in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.lockCaptureTarget(app: self.captureTargetCandidateApplication)
+                }
+            },
+            jumpToCaptureTarget: { [weak self] in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.dismissAgentMenuPopover()
+                    await self.jumpToCaptureTarget()
+                }
+            },
+            clearCaptureTarget: { [weak self] in
+                Task { @MainActor in
+                    self?.clearCaptureTarget()
+                }
+            },
             openHome: { [weak self] in
                 Task { @MainActor in
                     guard let self else { return }
@@ -1188,10 +1267,114 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         agentMenuPopover?.performClose(nil)
     }
 
+    private var captureTargetCandidateApplication: NSRunningApplication? {
+        let candidate = lastAgentMenuSourceApplication ?? NSWorkspace.shared.frontmostApplication
+        guard let candidate,
+              !candidate.isTerminated,
+              candidate.processIdentifier != ProcessInfo.processInfo.processIdentifier else {
+            return nil
+        }
+        return candidate
+    }
+
+    private func rememberAgentMenuSourceApplication() {
+        guard let frontmost = NSWorkspace.shared.frontmostApplication,
+              !frontmost.isTerminated,
+              frontmost.processIdentifier != ProcessInfo.processInfo.processIdentifier else {
+            return
+        }
+        lastAgentMenuSourceApplication = frontmost
+    }
+
+    private func lockCaptureTarget(app: NSRunningApplication?) {
+        let controller = CaptureTargetController.shared
+        if controller.lock(on: app) {
+            SoundManager.shared.playCaptureLocked()
+            CaptureTargetLockOverlayController.shared.showLocked(
+                appName: controller.appName ?? "Capture Target",
+                windowTitle: controller.windowTitle,
+                appIcon: controller.appIcon,
+                inputFrame: controller.inputFrame
+            )
+            refreshAgentMenuCacheAndPopover(reason: "capture-target-locked")
+            updateCaptureTargetMenuItems()
+            return
+        }
+
+        showToast(
+            emoji: "⚠️",
+            message: controller.lastFailure ?? "Could not lock capture target",
+            color: .systemOrange
+        )
+    }
+
+    private func jumpToCaptureTarget() async {
+        let controller = CaptureTargetController.shared
+        if await controller.jump() {
+            let delivered = await deliverPendingCaptures(
+                controller.pendingCaptures,
+                to: controller.targetApplication
+            )
+            SoundManager.shared.playCaptureSwitched()
+            refreshAgentMenuCacheAndPopover(reason: "capture-target-jumped")
+            updateCaptureTargetMenuItems()
+            if !delivered {
+                showToast(
+                    emoji: "⚠️",
+                    message: "Some screenshots are still queued",
+                    color: .systemOrange
+                )
+            }
+            return
+        }
+        showToast(
+            emoji: "⚠️",
+            message: controller.lastFailure ?? "Capture target unavailable",
+            color: .systemOrange
+        )
+        refreshAgentMenuCacheAndPopover(reason: "capture-target-jump-failed")
+        updateCaptureTargetMenuItems()
+    }
+
+    private func clearCaptureTarget() {
+        CaptureTargetLockOverlayController.shared.dismiss()
+        CaptureTargetController.shared.clear()
+        refreshAgentMenuCacheAndPopover(reason: "capture-target-cleared")
+        updateCaptureTargetMenuItems()
+    }
+
+    @objc private func lockCaptureTargetFromMenu() {
+        lockCaptureTarget(app: captureTargetCandidateApplication)
+    }
+
+    @objc private func jumpToCaptureTargetFromMenu() {
+        Task { @MainActor [weak self] in
+            await self?.jumpToCaptureTarget()
+        }
+    }
+
+    @objc private func clearCaptureTargetFromMenu() {
+        clearCaptureTarget()
+    }
+
+    private func updateCaptureTargetMenuItems() {
+        let controller = CaptureTargetController.shared
+        let candidateName = captureTargetCandidateApplication?.localizedName
+        lockCaptureTargetMenuItem?.title = candidateName.map { "Pin \($0) as Capture Target" } ?? "Pin Capture Target"
+        lockCaptureTargetMenuItem?.isEnabled = candidateName != nil
+
+        let targetName = controller.appName ?? "Capture Target"
+        jumpToCaptureTargetMenuItem?.title = "Jump to \(targetName)"
+        jumpToCaptureTargetMenuItem?.isEnabled = controller.isLocked
+        clearCaptureTargetMenuItem?.title = "Clear \(targetName)"
+        clearCaptureTargetMenuItem?.isEnabled = controller.isLocked
+    }
+
     private func updateStatusMenuItems() {
         updateRecordingMenuItem(isRecording: agentController?.state == .listening)
         updateRecentMenu()
         updatePermissionsMenuItem()
+        updateCaptureTargetMenuItems()
     }
 
     private nonisolated static func truncatedMenuText(_ text: String, limit: Int) -> String {
@@ -1710,6 +1893,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }
         log.info("Paste chord hotkey registered: keyCode=\(pasteChord.keyCode) modifiers=\(pasteChord.modifiers)")
 
+        let targetLock = Self.loadHotkeyConfig(
+            key: AgentSettingsKey.captureTargetLockHotkey,
+            fallbackKeyCode: 35,
+            fallbackModifiers: Self.hyperModifiers
+        )
+        captureTargetLockHotKey.registerHotKey(
+            modifiers: targetLock.modifiers,
+            keyCode: targetLock.keyCode
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                let frontmost = NSWorkspace.shared.frontmostApplication
+                self.lastAgentMenuSourceApplication = frontmost
+                self.lockCaptureTarget(app: frontmost)
+            }
+        }
+
+        let targetJump = Self.loadHotkeyConfig(
+            key: AgentSettingsKey.captureTargetJumpHotkey,
+            fallbackKeyCode: 38,
+            fallbackModifiers: Self.hyperModifiers
+        )
+        captureTargetJumpHotKey.registerHotKey(
+            modifiers: targetJump.modifiers,
+            keyCode: targetJump.keyCode
+        ) { [weak self] _ in
+            Task { @MainActor in
+                await self?.jumpToCaptureTarget()
+            }
+        }
+        log.info(
+            "Capture target hotkeys registered",
+            detail: "lock=\(targetLock.keyCode) jump=\(targetJump.keyCode)"
+        )
+
         let directShortcuts: [(HotKeyManager, String, UInt32, UInt32, String)] = [
             (ssFullscreenHotKey, "hotkeyCapture.fullscreen", 20, Self.hyperModifiers, "fullscreen"),
             (ssRegionHotKey,     "hotkeyCapture.region",     21, Self.hyperModifiers, "region"),
@@ -1743,7 +1961,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }
 
         log.info("Direct screenshot hotkeys registered from shared settings (defaults: Hyper+3/4/6)")
-        log.info("Paste-last screenshot hotkey skipped; tray-based latest capture is retired")
     }
 
     private func registerMarkupSafetyHotkey() {
@@ -2001,6 +2218,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             displayName: result.displayName,
             fileURL: persisted.fileURL
         )
+
+        if !opensMarkup,
+           routeScreenshotToCaptureTarget(
+               item,
+               near: screenshotPreviewAnchor(for: result)
+           ) {
+            return true
+        }
+
         if opensMarkup {
             openMarkupForAgentCapture(item, captureRect: result.captureRect)
         } else {
@@ -2009,6 +2235,79 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 near: screenshotPreviewAnchor(for: result)
             )
         }
+        return true
+    }
+
+    private func routeScreenshotToCaptureTarget(
+        _ item: AgentLiveTrayItem,
+        near previewAnchor: NSPoint?
+    ) -> Bool {
+        let controller = CaptureTargetController.shared
+        guard controller.isLocked else { return false }
+
+        guard controller.stage(item) else {
+            showToast(
+                emoji: "⚠️",
+                message: controller.lastFailure ?? "Could not queue screenshot",
+                color: .systemOrange
+            )
+            refreshAgentMenuCacheAndPopover(reason: "capture-target-queue-failed")
+            updateCaptureTargetMenuItems()
+            return false
+        }
+
+        let dockPoint = CaptureTargetLockOverlayController.shared.dockingPoint(
+            near: previewAnchor
+        )
+        CaptureIslandController.shared.presentCaught(
+            item,
+            near: previewAnchor,
+            dockTo: dockPoint
+        )
+        SoundManager.shared.playCaptureCaught()
+        log.info(
+            "Screenshot staged without target activation",
+            detail: "target=\(controller.appName ?? "unknown") queued=\(controller.captureCount)"
+        )
+        refreshAgentMenuCacheAndPopover(reason: "capture-target-queued")
+        updateCaptureTargetMenuItems()
+        return true
+    }
+
+    private func deliverPendingCaptures(
+        _ captures: [AgentLiveTrayItem],
+        to targetApp: NSRunningApplication?
+    ) async -> Bool {
+        guard !captures.isEmpty else { return true }
+        guard let targetApp, !targetApp.isTerminated else { return false }
+
+        log.info(
+            "Delivering queued screenshots",
+            detail: "target=\(targetApp.localizedName ?? "unknown") count=\(captures.count)"
+        )
+
+        for item in captures {
+            guard let data = try? Data(contentsOf: item.fileURL) else {
+                log.error("Queued screenshot is no longer readable", detail: item.fileURL.lastPathComponent)
+                return false
+            }
+
+            writeScreenshotPasteboard(
+                data: data,
+                fileURL: item.fileURL,
+                targetApp: targetApp
+            )
+            try? await Task.sleep(for: .milliseconds(80))
+
+            guard simulateCmdV() else {
+                log.error("Could not paste queued screenshot", detail: item.fileURL.lastPathComponent)
+                return false
+            }
+
+            await CaptureTargetController.shared.recordSuccessfulPaste(itemID: item.id)
+        }
+
+        log.info("Queued screenshots delivered", detail: "count=\(captures.count) remaining=0")
         return true
     }
 
@@ -2146,7 +2445,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         guard shouldPaste else { return }
 
         try? await Task.sleep(for: .milliseconds(80))
-        simulateCmdV()
+        _ = simulateCmdV()
     }
 
     @MainActor
@@ -2283,16 +2582,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         return haystack.contains("codex")
     }
 
-    private func simulateCmdV() {
+    @discardableResult
+    private func simulateCmdV() -> Bool {
+        guard PermissionManager.shared.hasAccessibilityPermission else {
+            PermissionManager.shared.reportAccessibilityFailure()
+            SoundManager.shared.playPasteBlocked()
+            return false
+        }
+
         let source = CGEventSource(stateID: .hidSystemState)
         guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true),
               let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false) else {
-            return
+            return false
         }
         keyDown.flags = .maskCommand
         keyUp.flags = .maskCommand
         keyDown.post(tap: .cghidEventTap)
         keyUp.post(tap: .cghidEventTap)
+        return true
     }
 
     @MainActor
@@ -2321,10 +2628,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         ssBufferHotKey.unregisterAll()
         ssWindowHotKey.unregisterAll()
         ssShelfHotKey.unregisterAll()
-        pasteLastScreenshotHotKey.unregisterAll()
         desktopInkHotKey.unregisterAll()
         desktopInkPassthroughHotKey.unregisterAll()
         desktopMagnifierHotKey.unregisterAll()
+        captureTargetLockHotKey.unregisterAll()
+        captureTargetJumpHotKey.unregisterAll()
         markupEmergencyHotKey.unregisterAll()
     }
 
@@ -2373,6 +2681,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             managers.append(("Region Capture", ssRegionHotKey))
             managers.append(("Window Capture", ssWindowHotKey))
             managers.append(("Desktop Magnifier", desktopMagnifierHotKey))
+            managers.append(("Pin Capture Target", captureTargetLockHotKey))
+            managers.append(("Jump to Capture Target", captureTargetJumpHotKey))
         }
         managers.append(("Markup Safety", markupEmergencyHotKey))
 

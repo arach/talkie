@@ -20,6 +20,7 @@ final class CaptureIslandController {
 
     private var panel: NSPanel?
     private var dismissTimer: Timer?
+    private var transferTask: Task<Void, Never>?
     private var shownItemID: UUID?
 
     private let panelWidth: CGFloat = 188
@@ -68,6 +69,48 @@ final class CaptureIslandController {
         guard isEnabled else { return }
         guard isFreshForPresentation(item) else { return }
         present(item, near: placement == .contextual ? anchor : nil)
+    }
+
+    func presentCaught(
+        _ item: AgentLiveTrayItem,
+        near anchor: NSPoint?,
+        dockTo destination: NSPoint
+    ) {
+        guard isEnabled else { return }
+        guard isFreshForPresentation(item) else { return }
+
+        present(item, near: placement == .contextual ? anchor : nil)
+        guard let panel else { return }
+
+        cancelDismissTimer()
+        panel.ignoresMouseEvents = true
+        transferTask = Task { @MainActor [weak self, weak panel] in
+            try? await Task.sleep(for: .milliseconds(420))
+            guard !Task.isCancelled,
+                  let self,
+                  let panel,
+                  panel === self.panel else { return }
+
+            let dockSize = NSSize(width: 34, height: 24)
+            let dockFrame = NSRect(
+                x: destination.x - dockSize.width / 2,
+                y: destination.y - dockSize.height / 2,
+                width: dockSize.width,
+                height: dockSize.height
+            )
+            NSAnimationContext.runAnimationGroup({ context in
+                context.duration = 0.44
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                panel.animator().setFrame(dockFrame, display: true)
+                panel.animator().alphaValue = 0
+            }, completionHandler: { [weak self, weak panel] in
+                guard let self, let panel, panel === self.panel else { return }
+                panel.orderOut(nil)
+                panel.contentView = nil
+                self.panel = nil
+                self.transferTask = nil
+            })
+        }
     }
 
     private func present(_ item: AgentLiveTrayItem, near anchor: NSPoint?) {
@@ -172,6 +215,8 @@ final class CaptureIslandController {
 
     func dismiss(animated: Bool = true) {
         cancelDismissTimer()
+        transferTask?.cancel()
+        transferTask = nil
         guard let p = panel else { return }
         panel = nil
         guard animated else {

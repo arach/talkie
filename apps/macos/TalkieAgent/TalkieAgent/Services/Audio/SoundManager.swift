@@ -121,6 +121,24 @@ final class SoundManager {
         play(LiveSettings.shared.pastedSound)
     }
 
+    /// A tactile placement cue for a screenshot successfully caught by a pinned target.
+    func playCaptureCaught() {
+        playSubtle(.pop, volume: 0.24)
+        playSubtle(.glass, volume: 0.08, after: .milliseconds(65))
+    }
+
+    /// A light spatial cue for moving focus back to the pinned target.
+    func playCaptureSwitched() {
+        playSubtle(.purr, volume: 0.14)
+        playSubtle(.tink, volume: 0.09, after: .milliseconds(45))
+    }
+
+    /// Uses the same tonal family as switching, reversed to feel like acquisition.
+    func playCaptureLocked() {
+        playSubtle(.tink, volume: 0.17)
+        playSubtle(.pop, volume: 0.08, after: .milliseconds(55))
+    }
+
     func playMicRecoveryStarted() {
         playSubtle(.tink, volume: 0.12)
     }
@@ -171,6 +189,14 @@ final class SoundManager {
                 guard let player else { return true }
                 return activeSound === player
             }
+        }
+    }
+
+    private func playSubtle(_ sound: TalkieSound, volume: Float, after delay: Duration) {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            self?.playSubtle(sound, volume: volume)
         }
     }
 
