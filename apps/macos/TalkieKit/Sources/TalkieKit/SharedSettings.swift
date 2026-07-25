@@ -102,6 +102,8 @@ public enum AgentSettingsKey {
     public static let screenRecordChordHotkey = "screenRecordChordHotkey"
     public static let pasteChordHotkey = "pasteChordHotkey"
     public static let pasteLastScreenshotHotkey = "hotkeyCapture.pasteLastScreenshot"
+    public static let captureTargetLockHotkey = "hotkeyCapture.targetLock"
+    public static let captureTargetJumpHotkey = "hotkeyCapture.targetJump"
 
     // MARK: Screen Recording
     public static let screenRecordingQuality = "screenRecordingQuality"

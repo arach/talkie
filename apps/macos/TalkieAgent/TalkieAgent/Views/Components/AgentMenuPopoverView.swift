@@ -19,6 +19,12 @@ struct AgentMenuModel: Sendable {
     var inputDevicesReady: Bool
     var isSystemDefaultInput: Bool
     var inputDevices: [AgentMenuInputDevice]
+    var captureTargetName: String?
+    var captureTargetDetail: String?
+    var captureTargetCount: Int
+    var captureTargetCandidateName: String?
+    var captureTargetLockShortcut: String
+    var captureTargetJumpShortcut: String
     var failedQueueCount: Int
     var recentItems: [AgentMenuRecentItem]
     var isLoadingData: Bool
@@ -42,6 +48,9 @@ struct AgentMenuActions {
     var toggleRecording: () -> Void
     var captureScreenshot: () -> Void
     var captureScreenRecording: () -> Void
+    var lockCaptureTarget: () -> Void
+    var jumpToCaptureTarget: () -> Void
+    var clearCaptureTarget: () -> Void
     var openHome: () -> Void
     var openTalkie: () -> Void
     var openSettings: () -> Void
@@ -240,7 +249,7 @@ struct AgentMenuPopoverView: View {
     private static let sectionTitleHeight: CGFloat = 12
     private static let sectionTitleSpacing: CGFloat = 4
     private static let captureRowHeight: CGFloat = 44
-    private static let captureToolsHeight: CGFloat = sectionTitleHeight + bareSectionTitleSpacing + 42
+    private static let captureToolsHeight: CGFloat = sectionTitleHeight + bareSectionTitleSpacing + 42 + 6 + 42
     private static let commandRowHeight: CGFloat = 40
     private static let recentGrabsHeight: CGFloat = 78
     private static let recentRowHeight: CGFloat = 26
@@ -249,7 +258,7 @@ struct AgentMenuPopoverView: View {
     private static let bareSectionTitleSpacing: CGFloat = 5
     // Fits the five-item recent list plus the optional permissions row without
     // clipping the second row of tools at the rounded popover edge.
-    private static let maxPopoverHeight: CGFloat = 588
+    private static let maxPopoverHeight: CGFloat = 636
 
     let model: AgentMenuModel
     let actions: AgentMenuActions
@@ -468,27 +477,49 @@ struct AgentMenuPopoverView: View {
 
     private var screenCaptureSection: some View {
         AgentMenuBareSection(title: "Capture") {
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: 6),
-                    GridItem(.flexible(), spacing: 6),
-                ],
-                spacing: 6
-            ) {
-                AgentMenuToolTile(
-                    title: "Screenshot",
-                    systemImage: "camera.viewfinder",
-                    tint: skin.accent,
-                    action: actions.captureScreenshot
+            VStack(spacing: 6) {
+                AgentMenuCaptureTargetRow(
+                    targetName: model.captureTargetName,
+                    targetDetail: captureTargetDetail,
+                    candidateName: model.captureTargetCandidateName,
+                    lockShortcut: model.captureTargetLockShortcut,
+                    jumpShortcut: model.captureTargetJumpShortcut,
+                    lockAction: actions.lockCaptureTarget,
+                    jumpAction: actions.jumpToCaptureTarget,
+                    clearAction: actions.clearCaptureTarget
                 )
-                AgentMenuToolTile(
-                    title: "Screen Recording",
-                    systemImage: "record.circle",
-                    tint: skin.rec,
-                    action: actions.captureScreenRecording
-                )
+
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), spacing: 6),
+                        GridItem(.flexible(), spacing: 6),
+                    ],
+                    spacing: 6
+                ) {
+                    AgentMenuToolTile(
+                        title: "Screenshot",
+                        systemImage: "camera.viewfinder",
+                        tint: skin.accent,
+                        action: actions.captureScreenshot
+                    )
+                    AgentMenuToolTile(
+                        title: "Screen Recording",
+                        systemImage: "record.circle",
+                        tint: skin.rec,
+                        action: actions.captureScreenRecording
+                    )
+                }
             }
         }
+    }
+
+    private var captureTargetDetail: String? {
+        guard model.captureTargetName != nil else { return nil }
+        let count = model.captureTargetCount
+        let countLabel = count == 0 ? nil : "\(count) queued"
+        return [model.captureTargetDetail, countLabel]
+            .compactMap { $0 }
+            .joined(separator: " · ")
     }
 
     private var recentGrabsSection: some View {
@@ -658,6 +689,107 @@ private struct AgentMenuBareSection<Content: View>: View {
 
             content
         }
+    }
+}
+
+private struct AgentMenuCaptureTargetRow: View {
+    @Environment(\.agentTraySkin) private var skin
+    let targetName: String?
+    let targetDetail: String?
+    let candidateName: String?
+    let lockShortcut: String
+    let jumpShortcut: String
+    let lockAction: () -> Void
+    let jumpAction: () -> Void
+    let clearAction: () -> Void
+
+    @State private var isHovered = false
+
+    private var isLocked: Bool { targetName != nil }
+    private var isEnabled: Bool { isLocked || candidateName != nil }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Button(action: isLocked ? jumpAction : lockAction) {
+                HStack(spacing: 8) {
+                    AgentMenuIconWell(
+                        systemImage: isLocked ? "scope" : "pin",
+                        tint: isLocked ? skin.accent : skin.inkMuted
+                    )
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(isLocked ? targetName ?? "Capture Target" : "Pin Capture Target")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(isEnabled ? skin.ink : skin.inkMuted)
+                            .lineLimit(1)
+
+                        Text(subtitle)
+                            .font(.system(size: 9.5))
+                            .foregroundStyle(skin.inkMuted)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+
+                    Spacer(minLength: 6)
+
+                    Text(isLocked ? jumpShortcut : lockShortcut)
+                        .font(.system(size: 9, weight: .semibold, design: .rounded))
+                        .foregroundStyle(skin.inkMuted)
+                }
+                .padding(.leading, 6)
+                .padding(.trailing, isLocked ? 6 : 9)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                .contentShape(.rect)
+                .background {
+                    Rectangle()
+                        .fill(isHovered && isEnabled ? skin.hoverFill : Color.clear)
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(!isEnabled)
+            .focusable(false)
+            .onHover { isHovered = $0 }
+
+            if isLocked {
+                Rectangle()
+                    .fill(skin.edgeStrong)
+                    .frame(width: 0.5)
+
+                Button(action: clearAction) {
+                    Image(systemName: "pin.slash")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(skin.inkMuted)
+                        .frame(width: 31, height: 42)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .help("Clear capture target")
+            }
+        }
+        .frame(height: 42)
+        .background {
+            RoundedRectangle(cornerRadius: 7)
+                .fill(isLocked ? skin.composerFill : skin.cardFill)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 7)
+                .stroke(isLocked ? skin.accent.opacity(0.35) : skin.cardStroke, lineWidth: 0.5)
+        }
+        .clipShape(.rect(cornerRadius: 7))
+    }
+
+    private var subtitle: String {
+        if isLocked {
+            if let targetDetail, !targetDetail.isEmpty {
+                return targetDetail
+            }
+            return "Screenshots queue here"
+        }
+        if let candidateName {
+            return "Pin the focused input in \(candidateName)"
+        }
+        return "Focus an input, then press Hyper+P"
     }
 }
 
@@ -1518,6 +1650,12 @@ private struct AgentMenuEmptyRow: View {
             inputDevices: [
                 AgentMenuInputDevice(id: 1, uid: "default", name: "MacBook Pro Microphone", isDefault: true)
             ],
+            captureTargetName: "Codex",
+            captureTargetDetail: "Work with ChatGPT",
+            captureTargetCount: 3,
+            captureTargetCandidateName: "Codex",
+            captureTargetLockShortcut: "⌃⌥⇧⌘P",
+            captureTargetJumpShortcut: "⌃⌥⇧⌘J",
             failedQueueCount: 2,
             recentItems: [
                 AgentMenuRecentItem(
@@ -1533,6 +1671,9 @@ private struct AgentMenuEmptyRow: View {
             toggleRecording: {},
             captureScreenshot: {},
             captureScreenRecording: {},
+            lockCaptureTarget: {},
+            jumpToCaptureTarget: {},
+            clearCaptureTarget: {},
             openHome: {},
             openTalkie: {},
             openSettings: {},

@@ -533,6 +533,7 @@ final class NotchOverlayController: ObservableObject {
 struct NotchOverlayView: View {
     @EnvironmentObject var controller: NotchOverlayController
     @ObservedObject private var tuning = NotchTuning.shared
+    @State private var captureTarget = CaptureTargetController.shared
     @State private var isHovered: Bool = false
 
     // Layout constants
@@ -556,7 +557,7 @@ struct NotchOverlayView: View {
     }
 
     private var hasActiveIntent: Bool {
-        controller.state != .idle || controller.isScreenRecordingActive
+        controller.state != .idle || controller.isScreenRecordingActive || captureTarget.isLocked
     }
 
     private var expansionState: ExpansionState {
@@ -753,6 +754,8 @@ struct NotchOverlayView: View {
                     // Particles flowing RIGHT (toward notch)
                     NotchParticles(audioLevel: controller.audioLevel, flowDirection: .right)
                         .frame(width: 45, height: 20)
+                } else if captureTarget.isLocked {
+                    captureTargetGlyph
                 } else if isExpanded {
                     Circle()
                         .fill(Color.white.opacity(0.3))
@@ -803,6 +806,8 @@ struct NotchOverlayView: View {
                             .foregroundColor(.white.opacity(0.9))
                     }
                     .padding(.leading, 4)
+                } else if captureTarget.isLocked {
+                    captureTargetCount
                 } else if controller.state == .transcribing {
                     Rectangle()
                         .fill(Color.orange)
@@ -875,7 +880,9 @@ struct NotchOverlayView: View {
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundColor(.purple)
                             case .idle:
-                                EmptyView()
+                                if captureTarget.isLocked {
+                                    captureTargetGlyph
+                                }
                             }
                         }
                     }
@@ -939,7 +946,9 @@ struct NotchOverlayView: View {
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundColor(.purple)
                             case .idle:
-                                EmptyView()
+                                if captureTarget.isLocked {
+                                    captureTargetCount
+                                }
                             }
                         }
                     }
@@ -1039,7 +1048,11 @@ struct NotchOverlayView: View {
                 .fill(Color.purple)
                 .frame(width: lineW * 0.7, height: lineH)
         case .idle:
-            EmptyView()
+            if captureTarget.isLocked {
+                Rectangle()
+                    .fill(Color.mint.opacity(0.86))
+                    .frame(width: lineW * 0.55, height: lineH)
+            }
         }
         }
     }
@@ -1067,6 +1080,8 @@ struct NotchOverlayView: View {
                 // Particles when recording
                 NotchParticles(audioLevel: controller.audioLevel)
                     .frame(width: 45, height: 20)
+            } else if captureTarget.isLocked {
+                captureTargetGlyph
             } else if isExpanded {
                 // Ready state - subtle dot
                 Circle()
@@ -1130,6 +1145,8 @@ struct NotchOverlayView: View {
                     Image(systemName: "checkmark")
                         .font(.system(size: 9, weight: .bold))
                         .foregroundColor(.green.opacity(0.9))
+                } else if captureTarget.isLocked {
+                    captureTargetCount
                 } else if isExpanded {
                     // Hover/ready state
                     Rectangle()
@@ -1155,6 +1172,40 @@ struct NotchOverlayView: View {
             .fill(stateColor)
             .frame(width: 24, height: 2)
             .modifier(LinePulseModifier(isAnimating: controller.state == .listening))
+    }
+
+    private var captureTargetGlyph: some View {
+        ZStack {
+            Circle()
+                .stroke(Color.mint.opacity(0.8), lineWidth: 1)
+                .frame(width: 18, height: 18)
+
+            if let appIcon = captureTarget.appIcon {
+                Image(nsImage: appIcon)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 12, height: 12)
+            } else {
+                Image(systemName: "scope")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(Color.mint)
+            }
+        }
+        .symbolEffect(.bounce, value: captureTarget.feedbackSequence)
+    }
+
+    @ViewBuilder
+    private var captureTargetCount: some View {
+        if captureTarget.captureCount > 0 {
+            Text(captureTarget.captureCount, format: .number)
+                .font(.system(size: 9, weight: .bold, design: .rounded))
+                .foregroundStyle(Color.mint.opacity(0.9))
+                .contentTransition(.numericText())
+        } else {
+            Circle()
+                .fill(Color.mint.opacity(0.8))
+                .frame(width: 5, height: 5)
+        }
     }
 
     // MARK: - Breathing Dot

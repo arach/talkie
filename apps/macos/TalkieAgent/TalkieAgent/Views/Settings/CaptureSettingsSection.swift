@@ -79,7 +79,24 @@ enum CaptureShortcuts {
         ),
     ]
 
-    static var all: [CaptureShortcut] { chords + direct }
+    /// Stateful capture destination controls. Pin reuses the retired Hyper+P
+    /// slot that previously pasted the latest tray screenshot.
+    static let targets: [CaptureShortcut] = [
+        CaptureShortcut(
+            id: AgentSettingsKey.captureTargetLockHotkey,
+            title: "Pin capture target",
+            subtitle: "Remember the frontmost app, window, and focused input",
+            defaultConfig: HotkeyConfig(keyCode: 35, modifiers: hyper)  // Hyper+P
+        ),
+        CaptureShortcut(
+            id: AgentSettingsKey.captureTargetJumpHotkey,
+            title: "Deliver and jump",
+            subtitle: "Paste queued screenshots, reset the count, and return to the pinned input",
+            defaultConfig: HotkeyConfig(keyCode: 38, modifiers: hyper)  // Hyper+J
+        ),
+    ]
+
+    static var all: [CaptureShortcut] { chords + direct + targets }
 }
 
 // MARK: - Model
@@ -203,6 +220,10 @@ struct CaptureSettingsSection: View {
 
             SettingsCard(title: "DIRECT CAPTURE TOOLS") {
                 shortcutRows(CaptureShortcuts.direct)
+            }
+
+            SettingsCard(title: "CAPTURE TARGET") {
+                shortcutRows(CaptureShortcuts.targets)
             }
 
             Text("Defaults use the Hyper layer (⌃⌥⇧⌘). Direct capture tools skip the HUD; screenshot rows fire immediately. A shortcut that collides with a HUD chord is skipped when hotkeys register.")

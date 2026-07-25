@@ -34,34 +34,58 @@ enum RoutingMode: String, CaseIterable {
 struct TranscriptInsertionTarget {
     let app: NSRunningApplication
     let processIdentifier: pid_t
+    let focusedWindow: AXUIElement?
     let focusedElement: AXUIElement?
     let selectedTextRange: CFRange?
+    let windowTitle: String?
+    let inputRole: String?
+    let inputFrame: CGRect?
 
     var label: String {
         app.localizedName ?? app.bundleIdentifier ?? "\(processIdentifier)"
+    }
+
+    var hasFocusedInput: Bool {
+        focusedElement != nil
     }
 
     @MainActor
     static func capture(from app: NSRunningApplication?) -> TranscriptInsertionTarget? {
         guard let app else { return nil }
 
+        var focusedWindow: AXUIElement?
         var focusedElement: AXUIElement?
         var selectedTextRange: CFRange?
+        var windowTitle: String?
+        var inputRole: String?
+        var inputFrame: CGRect?
 
         if AXIsProcessTrusted() {
             let appElement = AXUIElementCreateApplication(app.processIdentifier)
-            focusedElement = Self.focusedElement(in: appElement)
+            focusedWindow = Self.focusedWindow(in: appElement)
+            focusedElement = Self.focusedElement(in: appElement, focusedWindow: focusedWindow)
+            windowTitle = focusedWindow.flatMap {
+                Self.stringAttribute(kAXTitleAttribute as CFString, in: $0)
+            }
+            inputRole = focusedElement.flatMap {
+                Self.stringAttribute(kAXRoleAttribute as CFString, in: $0)
+            }
 
             if let focusedElement {
                 selectedTextRange = Self.selectedTextRange(in: focusedElement)
+                inputFrame = Self.frame(of: focusedElement)
             }
         }
 
         return TranscriptInsertionTarget(
             app: app,
             processIdentifier: app.processIdentifier,
+            focusedWindow: focusedWindow,
             focusedElement: focusedElement,
-            selectedTextRange: selectedTextRange
+            selectedTextRange: selectedTextRange,
+            windowTitle: windowTitle,
+            inputRole: inputRole,
+            inputFrame: inputFrame
         )
     }
 
@@ -76,6 +100,13 @@ struct TranscriptInsertionTarget {
         let activated = await waitForActivation()
         if !activated {
             log.warning("Timed out activating origin app: \(label)")
+        }
+
+        if let focusedWindow {
+            let raiseResult = AXUIElementPerformAction(focusedWindow, kAXRaiseAction as CFString)
+            if raiseResult != .success {
+                log.debug("Could not raise origin window (\(raiseResult.rawValue)) for \(label)")
+            }
         }
 
         guard let focusedElement else {
@@ -135,7 +166,23 @@ struct TranscriptInsertionTarget {
         return NSWorkspace.shared.frontmostApplication?.processIdentifier == processIdentifier
     }
 
-    private static func focusedElement(in appElement: AXUIElement) -> AXUIElement? {
+    private static func focusedWindow(in appElement: AXUIElement) -> AXUIElement? {
+        var windowRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            appElement,
+            kAXFocusedWindowAttribute as CFString,
+            &windowRef
+        ) == .success,
+              let windowRef else {
+            return nil
+        }
+        return (windowRef as! AXUIElement)
+    }
+
+    private static func focusedElement(
+        in appElement: AXUIElement,
+        focusedWindow: AXUIElement?
+    ) -> AXUIElement? {
         var focusedRef: CFTypeRef?
         var result = AXUIElementCopyAttributeValue(
             appElement,
@@ -144,12 +191,9 @@ struct TranscriptInsertionTarget {
         )
 
         if result != .success {
-            var windowRef: CFTypeRef?
-            if AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &windowRef) == .success,
-               let windowRef {
-                let window = windowRef as! AXUIElement
+            if let focusedWindow {
                 result = AXUIElementCopyAttributeValue(
-                    window,
+                    focusedWindow,
                     kAXFocusedUIElementAttribute as CFString,
                     &focusedRef
                 )
@@ -159,6 +203,16 @@ struct TranscriptInsertionTarget {
         guard result == .success else { return nil }
         guard let focusedRef else { return nil }
         return (focusedRef as! AXUIElement)
+    }
+
+    private static func stringAttribute(_ attribute: CFString, in element: AXUIElement) -> String? {
+        var valueRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, attribute, &valueRef) == .success,
+              let value = valueRef as? String else {
+            return nil
+        }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private static func selectedTextRange(in element: AXUIElement) -> CFRange? {
@@ -176,6 +230,38 @@ struct TranscriptInsertionTarget {
         var range = CFRange(location: 0, length: 0)
         guard AXValueGetValue(rangeValue, .cfRange, &range) else { return nil }
         return range
+    }
+
+    private static func frame(of element: AXUIElement) -> CGRect? {
+        var positionRef: CFTypeRef?
+        var sizeRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            element,
+            kAXPositionAttribute as CFString,
+            &positionRef
+        ) == .success,
+              AXUIElementCopyAttributeValue(
+                element,
+                kAXSizeAttribute as CFString,
+                &sizeRef
+              ) == .success,
+              let positionRef,
+              let sizeRef else {
+            return nil
+        }
+
+        let positionValue = positionRef as! AXValue
+        let sizeValue = sizeRef as! AXValue
+        var position = CGPoint.zero
+        var size = CGSize.zero
+        guard AXValueGetValue(positionValue, .cgPoint, &position),
+              AXValueGetValue(sizeValue, .cgSize, &size),
+              size.width > 0,
+              size.height > 0 else {
+            return nil
+        }
+
+        return CGRect(origin: position, size: size)
     }
 
 }

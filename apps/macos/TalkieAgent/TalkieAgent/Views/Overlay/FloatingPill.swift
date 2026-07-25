@@ -12,6 +12,12 @@ import Combine
 
 private let pillLogger = Log(.ui)
 
+private enum FloatingPillComponentLayout {
+    static let captureTargetHeight: CGFloat = 18
+    static let captureTargetGap: CGFloat = 2
+    static let captureTargetLaneHeight = captureTargetHeight + captureTargetGap
+}
+
 /// Hosting view that lets clicks pass through the transparent parts of the
 /// oversized pill window used for hover/dev-info headroom.
 private final class ClickThroughPillHostingView<Content: View>: NSHostingView<Content> {
@@ -28,6 +34,7 @@ private final class ClickThroughPillHostingView<Content: View>: NSHostingView<Co
 // Notification for showing permissions window
 extension Notification.Name {
     static let showPermissionsWindow = Notification.Name("showPermissionsWindow")
+    static let captureTargetJumpRequested = Notification.Name("captureTargetJumpRequested")
 }
 
 // MARK: - NSScreen Extension (Safe Display Access)
@@ -127,6 +134,8 @@ final class FloatingPillController: ObservableObject {
     static let shared = FloatingPillController()
 
     private var windows: [NSWindow] = []
+    private var overlayAppearances: [Int: ScreenAwareOverlayAppearance] = [:]
+    private var overlayAppearanceTasks: [Int: Task<Void, Never>] = [:]
     private var timerUpdateTimer: Timer?  // 1Hz timer for elapsed time display during recording
     private var healthCheckTimer: Timer?  // Periodic health check to heal from failed states
     private var recordingStartTime: Date?
@@ -172,6 +181,21 @@ final class FloatingPillController: ObservableObject {
                 if self?.isVisible == true {
                     self?.repositionAllPills()
                 }
+            }
+        }
+
+        // The pixels beneath a stationary overlay usually change when the
+        // frontmost app changes. Resample after that window has finished
+        // coming forward, rather than polling the display continuously.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(140))
+                guard !Task.isCancelled, self?.isVisible == true else { return }
+                self?.refreshOverlayAppearances()
             }
         }
 
@@ -301,6 +325,9 @@ final class FloatingPillController: ObservableObject {
             window.orderOut(nil)
         }
         windows.removeAll()
+        overlayAppearances.removeAll()
+        overlayAppearanceTasks.values.forEach { $0.cancel() }
+        overlayAppearanceTasks.removeAll()
 
         // Create pills based on settings
         let showOnAllScreens = LiveSettings.shared.pillShowOnAllScreens
@@ -347,16 +374,24 @@ final class FloatingPillController: ObservableObject {
         }
         let contentAlignment: Alignment
         let hitAlignment: HitAlignment
+        let captureTargetIsAbove: Bool
         switch LiveSettings.shared.pillPosition {
         case .bottomLeft:
-            contentAlignment = .leading
+            contentAlignment = .bottomLeading
             hitAlignment = .leading
+            captureTargetIsAbove = true
         case .bottomRight:
-            contentAlignment = .trailing
+            contentAlignment = .bottomTrailing
             hitAlignment = .trailing
-        case .bottomCenter, .topCenter:
-            contentAlignment = .center
+            captureTargetIsAbove = true
+        case .bottomCenter:
+            contentAlignment = .bottom
             hitAlignment = .center
+            captureTargetIsAbove = true
+        case .topCenter:
+            contentAlignment = .top
+            hitAlignment = .center
+            captureTargetIsAbove = false
         }
 
         // Keep enough headroom for expanded/pulsing states without creating an
@@ -365,11 +400,13 @@ final class FloatingPillController: ObservableObject {
         let developerWidth = pillOverrides.pillDeveloperWidth(fallback: 240)
         let maxPillHitWidth = pillOverrides.pillHitWidth(fallback: 144)
         let pillHeight = pillOverrides.pillHeight(fallback: 20)
+        let hostingHeight = pillHeight + FloatingPillComponentLayout.captureTargetLaneHeight
         let hostingWidth = max(maxPillHitWidth, max(pillWidth, developerWidth))
-        let pillView = FloatingPillView()
+        let overlayAppearance = ScreenAwareOverlayAppearance()
+        let pillView = FloatingPillView(overlayAppearance: overlayAppearance)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: contentAlignment)
         let hostingView = ClickThroughPillHostingView(rootView: pillView.environmentObject(self))
-        hostingView.frame = NSRect(x: 0, y: 0, width: hostingWidth, height: pillHeight)
+        hostingView.frame = NSRect(x: 0, y: 0, width: hostingWidth, height: hostingHeight)
         let regularHitWidth = min(hostingWidth, max(maxPillHitWidth, pillWidth))
         let developerHitWidth = min(hostingWidth, max(regularHitWidth, developerWidth))
         hostingView.interactiveRectProvider = {
@@ -383,7 +420,12 @@ final class FloatingPillController: ObservableObject {
             case .center:
                 originX = (hostingWidth - hitWidth) / 2
             }
-            return NSRect(x: originX, y: 0, width: hitWidth, height: pillHeight)
+            let captureTargetIsLocked = CaptureTargetController.shared.isLocked
+            let hitHeight = captureTargetIsLocked ? hostingHeight : pillHeight
+            let originY = captureTargetIsLocked || captureTargetIsAbove
+                ? 0
+                : hostingHeight - pillHeight
+            return NSRect(x: originX, y: originY, width: hitWidth, height: hitHeight)
         }
 
         let panel = NSPanel(
@@ -420,6 +462,43 @@ final class FloatingPillController: ObservableObject {
 
         panel.orderFront(nil)
         windows.append(panel)
+        overlayAppearances[panel.windowNumber] = overlayAppearance
+        refreshOverlayAppearance(for: panel)
+    }
+
+    private func refreshOverlayAppearances() {
+        for window in windows {
+            refreshOverlayAppearance(for: window)
+        }
+    }
+
+    private func refreshOverlayAppearance(for window: NSWindow) {
+        guard let appearance = overlayAppearances[window.windowNumber] else { return }
+        let windowNumber = window.windowNumber
+        overlayAppearanceTasks[windowNumber]?.cancel()
+        let excludedWindowIDs = windows.map { CGWindowID($0.windowNumber) }
+        let sampledFrame = window.frame
+
+        overlayAppearanceTasks[windowNumber] = Task { @MainActor [weak appearance] in
+            for sampleIndex in 0..<3 {
+                guard !Task.isCancelled, let appearance else { return }
+                await appearance.refresh(
+                    for: sampledFrame,
+                    excludingWindowIDs: excludedWindowIDs
+                )
+                if sampleIndex < 2 {
+                    try? await Task.sleep(for: .milliseconds(400))
+                }
+            }
+        }
+    }
+
+    func overlayTone(on screen: NSScreen) -> LiveGlassTone {
+        guard let window = windows.first(where: { $0.screen == screen }),
+              let appearance = overlayAppearances[window.windowNumber] else {
+            return ScreenAwareOverlayAppearance.fallbackTone()
+        }
+        return appearance.tone
     }
 
     private func calculateHomePosition(for panel: NSWindow, on screen: NSScreen) -> NSPoint {
@@ -477,6 +556,9 @@ final class FloatingPillController: ObservableObject {
             window.orderOut(nil)
         }
         windows.removeAll()
+        overlayAppearances.removeAll()
+        overlayAppearanceTasks.values.forEach { $0.cancel() }
+        overlayAppearanceTasks.removeAll()
     }
 
     func toggle() {
@@ -638,9 +720,12 @@ final class FloatingPillController: ObservableObject {
 // MARK: - Floating Pill View (expands when cursor approaches)
 
 struct FloatingPillView: View {
+    let overlayAppearance: ScreenAwareOverlayAppearance
     @EnvironmentObject var controller: FloatingPillController
     @StateObject private var permissionManager = PermissionManager.shared
     @ObservedObject private var audioMonitor = AudioLevelMonitor.shared
+    @State private var captureTarget = CaptureTargetController.shared
+    @ObservedObject private var settings = LiveSettings.shared
     private let overlayOverrides = OverlayIndicatorOverridesStore.shared
     @State private var isHovered = false
     @State private var showDevInfo = false
@@ -680,11 +765,33 @@ struct FloatingPillView: View {
     }
 
     private var currentWidth: CGFloat {
-        showDevInfo ? max(developerWidth, pillWidth) : pillWidth
+        if showDevInfo || (!permissionManager.allRequiredGranted && isExpanded) {
+            return max(developerWidth, pillWidth)
+        }
+        return pillWidth
     }
 
     private var pillCornerRadius: CGFloat {
         max(8, pillHeight / 2)
+    }
+
+    private var componentHeight: CGFloat {
+        pillHeight + FloatingPillComponentLayout.captureTargetLaneHeight
+    }
+
+    private var captureTargetIsAbove: Bool {
+        settings.pillPosition != .topCenter
+    }
+
+    private var componentAlignment: Alignment {
+        captureTargetIsAbove ? .bottom : .top
+    }
+
+    private var captureTargetOffsetY: CGFloat {
+        let centerDistance = (pillHeight / 2)
+            + FloatingPillComponentLayout.captureTargetGap
+            + (FloatingPillComponentLayout.captureTargetHeight / 2)
+        return captureTargetIsAbove ? -centerDistance : centerDistance
     }
 
     private var warningOffsetY: CGFloat {
@@ -696,9 +803,10 @@ struct FloatingPillView: View {
     }
 
     var body: some View {
-        HStack(spacing: 6) {
-            // Keep the permission action beside the recording control so the
-            // warning reads as part of the pill instead of a detached glyph.
+        // The microphone owns a fixed lane. The capture target gets a separate
+        // vertical lane toward the center of the screen, so neither control can
+        // overlap or reflow the other.
+        ZStack {
             if !permissionManager.allRequiredGranted && isExpanded {
                 Button(action: { showPermissionWarning.toggle() }) {
                     HStack(spacing: 4) {
@@ -713,7 +821,8 @@ struct FloatingPillView: View {
                     .frame(height: 18)
                     .liveGlassSurface(
                         borderColor: SemanticColor.warning.opacity(0.45),
-                        cornerRadius: 9
+                        cornerRadius: 9,
+                        tone: overlayAppearance.tone
                     )
                     .contentShape(Capsule())
                 }
@@ -726,6 +835,7 @@ struct FloatingPillView: View {
                         onOpenPermissionCenter: openPermissionCenter
                     )
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             LivePill(
@@ -741,6 +851,7 @@ struct FloatingPillView: View {
                 forceExpanded: isExpanded,
                 identifier: "floating",
                 captureIntent: controller.captureIntent,
+                glassTone: overlayAppearance.tone,
                 onTap: {
                     // Visual feedback - quick scale down/up
                     provideTapFeedback()
@@ -757,7 +868,16 @@ struct FloatingPillView: View {
                     controller.handleShiftToggle()
                 }
             )
+            .frame(width: pillWidth, height: pillHeight)
             .scaleEffect(tapFeedbackScale)
+            .zIndex(1)
+
+            if captureTarget.isLocked && !showDevInfo {
+                captureTargetBadge
+                    .transition(.scale(scale: 0.72).combined(with: .opacity))
+                    .offset(y: captureTargetOffsetY)
+                    .zIndex(2)
+            }
 
             // Dev info appears on Command+hover (build time + PID)
             if showDevInfo {
@@ -791,8 +911,10 @@ struct FloatingPillView: View {
                         )
                 )
                 .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
+        .frame(width: currentWidth, height: pillHeight)
         // Silence warning overlay - appears below the pill when mic is silent
         .overlay(alignment: .bottom) {
             if controller.state == .listening && audioMonitor.isSilent {
@@ -880,12 +1002,14 @@ struct FloatingPillView: View {
                 }
             }
         }
-        // Frame tightly wraps the pill content - expanded for dev info, compact otherwise
-        .frame(width: currentWidth, height: pillHeight)
+        // Reserve a stable companion lane without enlarging the unlocked hit target.
+        .frame(width: currentWidth, height: componentHeight, alignment: componentAlignment)
         .contentShape(RoundedRectangle(cornerRadius: pillCornerRadius))
         .scaleEffect(slideInOpacity == 0 ? 0.8 : 1.0)  // Scale up instead of offset (stays in bounds)
         .opacity(slideInOpacity)
         .animation(.easeInOut(duration: 0.15), value: showDevInfo)
+        .animation(.spring(response: 0.32, dampingFraction: 0.74), value: captureTarget.isLocked)
+        .environment(\.colorScheme, overlayAppearance.tone.colorScheme)
         .onAppear {
             // Animate in with scale + opacity (no offset to avoid out-of-bounds warnings)
             withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
@@ -914,6 +1038,50 @@ struct FloatingPillView: View {
                 pidCopied = false
             }
         }
+    }
+
+    private var captureTargetBadge: some View {
+        Button {
+            NotificationCenter.default.post(name: .captureTargetJumpRequested, object: nil)
+        } label: {
+            HStack(spacing: 2) {
+                ZStack {
+                    Circle()
+                        .stroke(overlayAppearance.tone.lockAccent.opacity(0.80), lineWidth: 1)
+                        .frame(width: 16, height: 16)
+
+                    if let appIcon = captureTarget.appIcon {
+                        Image(nsImage: appIcon)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 12, height: 12)
+                    } else {
+                        Image(systemName: "scope")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(overlayAppearance.tone.lockAccent)
+                    }
+                }
+                .symbolEffect(.bounce, value: captureTarget.feedbackSequence)
+
+                Text(captureTarget.captureCount, format: .number)
+                    .font(.system(size: 8, weight: .bold, design: .rounded))
+                    .foregroundStyle(overlayAppearance.tone.primaryText.opacity(0.90))
+                    .contentTransition(.numericText())
+                    .opacity(captureTarget.captureCount > 0 ? 1 : 0)
+                    .frame(width: 10, alignment: .center)
+            }
+            .padding(.horizontal, 3)
+            .frame(width: 35, height: 18)
+            .liveGlassSurface(
+                borderColor: overlayAppearance.tone.lockAccent.opacity(0.34),
+                cornerRadius: 9,
+                tone: overlayAppearance.tone
+            )
+            .shadow(color: overlayAppearance.tone.lockAccent.opacity(0.08), radius: 5, y: 2)
+        }
+        .buttonStyle(.plain)
+        .help("Deliver queued screenshots and jump to \(captureTarget.appName ?? "capture target")")
+        .accessibilityLabel("Capture target: \(captureTarget.appName ?? "locked")")
     }
 
     private func copyPID() {
@@ -1010,7 +1178,9 @@ private struct FloatingPillPermissionPopover: View {
 
 #Preview {
     VStack(spacing: 40) {
-        FloatingPillView()
+        FloatingPillView(
+            overlayAppearance: ScreenAwareOverlayAppearance(tone: .graphite)
+        )
             .environmentObject(FloatingPillController.shared)
     }
     .padding(40)

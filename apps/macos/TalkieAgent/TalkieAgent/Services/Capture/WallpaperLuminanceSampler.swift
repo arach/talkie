@@ -20,11 +20,26 @@ enum WallpaperLuminanceSampler {
     /// Returns the trio palette that best contrasts with the wallpaper
     /// region under the HUD. PEARL for light, SLATE for mid, AMBER for dark.
     static func samplePalette(for screenRect: CGRect) async -> Palette {
-        if let image = await ScreenshotCaptureService.shared.captureScreenRegion(screenRect: screenRect),
-           let brightness = averageBrightness(of: image) {
+        if let brightness = await sampleBrightness(for: screenRect) {
             return classify(brightness: brightness)
         }
         return appearanceFallback()
+    }
+
+    /// Samples the actual pixels beneath a floating overlay. Callers may
+    /// exclude their own panels so the previous overlay frame never biases
+    /// the result.
+    static func sampleBrightness(
+        for screenRect: CGRect,
+        excludingWindowIDs: [CGWindowID] = []
+    ) async -> CGFloat? {
+        guard let image = await ScreenshotCaptureService.shared.captureScreenRegion(
+            screenRect: screenRect,
+            excludingWindowIDs: excludingWindowIDs
+        ) else {
+            return nil
+        }
+        return averageBrightness(of: image)
     }
 
     static func fallbackPalette() -> Palette {
