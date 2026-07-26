@@ -2,7 +2,7 @@
 //  CaptureMarkupCoordinator.swift
 //  Talkie
 //
-//  Ephemeral markup bay lifecycle: open web session, accept/cancel, discard.
+//  Talkie-owned full markup editor lifecycle: open, autosave, accept/cancel.
 //
 
 import AppKit
@@ -32,8 +32,8 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
         super.init()
     }
 
-    /// Legacy Talkie-owned markup surface. Prefer `openAgentOwnedSession(imageURL:)`
-    /// for user-facing annotation entry points.
+    /// Open Talkie's full markup editor. TalkieAgent owns the separate quick,
+    /// ephemeral markup surface used while a capture is still in flight.
     func openSession(
         imageURL: URL,
         document: CaptureMarkupDocument? = nil,
@@ -144,7 +144,7 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
                         openWebBay: true
                     )
                 } else {
-                    openAgentOwnedSession(imageURL: imageURL)
+                    openSession(imageURL: imageURL)
                 }
             } catch {
                 log.error("Failed to open markup session", detail: error.localizedDescription)
@@ -152,15 +152,6 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
                     presentAgentError(error)
                 }
             }
-        }
-    }
-
-    func openAgentOwnedSession(imageURL: URL, fallbackToLegacy: Bool = true) {
-        Task { @MainActor in
-            let opened = await ServiceManager.shared.live.openCaptureMarkup(fileURL: imageURL)
-            if opened { return }
-            guard fallbackToLegacy else { return }
-            openSession(imageURL: imageURL)
         }
     }
 

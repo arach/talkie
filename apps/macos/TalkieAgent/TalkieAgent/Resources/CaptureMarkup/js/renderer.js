@@ -712,9 +712,14 @@
       ctx.beginPath();
       ctx.rect(drawable.x, drawable.y, drawable.width, drawable.height);
       ctx.clip();
-      for (const layer of state.layers) drawLayer(layer);
+      const editingLayerID = state.noteEditor && state.noteEditor.layerID;
+      for (const layer of state.layers) {
+        if (layer.id !== editingLayerID) drawLayer(layer);
+      }
       const selectedLayer = state.layers.find((layer) => layer.id === state.selectedLayerId);
-      if (state.tool === "select" && selectedLayer) drawSelection(selectedLayer);
+      if (state.tool === "select" && selectedLayer && selectedLayer.id !== editingLayerID) {
+        drawSelection(selectedLayer);
+      }
       if (state.creating) drawLayer(previewLayer(state.creating));
       ctx.restore();
     }

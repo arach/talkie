@@ -1031,7 +1031,7 @@ struct ScreenshotsScreen: View {
             videoMarkupItemID = item.id
             return
         }
-        CaptureMarkupCoordinator.shared.openAgentOwnedSession(imageURL: item.fileURL)
+        markupURL = item.fileURL
     }
 
     private func annotateLatestSystemScreenshot() {
@@ -1042,7 +1042,7 @@ struct ScreenshotsScreen: View {
         }
 
         previewItemID = nil
-        CaptureMarkupCoordinator.shared.openAgentOwnedSession(imageURL: latest.url)
+        markupURL = latest.url
     }
 
     private func shareFile(_ url: URL) {

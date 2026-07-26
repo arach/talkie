@@ -762,7 +762,7 @@ struct ScopeHomeView: View {
                 NSWorkspace.shared.open(url)
             },
             RecentMenuItem(label: "Annotate", systemImage: "pencil.tip.crop.circle", role: nil) {
-                CaptureMarkupCoordinator.shared.openAgentOwnedSession(imageURL: url)
+                markupURL = url
             },
             RecentMenuItem(label: "Quick Copy", systemImage: "doc.on.doc", role: nil) {
                 Self.copyImage(at: url)

@@ -744,7 +744,7 @@ struct ScopeLibraryView: View {
 
     private func openMarkupImage(_ imageURL: URL, for recording: TalkieObject) {
         selectRecording(recording.id, revealInspector: false)
-        CaptureMarkupCoordinator.shared.openAgentOwnedSession(imageURL: imageURL)
+        CaptureMarkupCoordinator.shared.openSession(imageURL: imageURL)
     }
 
     @ViewBuilder

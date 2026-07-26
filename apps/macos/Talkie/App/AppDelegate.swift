@@ -2672,7 +2672,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             displayName: result.displayName
         )
         if opensMarkup {
-            CaptureMarkupCoordinator.shared.openAgentOwnedSession(imageURL: savedURL)
+            CaptureMarkupCoordinator.shared.openSession(imageURL: savedURL)
         }
         return true
     }

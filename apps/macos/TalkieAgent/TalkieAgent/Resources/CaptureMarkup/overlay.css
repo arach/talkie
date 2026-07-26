@@ -399,6 +399,9 @@ button:focus-visible {
 }
 
 .selection-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
   padding: 3px;
 }
 
@@ -408,12 +411,26 @@ button:focus-visible {
   height: 26px;
   padding: 0;
   place-items: center;
-  color: rgba(255, 132, 122, 0.94);
+  color: rgba(255, 255, 255, 0.76);
 }
 
 .selection-actions button:hover {
+  color: #FFFFFF;
+  background: rgba(79, 125, 255, 0.20);
+}
+
+.selection-actions .selection-delete {
+  color: rgba(255, 132, 122, 0.94);
+}
+
+.selection-actions .selection-delete:hover {
   color: #FFAAA2;
   background: rgba(255, 76, 64, 0.16);
+}
+
+.selection-actions [hidden],
+.selection-menu [hidden] {
+  display: none;
 }
 
 .selection-menu {
@@ -730,6 +747,7 @@ body[data-agent-compact-dock="true"] .style-panel button {
   min-height: 44px;
   max-height: 160px;
   resize: none;
+  box-sizing: border-box;
   padding: 9px 11px;
   border: 1px solid rgba(223, 161, 58, 0.30);
   border-radius: 5px;
