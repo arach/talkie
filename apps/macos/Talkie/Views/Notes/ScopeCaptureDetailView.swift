@@ -854,7 +854,7 @@ struct ScopeCaptureDetailView: View {
 
     private func openMarkup() {
         guard case .image(let url) = primaryPreviewMedia else { return }
-        CaptureMarkupCoordinator.shared.openAgentOwnedSession(imageURL: url)
+        CaptureMarkupCoordinator.shared.openSession(imageURL: url)
     }
 
     private func exportCapture() {

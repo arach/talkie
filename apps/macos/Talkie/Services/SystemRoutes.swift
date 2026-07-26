@@ -248,7 +248,7 @@ final class SystemRoutes: RouteGroup {
 
         Route(
             path: "capture/markup",
-            description: "Open ephemeral capture markup bay for a screenshot file",
+            description: "Open Talkie's full markup editor for a screenshot file",
             isInternal: false
         ) { _, params in
             guard let path = params["path"], !path.isEmpty else {

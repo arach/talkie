@@ -527,9 +527,13 @@
     if (!selectionActions) return;
     const layer = selectedLayer();
     const bounds = layer ? layerBounds(layer) : null;
-    const shouldShow = state.tool === "select" && bounds && !state.dragging;
+    const shouldShow = state.tool === "select" && bounds && !state.dragging && !state.noteEditor;
     selectionActions.hidden = !shouldShow;
     if (!shouldShow) return;
+
+    selectionActions.querySelectorAll("[data-selection-note-only]").forEach((element) => {
+      element.hidden = layer.kind !== "label";
+    });
 
     const topRight = pointToCanvas({
       x: bounds.x + bounds.width,
@@ -795,6 +799,15 @@
 
   canvas.addEventListener("pointerup", finishPointer);
   canvas.addEventListener("pointercancel", finishPointer);
+  canvas.addEventListener("dblclick", (event) => {
+    if (!eventInsideDrawable(event)) return;
+    const layer = hitTestLayer(eventPoint(event));
+    if (!layer || layer.kind !== "label") return;
+    setTool("select");
+    state.selectedLayerId = layer.id;
+    editSelectedNote();
+    event.preventDefault();
+  });
   canvas.addEventListener("contextmenu", (event) => {
     if (!eventInsideDrawable(event)) return;
     event.preventDefault();
@@ -811,6 +824,9 @@
     state.selectedLayerId = layer.id;
     render();
     if (!selectionMenu) return;
+    selectionMenu.querySelectorAll("[data-selection-note-only]").forEach((element) => {
+      element.hidden = layer.kind !== "label";
+    });
     selectionMenu.hidden = false;
     const width = selectionMenu.offsetWidth || 156;
     const height = selectionMenu.offsetHeight || 132;
@@ -960,6 +976,27 @@
     state.noteEditor = null;
     const text = active.element.value.trim();
     active.element.remove();
+    if (active.layerID) {
+      const layer = state.layers.find((candidate) => candidate.id === active.layerID);
+      if (commit && text && layer) {
+        layer.text = text;
+        layer.label = text;
+        layer.author = "user";
+        layer.endTime = nowSeconds();
+        if (active.materialStyle) Object.assign(layer, active.materialStyle);
+        if (layer.noteStyle === "glass" && active.backdropDataURL) {
+          installMaterialBackdrop(layer.id, {
+            backdropDataURL: active.backdropDataURL,
+            backgroundBlur: layer.backgroundBlur,
+          });
+        }
+        state.redoStack = [];
+        sendUpdate();
+        if (layer.noteStyle === "glass") requestGlassMaterialForLayer(layer);
+      }
+      render();
+      return;
+    }
     if (!commit || !text) {
       render();
       return;
@@ -1014,28 +1051,46 @@
     if (noteStyle === "glass") requestGlassMaterialForLayer(layer);
   }
 
-  function startNoteEditor(point) {
+  function startNoteEditor(point, layer = null) {
     closeNoteEditor(true);
+    const editingLayer = layer && layer.kind === "label" && layer.frame ? layer : null;
+    const noteStyle = editingLayer && editingLayer.noteStyle
+      ? editingLayer.noteStyle
+      : state.noteStyle;
+    const preset = noteStylePresets[noteStyle] || noteStylePresets.sticky;
     const element = document.createElement("textarea");
     element.className = "note-editor";
-    element.dataset.noteStyle = state.noteStyle;
+    element.dataset.noteStyle = noteStyle;
     element.placeholder = "Note";
     element.spellcheck = true;
-    applyNotePresetToEditor(element, currentNotePreset());
-    const editorLeft = Math.min(
-      Math.max(point.x * drawableWidth(), 12),
-      Math.max(12, drawableWidth() - 320)
-    );
-    element.style.left = `${drawableLeft() + editorLeft}px`;
-    element.style.top = `${drawableTop() + Math.min(Math.max(point.y * drawableHeight(), 12), drawableHeight() - 80)}px`;
+    element.value = editingLayer ? editingLayer.text || editingLayer.label || "" : "";
+    applyNotePresetToEditor(element, editingLayer ? { ...preset, ...editingLayer } : preset);
+    if (editingLayer) {
+      const rect = rectToCanvas(editingLayer.frame);
+      element.style.left = `${rect.x}px`;
+      element.style.top = `${rect.y}px`;
+      element.style.width = `${Math.max(44, rect.width)}px`;
+      element.style.height = `${Math.max(44, rect.height)}px`;
+      element.style.minHeight = "0";
+      element.style.maxHeight = "none";
+    } else {
+      const editorLeft = Math.min(
+        Math.max(point.x * drawableWidth(), 12),
+        Math.max(12, drawableWidth() - 320)
+      );
+      element.style.left = `${drawableLeft() + editorLeft}px`;
+      element.style.top = `${drawableTop() + Math.min(Math.max(point.y * drawableHeight(), 12), drawableHeight() - 80)}px`;
+    }
     document.body.appendChild(element);
     state.noteEditor = {
       element,
       point,
       mode: state.mode,
-      noteStyle: state.noteStyle,
+      noteStyle,
+      layerID: editingLayer ? editingLayer.id : null,
       startTime: nowSeconds(),
     };
+    render();
 
     element.addEventListener("pointerdown", (event) => event.stopPropagation());
     element.addEventListener("keydown", (event) => {
@@ -1054,7 +1109,16 @@
         requestGlassMaterialForEditor(state.noteEditor);
       }
       element.focus();
+      element.select();
     });
+  }
+
+  function editSelectedNote() {
+    const layer = selectedLayer();
+    if (!layer || layer.kind !== "label" || !layer.frame) return false;
+    closeSelectionMenu();
+    startNoteEditor({ x: layer.frame.x, y: layer.frame.y }, layer);
+    return true;
   }
 
   const dockEdgeStorageKey = "talkie.capture-markup.dock-edge";
@@ -1754,7 +1818,9 @@
 
   function performSelectionAction(action) {
     closeSelectionMenu();
-    if (action === "delete") {
+    if (action === "edit-note") {
+      editSelectedNote();
+    } else if (action === "delete") {
       deleteSelectedLayer();
     } else if (action === "duplicate") {
       duplicateSelectedLayer();
@@ -1828,6 +1894,8 @@
       event.preventDefault();
     } else if (event.key === "Escape" || key === "x") {
       post("liveMarkup.cancel", {});
+    } else if (event.key === "Enter" && editSelectedNote()) {
+      event.preventDefault();
     } else if (event.key === "Enter") {
       post("liveMarkup.done", {
         layers: state.layers,
