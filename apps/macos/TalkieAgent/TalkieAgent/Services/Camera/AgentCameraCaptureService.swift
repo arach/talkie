@@ -26,12 +26,28 @@ final class AgentCameraCaptureService: NSObject {
     private(set) var isSessionRunning = false
     private(set) var captureSession: AVCaptureSession?
 
-    var bubbleSize: CGFloat {
-        switch TalkieSharedSettings.string(forKey: "cameraBubbleSize") {
-        case "small": return 80
-        case "large": return 130
-        default: return 100
+    var bubbleSize: CameraBubbleSize {
+        guard let raw = TalkieSharedSettings.string(forKey: AgentSettingsKey.cameraBubbleSize),
+              let size = CameraBubbleSize(rawValue: raw) else {
+            return .standard
         }
+        return size
+    }
+
+    var bubbleShape: CameraBubbleShape {
+        guard let raw = TalkieSharedSettings.string(forKey: AgentSettingsKey.cameraBubbleShape),
+              let shape = CameraBubbleShape(rawValue: raw) else {
+            return .circle
+        }
+        return shape
+    }
+
+    var bubblePlacement: CameraBubblePlacement {
+        guard let raw = TalkieSharedSettings.string(forKey: AgentSettingsKey.cameraBubblePlacement),
+              let placement = CameraBubblePlacement(rawValue: raw) else {
+            return .bottomTrailing
+        }
+        return placement
     }
 
     @ObservationIgnored
@@ -85,7 +101,7 @@ final class AgentCameraCaptureService: NSObject {
         session.sessionPreset = .hd1280x720
 
         let device: AVCaptureDevice?
-        if let selectedDeviceID = TalkieSharedSettings.string(forKey: "cameraDeviceID"),
+        if let selectedDeviceID = TalkieSharedSettings.string(forKey: AgentSettingsKey.cameraDeviceID),
            !selectedDeviceID.isEmpty,
            let selected = AVCaptureDevice(uniqueID: selectedDeviceID) {
             device = selected

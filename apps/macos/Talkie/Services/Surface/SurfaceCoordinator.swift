@@ -6,8 +6,8 @@ import TalkieKit
 
 /// Single state owner for the capture surface system.
 ///
-/// Wraps NotchComposer (which handles intent priority for recording/screenRecording/idle)
-/// and adds the missing state layers:
+/// Coordinates hover, explicit-open, and recording state for the remaining
+/// Talkie-owned tray surfaces:
 /// - Hover state (previously implicit in mouse position + expansion timers)
 /// - Explicit-open state for the primary non-recording viewer/shelf surface
 /// - Dismiss coordination (previously each surface handled its own dismiss)
@@ -53,13 +53,7 @@ final class SurfaceCoordinator {
     @ObservationIgnored
     private var hoverActive = false
 
-    /// Guards against re-entrant intent observation Tasks.
-    @ObservationIgnored
-    private var intentChangeTask: Task<Void, Never>?
-
-    private init() {
-        observeRecordingIntent()
-    }
+    private init() {}
 
     // MARK: - Hover
 
@@ -80,8 +74,7 @@ final class SurfaceCoordinator {
 
     // MARK: - Recording
 
-    /// Called when NotchComposer resolves to a recording intent.
-    /// Recording always wins — auto-dismisses shelf.
+    /// Recording always wins and auto-dismisses the shelf.
     func beginRecording(phase: RecordingPhase = .active) {
         // Auto-dismiss shelf if it's open — recording always wins
         if case .explicitOpen(.shelf) = state {
@@ -134,67 +127,4 @@ final class SurfaceCoordinator {
         return false
     }
 
-    // MARK: - NotchComposer Bridge
-
-    /// Observe NotchComposer's resolved intent and map to SurfaceCoordinator state.
-    /// This is the bridge — NotchComposer handles intent priority,
-    /// SurfaceCoordinator handles the state layers on top.
-    private func observeRecordingIntent() {
-        withObservationTracking {
-            let _ = NotchComposer.shared.resolvedIntent
-            let _ = NotchComposer.shared.resolvedPayload
-        } onChange: {
-            Task { @MainActor in
-                self.intentChangeTask?.cancel()
-                self.intentChangeTask = Task { @MainActor in
-                    guard !Task.isCancelled else { return }
-                    self.handleIntentChange()
-                }
-                self.observeRecordingIntent()
-            }
-        }
-    }
-
-    private func handleIntentChange() {
-        let intent = NotchComposer.shared.resolvedIntent
-        let payload = NotchComposer.shared.resolvedPayload
-
-        switch intent {
-        case .recording:
-            // Map payload state to recording phase
-            let phase: RecordingPhase
-            switch payload {
-            case .recording(let recordingState, _, _):
-                switch recordingState {
-                case .listening:
-                    phase = .active
-                case .transcribing, .routing, .refining:
-                    phase = .processing
-                case .idle:
-                    phase = .active
-                }
-            default:
-                phase = .active
-            }
-
-            if case .recording = state {
-                updateRecordingPhase(phase)
-            } else {
-                beginRecording(phase: phase)
-            }
-
-        case .screenRecording:
-            // Screen recording uses the same recording state for now
-            if case .recording = state {
-                // Already in recording state
-            } else {
-                beginRecording(phase: .active)
-            }
-
-        case .idle, .cameraLoading:
-            if case .recording = state {
-                endRecording()
-            }
-        }
-    }
 }

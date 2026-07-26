@@ -343,13 +343,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         // Sync feature flags to shared defaults so Agent can read them
         FeatureFlags.shared.syncAllToSharedDefaults()
 
-        // Talkie's notch/island is retired in favor of TalkieAgent's own
-        // capture island (TLK-027). Clear any agent-driven enable override so
-        // the legacy composer stays dormant; setup() then no-ops behind the
-        // (default-off) feature flag.
-        FeatureFlags.shared.clearLocalOverride("enableNotchComposer")
-        NotchComposer.shared.setup()
-
         // Capture system (gated)
         if FeatureFlags.shared.enableCapture {
             // Screenshot shortcuts (sub-gated)
@@ -429,22 +422,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             TalkieConsole.info("📸 Capturing settings pages to: \(outputDir.path)")
             let results = await SettingsStoryboardGenerator.shared.captureAllPages(to: outputDir)
             TalkieConsole.info("✅ Captured \(results.count) pages")
-            exit(0)
-        }
-
-        cliHandler.register(
-            "notch-status",
-            description: "Print runtime notch diagnostics (flags, settings, screen detection, hot state)"
-        ) { _ in
-            let lines = await MainActor.run {
-                NotchComposer.shared.debugStatusLines()
-            }
-            TalkieConsole.info("")
-            TalkieConsole.info("Notch Diagnostics")
-            TalkieConsole.info("═════════════════")
-            for line in lines {
-                TalkieConsole.info(line)
-            }
             exit(0)
         }
 

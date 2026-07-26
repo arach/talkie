@@ -15,7 +15,6 @@ const FLAG_DEFAULTS: Record<string, boolean> = {
   enableCapture: false,
   enableCameraBubble: false,
   enableScreenshots: false,
-  enableNotchComposer: true,
 };
 
 /** Parent → children for hierarchical display. */
@@ -26,7 +25,6 @@ const CHILD_FLAGS: Record<string, string[]> = {
 /** Flags that also need to be synced to the shared Agent suite. */
 const SHARED_FLAG_KEYS: Record<string, string> = {
   enableCapture: "feature_capture_enabled",
-  enableNotchComposer: "feature_notch_composer_enabled",
 };
 
 /** UserDefaults domain (dev build). */

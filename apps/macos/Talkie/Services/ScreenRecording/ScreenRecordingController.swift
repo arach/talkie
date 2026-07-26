@@ -4,7 +4,7 @@
 //
 //  Orchestrator for screen video recording.
 //  Flow: Hyper+R → chord HUD → select target → record → stop pill → Library.
-//  Coordinates ScreenRecordingService, NotchComposer, and Library capture storage.
+//  Coordinates ScreenRecordingService and Library capture storage.
 //
 
 import AppKit
@@ -408,7 +408,6 @@ final class ScreenRecordingController {
         startMetadataSampler(for: target, captureMode: Self.captureModeString(for: target), startedAt: startTime)
         startWindowHealthMonitor(for: target)
         showActiveOverlay(for: target, startedAt: startTime)
-        // NotchComposer observes our state change and activates .screenRecording automatically
         log.info(
             "Screen recording in progress (mode: \(mode.rawValue), \(ScreenRecordingService.shared.diagnosticSummary(for: target)))"
         )

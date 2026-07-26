@@ -5,7 +5,6 @@
 //  Human-editable settings store persisted to Application Support.
 //
 
-import AppKit
 import Foundation
 import Observation
 import TalkieKit
@@ -263,98 +262,6 @@ final class TalkieSettingsConfigurationStore {
             config.ui.settingsSidebarIconsOnly = defaults.bool(forKey: "settings.sidebar.iconsOnly")
         }
 
-        let hasBuiltInNotchedDisplay = NSScreen.screens.contains { screen in
-            let info = NotchInfo.detect(for: screen)
-            return info.hasNotch && CGDisplayIsBuiltin(info.displayID) != 0
-        }
-
-        config.notch.enabled = defaults.object(forKey: "notchCapabilityEnabled") as? Bool ?? config.notch.enabled
-        config.notch.externalEnabled = defaults.object(forKey: "notchExternalMonitorEnabled") as? Bool ?? config.notch.externalEnabled
-        config.notch.shellStyleRaw = defaults.string(forKey: "notchVirtualDisplayStyle") ?? config.notch.shellStyleRaw
-        config.notch.islandVisualStyleEnabled = defaults.object(forKey: "notchIslandVisualStyleEnabled") as? Bool ?? config.notch.islandVisualStyleEnabled
-        config.notch.alwaysVisible = defaults.object(forKey: "notchAlwaysVisible") as? Bool ?? config.notch.alwaysVisible
-        if defaults.object(forKey: "notchOverlayOpacity") != nil {
-            config.notch.overlayOpacity = defaults.double(forKey: "notchOverlayOpacity")
-        }
-        if defaults.object(forKey: "notchTrayBarEnabled") != nil {
-            config.notch.trayStripEnabled = defaults.bool(forKey: "notchTrayBarEnabled")
-        } else {
-            config.notch.trayStripEnabled = hasBuiltInNotchedDisplay
-        }
-        config.notch.trayStripPlacement = defaults.string(forKey: "notchTrayStripPlacement") ?? config.notch.trayStripPlacement
-        config.notch.trayStripShowDots = defaults.object(forKey: "notchTrayIndicatorShowDots") as? Bool ?? config.notch.trayStripShowDots
-        if defaults.object(forKey: "notchTrayIndicatorWidth") != nil {
-            config.notch.trayStripWidth = defaults.double(forKey: "notchTrayIndicatorWidth")
-        }
-        if defaults.object(forKey: "notchTrayIndicatorHeight") != nil {
-            config.notch.trayStripHeight = defaults.double(forKey: "notchTrayIndicatorHeight")
-        }
-        if defaults.object(forKey: "notchTrayIndicatorDotSize") != nil {
-            config.notch.trayStripDotSize = defaults.double(forKey: "notchTrayIndicatorDotSize")
-        }
-        if defaults.object(forKey: "notchTrayIndicatorMaxDots") != nil {
-            config.notch.trayStripMaxDots = defaults.integer(forKey: "notchTrayIndicatorMaxDots")
-        }
-        if defaults.object(forKey: "notchTrayIndicatorBorderOpacity") != nil {
-            config.notch.trayStripBorderOpacity = defaults.double(forKey: "notchTrayIndicatorBorderOpacity")
-        }
-        if defaults.object(forKey: "notchTrayIndicatorYOffset") != nil {
-            config.notch.trayStripYOffset = defaults.double(forKey: "notchTrayIndicatorYOffset")
-        }
-        config.notch.trayPreviewWhileRecordingEnabled = defaults.object(forKey: "notchTrayPreviewWhileRecordingEnabled") as? Bool ?? config.notch.trayPreviewWhileRecordingEnabled
-        if defaults.object(forKey: "notchHoverZoneWidthExternal") != nil {
-            config.notch.hoverZoneWidthExternal = defaults.double(forKey: "notchHoverZoneWidthExternal")
-        }
-        if defaults.object(forKey: "notchHoverZoneWidthNotch") != nil {
-            config.notch.hoverZoneWidthNotch = defaults.double(forKey: "notchHoverZoneWidthNotch")
-        }
-        if defaults.object(forKey: "notchHoverZoneHeight") != nil {
-            config.notch.hoverZoneHeight = defaults.double(forKey: "notchHoverZoneHeight")
-        }
-        if defaults.object(forKey: "notchHoverZonePaddingX") != nil {
-            config.notch.hoverZonePaddingX = defaults.double(forKey: "notchHoverZonePaddingX")
-        }
-        if defaults.object(forKey: "notchHoverZonePaddingY") != nil {
-            config.notch.hoverZonePaddingY = defaults.double(forKey: "notchHoverZonePaddingY")
-        }
-        if let data = defaults.data(forKey: "notchPerMonitorHoverZones"),
-           let hoverZones = try? JSONDecoder().decode([String: HoverZoneConfig].self, from: data) {
-            config.notch.perMonitorHoverZones = hoverZones
-        }
-        config.notch.communicationDemoEnabled = defaults.object(forKey: "notchCommunicationDemoEnabled") as? Bool ?? config.notch.communicationDemoEnabled
-        config.notch.inspectorEnabled = defaults.object(forKey: "notchAnimationInspectorEnabled") as? Bool ?? config.notch.inspectorEnabled
-        config.notch.inspectorScrubEnabled = defaults.object(forKey: "notchAnimationInspectorScrubEnabled") as? Bool ?? config.notch.inspectorScrubEnabled
-        if defaults.object(forKey: "notchAnimationInspectorProgress") != nil {
-            config.notch.inspectorProgress = defaults.double(forKey: "notchAnimationInspectorProgress")
-        }
-        if defaults.object(forKey: "notchAnimationInspectorExtensionWidthDelta") != nil {
-            config.notch.inspectorExtensionWidthDelta = defaults.double(forKey: "notchAnimationInspectorExtensionWidthDelta")
-        }
-        if defaults.object(forKey: "notchAnimationInspectorExtensionWidthMatch") != nil {
-            config.notch.inspectorExtensionWidthMatch = defaults.double(forKey: "notchAnimationInspectorExtensionWidthMatch")
-        }
-        config.notch.inspectorExtensionWidthReferenceRaw = defaults.string(forKey: "notchAnimationInspectorExtensionWidthReference") ?? config.notch.inspectorExtensionWidthReferenceRaw
-        if defaults.object(forKey: "notchAnimationInspectorExtensionYOffset") != nil {
-            config.notch.inspectorExtensionYOffset = defaults.double(forKey: "notchAnimationInspectorExtensionYOffset")
-        }
-        if defaults.object(forKey: "notchAnimationInspectorExtensionDropDistance") != nil {
-            config.notch.inspectorExtensionDropDistance = defaults.double(forKey: "notchAnimationInspectorExtensionDropDistance")
-        }
-        if defaults.object(forKey: "notchAnimationInspectorExpansionStart") != nil {
-            config.notch.inspectorExpansionStart = defaults.double(forKey: "notchAnimationInspectorExpansionStart")
-        }
-        if defaults.object(forKey: "notchAnimationInspectorBarAttachStart") != nil {
-            config.notch.inspectorBarAttachStart = defaults.double(forKey: "notchAnimationInspectorBarAttachStart")
-        }
-        if defaults.object(forKey: "notchAnimationInspectorBarAttachDuration") != nil {
-            config.notch.inspectorBarAttachDuration = defaults.double(forKey: "notchAnimationInspectorBarAttachDuration")
-        }
-        config.notch.inspectorRecordingExtensionPreviewRaw = defaults.string(forKey: "notchAnimationInspectorRecordingExtensionPreview") ?? config.notch.inspectorRecordingExtensionPreviewRaw
-        if defaults.object(forKey: "notchAnimationInspectorPlaybackSpeed") != nil {
-            config.notch.inspectorPlaybackSpeed = defaults.double(forKey: "notchAnimationInspectorPlaybackSpeed")
-        }
-        config.notch.aggressiveDebugLogging = defaults.object(forKey: "notchAggressiveDebugLogging") as? Bool ?? config.notch.aggressiveDebugLogging
-
         config.tray.externalBadgeEnabled = defaults.object(forKey: "externalTrayBadgeEnabled") as? Bool ?? config.tray.externalBadgeEnabled
         config.tray.badgeModeRaw = defaults.string(forKey: "trayBadgeMode") ?? config.tray.badgeModeRaw
         config.tray.badgeFollowNotchWidth = defaults.object(forKey: "trayBadgeStripFollowNotchWidth") as? Bool ?? config.tray.badgeFollowNotchWidth
@@ -381,36 +288,6 @@ final class TalkieSettingsConfigurationStore {
             config.tray.shelfHeight = defaults.double(forKey: "trayShelfHeight")
         }
         config.tray.shelfHotkey = defaults.string(forKey: "trayShelfHotkey") ?? config.tray.shelfHotkey
-
-        let notchLiveDefaults = UserDefaults(suiteName: NotchTuning.liveSuiteName)
-        if let value = notchLiveDefaults?.object(forKey: NotchTuning.liveHoverPokeOutKey) as? Double {
-            config.notchLab.hoverPokeOut = value
-        }
-        if let value = notchLiveDefaults?.object(forKey: NotchTuning.liveActivePokeOutKey) as? Double {
-            config.notchLab.activePokeOut = value
-        }
-        if let value = notchLiveDefaults?.object(forKey: NotchTuning.liveTopOuterRadiusKey) as? Double {
-            config.notchLab.topOuterRadius = value
-        }
-        if let value = notchLiveDefaults?.object(forKey: NotchTuning.liveLeftTopOuterRadiusKey) as? Double {
-            config.notchLab.leftTopOuterRadius = value
-        }
-        if let value = notchLiveDefaults?.object(forKey: NotchTuning.liveRightTopOuterRadiusKey) as? Double {
-            config.notchLab.rightTopOuterRadius = value
-        }
-        if let value = notchLiveDefaults?.object(forKey: NotchTuning.liveTopInnerRadiusKey) as? Double {
-            config.notchLab.topInnerRadius = value
-        }
-        if let value = notchLiveDefaults?.object(forKey: NotchTuning.liveBottomRadiusKey) as? Double {
-            config.notchLab.bottomRadius = value
-        }
-        if let value = notchLiveDefaults?.object(forKey: NotchTuning.liveNotchOverlapKey) as? Double {
-            config.notchLab.notchOverlap = value
-        }
-        if let value = notchLiveDefaults?.object(forKey: NotchTuning.liveHeightInsetKey) as? Double {
-            config.notchLab.heightInset = value
-        }
-        config.notchLab.innerCurveModeRawValue = notchLiveDefaults?.string(forKey: NotchTuning.liveInnerCurveModeKey) ?? config.notchLab.innerCurveModeRawValue
 
         let appEnabledStates = defaults.dictionaryRepresentation().reduce(into: [String: Bool]()) { partial, entry in
             guard entry.key.hasPrefix("app."), entry.key.hasSuffix(".enabled") else { return }

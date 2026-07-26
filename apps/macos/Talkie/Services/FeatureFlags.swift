@@ -119,10 +119,6 @@ final class FeatureFlags {
     }
 
     /// Legacy Talkie-owned notch composer. Agent owns live notch/island rendering by default.
-    var enableNotchComposer: Bool {
-        flag("enableNotchComposer")
-    }
-
     /// Experimental mic processing for making speech more prominent over local background audio
     var enableVoiceForegrounding: Bool {
         flag("enableVoiceForegrounding")

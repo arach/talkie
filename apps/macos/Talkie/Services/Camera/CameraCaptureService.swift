@@ -109,6 +109,28 @@ final class CameraCaptureService: NSObject {
         }
     }
 
+    var bubbleShape: CameraBubbleShape {
+        get {
+            _ = settings.cameraSettingsRevision
+            return settings.cameraBubbleShape
+        }
+        set {
+            settings.cameraBubbleShape = newValue
+            settingsRevision += 1
+        }
+    }
+
+    var bubblePlacement: CameraBubblePlacement {
+        get {
+            _ = settings.cameraSettingsRevision
+            return settings.cameraBubblePlacement
+        }
+        set {
+            settings.cameraBubblePlacement = newValue
+            settingsRevision += 1
+        }
+    }
+
     /// Video codec preference
     var videoCodec: CameraVideoCodec {
         get {
