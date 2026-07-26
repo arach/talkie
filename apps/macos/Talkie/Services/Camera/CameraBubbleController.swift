@@ -59,49 +59,26 @@ final class CameraBubbleController {
 
     func show() {
         guard state == .hidden else { return }
-        let t0 = CFAbsoluteTimeGetCurrent()
         state = .previewing  // Set immediately to prevent double-entry race
-
-        // Show "loading camera" via NotchComposer
-        NotchComposer.shared.activate(.cameraLoading, payload: .cameraLoading)
-        let t1 = CFAbsoluteTimeGetCurrent()
-        log.warning("Camera: notch cameraLoading at +\(Int((t1 - t0) * 1000))ms")
 
         Task {
             let captureService = CameraCaptureService.shared
 
-            // Yield to run loop so the notch panel actually renders before we block
-            await MainActor.run { }
-            try? await Task.sleep(for: .milliseconds(1))
-
-            let t2 = CFAbsoluteTimeGetCurrent()
-            log.warning("Camera: Task entered at +\(Int((t2 - t0) * 1000))ms")
-
             guard await captureService.requestPermission() else {
                 log.warning("Camera permission denied, cannot show bubble")
-                NotchComposer.shared.deactivate(.cameraLoading)
                 state = .hidden
                 return
             }
-            let t3 = CFAbsoluteTimeGetCurrent()
-            log.warning("Camera: permission at +\(Int((t3 - t0) * 1000))ms")
 
             // Use async startPreview so we don't block the main thread
             guard await captureService.startPreviewAsync() else {
                 log.error("Camera preview failed to start")
-                NotchComposer.shared.deactivate(.cameraLoading)
                 state = .hidden
                 return
             }
-            let t4 = CFAbsoluteTimeGetCurrent()
-            log.warning("Camera: preview ready at +\(Int((t4 - t0) * 1000))ms")
 
             panel.show()
-            let t5 = CFAbsoluteTimeGetCurrent()
-            log.warning("Camera: panel.show at +\(Int((t5 - t0) * 1000))ms")
-
-            // Dismiss pill when session is running (or after timeout)
-            awaitSessionReady(t0: t0)
+            log.info("Camera bubble shown")
         }
     }
 
@@ -114,32 +91,10 @@ final class CameraBubbleController {
         }
 
         hideAfterStop = false
-        NotchComposer.shared.deactivate(.cameraLoading)
         CameraCaptureService.shared.stopPreview()
         panel.dismiss()
         state = .hidden
         log.info("Camera bubble hidden")
-    }
-
-    // MARK: - Session Ready
-
-    private func awaitSessionReady(t0: CFAbsoluteTime) {
-        Task {
-            // Poll for session running (lightweight, ~50ms intervals)
-            let captureService = CameraCaptureService.shared
-            for _ in 0..<60 {  // Max 3s timeout
-                try? await Task.sleep(for: .milliseconds(50))
-                if captureService.isSessionRunning { break }
-            }
-            let t6 = CFAbsoluteTimeGetCurrent()
-            log.warning("Camera: session running at +\(Int((t6 - t0) * 1000))ms")
-
-            // Brief hold so the label registers visually
-            try? await Task.sleep(for: .milliseconds(300))
-            NotchComposer.shared.deactivate(.cameraLoading)
-            let t7 = CFAbsoluteTimeGetCurrent()
-            log.warning("Camera: notch cameraLoading dismissed at +\(Int((t7 - t0) * 1000))ms (total)")
-        }
     }
 
     // MARK: - Clip Recording

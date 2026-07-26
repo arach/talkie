@@ -63,13 +63,6 @@ public enum RuntimeFeatureFlags {
             defaultValue: false
         ),
         RuntimeFeatureFlagDefinition(
-            key: "enableNotchComposer",
-            title: "Legacy Notch Composer",
-            detail: "Talkie-owned live notch/island renderer.",
-            defaultValue: false,
-            sharedSettingsKey: AgentSettingsKey.featureNotchComposerEnabled
-        ),
-        RuntimeFeatureFlagDefinition(
             key: "enableVoiceForegrounding",
             title: "Voice Foregrounding",
             detail: "Experimental voice-over-background audio processing.",

@@ -77,18 +77,6 @@ public enum CaptureIslandPlacement: String, CaseIterable, Codable, Identifiable,
     }
 }
 
-/// Cross-process bridge for the rich notch/island surface.
-///
-/// TalkieAgent authors the notch-surface settings (enabled / external / shape /
-/// always-visible) into the shared suite, then posts this distributed
-/// notification. The Talkie app (which owns the `NotchComposer` renderer)
-/// applies the shared values and refreshes the overlay. The shared keys are the
-/// durable channel — read at Talkie launch — and this notification is the live
-/// signal when Talkie is already running.
-public enum TalkieNotchBridge {
-    public static let surfaceSettingsDidChange = "to.talkie.agent.notchSurfaceSettings"
-}
-
 /// All settings keys used by Agent settings
 /// Centralized here to ensure consistency between Talkie and Talkie Agent
 public enum AgentSettingsKey {
@@ -111,6 +99,13 @@ public enum AgentSettingsKey {
     public static let screenRecordingIncludesSystemAudio = "screenRecordingIncludesSystemAudio"
     public static let screenRecordingIncludesMicrophone = "screenRecordingIncludesMicrophone"
     public static let screenRecordingShowsCameraBubble = "screenRecordingShowsCameraBubble"
+
+    // MARK: Camera Bubble
+    public static let cameraBubbleSize = "cameraBubbleSize"
+    public static let cameraBubbleShape = "cameraBubbleShape"
+    public static let cameraBubblePlacement = "cameraBubblePlacement"
+    public static let cameraBubbleCustomPosition = "cameraBubbleCustomPosition"
+    public static let cameraDeviceID = "cameraDeviceID"
 
     // MARK: Capture Preview
     public static let captureIslandPlacement = "agent.captureIsland.placement"
@@ -146,14 +141,6 @@ public enum AgentSettingsKey {
     public static let pillShowOnAllScreens = "pillShowOnAllScreens"
     public static let pillExpandsDuringRecording = "pillExpandsDuringRecording"
     public static let notchOverlayEnabled = "notchOverlayEnabled"
-
-    // MARK: Notch Surface (rich notch/island — rendered by the Talkie app's
-    // NotchComposer, authored from TalkieAgent settings and synced via the
-    // shared suite + a distributed notification; see TalkieNotchBridge).
-    public static let notchSurfaceEnabled = "notchSurface.enabled"
-    public static let notchSurfaceExternalEnabled = "notchSurface.externalEnabled"
-    public static let notchSurfaceAlwaysVisible = "notchSurface.alwaysVisible"
-    public static let notchSurfaceShellStyle = "notchSurface.shellStyle"  // "auto" | "island" | "notch"
 
     // MARK: Sounds
     public static let startSound = "startSound"
@@ -216,7 +203,6 @@ public enum AgentSettingsKey {
 
     // MARK: Feature Flags
     public static let featureCaptureEnabled = "feature_capture_enabled"
-    public static let featureNotchComposerEnabled = "feature_notch_composer_enabled"
     public static let featureVoiceForegroundingEnabled = "feature_voice_foregrounding_enabled"
     public static let featureFlagsRemotePayload = "feature_flags_remote_payload"
     public static let featureFlagsLastFetch = "feature_flags_last_fetch"

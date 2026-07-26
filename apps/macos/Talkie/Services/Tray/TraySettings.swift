@@ -4,7 +4,7 @@ import Foundation
 
 /// Single source of truth for all tray settings (external badge, viewer, shelf).
 /// Replaces scattered @AppStorage declarations across TrayBadge,
-/// TrayViewer, and NotchSettingsView.
+/// TrayViewer, and SurfaceSettingsView.
 ///
 /// The declarative config file is the source of truth. Legacy UserDefaults keys
 /// remain as compatibility mirrors for older runtime paths.

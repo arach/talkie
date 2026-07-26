@@ -7,94 +7,174 @@
 
 import AppKit
 import SwiftUI
+import TalkieKit
 
-private let agentCameraPositionKey = "agentCameraBubblePosition"
+private let legacyAgentCameraPositionKey = "agentCameraBubblePosition"
 
 @MainActor
 final class AgentCameraBubblePanel {
     private var panel: NSPanel?
     private var moveObserver: NSObjectProtocol?
+    private var settingsObserver: NSObjectProtocol?
+    private var lastAppliedOrigin: NSPoint?
 
     var isVisible: Bool { panel != nil }
 
-    private var bubbleSize: CGFloat { AgentCameraCaptureService.shared.bubbleSize }
+    private var dimensions: CGSize {
+        let service = AgentCameraCaptureService.shared
+        return service.bubbleShape.dimensions(for: service.bubbleSize)
+    }
 
     func show() {
         guard panel == nil else { return }
+        migrateLegacyPositionIfNeeded()
 
-        let size = bubbleSize
-        let hostingView = NSHostingView(rootView: AgentCameraBubbleView())
-        hostingView.frame = NSRect(x: 0, y: 0, width: size, height: size)
+        let hostingView = makeHostingView()
+        let size = dimensions
+        hostingView.frame = NSRect(origin: .zero, size: size)
 
-        let p = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: size, height: size),
+        let panel = NSPanel(
+            contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
-        p.contentView = hostingView
-        p.isFloatingPanel = true
-        p.level = .floating
-        p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        p.isOpaque = false
-        p.backgroundColor = .clear
-        p.hasShadow = true
-        p.isMovableByWindowBackground = true
-        p.sharingType = .readOnly
+        panel.contentView = hostingView
+        panel.isFloatingPanel = true
+        panel.level = .floating
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.isMovableByWindowBackground = true
+        panel.sharingType = .readOnly
 
-        positionPanel(p)
-
-        p.alphaValue = 0
-        p.orderFrontRegardless()
+        position(panel)
+        panel.alphaValue = 0
+        panel.orderFrontRegardless()
 
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.2
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            p.animator().alphaValue = 1
+            panel.animator().alphaValue = 1
         }
 
-        panel = p
+        self.panel = panel
         moveObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didMoveNotification,
-            object: p,
+            object: panel,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
-                self?.savePosition()
-            }
+            Task { @MainActor in self?.saveCustomPositionIfNeeded() }
         }
+        settingsObserver = DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name(CameraBubbleSettingsBridge.settingsDidChange),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.refreshLayout() }
+        }
+    }
+
+    func refreshLayout() {
+        guard let panel else { return }
+        let size = dimensions
+        panel.contentView = makeHostingView()
+        panel.setContentSize(size)
+        position(panel)
     }
 
     func dismiss() {
         guard let panel else { return }
-        savePosition()
-
-        if let moveObserver {
-            NotificationCenter.default.removeObserver(moveObserver)
-            self.moveObserver = nil
-        }
-
+        saveCustomPositionIfNeeded()
+        removeObservers()
         panel.orderOut(nil)
         self.panel = nil
     }
 
-    private func positionPanel(_ panel: NSPanel) {
-        if let dict = UserDefaults.standard.dictionary(forKey: agentCameraPositionKey),
-           let x = dict["x"] as? CGFloat,
-           let y = dict["y"] as? CGFloat {
-            panel.setFrameOrigin(NSPoint(x: x, y: y))
-            return
-        }
-
-        let screen = NSScreen.main ?? NSScreen.screens[0]
-        let x = screen.visibleFrame.maxX - bubbleSize - 24
-        let y = screen.visibleFrame.minY + 80
-        panel.setFrameOrigin(NSPoint(x: x, y: y))
+    private func makeHostingView() -> NSHostingView<AgentCameraBubbleView> {
+        NSHostingView(rootView: AgentCameraBubbleView())
     }
 
-    private func savePosition() {
+    private func position(_ panel: NSPanel) {
+        let size = dimensions
+        let placement = AgentCameraCaptureService.shared.bubblePlacement
+        let requestedOrigin = placement == .custom ? storedCustomOrigin() : nil
+        let screen = screen(for: requestedOrigin, size: size)
+        let origin = CameraBubbleLayout.origin(
+            for: placement,
+            requested: requestedOrigin,
+            size: size,
+            visibleFrame: screen.visibleFrame
+        )
+        lastAppliedOrigin = origin
+        panel.setFrameOrigin(origin)
+    }
+
+    private func screen(for origin: NSPoint?, size: CGSize) -> NSScreen {
+        if let origin {
+            let center = NSPoint(x: origin.x + size.width / 2, y: origin.y + size.height / 2)
+            if let match = NSScreen.screens.first(where: { $0.frame.contains(center) }) {
+                return match
+            }
+        }
+        return NSScreen.main ?? NSScreen.screens[0]
+    }
+
+    private func storedCustomOrigin() -> NSPoint? {
+        if let dict = TalkieSharedSettings.dictionary(forKey: AgentSettingsKey.cameraBubbleCustomPosition),
+           let x = dict["x"] as? Double,
+           let y = dict["y"] as? Double {
+            return NSPoint(x: x, y: y)
+        }
+        if let legacy = UserDefaults.standard.dictionary(forKey: legacyAgentCameraPositionKey),
+           let x = legacy["x"] as? Double,
+           let y = legacy["y"] as? Double {
+            let origin = NSPoint(x: x, y: y)
+            persist(origin)
+            return origin
+        }
+        return nil
+    }
+
+    private func migrateLegacyPositionIfNeeded() {
+        guard TalkieSharedSettings.object(forKey: AgentSettingsKey.cameraBubblePlacement) == nil,
+              TalkieSharedSettings.object(forKey: AgentSettingsKey.cameraBubbleCustomPosition) == nil,
+              let legacy = UserDefaults.standard.dictionary(forKey: legacyAgentCameraPositionKey),
+              let x = legacy["x"] as? Double,
+              let y = legacy["y"] as? Double else { return }
+        persist(NSPoint(x: x, y: y))
+        TalkieSharedSettings.set(CameraBubblePlacement.custom.rawValue, forKey: AgentSettingsKey.cameraBubblePlacement)
+    }
+
+    private func saveCustomPositionIfNeeded() {
         guard let panel else { return }
-        let origin = panel.frame.origin
-        UserDefaults.standard.set(["x": origin.x, "y": origin.y], forKey: agentCameraPositionKey)
+        if let lastAppliedOrigin,
+           abs(lastAppliedOrigin.x - panel.frame.origin.x) < 0.5,
+           abs(lastAppliedOrigin.y - panel.frame.origin.y) < 0.5 {
+            self.lastAppliedOrigin = nil
+            return
+        }
+        persist(panel.frame.origin)
+        TalkieSharedSettings.set(CameraBubblePlacement.custom.rawValue, forKey: AgentSettingsKey.cameraBubblePlacement)
+        CameraBubbleSettingsBridge.notifyChanged()
+    }
+
+    private func persist(_ origin: NSPoint) {
+        TalkieSharedSettings.set(
+            ["x": Double(origin.x), "y": Double(origin.y)],
+            forKey: AgentSettingsKey.cameraBubbleCustomPosition
+        )
+    }
+
+    private func removeObservers() {
+        if let moveObserver {
+            NotificationCenter.default.removeObserver(moveObserver)
+            self.moveObserver = nil
+        }
+        if let settingsObserver {
+            DistributedNotificationCenter.default().removeObserver(settingsObserver)
+            self.settingsObserver = nil
+        }
     }
 }

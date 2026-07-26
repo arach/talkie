@@ -9,30 +9,6 @@ import SwiftUI
 import AVFoundation
 import TalkieKit
 
-// MARK: - Bubble Size
-
-enum CameraBubbleSize: String, CaseIterable, Codable {
-    case small    // 80pt
-    case standard // 100pt
-    case large    // 130pt
-
-    var points: CGFloat {
-        switch self {
-        case .small: return 80
-        case .standard: return 100
-        case .large: return 130
-        }
-    }
-
-    var label: String {
-        switch self {
-        case .small: return "Small"
-        case .standard: return "Standard"
-        case .large: return "Large"
-        }
-    }
-}
-
 // MARK: - Video Codec
 
 enum CameraVideoCodec: String, CaseIterable, Codable {
@@ -204,7 +180,7 @@ struct CameraSettingsView: View {
     private var cameraTabContent: some View {
         VStack(alignment: .leading, spacing: Spacing.lg) {
             cameraDeviceSection
-            bubbleSizeSection
+            bubbleLayoutSection
             recordingQualitySection
             videoFormatSection
             maxDurationSection
@@ -494,15 +470,15 @@ struct CameraSettingsView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Bubble Size
+    // MARK: - Bubble Layout
 
-    private var bubbleSizeSection: some View {
+    private var bubbleLayoutSection: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             HStack(spacing: Spacing.sm) {
                 RoundedRectangle(cornerRadius: 1)
                     .fill(Color.cyan)
                     .frame(width: 3, height: 14)
-                Text("BUBBLE")
+                Text("CAMERA VIEW")
                     .font(Theme.current.fontXSBold)
                     .foregroundColor(Theme.current.foregroundSecondary)
                 Spacer()
@@ -514,11 +490,91 @@ struct CameraSettingsView: View {
                 }
             }
 
-            Text("Size of the floating camera preview bubble.")
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text("SHAPE")
+                    .font(Theme.current.fontXS)
+                    .foregroundStyle(Theme.current.foregroundMuted)
+
+                HStack(spacing: Spacing.sm) {
+                    ForEach(CameraBubbleShape.allCases) { shape in
+                        bubbleShapeOption(shape)
+                    }
+                }
+            }
+
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text("PLACEMENT")
+                    .font(Theme.current.fontXS)
+                    .foregroundStyle(Theme.current.foregroundMuted)
+
+                HStack(spacing: Spacing.xs) {
+                    ForEach(CameraBubblePlacement.allCases) { placement in
+                        bubblePlacementOption(placement)
+                    }
+                }
+            }
+
+            Text("Drag the camera anywhere for a custom position. Talkie keeps it fully visible and shares the layout with Talkie Agent.")
                 .font(Theme.current.fontXS)
-                .foregroundColor(Theme.current.foregroundMuted)
+                .foregroundStyle(Theme.current.foregroundMuted)
         }
         .settingsSectionCard(padding: Spacing.md)
+    }
+
+    private func bubbleShapeOption(_ shape: CameraBubbleShape) -> some View {
+        let isSelected = captureService.bubbleShape == shape
+
+        return Button {
+            withAnimation(.easeOut(duration: 0.15)) {
+                captureService.bubbleShape = shape
+            }
+        } label: {
+            Label(shape.label, systemImage: shape.symbolName)
+                .font(Theme.current.fontXS)
+                .foregroundStyle(isSelected ? Theme.current.foreground : Theme.current.foregroundSecondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Spacing.sm)
+                .background(
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .fill(isSelected ? Theme.current.backgroundTertiary : Color.clear)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .stroke(isSelected ? Color.accentColor.opacity(0.45) : Theme.current.divider.opacity(0.5), lineWidth: 0.5)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func bubblePlacementOption(_ placement: CameraBubblePlacement) -> some View {
+        let isSelected = captureService.bubblePlacement == placement
+        let customAvailable = TalkieSharedSettings.dictionary(forKey: AgentSettingsKey.cameraBubbleCustomPosition) != nil
+
+        return Button {
+            withAnimation(.easeOut(duration: 0.15)) {
+                captureService.bubblePlacement = placement
+            }
+        } label: {
+            VStack(spacing: 3) {
+                Image(systemName: placement.symbolName)
+                    .font(.system(size: 11, weight: .medium))
+                Text(placement == .custom ? "Free" : placement.label.replacing(" left", with: " L").replacing(" right", with: " R"))
+                    .font(.system(size: 9, design: .monospaced))
+            }
+            .foregroundStyle(isSelected ? Theme.current.foreground : Theme.current.foregroundSecondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, Spacing.sm)
+            .background(
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .fill(isSelected ? Theme.current.backgroundTertiary : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .stroke(isSelected ? Color.accentColor.opacity(0.45) : Theme.current.divider.opacity(0.5), lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(placement == .custom && !customAvailable)
     }
 
     private func bubbleSizeOption(_ size: CameraBubbleSize) -> some View {

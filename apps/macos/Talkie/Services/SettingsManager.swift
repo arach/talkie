@@ -2232,25 +2232,63 @@ final class SettingsManager {
 
     // MARK: - Camera Capture Settings (file-backed, mirrored to UserDefaults)
 
-    private let cameraBubbleSizeKey = "cameraBubbleSize"
     private let cameraQualityKey = "cameraQuality"
     private let cameraVideoCodecKey = "cameraVideoCodec"
-    private let cameraDeviceIDKey = "cameraDeviceID"
     private let cameraMaxClipDurationKey = "cameraMaxClipDuration"
 
     var cameraBubbleSize: CameraBubbleSize {
         get {
             _ = settingsConfigurationRevision
-            guard let raw = UserDefaults.standard.string(forKey: cameraBubbleSizeKey),
+            let sharedRaw = TalkieSharedSettings.string(forKey: AgentSettingsKey.cameraBubbleSize)
+            let localRaw = UserDefaults.standard.string(forKey: AgentSettingsKey.cameraBubbleSize)
+            if sharedRaw == nil, let localRaw {
+                TalkieSharedSettings.set(localRaw, forKey: AgentSettingsKey.cameraBubbleSize)
+            }
+            let raw = sharedRaw ?? localRaw
+            guard let raw,
                   let bubbleSize = CameraBubbleSize(rawValue: raw) else {
                 return TalkieSettingsConfigurationStore.shared.configuration.camera.bubbleSize
             }
             return bubbleSize
         }
         set {
-            UserDefaults.standard.set(newValue.rawValue, forKey: cameraBubbleSizeKey)
+            UserDefaults.standard.set(newValue.rawValue, forKey: AgentSettingsKey.cameraBubbleSize)
+            TalkieSharedSettings.set(newValue.rawValue, forKey: AgentSettingsKey.cameraBubbleSize)
             persistDeclarativeSettings { $0.camera.bubbleSize = newValue }
             cameraSettingsRevision += 1
+            CameraBubbleSettingsBridge.notifyChanged()
+        }
+    }
+
+    var cameraBubbleShape: CameraBubbleShape {
+        get {
+            _ = cameraSettingsRevision
+            guard let raw = TalkieSharedSettings.string(forKey: AgentSettingsKey.cameraBubbleShape),
+                  let shape = CameraBubbleShape(rawValue: raw) else {
+                return .circle
+            }
+            return shape
+        }
+        set {
+            TalkieSharedSettings.set(newValue.rawValue, forKey: AgentSettingsKey.cameraBubbleShape)
+            cameraSettingsRevision += 1
+            CameraBubbleSettingsBridge.notifyChanged()
+        }
+    }
+
+    var cameraBubblePlacement: CameraBubblePlacement {
+        get {
+            _ = cameraSettingsRevision
+            guard let raw = TalkieSharedSettings.string(forKey: AgentSettingsKey.cameraBubblePlacement),
+                  let placement = CameraBubblePlacement(rawValue: raw) else {
+                return .bottomTrailing
+            }
+            return placement
+        }
+        set {
+            TalkieSharedSettings.set(newValue.rawValue, forKey: AgentSettingsKey.cameraBubblePlacement)
+            cameraSettingsRevision += 1
+            CameraBubbleSettingsBridge.notifyChanged()
         }
     }
 
@@ -2289,13 +2327,19 @@ final class SettingsManager {
     var cameraDeviceID: String {
         get {
             _ = settingsConfigurationRevision
-            if let deviceID = UserDefaults.standard.string(forKey: cameraDeviceIDKey) {
+            let sharedDeviceID = TalkieSharedSettings.string(forKey: AgentSettingsKey.cameraDeviceID)
+            let localDeviceID = UserDefaults.standard.string(forKey: AgentSettingsKey.cameraDeviceID)
+            if sharedDeviceID == nil, let localDeviceID {
+                TalkieSharedSettings.set(localDeviceID, forKey: AgentSettingsKey.cameraDeviceID)
+            }
+            if let deviceID = sharedDeviceID ?? localDeviceID {
                 return deviceID
             }
             return TalkieSettingsConfigurationStore.shared.configuration.camera.deviceID
         }
         set {
-            UserDefaults.standard.set(newValue, forKey: cameraDeviceIDKey)
+            UserDefaults.standard.set(newValue, forKey: AgentSettingsKey.cameraDeviceID)
+            TalkieSharedSettings.set(newValue, forKey: AgentSettingsKey.cameraDeviceID)
             persistDeclarativeSettings { $0.camera.deviceID = newValue }
             cameraSettingsRevision += 1
         }

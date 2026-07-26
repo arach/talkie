@@ -60,10 +60,6 @@ final class TrayBadge {
             let _ = SelectionTray.shared.count
             let _ = ServiceManager.shared.live.state
             let _ = TraySettings.shared.externalBadgeEnabled
-            let _ = NotchSettings.shared.enabled
-            let _ = NotchSettings.shared.trayStripEnabled
-            let _ = NotchSettings.shared.trayStripPlacement
-            let _ = NotchComposer.shared.isActive
         } onChange: {
             Task { @MainActor in
                 self.updateVisibility()
@@ -74,13 +70,6 @@ final class TrayBadge {
 
     private func updateVisibility() {
         guard TraySettings.shared.externalBadgeEnabled else {
-            dismiss()
-            return
-        }
-
-        // When notch capability + tray bar are active, the notch owns tray discovery.
-        let notchSettings = NotchSettings.shared
-        if notchSettings.overlayOwnsTrayDiscovery(isOverlayActive: NotchComposer.shared.isActive) {
             dismiss()
             return
         }
@@ -184,10 +173,7 @@ private struct BadgeView: View {
     private var stripMaxDotsStored: Int { ts.badgeMaxDots }
     private var stripYOffsetStored: Double { ts.badgeYOffset }
     private var stripHoverTargetHeightStored: Double { ts.badgeHoverTargetHeight }
-    private var trayBadgeHoverActive: Bool {
-        get { NotchComposer.shared.trayBadgeHoverActive }
-        nonmutating set { NotchComposer.shared.trayBadgeHoverActive = newValue }
-    }
+    @State private var trayBadgeHoverActive = false
     @State private var isExpanded = false
     @State private var selectedItemID: UUID?
     @State private var clickOutsideMonitor: Any?
@@ -204,13 +190,13 @@ private struct BadgeView: View {
         TrayBadgeMode(rawValue: modeRaw) ?? .pill
     }
 
-    private var notchBaselineWidth: CGFloat {
-        max(NotchInfo.effective().notchWidth - 4, 172)
+    private var defaultStripWidth: CGFloat {
+        180
     }
 
     private var stripWidth: CGFloat {
         if stripFollowNotchWidth {
-            return notchBaselineWidth
+            return defaultStripWidth
         }
         return CGFloat(max(120, min(stripWidthStored, 420)))
     }

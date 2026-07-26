@@ -614,6 +614,15 @@ struct TalkieSettingsConfiguration: Codable {
         }
     }
 
+    /// Compatibility-only shape for decoding settings written by the retired
+    /// Talkie-owned notch renderer. The live overlay is owned by TalkieAgent.
+    struct LegacyHoverZone: Codable, Equatable {
+        var width: Double = 80
+        var height: Double = 24
+        var paddingX: Double = 10
+        var paddingY: Double = 8
+    }
+
     struct Notch: Codable {
         var enabled: Bool
         var externalEnabled: Bool
@@ -636,7 +645,7 @@ struct TalkieSettingsConfiguration: Codable {
         var hoverZoneHeight: Double
         var hoverZonePaddingX: Double
         var hoverZonePaddingY: Double
-        var perMonitorHoverZones: [String: HoverZoneConfig]
+        var perMonitorHoverZones: [String: LegacyHoverZone]
         var communicationDemoEnabled: Bool
         var inspectorEnabled: Bool
         var inspectorScrubEnabled: Bool
@@ -656,7 +665,7 @@ struct TalkieSettingsConfiguration: Codable {
         init(
             enabled: Bool = true,
             externalEnabled: Bool = false,
-            shellStyleRaw: String = NotchVirtualDisplayStyle.auto.rawValue,
+            shellStyleRaw: String = "auto",
             islandVisualStyleEnabled: Bool = false,
             alwaysVisible: Bool = false,
             overlayOpacity: Double = 1.0,
@@ -675,7 +684,7 @@ struct TalkieSettingsConfiguration: Codable {
             hoverZoneHeight: Double = 24,
             hoverZonePaddingX: Double = 10,
             hoverZonePaddingY: Double = 8,
-            perMonitorHoverZones: [String: HoverZoneConfig] = [:],
+            perMonitorHoverZones: [String: LegacyHoverZone] = [:],
             communicationDemoEnabled: Bool = false,
             inspectorEnabled: Bool = false,
             inspectorScrubEnabled: Bool = false,
@@ -797,7 +806,7 @@ struct TalkieSettingsConfiguration: Codable {
             bottomRadius: Double = 14,
             notchOverlap: Double = 7,
             heightInset: Double = 2,
-            innerCurveModeRawValue: String = NotchInnerCurveMode.canonicalDownward.rawValue
+            innerCurveModeRawValue: String = "canonicalDownward"
         ) {
             self.hoverPokeOut = hoverPokeOut
             self.activePokeOut = activePokeOut

@@ -2,12 +2,13 @@
 //  CameraBubbleView.swift
 //  Talkie
 //
-//  SwiftUI circular camera preview with record/stop button.
+//  SwiftUI camera preview with record/stop button.
 //  Hosted inside CameraBubblePanel. Reads state from CameraBubbleController.
 //
 
 import SwiftUI
 import AVFoundation
+import TalkieKit
 
 // MARK: - Camera Bubble View
 
@@ -15,21 +16,27 @@ struct CameraBubbleView: View {
     private let controller = CameraBubbleController.shared
     private let captureService = CameraCaptureService.shared
 
-    private var size: CGFloat { captureService.bubbleSize.points }
+    @State private var isHovering = false
+
+    private var shape: CameraBubbleShape { captureService.bubbleShape }
+    private var size: CGSize { shape.dimensions(for: captureService.bubbleSize) }
+    private var bubbleShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: shape.cornerRadius(for: size), style: .continuous)
+    }
 
     var body: some View {
         ZStack {
             // Camera preview
             CameraPreviewRepresentable()
-                .frame(width: size, height: size)
-                .clipShape(Circle())
+                .frame(width: size.width, height: size.height)
+                .clipShape(bubbleShape)
 
             // Border ring — glows red when recording
-            Circle()
+            bubbleShape
                 .stroke(borderColor, lineWidth: borderWidth)
-                .frame(width: size, height: size)
+                .frame(width: size.width, height: size.height)
 
-            // Close button (top-left) — always visible
+            // Close button (top-left) — appears on hover
             VStack {
                 HStack {
                     Button(action: {
@@ -37,7 +44,7 @@ struct CameraBubbleView: View {
                     }) {
                         Image(systemName: "xmark")
                             .font(.system(size: 8, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundStyle(.white)
                             .frame(width: 18, height: 18)
                             .background(
                                 Circle()
@@ -50,6 +57,7 @@ struct CameraBubbleView: View {
                 Spacer()
             }
             .padding(2)
+            .opacity(isHovering ? 1 : 0)
 
             // Record/stop button at bottom
             VStack {
@@ -57,8 +65,12 @@ struct CameraBubbleView: View {
                 recordButton
             }
         }
-        .frame(width: size, height: size)
+        .frame(width: size.width, height: size.height)
+        .contentShape(bubbleShape)
+        .onHover { isHovering = $0 }
         .contextMenu {
+            cameraGeometryMenu
+            Divider()
             Button("Hide Camera") {
                 CameraBubbleController.shared.hide()
             }
@@ -70,6 +82,39 @@ struct CameraBubbleView: View {
             } else {
                 Button("Record Clip") {
                     controller.startClip()
+                }
+            }
+        }
+    }
+
+    private var cameraGeometryMenu: some View {
+        Group {
+            Menu("Size") {
+                ForEach(CameraBubbleSize.allCases) { size in
+                    Button {
+                        captureService.bubbleSize = size
+                    } label: {
+                        Label(size.label, systemImage: captureService.bubbleSize == size ? "checkmark" : "circle")
+                    }
+                }
+            }
+            Menu("Shape") {
+                ForEach(CameraBubbleShape.allCases) { shape in
+                    Button {
+                        captureService.bubbleShape = shape
+                    } label: {
+                        Label(shape.label, systemImage: shape.symbolName)
+                    }
+                }
+            }
+            Menu("Position") {
+                ForEach(CameraBubblePlacement.allCases) { placement in
+                    Button {
+                        captureService.bubblePlacement = placement
+                    } label: {
+                        Label(placement.label, systemImage: placement.symbolName)
+                    }
+                    .disabled(placement == .custom && TalkieSharedSettings.dictionary(forKey: AgentSettingsKey.cameraBubbleCustomPosition) == nil)
                 }
             }
         }
@@ -130,7 +175,7 @@ struct CameraPreviewRepresentable: NSViewRepresentable {
     }
 }
 
-/// NSView wrapping AVCaptureVideoPreviewLayer for circular camera preview
+/// NSView wrapping AVCaptureVideoPreviewLayer for camera preview.
 final class CameraPreviewNSView: NSView {
     private var previewLayer: AVCaptureVideoPreviewLayer?
 
