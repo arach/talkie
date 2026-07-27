@@ -18,7 +18,7 @@ private let log = Log(.database)
 final class DatabaseManager: @unchecked Sendable {
     static let shared = DatabaseManager()
 
-    private static let latestMigrationIdentifier = "v29_pin_and_star"
+    private static let latestMigrationIdentifier = "v30_drop_fts"
     private static let migrationBeforePinAndStar = "v28_action_workbench"
 
     private var dbQueue: DatabaseQueue?
@@ -458,13 +458,6 @@ final class DatabaseManager: @unchecked Sendable {
             try db.create(index: "idx_workflow_runs_date",
                          on: "workflow_runs",
                          columns: ["runDate"])
-
-            // Full-text search on transcription
-            try db.create(virtualTable: "memos_fts", using: FTS5()) { t in
-                t.column("title")
-                t.column("transcription")
-                t.column("notes")
-            }
         }
 
         // Migration v2: Add sync_history and sync_metadata tables
@@ -905,13 +898,6 @@ final class DatabaseManager: @unchecked Sendable {
             try db.create(index: "idx_recordings_type_created",
                          on: "recordings",
                          columns: ["type", "createdAt"])
-
-            // Full-text search on transcript content
-            try db.create(virtualTable: "recordings_fts", using: FTS5()) { t in
-                t.column("title")
-                t.column("text")
-                t.column("notes")
-            }
 
             TalkieConsole.info("✅ Unified recordings table created!")
 
@@ -1701,6 +1687,27 @@ final class DatabaseManager: @unchecked Sendable {
                          on: "recordings",
                          columns: ["starredAt"],
                          ifNotExists: true)
+        }
+
+        // Migration v30: repair orphaned Action Workbench rows and remove unused
+        // full-text search tables. Older builds could delete an action run while
+        // foreign-key enforcement was disabled, leaving child rows behind. GRDB
+        // validates foreign keys after every migration, so those stale rows must
+        // be removed before the migration can complete.
+        migrator.registerMigration("v30_drop_fts") { db in
+            for table in ["action_subject_refs", "action_input_packages", "action_events"] {
+                try db.execute(sql: """
+                    DELETE FROM \(table)
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM action_runs
+                        WHERE action_runs.id = \(table).actionRunId
+                    )
+                    """)
+            }
+
+            try db.execute(sql: "DROP TABLE IF EXISTS memos_fts")
+            try db.execute(sql: "DROP TABLE IF EXISTS recordings_fts")
         }
 
         return migrator
