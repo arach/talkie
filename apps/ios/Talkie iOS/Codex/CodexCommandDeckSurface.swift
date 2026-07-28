@@ -7,8 +7,8 @@
 //  raised cream keycaps, amber lane signals, and red closed failures.
 //  STORY: Pick one known task in the console lid, speak, see where the turn went,
 //  then read or hear the answer without returning to the Mac.
-//  FIRST VIEWPORT: Live console above a navigation-only 3×4. The lid owns lane
-//  selection while the fixed bottom rail owns push-to-talk and in-turn delivery.
+//  FIRST VIEWPORT: Live console above a 4×4 command keybed. The lid owns lane
+//  selection; stable keys own push-to-talk and in-turn delivery.
 //  FORM: Extends Talkie's established Scope instrument language and existing
 //  bridge behavior. A lane is a direct destination, not a separate claim.
 //
@@ -30,15 +30,10 @@ struct CodexCommandDeckSurface: View {
     var body: some View {
         VStack(spacing: 12) {
             CodexCommandConsole(onShowMapper: openMapper)
-                .frame(height: 226)
+                .frame(height: 274)
 
             keybed
                 .layoutPriority(60)
-
-            CodexCaptureRail()
-                .frame(height: 76)
-                .padding(.horizontal, 12)
-                .dynamicTypeSize(.xSmall ... .xxxLarge)
         }
         .padding(.top, 4)
         .padding(.bottom, 8)
@@ -60,16 +55,21 @@ struct CodexCommandDeckSurface: View {
     }
 
     private var keybed: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 8) {
+        Grid(horizontalSpacing: 8, verticalSpacing: 8) {
+            GridRow {
                 outputDial(index: 1)
                 actionKey(index: 2, label: "Mapper", icon: "rectangle.3.group", action: openMapper)
                 actionKey(index: 3, label: "Status", icon: "rectangle.inset.filled", action: { showingStatus = true })
-                openSocket(index: 4)
+                actionKey(
+                    index: 4,
+                    label: "Refresh",
+                    icon: "arrow.clockwise",
+                    isEnabled: !store.isLoadingCatalog,
+                    action: { Task { await store.refreshCatalog() } }
+                )
             }
-            .frame(maxHeight: .infinity)
 
-            HStack(spacing: 8) {
+            GridRow {
                 actionKey(
                     index: 5,
                     label: "History",
@@ -93,18 +93,30 @@ struct CodexCommandDeckSurface: View {
                     action: store.narrateLastResponse
                 )
             }
-            .frame(maxHeight: .infinity)
 
-            HStack(spacing: 8) {
-                openSocket(index: 9)
-                openSocket(index: 10)
-                openSocket(index: 11)
+            GridRow {
+                messageModeKey(index: 9, mode: .queue, icon: "tray.and.arrow.down")
+                messageModeKey(index: 10, mode: .steer, icon: "arrow.triangle.turn.up.right.diamond")
+                actionKey(
+                    index: 11,
+                    label: "Stop",
+                    icon: "stop.fill",
+                    isEnabled: store.phase == .speaking || store.phase == .preparingSpeech,
+                    action: store.interruptNarration
+                )
                 openSocket(index: 12)
             }
-            .frame(maxHeight: .infinity)
+
+            GridRow {
+                openSocket(index: 13)
+                captureKey
+                    .gridCellColumns(2)
+                openSocket(index: 16)
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 2)
+        .dynamicTypeSize(.xSmall ... .xxxLarge)
     }
 
     private func actionKey(
@@ -112,6 +124,7 @@ struct CodexCommandDeckSurface: View {
         label: String,
         icon: String,
         isEnabled: Bool = true,
+        isActive: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -131,13 +144,140 @@ struct CodexCommandDeckSurface: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal, 5)
             .padding(.vertical, 8)
-            .background(keycapSurface(active: false, isEmpty: false))
+            .background(keycapSurface(active: isActive, isEmpty: false))
             .overlay(alignment: .topLeading) { keyIndexLabel(index: index) }
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
         .accessibilityLabel(label)
+        .accessibilityAddTraits(isActive ? .isSelected : [])
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func messageModeKey(index: Int, mode: CodexMessageMode, icon: String) -> some View {
+        actionKey(
+            index: index,
+            label: mode.label,
+            icon: icon,
+            isEnabled: store.isTurnInFlight,
+            isActive: store.isTurnInFlight && store.duringTurnMessageMode == mode,
+            action: { store.setDuringTurnMessageMode(mode) }
+        )
+    }
+
+    private var captureKey: some View {
+        Button(action: {}) {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(theme.colors.accent.opacity(store.phase.isCapturing ? 0.24 : 0.10))
+                    Circle()
+                        .stroke(theme.colors.accent.opacity(0.68), lineWidth: 1)
+                    Image(systemName: captureIcon)
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .frame(width: 38, height: 38)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(captureTitle)
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .tracking(1.2)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                    Text(captureSubtitle)
+                        .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                        .tracking(0.45)
+                        .foregroundStyle(utilityInkFaint)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.68)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(theme.colors.accent)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(keycapSurface(active: store.phase.isCapturing, isEmpty: false))
+            .overlay(alignment: .topLeading) { keyIndexLabel(index: 14) }
+            .overlay(alignment: .topTrailing) { trailingKeyIndexLabel(index: 15) }
+        }
+        .buttonStyle(
+            CodexPressAndHoldButtonStyle { isPressed in
+                if isPressed {
+                    store.beginPushToTalk()
+                } else {
+                    store.endPushToTalk()
+                }
+            }
+        )
+        .disabled(!canCapture)
+        .opacity(store.activeLaneNumber == nil ? 0.48 : 1)
+        .accessibilityLabel(captureTitle)
+        .accessibilityHint(captureAccessibilityHint)
+        .accessibilityAction { store.handleCaptureControl() }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var canCapture: Bool {
+        store.activeLaneNumber != nil
+            && (!store.phase.isBusy
+                || store.phase.isCapturing
+                || store.phase == .speaking
+                || store.isTurnInFlight)
+    }
+
+    private var captureTitle: String {
+        switch store.phase {
+        case .listening:
+            return store.isTurnInFlight
+                ? "RELEASE TO \(store.duringTurnMessageMode.label.uppercased())"
+                : "RELEASE TO SEND"
+        case .speaking: return "INTERRUPT + TALK"
+        case .submitting where store.isTurnInFlight:
+            return "HOLD TO \(store.duringTurnMessageMode.label.uppercased())"
+        default: return "HOLD TO TALK"
+        }
+    }
+
+    private var captureSubtitle: String {
+        switch store.phase {
+        case .listening: return "KEEP HOLDING WHILE YOU SPEAK"
+        case .speaking: return "STOPS NARRATION, THEN LISTENS"
+        case .submitting where store.isTurnInFlight:
+            if store.duringTurnMessageMode == .queue {
+                let suffix = store.queuedMessageCount > 0
+                    ? " · \(store.queuedMessageCount) WAITING"
+                    : ""
+                return "AFTER THIS TURN\(suffix)"
+            }
+            return "ADDS TO THE ACTIVE TURN NOW"
+        default: return "EXACT TASK ROUTING"
+        }
+    }
+
+    private var captureIcon: String {
+        switch store.phase {
+        case .listening: return "arrow.up"
+        case .speaking: return "waveform"
+        case .submitting where store.isTurnInFlight: return "mic"
+        case .transcribing, .submitting, .preparingSpeech: return "ellipsis"
+        case .idle, .failed: return "mic"
+        }
+    }
+
+    private var captureAccessibilityHint: String {
+        guard store.isTurnInFlight else {
+            return "Sends speech to the active Codex task"
+        }
+        switch store.duringTurnMessageMode {
+        case .queue:
+            return "Queues the message to run after the current Codex turn"
+        case .steer:
+            return "Steers the current Codex turn immediately"
+        case .auto:
+            return "Sends speech to the active Codex task"
+        }
     }
 
     private func outputDial(index: Int) -> some View {
@@ -257,6 +397,15 @@ struct CodexCommandDeckSurface: View {
             .foregroundStyle(utilityInkFaint.opacity(0.56))
             .padding(.top, 7)
             .padding(.leading, 8)
+            .allowsHitTesting(false)
+    }
+
+    private func trailingKeyIndexLabel(index: Int) -> some View {
+        Text("\(index)")
+            .font(.system(size: 9, weight: .medium, design: .monospaced))
+            .foregroundStyle(utilityInkFaint.opacity(0.56))
+            .padding(.top, 7)
+            .padding(.trailing, 8)
             .allowsHitTesting(false)
     }
 
@@ -498,12 +647,14 @@ private struct CodexCommandConsole: View {
     }
 
     private var taskIdentity: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 7) {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
                 if let lane = store.activeLane {
                     Text(lane.number < 10 ? "LANE 0\(lane.number)" : "LANE \(lane.number)")
                         .foregroundStyle(theme.chrome.panelAccent)
-                    mappingBadge
+
+                    Text(lane.task.activityLabel().uppercased())
+                        .foregroundStyle(theme.chrome.panelInkFaint)
                 } else {
                     Text("NO ACTIVE TASK")
                         .foregroundStyle(theme.chrome.panelAccent)
@@ -517,16 +668,36 @@ private struct CodexCommandConsole: View {
                 .foregroundStyle(theme.chrome.panelInk)
                 .lineLimit(2)
 
-            Text(store.activeLane.map { "\($0.task.projectName)  ·  \($0.task.id)" } ?? "Tap an empty lane above to map an exact Codex task.")
-                .font(.system(size: 9, weight: .regular, design: .monospaced))
+            if let task = store.activeLane?.task {
+                HStack(spacing: 6) {
+                    Label(task.projectName, systemImage: "folder")
+                    if let branch = task.branchName {
+                        Text("/")
+                            .foregroundStyle(theme.chrome.panelInkFaint.opacity(0.55))
+                        Label(branch, systemImage: "arrow.triangle.branch")
+                    }
+                }
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
                 .foregroundStyle(theme.chrome.panelInkFaint)
                 .lineLimit(1)
 
-            responseReadout
+                Text(task.compactPath)
+                    .font(.system(size: 9, weight: .regular, design: .monospaced))
+                    .foregroundStyle(theme.chrome.panelInkFaint.opacity(0.82))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            } else {
+                Text("Tap an empty lane above to map an exact Codex task.")
+                    .font(.system(size: 9, weight: .regular, design: .monospaced))
+                    .foregroundStyle(theme.chrome.panelInkFaint)
+                    .lineLimit(2)
+            }
+
+            conversationPreview
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, minHeight: 103, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 145, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(theme.chrome.panel)
@@ -540,46 +711,45 @@ private struct CodexCommandConsole: View {
     }
 
     @ViewBuilder
-    private var mappingBadge: some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(theme.chrome.panelAccent)
-                .frame(width: 4, height: 4)
-            Text("SELECTED")
+    private var conversationPreview: some View {
+        if let failure = store.failure {
+            Label(failure.combined, systemImage: "exclamationmark.triangle.fill")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(Color(red: 0.92, green: 0.42, blue: 0.30))
+                .lineLimit(2)
+        } else if let turn = store.lastTurn,
+                  turn.laneNumber == store.activeLaneNumber {
+            VStack(alignment: .leading, spacing: 4) {
+                conversationLine(label: "YOU", text: turn.instruction, lineLimit: 1)
+                conversationLine(label: "CODEX", text: turn.response, lineLimit: 2)
+            }
+            .padding(.top, 2)
+        } else if store.activeLane != nil {
+            Text("Hold the 14–15 key to talk directly to this task.")
+                .font(.system(size: 10, weight: .regular))
+                .foregroundStyle(theme.chrome.panelInkFaint)
+                .lineLimit(2)
+        } else {
+            Text("Pick a lane above, or open Mapper to choose an exact task.")
+                .font(.system(size: 10, weight: .regular))
+                .foregroundStyle(theme.chrome.panelInkFaint)
+                .lineLimit(2)
         }
-        .foregroundStyle(theme.chrome.panelAccent)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
-        .background(
-            Capsule()
-                .fill(theme.chrome.panelAccent.opacity(0.10))
-        )
-        .overlay(
-            Capsule()
-                .stroke(theme.chrome.panelAccent.opacity(0.35), lineWidth: 0.5)
-        )
     }
 
-    private var responseReadout: some View {
-        Group {
-            if let failure = store.failure {
-                Text(failure.combined)
-                    .foregroundStyle(Color(red: 0.92, green: 0.42, blue: 0.30))
-            } else if let turn = store.lastTurn,
-                      turn.laneNumber == store.activeLaneNumber {
-                Text(turn.response)
-                    .foregroundStyle(theme.chrome.panelInk.opacity(0.82))
-            } else if store.activeLane != nil {
-                Text("Hold to talk. Talkie sends directly to the selected task.")
-                    .foregroundStyle(theme.chrome.panelInkFaint)
-            } else {
-                Text("Pick a lane above, or open Mapper to choose an exact task.")
-                    .foregroundStyle(theme.chrome.panelInkFaint)
-            }
+    private func conversationLine(label: String, text: String, lineLimit: Int) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            Text(label)
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .tracking(0.8)
+                .foregroundStyle(theme.chrome.panelAccent)
+                .frame(width: 38, alignment: .leading)
+
+            Text(text)
+                .font(.system(size: 10, weight: .regular))
+                .foregroundStyle(theme.chrome.panelInk.opacity(0.82))
+                .lineLimit(lineLimit)
         }
-        .font(.system(size: 11, weight: .regular))
-        .lineLimit(2)
-        .frame(maxWidth: .infinity, minHeight: 28, alignment: .topLeading)
     }
 
     private var phaseColor: Color {
@@ -661,7 +831,7 @@ private struct CodexCommandConsole: View {
                 .foregroundStyle(theme.chrome.panelInk)
                 .lineLimit(2)
 
-            Text(store.isTurnInFlight ? "Turn active. Choose Queue or Steer in the bottom rail." : "The bottom rail sends only to this exact task.")
+            Text(store.isTurnInFlight ? "Turn active. Choose Queue or Steer in keys 09–10." : "Hold key 14–15 to talk directly to this task.")
                 .font(.caption)
                 .foregroundStyle(theme.chrome.panelInkFaint)
                 .lineLimit(2)
@@ -681,228 +851,20 @@ private struct CodexCommandConsole: View {
         guard let lane = store.activeLane else {
             return "No active Codex task. Choose a lane or open the mapper."
         }
-        return "Lane \(lane.number), \(lane.task.projectName), \(lane.task.title), selected"
+        return "Lane \(lane.number), \(lane.task.projectName), \(lane.task.title)"
     }
 }
 
-private struct CodexCaptureRail: View {
-    @ObservedObject private var store = CodexLaneStore.shared
-    @ObservedObject private var theme = ThemeManager.shared
-    @Environment(\.colorScheme) private var colorScheme
+private struct CodexPressAndHoldButtonStyle: ButtonStyle {
+    let onPressingChanged: (Bool) -> Void
 
-    var body: some View {
-        HStack(spacing: 8) {
-            captureTarget
-
-            if store.isTurnInFlight {
-                duringTurnModeControl
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
+            .animation(.easeOut(duration: 0.10), value: configuration.isPressed)
+            .onChange(of: configuration.isPressed) { _, isPressed in
+                onPressingChanged(isPressed)
             }
-        }
-        .padding(7)
-        .background(railSurface)
-        .animation(.snappy(duration: 0.24), value: store.isTurnInFlight)
-    }
-
-    private var captureTarget: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(theme.colors.accent.opacity(store.phase.isCapturing ? 0.24 : 0.12))
-                Circle()
-                    .stroke(theme.colors.accent.opacity(0.72), lineWidth: 1)
-                Image(systemName: captureIcon)
-                    .font(.system(size: 16, weight: .semibold))
-            }
-            .frame(width: 44, height: 44)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(captureTitle)
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .tracking(1.7)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-                Text(captureSubtitle)
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .tracking(0.7)
-                    .foregroundStyle(railInkFaint)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-            }
-
-            Spacer(minLength: 0)
-
-            if let number = store.activeLaneNumber, !store.isTurnInFlight {
-                Text("L\(number)")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .foregroundStyle(railInkFaint)
-            }
-        }
-        .foregroundStyle(theme.colors.accent)
-        .padding(.horizontal, 8)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 15, style: .continuous)
-                .fill(theme.colors.accent.opacity(store.phase.isCapturing ? 0.13 : 0.045))
-        )
-        .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
-        .onLongPressGesture(
-            minimumDuration: 0,
-            maximumDistance: 44,
-            pressing: { isPressed in
-                if isPressed {
-                    store.beginPushToTalk()
-                } else {
-                    store.endPushToTalk()
-                }
-            },
-            perform: {}
-        )
-        .allowsHitTesting(canCapture)
-        .opacity(store.activeLaneNumber == nil ? 0.48 : 1)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityLabel(captureTitle)
-        .accessibilityHint(captureAccessibilityHint)
-        .accessibilityAction { store.handleCaptureControl() }
-    }
-
-    private var duringTurnModeControl: some View {
-        HStack(spacing: 4) {
-            duringTurnModeButton(.queue, icon: "tray.and.arrow.down")
-            duringTurnModeButton(.steer, icon: "arrow.triangle.turn.up.right.diamond")
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("During-turn delivery")
-    }
-
-    private func duringTurnModeButton(_ mode: CodexMessageMode, icon: String) -> some View {
-        let isSelected = store.duringTurnMessageMode == mode
-
-        return Button {
-            store.setDuringTurnMessageMode(mode)
-        } label: {
-            VStack(spacing: 3) {
-                Image(systemName: icon)
-                    .font(.system(size: 11, weight: .semibold))
-                Text(mode.label.uppercased())
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .tracking(0.3)
-            }
-            .foregroundStyle(isSelected ? railInk : railInkFaint)
-            .frame(width: 49, height: 52)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(isSelected ? theme.colors.accent.opacity(0.20) : railFace)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(
-                        isSelected ? theme.colors.accent.opacity(0.76) : railInk.opacity(0.14),
-                        lineWidth: isSelected ? 1 : theme.chrome.hairlineWidth
-                    )
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(mode.label) the next message")
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-
-    private var railSurface: some View {
-        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
-        return shape
-            .fill(railFace)
-            .overlay {
-                shape.fill(
-                    LinearGradient(
-                        colors: [Color.white.opacity(colorScheme == .dark ? 0.09 : 0.54), .clear, Color.black.opacity(0.045)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-            }
-            .overlay {
-                shape.stroke(theme.colors.accent.opacity(0.64), lineWidth: 1)
-            }
-            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.38 : 0.16), radius: 9, y: 5)
-    }
-
-    private var railFace: Color {
-        colorScheme == .dark
-            ? theme.colors.cardBackground
-            : Color(red: 0.97, green: 0.945, blue: 0.90)
-    }
-
-    private var railInk: Color {
-        colorScheme == .dark
-            ? theme.colors.textPrimary
-            : Color(red: 0.25, green: 0.21, blue: 0.17)
-    }
-
-    private var railInkFaint: Color {
-        colorScheme == .dark
-            ? theme.colors.textSecondary
-            : Color(red: 0.40, green: 0.34, blue: 0.27)
-    }
-
-    private var canCapture: Bool {
-        store.activeLaneNumber != nil
-            && (!store.phase.isBusy
-                || store.phase.isCapturing
-                || store.phase == .speaking
-                || store.isTurnInFlight)
-    }
-
-    private var captureTitle: String {
-        switch store.phase {
-        case .listening:
-            return store.isTurnInFlight
-                ? "RELEASE TO \(store.duringTurnMessageMode.label.uppercased())"
-                : "RELEASE TO SEND"
-        case .speaking: return "INTERRUPT + TALK"
-        case .submitting where store.isTurnInFlight:
-            return "HOLD TO \(store.duringTurnMessageMode.label.uppercased())"
-        default: return "HOLD TO TALK"
-        }
-    }
-
-    private var captureSubtitle: String {
-        switch store.phase {
-        case .listening: return "KEEP HOLDING WHILE YOU SPEAK"
-        case .speaking: return "STOPS NARRATION, THEN LISTENS"
-        case .submitting where store.isTurnInFlight:
-            if store.duringTurnMessageMode == .queue {
-                let suffix = store.queuedMessageCount > 0
-                    ? " · \(store.queuedMessageCount) WAITING"
-                    : ""
-                return "AFTER THIS TURN\(suffix)"
-            }
-            return "ADDS TO THE ACTIVE TURN NOW"
-        default: return "EXACT TASK ROUTING"
-        }
-    }
-
-    private var captureIcon: String {
-        switch store.phase {
-        case .listening: return "arrow.up"
-        case .speaking: return "waveform"
-        case .submitting where store.isTurnInFlight: return "mic"
-        case .transcribing, .submitting, .preparingSpeech: return "ellipsis"
-        case .idle, .failed: return "mic"
-        }
-    }
-
-    private var captureAccessibilityHint: String {
-        guard store.isTurnInFlight else {
-            return "Sends speech only to the selected exact Codex task"
-        }
-        switch store.duringTurnMessageMode {
-        case .queue:
-            return "Queues the message to run after the current Codex turn"
-        case .steer:
-            return "Steers the current Codex turn immediately"
-        case .auto:
-            return "Sends speech to the selected exact Codex task"
-        }
     }
 }
 
