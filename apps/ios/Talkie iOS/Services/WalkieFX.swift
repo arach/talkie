@@ -8,7 +8,7 @@
 //
 
 import Foundation
-import AVFoundation
+@preconcurrency import AVFoundation
 
 @MainActor
 final class WalkieFX {
@@ -123,17 +123,27 @@ final class WalkieFX {
                     + "channels=\(processingFormat.channelCount)"
             )
             guard frameCount > 0,
-                  let buffer = AVAudioPCMBuffer(pcmFormat: processingFormat, frameCapacity: frameCount) else {
+                  let decodedBuffer = AVAudioPCMBuffer(
+                      pcmFormat: processingFormat,
+                      frameCapacity: frameCount
+                  ) else {
                 throw NSError(domain: "WalkieFX", code: -1, userInfo: [
                     NSLocalizedDescriptionKey: "Failed to allocate decode buffer"
                 ])
             }
-            try file.read(into: buffer)
+            try file.read(into: decodedBuffer)
+
+            let playbackBuffer = try makeVoicePlaybackBuffer(from: decodedBuffer)
+            AppLogger.ai.info(
+                "WalkieFX voice ready frames=\(playbackBuffer.frameLength) "
+                    + "rate=\(playbackBuffer.format.sampleRate) "
+                    + "channels=\(playbackBuffer.format.channelCount)"
+            )
 
             if voicePlayer.isPlaying {
                 voicePlayer.stop()
             }
-            voicePlayer.scheduleBuffer(buffer, at: nil, options: [], completionHandler: nil)
+            voicePlayer.scheduleBuffer(playbackBuffer, at: nil, options: [], completionHandler: nil)
             if !voicePlayer.isPlaying {
                 voicePlayer.play()
             }
@@ -143,6 +153,68 @@ final class WalkieFX {
             fallbackPlayer.setPlaybackRate(playbackRate)
             fallbackPlayer.playAudio(data: data)
         }
+    }
+
+    /// Converts provider-specific TTS output into the exact format used by the
+    /// fixed radio filter graph. `AVAudioPlayerNode.scheduleBuffer` raises an
+    /// Objective-C exception (rather than a catchable Swift error) when these
+    /// formats differ, so the invariant must be established before scheduling.
+    private func makeVoicePlaybackBuffer(
+        from decodedBuffer: AVAudioPCMBuffer
+    ) throws -> AVAudioPCMBuffer {
+        let decodedFormat = decodedBuffer.format
+        let alreadyMatchesVoiceGraph = decodedFormat.sampleRate == voiceFormat.sampleRate
+            && decodedFormat.channelCount == voiceFormat.channelCount
+            && decodedFormat.commonFormat == voiceFormat.commonFormat
+            && decodedFormat.isInterleaved == voiceFormat.isInterleaved
+
+        if alreadyMatchesVoiceGraph {
+            return decodedBuffer
+        }
+
+        guard let converter = AVAudioConverter(from: decodedFormat, to: voiceFormat) else {
+            throw NSError(domain: "WalkieFX", code: -2, userInfo: [
+                NSLocalizedDescriptionKey: "Failed to create voice format converter"
+            ])
+        }
+
+        let sampleRateRatio = voiceFormat.sampleRate / decodedFormat.sampleRate
+        let convertedFrameCapacity = AVAudioFrameCount(
+            ceil(Double(decodedBuffer.frameLength) * sampleRateRatio) + 32
+        )
+        guard convertedFrameCapacity > 0,
+              let convertedBuffer = AVAudioPCMBuffer(
+                  pcmFormat: voiceFormat,
+                  frameCapacity: convertedFrameCapacity
+              ) else {
+            throw NSError(domain: "WalkieFX", code: -3, userInfo: [
+                NSLocalizedDescriptionKey: "Failed to allocate converted voice buffer"
+            ])
+        }
+
+        var suppliedInput = false
+        var conversionError: NSError?
+        let status = converter.convert(to: convertedBuffer, error: &conversionError) {
+            _, inputStatus in
+            guard !suppliedInput else {
+                inputStatus.pointee = .endOfStream
+                return nil
+            }
+            suppliedInput = true
+            inputStatus.pointee = .haveData
+            return decodedBuffer
+        }
+
+        if let conversionError {
+            throw conversionError
+        }
+        guard status != .error, convertedBuffer.frameLength > 0 else {
+            throw NSError(domain: "WalkieFX", code: -4, userInfo: [
+                NSLocalizedDescriptionKey: "Voice format conversion produced no audio"
+            ])
+        }
+
+        return convertedBuffer
     }
 
     /// Immediately silences voice playback and any scheduled bookend FX.
