@@ -277,6 +277,47 @@ actor BridgeClient {
         return try JSONDecoder().decode(CompanionTriggerResponse.self, from: data)
     }
 
+    // MARK: - Codex exact-task lanes
+
+    /// Recent Codex Desktop tasks for the lane mapper.
+    func codexTasks(limit: Int = 25) async throws -> [CodexTaskSummary] {
+        let bounded = max(1, min(limit, 100))
+        let data = try await get("/codex/tasks?limit=\(bounded)")
+        return try JSONDecoder().decode(CodexTasksResponse.self, from: data).tasks
+    }
+
+    /// Confirms Codex Desktop still owns this exact task.
+    ///
+    /// Throws when ownership cannot be confirmed — callers must treat a throw as
+    /// "do not show this lane as locked" rather than retrying into a guess.
+    func codexValidate(taskId: String) async throws -> CodexValidatedTask {
+        struct Request: Encodable { let taskId: String }
+        let data = try await post("/codex/validate", body: Request(taskId: taskId))
+        return try JSONDecoder().decode(CodexValidateResponse.self, from: data).task
+    }
+
+    /// Delivers an instruction into one exact Codex task and waits for the turn.
+    ///
+    /// Queue receives two turn ceilings because it can wait for an active turn
+    /// before its own turn begins. Steer normally returns immediately.
+    func codexSubmit(
+        taskId: String,
+        text: String,
+        mode: CodexMessageMode = .auto
+    ) async throws -> CodexSubmitResponse {
+        struct Request: Encodable {
+            let taskId: String
+            let text: String
+            let mode: CodexMessageMode
+        }
+        let data = try await post(
+            "/codex/submit",
+            body: Request(taskId: taskId, text: text, mode: mode),
+            timeout: mode == .queue ? 3_660 : 1_860
+        )
+        return try JSONDecoder().decode(CodexSubmitResponse.self, from: data)
+    }
+
     func companionActivateApp(
         processIdentifier: Int32,
         bundleIdentifier: String?
@@ -939,6 +980,35 @@ struct DeviceSetupStateRequest: Codable, Equatable {
 
 struct CompanionTriggerRequest: Codable {
     let shortcutId: String
+}
+
+// MARK: - Codex lane payloads
+
+struct CodexTasksResponse: Codable {
+    let tasks: [CodexTaskSummary]
+}
+
+/// The subset of a task the Mac re-confirms at validation time. Ownership is
+/// what is being asserted here, so only the identifying fields come back.
+struct CodexValidatedTask: Codable, Equatable {
+    let id: String
+    let title: String?
+    let cwd: String?
+}
+
+struct CodexValidateResponse: Codable {
+    let task: CodexValidatedTask
+}
+
+struct CodexSubmitResponse: Codable {
+    let taskId: String
+    let turnId: String?
+    /// Steering is acknowledged immediately; the original submit owns the
+    /// active turn's eventual response.
+    let response: String?
+    /// Raw delivery discriminator; decoded into `CodexTurnDelivery` by the store
+    /// so an unrecognized value fails loudly instead of being coerced.
+    let delivery: String
 }
 
 struct CompanionTriggerResponse: Codable {

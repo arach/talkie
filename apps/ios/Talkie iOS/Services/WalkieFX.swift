@@ -91,6 +91,7 @@ final class WalkieFX {
     /// Falls back to plain `AudioPlayerManager` playback if anything fails.
     func playVoiceAudio(data: Data, playbackRate: Float = 1.0) async {
         voiceVarispeed.rate = playbackRate > 0 ? playbackRate : 1.0
+        AppLogger.ai.info("WalkieFX voice requested bytes=\(data.count) rate=\(voiceVarispeed.rate)")
 
         guard ensureRunning() else {
             AppLogger.ai.warning("WalkieFX voice engine unavailable; using unfiltered playback")
@@ -117,6 +118,10 @@ final class WalkieFX {
             let file = try AVAudioFile(forReading: tempURL)
             let processingFormat = file.processingFormat
             let frameCount = AVAudioFrameCount(file.length)
+            AppLogger.ai.info(
+                "WalkieFX voice decoded frames=\(frameCount) rate=\(processingFormat.sampleRate) "
+                    + "channels=\(processingFormat.channelCount)"
+            )
             guard frameCount > 0,
                   let buffer = AVAudioPCMBuffer(pcmFormat: processingFormat, frameCapacity: frameCount) else {
                 throw NSError(domain: "WalkieFX", code: -1, userInfo: [
@@ -132,11 +137,28 @@ final class WalkieFX {
             if !voicePlayer.isPlaying {
                 voicePlayer.play()
             }
+            AppLogger.ai.info("WalkieFX voice scheduled playing=\(voicePlayer.isPlaying)")
         } catch {
             AppLogger.ai.warning("WalkieFX voice decode failed: \(error.localizedDescription); falling back to plain playback")
             fallbackPlayer.setPlaybackRate(playbackRate)
             fallbackPlayer.playAudio(data: data)
         }
+    }
+
+    /// Immediately silences voice playback and any scheduled bookend FX.
+    ///
+    /// Used when the user starts a new capture while a response is still being
+    /// read aloud. Stopping `player` matters as much as stopping `voicePlayer`:
+    /// the closing squelch/kerchunk are scheduled ahead of time, so without this
+    /// they would fire into the middle of the next utterance.
+    func stopVoicePlayback() {
+        if voicePlayer.isPlaying {
+            voicePlayer.stop()
+        }
+        if player.isPlaying {
+            player.stop()
+        }
+        fallbackPlayer.stopPlayback()
     }
 
     /// Schedules a squelch tail followed by a closing kerchunk so that the
@@ -164,18 +186,30 @@ final class WalkieFX {
 
     @discardableResult
     private func ensureRunning() -> Bool {
-        if engineStarted && engine.isRunning {
-            return true
-        }
         do {
+            // Inline dictation releases the shared audio session as soon as the
+            // mic closes. Narration owns the next phase, so it must explicitly
+            // reactivate a playback session even when this engine survived the
+            // previous turn. AVAudioEngine state alone does not prove that iOS
+            // currently has an audible output route.
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, mode: .spokenAudio, options: [])
+            try session.setActive(true)
+
+            if engineStarted && engine.isRunning {
+                return true
+            }
+
             if !engine.isRunning {
                 engine.prepare()
                 try engine.start()
             }
             engineStarted = true
+            AppLogger.ai.info("WalkieFX engine running=\(engine.isRunning)")
             return true
         } catch {
             engineStarted = false
+            AppLogger.ai.error("WalkieFX engine start failed: \(error.localizedDescription)")
             return false
         }
     }

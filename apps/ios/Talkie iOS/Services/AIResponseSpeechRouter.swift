@@ -23,16 +23,34 @@ final class AIResponseSpeechRouter {
         let settings = TalkieAppSettings.shared
         let route = AIResponseSpeechRoute(rawValue: settings.aiVoiceOutputRoute) ?? .phone
 
+        AppLogger.ai.info(
+            "AI speech start route=\(route.rawValue) provider=\(settings.ttsProvider) "
+                + "mode=\(settings.ttsMode) chars=\(text.count)"
+        )
+
         guard route != .silent else {
+            AppLogger.ai.info("AI speech skipped route=silent")
             return AIResponseSpeechResult(didSpeak: false, route: route)
         }
 
+        // Interrupt anything still being read aloud. Without this a new
+        // response would overlap the tail of the previous one.
+        WalkieFX.shared.stopVoicePlayback()
+
         do {
             let audioData = try await synthesizeSpeech(text, provider: provider, settings: settings)
+            AppLogger.ai.info("AI speech synthesized bytes=\(audioData.count) route=\(route.rawValue)")
 
             switch route {
             case .phone:
                 let playbackRate = Float(settings.ttsPlaybackRate)
+
+                let session = AVAudioSession.sharedInstance()
+                let outputs = session.currentRoute.outputs.map(\.portType.rawValue).joined(separator: ",")
+                AppLogger.ai.info(
+                    "AI speech phone playback rate=\(playbackRate) category=\(session.category.rawValue) "
+                        + "outputs=\(outputs.isEmpty ? "none" : outputs)"
+                )
 
                 // Walkie bookend: opening kerchunk -> speech -> tail + closing
                 // kerchunk. Synthesized at runtime; failures are silent so the
@@ -47,7 +65,13 @@ final class AIResponseSpeechRouter {
                 let speechDuration = rawDuration / effectiveRate
                 WalkieFX.shared.playClosingSequence(after: speechDuration)
 
-                return AIResponseSpeechResult(didSpeak: true, route: route)
+                AppLogger.ai.info("AI speech phone scheduled duration=\(speechDuration)")
+
+                return AIResponseSpeechResult(
+                    didSpeak: true,
+                    route: route,
+                    speechDuration: speechDuration
+                )
 
             case .watch:
                 let didSend = WatchSessionManager.shared.sendAIAudio(
@@ -55,14 +79,25 @@ final class AIResponseSpeechRouter {
                     audioData: audioData,
                     preview: preview ?? text
                 )
-                return AIResponseSpeechResult(didSpeak: didSend, route: route)
+                return AIResponseSpeechResult(
+                    didSpeak: didSend,
+                    route: route,
+                    failure: didSend ? nil : "The Watch did not accept the audio."
+                )
 
             case .silent:
                 return AIResponseSpeechResult(didSpeak: false, route: route)
             }
         } catch {
             AppLogger.ai.warning("AI speech skipped: \(error.localizedDescription)")
-            return AIResponseSpeechResult(didSpeak: false, route: route)
+            // Reported, not thrown: callers narrate the result of work that
+            // already succeeded, so a speech failure must stay separable from
+            // the success of that work.
+            return AIResponseSpeechResult(
+                didSpeak: false,
+                route: route,
+                failure: error.localizedDescription
+            )
         }
     }
 
@@ -125,4 +160,22 @@ enum AIResponseSpeechRoute: String {
 struct AIResponseSpeechResult {
     let didSpeak: Bool
     let route: AIResponseSpeechRoute
+    /// Why narration did not happen, when it was attempted and failed.
+    /// `nil` for both success and a deliberately silent route.
+    let failure: String?
+    /// Best-effort length of the spoken audio, so callers can hold a
+    /// "speaking" state for as long as speech is actually playing.
+    let speechDuration: TimeInterval
+
+    init(
+        didSpeak: Bool,
+        route: AIResponseSpeechRoute,
+        failure: String? = nil,
+        speechDuration: TimeInterval = 0
+    ) {
+        self.didSpeak = didSpeak
+        self.route = route
+        self.failure = failure
+        self.speechDuration = speechDuration
+    }
 }
