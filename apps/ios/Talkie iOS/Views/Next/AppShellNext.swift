@@ -904,7 +904,7 @@ final class ShellChrome: ObservableObject {
                 // handled by the early-return above. Never fail silently:
                 // the user spoke and released, so tell them it didn't land.
                 withAnimation(.easeIn(duration: 0.18)) { self.isProcessingCommand = false }
-                FeedbackToastCenter.shared.showError("Didn't catch that — no words came through. Try again.")
+                FeedbackToastCenter.shared.showError("Nothing came through — try again", code: "NO SIGNAL")
                 return
             }
 

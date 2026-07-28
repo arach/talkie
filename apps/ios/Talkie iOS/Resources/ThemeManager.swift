@@ -45,6 +45,7 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
 
 enum AppTheme: String, CaseIterable, Identifiable {
     case scope = "scope"
+    case mineral = "mineral"
     case midnight = "midnight"
     case tactical = "tactical"
     case ghost = "ghost"
@@ -57,6 +58,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .scope: return "Scope"
+        case .mineral: return "Mineral"
         case .midnight: return "Linear"
         case .tactical: return "Tactical"
         case .ghost: return "Ghost"
@@ -69,6 +71,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
     var description: String {
         switch self {
         case .scope: return "Paper chassis with brass instrument chrome"
+        case .mineral: return "Blue-gray alloy with copper signal chrome"
         case .midnight: return "Linear-style · flat indigo dark, clean"
         case .tactical: return "High contrast, sharp edges"
         case .ghost: return "Soft, muted elegance"
@@ -200,6 +203,25 @@ private let cachedScopeColors = ThemeColors(
     success: Color(hex: "6F7D3E", darkHex: "9CB35A")
 )
 
+// Mineral: softly anodized blue-gray alloy with deep teal ink and a restrained
+// copper signal. The light palette intentionally narrows the jump between the
+// canvas, cards, and recessed chrome so the interface feels fabricated rather
+// than layered from white sheets. Dark mode keeps the same cool-metal identity.
+private let cachedMineralColors = ThemeColors(
+    tableHeaderBackground: Color(hex: "C4D1D0", darkHex: "203336"),
+    tableCellBackground: Color(hex: "E3E9E6", darkHex: "17272A"),
+    tableDivider: Color(hex: "1F18353B", darkHex: "33EAF0EC"),
+    tableBorder: Color(hex: "3318353B", darkHex: "4DEAF0EC"),
+    background: Color(hex: "D2DEDD", darkHex: "122023"),
+    cardBackground: Color(hex: "E3E9E6", darkHex: "192B2E"),
+    searchBackground: Color(hex: "CBD7D6", darkHex: "213438"),
+    textPrimary: Color(hex: "163238", darkHex: "EFF2ED"),
+    textSecondary: Color(hex: "334F54", darkHex: "BECBC7"),
+    textTertiary: Color(hex: "455E62", darkHex: "9DAEAA"),
+    accent: Color(hex: "9B4E27", darkHex: "DF8955"),
+    success: Color(hex: "3F7767", darkHex: "63AA91")
+)
+
 // EXPLORATION — "Vercel" approach (Graphite slot). Geist-style true
 // monochrome: pure-black canvas, neutral-gray elevated surfaces, and a WHITE
 // accent — so every accent-driven icon/control goes white automatically (no
@@ -267,6 +289,7 @@ extension AppTheme {
     var colors: ThemeColors {
         switch self {
         case .scope: return cachedScopeColors
+        case .mineral: return cachedMineralColors
         case .midnight: return cachedMidnightColors
         case .tactical: return cachedTacticalColors
         case .ghost: return cachedGhostColors

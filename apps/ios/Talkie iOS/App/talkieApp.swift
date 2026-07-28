@@ -173,7 +173,10 @@ struct talkieApp: App {
             let theme = AppTheme(rawValue: arguments[themeFlagIndex + 1])
         else { return }
 
-        themeManager.apply(theme: theme)
+        themeManager.apply(
+            theme: theme,
+            appearanceMode: Self.isScreenshotMode ? .light : nil
+        )
         AppLogger.app.info("📸 Screenshot theme override: \(theme.rawValue)")
     }
 
