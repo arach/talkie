@@ -43,6 +43,7 @@ final class CodexLaneStore: ObservableObject {
     // MARK: - Voice loop
 
     @Published private(set) var phase: CodexLanePhase = .idle
+    @Published private(set) var narrationState: CodexNarrationState = .idle
     @Published private(set) var failure: CodexLaneFailure?
     @Published private(set) var lastTurn: CodexTurnRecord?
     @Published private(set) var history: [CodexTurnRecord] = []
@@ -154,6 +155,7 @@ final class CodexLaneStore: ObservableObject {
         history = []
         failure = nil
         phase = .idle
+        narrationState = .idle
         loadPersistedLanes()
     }
 
@@ -329,6 +331,7 @@ final class CodexLaneStore: ObservableObject {
         speakingTask?.cancel()
         speakingTask = nil
         WalkieFX.shared.stopVoicePlayback()
+        narrationState = .idle
         if phase == .speaking {
             phase = isTurnInFlight ? .submitting : .idle
         }
@@ -370,6 +373,7 @@ final class CodexLaneStore: ObservableObject {
         }
 
         failure = nil
+        narrationState = .idle
         Task { await dictation.start() }
     }
 
@@ -578,6 +582,10 @@ final class CodexLaneStore: ObservableObject {
             record = await narrate(record)
         } else {
             record.narrationSuppressed = true
+            let route = AIResponseSpeechRoute(
+                rawValue: TalkieAppSettings.shared.aiVoiceOutputRoute
+            ) ?? .phone
+            narrationState = .suppressed(laneNumber: laneNumber, route: route)
             phase = isTurnInFlight ? .submitting : .idle
         }
         remember(record)
@@ -731,10 +739,16 @@ final class CodexLaneStore: ObservableObject {
         guard route != .silent else {
             AppLogger.ai.info("Codex narration suppressed route=silent")
             record.narrationSuppressed = true
+            narrationState = .suppressed(laneNumber: record.laneNumber, route: route)
             phase = isTurnInFlight ? .submitting : .idle
             return record
         }
 
+        // A previous playback timer must not clear the status for this newer
+        // synthesis while it is still waiting on the remote provider.
+        speakingTask?.cancel()
+        speakingTask = nil
+        narrationState = .preparing(laneNumber: record.laneNumber, route: route)
         phase = .preparingSpeech
         let result = await AIResponseSpeechRouter.shared.speak(
             record.response,
@@ -749,6 +763,11 @@ final class CodexLaneStore: ObservableObject {
 
         if let speechFailure = result.failure {
             record.speechFailure = speechFailure
+            narrationState = .failed(
+                laneNumber: record.laneNumber,
+                route: result.route,
+                message: speechFailure
+            )
             phase = isTurnInFlight ? .submitting : .idle
             AppLogger.ai.warning("Codex narration failed: \(speechFailure)")
             return record
@@ -756,6 +775,7 @@ final class CodexLaneStore: ObservableObject {
 
         guard result.didSpeak else {
             record.narrationSuppressed = true
+            narrationState = .suppressed(laneNumber: record.laneNumber, route: result.route)
             phase = isTurnInFlight ? .submitting : .idle
             return record
         }
@@ -763,6 +783,7 @@ final class CodexLaneStore: ObservableObject {
         // Hold `.speaking` for as long as audio is actually playing, so the deck
         // reports the phase the user is in rather than snapping back to idle
         // while the response is still being read.
+        narrationState = .speaking(laneNumber: record.laneNumber, route: result.route)
         phase = .speaking
         let duration = result.speechDuration
         speakingTask?.cancel()
@@ -774,6 +795,10 @@ final class CodexLaneStore: ObservableObject {
             guard let self else { return }
             if self.phase == .speaking {
                 self.phase = self.isTurnInFlight ? .submitting : .idle
+            }
+            if case .speaking(let laneNumber, _) = self.narrationState,
+               laneNumber == record.laneNumber {
+                self.narrationState = .idle
             }
             self.speakingTask = nil
         }

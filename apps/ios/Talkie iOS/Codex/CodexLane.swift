@@ -246,6 +246,44 @@ enum CodexLanePhase: Equatable, Sendable {
     }
 }
 
+/// Delivery state for the spoken copy of a successful Codex response.
+///
+/// This is deliberately separate from `CodexLanePhase`: the Codex turn can
+/// succeed while remote speech synthesis is still pending or fails. Keeping
+/// the lane number here also prevents a status from following the user when
+/// they switch to a different task.
+enum CodexNarrationState: Equatable, Sendable {
+    case idle
+    case preparing(laneNumber: Int, route: AIResponseSpeechRoute)
+    case speaking(laneNumber: Int, route: AIResponseSpeechRoute)
+    case failed(laneNumber: Int, route: AIResponseSpeechRoute, message: String)
+    case suppressed(laneNumber: Int, route: AIResponseSpeechRoute)
+
+    var laneNumber: Int? {
+        switch self {
+        case .idle:
+            return nil
+        case .preparing(let laneNumber, _),
+             .speaking(let laneNumber, _),
+             .failed(let laneNumber, _, _),
+             .suppressed(let laneNumber, _):
+            return laneNumber
+        }
+    }
+
+    var route: AIResponseSpeechRoute? {
+        switch self {
+        case .idle:
+            return nil
+        case .preparing(_, let route),
+             .speaking(_, let route),
+             .failed(_, let route, _),
+             .suppressed(_, let route):
+            return route
+        }
+    }
+}
+
 /// One completed exchange, retained so the response stays readable after
 /// narration ends (or when narration never happened at all).
 struct CodexTurnRecord: Identifiable, Equatable, Sendable {

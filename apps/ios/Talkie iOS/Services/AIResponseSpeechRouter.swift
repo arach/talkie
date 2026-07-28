@@ -140,7 +140,7 @@ final class AIResponseSpeechRouter {
     }
 }
 
-enum AIResponseSpeechRoute: String {
+enum AIResponseSpeechRoute: String, Equatable, Sendable {
     case phone
     case watch
     case silent

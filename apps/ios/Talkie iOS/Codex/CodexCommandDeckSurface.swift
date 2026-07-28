@@ -70,7 +70,7 @@ struct CodexCommandDeckSurface: View {
                     index: 4,
                     label: "Stop",
                     icon: "stop.fill",
-                    isEnabled: store.phase == .speaking || store.phase == .preparingSpeech,
+                    isEnabled: store.phase == .speaking,
                     action: store.interruptNarration
                 )
             }
@@ -89,7 +89,7 @@ struct CodexCommandDeckSurface: View {
                     index: 8,
                     label: "Narrate",
                     icon: "speaker.wave.2",
-                    isEnabled: store.lastTurn != nil,
+                    isEnabled: store.lastTurn != nil && store.phase != .preparingSpeech,
                     action: store.narrateLastResponse
                 )
             }
@@ -218,6 +218,7 @@ struct CodexCommandDeckSurface: View {
                 ? "RELEASE TO \(store.activeLaneMessageMode.label.uppercased())"
                 : "RELEASE TO SEND"
         case .speaking: return "INTERRUPT + TALK"
+        case .preparingSpeech: return "VOICE INBOUND"
         case .submitting where store.activeLaneIsInFlight:
             return "HOLD TO \(store.activeLaneMessageMode.label.uppercased())"
         default: return "HOLD TO TALK"
@@ -228,6 +229,9 @@ struct CodexCommandDeckSurface: View {
         switch store.phase {
         case .listening: return "KEEP HOLDING WHILE YOU SPEAK"
         case .speaking: return "STOPS NARRATION, THEN LISTENS"
+        case .preparingSpeech:
+            let destination = store.narrationState.route?.displayName.uppercased() ?? "VOICE"
+            return "\(destination) AUDIO IS PREPARING"
         case .submitting where store.activeLaneIsInFlight:
             if store.activeLaneMessageMode == .queue {
                 let queued = store.activeLaneNumber.map(store.queuedMessageCount(for:)) ?? 0
@@ -885,6 +889,9 @@ private struct CodexCommandConsole: View {
                         )
                     }
                 }
+                if isLatest, let narrationLine = narrationTechnicalLine(for: laneNumber) {
+                    technicalLine(narrationLine.text, isFailure: narrationLine.isFailure)
+                }
             case .failed(let message):
                 technicalLine("ERR> \(message)", isFailure: true)
             }
@@ -941,10 +948,38 @@ private struct CodexCommandConsole: View {
         }
     }
 
+    private func narrationTechnicalLine(
+        for laneNumber: Int
+    ) -> (text: String, isFailure: Bool)? {
+        guard store.narrationState.laneNumber == laneNumber else { return nil }
+
+        switch store.narrationState {
+        case .idle:
+            return nil
+        case .preparing(_, let route):
+            return ("VOICE> \(route.displayName.uppercased()) // INBOUND", false)
+        case .speaking(_, let route):
+            return ("VOICE> \(route.displayName.uppercased()) // PLAYING", false)
+        case .failed:
+            return ("VOICE> FAILED // TAP NARRATE", true)
+        case .suppressed(_, let route):
+            if route == .silent {
+                return ("VOICE> SILENT // KEY 01", false)
+            }
+            return ("VOICE> NOT PLAYED // TAP NARRATE", false)
+        }
+    }
+
     private var consoleStatusLabel: String {
+        if let narrationStatus = activeNarrationStatusLabel {
+            return narrationStatus
+        }
+
         switch store.phase {
-        case .listening, .transcribing, .preparingSpeech, .speaking:
+        case .listening, .transcribing:
             return store.phase.label.uppercased()
+        case .preparingSpeech, .speaking:
+            break
         case .failed:
             return "ERROR"
         case .idle, .submitting:
@@ -967,7 +1002,30 @@ private struct CodexCommandConsole: View {
         }
     }
 
+    private var activeNarrationStatusLabel: String? {
+        guard let number = store.activeLaneNumber,
+              store.narrationState.laneNumber == number else { return nil }
+
+        switch store.narrationState {
+        case .idle:
+            return nil
+        case .preparing:
+            return "VOICE INBOUND"
+        case .speaking:
+            return "SPEAKING"
+        case .failed:
+            return "VOICE FAILED"
+        case .suppressed(_, let route):
+            return route == .silent ? "SILENT" : "VOICE SKIPPED"
+        }
+    }
+
     private var phaseColor: Color {
+        if let number = store.activeLaneNumber,
+           store.narrationState.laneNumber == number,
+           case .failed = store.narrationState {
+            return Color(red: 0.92, green: 0.42, blue: 0.30)
+        }
         if let number = store.activeLaneNumber,
            case .failed = store.activity(for: number)?.state {
             return Color(red: 0.92, green: 0.42, blue: 0.30)
@@ -1070,7 +1128,7 @@ private struct CodexCommandConsole: View {
         guard let lane = store.activeLane else {
             return "No active Codex task. Choose a lane or open the mapper."
         }
-        return "Lane \(lane.number), \(lane.task.projectName), \(lane.task.title)"
+        return "Lane \(lane.number), \(lane.task.projectName), \(lane.task.title), \(consoleStatusLabel)"
     }
 }
 
