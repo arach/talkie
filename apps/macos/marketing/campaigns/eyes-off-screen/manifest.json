@@ -1,0 +1,51 @@
+{
+  "campaign": "eyes-off-screen",
+  "platform": "macOS",
+  "message": {
+    "master": "Lean back. Take your eyes off the screen. Speak your ideas into existence.",
+    "sequence": [
+      "Lean back.",
+      "Take your eyes off the screen.",
+      "Speak your ideas into existence."
+    ]
+  },
+  "export": {
+    "width": 2880,
+    "height": 1800,
+    "format": "png",
+    "alpha": false
+  },
+  "assets": [
+    {
+      "file": "exports/app-store-concepts/01-lean-back-2880x1800.png",
+      "role": "campaign-sequence-1",
+      "submissionReady": false
+    },
+    {
+      "file": "exports/app-store-concepts/02-eyes-off-screen-2880x1800.png",
+      "role": "campaign-sequence-2",
+      "submissionReady": false
+    },
+    {
+      "file": "exports/app-store-concepts/03-speak-ideas-into-existence-2880x1800.png",
+      "role": "campaign-sequence-3",
+      "submissionReady": false
+    },
+    {
+      "file": "exports/app-store-concepts/clean-warm-city-2880x1800.png",
+      "role": "clean-primary-warm",
+      "submissionReady": false
+    },
+    {
+      "file": "exports/app-store-concepts/clean-pearl-lake-2880x1800.png",
+      "role": "clean-primary-light",
+      "submissionReady": false
+    },
+    {
+      "file": "exports/app-store-concepts/clean-dark-studio-2880x1800.png",
+      "role": "clean-primary-dark",
+      "submissionReady": false
+    }
+  ],
+  "submissionBlocker": "Replace the conceptual generated screen with a current shipping macOS app capture."
+}
