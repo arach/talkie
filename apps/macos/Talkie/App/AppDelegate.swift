@@ -196,6 +196,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         return false
     }
 
+    /// Finder and AirDrop route files here when the user chooses
+    /// Open With > Talkie. Import through the normal gallery ingestion path,
+    /// then present the relevant Library item. Editors remain user-invoked.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        let fileURLs = urls.filter(\.isFileURL)
+        guard !fileURLs.isEmpty else { return }
+
+        Task { @MainActor in
+            guard await StartupCoordinator.shared.initializeDatabase() else {
+                presentFileOpenError(
+                    "Talkie's library could not be opened.",
+                    detail: "Try opening the file again after Talkie finishes starting."
+                )
+                return
+            }
+
+            do {
+                let result = try await AudioDropService.shared.processOpenedFiles(fileURLs)
+                showMainWindowForExternalRoute()
+
+                switch result {
+                case .memo(let memo):
+                    NavigationState.shared.navigateToMemo(memo.id)
+                    logger.info("Opened imported audio memo: \(memo.id)")
+                case .recording(let recordingID):
+                    NavigationState.shared.navigate(
+                        to: .recordings,
+                        params: ["recordingId": recordingID.uuidString]
+                    )
+                    logger.info("Opened imported file in Library: \(recordingID)")
+                case .noop:
+                    break
+                }
+            } catch {
+                logger.error("Could not open imported file: \(error.localizedDescription)")
+                presentFileOpenError(
+                    "Talkie couldn't open that file.",
+                    detail: error.localizedDescription
+                )
+            }
+        }
+    }
+
+    private func presentFileOpenError(_ message: String, detail: String) {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = message
+        alert.informativeText = detail
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
     /// Handle dock click - show existing window instead of creating new one
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         // NOTE: Interstitial is now handled by TalkieAgent, so no check needed here

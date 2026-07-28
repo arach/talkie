@@ -129,19 +129,86 @@ actor AudioDropService {
         }
     }
 
+    /// Import files sent from Finder's Open With command through the same
+    /// durable paths used by app-wide drops, then return the normal memo or
+    /// Library destination. Editors remain an explicit action from details.
+    func processOpenedFiles(_ urls: [URL]) async throws -> IngestResult {
+        guard !urls.isEmpty else { throw DropError.noValidProvider }
+
+        var securityScopedURLs: [URL] = []
+        defer {
+            for url in securityScopedURLs {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        var files: [DroppedFile] = []
+        for url in urls {
+            guard url.isFileURL else {
+                throw DropError.unsupportedItem("Only local files can be opened with Talkie.")
+            }
+
+            if url.startAccessingSecurityScopedResource() {
+                securityScopedURLs.append(url)
+            }
+
+            try validateSafeFile(url, originalFilename: url.lastPathComponent)
+            let imageType = CGImageSourceCreateWithURL(url as CFURL, nil)
+                .flatMap(CGImageSourceGetType)
+                .flatMap { UTType($0 as String) }
+            let isMarkupImage = imageType == .png || imageType == .jpeg
+            let declaredType = try? url.resourceValues(forKeys: [.contentTypeKey]).contentType
+            let fileType = imageType
+                ?? declaredType
+                ?? UTType(filenameExtension: url.pathExtension)
+            let isMarkdown = ["md", "markdown"].contains(url.pathExtension.lowercased())
+            let isSupportedMedia = fileType?.conforms(to: .movie) == true
+                || fileType?.conforms(to: .audio) == true
+
+            guard isMarkupImage || isSupportedMedia || isMarkdown else {
+                throw DropError.unsupportedFormat(url.pathExtension.lowercased())
+            }
+            files.append(
+                DroppedFile(
+                    url: url,
+                    originalFilename: url.lastPathComponent,
+                    typeIdentifier: fileType?.identifier ?? UTType.data.identifier,
+                    isTemporary: false
+                )
+            )
+        }
+
+        return try await processDroppedFiles(
+            files,
+            onProgress: nil,
+            ingestionMethod: "open-with"
+        )
+    }
+
     // MARK: - Import Routing
 
     private func processDroppedFiles(
         _ files: [DroppedFile],
-        onProgress: (@MainActor (DropProgress) -> Void)?
+        onProgress: (@MainActor (DropProgress) -> Void)?,
+        ingestionMethod: String = "drop"
     ) async throws -> IngestResult {
         guard !files.isEmpty else { throw DropError.noValidProvider }
 
         if files.count == 1, let file = files.first, Self.shouldTranscribe(file.url) {
-            return .memo(try await importAudioFile(file, onProgress: onProgress))
+            return .memo(
+                try await importAudioFile(
+                    file,
+                    onProgress: onProgress,
+                    ingestionMethod: ingestionMethod
+                )
+            )
         }
 
-        let objectID = try await importFilesAsCapture(files, onProgress: onProgress)
+        let objectID = try await importFilesAsCapture(
+            files,
+            onProgress: onProgress,
+            ingestionMethod: ingestionMethod
+        )
         return .recording(objectID)
     }
 
@@ -222,7 +289,8 @@ actor AudioDropService {
 
     private func importFilesAsCapture(
         _ files: [DroppedFile],
-        onProgress: (@MainActor (DropProgress) -> Void)?
+        onProgress: (@MainActor (DropProgress) -> Void)?,
+        ingestionMethod: String = "drop"
     ) async throws -> UUID {
         guard !files.isEmpty else { throw DropError.noValidProvider }
 
@@ -271,7 +339,7 @@ actor AudioDropService {
         object.assetsJSON = TalkieObjectAssets(attachments: attachments).toJSON()
         object.metadataJSON = metadataJSON([
             "ingestSourceType": "file",
-            "ingestMethod": "drop",
+            "ingestMethod": ingestionMethod,
             "fileCount": "\(files.count)",
         ])
 
@@ -282,13 +350,14 @@ actor AudioDropService {
             SoundManager.shared.playPasted()
         }
         await onProgress?(.complete)
-        log.info("Created recording from dropped file(s): \(objectID) count=\(files.count)")
+        log.info("Created recording from imported file(s): \(objectID) count=\(files.count) method=\(ingestionMethod)")
         return objectID
     }
 
     private func importAudioFile(
         _ file: DroppedFile,
-        onProgress: (@MainActor (DropProgress) -> Void)?
+        onProgress: (@MainActor (DropProgress) -> Void)?,
+        ingestionMethod: String = "drop"
     ) async throws -> MemoModel {
         try Task.checkCancellation()
         await onProgress?(.copying)
@@ -331,7 +400,7 @@ actor AudioDropService {
                 duration: metadata.duration ?? 0,
                 transcription: transcription,
                 audioFilePath: storedFilename,
-                originDeviceId: "mac-drop"
+                originDeviceId: ingestionMethod == "open-with" ? "mac-open-with" : "mac-drop"
             )
 
             try await memoRepository.saveMemo(memo)
@@ -387,7 +456,7 @@ actor AudioDropService {
             // purely additive enrichment.
             var augContext = TKAugmentationContext()
             augContext["recording.id"] = memo.id.uuidString
-            augContext["origin"] = "audio-drop"
+            augContext["origin"] = ingestionMethod == "open-with" ? "audio-open-with" : "audio-drop"
             augContext["source.filename"] = file.originalFilename
             MediaAugmentationService.shared.enqueue(
                 AugmentationTask(
@@ -398,8 +467,8 @@ actor AudioDropService {
             )
 
             await onProgress?(.complete)
-            log.info("Created memo from dropped audio: \(memo.id)")
-            databaseLog.info("Created unified recording for dropped audio: \(memo.id)")
+            log.info("Created memo from imported audio: \(memo.id) method=\(ingestionMethod)")
+            databaseLog.info("Created unified recording for imported audio: \(memo.id)")
 
             await MainActor.run {
                 SoundManager.shared.playPasted()
