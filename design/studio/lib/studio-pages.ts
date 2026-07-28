@@ -620,6 +620,15 @@ export const STUDIO_PAGES: StudioPage[] = [
     blurb: "Five lane-picker and host-signal treatments above the selected Bottom Sill Rail, with current and proposed telemetry kept explicit.",
   },
   {
+    href: "/ios-deck-codex-kimi",
+    label: "Deck · Codex Alt K",
+    bucket: "surfaces",
+    platform: "iphone",
+    family: "deck",
+    status: "concept",
+    blurb: "Alternate composition — one display, one lane scale, one keyboard.",
+  },
+  {
     href: "/ios-memo-connected",
     label: "Memo · Connected",
     bucket: "surfaces",
