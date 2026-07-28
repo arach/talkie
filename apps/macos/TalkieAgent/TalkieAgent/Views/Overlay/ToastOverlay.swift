@@ -335,21 +335,21 @@ private struct ToastHUDView: View {
                     Text(message.code)
                         .font(.system(size: 8.5, weight: .semibold, design: .monospaced))
                         .tracking(1.2) // 0.14em at 8.5pt — the overlay's label tracking
-                        .foregroundColor(brand.opacity(0.9))
+                        .foregroundStyle(brand.opacity(0.9))
                 }
                 .padding(.bottom, 2) // eyebrow reads as its own lane, not line one of a stack
 
                 Text(message.text)
                     .font(.system(size: 12.5, weight: .medium, design: .monospaced))
                     .tracking(0.5)
-                    .foregroundColor(.white.opacity(0.96))
+                    .foregroundStyle(.white.opacity(0.96))
                     .fixedSize(horizontal: false, vertical: true)
 
                 if let detail = message.detail {
                     Text(detail)
                         .font(.system(size: 10.5, weight: .medium, design: .monospaced))
                         .tracking(0.35)
-                        .foregroundColor(.white.opacity(0.52))
+                        .foregroundStyle(.white.opacity(0.52))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -363,7 +363,7 @@ private struct ToastHUDView: View {
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .tracking(0.9)
                         .textCase(.uppercase)
-                        .foregroundColor(brand)
+                        .foregroundStyle(brand)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background(
@@ -420,7 +420,7 @@ private struct ToastHUDView: View {
         case .symbol(let name):
             Image(systemName: name)
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(brand)
+                .foregroundStyle(brand)
         }
     }
 }
