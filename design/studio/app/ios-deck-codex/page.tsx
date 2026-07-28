@@ -1,15 +1,15 @@
 import { StudioPage } from "@/components/StudioPage";
-import { CodexDeckLaneSignalsStudy } from "@/components/studies/CodexDeckLaneSignals";
+import { CodexDeckBridgeBarStudy } from "@/components/studies/CodexDeckBridgeBar";
 
-export default function IOSDeckCodexLaneSignalsStudy() {
+export default function IOSDeckCodexBridgeBarStudy() {
   return (
     <StudioPage
-      eyebrow="Command Deck · Codex lanes"
-      title="iOS · Codex Lane Picker & Host Signals"
-      help="edit components/studies/CodexDeckLaneSignals.tsx · decisions in app/ios-deck-codex/NOTES.md"
+      eyebrow="Command Deck · Codex bridge"
+      title="iOS · Deck/Host Bridge Bar & Live Turn Context"
+      help="edit components/studies/CodexDeckBridgeBar.tsx · decisions in app/ios-deck-codex/NOTES.md"
       back={{ href: "/ios-deck", label: "Deck" }}
     >
-      <CodexDeckLaneSignalsStudy />
+      <CodexDeckBridgeBarStudy />
     </StudioPage>
   );
 }
