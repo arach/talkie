@@ -432,6 +432,7 @@ final class CodexLaneStore: ObservableObject {
             )
         } catch {
             finishSubmission(on: laneNumber, mode: mode)
+            guard isCurrentActivity(activityID, on: laneNumber) else { return }
             let described = Self.describe(error)
             failure = described
             failActivity(activityID, on: laneNumber, message: described.combined)
@@ -447,12 +448,14 @@ final class CodexLaneStore: ObservableObject {
         let job = await waitForTurnJob(receipt, activityID: activityID, laneNumber: laneNumber)
         guard let job else {
             finishSubmission(on: laneNumber, mode: mode)
+            guard isCurrentActivity(activityID, on: laneNumber) else { return }
             phase = .failed("Timed out waiting for the Mac-owned turn.")
             return
         }
 
         if job.status == "failed" {
             finishSubmission(on: laneNumber, mode: mode)
+            guard isCurrentActivity(activityID, on: laneNumber) else { return }
             let message = job.error ?? "The Codex turn failed on the Mac."
             failure = CodexLaneFailure(message: message, hint: nil)
             failActivity(activityID, on: laneNumber, message: message)
@@ -463,6 +466,7 @@ final class CodexLaneStore: ObservableObject {
         guard let deliveryValue = job.delivery,
               let delivery = CodexTurnDelivery(rawValue: deliveryValue) else {
             finishSubmission(on: laneNumber, mode: mode)
+            guard isCurrentActivity(activityID, on: laneNumber) else { return }
             let message = "Codex reported an incomplete delivery receipt."
             failure = CodexLaneFailure(
                 message: message,
@@ -485,6 +489,7 @@ final class CodexLaneStore: ObservableObject {
         guard let responseText = job.response?.trimmingCharacters(in: .whitespacesAndNewlines),
               !responseText.isEmpty else {
             guard delivery == .steeredActiveTurn else {
+                guard isCurrentActivity(activityID, on: laneNumber) else { return }
                 let message = "Codex completed without a readable response."
                 failure = CodexLaneFailure(
                     message: message,
@@ -495,7 +500,9 @@ final class CodexLaneStore: ObservableObject {
                 return
             }
             acceptActivity(activityID, on: laneNumber, delivery: delivery)
-            phase = isTurnInFlight ? .submitting : .idle
+            if isCurrentActivity(activityID, on: laneNumber) {
+                phase = isTurnInFlight ? .submitting : .idle
+            }
             return
         }
 
@@ -561,6 +568,10 @@ final class CodexLaneStore: ObservableObject {
         guard liveActivityByLane[laneNumber]?.id == id else { return }
         liveActivityByLane[laneNumber]?.jobID = job.id
         liveActivityByLane[laneNumber]?.updates = job.updates ?? []
+    }
+
+    private func isCurrentActivity(_ id: UUID, on laneNumber: Int) -> Bool {
+        liveActivityByLane[laneNumber]?.id == id
     }
 
     func narrateNotificationResponse(
