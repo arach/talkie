@@ -488,7 +488,7 @@ const TREATMENTS: Treatment[] = [
     failure:
       "The plate is dead weight in the common case where you already know the lane — it costs vertical space every second to pay off in the few seconds that matter.",
     params: [
-      { kind: "range", key: "plateH", label: "Readout height", min: 84, max: 168, step: 4, unit: "pt" },
+      { kind: "range", key: "plateH", label: "Readout height", min: 84, max: 142, step: 2, unit: "pt" },
       {
         kind: "select", key: "titleLines", label: "Title lines",
         options: [
@@ -508,7 +508,7 @@ const TREATMENTS: Treatment[] = [
       { kind: "toggle", key: "showRecency", label: "Task recency" },
       { kind: "toggle", key: "showPending", label: "Your in-flight count", help: "Phone-local. Never labelled as the host's queue." },
     ],
-    defaults: { plateH: 112, titleLines: "2", showId: true, confirmStyle: "rule", showRecency: true, showPending: true },
+    defaults: { plateH: 136, titleLines: "2", showId: true, confirmStyle: "rule", showRecency: true, showPending: true },
   },
   {
     key: "glyph",
@@ -991,14 +991,14 @@ function phoneAppearanceVariables(appearance: Appearance): React.CSSProperties {
     return {
       "--cdx-console-face": "linear-gradient(180deg,#E8E1D6,#D6CCBE)",
       "--cdx-console-shadow": "inset 0 1px 0 rgba(255,255,255,0.82), inset 0 -1px 0 rgba(64,48,32,0.16), inset 0 0 0 1px rgba(64,48,32,0.20), 0 5px 12px rgba(50,37,24,0.13)",
-      "--cdx-bed-face": "#C8BFAF",
-      "--cdx-bed-shadow": "inset 0 2px 4px rgba(64,48,32,0.26), inset 0 0 0 1px rgba(64,48,32,0.17)",
-      "--cdx-cap-face": "linear-gradient(180deg,#FFFDF8,#E8DFD2)",
-      "--cdx-cap-active": "linear-gradient(180deg,#FFF7E7,#E8C998)",
-      "--cdx-cap-empty": "rgba(76,57,38,0.10)",
-      "--cdx-cap-top": "inset 0 1px 0 rgba(255,255,255,0.88)",
-      "--cdx-cap-bottom": "inset 0 -1px 0 rgba(72,52,34,0.20)",
-      "--cdx-cap-lift": "0 2px 3px rgba(68,48,30,0.18)",
+      "--cdx-bed-face": "#050505",
+      "--cdx-bed-shadow": "inset 0 1.5px 3px rgba(0,0,0,0.68), inset 0 0 0 1px rgba(255,255,255,0.10)",
+      "--cdx-cap-face": "linear-gradient(180deg,rgba(255,255,255,0.14),rgba(255,255,255,0.045))",
+      "--cdx-cap-active": "linear-gradient(180deg,rgba(255,136,0,0.32),rgba(255,136,0,0.12))",
+      "--cdx-cap-empty": "rgba(0,0,0,0.50)",
+      "--cdx-cap-top": "inset 0 1px 0 rgba(255,255,255,0.16)",
+      "--cdx-cap-bottom": "inset 0 -1px 0 rgba(0,0,0,0.42)",
+      "--cdx-cap-lift": "0 2px 3px rgba(0,0,0,0.42)",
       "--cdx-utility-face": "linear-gradient(180deg,#FFFDF8,#E6DED2)",
       "--cdx-utility-empty": "rgba(70,52,34,0.055)",
       "--cdx-utility-shadow": "0 4px 8px rgba(62,45,28,0.12), inset 0 1px 0 rgba(255,255,255,0.90), inset 0 0 0 1px rgba(74,55,36,0.14)",
@@ -1208,7 +1208,7 @@ function SillRail({ model }: { model: DeckModel }) {
         top: RAIL_TOP,
         width: RAIL_W,
         height: RAIL.h,
-        borderRadius: 14,
+        borderRadius: 18,
         background: tone.bg,
         boxShadow: `var(--cdx-rail-shadow), inset 0 0 0 1px ${tone.rim}`,
       }}
@@ -1236,7 +1236,7 @@ function SillRail({ model }: { model: DeckModel }) {
           </span>
           <span
             className="truncate text-center"
-            style={{ color: "var(--theme-ink-subtle)", fontSize: 7.5, letterSpacing: "0.11em", lineHeight: 1.25, maxWidth: "100%" }}
+            style={{ color: "var(--theme-ink-subtle)", fontSize: 9, letterSpacing: "0.10em", lineHeight: 1.25, maxWidth: "100%" }}
           >
             {duringTurn ? (messageMode === "queue" ? "RUNS AFTER THIS TURN" : "ADDS TO THE ACTIVE TURN") : face.sub}
           </span>
@@ -1263,7 +1263,7 @@ function SillRail({ model }: { model: DeckModel }) {
                 }}
               >
                 <span style={{ fontSize: 11 }}>{mode === "queue" ? "⇣" : "↗"}</span>
-                <span style={{ fontSize: 6.5, fontWeight: 700, letterSpacing: "0.08em" }}>{mode.toUpperCase()}</span>
+                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.06em" }}>{mode.toUpperCase()}</span>
               </button>
             );
           })}
@@ -1301,7 +1301,7 @@ const CAP_LIFT = "var(--cdx-cap-lift)";
 
 function laneSkin(state: LaneState, emphasis = "fill"): React.CSSProperties {
   const base: React.CSSProperties = {
-    borderRadius: 6,
+    borderRadius: 10,
     transition: "background 160ms ease, box-shadow 160ms ease, transform 160ms ease",
   };
   switch (state) {
@@ -1381,7 +1381,7 @@ function LaneSlot({
       style={{ width: grow ? undefined : w, height: h, ...laneSkin(state, emphasis) }}
     >
       <span className="flex flex-col items-center leading-none">
-        <span style={{ color: LANE_INK[state], fontSize: 13, fontWeight: 700, letterSpacing: "0.01em" }}>
+        <span style={{ color: LANE_INK[state], fontSize: 15, fontWeight: 700, letterSpacing: "0.01em" }}>
           {n}
         </span>
         {initials && state !== "empty" && (
@@ -1400,7 +1400,7 @@ function LaneSlot({
 /** The bed's utility key. Same cap material at lower emphasis, so it is
  *  legibly a key but never competes with the six numbers. */
 function BedKey({
-  h, glyph, label, text, w = 30, grow = false, expanded,
+  h, glyph, label, text, w = 26, grow = false, expanded,
 }: {
   h: number; glyph: string; label: string; text?: string; w?: number; grow?: boolean; expanded?: boolean;
 }) {
@@ -1413,7 +1413,7 @@ function BedKey({
       style={{
         width: grow ? undefined : w,
         height: h,
-        borderRadius: 6,
+        borderRadius: 10,
         background: "var(--cdx-cap-face)",
         boxShadow: `inset 0 1px 0 rgba(255,255,255,0.09), ${CAP_BOTTOM}, ${CAP_LIFT}`,
       }}
@@ -1474,7 +1474,7 @@ function FreshnessSignal({ model }: { model: DeckModel }) {
   return (
     <span
       className="ml-auto inline-flex shrink-0 items-center gap-1.5"
-      style={{ color: ink, fontSize: 7.5, letterSpacing: "0.11em", whiteSpace: "nowrap" }}
+      style={{ color: ink, fontSize: 9, letterSpacing: "0.10em", whiteSpace: "nowrap" }}
     >
       <span
         aria-hidden
@@ -1495,7 +1495,7 @@ function Badge({ ink, rim, children }: { ink: string; rim: string; children: Rea
   return (
     <span
       className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-[2px]"
-      style={{ color: ink, border: `0.5px solid ${rim}`, fontSize: 7.5, letterSpacing: "0.12em", whiteSpace: "nowrap" }}
+      style={{ color: ink, border: `0.5px solid ${rim}`, fontSize: 9, letterSpacing: "0.10em", whiteSpace: "nowrap" }}
     >
       {children}
     </span>
@@ -1527,7 +1527,7 @@ function PhaseWord({ model }: { model: DeckModel }) {
     : model.phase === "idle" ? "var(--theme-ink-faint)"
     : "var(--theme-amber)";
   return (
-    <span style={{ color: ink, fontSize: 8.5, fontWeight: 700, letterSpacing: "0.14em", whiteSpace: "nowrap" }}>
+    <span style={{ color: ink, fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", whiteSpace: "nowrap" }}>
       {PHASE_LABEL[model.phase]}
     </span>
   );
@@ -1538,7 +1538,7 @@ function ReceiptLine({ receipt }: { receipt: Receipt }) {
   return (
     <span
       className="inline-flex items-center gap-1.5"
-      style={{ color: good ? "#5FCD8C" : "var(--theme-amber)", fontSize: 8, letterSpacing: "0.12em" }}
+      style={{ color: good ? "#5FCD8C" : "var(--theme-amber)", fontSize: 9, letterSpacing: "0.10em" }}
     >
       ✓ {DELIVERY_LABEL[receipt.delivery]}
       <span style={{ color: "var(--theme-ink-subtle)" }}>{receipt.turnId}</span>
@@ -1597,11 +1597,11 @@ const CONSOLE_FACE: React.CSSProperties = {
 function Silkscreen({ left, right, ink }: { left: string; right?: string; ink?: string }) {
   return (
     <div className="flex shrink-0 items-center justify-between" style={{ height: 8 }}>
-      <span style={{ color: "var(--theme-ink-subtle)", fontSize: 7, letterSpacing: "0.26em" }}>{left}</span>
+      <span style={{ color: "var(--theme-ink-subtle)", fontSize: 9, fontWeight: 600, letterSpacing: "0.16em" }}>{left}</span>
       {right && (
         <span
           className="min-w-0 truncate pl-3"
-          style={{ color: ink ?? "var(--theme-ink-subtle)", fontSize: 7, letterSpacing: "0.2em" }}
+          style={{ color: ink ?? "var(--theme-ink-subtle)", fontSize: 9, fontWeight: 600, letterSpacing: "0.16em" }}
         >
           {right}
         </span>
@@ -1619,7 +1619,7 @@ function consoleTarget(model: DeckModel): { text: string; ink: string } {
   if (!lane) return { text: `${model.lanes.length} OF 6 BOUND`, ink: "var(--theme-ink-subtle)" };
   const fresh = model.confirmed === lane.n && model.confirmAge < LOCK_FRESHNESS_S;
   return {
-    text: `LANE ${String(lane.n).padStart(2, "0")} · ${lane.project.toUpperCase()}`,
+    text: `LANE ${String(lane.n).padStart(2, "0")} · ${lane.project.slice(0, 12).toUpperCase()}`,
     ink: fresh ? "var(--theme-amber)" : "var(--theme-ink-subtle)",
   };
 }
@@ -1634,7 +1634,7 @@ function LaneConsole({ model, children }: { model: DeckModel; children: React.Re
         right: CONSOLE_X,
         top: CONSOLE_TOP,
         maxHeight: CONSOLE_MAX_H,
-        borderRadius: 14,
+        borderRadius: 24,
         padding: CONSOLE_PAD,
         gap: 8,
         ...CONSOLE_FACE,
@@ -1653,7 +1653,7 @@ function LaneBed({ h, grow, children }: { h?: number; grow?: boolean; children: 
       className={`flex items-stretch ${grow ? "flex-1" : "shrink-0"}`}
       style={{
         height: grow ? undefined : h,
-        borderRadius: 9,
+        borderRadius: 14,
         padding: 4,
         gap: 4,
         background: "var(--cdx-bed-face)",
@@ -1675,7 +1675,7 @@ function Seam() {
       className="shrink-0 self-stretch"
       style={{
         width: 3,
-        margin: "1px 3px",
+        margin: "1px 1px",
         borderRadius: 2,
         background: "rgba(0,0,0,0.7)",
         boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.05)",
@@ -1702,7 +1702,7 @@ function Readout({ children, locked, h, grow, onClick, ariaLabel, ariaExpanded }
   const style = {
     height: grow ? undefined : h,
     minHeight: grow ? h : undefined,
-    borderRadius: 9,
+    borderRadius: 14,
     background: "var(--theme-screen-bg)",
     boxShadow: locked
       ? `inset 0 0 0 1px var(--theme-amber), inset 0 2px 9px rgba(0,0,0,0.65), ${ACTIVE_GLOW}`
@@ -1776,7 +1776,7 @@ function ConsoleFooter({ children }: { children: React.ReactNode }) {
 function ConsoleNote({ children, ink }: { children: React.ReactNode; ink?: string }) {
   return (
     <span
-      style={{ color: ink ?? "var(--theme-ink-subtle)", fontSize: 7.5, letterSpacing: "0.14em", lineHeight: 1.5 }}
+      style={{ color: ink ?? "var(--theme-ink-subtle)", fontSize: 9, letterSpacing: "0.12em", lineHeight: 1.4 }}
     >
       {children}
     </span>
@@ -2010,7 +2010,11 @@ function TwoTierPicker({ model, params, select }: PickerProps) {
 
       {/* Tier two is the instrument's display, not a card floating on the chassis.
           confirmStyle "rule" drives the readout's own amber lock rim. */}
-      <Readout h={plateH} locked={confirmStyle === "rule" && fresh}>
+      <Readout
+        h={plateH}
+        locked={confirmStyle === "rule" && fresh}
+        ariaLabel={lane ? `${lane.project} — ${lane.title}` : "No Codex lane selected"}
+      >
         {model.failure ? (
           <div className="flex h-full items-center">
             <FailureNote failure={model.failure} compact />
@@ -2032,14 +2036,14 @@ function TwoTierPicker({ model, params, select }: PickerProps) {
         ) : (
           <div className="flex h-full flex-col gap-1.5">
             <div className="flex items-center gap-1.5">
-              <span style={{ color: "var(--theme-amber)", fontSize: 8.5, fontWeight: 700, letterSpacing: "0.14em" }}>
+              <span style={{ color: "var(--theme-amber)", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em" }}>
                 LANE {String(lane.n).padStart(2, "0")}
               </span>
-              <span className="min-w-0 truncate" style={{ color: "var(--theme-ink-faint)", fontSize: 8.5, letterSpacing: "0.1em" }}>
+              <span className="min-w-0 truncate" style={{ color: "var(--theme-ink-faint)", fontSize: 10, letterSpacing: "0.10em" }}>
                 {lane.project.toUpperCase()}
               </span>
               {bool(params, "showRecency") && (
-                <span className="shrink-0" style={{ color: "var(--theme-ink-subtle)", fontSize: 8 }}>· {lane.rel}</span>
+                <span className="shrink-0" style={{ color: "var(--theme-ink-subtle)", fontSize: 9 }}>· {lane.rel}</span>
               )}
               {confirmStyle === "rule" ? (
                 <FreshnessSignal model={model} />
@@ -2053,9 +2057,9 @@ function TwoTierPicker({ model, params, select }: PickerProps) {
             <span
               style={{
                 color: "var(--theme-ink)",
-                fontSize: 14,
+                fontSize: 15,
                 fontWeight: 600,
-                lineHeight: 1.28,
+                lineHeight: 1.3,
                 display: "-webkit-box",
                 WebkitBoxOrient: "vertical",
                 WebkitLineClamp: titleLines,
@@ -2068,12 +2072,12 @@ function TwoTierPicker({ model, params, select }: PickerProps) {
             <div className="mt-auto flex items-center gap-2">
               <PhaseWord model={model} />
               {bool(params, "showId") && (
-                <span className="truncate" style={{ color: "var(--theme-ink-subtle)", fontSize: 7.5, letterSpacing: "0.06em" }}>
+                <span className="truncate" style={{ color: "var(--theme-ink-subtle)", fontSize: 9, letterSpacing: "0.04em" }}>
                   {lane.id}
                 </span>
               )}
               {bool(params, "showPending") && model.pending > 0 && (
-                <span className="ml-auto shrink-0" style={{ color: "#3C6E9E", fontSize: 7.5, letterSpacing: "0.1em" }}>
+                <span className="ml-auto shrink-0" style={{ color: "#5E90C4", fontSize: 9, letterSpacing: "0.10em" }}>
                   {model.pending} OF YOURS IN FLIGHT
                 </span>
               )}

@@ -7,8 +7,8 @@
 //  raised cream keycaps, green ownership confirmation, and red closed failures.
 //  STORY: Pick one known task in the console lid, confirm ownership, speak, see where the turn went,
 //  then read or hear the answer without returning to the Mac.
-//  FIRST VIEWPORT: Live console above a fixed 4×4. The lid owns lane selection
-//  and push-to-talk; output anchors key 01 and the bottom corners remain open sockets.
+//  FIRST VIEWPORT: Live console above a navigation-only 3×4. The lid owns lane
+//  selection while the fixed bottom rail owns push-to-talk and in-turn delivery.
 //  FORM: Extends Talkie's established Scope instrument language and existing
 //  bridge behavior. Nothing shown as live or locked is inferred locally.
 //
@@ -38,6 +38,7 @@ struct CodexCommandDeckSurface: View {
             CodexCaptureRail()
                 .frame(height: 76)
                 .padding(.horizontal, 12)
+                .dynamicTypeSize(.xSmall ... .xxxLarge)
         }
         .padding(.top, 4)
         .padding(.bottom, 8)
@@ -126,13 +127,13 @@ struct CodexCommandDeckSurface: View {
                     .font(.system(size: 15, weight: .light))
                     .frame(height: 18)
                 Text(label.uppercased())
-                    .font(.system(size: 8, weight: .medium, design: .monospaced))
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
                     .tracking(1.1)
                     .lineLimit(1)
                     .minimumScaleFactor(0.65)
                 Spacer(minLength: 0)
             }
-            .foregroundStyle(isEnabled ? theme.colors.textSecondary : theme.colors.textTertiary.opacity(0.45))
+            .foregroundStyle(isEnabled ? utilityInk : utilityInkFaint.opacity(0.42))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal, 5)
             .padding(.vertical, 8)
@@ -152,7 +153,7 @@ struct CodexCommandDeckSurface: View {
                 ZStack {
                     ForEach(0..<9, id: \.self) { tick in
                         Capsule()
-                            .fill(theme.colors.textTertiary.opacity(0.35))
+                            .fill(utilityInkFaint.opacity(0.40))
                             .frame(width: 1, height: 4)
                             .offset(y: -24)
                             .rotationEffect(.degrees(Double(tick) * 30 - 120))
@@ -161,7 +162,7 @@ struct CodexCommandDeckSurface: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [theme.colors.textPrimary.opacity(0.86), theme.colors.textPrimary],
+                                colors: [dialFace.opacity(0.88), dialFace],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
@@ -182,9 +183,9 @@ struct CodexCommandDeckSurface: View {
                 .frame(width: 52, height: 52)
 
                 Text("OUTPUT · \(outputRoute.shortLabel)")
-                    .font(.system(size: 7, weight: .medium, design: .monospaced))
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
                     .tracking(0.8)
-                    .foregroundStyle(theme.colors.textSecondary)
+                    .foregroundStyle(utilityInk)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Spacer(minLength: 0)
@@ -208,7 +209,7 @@ struct CodexCommandDeckSurface: View {
             keycapSurface(active: false, isEmpty: true)
             Image(systemName: "plus")
                 .font(.system(size: 16, weight: .ultraLight))
-                .foregroundStyle(theme.colors.textTertiary.opacity(0.45))
+                .foregroundStyle(utilityInkFaint.opacity(0.45))
         }
         .overlay(alignment: .topLeading) { keyIndexLabel(index: index) }
         .accessibilityElement(children: .ignore)
@@ -223,7 +224,7 @@ struct CodexCommandDeckSurface: View {
             .fill(
                 active
                     ? theme.chrome.accent.opacity(0.18)
-                    : (isEmpty ? theme.colors.textPrimary.opacity(0.035) : theme.colors.cardBackground)
+                    : (isEmpty ? emptyKeyFace : utilityFace)
             )
             .overlay {
                 if !isEmpty {
@@ -258,8 +259,8 @@ struct CodexCommandDeckSurface: View {
 
     private func keyIndexLabel(index: Int) -> some View {
         Text(index < 10 ? "0\(index)" : "\(index)")
-            .font(.system(size: 7, weight: .medium, design: .monospaced))
-            .foregroundStyle(theme.colors.textTertiary.opacity(0.52))
+            .font(.system(size: 9, weight: .medium, design: .monospaced))
+            .foregroundStyle(utilityInkFaint.opacity(0.56))
             .padding(.top, 7)
             .padding(.leading, 8)
             .allowsHitTesting(false)
@@ -267,6 +268,36 @@ struct CodexCommandDeckSurface: View {
 
     private var outputRoute: AIResponseSpeechRoute {
         AIResponseSpeechRoute(rawValue: appSettings.aiVoiceOutputRoute) ?? .phone
+    }
+
+    private var utilityFace: Color {
+        colorScheme == .dark
+            ? theme.colors.cardBackground
+            : Color(red: 0.965, green: 0.945, blue: 0.905)
+    }
+
+    private var emptyKeyFace: Color {
+        colorScheme == .dark
+            ? theme.colors.textPrimary.opacity(0.035)
+            : Color(red: 0.30, green: 0.25, blue: 0.19).opacity(0.035)
+    }
+
+    private var utilityInk: Color {
+        colorScheme == .dark
+            ? theme.colors.textSecondary
+            : Color(red: 0.28, green: 0.24, blue: 0.19)
+    }
+
+    private var utilityInkFaint: Color {
+        colorScheme == .dark
+            ? theme.colors.textTertiary
+            : Color(red: 0.42, green: 0.36, blue: 0.28)
+    }
+
+    private var dialFace: Color {
+        colorScheme == .dark
+            ? theme.colors.textPrimary
+            : Color(red: 0.995, green: 0.985, blue: 0.955)
     }
 
     private var outputDialAngle: Angle {
@@ -299,14 +330,21 @@ private struct CodexCommandConsole: View {
     @ObservedObject private var store = CodexLaneStore.shared
     @ObservedObject private var theme = ThemeManager.shared
     @State private var bridge = BridgeManager.shared
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             consoleHeader
 
             VStack(alignment: .leading, spacing: 8) {
-                lanePicker
-                taskIdentity
+                if dynamicTypeSize.isAccessibilitySize {
+                    accessibilityLaneTransport
+                    accessibilityTaskIdentity
+                } else {
+                    lanePicker
+                    taskIdentity
+                }
             }
             .padding(.horizontal, 12)
             .padding(.top, 9)
@@ -314,19 +352,20 @@ private struct CodexCommandConsole: View {
         }
         .background {
             ZStack {
-                theme.colors.cardBackground
+                consoleChassis
                 diagonalTrace
             }
         }
         .overlay {
             RoundedRectangle(cornerRadius: 0)
-                .stroke(theme.colors.textPrimary.opacity(0.13), lineWidth: theme.chrome.hairlineWidth)
+                .stroke(consoleInk.opacity(0.16), lineWidth: theme.chrome.hairlineWidth)
         }
+        .dynamicTypeSize(.xSmall ... .accessibility1)
     }
 
     private var lanePicker: some View {
-        HStack(spacing: 6) {
-            HStack(spacing: 6) {
+        HStack(spacing: 5) {
+            HStack(spacing: 4) {
                 ForEach(Array(CodexLane.range), id: \.self) { number in
                     lanePickerButton(number)
                 }
@@ -335,7 +374,7 @@ private struct CodexCommandConsole: View {
             Button(action: onShowMapper) {
                 Image(systemName: "rectangle.3.group")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(theme.colors.textSecondary)
+                    .foregroundStyle(theme.chrome.panelInkFaint)
                     .frame(width: 44, height: 44)
                     .background(laneKeySurface(isActive: false))
             }
@@ -344,12 +383,12 @@ private struct CodexCommandConsole: View {
         }
         .padding(6)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(theme.colors.tableHeaderBackground)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(theme.chrome.panel)
         )
         .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(theme.colors.textPrimary.opacity(0.12), lineWidth: theme.chrome.hairlineWidth)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(theme.chrome.panelInk.opacity(0.13), lineWidth: theme.chrome.hairlineWidth)
         }
         .frame(height: 56)
         .sensoryFeedback(.selection, trigger: store.activeLaneNumber)
@@ -370,13 +409,13 @@ private struct CodexCommandConsole: View {
         } label: {
             VStack(spacing: 3) {
                 Text("\(number)")
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
 
                 Circle()
                     .fill(laneStatusColor(lane: lane, isLocked: isLocked))
                     .frame(width: 5, height: 5)
             }
-            .foregroundStyle(isActive ? theme.colors.textPrimary : theme.colors.textSecondary)
+            .foregroundStyle(isActive ? theme.chrome.panelInk : theme.chrome.panelInkFaint)
             .frame(maxWidth: .infinity)
             .frame(height: 44)
             .background(laneKeySurface(isActive: isActive))
@@ -390,13 +429,13 @@ private struct CodexCommandConsole: View {
     }
 
     private func laneKeySurface(isActive: Bool) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
         return shape
-            .fill(isActive ? theme.colors.accent.opacity(0.20) : theme.colors.cardBackground)
+            .fill(isActive ? theme.colors.accent.opacity(0.20) : theme.chrome.panel)
             .overlay {
                 shape.fill(
                     LinearGradient(
-                        colors: [Color.white.opacity(0.34), .clear, Color.black.opacity(0.045)],
+                        colors: [Color.white.opacity(0.16), .clear, Color.black.opacity(0.16)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
@@ -404,7 +443,7 @@ private struct CodexCommandConsole: View {
             }
             .overlay {
                 shape.stroke(
-                    isActive ? theme.colors.accent.opacity(0.78) : theme.colors.textPrimary.opacity(0.15),
+                    isActive ? theme.colors.accent.opacity(0.78) : theme.chrome.panelInk.opacity(0.15),
                     lineWidth: isActive ? 1 : theme.chrome.hairlineWidth
                 )
             }
@@ -432,7 +471,7 @@ private struct CodexCommandConsole: View {
             Text((bridge.pairedMacDisplayName ?? "MAC").uppercased())
                 .lineLimit(1)
             Text("/")
-                .foregroundStyle(theme.colors.textTertiary.opacity(0.55))
+                .foregroundStyle(consoleInkFaint.opacity(0.60))
             Text("CODEX")
 
             Spacer(minLength: 8)
@@ -455,12 +494,12 @@ private struct CodexCommandConsole: View {
         }
         .font(.system(size: 9, weight: .medium, design: .monospaced))
         .tracking(1.2)
-        .foregroundStyle(theme.colors.textSecondary)
+        .foregroundStyle(consoleInk)
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(theme.colors.textPrimary.opacity(0.14))
+                .fill(consoleInk.opacity(0.16))
                 .frame(height: theme.chrome.hairlineWidth)
         }
     }
@@ -477,16 +516,16 @@ private struct CodexCommandConsole: View {
                         .foregroundStyle(theme.chrome.panelAccent)
                 }
             }
-            .font(.system(size: 8, weight: .semibold, design: .monospaced))
-            .tracking(1.4)
+            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            .tracking(1.2)
 
             Text(store.activeLane?.task.title ?? "Choose a lane")
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(theme.chrome.panelInk)
-                .lineLimit(1)
+                .lineLimit(2)
 
             Text(store.activeLane.map { "\($0.task.projectName)  ·  \($0.task.id)" } ?? "Tap an empty lane above to map an exact Codex task.")
-                .font(.system(size: 8, weight: .regular, design: .monospaced))
+                .font(.system(size: 9, weight: .regular, design: .monospaced))
                 .foregroundStyle(theme.chrome.panelInkFaint)
                 .lineLimit(1)
 
@@ -496,13 +535,15 @@ private struct CodexCommandConsole: View {
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, minHeight: 103, alignment: .topLeading)
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(theme.chrome.panel)
         )
         .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(theme.chrome.panelEdge.opacity(0.78), lineWidth: theme.chrome.hairlineWidth)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(taskIdentityAccessibilityLabel)
     }
 
     @ViewBuilder
@@ -543,7 +584,7 @@ private struct CodexCommandConsole: View {
                     .foregroundStyle(theme.chrome.panelInkFaint)
             }
         }
-        .font(.system(size: 10, weight: .regular))
+        .font(.system(size: 11, weight: .regular))
         .lineLimit(2)
         .frame(maxWidth: .infinity, minHeight: 28, alignment: .topLeading)
     }
@@ -560,6 +601,24 @@ private struct CodexCommandConsole: View {
         }
     }
 
+    private var consoleChassis: Color {
+        colorScheme == .dark
+            ? theme.colors.cardBackground
+            : Color(red: 0.90, green: 0.875, blue: 0.825)
+    }
+
+    private var consoleInk: Color {
+        colorScheme == .dark
+            ? theme.colors.textSecondary
+            : Color(red: 0.25, green: 0.21, blue: 0.17)
+    }
+
+    private var consoleInkFaint: Color {
+        colorScheme == .dark
+            ? theme.colors.textTertiary
+            : Color(red: 0.40, green: 0.34, blue: 0.27)
+    }
+
     private var diagonalTrace: some View {
         Canvas { context, size in
             var path = Path()
@@ -572,6 +631,67 @@ private struct CodexCommandConsole: View {
             context.stroke(path, with: .color(theme.colors.accent.opacity(0.055)), lineWidth: 0.7)
         }
         .allowsHitTesting(false)
+    }
+
+    private var accessibilityLaneTransport: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 6) {
+                ForEach(Array(CodexLane.range), id: \.self) { number in
+                    lanePickerButton(number)
+                        .frame(width: 44)
+                }
+
+                Button(action: onShowMapper) {
+                    Label("Map", systemImage: "rectangle.3.group")
+                        .font(.caption.bold())
+                        .frame(minWidth: 64, minHeight: 44)
+                        .background(laneKeySurface(isActive: false))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(6)
+        }
+        .scrollIndicators(.hidden)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(theme.chrome.panel)
+        )
+        .accessibilityLabel("Codex lane transport")
+    }
+
+    private var accessibilityTaskIdentity: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(store.activeLane.map { "Lane \($0.number), \($0.task.projectName)" } ?? "No active task")
+                .font(.caption.bold())
+                .foregroundStyle(theme.chrome.panelAccent)
+
+            Text(store.activeLane?.task.title ?? "Choose a lane")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(theme.chrome.panelInk)
+                .lineLimit(2)
+
+            Text(store.isTurnInFlight ? "Turn active. Choose Queue or Steer in the bottom rail." : "The bottom rail sends only to this exact task.")
+                .font(.caption)
+                .foregroundStyle(theme.chrome.panelInkFaint)
+                .lineLimit(2)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, minHeight: 102, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(theme.chrome.panel)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(taskIdentityAccessibilityLabel)
+    }
+
+    private var taskIdentityAccessibilityLabel: String {
+        guard let lane = store.activeLane else {
+            return "No active Codex task. Choose a lane or open the mapper."
+        }
+        let ownership = store.isLocked(lane.number) ? "ownership confirmed" : "revalidation required"
+        return "Lane \(lane.number), \(lane.task.projectName), \(lane.task.title), \(ownership)"
     }
 }
 
@@ -613,9 +733,9 @@ private struct CodexCaptureRail: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
                 Text(captureSubtitle)
-                    .font(.system(size: 7, weight: .semibold, design: .monospaced))
-                    .tracking(0.9)
-                    .foregroundStyle(theme.colors.textSecondary)
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .tracking(0.7)
+                    .foregroundStyle(railInkFaint)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
             }
@@ -625,7 +745,7 @@ private struct CodexCaptureRail: View {
             if let number = store.activeLaneNumber, !store.isTurnInFlight {
                 Text("L\(number)")
                     .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .foregroundStyle(theme.colors.textSecondary)
+                    .foregroundStyle(railInkFaint)
             }
         }
         .foregroundStyle(theme.colors.accent)
@@ -675,19 +795,19 @@ private struct CodexCaptureRail: View {
                 Image(systemName: icon)
                     .font(.system(size: 11, weight: .semibold))
                 Text(mode.label.uppercased())
-                    .font(.system(size: 6, weight: .bold, design: .monospaced))
-                    .tracking(0.5)
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .tracking(0.3)
             }
-            .foregroundStyle(isSelected ? theme.colors.textPrimary : theme.colors.textSecondary)
+            .foregroundStyle(isSelected ? railInk : railInkFaint)
             .frame(width: 49, height: 52)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(isSelected ? theme.colors.accent.opacity(0.20) : theme.colors.cardBackground)
+                    .fill(isSelected ? theme.colors.accent.opacity(0.20) : railFace)
             )
             .overlay {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .stroke(
-                        isSelected ? theme.colors.accent.opacity(0.76) : theme.colors.textPrimary.opacity(0.13),
+                        isSelected ? theme.colors.accent.opacity(0.76) : railInk.opacity(0.14),
                         lineWidth: isSelected ? 1 : theme.chrome.hairlineWidth
                     )
             }
@@ -700,7 +820,7 @@ private struct CodexCaptureRail: View {
     private var railSurface: some View {
         let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
         return shape
-            .fill(theme.colors.cardBackground)
+            .fill(railFace)
             .overlay {
                 shape.fill(
                     LinearGradient(
@@ -714,6 +834,24 @@ private struct CodexCaptureRail: View {
                 shape.stroke(theme.colors.accent.opacity(0.64), lineWidth: 1)
             }
             .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.38 : 0.16), radius: 9, y: 5)
+    }
+
+    private var railFace: Color {
+        colorScheme == .dark
+            ? theme.colors.cardBackground
+            : Color(red: 0.97, green: 0.945, blue: 0.90)
+    }
+
+    private var railInk: Color {
+        colorScheme == .dark
+            ? theme.colors.textPrimary
+            : Color(red: 0.25, green: 0.21, blue: 0.17)
+    }
+
+    private var railInkFaint: Color {
+        colorScheme == .dark
+            ? theme.colors.textSecondary
+            : Color(red: 0.40, green: 0.34, blue: 0.27)
     }
 
     private var canCapture: Bool {
