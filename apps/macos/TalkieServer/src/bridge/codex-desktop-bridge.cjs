@@ -216,7 +216,7 @@ class DesktopIPCClient {
       const timer = setTimeout(() => {
         this.snapshotWaiter = null;
         reject(Object.assign(
-          new Error('Open the locked task in Codex Desktop, then try the hotkey again.'),
+          new Error('Open this task in Codex Desktop, then try the hotkey again.'),
           { code: 'task-owner-unavailable' },
         ));
       }, SNAPSHOT_TIMEOUT_MS);

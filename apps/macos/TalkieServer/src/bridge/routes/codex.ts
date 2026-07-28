@@ -68,15 +68,14 @@ const UNAVAILABLE_CODES = new Set([
 ]);
 
 /**
- * Recovery guidance keyed by adapter failure code. The article's contract is
- * that a lane which cannot be confirmed must explain how to recover, so the
- * hint travels with the error rather than being invented on the phone.
+ * Recovery guidance keyed by adapter failure code. The hint travels with the
+ * actual task operation error rather than being invented on the phone.
  */
 const RECOVERY_HINTS: Record<string, string> = {
   "catalog-unavailable": "Open Codex Desktop at least once so its task catalog exists.",
   "desktop-unavailable": "Codex Desktop is not running. Launch it, then retry.",
   "desktop-timeout": "Codex Desktop did not respond. Bring it to the foreground, then retry.",
-  "task-owner-unavailable": "Open this task in Codex Desktop so a window owns it, then retry.",
+  "task-owner-unavailable": "Open this task in Codex Desktop, then retry.",
   "app-server-unavailable": "Install or update Codex on this Mac, then retry.",
   "app-server-request-failed": "Open this task in Codex Desktop and retry from the deck.",
   "approval-required": "Open this task in Codex Desktop to review the approval request.",
@@ -84,7 +83,7 @@ const RECOVERY_HINTS: Record<string, string> = {
   "protocol-mismatch": "Codex Desktop's task protocol changed. Update Talkie.",
   "turn-timeout": "Codex did not finish in time. Check the task in Codex Desktop.",
   "empty-response": "Codex finished without a final message.",
-  "unsafe-socket": "Codex Desktop's IPC socket failed its ownership check.",
+  "unsafe-socket": "Codex Desktop's IPC socket failed its security check.",
   "unsafe-rollout-path": "Codex Desktop returned an unsafe transcript path.",
 };
 
@@ -272,7 +271,7 @@ function bridgeFailureResponse(error: unknown): Response {
 
 /**
  * GET /codex/tasks — recent Codex Desktop tasks for the lane mapper.
- * Read-only snapshot of the catalog; never touches task ownership.
+ * Read-only snapshot of the task catalog.
  */
 export async function codexTasksRoute(limitParam?: string | null): Promise<Response> {
   const parsed = Number(limitParam);
@@ -289,10 +288,10 @@ export async function codexTasksRoute(limitParam?: string | null): Promise<Respo
 }
 
 /**
- * POST /codex/validate — confirm the Mac can resume this exact task.
+ * POST /codex/validate — compatibility probe for an exact task ID.
  *
- * The deck calls this before showing a lane as locked. A success here means
- * either a live Desktop owner or Codex app-server resumed this exact task ID.
+ * Current deck clients submit directly. This remains available to older
+ * clients and diagnostics without creating any user-visible lane state.
  */
 export async function codexValidateRoute(body: unknown): Promise<Response> {
   const taskId = (body as { taskId?: unknown })?.taskId;
@@ -304,10 +303,10 @@ export async function codexValidateRoute(body: unknown): Promise<Response> {
     const envelope = await runBridge(["validate", taskId.trim()], { timeoutMs: SNAPSHOT_TIMEOUT_MS });
     if (!envelope.ok || !envelope.task) throw envelopeError(envelope);
 
-    // Defense in depth: the adapter already rejects a mismatched task, but the
-    // lock badge is only trustworthy if this layer refuses to relabel it too.
+    // Defense in depth: the adapter already rejects a mismatched task, but this
+    // route must never relabel a different task as the requested one.
     if (envelope.task.id !== taskId.trim()) {
-      throw new CodexBridgeError("Codex Desktop confirmed a different task.", "task-mismatch");
+      throw new CodexBridgeError("Codex Desktop returned a different task.", "task-mismatch");
     }
 
     return Response.json({ task: envelope.task });

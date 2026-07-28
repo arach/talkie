@@ -2,20 +2,10 @@
 //  CodexLaneStore.swift
 //  Talkie iOS
 //
-//  Owns the Codex lane bindings and the narrated voice loop.
+//  Owns persistent Codex lane mappings and the narrated voice loop.
 //
-//  Two ideas drive every decision in this file:
-//
-//  1. A lane binding and a lane *lock* are different things. The binding is a
-//     user decision that persists across launches; the lock is a claim that
-//     Codex Desktop owns that exact task right now. Only the Mac can confirm
-//     the second, and the confirmation is never persisted — a restored lane
-//     starts unconfirmed and must be revalidated before the deck says "locked".
-//
-//  2. Failures fail closed. If ownership cannot be confirmed, nothing is sent,
-//     and the user is told what to do about it. The one exception is narration:
-//     a speech failure is reported alongside a successful Codex turn, never as
-//     a failed turn.
+//  Selecting a lane is immediate: it chooses the exact Codex task that receives
+//  the next message. Availability is determined by the actual submit.
 //
 
 import Foundation
@@ -29,11 +19,6 @@ final class CodexLaneStore: ObservableObject {
         static let activeLane = "codex.lanes.active.v1"
     }
 
-    /// How long a confirmed lock is trusted before the next submit revalidates.
-    /// Short enough that a task closed on the Mac is caught quickly, long enough
-    /// that back-to-back captures don't pay for a snapshot every time.
-    private static let lockFreshness: TimeInterval = 60
-
     /// Cadence of the catalog refresh while the mapper is on screen.
     private static let catalogRefreshInterval: TimeInterval = 15
 
@@ -43,11 +28,6 @@ final class CodexLaneStore: ObservableObject {
 
     @Published private(set) var lanes: [Int: CodexLane] = [:]
     @Published private(set) var activeLaneNumber: Int?
-
-    /// The lane the Mac confirmed it owns, this session. `nil` means no lane may
-    /// be presented as locked.
-    @Published private(set) var confirmedLaneNumber: Int?
-    private var confirmedAt: Date?
 
     // MARK: - Voice loop
 
@@ -71,7 +51,6 @@ final class CodexLaneStore: ObservableObject {
     private lazy var dictation: InlineDictationController = makeDictationController()
     private var catalogRefreshTask: Task<Void, Never>?
     private var catalogViewers = 0
-    private var confirmationExpiryTask: Task<Void, Never>?
     private var speakingTask: Task<Void, Never>?
     private var isPushToTalkHeld = false
     private var submissionRequestCount = 0
@@ -93,12 +72,6 @@ final class CodexLaneStore: ObservableObject {
 
     var activeLane: CodexLane? {
         activeLaneNumber.flatMap { lanes[$0] }
-    }
-
-    /// True only when this exact lane's ownership was confirmed by the Mac.
-    /// The UI must gate the word "locked" on this and nothing else.
-    func isLocked(_ number: Int) -> Bool {
-        confirmedLaneNumber == number && activeLaneNumber == number
     }
 
     func lane(_ number: Int) -> CodexLane? { lanes[number] }
@@ -156,20 +129,12 @@ final class CodexLaneStore: ObservableObject {
 
     // MARK: - Assignment
 
-    /// Binds a task to a lane. Deliberately does NOT change which lane is active
-    /// or claim a lock: mapping is an editing gesture, activation is a separate,
-    /// validated one.
+    /// Binds a task to a lane without changing the active lane.
     func assign(_ task: CodexTaskSummary, to number: Int) {
         guard CodexLane.range.contains(number) else { return }
 
         let existingOverride = lanes[number]?.voiceOverride
-        let previousTaskID = lanes[number]?.task.id
         lanes[number] = CodexLane(number: number, task: task, voiceOverride: existingOverride)
-
-        // Re-pointing a lane invalidates any lock we were holding for it.
-        if previousTaskID != task.id, confirmedLaneNumber == number {
-            clearConfirmation()
-        }
 
         persistLanes()
     }
@@ -181,9 +146,6 @@ final class CodexLaneStore: ObservableObject {
         if activeLaneNumber == number {
             activeLaneNumber = nil
             persistActiveLane()
-        }
-        if confirmedLaneNumber == number {
-            clearConfirmation()
         }
         persistLanes()
     }
@@ -197,12 +159,10 @@ final class CodexLaneStore: ObservableObject {
 
     // MARK: - Activation
 
-    /// Makes a lane active, but only after the Mac confirms Codex Desktop still
-    /// owns that exact task. On any failure the lane is left unlocked and the
-    /// recovery hint is surfaced.
+    /// Selects the exact task that receives the next message.
     @discardableResult
     func activate(_ number: Int) async -> Bool {
-        guard let lane = lanes[number] else {
+        guard lanes[number] != nil else {
             failure = CodexLaneFailure(
                 message: "Lane \(number) has no task yet.",
                 hint: "Map a Codex task to this lane first."
@@ -210,40 +170,11 @@ final class CodexLaneStore: ObservableObject {
             return false
         }
 
-        // Selecting a lane while a previous one was locked must not leave the
-        // old lock visible during validation.
-        clearConfirmation()
         activeLaneNumber = number
         persistActiveLane()
-
-        phase = .validating
         failure = nil
-
-        do {
-            let validated = try await bridge.codexValidateTask(taskId: lane.task.id)
-            applyValidated(validated, to: number)
-            confirmLane(number)
-            phase = .idle
-            return true
-        } catch {
-            let described = Self.describe(error)
-            failure = described
-            phase = .failed(described.message)
-            clearConfirmation()
-            AppLogger.ai.warning("Codex lane \(number) validation failed: \(described.combined)")
-            return false
-        }
-    }
-
-    /// Drops the lock claim without touching the binding. Used when the bridge
-    /// goes away: the assignment survives, the "locked" claim does not.
-    func noteBridgeUnavailable() {
-        guard confirmedLaneNumber != nil else { return }
-        clearConfirmation()
-        failure = CodexLaneFailure(
-            message: "Lost the connection to your Mac.",
-            hint: "Reconnect, then activate the lane again to re-confirm the task."
-        )
+        phase = .idle
+        return true
     }
 
     // MARK: - Voice loop
@@ -259,7 +190,7 @@ final class CodexLaneStore: ObservableObject {
             dictation.stop(insertTranscript: true)
         case .submitting where isTurnInFlight:
             startCapture()
-        case .transcribing, .validating, .submitting, .preparingSpeech:
+        case .transcribing, .submitting, .preparingSpeech:
             return
         case .speaking:
             interruptNarration()
@@ -279,7 +210,7 @@ final class CodexLaneStore: ObservableObject {
         case .submitting where isTurnInFlight:
             isPushToTalkHeld = true
             startCapture()
-        case .transcribing, .validating, .submitting, .preparingSpeech:
+        case .transcribing, .submitting, .preparingSpeech:
             return
         case .listening:
             isPushToTalkHeld = true
@@ -325,21 +256,6 @@ final class CodexLaneStore: ObservableObject {
     func setDuringTurnMessageMode(_ mode: CodexMessageMode) {
         guard mode == .queue || mode == .steer else { return }
         duringTurnMessageMode = mode
-    }
-
-    /// Re-confirms the active task without sending an instruction. This powers
-    /// the deck's explicit Revalidate key and is the recovery path after a
-    /// stale ownership confirmation expires.
-    func revalidateActiveLane() {
-        guard let number = activeLaneNumber else {
-            failure = CodexLaneFailure(
-                message: "No lane is active.",
-                hint: "Pick a lane in the lid first."
-            )
-            return
-        }
-
-        Task { await activate(number) }
     }
 
     /// Reads the last successful response again using the currently selected
@@ -437,8 +353,6 @@ final class CodexLaneStore: ObservableObject {
             return
         }
 
-        guard await ensureLockIsFresh(for: number, task: lane.task) else { return }
-
         let mode = isTurnInFlight ? duringTurnMessageMode : .auto
         await deliver(
             instruction: text,
@@ -474,9 +388,6 @@ final class CodexLaneStore: ObservableObject {
             let described = Self.describe(error)
             failure = described
             phase = .failed(described.message)
-            // The Mac only reaches a task it owns; a failure here means the
-            // claim is no longer trustworthy.
-            clearConfirmation()
             AppLogger.ai.warning("Codex submit failed on lane \(laneNumber): \(described.combined)")
             return
         }
@@ -537,29 +448,6 @@ final class CodexLaneStore: ObservableObject {
         isTurnInFlight = submissionRequestCount > 0
         if mode == .queue {
             queuedMessageCount = max(0, queuedMessageCount - 1)
-        }
-    }
-
-    /// Revalidates when the lock is missing or stale. Returns false — having
-    /// already reported the failure — when the lane must not be used.
-    private func ensureLockIsFresh(for number: Int, task: CodexTaskSummary) async -> Bool {
-        let isFresh = confirmedLaneNumber == number
-            && confirmedAt.map { Date().timeIntervalSince($0) < Self.lockFreshness } == true
-        if isFresh { return true }
-
-        phase = .validating
-        do {
-            let validated = try await bridge.codexValidateTask(taskId: task.id)
-            applyValidated(validated, to: number)
-            confirmLane(number)
-            return true
-        } catch {
-            let described = Self.describe(error)
-            failure = described
-            phase = .failed(described.message)
-            clearConfirmation()
-            AppLogger.ai.warning("Codex lane \(number) revalidation failed: \(described.combined)")
-            return false
         }
     }
 
@@ -644,55 +532,6 @@ final class CodexLaneStore: ObservableObject {
 
     // MARK: - Internals
 
-    private func confirmLane(_ number: Int) {
-        confirmationExpiryTask?.cancel()
-
-        let confirmedAt = Date()
-        confirmedLaneNumber = number
-        self.confirmedAt = confirmedAt
-
-        // A lock is a time-bounded claim about live Mac ownership. Expire the
-        // visible claim at the same moment its trust window ends, rather than
-        // leaving a stale LOCKED light on until the next submission happens.
-        confirmationExpiryTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(Self.lockFreshness))
-            guard !Task.isCancelled, let self else { return }
-            guard self.confirmedLaneNumber == number,
-                  self.confirmedAt == confirmedAt else { return }
-            self.clearConfirmation()
-        }
-    }
-
-    private func clearConfirmation() {
-        confirmationExpiryTask?.cancel()
-        confirmationExpiryTask = nil
-        confirmedLaneNumber = nil
-        confirmedAt = nil
-    }
-
-    /// Folds the Mac's authoritative title/cwd back into the stored binding so a
-    /// renamed task stops showing a stale label on the deck.
-    private func applyValidated(_ validated: CodexValidatedTask, to number: Int) {
-        guard var lane = lanes[number], validated.id == lane.task.id else { return }
-
-        let title = validated.title?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cwd = validated.cwd?.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard (title?.isEmpty == false) || (cwd?.isEmpty == false) else { return }
-
-        lane.task = CodexTaskSummary(
-            id: lane.task.id,
-            title: (title?.isEmpty == false) ? title! : lane.task.title,
-            preview: lane.task.preview,
-            cwd: (cwd?.isEmpty == false) ? cwd! : lane.task.cwd,
-            project: lane.task.project,
-            gitBranch: lane.task.gitBranch,
-            gitOriginURL: lane.task.gitOriginURL,
-            updatedAt: lane.task.updatedAt
-        )
-        lanes[number] = lane
-        persistLanes()
-    }
-
     private static func describe(_ error: Error) -> CodexLaneFailure {
         // The Mac's error bodies already carry both the symptom and the
         // recovery hint, and the bridge client joins them, so the useful
@@ -732,9 +571,8 @@ final class CodexLaneStore: ObservableObject {
             )
         }
 
-        // Restored, but deliberately unconfirmed: the active lane comes back so
-        // the deck opens where the user left it, while `confirmedLaneNumber`
-        // stays nil until the Mac re-confirms ownership.
+        // Restore the selected destination so the deck opens where the user
+        // left it. The submit itself is the live availability check.
         let storedActive = defaults.integer(forKey: Keys.activeLane)
         if lanes[storedActive] != nil {
             activeLaneNumber = storedActive

@@ -5,9 +5,8 @@
 //  Maps live Codex Desktop tasks onto numbered deck lanes.
 //
 //  The mapper is deliberately an *editing* surface: picking a task here binds
-//  it to a lane and nothing else. It never changes which lane is live, because
-//  going live requires the Mac to confirm ownership, and that belongs to the
-//  deck's activation path rather than to a picker.
+//  it to a lane and nothing else. Lane selection remains on the deck so mapping
+//  and steering stay predictable gestures.
 //
 
 import SwiftUI

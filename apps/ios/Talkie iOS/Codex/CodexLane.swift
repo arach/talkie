@@ -7,9 +7,7 @@
 //  A lane is a stable numbered slot bound to ONE exact Codex Desktop task —
 //  not a repository, not the frontmost window. The whole point of the lane is
 //  that the user knows precisely which conversation will receive the next
-//  instruction, so every type here keeps the exact task ID as the identity and
-//  treats "we could not confirm it" as a first-class state rather than a
-//  cosmetic detail.
+//  instruction, so every type here keeps the exact task ID as the identity.
 //
 
 import Foundation
@@ -149,13 +147,11 @@ enum CodexTurnDelivery: String, Codable, Equatable, Sendable {
 
 /// A numbered deck lane bound to one exact Codex task.
 ///
-/// `task` is the assignment the user made; it persists across launches and
-/// disconnects. Whether that assignment is currently *trustworthy* is tracked
-/// separately by the store, because a stored binding says nothing about whether
-/// Codex Desktop still owns the task right now.
+/// `task` is the assignment the user made and persists across launches and
+/// disconnects.
 struct CodexLane: Codable, Equatable, Identifiable, Sendable {
     /// Six bindings power the lid's lane picker and the current physical lane
-    /// shortcuts. Selection and mapping remain separate from task ownership.
+    /// shortcuts.
     static let range = 1...6
 
     let number: Int
@@ -196,8 +192,6 @@ struct CodexLaneVoiceOverride: Codable, Equatable, Sendable {
 /// after a dropped turn is the failure mode this enum exists to prevent.
 enum CodexLanePhase: Equatable, Sendable {
     case idle
-    /// Confirming Codex Desktop still owns the exact task before claiming a lock.
-    case validating
     case listening
     case transcribing
     /// Instruction sent; waiting for the Codex turn to complete.
@@ -209,7 +203,6 @@ enum CodexLanePhase: Equatable, Sendable {
     var label: String {
         switch self {
         case .idle: return "Ready"
-        case .validating: return "Validating"
         case .listening: return "Listening"
         case .transcribing: return "Transcribing"
         case .submitting: return "Waiting for Codex"
@@ -222,7 +215,7 @@ enum CodexLanePhase: Equatable, Sendable {
     var isBusy: Bool {
         switch self {
         case .idle, .failed: return false
-        case .validating, .listening, .transcribing, .submitting, .preparingSpeech, .speaking: return true
+        case .listening, .transcribing, .submitting, .preparingSpeech, .speaking: return true
         }
     }
 
@@ -275,8 +268,7 @@ struct CodexTurnRecord: Identifiable, Equatable, Sendable {
     }
 }
 
-/// Why a lane is not currently locked. Carries the Mac's recovery hint so the
-/// deck explains the fix instead of only reporting the symptom.
+/// A failed task delivery with optional recovery guidance from the Mac.
 struct CodexLaneFailure: Equatable, Sendable {
     let message: String
     let hint: String?

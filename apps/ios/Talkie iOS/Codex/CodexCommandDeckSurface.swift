@@ -4,13 +4,13 @@
 //
 //  THESIS: This is an exact-task instrument, not a generic remote-control grid.
 //  OWN WORLD: Paper chassis, recessed graphite console, amber signal traces,
-//  raised cream keycaps, green ownership confirmation, and red closed failures.
-//  STORY: Pick one known task in the console lid, confirm ownership, speak, see where the turn went,
+//  raised cream keycaps, amber lane signals, and red closed failures.
+//  STORY: Pick one known task in the console lid, speak, see where the turn went,
 //  then read or hear the answer without returning to the Mac.
 //  FIRST VIEWPORT: Live console above a navigation-only 3×4. The lid owns lane
 //  selection while the fixed bottom rail owns push-to-talk and in-turn delivery.
 //  FORM: Extends Talkie's established Scope instrument language and existing
-//  bridge behavior. Nothing shown as live or locked is inferred locally.
+//  bridge behavior. A lane is a direct destination, not a separate claim.
 //
 
 import SwiftUI
@@ -65,13 +65,7 @@ struct CodexCommandDeckSurface: View {
                 outputDial(index: 1)
                 actionKey(index: 2, label: "Mapper", icon: "rectangle.3.group", action: openMapper)
                 actionKey(index: 3, label: "Status", icon: "rectangle.inset.filled", action: { showingStatus = true })
-                actionKey(
-                    index: 4,
-                    label: "Revalidate",
-                    icon: "arrow.clockwise",
-                    isEnabled: store.activeLaneNumber != nil,
-                    action: store.revalidateActiveLane
-                )
+                openSocket(index: 4)
             }
             .frame(maxHeight: .infinity)
 
@@ -397,7 +391,6 @@ private struct CodexCommandConsole: View {
     private func lanePickerButton(_ number: Int) -> some View {
         let lane = store.lane(number)
         let isActive = store.activeLaneNumber == number
-        let isLocked = store.isLocked(number)
         let isEnabled = !store.isTurnInFlight && !store.phase.isCapturing
 
         return Button {
@@ -412,7 +405,7 @@ private struct CodexCommandConsole: View {
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
 
                 Circle()
-                    .fill(laneStatusColor(lane: lane, isLocked: isLocked))
+                    .fill(laneStatusColor(lane: lane, isActive: isActive))
                     .frame(width: 5, height: 5)
             }
             .foregroundStyle(isActive ? theme.chrome.panelInk : theme.chrome.panelInkFaint)
@@ -423,8 +416,8 @@ private struct CodexCommandConsole: View {
         .buttonStyle(.plain)
         .disabled(!isEnabled)
         .opacity(isEnabled ? 1 : 0.56)
-        .accessibilityLabel(lanePickerAccessibilityLabel(number: number, lane: lane, isLocked: isLocked))
-        .accessibilityHint(lane == nil ? "Opens the task mapper" : "Selects and validates this exact Codex task")
+        .accessibilityLabel(lanePickerAccessibilityLabel(number: number, lane: lane, isActive: isActive))
+        .accessibilityHint(lane == nil ? "Opens the task mapper" : "Selects this exact Codex task")
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 
@@ -450,18 +443,18 @@ private struct CodexCommandConsole: View {
             .shadow(color: Color.black.opacity(0.12), radius: 3, y: 2)
     }
 
-    private func laneStatusColor(lane: CodexLane?, isLocked: Bool) -> Color {
+    private func laneStatusColor(lane: CodexLane?, isActive: Bool) -> Color {
         guard lane != nil else { return theme.chrome.panelInkFaint.opacity(0.30) }
-        return isLocked ? theme.colors.success : theme.chrome.panelAccent.opacity(0.78)
+        return theme.chrome.panelAccent.opacity(isActive ? 1 : 0.62)
     }
 
     private func lanePickerAccessibilityLabel(
         number: Int,
         lane: CodexLane?,
-        isLocked: Bool
+        isActive: Bool
     ) -> String {
         guard let lane else { return "Lane \(number), empty" }
-        return "Lane \(number), \(lane.task.title), \(isLocked ? "ownership confirmed" : "mapped")"
+        return "Lane \(number), \(lane.task.title), \(isActive ? "selected" : "mapped")"
     }
 
     private var consoleHeader: some View {
@@ -510,7 +503,7 @@ private struct CodexCommandConsole: View {
                 if let lane = store.activeLane {
                     Text(lane.number < 10 ? "LANE 0\(lane.number)" : "LANE \(lane.number)")
                         .foregroundStyle(theme.chrome.panelAccent)
-                    ownershipBadge(isLocked: store.isLocked(lane.number))
+                    mappingBadge
                 } else {
                     Text("NO ACTIVE TASK")
                         .foregroundStyle(theme.chrome.panelAccent)
@@ -547,23 +540,23 @@ private struct CodexCommandConsole: View {
     }
 
     @ViewBuilder
-    private func ownershipBadge(isLocked: Bool) -> some View {
+    private var mappingBadge: some View {
         HStack(spacing: 4) {
             Circle()
-                .fill(isLocked ? theme.colors.success : theme.chrome.panelAccent)
+                .fill(theme.chrome.panelAccent)
                 .frame(width: 4, height: 4)
-            Text(isLocked ? "OWNERSHIP CONFIRMED" : "REVALIDATION REQUIRED")
+            Text("SELECTED")
         }
-        .foregroundStyle(isLocked ? theme.colors.success : theme.chrome.panelAccent)
+        .foregroundStyle(theme.chrome.panelAccent)
         .padding(.horizontal, 6)
         .padding(.vertical, 2)
         .background(
             Capsule()
-                .fill((isLocked ? theme.colors.success : theme.chrome.panelAccent).opacity(0.10))
+                .fill(theme.chrome.panelAccent.opacity(0.10))
         )
         .overlay(
             Capsule()
-                .stroke((isLocked ? theme.colors.success : theme.chrome.panelAccent).opacity(0.35), lineWidth: 0.5)
+                .stroke(theme.chrome.panelAccent.opacity(0.35), lineWidth: 0.5)
         )
     }
 
@@ -577,10 +570,10 @@ private struct CodexCommandConsole: View {
                 Text(turn.response)
                     .foregroundStyle(theme.chrome.panelInk.opacity(0.82))
             } else if store.activeLane != nil {
-                Text("Hold to talk. Talkie will send only to the confirmed task above.")
+                Text("Hold to talk. Talkie sends directly to the selected task.")
                     .foregroundStyle(theme.chrome.panelInkFaint)
             } else {
-                Text("Pick a lane above to confirm exact task ownership on your Mac.")
+                Text("Pick a lane above, or open Mapper to choose an exact task.")
                     .foregroundStyle(theme.chrome.panelInkFaint)
             }
         }
@@ -592,11 +585,9 @@ private struct CodexCommandConsole: View {
     private var phaseColor: Color {
         switch store.phase {
         case .failed: return Color(red: 0.92, green: 0.42, blue: 0.30)
-        case .idle:
-            if let number = store.activeLaneNumber, store.isLocked(number) {
-                return theme.colors.success
-            }
-            return theme.chrome.panelInkFaint
+        case .idle: return store.activeLaneNumber == nil
+            ? theme.chrome.panelInkFaint
+            : theme.chrome.panelAccent
         default: return theme.chrome.panelAccent
         }
     }
@@ -690,8 +681,7 @@ private struct CodexCommandConsole: View {
         guard let lane = store.activeLane else {
             return "No active Codex task. Choose a lane or open the mapper."
         }
-        let ownership = store.isLocked(lane.number) ? "ownership confirmed" : "revalidation required"
-        return "Lane \(lane.number), \(lane.task.projectName), \(lane.task.title), \(ownership)"
+        return "Lane \(lane.number), \(lane.task.projectName), \(lane.task.title), selected"
     }
 }
 
@@ -896,7 +886,7 @@ private struct CodexCaptureRail: View {
         case .listening: return "arrow.up"
         case .speaking: return "waveform"
         case .submitting where store.isTurnInFlight: return "mic"
-        case .validating, .transcribing, .submitting, .preparingSpeech: return "ellipsis"
+        case .transcribing, .submitting, .preparingSpeech: return "ellipsis"
         case .idle, .failed: return "mic"
         }
     }
@@ -932,7 +922,6 @@ private struct CodexDeckStatusSheet: View {
                             LabeledContent("Lane", value: "\(lane.number)")
                             LabeledContent("Task", value: lane.task.title)
                             LabeledContent("Project", value: lane.task.projectName)
-                            LabeledContent("Ownership", value: store.isLocked(lane.number) ? "Confirmed" : "Revalidation required")
                         } else {
                             Text("No lane is active.")
                                 .foregroundStyle(theme.colors.textTertiary)

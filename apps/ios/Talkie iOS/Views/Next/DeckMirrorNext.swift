@@ -159,14 +159,6 @@ struct DeckMirrorNext: View {
             guard selectedSpaceID == nil else { return }
             selectedSpaceID = board?.activeSpaceID ?? board?.spaces.first?.id
         }
-        .onChange(of: bridgeManager.status) { _, status in
-            // Losing the Mac must drop any live lock claim. The lane bindings
-            // survive — only the "this task is locked right now" assertion goes
-            // away, and it has to be re-earned by revalidating.
-            if status != .connected {
-                CodexLaneStore.shared.noteBridgeUnavailable()
-            }
-        }
         .onChange(of: imageSharePickerItem) { _, item in
             guard let item else { return }
             Task { await shareImagePickerItem(item) }

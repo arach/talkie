@@ -66,8 +66,6 @@ struct CodexLaneBar: View {
 
     private func laneChip(_ lane: CodexLane) -> some View {
         let isActive = store.activeLaneNumber == lane.number
-        let isLocked = store.isLocked(lane.number)
-
         return Button {
             Task { await store.activate(lane.number) }
         } label: {
@@ -76,32 +74,25 @@ struct CodexLaneBar: View {
                 .frame(width: 28, height: 28)
                 .background(
                     RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(isLocked
+                        .fill(isActive
                               ? theme.colors.accent.opacity(0.20)
                               : theme.colors.cardBackground)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 7, style: .continuous)
                         .strokeBorder(
-                            isLocked ? theme.colors.accent
-                                : (isActive ? theme.colors.textTertiary : theme.colors.tableBorder),
-                            // A dashed edge is the visual form of "selected but
-                            // not confirmed" — the deck must never draw an
-                            // unvalidated lane the same as a locked one.
-                            style: StrokeStyle(
-                                lineWidth: isActive ? 1.5 : 1,
-                                dash: (isActive && !isLocked) ? [3, 2] : []
-                            )
+                            isActive ? theme.colors.accent : theme.colors.tableBorder,
+                            lineWidth: isActive ? 1.5 : 1
                         )
                 )
-                .foregroundStyle(isLocked ? theme.colors.accent : theme.colors.textSecondary)
+                .foregroundStyle(isActive ? theme.colors.accent : theme.colors.textSecondary)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(accessibilityLabel(for: lane, isActive: isActive, isLocked: isLocked))
+        .accessibilityLabel(accessibilityLabel(for: lane, isActive: isActive))
     }
 
-    private func accessibilityLabel(for lane: CodexLane, isActive: Bool, isLocked: Bool) -> String {
-        let state = isLocked ? "locked" : (isActive ? "selected, not confirmed" : "mapped")
+    private func accessibilityLabel(for lane: CodexLane, isActive: Bool) -> String {
+        let state = isActive ? "selected" : "mapped"
         return "Lane \(lane.number), \(lane.task.title), \(state)"
     }
 
@@ -134,7 +125,7 @@ struct CodexLaneBar: View {
         switch store.phase {
         case .listening: return "stop.fill"
         case .speaking: return "waveform"
-        case .validating, .transcribing, .submitting, .preparingSpeech: return "ellipsis"
+        case .transcribing, .submitting, .preparingSpeech: return "ellipsis"
         case .idle, .failed: return "mic.fill"
         }
     }
@@ -176,9 +167,7 @@ struct CodexLaneBar: View {
                 Text("·")
                     .font(.system(size: 10))
                     .foregroundStyle(theme.colors.textTertiary)
-                Text(store.isLocked(lane.number)
-                     ? "\(lane.task.projectName) — \(lane.task.title)"
-                     : "Confirming \(lane.task.title)…")
+                Text("\(lane.task.projectName) — \(lane.task.title)")
                     .font(.system(size: 10))
                     .foregroundStyle(theme.colors.textTertiary)
                     .lineLimit(1)
