@@ -43,30 +43,34 @@ function fail(message, code = 'bridge-failed') {
 
 function listTasks(limit) {
   const database = path.join(codexHome(), 'state_5.sqlite');
-  const catalogDatabase = path.join(codexHome(), 'sqlite', 'codex-dev.db');
-  if (!fs.existsSync(database) || !fs.existsSync(catalogDatabase)) {
+  if (!fs.existsSync(database)) {
     fail('Codex task catalog is unavailable.', 'catalog-unavailable');
   }
   const boundedLimit = Math.max(1, Math.min(Number(limit) || 50, 100));
-  const escapedCatalogDatabase = catalogDatabase.replaceAll("'", "''");
   const query = `
-    ATTACH DATABASE '${escapedCatalogDatabase}' AS desktop_catalog;
     SELECT
       state.id AS id,
       COALESCE(
-        NULLIF(catalog.display_title, ''),
-        NULLIF(state.name, ''),
+        NULLIF(SUBSTR(REPLACE(state.name, CHAR(10), ' '), 1, 120), ''),
+        NULLIF(SUBSTR(REPLACE(state.title, CHAR(10), ' '), 1, 120), ''),
+        NULLIF(SUBSTR(REPLACE(state.first_user_message, CHAR(10), ' '), 1, 96), ''),
         NULLIF(SUBSTR(REPLACE(state.preview, CHAR(10), ' '), 1, 96), ''),
         'Untitled task'
       ) AS title,
-      COALESCE(state.preview, '') AS preview,
+      SUBSTR(REPLACE(COALESCE(state.preview, ''), CHAR(10), ' '), 1, 280) AS preview,
       state.cwd AS cwd,
+      state.git_branch AS gitBranch,
+      state.git_origin_url AS gitOriginURL,
       CASE WHEN state.updated_at_ms > 0 THEN state.updated_at_ms / 1000.0 ELSE state.updated_at END AS updatedAt
     FROM threads AS state
-    LEFT JOIN desktop_catalog.local_thread_catalog AS catalog
-      ON catalog.host_id = 'local' AND catalog.thread_id = state.id AND catalog.missing_candidate = 0
     WHERE
       state.archived = 0
+      AND COALESCE(state.preview, '') <> ''
+      AND COALESCE(state.agent_role, '') <> 'subagent'
+      AND COALESCE(state.thread_source, 'user') IN ('', 'user')
+      AND COALESCE(state.first_user_message, '') NOT LIKE '<codex_delegation>%'
+      AND COALESCE(state.first_user_message, '') NOT LIKE '<realtime_delegation>%'
+      AND COALESCE(state.first_user_message, '') NOT LIKE '[Base]%'
     ORDER BY state.recency_at_ms DESC, state.updated_at_ms DESC
     LIMIT ${boundedLimit};
   `;
@@ -74,7 +78,20 @@ function listTasks(limit) {
     encoding: 'utf8',
     maxBuffer: 8 * 1024 * 1024,
   });
-  return JSON.parse(output || '[]');
+  return JSON.parse(output || '[]').map((task) => ({
+    ...task,
+    project: projectName(task.gitOriginURL, task.cwd),
+  }));
+}
+
+/** A stable, human project label. Git origin wins over generated worktree names. */
+function projectName(gitOriginURL, cwd) {
+  if (typeof gitOriginURL === 'string' && gitOriginURL.trim()) {
+    const withoutSuffix = gitOriginURL.trim().replace(/\/+$/, '').replace(/\.git$/, '');
+    const repository = withoutSuffix.split(/[/:]/).pop();
+    if (repository) return repository;
+  }
+  return path.basename(cwd || '') || cwd || 'Unknown project';
 }
 
 function assertPrivateCodexSocket(socketPath) {
@@ -769,11 +786,15 @@ async function main() {
   );
 }
 
-main().catch((error) => {
-  writeResult({
-    ok: false,
-    code: error?.code || 'bridge-failed',
-    error: error instanceof Error ? error.message : String(error),
+if (require.main === module) {
+  main().catch((error) => {
+    writeResult({
+      ok: false,
+      code: error?.code || 'bridge-failed',
+      error: error instanceof Error ? error.message : String(error),
+    });
+    process.exitCode = 1;
   });
-  process.exitCode = 1;
-});
+}
+
+module.exports = { listTasks, projectName };

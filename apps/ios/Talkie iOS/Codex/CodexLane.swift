@@ -38,16 +38,60 @@ struct CodexTaskSummary: Identifiable, Codable, Equatable, Sendable {
     let title: String
     let preview: String
     let cwd: String
+    let project: String?
+    let gitBranch: String?
+    let gitOriginURL: String?
     /// Seconds since epoch, as reported by the Mac-side adapter.
     let updatedAt: Double
+
+    init(
+        id: String,
+        title: String,
+        preview: String,
+        cwd: String,
+        project: String? = nil,
+        gitBranch: String? = nil,
+        gitOriginURL: String? = nil,
+        updatedAt: Double
+    ) {
+        self.id = id
+        self.title = title
+        self.preview = preview
+        self.cwd = cwd
+        self.project = project
+        self.gitBranch = gitBranch
+        self.gitOriginURL = gitOriginURL
+        self.updatedAt = updatedAt
+    }
 
     var updatedDate: Date { Date(timeIntervalSince1970: updatedAt) }
 
     /// Last path component of the working directory — the label a developer
     /// actually recognizes when two tasks share a title.
     var projectName: String {
+        if let project = project?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !project.isEmpty {
+            return project
+        }
         let name = URL(fileURLWithPath: cwd).lastPathComponent
         return name.isEmpty ? cwd : name
+    }
+
+    var compactPath: String {
+        let home = URL.homeDirectory.path
+        if cwd == home { return "~" }
+        if cwd.hasPrefix("\(home)/") {
+            return "~\(cwd.dropFirst(home.count))"
+        }
+        return cwd
+    }
+
+    var shortID: String { String(id.suffix(8)) }
+
+    var branchName: String? {
+        guard let branch = gitBranch?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !branch.isEmpty else { return nil }
+        return branch
     }
 
     /// Matches when every whitespace-separated term appears somewhere in the
@@ -61,7 +105,7 @@ struct CodexTaskSummary: Identifiable, Codable, Equatable, Sendable {
             .map(String.init)
         guard !terms.isEmpty else { return true }
 
-        let haystack = [title, preview, cwd, id]
+        let haystack = [title, preview, projectName, cwd, gitBranch ?? "", gitOriginURL ?? "", id]
             .joined(separator: "\n")
             .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
         return terms.allSatisfy(haystack.contains)

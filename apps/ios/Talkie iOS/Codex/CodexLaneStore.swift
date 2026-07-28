@@ -684,6 +684,9 @@ final class CodexLaneStore: ObservableObject {
             title: (title?.isEmpty == false) ? title! : lane.task.title,
             preview: lane.task.preview,
             cwd: (cwd?.isEmpty == false) ? cwd! : lane.task.cwd,
+            project: lane.task.project,
+            gitBranch: lane.task.gitBranch,
+            gitOriginURL: lane.task.gitOriginURL,
             updatedAt: lane.task.updatedAt
         )
         lanes[number] = lane

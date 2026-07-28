@@ -41,7 +41,7 @@ struct CodexLaneMapperView: View {
                     Button("Done") { dismiss() }
                 }
             }
-            .searchable(text: $store.searchQuery, prompt: "Search tasks, projects, IDs")
+            .searchable(text: $store.searchQuery, prompt: "Search names, paths, branches, IDs")
         }
         .task {
             targetLane = store.unassignedLaneNumbers.first ?? CodexLane.range.lowerBound
@@ -69,21 +69,30 @@ struct CodexLaneMapperView: View {
             }
 
             if let lane = store.lane(targetLane) {
-                HStack(spacing: 6) {
-                    Text(lane.task.title)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(theme.colors.textSecondary)
-                        .lineLimit(1)
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(lane.task.title)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(theme.colors.textPrimary)
+                            .lineLimit(1)
+
+                        Text(lane.task.branchName.map { "\(lane.task.projectName) · \($0)" }
+                             ?? lane.task.projectName)
+                            .font(.caption)
+                            .foregroundStyle(theme.colors.textSecondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
 
                     Spacer(minLength: 8)
 
                     Button("Clear") { store.clearLane(targetLane) }
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.subheadline.weight(.medium))
                         .foregroundStyle(theme.colors.accent)
                 }
             } else {
-                Text("Lane \(targetLane) is empty — pick a task below.")
-                    .font(.system(size: 12))
+                Text("Lane \(targetLane) is empty — choose a conversation below.")
+                    .font(.caption)
                     .foregroundStyle(theme.colors.textTertiary)
             }
 
@@ -141,7 +150,7 @@ struct CodexLaneMapperView: View {
                     ProgressView()
                 } else {
                     Text(emptyMessage)
-                        .font(.system(size: 13))
+                        .font(.subheadline)
                         .foregroundStyle(theme.colors.textTertiary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
@@ -151,9 +160,14 @@ struct CodexLaneMapperView: View {
             .frame(maxWidth: .infinity)
         } else {
             List {
-                ForEach(tasks) { task in
-                    taskRow(task)
-                        .listRowBackground(theme.colors.background)
+                Section {
+                    ForEach(tasks) { task in
+                        taskRow(task)
+                            .listRowBackground(theme.colors.background)
+                    }
+                } header: {
+                    Text("Recent user conversations")
+                        .foregroundStyle(theme.colors.textSecondary)
                 }
             }
             .listStyle(.plain)
@@ -183,12 +197,12 @@ struct CodexLaneMapperView: View {
                 targetLane = next
             }
         } label: {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(task.title)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.headline)
                         .foregroundStyle(theme.colors.textPrimary)
-                        .lineLimit(1)
+                        .lineLimit(2)
 
                     Spacer(minLength: 6)
 
@@ -204,22 +218,43 @@ struct CodexLaneMapperView: View {
                     }
 
                     Text(task.activityLabel(relativeTo: now))
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.caption.monospacedDigit())
                         .foregroundStyle(theme.colors.textTertiary)
                 }
 
-                Text(task.projectName)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(theme.colors.textSecondary)
+                HStack(spacing: 12) {
+                    Label(task.projectName, systemImage: "folder")
 
-                if !task.preview.isEmpty {
+                    if let branch = task.branchName {
+                        Label(branch, systemImage: "arrow.triangle.branch")
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(theme.colors.textSecondary)
+
+                HStack(spacing: 8) {
+                    Text(task.compactPath)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+
+                    Spacer(minLength: 4)
+
+                    Text("Task \(task.shortID)")
+                        .monospaced()
+                }
+                .font(.caption)
+                .foregroundStyle(theme.colors.textTertiary)
+
+                if !task.preview.isEmpty && task.preview != task.title {
                     Text(task.preview)
-                        .font(.system(size: 11))
+                        .font(.caption)
                         .foregroundStyle(theme.colors.textTertiary)
-                        .lineLimit(2)
+                        .lineLimit(1)
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, 7)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

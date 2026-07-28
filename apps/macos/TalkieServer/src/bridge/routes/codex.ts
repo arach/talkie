@@ -30,6 +30,9 @@ export interface CodexTaskSummary {
   title: string;
   preview: string;
   cwd: string;
+  project: string;
+  gitBranch?: string | null;
+  gitOriginURL?: string | null;
   /** Seconds since epoch, matching the adapter's rollout timestamps. */
   updatedAt: number;
 }
