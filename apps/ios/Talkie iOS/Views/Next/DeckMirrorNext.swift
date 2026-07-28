@@ -32,6 +32,7 @@ enum DeckTreatment: String, CaseIterable {
 struct DeckMirrorNext: View {
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var deck = DeckMirrorStore.shared
+    @ObservedObject private var codexLanes = CodexLaneStore.shared
     @ObservedObject private var reachability = NetworkReachability.shared
     @State private var bridgeManager = BridgeManager.shared
     @State private var selectedSpaceID: String?
@@ -150,6 +151,7 @@ struct DeckMirrorNext: View {
                 selectedSpaceID = deck.board?.activeSpaceID ?? deck.board?.spaces.first?.id
             }
             bridgeManager.setCompanionDeckVisible(true)
+            codexLanes.reloadForActiveHost()
             warmDeckConnection()
         }
         .onDisappear {
@@ -158,6 +160,9 @@ struct DeckMirrorNext: View {
         .onChange(of: deck.board) { _, board in
             guard selectedSpaceID == nil else { return }
             selectedSpaceID = board?.activeSpaceID ?? board?.spaces.first?.id
+        }
+        .onChange(of: bridgeManager.activePairedMacID) {
+            codexLanes.reloadForActiveHost()
         }
         .onChange(of: imageSharePickerItem) { _, item in
             guard let item else { return }
@@ -195,8 +200,8 @@ struct DeckMirrorNext: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 8) {
-            Text("TALKIE · DECK")
+        HStack(spacing: 10) {
+            Text("TALKIE")
                 .talkieType(.wordmark)
                 .foregroundStyle(theme.colors.textPrimary.opacity(0.78))
                 .contentShape(Rectangle())
@@ -204,60 +209,144 @@ struct DeckMirrorNext: View {
                 // are reviewable without a settings screen.
                 .onTapGesture { treatmentRaw = treatment.next.rawValue }
 
-            Text(treatment.label)
-                .talkieType(.channelLabelTiny)
-                .foregroundStyle(theme.colors.textTertiary.opacity(0.7))
+            deckMenu
 
-            Button {
-                showingDeckSurfacePicker = true
-            } label: {
-                HStack(spacing: 4) {
-                    Text(selectedSurfaceTitle)
-                        .talkieType(.channelLabelTiny)
-                        .lineLimit(1)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 7, weight: .semibold))
-                }
-                .foregroundStyle(
-                    showingCodexDeck
-                        ? theme.chrome.accent
-                        : theme.colors.textTertiary.opacity(0.78)
-                )
-                .padding(.horizontal, 7)
-                .padding(.vertical, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .fill(showingCodexDeck ? theme.chrome.accentTint : Color.clear)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .stroke(
-                            showingCodexDeck ? theme.chrome.accent.opacity(0.35) : theme.chrome.edgeFaint,
-                            lineWidth: theme.chrome.hairlineWidth
-                        )
-                )
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Choose deck space")
+            Spacer(minLength: 0)
 
-            Spacer()
+            hostMenu
 
             Button(action: { AppShellRouter.shared.openHome() }) {
                 Image(systemName: "xmark")
                     .font(.system(size: 13))
                     .foregroundStyle(theme.colors.textTertiary)
-                    .frame(width: 28, height: 28)
+                    .frame(width: 44, height: 44)
                     .background(
                         Circle()
                             .fill(theme.currentTheme.chrome.edgeFaint.opacity(0.5))
+                            .frame(width: 28, height: 28)
                     )
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Close deck")
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 16)
-        .padding(.bottom, 8)
+        .padding(.leading, 20)
+        .padding(.trailing, 8)
+        .padding(.top, 10)
+        .padding(.bottom, 6)
+    }
+
+    private var deckMenu: some View {
+        Menu {
+            Button {
+                showingCodexDeck = true
+            } label: {
+                Label("Codex", systemImage: showingCodexDeck ? "checkmark" : "terminal")
+            }
+
+            if let spaces = deck.board?.spaces, !spaces.isEmpty {
+                Divider()
+
+                ForEach(spaces) { space in
+                    Button {
+                        selectedSpaceID = space.id
+                        showingCodexDeck = false
+                    } label: {
+                        Label(
+                            space.title,
+                            systemImage: !showingCodexDeck && selectedSpaceID == space.id
+                                ? "checkmark"
+                                : "square.grid.2x2"
+                        )
+                    }
+                }
+            }
+        } label: {
+            headerSelectorLabel(
+                eyebrow: "DECK",
+                title: selectedSurfaceTitle,
+                icon: showingCodexDeck ? "terminal" : "square.grid.2x2",
+                tint: showingCodexDeck ? theme.chrome.accent : theme.colors.textSecondary
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Deck, \(selectedSurfaceTitle)")
+        .accessibilityHint("Choose Codex or another deck on this Mac")
+    }
+
+    private var hostMenu: some View {
+        Menu {
+            if bridgeManager.pairedMacs.isEmpty {
+                Button("Pair a Mac", systemImage: "plus") {
+                    AppShellRouter.shared.openBridgeDetail()
+                }
+            } else {
+                ForEach(bridgeManager.pairedMacs) { mac in
+                    Button {
+                        selectPairedMac(mac)
+                    } label: {
+                        Label(
+                            pairedMacTitle(mac),
+                            systemImage: bridgeManager.activePairedMacID == mac.id
+                                ? "checkmark"
+                                : "desktopcomputer"
+                        )
+                    }
+                    .disabled(switchingPairedMacID != nil || codexLanes.isTurnInFlight)
+                }
+
+                Divider()
+
+                Button("Manage Macs", systemImage: "gearshape") {
+                    AppShellRouter.shared.openBridgeDetail()
+                }
+            }
+        } label: {
+            headerSelectorLabel(
+                eyebrow: switchingPairedMacID == nil ? "HOST" : "CONNECTING",
+                title: activeHostTitle,
+                icon: "desktopcomputer",
+                tint: bridgeManager.status == .connected
+                    ? theme.chrome.accent
+                    : theme.colors.textSecondary
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Host, \(activeHostTitle)")
+        .accessibilityHint(
+            codexLanes.isTurnInFlight
+                ? "Wait for the active Codex turn before changing Macs"
+                : "Choose which Mac this deck controls"
+        )
+    }
+
+    private func headerSelectorLabel(
+        eyebrow: String,
+        title: String,
+        icon: String,
+        tint: Color
+    ) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .medium))
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(eyebrow)
+                    .font(.system(size: 7, weight: .medium, design: .monospaced))
+                    .tracking(1)
+                    .foregroundStyle(theme.colors.textTertiary.opacity(0.72))
+                Text(title)
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .tracking(0.65)
+                    .lineLimit(1)
+            }
+
+            Image(systemName: "chevron.down")
+                .font(.system(size: 7, weight: .semibold))
+                .foregroundStyle(theme.colors.textTertiary.opacity(0.72))
+        }
+        .foregroundStyle(tint)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
     }
 
     // MARK: - Board
@@ -455,6 +544,19 @@ struct DeckMirrorNext: View {
         guard let board = deck.board,
               let space = currentSpace(in: board) else { return "DECK" }
         return space.title.uppercased()
+    }
+
+    private var activeHostTitle: String {
+        let fallback = bridgeManager.activePairedMac.map(pairedMacTitle) ?? "PAIR MAC"
+        return (bridgeManager.pairedMacDisplayName ?? fallback).uppercased()
+    }
+
+    private func pairedMacTitle(_ mac: BridgeManager.PairedMac) -> String {
+        let name = mac.pairedMacName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !name.isEmpty { return name }
+
+        let host = mac.hostname.trimmingCharacters(in: .whitespacesAndNewlines)
+        return host.isEmpty ? "Mac" : host
     }
 
     private func deckSpaceSwipeGesture(for board: DeckBoardSnapshot) -> some Gesture {
@@ -948,6 +1050,7 @@ struct DeckMirrorNext: View {
 
     private func selectPairedMac(_ mac: BridgeManager.PairedMac) {
         guard switchingPairedMacID == nil else { return }
+        guard !codexLanes.isTurnInFlight else { return }
         guard bridgeManager.activePairedMacID != mac.id else {
             showingPairedMacSwitcher = false
             return
@@ -958,6 +1061,7 @@ struct DeckMirrorNext: View {
 
         Task {
             await bridgeManager.activatePairedMac(id: mac.id)
+            codexLanes.reloadForActiveHost()
             await bridgeManager.refreshCompanionState()
             switchingPairedMacID = nil
             showingPairedMacSwitcher = false

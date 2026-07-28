@@ -28,10 +28,9 @@ struct CodexCommandDeckSurface: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 8) {
             CodexCommandConsole(onShowMapper: openMapper)
-                .frame(height: store.activeLaneIsInFlight ? 318 : 274)
-                .animation(.easeInOut(duration: 0.22), value: store.activeLaneIsInFlight)
+                .frame(height: 300)
 
             keybed
                 .layoutPriority(60)
@@ -58,26 +57,26 @@ struct CodexCommandDeckSurface: View {
     private var keybed: some View {
         Grid(horizontalSpacing: 8, verticalSpacing: 8) {
             GridRow {
-                outputDial(index: 1)
+                audioKey(index: 1)
                 actionKey(index: 2, label: "Mapper", icon: "rectangle.3.group", action: openMapper)
-                actionKey(index: 3, label: "Status", icon: "rectangle.inset.filled", action: { showingStatus = true })
                 actionKey(
-                    index: 4,
-                    label: "Refresh",
-                    icon: "arrow.clockwise",
-                    isEnabled: !store.isLoadingCatalog,
-                    action: { Task { await store.refreshCatalog() } }
-                )
-            }
-
-            GridRow {
-                actionKey(
-                    index: 5,
+                    index: 3,
                     label: "History",
                     icon: "clock.arrow.circlepath",
                     isEnabled: !store.history.isEmpty,
                     action: { showingHistory = true }
                 )
+                actionKey(
+                    index: 4,
+                    label: "Stop",
+                    icon: "stop.fill",
+                    isEnabled: store.phase == .speaking || store.phase == .preparingSpeech,
+                    action: store.interruptNarration
+                )
+            }
+
+            GridRow {
+                actionKey(index: 5, label: "Status", icon: "rectangle.inset.filled", action: { showingStatus = true })
                 actionKey(index: 6, label: "Spaces", icon: "square.grid.2x2", action: onShowSpaces)
                 actionKey(
                     index: 7,
@@ -96,15 +95,15 @@ struct CodexCommandDeckSurface: View {
             }
 
             GridRow {
-                openSocket(index: 9)
-                openSocket(index: 10)
+                modeKey(index: 9)
                 actionKey(
-                    index: 11,
-                    label: "Stop",
-                    icon: "stop.fill",
-                    isEnabled: store.phase == .speaking || store.phase == .preparingSpeech,
-                    action: store.interruptNarration
+                    index: 10,
+                    label: "Refresh",
+                    icon: "arrow.clockwise",
+                    isEnabled: !store.isLoadingCatalog,
+                    action: { Task { await store.refreshCatalog() } }
                 )
+                openSocket(index: 11)
                 openSocket(index: 12)
             }
 
@@ -157,38 +156,33 @@ struct CodexCommandDeckSurface: View {
 
     private var captureKey: some View {
         Button(action: {}) {
-            HStack(spacing: 10) {
-                ZStack {
-                    Circle()
-                        .fill(theme.colors.accent.opacity(store.phase.isCapturing ? 0.24 : 0.10))
-                    Circle()
-                        .stroke(theme.colors.accent.opacity(0.68), lineWidth: 1)
-                    Image(systemName: captureIcon)
-                        .font(.system(size: 14, weight: .semibold))
-                }
-                .frame(width: 38, height: 38)
+            VStack(spacing: 4) {
+                Spacer(minLength: 0)
 
-                VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 7) {
+                    Image(systemName: captureIcon)
+                        .font(.system(size: 12, weight: .semibold))
                     Text(captureTitle)
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .tracking(1.2)
                         .lineLimit(1)
                         .minimumScaleFactor(0.72)
-                    Text(captureSubtitle)
-                        .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                        .tracking(0.45)
-                        .foregroundStyle(utilityInkFaint)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.68)
                 }
+
+                Text(captureSubtitle)
+                    .font(.system(size: 7, weight: .semibold, design: .monospaced))
+                    .tracking(0.45)
+                    .foregroundStyle(theme.colors.accent.opacity(0.72))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.68)
 
                 Spacer(minLength: 0)
             }
             .foregroundStyle(theme.colors.accent)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 8)
             .padding(.vertical, 8)
-            .background(keycapSurface(active: store.phase.isCapturing, isEmpty: false))
+            .background(talkKeySurface)
             .overlay(alignment: .topLeading) { keyIndexLabel(index: 14) }
             .overlay(alignment: .topTrailing) { trailingKeyIndexLabel(index: 15) }
         }
@@ -271,48 +265,25 @@ struct CodexCommandDeckSurface: View {
         }
     }
 
-    private func outputDial(index: Int) -> some View {
+    private func audioKey(index: Int) -> some View {
         Button(action: cycleOutputRoute) {
-            VStack(spacing: 3) {
+            VStack(spacing: 6) {
                 Spacer(minLength: 0)
-                ZStack {
-                    ForEach(0..<9, id: \.self) { tick in
-                        Capsule()
-                            .fill(utilityInkFaint.opacity(0.40))
-                            .frame(width: 1, height: 4)
-                            .offset(y: -24)
-                            .rotationEffect(.degrees(Double(tick) * 30 - 120))
-                    }
+                Image(systemName: outputRouteIcon)
+                    .font(.system(size: 15, weight: .light))
+                    .frame(height: 18)
 
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [dialFace.opacity(0.88), dialFace],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .overlay(
-                            Circle()
-                                .stroke(Color.white.opacity(0.20), lineWidth: 1)
-                        )
-                        .shadow(color: Color.black.opacity(0.34), radius: 4, y: 3)
-
-                    Capsule()
-                        .fill(theme.chrome.panelAccent)
-                        .frame(width: 2, height: 12)
-                        .offset(y: -12)
-                        .rotationEffect(outputDialAngle)
-                        .talkieAccentGlow(radius: 3)
-                }
-                .frame(width: 52, height: 52)
-
-                Text("OUTPUT · \(outputRoute.shortLabel)")
+                Text("AUDIO")
                     .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .tracking(0.8)
+                    .tracking(1.1)
                     .foregroundStyle(utilityInk)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+
+                Text(outputRoute.shortLabel.uppercased())
+                    .font(.system(size: 7, weight: .medium, design: .monospaced))
+                    .tracking(0.55)
+                    .foregroundStyle(utilityInkFaint.opacity(0.72))
+                    .lineLimit(1)
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -329,17 +300,63 @@ struct CodexCommandDeckSurface: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func openSocket(index: Int) -> some View {
-        ZStack {
-            keycapSurface(active: false, isEmpty: true)
-            Image(systemName: "plus")
-                .font(.system(size: 16, weight: .ultraLight))
-                .foregroundStyle(utilityInkFaint.opacity(0.45))
+    private func modeKey(index: Int) -> some View {
+        let mode = store.activeLaneMessageMode
+        return Button(action: toggleMessageMode) {
+            VStack(alignment: .leading, spacing: 5) {
+                Spacer(minLength: 0)
+                Text("DELIVER")
+                    .font(.system(size: 7, weight: .medium, design: .monospaced))
+                    .tracking(0.8)
+                    .foregroundStyle(utilityInkFaint.opacity(0.72))
+                Text(mode.label.uppercased())
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .tracking(1.1)
+                    .foregroundStyle(theme.chrome.accent)
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(keycapSurface(active: true, isEmpty: false))
+            .overlay(alignment: .topLeading) { keyIndexLabel(index: index) }
         }
+        .buttonStyle(.plain)
+        .disabled(store.activeLane == nil)
+        .opacity(store.activeLane == nil ? 0.44 : 1)
+        .accessibilityLabel("Delivery mode, \(mode.label)")
+        .accessibilityHint("Switches this lane between steer and queue")
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func openSocket(index: Int) -> some View {
+        keycapSurface(active: false, isEmpty: true)
         .overlay(alignment: .topLeading) { keyIndexLabel(index: index) }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Open deck slot \(index)")
+        .accessibilityLabel("Empty deck slot \(index)")
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var talkKeySurface: some View {
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        return shape
+            .fill(theme.chrome.accent.opacity(store.phase.isCapturing ? 0.30 : 0.17))
+            .overlay {
+                shape.fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.10), .clear, Color.black.opacity(0.10)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+            }
+            .overlay {
+                shape.strokeBorder(
+                    theme.chrome.accent.opacity(store.phase.isCapturing ? 0.92 : 0.55),
+                    lineWidth: store.phase.isCapturing ? 1.5 : 1
+                )
+            }
+            .shadow(color: Color.black.opacity(0.28), radius: 7, y: 4)
     }
 
     private func keycapSurface(active: Bool, isEmpty: Bool) -> some View {
@@ -404,6 +421,14 @@ struct CodexCommandDeckSurface: View {
         AIResponseSpeechRoute(rawValue: appSettings.aiVoiceOutputRoute) ?? .phone
     }
 
+    private var outputRouteIcon: String {
+        switch outputRoute {
+        case .silent: return "speaker.slash"
+        case .phone: return "iphone"
+        case .watch: return "applewatch"
+        }
+    }
+
     private var utilityFace: Color {
         colorScheme == .dark
             ? theme.colors.cardBackground
@@ -428,20 +453,6 @@ struct CodexCommandDeckSurface: View {
             : Color(red: 0.42, green: 0.36, blue: 0.28)
     }
 
-    private var dialFace: Color {
-        colorScheme == .dark
-            ? Color(red: 0.30, green: 0.285, blue: 0.265)
-            : Color(red: 0.86, green: 0.825, blue: 0.76)
-    }
-
-    private var outputDialAngle: Angle {
-        switch outputRoute {
-        case .silent: return .degrees(-80)
-        case .phone: return .degrees(0)
-        case .watch: return .degrees(80)
-        }
-    }
-
     private func cycleOutputRoute() {
         let next: AIResponseSpeechRoute
         switch outputRoute {
@@ -450,6 +461,12 @@ struct CodexCommandDeckSurface: View {
         case .silent: next = .phone
         }
         appSettings.aiVoiceOutputRoute = next.rawValue
+    }
+
+    private func toggleMessageMode() {
+        guard let lane = store.activeLane else { return }
+        let next: CodexMessageMode = lane.preferredMessageMode == .queue ? .steer : .queue
+        store.setMessageMode(next, for: lane.number)
     }
 
     private func openMapper() {
@@ -468,64 +485,44 @@ private struct CodexCommandConsole: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            consoleHeader
-
-            VStack(alignment: .leading, spacing: 8) {
-                if dynamicTypeSize.isAccessibilitySize {
-                    accessibilityLaneTransport
-                    accessibilityTaskIdentity
-                } else {
-                    lanePicker
-                    taskIdentity
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.top, 9)
-            .padding(.bottom, 12)
-        }
-        .background {
-            ZStack {
-                consoleChassis
-                diagonalTrace
+        VStack(alignment: .leading, spacing: 8) {
+            if dynamicTypeSize.isAccessibilitySize {
+                accessibilityLaneTransport
+                accessibilityTaskIdentity
+            } else {
+                lanePicker
+                taskIdentity
             }
         }
-        .overlay {
-            RoundedRectangle(cornerRadius: 0)
-                .stroke(consoleInk.opacity(0.16), lineWidth: theme.chrome.hairlineWidth)
-        }
+        .padding(.horizontal, 10)
         .dynamicTypeSize(.xSmall ... .accessibility1)
     }
 
     private var lanePicker: some View {
-        HStack(spacing: 5) {
-            HStack(spacing: 4) {
-                ForEach(Array(CodexLane.range), id: \.self) { number in
-                    lanePickerButton(number)
+        HStack(spacing: 0) {
+            ForEach(Array(CodexLane.range), id: \.self) { number in
+                lanePickerButton(number)
+
+                if number != CodexLane.range.upperBound {
+                    Rectangle()
+                        .fill(theme.chrome.panelInk.opacity(0.09))
+                        .frame(width: theme.chrome.hairlineWidth, height: 20)
                 }
             }
-
-            Button(action: onShowMapper) {
-                Image(systemName: "rectangle.3.group")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(theme.chrome.panelInkFaint)
-                    .frame(width: 44, height: 44)
-                    .background(laneKeySurface(isActive: false))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Map Codex task lanes")
         }
-        .padding(6)
+        .padding(.horizontal, 4)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(theme.chrome.panel)
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(theme.chrome.panel.opacity(colorScheme == .dark ? 0.70 : 0.92))
         )
         .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(theme.chrome.panelInk.opacity(0.13), lineWidth: theme.chrome.hairlineWidth)
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .stroke(theme.chrome.panelInk.opacity(0.12), lineWidth: theme.chrome.hairlineWidth)
         }
-        .frame(height: 56)
+        .shadow(color: Color.black.opacity(0.16), radius: 2, y: 1)
+        .frame(height: 36)
         .sensoryFeedback(.selection, trigger: store.activeLaneNumber)
+        .accessibilityLabel("Codex lanes")
     }
 
     private func lanePickerButton(_ number: Int) -> some View {
@@ -540,19 +537,36 @@ private struct CodexCommandConsole: View {
             }
             Task { await store.activate(lane.number) }
         } label: {
-            VStack(spacing: 3) {
-                Text("\(number)")
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+            ZStack(alignment: .top) {
+                if isActive {
+                    Capsule()
+                        .fill(theme.chrome.panelAccent)
+                        .frame(width: 22, height: 2)
+                        .talkieAccentGlow(radius: 3)
+                }
 
-                Text(laneModeMark(lane))
-                    .font(.system(size: 7, weight: .bold, design: .monospaced))
-                    .tracking(0.7)
-                    .foregroundStyle(laneStatusColor(lane: lane, isActive: isActive))
+                HStack(spacing: 3) {
+                    Text(number < 10 ? "0\(number)" : "\(number)")
+                        .font(.system(size: 8, weight: isActive ? .bold : .medium, design: .monospaced))
+                        .tracking(0.55)
+
+                    if lane.map({ store.isTurnInFlight(on: $0.number) }) == true {
+                        Circle()
+                            .fill(theme.chrome.panelAccent)
+                            .frame(width: 4, height: 4)
+                            .talkieAccentGlow(radius: 2)
+                    }
+                }
+                .foregroundStyle(
+                    lane == nil
+                        ? theme.chrome.panelInkFaint.opacity(0.28)
+                        : (isActive ? theme.chrome.panelAccent : theme.chrome.panelInkFaint.opacity(0.72))
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .foregroundStyle(isActive ? theme.chrome.panelInk : theme.chrome.panelInkFaint)
             .frame(maxWidth: .infinity)
-            .frame(height: 44)
-            .background(laneKeySurface(isActive: isActive))
+            .frame(height: 36)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
@@ -654,17 +668,29 @@ private struct CodexCommandConsole: View {
 
                     Text(lane.task.activityLabel().uppercased())
                         .foregroundStyle(theme.chrome.panelInkFaint)
-
-                    Spacer(minLength: 6)
-
-                    laneModeSelector(lane)
                 } else {
                     Text("NO ACTIVE TASK")
                         .foregroundStyle(theme.chrome.panelAccent)
                 }
+
+                Spacer(minLength: 6)
+
+                Circle()
+                    .fill(phaseColor)
+                    .frame(width: 5, height: 5)
+                    .talkieAccentGlow(radius: 2)
+
+                Text(consoleStatusLabel)
+                    .foregroundStyle(theme.chrome.panelInkFaint)
+                    .lineLimit(1)
+
+                Text(store.activeLaneMessageMode.label.uppercased())
+                    .foregroundStyle(theme.chrome.panelAccent)
             }
-            .font(.system(size: 10, weight: .semibold, design: .monospaced))
-            .tracking(1.2)
+            .font(.system(size: 8, weight: .semibold, design: .monospaced))
+            .tracking(0.9)
+
+            Spacer(minLength: store.activeLaneIsInFlight ? 6 : 18)
 
             Text(store.activeLane?.task.title ?? "Choose a lane")
                 .font(.system(size: 15, weight: .medium))
@@ -684,13 +710,11 @@ private struct CodexCommandConsole: View {
                 .foregroundStyle(theme.chrome.panelInkFaint)
                 .lineLimit(1)
 
-                if !store.activeLaneIsInFlight {
-                    Text(task.compactPath)
-                        .font(.system(size: 9, weight: .regular, design: .monospaced))
-                        .foregroundStyle(theme.chrome.panelInkFaint.opacity(0.82))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
+                Text(task.compactPath)
+                    .font(.system(size: 8, weight: .regular, design: .monospaced))
+                    .foregroundStyle(theme.chrome.panelInkFaint.opacity(0.70))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             } else {
                 Text("Tap an empty lane above to map an exact Codex task.")
                     .font(.system(size: 9, weight: .regular, design: .monospaced))
@@ -699,18 +723,33 @@ private struct CodexCommandConsole: View {
             }
 
             conversationPreview
+
+            Spacer(minLength: 0)
+
+            Rectangle()
+                .fill(theme.chrome.panelInk.opacity(0.08))
+                .frame(height: theme.chrome.hairlineWidth)
+
+            Text(store.activeLane == nil ? "MAP A LANE TO BEGIN" : "HOLD TALK TO SPEAK INTO THIS LANE")
+                .font(.system(size: 7, weight: .medium, design: .monospaced))
+                .tracking(1.1)
+                .foregroundStyle(theme.chrome.panelInkFaint.opacity(0.58))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(
             maxWidth: .infinity,
-            minHeight: store.activeLaneIsInFlight ? 189 : 145,
+            maxHeight: .infinity,
             alignment: .topLeading
         )
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(theme.chrome.panel)
-        )
+        .background {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(theme.chrome.panel)
+                diagonalTrace
+                    .clipShape(.rect(cornerRadius: 14))
+            }
+        }
         .overlay {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(theme.chrome.panelEdge.opacity(0.78), lineWidth: theme.chrome.hairlineWidth)

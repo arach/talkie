@@ -16,8 +16,17 @@ final class CodexLaneStore: ObservableObject {
     static let shared = CodexLaneStore()
 
     private enum Keys {
-        static let lanes = "codex.lanes.v1"
-        static let activeLane = "codex.lanes.active.v1"
+        static let legacyLanes = "codex.lanes.v1"
+        static let legacyActiveLane = "codex.lanes.active.v1"
+        static let migratedLegacyHost = "codex.lanes.v2.migrated-host"
+
+        static func lanes(for hostID: String) -> String {
+            "codex.lanes.v2.\(hostID)"
+        }
+
+        static func activeLane(for hostID: String) -> String {
+            "codex.lanes.active.v2.\(hostID)"
+        }
     }
 
     /// Cadence of the catalog refresh while the mapper is on screen.
@@ -55,13 +64,16 @@ final class CodexLaneStore: ObservableObject {
     private var speakingTask: Task<Void, Never>?
     private var isPushToTalkHeld = false
     private var notificationNarratedJobIDs: Set<String> = []
+    private var loadedHostID: String?
 
     init(
         defaults: UserDefaults = .standard,
         bridge: BridgeManager? = nil
     ) {
         self.defaults = defaults
-        self.bridge = bridge ?? .shared
+        let resolvedBridge = bridge ?? .shared
+        self.bridge = resolvedBridge
+        self.loadedHostID = resolvedBridge.activePairedMacID
         loadPersistedLanes()
     }
 
@@ -115,6 +127,29 @@ final class CodexLaneStore: ObservableObject {
     /// as the default destination.
     var unassignedLaneNumbers: [Int] {
         CodexLane.range.filter { lanes[$0] == nil }
+    }
+
+    /// Reloads the lane bank after the active Mac changes. Lane numbers are
+    /// intentionally local to a host: lane 2 on one Mac must never route to a
+    /// task that happened to occupy lane 2 on another Mac.
+    func reloadForActiveHost() {
+        let nextHostID = bridge.activePairedMacID
+        guard nextHostID != loadedHostID else { return }
+
+        loadedHostID = nextHostID
+        lanes = [:]
+        activeLaneNumber = nil
+        catalog = []
+        catalogFailure = nil
+        searchQuery = ""
+        liveActivityByLane = [:]
+        inFlightRequestCounts = [:]
+        queuedMessageCounts = [:]
+        lastTurn = nil
+        history = []
+        failure = nil
+        phase = .idle
+        loadPersistedLanes()
     }
 
     // MARK: - Catalog
@@ -742,7 +777,14 @@ final class CodexLaneStore: ObservableObject {
     // MARK: - Persistence
 
     private func loadPersistedLanes() {
-        if let data = defaults.data(forKey: Keys.lanes),
+        guard let loadedHostID else { return }
+
+        let lanesKey = Keys.lanes(for: loadedHostID)
+        let activeLaneKey = Keys.activeLane(for: loadedHostID)
+
+        migrateLegacyLanesIfNeeded(to: loadedHostID)
+
+        if let data = defaults.data(forKey: lanesKey),
            let stored = try? JSONDecoder().decode([CodexLane].self, from: data) {
             lanes = Dictionary(
                 uniqueKeysWithValues: stored
@@ -753,23 +795,47 @@ final class CodexLaneStore: ObservableObject {
 
         // Restore the selected destination so the deck opens where the user
         // left it. The submit itself is the live availability check.
-        let storedActive = defaults.integer(forKey: Keys.activeLane)
+        let storedActive = defaults.integer(forKey: activeLaneKey)
         if lanes[storedActive] != nil {
             activeLaneNumber = storedActive
         }
     }
 
     private func persistLanes() {
+        guard let loadedHostID else { return }
         let ordered = sortedLanes
         guard let data = try? JSONEncoder().encode(ordered) else { return }
-        defaults.set(data, forKey: Keys.lanes)
+        defaults.set(data, forKey: Keys.lanes(for: loadedHostID))
     }
 
     private func persistActiveLane() {
+        guard let loadedHostID else { return }
+        let key = Keys.activeLane(for: loadedHostID)
         if let activeLaneNumber {
-            defaults.set(activeLaneNumber, forKey: Keys.activeLane)
+            defaults.set(activeLaneNumber, forKey: key)
         } else {
-            defaults.removeObject(forKey: Keys.activeLane)
+            defaults.removeObject(forKey: key)
+        }
+    }
+
+    /// Assign the former global lane bank to the first paired host which opens
+    /// it. This preserves existing mappings once without leaking them to every
+    /// Mac the user subsequently selects.
+    private func migrateLegacyLanesIfNeeded(to hostID: String) {
+        guard defaults.string(forKey: Keys.migratedLegacyHost) == nil else { return }
+        defer { defaults.set(hostID, forKey: Keys.migratedLegacyHost) }
+
+        guard defaults.data(forKey: Keys.lanes(for: hostID)) == nil,
+              let legacyData = defaults.data(forKey: Keys.legacyLanes) else {
+            return
+        }
+
+        defaults.set(legacyData, forKey: Keys.lanes(for: hostID))
+        if defaults.object(forKey: Keys.legacyActiveLane) != nil {
+            defaults.set(
+                defaults.integer(forKey: Keys.legacyActiveLane),
+                forKey: Keys.activeLane(for: hostID)
+            )
         }
     }
 }
