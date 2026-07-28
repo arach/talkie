@@ -4,4 +4,4 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-xcrun swift "$ROOT/compose-ipad.swift"
+xcrun swift "$ROOT/compose-ipad.swift" "$@"

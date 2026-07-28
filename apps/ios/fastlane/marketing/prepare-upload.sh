@@ -4,7 +4,15 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE="$ROOT/output"
-IPAD_SOURCE="$ROOT/output-ipad"
+IPAD_THEME="${TALKIE_IPAD_MARKETING_THEME:-mineral}"
+case "$IPAD_THEME" in
+  mineral) IPAD_SOURCE="$ROOT/output-ipad-mineral" ;;
+  graphite) IPAD_SOURCE="$ROOT/output-ipad" ;;
+  *)
+    echo "Unknown iPad marketing theme: $IPAD_THEME (expected mineral or graphite)" >&2
+    exit 1
+    ;;
+esac
 DESTINATION="${TALKIE_SCREENSHOTS_PATH:-$ROOT/.upload}"
 WATCH_SOURCE="$ROOT/../screenshots/Apple Watch Series 11 (46mm)/00_WatchHome.png"
 
@@ -62,3 +70,4 @@ echo "Prepared App Store screenshot upload bundle: $DESTINATION"
 echo "Localizations: en-US, en-CA"
 echo "Screenshots per localization: $((${#required_iphone[@]} + ${#required_ipad[@]} + 1))"
 echo "Device sets: 6.9-inch iPhone (6), 13-inch iPad landscape (6), Apple Watch Series 10/11 (1)"
+echo "iPad marketing theme: $IPAD_THEME"

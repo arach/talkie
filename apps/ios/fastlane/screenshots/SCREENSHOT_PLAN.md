@@ -36,6 +36,7 @@ dictation anywhere.
 
 ### iPad Pro 13-inch (M5)
 
+- Campaign theme: ✅ Mineral blue-gray alloy with copper signal chrome
 - 01_Home: ✅ Seeded landscape workspace
 - 02_Recording: ✅ Recording sheet with waveform
 - state-dictating: ✅ Live dictation on the Compose surface

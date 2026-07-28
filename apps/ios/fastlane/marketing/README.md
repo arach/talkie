@@ -32,8 +32,18 @@ tape-machine surfaces while keeping the app UI itself unaltered.
 
 The iPad set uses a consistent 2752x2064 landscape presentation so Talkie reads
 large on the desktop App Store instead of appearing as a narrow portrait image.
-Its visual chassis is a matte graphite voice instrument: sparse amber indicators,
-powder-coated metal, and a recessed display holding the real iPad UI.
+Five frames use a quiet mineral studio treatment that keeps the real iPad UI in
+the foreground. The Home Ask frame is the single instrument hero: a slim,
+symmetrical mineral shell with one mirrored pair of machined encoders. Its
+editorial caption floats above the enclosure as a visibly separate component,
+and the real iPad capture remains in an exact 4:3 aperture. This keeps the
+tactile hardware idea memorable without turning it into a visual gimmick across
+the whole campaign.
+
+The iPad capture harness selects Talkie's matching `Mineral` app theme, so the
+blue-gray alloy, deep teal ink, recessed readouts, copper signal chrome, and the
+custom Home keyboard continue inside the interface. The original graphite
+treatment remains available as an alternate colorway.
 
 1. Voice into action — the complete Talkie workspace
 2. Talk at full speed — focused recording and live transcription
@@ -49,6 +59,7 @@ Run from anywhere in the repository:
 ```bash
 apps/ios/fastlane/marketing/compose.sh
 apps/ios/fastlane/marketing/compose-ipad.sh
+apps/ios/fastlane/marketing/compose-ipad.sh --theme graphite
 ```
 
 Requirements:
@@ -75,6 +86,9 @@ Override it with `TALKIE_SCREENSHOTS_PATH` when needed. Uploads require the
 gitignored App Store Connect API key at `apps/ios/fastlane/api_key.json`, or a
 path supplied through `TALKIE_FASTLANE_API_KEY_PATH`.
 
+Mineral is the default iPad upload set. Set
+`TALKIE_IPAD_MARKETING_THEME=graphite` to stage the older dark treatment.
+
 ## Export the App Store build
 
 After creating an Xcode archive, export its IPA with the checked-in App Store
@@ -98,6 +112,7 @@ includes symbols for App Store Connect.
 - `source/backgrounds/charcoal-waveform.png`: generated dark tape-reel campaign art
 - `source/backgrounds/paper-waveform.png`: generated layered-paper campaign art
 - `source/backgrounds/graphite-instrument-panel.png`: generated iPad instrument-panel art
+- `source/backgrounds/mineral-instrument-panel-v7.png`: symmetrical mineral instrument hero used only for Home Ask
 - `fastlane/screenshots/raw/en-US/`: iPhone 17 Pro Max simulator captures
 - `fastlane/screenshots/iPad Pro 13-inch (M5)/`: 13-inch landscape iPad captures
 - `fastlane/screenshots/Apple Watch Series 11 (46mm)/00_WatchHome.png`: required Watch capture
