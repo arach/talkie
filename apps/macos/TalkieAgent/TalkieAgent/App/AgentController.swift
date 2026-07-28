@@ -712,9 +712,10 @@ final class AgentController: ObservableObject {
     private func showNoSpeechRetryPrompt() {
         ToastOverlayController.shared.show(
             ToastMessage(
-                icon: "waveform.slash",
+                mark: .signalLost,
+                code: "NO SIGNAL",
                 text: "Didn't catch that",
-                detail: "Want to start a normal recording?",
+                detail: "Want to try again?",
                 actionLabel: "Record",
                 action: { [weak self] in
                     ToastOverlayController.shared.dismiss()
@@ -1244,7 +1245,8 @@ final class AgentController: ObservableObject {
                 await MainActor.run {
                     ToastOverlayController.shared.show(
                         ToastMessage(
-                            icon: "waveform.slash",
+                            mark: .signalLost,
+                            code: "NO SIGNAL",
                             text: "No speech captured",
                             detail: "Nothing to analyze from that moment.",
                             actionLabel: nil,

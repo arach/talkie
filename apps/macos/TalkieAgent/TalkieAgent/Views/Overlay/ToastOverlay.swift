@@ -15,14 +15,55 @@ private let log = Log(.ui)
 // MARK: - Toast Model
 
 struct ToastMessage: Equatable {
-    let icon: String
+    /// What sits in the mark lane. `.signalLost` is drawn, not an SF Symbol —
+    /// the trace is Talkie's, and a dead channel should be reported in our own
+    /// hand rather than with a borrowed system glyph.
+    enum Mark: Equatable {
+        case signalLost
+        case symbol(String)
+    }
+
+    let mark: Mark
+    /// Instrument code in the eyebrow lane — the channel that spoke, not a
+    /// severity word. Short and mono: "NO SIGNAL", "CAPTURE", "PERMISSION".
+    let code: String
     let text: String
     let detail: String?
     let actionLabel: String?
     let action: (() -> Void)?
 
+    init(
+        mark: Mark,
+        code: String,
+        text: String,
+        detail: String? = nil,
+        actionLabel: String? = nil,
+        action: (() -> Void)? = nil
+    ) {
+        self.mark = mark
+        self.code = code
+        self.text = text
+        self.detail = detail
+        self.actionLabel = actionLabel
+        self.action = action
+    }
+
+    /// SF Symbol convenience for call sites that already think in glyph names.
+    init(
+        icon: String,
+        code: String = "TALKIE",
+        text: String,
+        detail: String?,
+        actionLabel: String?,
+        action: (() -> Void)?
+    ) {
+        self.init(mark: .symbol(icon), code: code, text: text, detail: detail,
+                  actionLabel: actionLabel, action: action)
+    }
+
     static func == (lhs: ToastMessage, rhs: ToastMessage) -> Bool {
-        lhs.icon == rhs.icon && lhs.text == rhs.text && lhs.detail == rhs.detail && lhs.actionLabel == rhs.actionLabel
+        lhs.mark == rhs.mark && lhs.code == rhs.code && lhs.text == rhs.text
+            && lhs.detail == rhs.detail && lhs.actionLabel == rhs.actionLabel
     }
 }
 
@@ -151,6 +192,7 @@ final class ToastOverlayController {
     func showPermissionBlocked() {
         show(ToastMessage(
             icon: "lock.trianglebadge.exclamationmark.fill",
+            code: "PERMISSION",
             text: "Paste Blocked",
             detail: "Accessibility permission required",
             actionLabel: "Open Settings",
@@ -269,59 +311,81 @@ final class SelectionFeedbackOverlayController {
 
 // MARK: - HUD View (center-screen alert)
 
+/// The agent reporting a fact about itself, in the same hand as the rest of the
+/// overlay chrome (cf. `SelectionFeedbackHUDView` below): mono type on a dark
+/// plate, brass for the brand cue, a hairline edge. Left-aligned instrument
+/// readout — mark + code eyebrow, then the fact, then the consequence — with the
+/// action docked right instead of stacked underneath.
 private struct ToastHUDView: View {
     let message: ToastMessage
     let onDismiss: () -> Void
 
     @State private var isHovered = false
 
+    private var brand: Color { AgentTheme.brandAccent }
+
     var body: some View {
-        VStack(spacing: 10) {
-            // Icon
-            Image(systemName: message.icon)
-                .font(.system(size: 28, weight: .medium))
-                .foregroundColor(.orange)
+        HStack(alignment: .center, spacing: 22) {
+            brandTile
 
-            // Title
-            Text(message.text)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.white.opacity(0.95))
+            VStack(alignment: .leading, spacing: 7) {
+                // Mark + code share one eyebrow line, set off from the body.
+                HStack(spacing: 9) {
+                    mark
+                    Text(message.code)
+                        .font(.system(size: 8.5, weight: .semibold, design: .monospaced))
+                        .tracking(1.2) // 0.14em at 8.5pt — the overlay's label tracking
+                        .foregroundStyle(brand.opacity(0.9))
+                }
+                .padding(.bottom, 2) // eyebrow reads as its own lane, not line one of a stack
 
-            // Detail
-            if let detail = message.detail {
-                Text(detail)
-                    .font(.system(size: 11))
-                    .foregroundColor(.white.opacity(0.5))
+                Text(message.text)
+                    .font(.system(size: 12.5, weight: .medium, design: .monospaced))
+                    .tracking(0.5)
+                    .foregroundStyle(.white.opacity(0.96))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let detail = message.detail {
+                    Text(detail)
+                        .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                        .tracking(0.35)
+                        .foregroundStyle(.white.opacity(0.52))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
+            // Give the copy a lane to live in so short and long messages sit on
+            // the same plate instead of shrink-wrapping to the glyph run.
+            .frame(minWidth: 210, alignment: .leading)
 
-            // Action button
             if let actionLabel = message.actionLabel {
-                Button(action: {
-                    message.action?()
-                }) {
+                Button(action: { message.action?() }) {
                     Text(actionLabel)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 5)
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .tracking(0.9)
+                        .textCase(.uppercase)
+                        .foregroundStyle(brand)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
                         .background(
-                            Capsule()
-                                .fill(Color.accentColor)
+                            Capsule().fill(brand.opacity(0.10))
+                        )
+                        .overlay(
+                            Capsule().stroke(brand.opacity(0.55), lineWidth: 0.5)
                         )
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 24)
-        .padding(.vertical, 16)
+        .padding(.vertical, 20)
         .background(
             ZStack {
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(.ultraThinMaterial)
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.black.opacity(0.6))
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.black.opacity(0.62))
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(brand.opacity(0.22), lineWidth: 0.5)
             }
         )
         .shadow(color: .black.opacity(0.4), radius: 20, y: 8)
@@ -330,6 +394,52 @@ private struct ToastHUDView: View {
         .onTapGesture {
             onDismiss()
         }
+    }
+
+    /// The Talkie "t" tile — the same brand mark Agent Home's sidebar wears,
+    /// scaled down. Ink is pinned dark (not `OpsInk.bg`) because this plate is
+    /// always dark regardless of system appearance.
+    private var brandTile: some View {
+        Text("t")
+            .font(ScopeType.mono(size: 11, weight: .bold))
+            .foregroundStyle(Color.black.opacity(0.85))
+            .frame(width: 20, height: 20)
+            .background(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(brand)
+            )
+    }
+
+    @ViewBuilder
+    private var mark: some View {
+        switch message.mark {
+        case .signalLost:
+            FlatlineTrace()
+                .stroke(brand, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                .frame(width: 26, height: 10)
+        case .symbol(let name):
+            Image(systemName: name)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(brand)
+        }
+    }
+}
+
+/// The mark for a dropped turn: the signal trace Talkie always draws, alive for
+/// two beats and then dead flat. Drawn rather than borrowed from SF Symbols.
+private struct FlatlineTrace: Shape {
+    func path(in rect: CGRect) -> Path {
+        let midY = rect.midY
+        let unit = rect.width / 9
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: midY))
+        path.addLine(to: CGPoint(x: rect.minX + unit, y: midY))
+        path.addLine(to: CGPoint(x: rect.minX + unit * 1.6, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.minX + unit * 2.2, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX + unit * 2.8, y: midY - rect.height * 0.28))
+        path.addLine(to: CGPoint(x: rect.minX + unit * 3.4, y: midY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: midY))
+        return path
     }
 }
 

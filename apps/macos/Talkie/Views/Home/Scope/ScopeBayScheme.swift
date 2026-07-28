@@ -190,7 +190,10 @@ enum BayScheme: String, CaseIterable {
             case .carbon:
                 return [("211F1D", 0.0), ("181614", 0.45), ("0C0B0A", 1.0)]
             case .pearl:
-                return [("FBFCFE", 0.0), ("F2F5F7", 0.60), ("E5E9ED", 1.0)]
+                // Keep the control strip close to PEARL's F5F8FA body.
+                // The previous FBFCFE → E5E9ED swing read as a separate
+                // bright band instead of one continuous machined component.
+                return [("F8FAFB", 0.0), ("F4F7F9", 0.52), ("EEF2F5", 1.0)]
             case .porcelain:
                 return [("F2F5F7", 0.0), ("E8ECEF", 0.60), ("DCE0E4", 1.0)]
             case .aluminum:
