@@ -488,6 +488,38 @@ private let scopeChrome = ChromeTokens(
     hairlineWidth: 0.5
 )
 
+// Mineral — cool anodized alloy, teal structural ink, and a single copper
+// signal. Panels remain recessed and dark enough to behave like readouts, but
+// edges and actions stay tonal so the theme never returns to hard black/white.
+private let mineralChrome: ChromeTokens = {
+    let accent = Color(hex: "9B4E27", darkHex: "DF8955")
+    let ink = Color(hex: "18353B", darkHex: "EAF0EC")
+    return ChromeTokens(
+        accent: accent,
+        accentTint: accent.opacity(0.10),
+        accentGlow: accent.opacity(0.16),
+        accentStrong: accent.opacity(0.34),
+        action: ink.opacity(0.68),
+        actionTint: ink.opacity(0.06),
+        panel: Color(hex: "1C3034", darkHex: "0F1B1E"),
+        panelAlt: Color(hex: "263C40", darkHex: "17272A"),
+        panelInk: Color(hex: "EEF1EA"),
+        panelInkFaint: Color(hex: "AAB7B2"),
+        panelAccent: Color(hex: "D27A46"),
+        panelEdge: Color(hex: "D27A46").opacity(0.24),
+        trace: Color(hex: "29484E", darkHex: "D67B48"),
+        traceFaint: Color(hex: "29484E", darkHex: "D67B48").opacity(0.10),
+        edgeStrong: ink.opacity(0.26),
+        edge: ink.opacity(0.17),
+        edgeFaint: ink.opacity(0.10),
+        edgeSubtle: ink.opacity(0.05),
+        glowRadius: 1,
+        chromeCorner: 4,
+        eyebrowLeader: "·",
+        hairlineWidth: 0.75
+    )
+}()
+
 // "Linear" approach — flat indigo dark. No halo, generous 8pt rounding,
 // subtle 1pt borders that read via surface elevation (Linear's signature).
 private let midnightChrome: ChromeTokens = {
@@ -683,6 +715,7 @@ extension AppTheme {
     var chrome: ChromeTokens {
         switch self {
         case .scope:    return scopeChrome
+        case .mineral:  return mineralChrome
         case .midnight: return midnightChrome
         case .tactical: return tacticalChrome
         case .ghost:    return ghostChrome

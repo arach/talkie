@@ -162,6 +162,59 @@ public final class CompactKeyboardView: UIView {
         }
     }
 
+    private struct Palette {
+        let background: UIColor
+        let keyBackground: UIColor
+        let keyPressed: UIColor
+        let specialKey: UIColor
+        let specialKeyActive: UIColor
+        let keyBorder: UIColor
+        let keyBorderPressed: UIColor
+        let keyText: UIColor
+        let selection: UIColor
+        let accentText: UIColor
+        let popupBackground: UIColor
+        let keyShadow: UIColor
+        let keyCalloutBackground: UIColor
+    }
+
+    private var palette: Palette {
+        switch visualStyle {
+        case .automatic:
+            Palette(
+                background: Colors.background,
+                keyBackground: Colors.keyBackground,
+                keyPressed: Colors.keyPressed,
+                specialKey: Colors.specialKey,
+                specialKeyActive: Colors.specialKeyActive,
+                keyBorder: Colors.keyBorder,
+                keyBorderPressed: Colors.keyBorderPressed,
+                keyText: Colors.keyText,
+                selection: Colors.returnBlue,
+                accentText: Colors.keyText,
+                popupBackground: Colors.popupBackground,
+                keyShadow: Colors.keyShadow,
+                keyCalloutBackground: Colors.keyCalloutBackground
+            )
+        case .mineralInstrument:
+            Palette(
+                background: UIColor.clear,
+                keyBackground: UIColor(red: 0.890, green: 0.914, blue: 0.902, alpha: 1),
+                keyPressed: UIColor(red: 0.949, green: 0.957, blue: 0.941, alpha: 1),
+                specialKey: UIColor(red: 0.733, green: 0.792, blue: 0.784, alpha: 1),
+                specialKeyActive: UIColor(red: 0.827, green: 0.651, blue: 0.545, alpha: 1),
+                keyBorder: UIColor(red: 0.094, green: 0.196, blue: 0.220, alpha: 0.22),
+                keyBorderPressed: UIColor(red: 0.608, green: 0.306, blue: 0.153, alpha: 0.72),
+                keyText: UIColor(red: 0.086, green: 0.196, blue: 0.220, alpha: 1),
+                selection: UIColor(red: 0.608, green: 0.306, blue: 0.153, alpha: 1),
+                accentText: UIColor(red: 0.937, green: 0.949, blue: 0.929, alpha: 1),
+                popupBackground: UIColor(red: 0.796, green: 0.843, blue: 0.839, alpha: 0.98),
+                keyShadow: UIColor(red: 0.086, green: 0.196, blue: 0.220, alpha: 0.30),
+                keyCalloutBackground: UIColor(red: 0.949, green: 0.957, blue: 0.941, alpha: 1)
+            )
+        }
+    }
+
     // Active press-callout bubble (iOS-style key pop). Weakly held — it
     // lives in the view hierarchy while a key is held down.
     private weak var keyCalloutView: UIView?
@@ -176,6 +229,14 @@ public final class CompactKeyboardView: UIView {
     public var onEmojiTapped: (() -> Void)?
     public var onShiftDebugRequested: (() -> Void)?
     public var onDismiss: (() -> Void)?
+    public var visualStyle: KeyboardVisualStyle = .automatic {
+        didSet {
+            guard oldValue != visualStyle else { return }
+            backgroundColor = palette.background
+            buildKeyboard()
+            setNeedsLayout()
+        }
+    }
 
     // MARK: - Haptic Generators
 
@@ -261,17 +322,17 @@ public final class CompactKeyboardView: UIView {
         guard traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) else { return }
         // Update shadow colors (CGColor doesn't auto-update)
         for btn in keyButtons {
-            btn.layer.shadowColor = Colors.keyShadow.cgColor
-            btn.layer.borderColor = Colors.keyBorder.cgColor
+            btn.layer.shadowColor = palette.keyShadow.cgColor
+            btn.layer.borderColor = palette.keyBorder.cgColor
             btn.layer.shadowOpacity = keyRestingShadowOpacity
         }
-        accentPopup?.layer.shadowColor = Colors.keyShadow.cgColor
+        accentPopup?.layer.shadowColor = palette.keyShadow.cgColor
     }
 
     // MARK: - Setup
 
     private func setupUI() {
-        backgroundColor = Colors.background
+        backgroundColor = palette.background
         lightImpact.prepare()
         mediumImpact.prepare()
         registerColorAppearanceObservation()
@@ -468,16 +529,18 @@ public final class CompactKeyboardView: UIView {
     private func createKeyButton(_ key: String) -> KeyButton {
         let btn = KeyButton(type: .system)
         btn.keyValue = key
+        btn.accessibilityIdentifier = "talkie.keyboard.key.\(key)"
 
         let displayKey = (isShifted || isCapsLock) ? key.uppercased() : key
         btn.setTitle(displayKey, for: .normal)
+        btn.accessibilityLabel = displayKey
         btn.titleLabel?.font = .systemFont(ofSize: 23, weight: .light)
-        btn.setTitleColor(Colors.keyText, for: .normal)
-        btn.backgroundColor = Colors.keyBackground
+        btn.setTitleColor(palette.keyText, for: .normal)
+        btn.backgroundColor = palette.keyBackground
         btn.layer.cornerRadius = 6
         btn.layer.borderWidth = 0.45
-        btn.layer.borderColor = Colors.keyBorder.cgColor
-        btn.layer.shadowColor = Colors.keyShadow.cgColor
+        btn.layer.borderColor = palette.keyBorder.cgColor
+        btn.layer.shadowColor = palette.keyShadow.cgColor
         btn.layer.shadowOffset = CGSize(width: 0, height: 0.5)
         btn.layer.shadowRadius = 1.2
         btn.layer.shadowOpacity = keyRestingShadowOpacity
@@ -514,54 +577,77 @@ public final class CompactKeyboardView: UIView {
         btn.isModeKey = isMode
         btn.isEmojiKey = isEmoji
 
+        if isSpace {
+            btn.accessibilityIdentifier = "talkie.keyboard.space"
+            btn.accessibilityLabel = "Space"
+        } else if isEmoji {
+            btn.accessibilityIdentifier = "talkie.keyboard.emoji"
+            btn.accessibilityLabel = "Emoji"
+        } else if isDelete {
+            btn.accessibilityIdentifier = "talkie.keyboard.delete"
+            btn.accessibilityLabel = "Delete"
+        } else if isReturn {
+            btn.accessibilityIdentifier = "talkie.keyboard.return"
+            btn.accessibilityLabel = "Return"
+        } else if isShift {
+            btn.accessibilityIdentifier = "talkie.keyboard.shift"
+            btn.accessibilityLabel = "Shift"
+        } else if isMode {
+            btn.accessibilityIdentifier = "talkie.keyboard.mode"
+            btn.accessibilityLabel = label
+        } else if isSymbol {
+            btn.accessibilityIdentifier = "talkie.keyboard.symbols"
+            btn.accessibilityLabel = label
+        }
+
         let config = UIImage.SymbolConfiguration(pointSize: 18, weight: .medium)
         let shiftConfig = UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)
 
         if isSpace {
             btn.setTitle("", for: .normal)
-            btn.backgroundColor = Colors.keyBackground  // Space bar like regular keys
+            btn.backgroundColor = palette.keyBackground  // Space bar like regular keys
         } else if isEmoji {
             // Emoji globe button
             btn.setImage(UIImage(systemName: "face.smiling", withConfiguration: config), for: .normal)
-            btn.tintColor = Colors.keyText
+            btn.tintColor = palette.keyText
             btn.setTitle(nil, for: .normal)
-            btn.backgroundColor = Colors.specialKey
+            btn.backgroundColor = palette.specialKey
         } else if isDelete {
             // Use SF Symbol for delete
             btn.setImage(UIImage(systemName: "delete.left.fill", withConfiguration: config), for: .normal)
-            btn.tintColor = Colors.keyText
+            btn.tintColor = palette.keyText
             btn.setTitle(nil, for: .normal)
-            btn.backgroundColor = Colors.specialKey
+            btn.backgroundColor = palette.specialKey
         } else if isReturn {
             // Return key - same style as other special keys
             btn.setImage(UIImage(systemName: "return", withConfiguration: config), for: .normal)
-            btn.tintColor = Colors.keyText
+            btn.tintColor = visualStyle == .mineralInstrument ? palette.accentText : palette.keyText
             btn.setTitle(nil, for: .normal)
-            btn.backgroundColor = Colors.specialKey
+            btn.backgroundColor = visualStyle == .mineralInstrument ? palette.selection : palette.specialKey
         } else if isShift {
             // Shift key with icon
             btn.setImage(UIImage(systemName: "shift", withConfiguration: shiftConfig), for: .normal)
-            btn.tintColor = Colors.keyText
+            btn.tintColor = palette.keyText
             btn.setTitle(nil, for: .normal)
-            btn.backgroundColor = Colors.specialKey
+            btn.backgroundColor = palette.specialKey
         } else {
             // Text-labeled special keys: mode (123/ABC), symbol (#+=), etc.
             btn.setTitle(label, for: .normal)
-            btn.backgroundColor = Colors.specialKey
+            btn.backgroundColor = palette.specialKey
         }
 
         btn.titleLabel?.font = .systemFont(ofSize: (isSymbol || isMode) ? 15 : 16, weight: .medium)
-        btn.setTitleColor(Colors.keyText, for: .normal)
+        btn.setTitleColor(palette.keyText, for: .normal)
         btn.layer.cornerRadius = 6
         btn.layer.borderWidth = 0.45
-        btn.layer.borderColor = Colors.keyBorder.cgColor
-        btn.layer.shadowColor = Colors.keyShadow.cgColor
+        btn.layer.borderColor = palette.keyBorder.cgColor
+        btn.layer.shadowColor = palette.keyShadow.cgColor
         btn.layer.shadowOffset = CGSize(width: 0, height: 0.5)
         btn.layer.shadowRadius = 1.2
         btn.layer.shadowOpacity = keyRestingShadowOpacity
 
         if isShift && (isShifted || isCapsLock) {
-            btn.backgroundColor = Colors.specialKeyActive
+            btn.backgroundColor = palette.specialKeyActive
         }
 
         btn.addTarget(self, action: #selector(specialKeyTapped(_:)), for: .touchUpInside)
@@ -818,14 +904,14 @@ public final class CompactKeyboardView: UIView {
     }
 
     private func applySpecialKeyRestingStyle(_ button: KeyButton) {
-        button.layer.borderColor = Colors.keyBorder.cgColor
+        button.layer.borderColor = palette.keyBorder.cgColor
         button.layer.shadowOpacity = keyRestingShadowOpacity
 
         if button.isShiftKey {
             if isCapsLock || isShifted {
-                button.backgroundColor = Colors.specialKeyActive
+                button.backgroundColor = palette.specialKeyActive
             } else {
-                button.backgroundColor = Colors.specialKey
+                button.backgroundColor = palette.specialKey
             }
             return
         }
@@ -834,11 +920,16 @@ public final class CompactKeyboardView: UIView {
             if isDictationActive {
                 return
             }
-            button.backgroundColor = Colors.keyBackground
+            button.backgroundColor = palette.keyBackground
             return
         }
 
-        button.backgroundColor = Colors.specialKey
+        if button.isReturnKey, visualStyle == .mineralInstrument {
+            button.backgroundColor = palette.selection
+            button.tintColor = palette.accentText
+        } else {
+            button.backgroundColor = palette.specialKey
+        }
     }
 
     @objc private func keyTapped(_ sender: KeyButton) {
@@ -862,8 +953,8 @@ public final class CompactKeyboardView: UIView {
         showKeyCallout(for: sender)
         UIView.animate(withDuration: 0.05, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState, .curveEaseOut]) {
             sender.transform = self.pressTransform(for: sender)
-            sender.backgroundColor = Colors.keyPressed
-            sender.layer.borderColor = Colors.keyBorderPressed.cgColor
+            sender.backgroundColor = self.palette.keyPressed
+            sender.layer.borderColor = self.palette.keyBorderPressed.cgColor
             sender.layer.shadowOpacity = 0.02
         }
     }
@@ -878,8 +969,8 @@ public final class CompactKeyboardView: UIView {
             options: [.allowUserInteraction, .beginFromCurrentState, .curveEaseOut]
         ) {
             sender.transform = .identity
-            sender.backgroundColor = Colors.keyBackground
-            sender.layer.borderColor = Colors.keyBorder.cgColor
+            sender.backgroundColor = self.palette.keyBackground
+            sender.layer.borderColor = self.palette.keyBorder.cgColor
             sender.layer.shadowOpacity = self.keyRestingShadowOpacity
         }
     }
@@ -891,8 +982,8 @@ public final class CompactKeyboardView: UIView {
         }
         UIView.animate(withDuration: 0.05, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState, .curveEaseOut]) {
             sender.transform = self.pressTransform(for: sender)
-            sender.backgroundColor = Colors.keyPressed
-            sender.layer.borderColor = Colors.keyBorderPressed.cgColor
+            sender.backgroundColor = self.palette.keyPressed
+            sender.layer.borderColor = self.palette.keyBorderPressed.cgColor
             sender.layer.shadowOpacity = 0.02
         }
     }
@@ -928,8 +1019,8 @@ public final class CompactKeyboardView: UIView {
                     || button.isEmojiKey {
                     self.applySpecialKeyRestingStyle(button)
                 } else {
-                    button.backgroundColor = Colors.keyBackground
-                    button.layer.borderColor = Colors.keyBorder.cgColor
+                    button.backgroundColor = self.palette.keyBackground
+                    button.layer.borderColor = self.palette.keyBorder.cgColor
                     button.layer.shadowOpacity = self.keyRestingShadowOpacity
                 }
             }
@@ -1099,12 +1190,12 @@ public final class CompactKeyboardView: UIView {
         let y = keyFrame.minY - (calloutHeight - keyFrame.height) + 6
 
         let callout = UIView(frame: CGRect(x: x, y: y, width: calloutWidth, height: calloutHeight))
-        callout.backgroundColor = Colors.keyCalloutBackground
+        callout.backgroundColor = palette.keyCalloutBackground
         callout.layer.cornerRadius = 9
         callout.layer.cornerCurve = .continuous
-        callout.layer.borderColor = Colors.keyBorder.cgColor
+        callout.layer.borderColor = palette.keyBorder.cgColor
         callout.layer.borderWidth = 1
-        callout.layer.shadowColor = Colors.keyShadow.cgColor
+        callout.layer.shadowColor = palette.keyShadow.cgColor
         callout.layer.shadowOffset = CGSize(width: 0, height: 4)
         callout.layer.shadowRadius = 12
         callout.layer.shadowOpacity = 0.45
@@ -1112,7 +1203,7 @@ public final class CompactKeyboardView: UIView {
 
         let label = UILabel(frame: CGRect(x: 0, y: 0, width: calloutWidth, height: calloutHeight - 12))
         label.text = character
-        label.textColor = Colors.keyText
+        label.textColor = palette.keyText
         label.font = .systemFont(ofSize: 30, weight: .regular)
         label.textAlignment = .center
         callout.addSubview(label)
@@ -1154,9 +1245,9 @@ public final class CompactKeyboardView: UIView {
         accentButtons.removeAll()
 
         let popup = UIView()
-        popup.backgroundColor = Colors.popupBackground
+        popup.backgroundColor = palette.popupBackground
         popup.layer.cornerRadius = 8
-        popup.layer.shadowColor = Colors.keyShadow.cgColor
+        popup.layer.shadowColor = palette.keyShadow.cgColor
         popup.layer.shadowOffset = CGSize(width: 0, height: 4)
         popup.layer.shadowRadius = 12
         popup.layer.shadowOpacity = 0.6
@@ -1189,7 +1280,7 @@ public final class CompactKeyboardView: UIView {
             let btn = UIButton(type: .system)
             btn.setTitle(accent, for: .normal)
             btn.titleLabel?.font = .systemFont(ofSize: 22)
-            btn.setTitleColor(Colors.keyText, for: .normal)
+            btn.setTitleColor(palette.keyText, for: .normal)
             btn.backgroundColor = .clear
             btn.tag = index
             btn.frame = CGRect(
@@ -1216,7 +1307,7 @@ public final class CompactKeyboardView: UIView {
 
         for btn in accentButtons {
             let isSelected = btn.frame.contains(location)
-            btn.backgroundColor = isSelected ? Colors.returnBlue : .clear  // Blue highlight
+            btn.backgroundColor = isSelected ? palette.selection : .clear
         }
     }
 
@@ -1270,9 +1361,9 @@ public final class CompactKeyboardView: UIView {
         ]
 
         let popup = UIView()
-        popup.backgroundColor = Colors.popupBackground
+        popup.backgroundColor = palette.popupBackground
         popup.layer.cornerRadius = 10
-        popup.layer.shadowColor = Colors.keyShadow.cgColor
+        popup.layer.shadowColor = palette.keyShadow.cgColor
         popup.layer.shadowOffset = CGSize(width: 0, height: 4)
         popup.layer.shadowRadius = 12
         popup.layer.shadowOpacity = 0.6
@@ -1307,8 +1398,8 @@ public final class CompactKeyboardView: UIView {
                 button.frame = CGRect(x: x, y: y, width: buttonWidth, height: buttonHeight)
                 button.setTitle(symbol, for: .normal)
                 button.titleLabel?.font = .systemFont(ofSize: 19, weight: .regular)
-                button.setTitleColor(Colors.keyText, for: .normal)
-                button.backgroundColor = Colors.keyBackground
+                button.setTitleColor(palette.keyText, for: .normal)
+                button.backgroundColor = palette.keyBackground
                 button.layer.cornerRadius = 6
                 button.addAction(UIAction { [weak self] _ in
                     self?.onKeyTapped?(symbol)
@@ -1341,18 +1432,18 @@ public final class CompactKeyboardView: UIView {
         let config = UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)
 
         for btn in keyButtons where btn.isShiftKey {
-            btn.tintColor = Colors.keyText
-            btn.layer.borderColor = Colors.keyBorder.cgColor
+            btn.tintColor = palette.keyText
+            btn.layer.borderColor = palette.keyBorder.cgColor
             if isCapsLock {
-                btn.backgroundColor = Colors.specialKeyActive
+                btn.backgroundColor = palette.specialKeyActive
                 btn.setImage(UIImage(systemName: "capslock.fill", withConfiguration: config), for: .normal)
                 btn.setTitle(nil, for: .normal)
             } else if isShifted {
-                btn.backgroundColor = Colors.specialKeyActive
+                btn.backgroundColor = palette.specialKeyActive
                 btn.setImage(UIImage(systemName: "shift.fill", withConfiguration: config), for: .normal)
                 btn.setTitle(nil, for: .normal)
             } else {
-                btn.backgroundColor = Colors.specialKey
+                btn.backgroundColor = palette.specialKey
                 btn.setImage(UIImage(systemName: "shift", withConfiguration: config), for: .normal)
                 btn.setTitle(nil, for: .normal)
             }
@@ -1402,7 +1493,7 @@ public final class CompactKeyboardView: UIView {
         let activeConfig = UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
         let updates = {
             spaceBtn.imageView?.contentMode = .scaleAspectFit
-            spaceBtn.tintColor = Colors.keyText
+            spaceBtn.tintColor = self.palette.keyText
             spaceBtn.imageView?.transform = .identity
             self.removeSpaceIdleHintStack(from: spaceBtn)
             self.removeSpaceStateHintStack(from: spaceBtn)
@@ -1417,16 +1508,16 @@ public final class CompactKeyboardView: UIView {
             case .recording:
                 // Keep dictation affordance aligned with key styling but restore clear state cue.
                 self.applySpecialKeyRestingStyle(spaceBtn)
-                spaceBtn.backgroundColor = Colors.specialKeyActive
-                spaceBtn.layer.borderColor = Colors.keyBorderPressed.cgColor
+                spaceBtn.backgroundColor = self.palette.specialKeyActive
+                spaceBtn.layer.borderColor = self.palette.keyBorderPressed.cgColor
                 spaceBtn.layer.shadowOpacity = self.keyRestingShadowOpacity
                 spaceBtn.setImage(UIImage(systemName: "stop.fill", withConfiguration: activeConfig), for: .normal)
                 spaceBtn.setTitle(nil, for: .normal)
                 self.addSpaceStateHintStack(to: spaceBtn, text: "TAP TO STOP")
             case .processing:
                 self.applySpecialKeyRestingStyle(spaceBtn)
-                spaceBtn.backgroundColor = Colors.keyPressed
-                spaceBtn.layer.borderColor = Colors.keyBorderPressed.cgColor
+                spaceBtn.backgroundColor = self.palette.keyPressed
+                spaceBtn.layer.borderColor = self.palette.keyBorderPressed.cgColor
                 spaceBtn.layer.shadowOpacity = self.keyRestingShadowOpacity
                 spaceBtn.setImage(UIImage(systemName: "ellipsis", withConfiguration: activeConfig), for: .normal)
                 spaceBtn.setTitle(nil, for: .normal)
@@ -1453,7 +1544,7 @@ public final class CompactKeyboardView: UIView {
         stack.translatesAutoresizingMaskIntoConstraints = false
 
         let iconView = UIImageView(image: UIImage(systemName: "mic.fill"))
-        iconView.tintColor = Colors.keyText.withAlphaComponent(0.11)
+        iconView.tintColor = palette.keyText.withAlphaComponent(0.11)
         iconView.contentMode = .scaleAspectFit
         iconView.translatesAutoresizingMaskIntoConstraints = false
         iconView.heightAnchor.constraint(equalToConstant: 18).isActive = true
@@ -1462,7 +1553,7 @@ public final class CompactKeyboardView: UIView {
         let labelView = UILabel()
         labelView.text = "LONG TAP"
         labelView.font = .systemFont(ofSize: 8, weight: .medium)
-        labelView.textColor = Colors.keyText.withAlphaComponent(0.14)
+        labelView.textColor = palette.keyText.withAlphaComponent(0.14)
 
         stack.addArrangedSubview(iconView)
         stack.addArrangedSubview(labelView)
@@ -1485,7 +1576,7 @@ public final class CompactKeyboardView: UIView {
         label.tag = spaceStateHintStackTag
         label.text = text
         label.font = .systemFont(ofSize: 8, weight: .semibold)
-        label.textColor = Colors.keyText.withAlphaComponent(0.5)
+        label.textColor = palette.keyText.withAlphaComponent(0.5)
         label.isUserInteractionEnabled = false
         label.translatesAutoresizingMaskIntoConstraints = false
 

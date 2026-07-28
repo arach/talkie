@@ -19,6 +19,7 @@
 //
 
 import SwiftUI
+import Observation
 import TalkieMobileKit
 import UIKit
 
@@ -28,7 +29,8 @@ struct HomeNextView: View {
     @ObservedObject private var iCloudStatus = iCloudStatusManager.shared
     @ObservedObject private var recordingSheet = RecordingSheetController.shared
     @StateObject private var feed: HomeFeed
-    @FocusState private var isCommandFocused: Bool
+    @State private var isCommandFocused = false
+    @State private var commandKeyboard = HomeCommandKeyboardController()
     @State private var commandMode: HomeCommandMode = .ask
     @State private var askPrompt = ""
 
@@ -51,7 +53,8 @@ struct HomeNextView: View {
                     prompt: $askPrompt,
                     searchText: $feed.searchText,
                     mode: $commandMode,
-                    isFocused: $isCommandFocused
+                    isFocused: $isCommandFocused,
+                    keyboardController: commandKeyboard
                 )
                     .padding(.horizontal, 12)
 
@@ -85,6 +88,17 @@ struct HomeNextView: View {
             }
         }
         .scrollIndicators(.hidden)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if isCommandFocused {
+                HomeTalkieKeyboardHost(
+                    controller: commandKeyboard,
+                    visualStyle: theme.currentTheme == .mineral ? .mineralInstrument : .automatic
+                )
+                .frame(maxWidth: .infinity)
+                .frame(height: commandKeyboard.preferredHeight)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onReceive(NotificationCenter.default.publisher(for: .voiceMemosDidChange)) { _ in feed.reload() }
         .onReceive(NotificationCenter.default.publisher(for: .capturesDidChange)) { _ in feed.reload() }
@@ -93,12 +107,26 @@ struct HomeNextView: View {
             guard wasPresented && !isPresented else { return }
             feed.reload()
         }
+        .onChange(of: isCommandFocused) { _, isFocused in
+            AppShellRouter.shared.isEditorKeyboardUp = isFocused
+        }
         .onChange(of: deepLinkManager.pendingAction) { _, action in
             handleDeepLinkAction(action)
         }
         .onAppear {
             feed.reload()
             handleDeepLinkAction(deepLinkManager.pendingAction)
+        }
+        .task {
+            guard ProcessInfo.processInfo.arguments.contains("--screenshotHomeAskReady") else { return }
+            commandMode = .ask
+            askPrompt = "Help me outline the launch plan"
+            try? await Task.sleep(for: .milliseconds(450))
+            isCommandFocused = true
+        }
+        .animation(.easeOut(duration: 0.22), value: isCommandFocused)
+        .onDisappear {
+            AppShellRouter.shared.isEditorKeyboardUp = false
         }
     }
 
@@ -370,24 +398,30 @@ private struct DeckComplication: View {
     }
 }
 
-// MARK: - Home tactical palette
+// MARK: - Home cockpit palette
 
-private enum HomeTacticalPalette {
-    static let accent = Color(hex: "FF8800")
-    static let accentSoft = Color(hex: "FF8800").opacity(0.14)
-    static let accentEdge = Color(hex: "FF8800").opacity(0.34)
-    static let matte = Color(hex: "303030", darkHex: "181818")
-    static let matteLow = Color(hex: "242424", darkHex: "101010")
-    static let screen = Color(hex: "050505")
-    static let screenAlt = Color(hex: "121212")
-    static let screenInk = Color(hex: "F3F1EA")
-    static let screenInkFaint = Color(hex: "A6A29A")
+// The cockpit used to carry a tactical orange palette regardless of the user's
+// theme. Derive its fabricated chassis, screen, ink, and signal colors from the
+// active chrome vocabulary so Mineral reads as copper on blue-gray alloy while
+// Tactical, Scope, and the monochrome themes retain their own identities.
+private enum HomeCockpitPalette {
+    private static var activeTheme: AppTheme {
+        let raw = TalkieAppConfigurationStore.shared.configuration.appearance.theme
+        return AppTheme(rawValue: raw) ?? .scope
+    }
 
-    // ── Amber-CRT terminal ink — the phosphor shared by the Message Line strip
-    // (TerminalMessageStrip) and the Roll / Gauge amber. The terminal dark-glass
-    // gradient stops now live with the reusable strip in TerminalMessageStrip.swift.
-    /// The terminal's lit ink — amber phosphor (#FFB24A).
-    static let phosphor = Color(hex: "FFB24A")
+    private static var chrome: ChromeTokens { activeTheme.chrome }
+
+    static var accent: Color { chrome.accent }
+    static var accentSoft: Color { chrome.accentTint }
+    static var accentEdge: Color { chrome.panelEdge }
+    static var matte: Color { chrome.panelAlt }
+    static var matteLow: Color { chrome.panel }
+    static var screen: Color { chrome.panel }
+    static var screenAlt: Color { chrome.panelAlt }
+    static var screenInk: Color { chrome.panelInk }
+    static var screenInkFaint: Color { chrome.panelInkFaint }
+    static var phosphor: Color { chrome.panelAccent }
 }
 
 // MARK: - Command center
@@ -431,11 +465,74 @@ private struct HomeAskShortcut: Identifiable {
     ]
 }
 
+@MainActor
+@Observable
+private final class HomeCommandKeyboardController {
+    var preferredHeight: CGFloat = 230
+
+    @ObservationIgnored weak var inputHost: KeyboardInputHost?
+    @ObservationIgnored weak var keyboard: HostedTalkieKeyboardView?
+    @ObservationIgnored var onDictationToggle: (() -> Void)?
+    @ObservationIgnored var onCollapse: (() -> Void)?
+}
+
+/// Home presents the Talkie keyboard as app-owned chrome, just like Compose.
+/// This keeps it visible on iPad even when a hardware keyboard is connected;
+/// UIKit's custom `inputView` presentation is intentionally bypassed.
+private struct HomeTalkieKeyboardHost: UIViewRepresentable {
+    let controller: HomeCommandKeyboardController
+    let visualStyle: KeyboardVisualStyle
+
+    func makeUIView(context: Context) -> HostedTalkieKeyboardView {
+        let keyboard = HostedTalkieKeyboardView()
+        keyboard.accessibilityIdentifier = "home.talkie-keyboard"
+        keyboard.allowsMinimalLayout = false
+        keyboard.preferredInitialLayout = .compact
+        keyboard.preferredInitialModeId = KeyboardMode.abc.id
+        keyboard.visualStyle = visualStyle
+        keyboard.overrideUserInterfaceStyle = visualStyle == .mineralInstrument ? .light : .unspecified
+        keyboard.inputHost = controller.inputHost
+        keyboard.onDictationToggle = { [weak controller] in
+            controller?.onDictationToggle?()
+        }
+        keyboard.onRequestCollapse = { [weak controller] in
+            controller?.onCollapse?()
+        }
+        keyboard.onLayoutHeightChange = { [weak controller, weak keyboard] in
+            guard let controller, let keyboard else { return }
+            controller.preferredHeight = keyboard.intrinsicContentSize.height
+        }
+        keyboard.resetToPreferredInitialLayout()
+        controller.keyboard = keyboard
+        controller.preferredHeight = keyboard.intrinsicContentSize.height
+        return keyboard
+    }
+
+    func updateUIView(_ keyboard: HostedTalkieKeyboardView, context: Context) {
+        keyboard.inputHost = controller.inputHost
+        keyboard.visualStyle = visualStyle
+        keyboard.overrideUserInterfaceStyle = visualStyle == .mineralInstrument ? .light : .unspecified
+        controller.keyboard = keyboard
+        controller.preferredHeight = keyboard.intrinsicContentSize.height
+    }
+
+    static func dismantleUIView(
+        _ keyboard: HostedTalkieKeyboardView,
+        coordinator: Void
+    ) {
+        keyboard.inputHost = nil
+        keyboard.onDictationToggle = nil
+        keyboard.onRequestCollapse = nil
+        keyboard.onLayoutHeightChange = nil
+    }
+}
+
 private struct HomeCommandBar: View {
     @Binding var prompt: String
     @Binding var searchText: String
     @Binding var mode: HomeCommandMode
-    @FocusState.Binding var isFocused: Bool
+    @Binding var isFocused: Bool
+    let keyboardController: HomeCommandKeyboardController
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
@@ -448,15 +545,15 @@ private struct HomeCommandBar: View {
                         Text(mode.label)
                             .talkieType(.channelLabelTiny)
                     }
-                    .foregroundStyle(mode == .ask ? HomeTacticalPalette.accent : theme.colors.textSecondary)
+                    .foregroundStyle(mode == .ask ? HomeCockpitPalette.accent : theme.colors.textSecondary)
                     .padding(.horizontal, 9)
                     .frame(height: 30)
                     .background {
                         Capsule()
-                            .fill(mode == .ask ? HomeTacticalPalette.accentSoft : theme.currentTheme.chrome.edgeFaint)
+                            .fill(mode == .ask ? HomeCockpitPalette.accentSoft : theme.currentTheme.chrome.edgeFaint)
                             .overlay {
                                 Capsule().strokeBorder(
-                                    mode == .ask ? HomeTacticalPalette.accentEdge : theme.currentTheme.chrome.edgeFaint,
+                                    mode == .ask ? HomeCockpitPalette.accentEdge : theme.currentTheme.chrome.edgeFaint,
                                     lineWidth: theme.currentTheme.chrome.hairlineWidth
                                 )
                             }
@@ -466,13 +563,21 @@ private struct HomeCommandBar: View {
                 .accessibilityLabel(mode == .ask ? "Switch to search" : "Switch to Ask AI")
                 .accessibilityIdentifier("home.command-mode")
 
-                TextField(mode.placeholder, text: activeText)
-                    .talkieType(.fieldLabel)
-                    .foregroundStyle(theme.colors.textPrimary)
-                    .submitLabel(mode == .ask ? .send : .search)
-                    .focused($isFocused)
-                    .onSubmit(submit)
-                    .accessibilityIdentifier("home.command-field")
+                HomeCommandTextField(
+                    text: activeText,
+                    placeholder: mode.placeholder,
+                    isFocused: $isFocused,
+                    keyboardController: keyboardController,
+                    textColor: UIColor(theme.colors.textPrimary),
+                    placeholderColor: UIColor(theme.colors.textTertiary),
+                    tintColor: UIColor(HomeCockpitPalette.accent),
+                    onSubmit: submit
+                )
+                // Ask and Search own independent values. Recreate the UIKit
+                // coordinator when the mode changes so its keystroke replay
+                // guard cannot preserve text from the previous field.
+                .id(mode)
+                .frame(height: 30)
 
                 Button(action: submit) {
                     Image(systemName: trailingIcon)
@@ -511,12 +616,12 @@ private struct HomeCommandBar: View {
                 .fill(theme.colors.cardBackground.opacity(0.9))
                 .overlay {
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(HomeTacticalPalette.accentSoft.opacity(mode == .ask ? (isFocused ? 0.7 : 0.28) : 0))
+                        .fill(HomeCockpitPalette.accentSoft.opacity(mode == .ask ? (isFocused ? 0.7 : 0.28) : 0))
                 }
                 .overlay {
                     RoundedRectangle(cornerRadius: 14)
                         .strokeBorder(
-                            isFocused && mode == .ask ? HomeTacticalPalette.accentEdge : theme.currentTheme.chrome.edgeFaint,
+                            isFocused && mode == .ask ? HomeCockpitPalette.accentEdge : theme.currentTheme.chrome.edgeFaint,
                             lineWidth: isFocused ? 1 : theme.currentTheme.chrome.hairlineWidth
                         )
                 }
@@ -574,7 +679,7 @@ private struct HomeCommandBar: View {
 
                 Button("ASK AI", action: switchToAsk)
                     .talkieType(.channelLabelTiny)
-                    .foregroundStyle(HomeTacticalPalette.accent)
+                    .foregroundStyle(HomeCockpitPalette.accent)
                     .buttonStyle(.plain)
             }
         }
@@ -601,13 +706,13 @@ private struct HomeCommandBar: View {
     }
 
     private var trailingBackground: Color {
-        if mode == .ask, !trimmedActiveText.isEmpty { return HomeTacticalPalette.accent }
+        if mode == .ask, !trimmedActiveText.isEmpty { return HomeCockpitPalette.accent }
         return theme.currentTheme.chrome.edgeFaint
     }
 
     private var trailingBorder: Color {
         mode == .ask && !trimmedActiveText.isEmpty
-            ? HomeTacticalPalette.accentEdge
+            ? HomeCockpitPalette.accentEdge
             : theme.currentTheme.chrome.edgeFaint
     }
 
@@ -645,6 +750,289 @@ private struct HomeCommandBar: View {
     private func switchToAsk() {
         mode = .ask
         isFocused = true
+    }
+}
+
+/// Single-line command input backed by `UITextField` so Home can present the
+/// same reusable Talkie keyboard as Compose and SSH. UIKit still owns focus,
+/// selection, and hardware input; the visible key surface is app-hosted below.
+private struct HomeCommandTextField: UIViewRepresentable {
+    @Binding var text: String
+    let placeholder: String
+    @Binding var isFocused: Bool
+    let keyboardController: HomeCommandKeyboardController
+    let textColor: UIColor
+    let placeholderColor: UIColor
+    let tintColor: UIColor
+    let onSubmit: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(
+            text: $text,
+            onSubmit: onSubmit,
+            keyboardController: keyboardController
+        )
+    }
+
+    func makeUIView(context: Context) -> UITextField {
+        let textField = UITextField()
+        // The Talkie keyboard is an ordinary bottom-anchored view. Suppress
+        // the system keyboard while retaining a real first responder/caret.
+        textField.inputView = UIView()
+        textField.delegate = context.coordinator
+        textField.addTarget(
+            context.coordinator,
+            action: #selector(Coordinator.textDidChange(_:)),
+            for: .editingChanged
+        )
+        textField.backgroundColor = .clear
+        textField.borderStyle = .none
+        textField.clearButtonMode = .never
+        textField.autocapitalizationType = .sentences
+        textField.autocorrectionType = .yes
+        textField.spellCheckingType = .yes
+        textField.smartDashesType = .yes
+        textField.smartQuotesType = .yes
+        textField.font = .preferredFont(forTextStyle: .body)
+        textField.adjustsFontForContentSizeCategory = true
+        textField.returnKeyType = .send
+        textField.accessibilityIdentifier = "home.command-field"
+        textField.inputAssistantItem.leadingBarButtonGroups = []
+        textField.inputAssistantItem.trailingBarButtonGroups = []
+
+        context.coordinator.textField = textField
+        keyboardController.inputHost = context.coordinator
+        return textField
+    }
+
+    func updateUIView(_ textField: UITextField, context: Context) {
+        context.coordinator.text = $text
+        context.coordinator.onSubmit = onSubmit
+        context.coordinator.setFocused = { focused in
+            isFocused = focused
+        }
+
+        if textField.text != text,
+           context.coordinator.shouldApplyBoundText(text, to: textField) {
+            textField.text = text
+            context.coordinator.recordFieldValue(text)
+        }
+
+        textField.textColor = textColor
+        textField.tintColor = tintColor
+        textField.attributedPlaceholder = NSAttributedString(
+            string: placeholder,
+            attributes: [
+                .foregroundColor: placeholderColor,
+                .font: textField.font ?? UIFont.preferredFont(forTextStyle: .body),
+            ]
+        )
+
+        keyboardController.inputHost = context.coordinator
+
+        if isFocused {
+            if !textField.isFirstResponder {
+                textField.becomeFirstResponder()
+            }
+        } else if textField.isFirstResponder {
+            textField.resignFirstResponder()
+        }
+    }
+
+    static func dismantleUIView(_ textField: UITextField, coordinator: Coordinator) {
+        coordinator.teardown()
+        textField.delegate = nil
+        textField.inputView = nil
+        if textField.isFirstResponder {
+            textField.resignFirstResponder()
+        }
+    }
+
+    @MainActor
+    final class Coordinator: NSObject, UITextFieldDelegate, KeyboardInputHost {
+        var text: Binding<String>
+        var onSubmit: () -> Void
+        var setFocused: ((Bool) -> Void)?
+        weak var textField: UITextField?
+        let keyboardController: HomeCommandKeyboardController
+
+        private let dictationController = InlineDictationController()
+        private var recentFieldValues: [String]
+
+        init(
+            text: Binding<String>,
+            onSubmit: @escaping () -> Void,
+            keyboardController: HomeCommandKeyboardController
+        ) {
+            self.text = text
+            self.onSubmit = onSubmit
+            self.keyboardController = keyboardController
+            recentFieldValues = [text.wrappedValue]
+            super.init()
+
+            keyboardController.inputHost = self
+            keyboardController.onDictationToggle = { [weak self] in
+                self?.toggleDictation()
+            }
+            keyboardController.onCollapse = { [weak self] in
+                self?.textField?.resignFirstResponder()
+            }
+
+            dictationController.onStateChange = { [weak self] state in
+                self?.applyDictationState(state)
+            }
+            dictationController.onTranscript = { [weak self] transcript in
+                guard let self else { return }
+                replaceSelection(with: transcript)
+                keyboardController.keyboard?.showDictationSuccessFeedback()
+            }
+            dictationController.onError = { [weak self] _ in
+                self?.keyboardController.keyboard?.setDictationState(.idle)
+            }
+        }
+
+        @objc func textDidChange(_ textField: UITextField) {
+            commitFieldValue(textField.text ?? "")
+        }
+
+        func shouldApplyBoundText(_ value: String, to textField: UITextField) -> Bool {
+            guard textField.isFirstResponder else { return true }
+
+            // UIKit can deliver several hardware/XCTest keystrokes before
+            // SwiftUI finishes replaying every intermediate Binding value.
+            // Never push one of those older prefixes back into the live field.
+            return !recentFieldValues.contains(value)
+        }
+
+        func recordFieldValue(_ value: String) {
+            recentFieldValues.append(value)
+            if recentFieldValues.count > 64 {
+                recentFieldValues.removeFirst(recentFieldValues.count - 64)
+            }
+        }
+
+        func textFieldDidBeginEditing(_ textField: UITextField) {
+            keyboardController.keyboard?.resetToPreferredInitialLayout()
+            setFocused?(true)
+        }
+
+        func textFieldDidEndEditing(_ textField: UITextField) {
+            setFocused?(false)
+            dictationController.cancel()
+        }
+
+        func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+            submit()
+            return false
+        }
+
+        func performKeyboardAction(_ action: KeyboardAction) {
+            guard let textField else { return }
+
+            switch action {
+            case .insert(let insertedText):
+                replaceSelection(with: insertedText)
+            case .deleteBackward:
+                textField.deleteBackward()
+                commitFieldValue(textField.text ?? "")
+            case .copy:
+                copySelection(from: textField)
+            case .paste:
+                guard let clipboardText = UIPasteboard.general.string, !clipboardText.isEmpty else { return }
+                replaceSelection(with: clipboardText)
+            case .selectAll:
+                textField.selectAll(nil)
+            case .tab:
+                replaceSelection(with: " ")
+            case .enter:
+                submit()
+            case .escape, .dismissKeyboard:
+                textField.resignFirstResponder()
+            case .moveCursor(let movement):
+                moveCursor(movement, in: textField)
+            case .toggleShift, .toggleControl, .interrupt:
+                break
+            }
+        }
+
+        func toggleDictation() {
+            switch dictationController.currentState {
+            case .idle:
+                Task { @MainActor [weak self] in
+                    await self?.dictationController.start()
+                }
+            case .recording:
+                dictationController.stop(insertTranscript: true)
+            case .transcribing:
+                break
+            }
+        }
+
+        func teardown() {
+            dictationController.cancel()
+            if keyboardController.inputHost === self {
+                keyboardController.inputHost = nil
+            }
+            keyboardController.onDictationToggle = nil
+            keyboardController.onCollapse = nil
+            textField = nil
+        }
+
+        private func submit() {
+            textField?.resignFirstResponder()
+            onSubmit()
+        }
+
+        private func replaceSelection(with insertedText: String) {
+            guard let textField else { return }
+            if let selection = textField.selectedTextRange {
+                textField.replace(selection, withText: insertedText)
+            } else {
+                textField.text = (textField.text ?? "") + insertedText
+            }
+            commitFieldValue(textField.text ?? "")
+        }
+
+        private func commitFieldValue(_ value: String) {
+            recordFieldValue(value)
+            text.wrappedValue = value
+        }
+
+        private func copySelection(from textField: UITextField) {
+            guard let selection = textField.selectedTextRange else {
+                UIPasteboard.general.string = textField.text
+                return
+            }
+            let selected = textField.text(in: selection) ?? ""
+            UIPasteboard.general.string = selected.isEmpty ? textField.text : selected
+        }
+
+        private func moveCursor(_ movement: KeyboardCursorMovement, in textField: UITextField) {
+            guard let selection = textField.selectedTextRange else { return }
+            let offset: Int
+            switch movement {
+            case .left, .up: offset = -1
+            case .right, .down: offset = 1
+            case .wordLeft: offset = -5
+            case .wordRight: offset = 5
+            }
+            guard let position = textField.position(from: selection.start, offset: offset),
+                  let collapsed = textField.textRange(from: position, to: position) else {
+                return
+            }
+            textField.selectedTextRange = collapsed
+        }
+
+        private func applyDictationState(_ state: InlineDictationController.State) {
+            switch state {
+            case .idle:
+                keyboardController.keyboard?.setDictationState(.idle)
+            case .recording:
+                keyboardController.keyboard?.setDictationState(.recording)
+            case .transcribing:
+                keyboardController.keyboard?.setDictationState(.processing)
+            }
+        }
     }
 }
 
@@ -788,7 +1176,7 @@ private struct HomeCockpit: View {
                         padding: 10,
                         corner: 14,
                         emphasis: .edge,
-                        fill: HomeTacticalPalette.matte
+                        fill: HomeCockpitPalette.matte
                     )
                 }
                 .buttonStyle(.plain)
@@ -804,7 +1192,7 @@ private struct HomeCockpit: View {
                         padding: HomeCockpitMetrics.bezelPad,
                         corner: HomeCockpitMetrics.bezelCorner,
                         metal: true,
-                        fill: HomeTacticalPalette.matte
+                        fill: HomeCockpitPalette.matte
                     )
             }
             .buttonStyle(.plain)
@@ -869,15 +1257,15 @@ private struct HomeActivityScreen: View {
             HStack {
                 Text("TALKIE")
                     .talkieType(.channelLabelTiny)
-                    .foregroundStyle(HomeTacticalPalette.screenInkFaint)
+                    .foregroundStyle(HomeCockpitPalette.screenInkFaint)
                 Spacer()
                 Text("ACTIVITY")
                     .talkieType(.channelLabelTiny)
-                    .foregroundStyle(HomeTacticalPalette.accent)
+                    .foregroundStyle(HomeCockpitPalette.accent)
                 Spacer()
                 Text("9:41")
                     .talkieType(.channelLabelTiny)
-                    .foregroundStyle(HomeTacticalPalette.screenInkFaint)
+                    .foregroundStyle(HomeCockpitPalette.screenInkFaint)
             }
 
             VStack(spacing: 0) {
@@ -889,7 +1277,7 @@ private struct HomeActivityScreen: View {
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(HomeTacticalPalette.accent.opacity(0.14), lineWidth: 1)
+                    .strokeBorder(HomeCockpitPalette.accent.opacity(0.14), lineWidth: 1)
             }
         }
         .padding(.horizontal, 12)
@@ -897,14 +1285,14 @@ private struct HomeActivityScreen: View {
         .frame(maxWidth: .infinity)
         .background {
             ZStack {
-                HomeTacticalPalette.screen
+                HomeCockpitPalette.screen
                 LinearGradient(
                     colors: [Color.white.opacity(0.08), Color.black.opacity(0.20)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
                 RadialGradient(
-                    colors: [HomeTacticalPalette.accent.opacity(0.18), .clear],
+                    colors: [HomeCockpitPalette.accent.opacity(0.18), .clear],
                     center: UnitPoint(x: 0.72, y: 0.36),
                     startRadius: 0,
                     endRadius: 140
@@ -913,7 +1301,7 @@ private struct HomeActivityScreen: View {
         }
         .clipShape(shape)
         .overlay {
-            shape.strokeBorder(HomeTacticalPalette.accentEdge, lineWidth: hairline)
+            shape.strokeBorder(HomeCockpitPalette.accentEdge, lineWidth: hairline)
         }
     }
 }
@@ -926,23 +1314,23 @@ private struct HomeActivityRow: View {
         HStack(spacing: 9) {
             Text(event.time)
                 .talkieType(.timestamp)
-                .foregroundStyle(HomeTacticalPalette.screenInkFaint)
+                .foregroundStyle(HomeCockpitPalette.screenInkFaint)
                 .frame(width: 34, alignment: .leading)
 
             Circle()
-                .fill(HomeTacticalPalette.accent)
+                .fill(HomeCockpitPalette.accent)
                 .frame(width: 5, height: 5)
-                .shadow(color: HomeTacticalPalette.accent.opacity(0.65), radius: 3)
+                .shadow(color: HomeCockpitPalette.accent.opacity(0.65), radius: 3)
 
             Text(event.title)
                 .talkieType(.preview)
-                .foregroundStyle(HomeTacticalPalette.screenInk)
+                .foregroundStyle(HomeCockpitPalette.screenInk)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Text(event.kind)
                 .talkieType(.channelLabelTiny)
-                .foregroundStyle(HomeTacticalPalette.accent)
+                .foregroundStyle(HomeCockpitPalette.accent)
                 .lineLimit(1)
         }
         .padding(.horizontal, 9)
@@ -995,7 +1383,7 @@ private struct CockpitScreen: View {
         .frame(maxWidth: .infinity)
         .background {
             ZStack {
-                HomeTacticalPalette.screen
+                HomeCockpitPalette.screen
                 LinearGradient(
                     stops: [
                         .init(color: Color.white.opacity(0.08), location: 0),
@@ -1006,15 +1394,15 @@ private struct CockpitScreen: View {
                     endPoint: .bottom
                 )
                 RadialGradient(
-                    colors: [HomeTacticalPalette.accent.opacity(0.22), .clear],
+                    colors: [HomeCockpitPalette.accent.opacity(0.22), .clear],
                     center: UnitPoint(x: 0.5, y: 0.44),
                     startRadius: 0,
                     endRadius: 110
                 )
                 LinearGradient(
                     colors: [
-                        HomeTacticalPalette.screenAlt.opacity(0.00),
-                        HomeTacticalPalette.screenAlt.opacity(0.45),
+                        HomeCockpitPalette.screenAlt.opacity(0.00),
+                        HomeCockpitPalette.screenAlt.opacity(0.45),
                     ],
                     startPoint: .leading,
                     endPoint: .trailing
@@ -1023,7 +1411,7 @@ private struct CockpitScreen: View {
         }
         .clipShape(shape)
         .overlay {
-            shape.strokeBorder(HomeTacticalPalette.accentEdge, lineWidth: hairline)
+            shape.strokeBorder(HomeCockpitPalette.accentEdge, lineWidth: hairline)
         }
     }
 
@@ -1081,7 +1469,7 @@ private struct CockpitBay: View {
                 Text(readout)
                     .font(.system(size: 8, weight: .semibold, design: .monospaced))
                     .tracking(0.8) // 0.1em at 8pt
-                    .foregroundStyle(readoutHot ? HomeTacticalPalette.accent : HomeTacticalPalette.screenInkFaint)
+                    .foregroundStyle(readoutHot ? HomeCockpitPalette.accent : HomeCockpitPalette.screenInkFaint)
                     .accessibilityHidden(true)
             }
             .frame(height: HomeCockpitMetrics.bayLabelHeight)
@@ -1148,7 +1536,7 @@ private struct BaySelector: View {
             .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .strokeBorder(HomeTacticalPalette.accent.opacity(0.22), lineWidth: 1)
+                    .strokeBorder(HomeCockpitPalette.accent.opacity(0.22), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -1163,16 +1551,16 @@ private struct BaySelector: View {
         Text(label)
             .font(.system(size: 8, weight: .bold, design: .monospaced))
             .tracking(0.96) // 0.12em at 8pt
-            .foregroundStyle(on ? HomeTacticalPalette.phosphor : HomeTacticalPalette.phosphor.opacity(0.5))
-            .shadow(color: on ? HomeTacticalPalette.accent.opacity(0.55) : .clear, radius: on ? 3 : 0)
+            .foregroundStyle(on ? HomeCockpitPalette.phosphor : HomeCockpitPalette.phosphor.opacity(0.5))
+            .shadow(color: on ? HomeCockpitPalette.accent.opacity(0.55) : .clear, radius: on ? 3 : 0)
             .padding(.horizontal, 7)
             .frame(maxHeight: .infinity)
-            .background(on ? HomeTacticalPalette.accent.opacity(0.16) : Color.clear)
+            .background(on ? HomeCockpitPalette.accent.opacity(0.16) : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
             .overlay {
                 if on {
                     RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .strokeBorder(HomeTacticalPalette.accent.opacity(0.4), lineWidth: 0.5)
+                        .strokeBorder(HomeCockpitPalette.accent.opacity(0.4), lineWidth: 0.5)
                 }
             }
     }
@@ -1279,14 +1667,14 @@ private struct MeterLane: View {
             Text(caption)
                 .font(.system(size: 8, weight: .semibold, design: .monospaced))
                 .tracking(0.8) // 0.1em at 8pt
-                .foregroundStyle(HomeTacticalPalette.phosphor.opacity(0.5))
+                .foregroundStyle(HomeCockpitPalette.phosphor.opacity(0.5))
                 .frame(width: 42, alignment: .leading)
 
             Text(readout)
                 .font(.system(size: 15, weight: .bold, design: .monospaced).monospacedDigit())
                 .tracking(0.3) // 0.02em at 15pt
-                .foregroundStyle(standby ? HomeTacticalPalette.phosphor.opacity(0.5) : HomeTacticalPalette.phosphor)
-                .shadow(color: standby ? .clear : HomeTacticalPalette.accent.opacity(0.55), radius: standby ? 0 : 4)
+                .foregroundStyle(standby ? HomeCockpitPalette.phosphor.opacity(0.5) : HomeCockpitPalette.phosphor)
+                .shadow(color: standby ? .clear : HomeCockpitPalette.accent.opacity(0.55), radius: standby ? 0 : 4)
                 .lineLimit(1)
                 .frame(width: 44, alignment: .leading)
 
@@ -1296,7 +1684,7 @@ private struct MeterLane: View {
             Text(pace.text)
                 .font(.system(size: 8, weight: .semibold, design: .monospaced))
                 .tracking(0.48) // 0.06em at 8pt
-                .foregroundStyle(pace.hot ? HomeTacticalPalette.accent : HomeTacticalPalette.phosphor.opacity(0.5))
+                .foregroundStyle(pace.hot ? HomeCockpitPalette.accent : HomeCockpitPalette.phosphor.opacity(0.5))
                 .lineLimit(1)
                 .frame(width: 72, alignment: .trailing)
         }
@@ -1359,15 +1747,15 @@ private struct SegMeter: View {
 
     private func fill(lit: Bool, isAvg: Bool) -> Color {
         if standby { return .clear }
-        if isAvg && !lit { return HomeTacticalPalette.accent.opacity(0.5) }
-        if lit { return HomeTacticalPalette.accent }
+        if isAvg && !lit { return HomeCockpitPalette.accent.opacity(0.5) }
+        if lit { return HomeCockpitPalette.accent }
         return Color.white.opacity(0.12)
     }
 
     private func glow(i: Int, filled: Int, lit: Bool, isAvg: Bool) -> Color {
         if standby { return .clear }
-        if isAvg { return HomeTacticalPalette.accent.opacity(0.7) }
-        if lit && i == filled - 1 { return HomeTacticalPalette.accent.opacity(0.55) }
+        if isAvg { return HomeCockpitPalette.accent.opacity(0.7) }
+        if lit && i == filled - 1 { return HomeCockpitPalette.accent.opacity(0.55) }
         return .clear
     }
 }
@@ -1387,21 +1775,21 @@ private struct StrkLane: View {
             Text("STRK")
                 .font(.system(size: 8, weight: .semibold, design: .monospaced))
                 .tracking(0.8) // 0.1em at 8pt
-                .foregroundStyle(HomeTacticalPalette.phosphor.opacity(0.5))
+                .foregroundStyle(HomeCockpitPalette.phosphor.opacity(0.5))
                 .frame(width: 42, alignment: .leading)
 
             HStack(alignment: .firstTextBaseline, spacing: 5) {
                 Text(standby ? "0" : "\(streak)")
                     .font(.system(size: 17, weight: .bold, design: .monospaced).monospacedDigit())
-                    .foregroundStyle(standby || streak > 0 ? HomeTacticalPalette.accent : HomeTacticalPalette.phosphor.opacity(0.5))
+                    .foregroundStyle(standby || streak > 0 ? HomeCockpitPalette.accent : HomeCockpitPalette.phosphor.opacity(0.5))
                     .shadow(
-                        color: (!standby && streak > 0) ? HomeTacticalPalette.accent.opacity(0.5) : .clear,
+                        color: (!standby && streak > 0) ? HomeCockpitPalette.accent.opacity(0.5) : .clear,
                         radius: (!standby && streak > 0) ? 3 : 0
                     )
                 Text(standby ? "DAY 1" : "DAY RUN")
                     .font(.system(size: 7, weight: .semibold, design: .monospaced))
                     .tracking(0.56) // 0.08em at 7pt
-                    .foregroundStyle(HomeTacticalPalette.phosphor.opacity(0.5))
+                    .foregroundStyle(HomeCockpitPalette.phosphor.opacity(0.5))
             }
             .frame(width: 66, alignment: .leading)
 
@@ -1459,7 +1847,7 @@ private struct Dot: View {
 
     private var fill: Color {
         if standby { return .clear }
-        if isToday { return HomeTacticalPalette.accent }
+        if isToday { return HomeCockpitPalette.accent }
         if filled { return Color.white.opacity(0.9) }
         return .clear
     }
@@ -1467,7 +1855,7 @@ private struct Dot: View {
     @ViewBuilder
     private var stroke: some View {
         if standby && isToday {
-            Circle().strokeBorder(HomeTacticalPalette.accent, lineWidth: 1.5) // amber Today Seed
+            Circle().strokeBorder(HomeCockpitPalette.accent, lineWidth: 1.5) // amber Today Seed
         } else if standby {
             Circle().strokeBorder(Color.white.opacity(0.11), lineWidth: 1) // Ghost dot
         } else if !filled && !isToday {
@@ -1476,8 +1864,8 @@ private struct Dot: View {
     }
 
     private var glowColor: Color {
-        if standby && isToday { return HomeTacticalPalette.accent.opacity(0.7) }
-        if !standby && isToday { return HomeTacticalPalette.accent.opacity(0.8) }
+        if standby && isToday { return HomeCockpitPalette.accent.opacity(0.7) }
+        if !standby && isToday { return HomeCockpitPalette.accent.opacity(0.8) }
         return .clear
     }
 
@@ -1512,7 +1900,7 @@ private struct RollCell: View {
         if ghost && isToday {
             // The amber Today Seed — the "you are here" the streak grows from.
             RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .strokeBorder(HomeTacticalPalette.accent, lineWidth: 1.5)
+                .strokeBorder(HomeCockpitPalette.accent, lineWidth: 1.5)
         } else if ghost {
             // A Ghost Cell — a faint outline sketching the grid that will fill in.
             RoundedRectangle(cornerRadius: 2, style: .continuous)
@@ -1520,16 +1908,16 @@ private struct RollCell: View {
         } else if isToday && intensity == 0 {
             // Today, no capture yet — an unlit amber ring marker.
             RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .strokeBorder(HomeTacticalPalette.accent, lineWidth: 1)
+                .strokeBorder(HomeCockpitPalette.accent, lineWidth: 1)
         }
     }
 
     private var fill: Color {
         if ghost { return .clear }  // ghost cells are outlined only
         if isFuture { return Color.white.opacity(0.03) }
-        if isToday && intensity > 0 { return HomeTacticalPalette.accent }
+        if isToday && intensity > 0 { return HomeCockpitPalette.accent }
         if isToday { return .clear }  // ring drawn in the overlay
-        if inRun { return HomeTacticalPalette.accent.opacity(0.7 + Double(intensity) * 0.1) }
+        if inRun { return HomeCockpitPalette.accent.opacity(0.7 + Double(intensity) * 0.1) }
         if intensity > 0 { return activeInk }
         return Color.white.opacity(0.05)   // empty past day
     }
@@ -1541,10 +1929,10 @@ private struct RollCell: View {
     }
 
     private var glowColor: Color {
-        if ghost && isToday { return HomeTacticalPalette.accent.opacity(0.7) }
+        if ghost && isToday { return HomeCockpitPalette.accent.opacity(0.7) }
         if ghost { return .clear }
-        if isToday && intensity > 0 { return HomeTacticalPalette.accent.opacity(0.85) }
-        if inRun { return HomeTacticalPalette.accent.opacity(0.4) }
+        if isToday && intensity > 0 { return HomeCockpitPalette.accent.opacity(0.85) }
+        if inRun { return HomeCockpitPalette.accent.opacity(0.4) }
         return .clear
     }
 
@@ -1624,7 +2012,7 @@ private struct HomeFrequentActionsStrip: View {
     private func iconColor(label: String) -> Color {
         switch label {
         case "RECORD", "SEARCH":
-            return HomeTacticalPalette.accent
+            return HomeCockpitPalette.accent
         default:
             return theme.currentTheme.chrome.action
         }
@@ -1700,7 +2088,7 @@ private struct HomeSuggestionsStrip: View {
                             HStack(spacing: 6) {
                                 Image(systemName: suggestion.icon)
                                     .font(.system(size: 12, weight: .medium))
-                                    .foregroundStyle(HomeTacticalPalette.accent)
+                                    .foregroundStyle(HomeCockpitPalette.accent)
                                 Text(suggestion.title)
                                     .talkieType(.fieldLabel)
                                     .foregroundStyle(theme.colors.textSecondary)
@@ -1714,7 +2102,7 @@ private struct HomeSuggestionsStrip: View {
                                     .fill(theme.colors.cardBackground)
                                     .overlay(
                                         Capsule()
-                                            .fill(HomeTacticalPalette.accent.opacity(0.035))
+                                            .fill(HomeCockpitPalette.accent.opacity(0.035))
                                     )
                                     .overlay(
                                         Capsule()

@@ -30,6 +30,13 @@ public final class HostedTalkieKeyboardView: UIView, UIGestureRecognizerDelegate
     public var onDictationToggle: (() -> Void)?
     public var onLayoutHeightChange: (() -> Void)?
     public var onRequestCollapse: (() -> Void)?
+    public var visualStyle: KeyboardVisualStyle = .automatic {
+        didSet {
+            guard oldValue != visualStyle else { return }
+            applyVisualStyle()
+            rebuildKeyboardContent()
+        }
+    }
     public var preferredInitialLayout: InitialLayout = .persisted {
         didSet {
             guard oldValue != preferredInitialLayout else { return }
@@ -213,7 +220,7 @@ public final class HostedTalkieKeyboardView: UIView, UIGestureRecognizerDelegate
     }
 
     private func setupUI() {
-        backgroundColor = Design.background
+        applyVisualStyle()
         lightImpact.prepare()
         mediumImpact.prepare()
 
@@ -334,6 +341,7 @@ public final class HostedTalkieKeyboardView: UIView, UIGestureRecognizerDelegate
 
     private func makeCompactKeyboardView() -> UIView {
         let keyboard = CompactKeyboardView()
+        keyboard.visualStyle = visualStyle
         keyboard.translatesAutoresizingMaskIntoConstraints = false
         keyboard.onKeyTapped = { [weak self] key in
             self?.inputHost?.performKeyboardAction(.insert(key))
@@ -355,6 +363,19 @@ public final class HostedTalkieKeyboardView: UIView, UIGestureRecognizerDelegate
         }
         compactKeyboardView = keyboard
         return keyboard
+    }
+
+    private func applyVisualStyle() {
+        switch visualStyle {
+        case .automatic:
+            backgroundColor = Design.background
+            layer.borderWidth = 0
+            layer.borderColor = nil
+        case .mineralInstrument:
+            backgroundColor = UIColor(red: 0.796, green: 0.843, blue: 0.839, alpha: 1)
+            layer.borderWidth = 0.75
+            layer.borderColor = UIColor(red: 0.608, green: 0.306, blue: 0.153, alpha: 0.42).cgColor
+        }
     }
 
     private func makeMinimalKeyboardView() -> UIView {

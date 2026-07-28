@@ -28,19 +28,27 @@ struct TerminalDockReadout: Equatable {
     let hot: Bool
 }
 
-// The terminal strip's own material — mirrors HomeTacticalPalette's amber
-// phosphor values verbatim, kept here so the component carries no Home
-// dependency and can travel to non-Home surfaces unchanged.
-private enum TerminalStripPalette {
-    static let phosphor = Color(hex: "FFB24A")
-    static let phosphorDim = Color(hex: "FFB24A").opacity(0.5) // PHOSPHOR_DIM
-    static let accent = Color(hex: "FF8800")
-    static let glassTop = Color(hex: "0B0704")
-    static let glassBottom = Color(hex: "050301")
-    static let glowInk = Color(hex: "FFCD82")
+// The terminal strip carries its own theme lookup so it can travel to non-Home
+// surfaces while matching the same active chrome vocabulary as the cockpit.
+// Shared with the failure toast (FeedbackToastNext) so a dropped voice turn
+// speaks the same phosphor language as the Message Line.
+enum TerminalStripPalette {
+    private static var activeTheme: AppTheme {
+        let raw = TalkieAppConfigurationStore.shared.configuration.appearance.theme
+        return AppTheme(rawValue: raw) ?? .scope
+    }
+
+    private static var chrome: ChromeTokens { activeTheme.chrome }
+
+    static var phosphor: Color { chrome.panelAccent }
+    static var phosphorDim: Color { chrome.panelAccent.opacity(0.5) }
+    static var accent: Color { chrome.accent }
+    static var glassTop: Color { chrome.panelAlt }
+    static var glassBottom: Color { chrome.panel }
+    static var glowInk: Color { chrome.panelAccent }
 }
 
-private enum TerminalStripMetrics {
+enum TerminalStripMetrics {
     static let font: CGFloat = 15          // MSG_FONT
     static let tracking: CGFloat = 0.9     // ≈ 0.06em at 15pt
     static let padH: CGFloat = 10          // STRIP_PAD_X
@@ -159,7 +167,7 @@ private struct DockedReadout: View {
 
 /// The dark amber glass behind the terminal line — a near-black vertical
 /// gradient with a soft amber radial bloom (TERM_GLASS in the studio).
-private struct TerminalGlass: View {
+struct TerminalGlass: View {
     var body: some View {
         ZStack {
             LinearGradient(
@@ -179,7 +187,7 @@ private struct TerminalGlass: View {
 
 /// Thin dark horizontal raster lines over the terminal glass — a static 1-in-3pt
 /// dark band. Drawn as a Shape (path built at layout, never per frame).
-private struct ScanlineOverlay: Shape {
+struct ScanlineOverlay: Shape {
     var spacing: CGFloat = 3
 
     func path(in rect: CGRect) -> Path {

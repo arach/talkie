@@ -835,7 +835,8 @@ private final class AskDictationController: ObservableObject {
     private func failSoftPermission() {
         phase = .idle
         FeedbackToastCenter.shared.showError(
-            "Microphone access is off — enable it in Settings to dictate.",
+            "Microphone access is off",
+            code: "MIC OFF",
             actionLabel: "SETTINGS"
         ) {
             if let url = URL(string: UIApplication.openSettingsURLString) {

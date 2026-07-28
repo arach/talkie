@@ -45,6 +45,50 @@
       ]
     },
     {
+      "key": "mineral",
+      "name": "Mineral",
+      "identity": "Blue-gray anodized alloy · copper signal chrome",
+      "blurb": "A calm fabricated-instrument theme built for the iPad campaign. Mineral blue-gray surfaces narrow the tonal jump between canvas and cards, deep teal carries the information hierarchy, and copper is reserved for active signal moments.",
+      "canvasHex": "#D2DEDD",
+      "accentHex": "#9B4E27",
+      "display": {
+        "weight": 500,
+        "tracking": "-0.018em",
+        "italicAccent": false
+      },
+      "behavior": {
+        "phosphorGlow": false,
+        "graticule": false,
+        "darkSurface": false
+      },
+      "preview": [
+        {
+          "label": "alloy",
+          "hex": "#D2DEDD"
+        },
+        {
+          "label": "surface",
+          "hex": "#E3E9E6"
+        },
+        {
+          "label": "ink",
+          "hex": "#163238"
+        },
+        {
+          "label": "copper",
+          "hex": "#9B4E27"
+        },
+        {
+          "label": "screen",
+          "hex": "#1C3034"
+        },
+        {
+          "label": "trace",
+          "hex": "#D27A46"
+        }
+      ]
+    },
+    {
       "key": "midnight",
       "name": "Midnight",
       "identity": "Vercel-blue on near-black · em-dash eyebrows",

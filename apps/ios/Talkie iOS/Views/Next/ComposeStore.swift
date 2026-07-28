@@ -461,7 +461,7 @@ final class ComposeStore: ObservableObject {
         inlineDictationController.onError = { [weak self] _ in
             self?.livePartialTranscript = nil
             self?.state = .idle
-            FeedbackToastCenter.shared.showError("Dictation didn't come through. Tap the mic to try again.")
+            FeedbackToastCenter.shared.showError("Dictation dropped — tap the mic", code: "NO SIGNAL")
         }
 
         voiceCommandController.onStateChange = { [weak self] state in
@@ -476,7 +476,7 @@ final class ComposeStore: ObservableObject {
             self?.voiceCommandDidSubmit = false
             self?.lastCommandTranscript = nil
             self?.state = .idle
-            FeedbackToastCenter.shared.showError("Voice command didn't come through. Try again.")
+            FeedbackToastCenter.shared.showError("Command dropped — try again", code: "NO SIGNAL")
         }
     }
 
