@@ -65,6 +65,13 @@ actor BridgeClient {
         path != "/pair"
     }
 
+    /// HTTP success is the full 2xx class. In particular, asynchronous bridge
+    /// routes return 202 Accepted with a decodable receipt while work continues
+    /// on the Mac.
+    static func accepts(statusCode: Int) -> Bool {
+        (200..<300).contains(statusCode)
+    }
+
     /// Whether stream frames should be sealed/opened — gated on the server
     /// advertising per-frame stream support, or on the per-Mac pin. Old servers
     /// that never advertised encStream → plaintext streams, unchanged (fully
@@ -778,7 +785,7 @@ actor BridgeClient {
             throw BridgeError.invalidResponse
         }
 
-        guard httpResponse.statusCode == 200 else {
+        guard Self.accepts(statusCode: httpResponse.statusCode) else {
             throw BridgeError.httpError(httpResponse.statusCode, detail: bridgeErrorDetail(from: data))
         }
 
@@ -821,7 +828,7 @@ actor BridgeClient {
             }
         }
 
-        guard httpResponse.statusCode == 200 else {
+        guard Self.accepts(statusCode: httpResponse.statusCode) else {
             throw BridgeError.httpError(httpResponse.statusCode, detail: bridgeErrorDetail(from: data))
         }
 
@@ -868,7 +875,7 @@ actor BridgeClient {
             }
         }
 
-        guard httpResponse.statusCode == 200 else {
+        guard Self.accepts(statusCode: httpResponse.statusCode) else {
             throw BridgeError.httpError(httpResponse.statusCode, detail: bridgeErrorDetail(from: data))
         }
 
