@@ -6,10 +6,28 @@ import path from "node:path";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { listTasks, readTurnActivity, taskRolloutPath } = require("./codex-desktop-bridge.cjs") as {
+const {
+  appendQueuedFollowUp,
+  listTasks,
+  readQueuedFollowUps,
+  readTurnActivity,
+  taskRolloutPath,
+  waitForQueuedTurn,
+} = require("./codex-desktop-bridge.cjs") as {
+  appendQueuedFollowUp: (
+    queued: Record<string, Array<Record<string, unknown>>>,
+    taskId: string,
+    message: Record<string, unknown>,
+  ) => Record<string, Array<Record<string, unknown>>>;
   listTasks: (limit: number) => Array<Record<string, unknown>>;
+  readQueuedFollowUps: () => Record<string, Array<Record<string, unknown>>>;
   readTurnActivity: (rolloutPath: string) => Record<string, unknown>;
   taskRolloutPath: (taskId: string) => string;
+  waitForQueuedTurn: (
+    rolloutPath: string,
+    offset: number,
+    text: string,
+  ) => Promise<{ turnId: string; response: string }>;
 };
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -22,7 +40,7 @@ afterEach(() => {
   fixtureHome = undefined;
 });
 
-describe("Codex task catalog", () => {
+describe.serial("Codex task catalog", () => {
   test("returns recognizable user task identity and hides internal tasks", () => {
     fixtureHome = mkdtempSync(path.join(tmpdir(), "talkie-codex-catalog-"));
     mkdirSync(fixtureHome, { recursive: true });
@@ -129,6 +147,48 @@ describe("Codex task catalog", () => {
           timestamp: "2026-07-28T10:00:03Z",
         },
       ],
+    });
+  });
+});
+
+describe.serial("Codex Desktop queued follow-ups", () => {
+  test("preserves queues for other tasks when appending a Talkie message", () => {
+    fixtureHome = mkdtempSync(path.join(tmpdir(), "talkie-codex-queue-"));
+    process.env.CODEX_HOME = fixtureHome;
+    const existing = {
+      "other-task": [{ id: "existing", text: "Keep me" }],
+    };
+    writeFileSync(
+      path.join(fixtureHome, ".codex-global-state.json"),
+      JSON.stringify({ "queued-follow-ups": existing }),
+    );
+
+    const queued = appendQueuedFollowUp(readQueuedFollowUps(), "talkie-task", {
+      id: "talkie-message",
+      text: "Queue me",
+    });
+
+    expect(queued).toEqual({
+      "other-task": [{ id: "existing", text: "Keep me" }],
+      "talkie-task": [{ id: "talkie-message", text: "Queue me" }],
+    });
+  });
+
+  test("observes the exact queued instruction through its completed turn", async () => {
+    fixtureHome = mkdtempSync(path.join(tmpdir(), "talkie-codex-queued-turn-"));
+    const rollout = path.join(fixtureHome, "rollout.jsonl");
+    writeFileSync(rollout, [
+      { type: "event_msg", payload: { type: "task_started", turn_id: "unrelated-turn" } },
+      { type: "event_msg", payload: { type: "user_message", message: "Desktop message" } },
+      { type: "event_msg", payload: { type: "task_complete", turn_id: "unrelated-turn", last_agent_message: "Unrelated" } },
+      { type: "event_msg", payload: { type: "task_started", turn_id: "talkie-turn" } },
+      { type: "event_msg", payload: { type: "user_message", message: "Talkie queued message" } },
+      { type: "event_msg", payload: { type: "task_complete", turn_id: "talkie-turn", last_agent_message: "Talkie response" } },
+    ].map(JSON.stringify).join("\n") + "\n");
+
+    await expect(waitForQueuedTurn(rollout, 0, "Talkie queued message")).resolves.toEqual({
+      turnId: "talkie-turn",
+      response: "Talkie response",
     });
   });
 });

@@ -14,8 +14,10 @@ const FOLLOW_VERSION = 1;
 const STREAM_VERSION = 11;
 const START_TURN_VERSION = 1;
 const STEER_TURN_VERSION = 1;
+const QUEUED_FOLLOW_UPS_VERSION = 1;
 const SNAPSHOT_TIMEOUT_MS = 5_000;
 const TURN_TIMEOUT_MS = 30 * 60_000;
+const QUEUED_TURN_TIMEOUT_MS = 60 * 60_000;
 const APP_SERVER_REQUEST_TIMEOUT_MS = 30_000;
 
 const CODEX_EXECUTABLE_CANDIDATES = [
@@ -116,6 +118,56 @@ function assertRolloutPath(rolloutPath, threadId) {
     fail('Codex task transcript is not a private user-owned file.', 'unsafe-rollout-path');
   }
   return resolved;
+}
+
+function readQueuedFollowUps() {
+  const statePath = path.join(codexHome(), '.codex-global-state.json');
+  let info;
+  try {
+    info = fs.lstatSync(statePath);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return {};
+    throw error;
+  }
+  if (
+    !info.isFile() ||
+    info.isSymbolicLink() ||
+    info.uid !== process.getuid() ||
+    (info.mode & 0o022) !== 0
+  ) {
+    fail('Codex Desktop global state is not a private user-owned file.', 'unsafe-global-state');
+  }
+  if (info.size > 32 * 1024 * 1024) {
+    fail('Codex Desktop global state is unexpectedly large.', 'unsafe-global-state');
+  }
+
+  let state;
+  try {
+    state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+  } catch {
+    fail('Codex Desktop global state is unreadable.', 'protocol-mismatch');
+  }
+  const queued = state?.['queued-follow-ups'] ?? {};
+  if (!queued || typeof queued !== 'object' || Array.isArray(queued)) {
+    fail('Codex Desktop queued follow-ups state is unreadable.', 'protocol-mismatch');
+  }
+  for (const messages of Object.values(queued)) {
+    if (!Array.isArray(messages)) {
+      fail('Codex Desktop queued follow-ups state is unreadable.', 'protocol-mismatch');
+    }
+  }
+  return queued;
+}
+
+function appendQueuedFollowUp(queued, threadId, message) {
+  const existing = queued[threadId] ?? [];
+  if (!Array.isArray(existing)) {
+    fail('Codex Desktop queued follow-ups state is unreadable.', 'protocol-mismatch');
+  }
+  return {
+    ...queued,
+    [threadId]: [...existing, message],
+  };
 }
 
 function codexExecutable() {
@@ -404,6 +456,43 @@ class DesktopIPCClient {
     if (response.resultType !== 'success') {
       fail(`Codex Desktop could not steer the active turn: ${response.error || 'unknown error'}`, 'turn-steer-failed');
     }
+  }
+
+  async queueTurn(text, ownerClientId, state) {
+    const message = {
+      id: randomUUID(),
+      text,
+      context: {
+        addedFiles: [],
+        prompt: text,
+        ideContext: null,
+        imageAttachments: [],
+        fileAttachments: [],
+        commentAttachments: [],
+        pullRequestChecks: [],
+        reviewFindings: [],
+        workspaceRoots: state.cwd ? [state.cwd] : [],
+        collaborationMode: state.latestCollaborationMode || null,
+        pastedTextAttachments: [],
+        appshotContexts: [],
+        mcpAppModelContextAttachments: [],
+      },
+      cwd: state.cwd || '/',
+      createdAt: Date.now(),
+    };
+    const queued = appendQueuedFollowUp(readQueuedFollowUps(), this.threadId, message);
+    const response = await this.request('thread-follower-set-queued-follow-ups-state', {
+      conversationId: this.threadId,
+      state: queued,
+    }, {
+      targetClientId: ownerClientId,
+      version: QUEUED_FOLLOW_UPS_VERSION,
+      timeoutMs: 30_000,
+    });
+    if (response.resultType !== 'success') {
+      fail(`Codex Desktop could not queue the follow-up: ${response.error || 'unknown error'}`, 'turn-queue-failed');
+    }
+    return message.id;
   }
 
   broadcast(method, params, version) {
@@ -732,6 +821,63 @@ async function waitForTurn(rolloutPath, offset, turnId) {
   fail('Timed out waiting for the Codex response.', 'turn-timeout');
 }
 
+async function waitForQueuedTurn(rolloutPath, offset, text) {
+  const descriptor = fs.openSync(rolloutPath, 'r');
+  let position = offset;
+  let pending = '';
+  let latestStartedTurnId = null;
+  let queuedTurnId = null;
+  const deadline = Date.now() + QUEUED_TURN_TIMEOUT_MS;
+  try {
+    while (Date.now() < deadline) {
+      const size = fs.fstatSync(descriptor).size;
+      if (size > position) {
+        const chunk = Buffer.allocUnsafe(Math.min(size - position, 1024 * 1024));
+        const count = fs.readSync(descriptor, chunk, 0, chunk.length, position);
+        position += count;
+        pending += chunk.subarray(0, count).toString('utf8');
+        const lines = pending.split('\n');
+        pending = lines.pop() || '';
+        for (const line of lines) {
+          if (!line) continue;
+          let record;
+          try { record = JSON.parse(line); } catch { continue; }
+          const payload = record?.type === 'event_msg' ? record.payload : null;
+          if (!payload) continue;
+          if (payload.type === 'task_started' && typeof payload.turn_id === 'string') {
+            latestStartedTurnId = payload.turn_id;
+            continue;
+          }
+          if (
+            !queuedTurnId &&
+            latestStartedTurnId &&
+            payload.type === 'user_message' &&
+            String(payload.message || '').trim() === text.trim()
+          ) {
+            queuedTurnId = latestStartedTurnId;
+            continue;
+          }
+          if (payload.type === 'task_complete' && payload.turn_id === queuedTurnId) {
+            const response = String(payload.last_agent_message || '').trim();
+            if (!response) fail('Codex completed without a final answer.', 'empty-response');
+            return { turnId: queuedTurnId, response };
+          }
+          if (
+            (payload.type === 'task_failed' || payload.type === 'turn_aborted') &&
+            payload.turn_id === queuedTurnId
+          ) {
+            fail(payload.message || 'The queued Codex turn failed.', 'turn-failed');
+          }
+        }
+      }
+      await sleep(150);
+    }
+  } finally {
+    fs.closeSync(descriptor);
+  }
+  fail('Timed out waiting for the queued Codex response.', 'turn-timeout');
+}
+
 async function withClient(threadId, action) {
   const client = new DesktopIPCClient(threadId);
   try {
@@ -795,12 +941,12 @@ async function runDesktopCommand(command, threadId, text) {
     }
 
     if (command === 'queue' && activeTurnId) {
-      // Queue is intentionally different from steer: let the current turn
-      // finish, then begin a new turn with this message.
-      await waitForTurn(rolloutPath, offset, activeTurnId);
-      offset = fs.statSync(rolloutPath).size;
-      const turnId = await client.startTurn(text, snapshot.ownerClientId);
-      const response = await waitForTurn(rolloutPath, offset, turnId);
+      // Publish the follow-up into Codex Desktop's native queue immediately so
+      // it is visible beside messages queued from Desktop itself. The owner
+      // starts it when the current turn becomes idle; Talkie keeps observing
+      // until that exact instruction completes so async narration still works.
+      await client.queueTurn(text, snapshot.ownerClientId, state);
+      const { turnId, response } = await waitForQueuedTurn(rolloutPath, offset, text);
       return { ok: true, threadId, turnId, delivery: 'queued-turn', response };
     }
 
@@ -849,11 +995,10 @@ async function runAppServerCommand(command, threadId, text) {
     }
 
     if (command === 'queue' && activeTurn?.id) {
-      await waitForTurn(rolloutPath, offset, activeTurn.id);
-      offset = fs.statSync(rolloutPath).size;
-      const turnId = await client.startTurn(threadId, text);
-      const response = await waitForTurn(rolloutPath, offset, turnId);
-      return { ok: true, threadId, turnId, delivery: 'queued-turn', response };
+      fail(
+        'Open this task in Codex Desktop so Talkie can add the message to its visible queue.',
+        'task-owner-unavailable',
+      );
     }
 
     let turnId;
@@ -911,4 +1056,12 @@ if (require.main === module) {
   });
 }
 
-module.exports = { listTasks, projectName, readTurnActivity, taskRolloutPath };
+module.exports = {
+  appendQueuedFollowUp,
+  listTasks,
+  projectName,
+  readQueuedFollowUps,
+  readTurnActivity,
+  taskRolloutPath,
+  waitForQueuedTurn,
+};

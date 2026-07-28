@@ -761,8 +761,8 @@ private struct CodexCommandConsole: View {
     @ViewBuilder
     private var conversationPreview: some View {
         if let number = store.activeLaneNumber,
-           let activity = store.activity(for: number) {
-            liveActivity(activity, laneNumber: number)
+           !store.activities(for: number).isEmpty {
+            activityTimeline(store.activities(for: number), laneNumber: number)
         } else if let failure = store.failure {
             Label(failure.combined, systemImage: "exclamationmark.triangle.fill")
                 .font(.system(size: 10, weight: .medium))
@@ -826,13 +826,31 @@ private struct CodexCommandConsole: View {
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 
-    private func liveActivity(_ activity: CodexLaneActivity, laneNumber: Int) -> some View {
+    private func activityTimeline(_ activities: [CodexLaneActivity], laneNumber: Int) -> some View {
+        let visibleActivities = Array(activities.suffix(3))
+        return VStack(alignment: .leading, spacing: 7) {
+            ForEach(visibleActivities) { activity in
+                liveActivity(
+                    activity,
+                    laneNumber: laneNumber,
+                    isLatest: activity.id == visibleActivities.last?.id
+                )
+            }
+        }
+        .animation(.easeOut(duration: 0.18), value: visibleActivities)
+    }
+
+    private func liveActivity(
+        _ activity: CodexLaneActivity,
+        laneNumber: Int,
+        isLatest: Bool
+    ) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            conversationLine(label: "TX", text: activity.instruction, lineLimit: 1)
+            conversationLine(label: "TX", text: activity.instruction, lineLimit: isLatest ? 2 : 1)
 
             switch activity.state {
             case .working(let mode):
-                if !activity.updates.isEmpty {
+                if isLatest, !activity.updates.isEmpty {
                     ForEach(Array(activity.updates.suffix(2))) { update in
                         progressLine(
                             update,
@@ -840,12 +858,16 @@ private struct CodexCommandConsole: View {
                         )
                     }
                 }
-                CodexWorkingSignal(
-                    mode: mode,
-                    queuedCount: store.queuedMessageCount(for: laneNumber),
-                    color: theme.chrome.panelAccent,
-                    secondaryColor: theme.chrome.panelInkFaint
-                )
+                if isLatest {
+                    CodexWorkingSignal(
+                        mode: mode,
+                        queuedCount: store.queuedMessageCount(for: laneNumber),
+                        color: theme.chrome.panelAccent,
+                        secondaryColor: theme.chrome.panelInkFaint
+                    )
+                } else {
+                    technicalLine(mode == .queue ? "Q> WAITING" : "HOST> WORKING")
+                }
             case .accepted:
                 technicalLine("HOST> STEER ACCEPTED // TURN CONTINUES")
             case .receiving:

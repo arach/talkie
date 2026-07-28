@@ -33,6 +33,7 @@ final class CodexLaneStore: ObservableObject {
     private static let catalogRefreshInterval: TimeInterval = 15
 
     private static let historyLimit = 20
+    private static let liveActivityLimit = 6
 
     // MARK: - Lane bindings
 
@@ -45,7 +46,7 @@ final class CodexLaneStore: ObservableObject {
     @Published private(set) var failure: CodexLaneFailure?
     @Published private(set) var lastTurn: CodexTurnRecord?
     @Published private(set) var history: [CodexTurnRecord] = []
-    @Published private(set) var liveActivityByLane: [Int: CodexLaneActivity] = [:]
+    @Published private(set) var liveActivitiesByLane: [Int: [CodexLaneActivity]] = [:]
     @Published private(set) var inFlightRequestCounts: [Int: Int] = [:]
     @Published private(set) var queuedMessageCounts: [Int: Int] = [:]
 
@@ -102,7 +103,11 @@ final class CodexLaneStore: ObservableObject {
     func lane(_ number: Int) -> CodexLane? { lanes[number] }
 
     func activity(for number: Int) -> CodexLaneActivity? {
-        liveActivityByLane[number]
+        liveActivitiesByLane[number]?.last
+    }
+
+    func activities(for number: Int) -> [CodexLaneActivity] {
+        liveActivitiesByLane[number] ?? []
     }
 
     func isTurnInFlight(on number: Int) -> Bool {
@@ -142,7 +147,7 @@ final class CodexLaneStore: ObservableObject {
         catalog = []
         catalogFailure = nil
         searchQuery = ""
-        liveActivityByLane = [:]
+        liveActivitiesByLane = [:]
         inFlightRequestCounts = [:]
         queuedMessageCounts = [:]
         lastTurn = nil
@@ -449,10 +454,14 @@ final class CodexLaneStore: ObservableObject {
         if mode == .queue {
             queuedMessageCounts[laneNumber, default: 0] += 1
         }
-        liveActivityByLane[laneNumber] = CodexLaneActivity(
+        appendActivity(CodexLaneActivity(
             id: activityID,
             instruction: instruction,
             state: .working(mode)
+        ), on: laneNumber)
+        AppLogger.ai.info(
+            "Codex activity created lane=\(laneNumber) id=\(activityID) "
+                + "mode=\(mode.rawValue) chars=\(instruction.count)"
         )
         phase = .submitting
         failure = nil
@@ -476,9 +485,13 @@ final class CodexLaneStore: ObservableObject {
             return
         }
 
-        if liveActivityByLane[laneNumber]?.id == activityID {
-            liveActivityByLane[laneNumber]?.jobID = receipt.id
+        mutateActivity(activityID, on: laneNumber) { activity in
+            activity.jobID = receipt.id
         }
+        AppLogger.ai.info(
+            "Codex activity accepted lane=\(laneNumber) id=\(activityID) job=\(receipt.id) "
+                + "status=\(receipt.status)"
+        )
 
         let job = await waitForTurnJob(receipt, activityID: activityID, laneNumber: laneNumber)
         guard let job else {
@@ -542,6 +555,7 @@ final class CodexLaneStore: ObservableObject {
         }
 
         receiveActivity(
+            activityID,
             on: laneNumber,
             response: responseText,
             delivery: delivery
@@ -575,9 +589,17 @@ final class CodexLaneStore: ObservableObject {
         laneNumber: Int
     ) async -> CodexTurnJob? {
         var job = receipt
+        var loggedStatus: String?
         let deadline = Date().addingTimeInterval(62 * 60)
         while Date() < deadline, !Task.isCancelled {
             updateActivity(activityID, on: laneNumber, from: job)
+            if job.status != loggedStatus {
+                loggedStatus = job.status
+                AppLogger.ai.info(
+                    "Codex activity status lane=\(laneNumber) id=\(activityID) "
+                        + "job=\(job.id) status=\(job.status) updates=\(job.updates?.count ?? 0)"
+                )
+            }
             if job.status == "completed" || job.status == "failed" {
                 return job
             }
@@ -600,13 +622,14 @@ final class CodexLaneStore: ObservableObject {
         on laneNumber: Int,
         from job: CodexTurnJob
     ) {
-        guard liveActivityByLane[laneNumber]?.id == id else { return }
-        liveActivityByLane[laneNumber]?.jobID = job.id
-        liveActivityByLane[laneNumber]?.updates = job.updates ?? []
+        mutateActivity(id, on: laneNumber) { activity in
+            activity.jobID = job.id
+            activity.updates = job.updates ?? []
+        }
     }
 
     private func isCurrentActivity(_ id: UUID, on laneNumber: Int) -> Bool {
-        liveActivityByLane[laneNumber]?.id == id
+        liveActivitiesByLane[laneNumber]?.contains { $0.id == id } == true
     }
 
     func narrateNotificationResponse(
@@ -644,26 +667,47 @@ final class CodexLaneStore: ObservableObject {
         on laneNumber: Int,
         delivery: CodexTurnDelivery
     ) {
-        guard liveActivityByLane[laneNumber]?.id == id else { return }
-        liveActivityByLane[laneNumber]?.state = .accepted(delivery)
+        mutateActivity(id, on: laneNumber) { activity in
+            activity.state = .accepted(delivery)
+        }
     }
 
     private func receiveActivity(
+        _ id: UUID,
         on laneNumber: Int,
         response: String,
         delivery: CodexTurnDelivery
     ) {
-        // A later steer may be the most recent visible instruction while the
-        // original request still owns the final response. Preserve that newer
-        // instruction and pipe the task's final response into the same lane.
-        guard liveActivityByLane[laneNumber] != nil else { return }
-        liveActivityByLane[laneNumber]?.response = response
-        liveActivityByLane[laneNumber]?.state = .receiving(delivery)
+        mutateActivity(id, on: laneNumber) { activity in
+            activity.response = response
+            activity.state = .receiving(delivery)
+        }
     }
 
     private func failActivity(_ id: UUID, on laneNumber: Int, message: String) {
-        guard liveActivityByLane[laneNumber]?.id == id else { return }
-        liveActivityByLane[laneNumber]?.state = .failed(message)
+        mutateActivity(id, on: laneNumber) { activity in
+            activity.state = .failed(message)
+        }
+    }
+
+    private func appendActivity(_ activity: CodexLaneActivity, on laneNumber: Int) {
+        var activities = liveActivitiesByLane[laneNumber] ?? []
+        activities.append(activity)
+        if activities.count > Self.liveActivityLimit {
+            activities.removeFirst(activities.count - Self.liveActivityLimit)
+        }
+        liveActivitiesByLane[laneNumber] = activities
+    }
+
+    private func mutateActivity(
+        _ id: UUID,
+        on laneNumber: Int,
+        mutation: (inout CodexLaneActivity) -> Void
+    ) {
+        guard var activities = liveActivitiesByLane[laneNumber],
+              let index = activities.firstIndex(where: { $0.id == id }) else { return }
+        mutation(&activities[index])
+        liveActivitiesByLane[laneNumber] = activities
     }
 
     // MARK: - Narration

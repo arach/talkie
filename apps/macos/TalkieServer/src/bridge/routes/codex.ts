@@ -97,7 +97,9 @@ const RECOVERY_HINTS: Record<string, string> = {
   "protocol-mismatch": "Codex Desktop's task protocol changed. Update Talkie.",
   "turn-timeout": "Codex did not finish in time. Check the task in Codex Desktop.",
   "empty-response": "Codex finished without a final message.",
+  "turn-queue-failed": "Open this task in Codex Desktop and retry the queued message.",
   "unsafe-socket": "Codex Desktop's IPC socket failed its security check.",
+  "unsafe-global-state": "Codex Desktop's queued-message state failed its security check.",
   "unsafe-rollout-path": "Codex Desktop returned an unsafe transcript path.",
 };
 
@@ -175,10 +177,10 @@ type CodexCommandRunner = (
 /**
  * Coordinates Talkie-originated messages per exact task.
  *
- * Completed turns are serialized because every adapter process tails one
- * rollout offset. Steering is a separate, ordered lane: it is acknowledged as
- * soon as Codex accepts the message and the already-running submit remains the
- * sole waiter for that turn's final response.
+ * Ordinary Talkie-started turns are serialized because every adapter process
+ * tails one rollout offset. Explicit queue requests bypass that private tail:
+ * the adapter publishes each one into Codex Desktop's native visible queue and
+ * observes its exact turn there. Steering remains a separate, ordered lane.
  */
 export class CodexTaskMessageCoordinator {
   private readonly activeTurns = new Set<string>();
@@ -194,7 +196,7 @@ export class CodexTaskMessageCoordinator {
     onStart?: () => void,
   ): Promise<BridgeEnvelope> {
     if (mode === "queue") {
-      return this.enqueueTurn(taskId, text, "queue", onStart);
+      return this.queue(taskId, text, onStart);
     }
 
     if (mode === "steer" || (mode === "auto" && this.activeTurns.has(taskId))) {
@@ -202,6 +204,11 @@ export class CodexTaskMessageCoordinator {
     }
 
     return this.enqueueTurn(taskId, text, "submit", onStart);
+  }
+
+  private queue(taskId: string, text: string, onStart?: () => void): Promise<BridgeEnvelope> {
+    onStart?.();
+    return this.run("queue", taskId, text);
   }
 
   private enqueueTurn(
@@ -319,16 +326,24 @@ export class CodexTurnJobManager {
       updatedAt: now,
     };
     this.jobs.set(job.id, job);
+    log.info(
+      `[codex] async job ${job.id} created task=${taskId} mode=${mode} chars=${text.length}`,
+    );
 
     void this.coordinator.deliver(taskId, text, mode, () => {
       job.status = "running";
       job.updatedAt = new Date().toISOString();
+      log.info(`[codex] async job ${job.id} running task=${taskId} mode=${mode}`);
     }).then(async (envelope) => {
       job.status = "completed";
       job.updatedAt = new Date().toISOString();
       job.turnId = envelope.turnId;
       job.delivery = envelope.delivery;
       job.response = envelope.response?.trim() || undefined;
+      log.info(
+        `[codex] async job ${job.id} completed task=${taskId} delivery=${job.delivery ?? "unknown"} `
+          + `responseChars=${job.response?.length ?? 0}`,
+      );
       if (job.response) {
         await this.notifyCompletion({ ...job });
       }
