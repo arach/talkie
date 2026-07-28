@@ -50,6 +50,8 @@ apps/ios/fastlane/marketing/.upload/
 # Intentional App Store marketing sources and final exports
 !apps/ios/fastlane/marketing/output/
 !apps/ios/fastlane/marketing/output/*.png
+!apps/ios/fastlane/marketing/output-ipad/
+!apps/ios/fastlane/marketing/output-ipad/*.png
 !apps/ios/fastlane/screenshots/raw/
 !apps/ios/fastlane/screenshots/raw/en-US/
 !apps/ios/fastlane/screenshots/raw/en-US/iPhone\ 17\ Pro\ Max-01_Home.png
@@ -59,6 +61,11 @@ apps/ios/fastlane/marketing/.upload/
 !apps/ios/fastlane/screenshots/raw/en-US/iPhone\ 17\ Pro\ Max-state-dictating.png
 !apps/ios/fastlane/screenshots/raw/en-US/iPhone\ 17\ Pro\ Max-state-diff.png
 !apps/ios/fastlane/screenshots/iPad\ Pro\ 13-inch\ \(M5\)/01_Home.png
+!apps/ios/fastlane/screenshots/iPad\ Pro\ 13-inch\ \(M5\)/02_Recording.png
+!apps/ios/fastlane/screenshots/iPad\ Pro\ 13-inch\ \(M5\)/05_Keyboard.png
+!apps/ios/fastlane/screenshots/iPad\ Pro\ 13-inch\ \(M5\)/state-dictating.png
+!apps/ios/fastlane/screenshots/iPad\ Pro\ 13-inch\ \(M5\)/state-diff.png
+!apps/ios/fastlane/screenshots/iPad\ Pro\ 13-inch\ \(M5\)/state-home-ask-ready.png
 !apps/ios/fastlane/screenshots/Apple\ Watch\ Series\ 11\ \(46mm\)/00_WatchHome.png
 
 # macOS

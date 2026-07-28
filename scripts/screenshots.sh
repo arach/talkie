@@ -33,9 +33,9 @@ IPHONE_H=2868
 IPHONE_CLASS="6.9\" iPhone"
 
 IPAD_NAME="iPad Pro 13-inch (M5)"
-IPAD_W=2064
-IPAD_H=2752
-IPAD_CLASS="13\" iPad"
+IPAD_W=2752
+IPAD_H=2064
+IPAD_CLASS="13\" iPad landscape"
 
 # Fastlane cache dir (SnapshotHelper reads language/locale from here)
 CACHE_DIR="$HOME/Library/Caches/tools.fastlane"
@@ -151,6 +151,8 @@ build_tests() {
         -project "$ROOT_DIR/apps/ios/Talkie-iOS.xcodeproj" \
         -scheme TalkieUITests \
         -destination "generic/platform=iOS Simulator" \
+        -disableAutomaticPackageResolution \
+        -skipPackageUpdates \
         -derivedDataPath "$DERIVED_DATA_DIR" \
         2>&1 | tee "$log_file" | while IFS= read -r line; do
             # Show compilation progress and errors
@@ -167,20 +169,38 @@ build_tests() {
 }
 
 run_tests() {
-    local udid="$1"
+    local device_name="$1"
+    local udid="$2"
     mkdir -p "$BUILD_CACHE_DIR"
     local log_file="$BUILD_CACHE_DIR/talkie-screenshots-test-$(date +%Y%m%d-%H%M%S).log"
+    local orientation="portrait"
+    local screenshot_tests=(
+        -only-testing:TalkieUITests/TalkieUITestsScreenshots/test00_Splash
+        -only-testing:TalkieUITests/TalkieUITestsScreenshots/test01_Home
+        -only-testing:TalkieUITests/TalkieUITestsScreenshots/test02_Recording
+        -only-testing:TalkieUITests/TalkieUITestsScreenshots/test04_Settings
+        -only-testing:TalkieUITests/TalkieUITestsScreenshots/test05_Keyboard
+    )
 
-    xcodebuild test-without-building \
+    if [ "$device_name" = "$IPAD_NAME" ]; then
+        orientation="landscape"
+        screenshot_tests+=(
+            -only-testing:TalkieUITests/TalkieUITestsScreenshots/testM2ComposeStateScreenshots
+            -only-testing:TalkieUITests/TalkieUITestsScreenshots/testHomeAskTalkieFlowScreenshots
+        )
+    else
+        screenshot_tests+=(
+            -only-testing:TalkieUITests/TalkieUITestsScreenshots/test03_MemoDetail
+        )
+    fi
+
+    TALKIE_SCREENSHOT_ORIENTATION="$orientation" xcodebuild test-without-building \
         -project "$ROOT_DIR/apps/ios/Talkie-iOS.xcodeproj" \
         -scheme TalkieUITests \
         -destination "platform=iOS Simulator,id=$udid" \
-        -only-testing:TalkieUITests/TalkieUITestsScreenshots/test00_Splash \
-        -only-testing:TalkieUITests/TalkieUITestsScreenshots/test01_Home \
-        -only-testing:TalkieUITests/TalkieUITestsScreenshots/test02_Recording \
-        -only-testing:TalkieUITests/TalkieUITestsScreenshots/test03_MemoDetail \
-        -only-testing:TalkieUITests/TalkieUITestsScreenshots/test04_Settings \
-        -only-testing:TalkieUITests/TalkieUITestsScreenshots/test05_Keyboard \
+        -disableAutomaticPackageResolution \
+        -skipPackageUpdates \
+        "${screenshot_tests[@]}" \
         -parallel-testing-enabled NO \
         -derivedDataPath "$DERIVED_DATA_DIR" \
         2>&1 | tee "$log_file" | while IFS= read -r line; do
@@ -274,7 +294,7 @@ capture_device() {
 
     info "Running screenshot tests (no clones)..."
     set +e
-    run_tests "$udid"
+    run_tests "$device_name" "$udid"
     local test_exit=$?
     set -e
 

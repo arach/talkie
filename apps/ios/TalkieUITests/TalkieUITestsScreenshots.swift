@@ -1,5 +1,7 @@
 import XCTest
 
+private let marketingScreenshotTheme = "mineral"
+
 // MARK: - Screenshot Spec
 
 /// Declarative description of one screenshot.
@@ -87,6 +89,16 @@ final class TalkieUITestsScreenshots: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
+        let environment = ProcessInfo.processInfo.environment
+        let simulatorName = environment["SIMULATOR_DEVICE_NAME"] ?? ""
+        let isIPadSimulator = simulatorName.localizedStandardContains("iPad")
+        if environment["TALKIE_SCREENSHOT_ORIENTATION"] == "landscape" || isIPadSimulator {
+            XCUIDevice.shared.orientation = .landscapeLeft
+            waitForOrientation { $0.isLandscape }
+        } else {
+            XCUIDevice.shared.orientation = .portrait
+            waitForOrientation { $0.isPortrait }
+        }
         setupSnapshot(app, waitForAnimations: false)
         app.launchArguments += ["-FASTLANE_SNAPSHOT"]
     }
@@ -96,6 +108,7 @@ final class TalkieUITestsScreenshots: XCTestCase {
         if spec.skipSplash {
             app.launchArguments += ["--screenshotSkipSplash"]
         }
+        app.launchArguments += ["--screenshotTheme", marketingScreenshotTheme]
         app.launchArguments += spec.launchArguments
         app.launch()
         dismissSystemAlertsIfNeeded()
@@ -151,7 +164,7 @@ private extension TalkieUITestsScreenshots {
 
 extension TalkieUITestsScreenshots {
     func testPhase0ThemeChromeScreenshots() {
-        let themes = ["scope", "midnight", "tactical", "ghost", "lift"]
+        let themes = ["scope", "mineral", "midnight", "tactical", "ghost", "lift"]
         let states = ["resting", "expanded", "listening"]
 
         for theme in themes {
@@ -197,7 +210,7 @@ extension TalkieUITestsScreenshots {
             app.launchArguments = [
                 "-FASTLANE_SNAPSHOT",
                 "--screenshotSkipSplash",
-                "--screenshotTheme", "scope",
+                "--screenshotTheme", marketingScreenshotTheme,
                 "--composeState", state,
             ]
             app.launch()
@@ -218,7 +231,7 @@ extension TalkieUITestsScreenshots {
         app.launchArguments = [
             "-FASTLANE_SNAPSHOT",
             "--screenshotSkipSplash",
-            "--screenshotTheme", "scope",
+            "--screenshotTheme", marketingScreenshotTheme,
         ]
         app.launch()
         dismissSystemAlertsIfNeeded()
@@ -248,7 +261,7 @@ extension TalkieUITestsScreenshots {
         app.launchArguments = [
             "-FASTLANE_SNAPSHOT",
             "--screenshotSkipSplash",
-            "--screenshotTheme", "scope",
+            "--screenshotTheme", marketingScreenshotTheme,
             "--composeState", "idle",
         ]
         app.launch()
@@ -275,7 +288,7 @@ extension TalkieUITestsScreenshots {
         app.launchArguments = [
             "-FASTLANE_SNAPSHOT",
             "--screenshotSkipSplash",
-            "--screenshotTheme", "scope",
+            "--screenshotTheme", marketingScreenshotTheme,
             "--askaiNoProviders",
         ]
         app.launch()
@@ -292,8 +305,26 @@ extension TalkieUITestsScreenshots {
         commandField.tap()
         snapshot("state-home-ask-focused", timeWaitingForIdle: 0)
 
+        let hostedKey = app.buttons["talkie.keyboard.key.h"].firstMatch
+        XCTAssertTrue(hostedKey.waitForExistence(timeout: 3))
+        hostedKey.tap()
+        XCTAssertEqual(commandField.value as? String, "h")
+
+        let hostedDelete = app.buttons["talkie.keyboard.delete"].firstMatch
+        XCTAssertTrue(hostedDelete.waitForExistence(timeout: 3))
+        hostedDelete.tap()
+        XCTAssertEqual(commandField.value as? String, "")
+
         let prompt = "Help me outline the launch plan"
-        commandField.typeText(prompt)
+        for character in prompt {
+            commandField.typeText(String(character))
+        }
+        XCTAssertEqual(
+            commandField.value as? String,
+            prompt,
+            "The hosted Talkie keyboard should enter the complete Home prompt"
+        )
+        Snapshot.snapshot("state-home-ask-ready", timeWaitingForIdle: 0)
 
         let sendButton = app.buttons["home.command-send"].firstMatch
         XCTAssertTrue(sendButton.waitForExistence(timeout: 3), "Home Ask Talkie send should exist")
@@ -313,6 +344,16 @@ extension TalkieUITestsScreenshots {
     }
 }
 
+private func waitForOrientation(
+    timeout: TimeInterval = 2,
+    matches: (UIDeviceOrientation) -> Bool
+) {
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline, !matches(XCUIDevice.shared.orientation) {
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    }
+}
+
 // MARK: - App Preview Capture
 
 /// Deterministic, real-app performances used by `scripts/app-preview.sh`.
@@ -327,7 +368,7 @@ extension TalkieUITestsScreenshots {
         app.launchArguments = [
             "-FASTLANE_SNAPSHOT",
             "--screenshotSkipSplash",
-            "--screenshotTheme", "scope",
+            "--screenshotTheme", marketingScreenshotTheme,
             "--celebrateFirstSave",
             "--animateRecordingWaveform",
         ]
@@ -370,7 +411,7 @@ extension TalkieUITestsScreenshots {
         app.launchArguments = [
             "-FASTLANE_SNAPSHOT",
             "--screenshotSkipSplash",
-            "--screenshotTheme", "scope",
+            "--screenshotTheme", marketingScreenshotTheme,
             "--composeState", "idle",
         ]
         app.launch()
