@@ -14,8 +14,9 @@ import Foundation
 
 /// How a message spoken while Codex is working should be delivered.
 ///
-/// Queue is the default because it preserves the current turn and starts a new
-/// one afterward. Steer deliberately adds context to the turn already running.
+/// Steer is the lane default because voice is primarily used to adjust work
+/// already in motion. Queue deliberately preserves the current turn and starts
+/// a new one afterward.
 enum CodexMessageMode: String, Codable, Equatable, Sendable {
     case auto
     case queue
@@ -156,11 +157,30 @@ struct CodexLane: Codable, Equatable, Identifiable, Sendable {
 
     let number: Int
     var task: CodexTaskSummary
+    /// Persistent delivery preference for this exact lane. Optional on disk so
+    /// lanes saved by older builds decode safely and naturally migrate to steer.
+    var messageMode: CodexMessageMode?
     /// Optional per-lane narration voice. Left open deliberately — the brief
     /// wants room for it without making it a launch blocker.
     var voiceOverride: CodexLaneVoiceOverride?
 
     var id: Int { number }
+
+    var preferredMessageMode: CodexMessageMode {
+        messageMode ?? .steer
+    }
+
+    init(
+        number: Int,
+        task: CodexTaskSummary,
+        messageMode: CodexMessageMode = .steer,
+        voiceOverride: CodexLaneVoiceOverride? = nil
+    ) {
+        self.number = number
+        self.task = task
+        self.messageMode = messageMode
+        self.voiceOverride = voiceOverride
+    }
 
     /// Short spoken form of the task title, for narration preambles.
     var spokenTitle: String {

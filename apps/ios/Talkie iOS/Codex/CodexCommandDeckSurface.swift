@@ -8,7 +8,7 @@
 //  STORY: Pick one known task in the console lid, speak, see where the turn went,
 //  then read or hear the answer without returning to the Mac.
 //  FIRST VIEWPORT: Live console above a 4×4 command keybed. The lid owns lane
-//  selection; stable keys own push-to-talk and in-turn delivery.
+//  selection, delivery mode, and host activity; the stable keybed owns talk.
 //  FORM: Extends Talkie's established Scope instrument language and existing
 //  bridge behavior. A lane is a direct destination, not a separate claim.
 //
@@ -95,8 +95,8 @@ struct CodexCommandDeckSurface: View {
             }
 
             GridRow {
-                messageModeKey(index: 9, mode: .queue, icon: "tray.and.arrow.down")
-                messageModeKey(index: 10, mode: .steer, icon: "arrow.triangle.turn.up.right.diamond")
+                openSocket(index: 9)
+                openSocket(index: 10)
                 actionKey(
                     index: 11,
                     label: "Stop",
@@ -152,17 +152,6 @@ struct CodexCommandDeckSurface: View {
         .accessibilityLabel(label)
         .accessibilityAddTraits(isActive ? .isSelected : [])
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private func messageModeKey(index: Int, mode: CodexMessageMode, icon: String) -> some View {
-        actionKey(
-            index: index,
-            label: mode.label,
-            icon: icon,
-            isEnabled: store.isTurnInFlight,
-            isActive: store.isTurnInFlight && store.duringTurnMessageMode == mode,
-            action: { store.setDuringTurnMessageMode(mode) }
-        )
     }
 
     private var captureKey: some View {
@@ -230,12 +219,12 @@ struct CodexCommandDeckSurface: View {
     private var captureTitle: String {
         switch store.phase {
         case .listening:
-            return store.isTurnInFlight
-                ? "RELEASE TO \(store.duringTurnMessageMode.label.uppercased())"
+            return store.activeLaneIsInFlight
+                ? "RELEASE TO \(store.activeLaneMessageMode.label.uppercased())"
                 : "RELEASE TO SEND"
         case .speaking: return "INTERRUPT + TALK"
-        case .submitting where store.isTurnInFlight:
-            return "HOLD TO \(store.duringTurnMessageMode.label.uppercased())"
+        case .submitting where store.activeLaneIsInFlight:
+            return "HOLD TO \(store.activeLaneMessageMode.label.uppercased())"
         default: return "HOLD TO TALK"
         }
     }
@@ -244,10 +233,11 @@ struct CodexCommandDeckSurface: View {
         switch store.phase {
         case .listening: return "KEEP HOLDING WHILE YOU SPEAK"
         case .speaking: return "STOPS NARRATION, THEN LISTENS"
-        case .submitting where store.isTurnInFlight:
-            if store.duringTurnMessageMode == .queue {
-                let suffix = store.queuedMessageCount > 0
-                    ? " · \(store.queuedMessageCount) WAITING"
+        case .submitting where store.activeLaneIsInFlight:
+            if store.activeLaneMessageMode == .queue {
+                let queued = store.activeLaneNumber.map(store.queuedMessageCount(for:)) ?? 0
+                let suffix = queued > 0
+                    ? " · \(queued) WAITING"
                     : ""
                 return "AFTER THIS TURN\(suffix)"
             }
@@ -260,17 +250,17 @@ struct CodexCommandDeckSurface: View {
         switch store.phase {
         case .listening: return "arrow.up"
         case .speaking: return "waveform"
-        case .submitting where store.isTurnInFlight: return "mic"
+        case .submitting where store.activeLaneIsInFlight: return "mic"
         case .transcribing, .submitting, .preparingSpeech: return "ellipsis"
         case .idle, .failed: return "mic"
         }
     }
 
     private var captureAccessibilityHint: String {
-        guard store.isTurnInFlight else {
+        guard store.activeLaneIsInFlight else {
             return "Sends speech to the active Codex task"
         }
-        switch store.duringTurnMessageMode {
+        switch store.activeLaneMessageMode {
         case .queue:
             return "Queues the message to run after the current Codex turn"
         case .steer:
@@ -439,8 +429,8 @@ struct CodexCommandDeckSurface: View {
 
     private var dialFace: Color {
         colorScheme == .dark
-            ? theme.colors.textPrimary
-            : Color(red: 0.995, green: 0.985, blue: 0.955)
+            ? Color(red: 0.30, green: 0.285, blue: 0.265)
+            : Color(red: 0.86, green: 0.825, blue: 0.76)
     }
 
     private var outputDialAngle: Angle {
@@ -540,7 +530,7 @@ private struct CodexCommandConsole: View {
     private func lanePickerButton(_ number: Int) -> some View {
         let lane = store.lane(number)
         let isActive = store.activeLaneNumber == number
-        let isEnabled = !store.isTurnInFlight && !store.phase.isCapturing
+        let isEnabled = !store.phase.isCapturing
 
         return Button {
             guard let lane else {
@@ -553,9 +543,10 @@ private struct CodexCommandConsole: View {
                 Text("\(number)")
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
 
-                Circle()
-                    .fill(laneStatusColor(lane: lane, isActive: isActive))
-                    .frame(width: 5, height: 5)
+                Text(laneModeMark(lane))
+                    .font(.system(size: 7, weight: .bold, design: .monospaced))
+                    .tracking(0.7)
+                    .foregroundStyle(laneStatusColor(lane: lane, isActive: isActive))
             }
             .foregroundStyle(isActive ? theme.chrome.panelInk : theme.chrome.panelInkFaint)
             .frame(maxWidth: .infinity)
@@ -597,6 +588,13 @@ private struct CodexCommandConsole: View {
         return theme.chrome.panelAccent.opacity(isActive ? 1 : 0.62)
     }
 
+    private func laneModeMark(_ lane: CodexLane?) -> String {
+        guard let lane else { return "––" }
+        let mode = lane.preferredMessageMode == .queue ? "Q" : "S"
+        guard store.isTurnInFlight(on: lane.number) else { return mode }
+        return "\(mode)•"
+    }
+
     private func lanePickerAccessibilityLabel(
         number: Int,
         lane: CodexLane?,
@@ -622,7 +620,7 @@ private struct CodexCommandConsole: View {
                 Circle()
                     .fill(phaseColor)
                     .frame(width: 5, height: 5)
-                Text(store.phase.label.uppercased())
+                Text(consoleStatusLabel)
                     .lineLimit(1)
             }
             .padding(.horizontal, 8)
@@ -655,6 +653,10 @@ private struct CodexCommandConsole: View {
 
                     Text(lane.task.activityLabel().uppercased())
                         .foregroundStyle(theme.chrome.panelInkFaint)
+
+                    Spacer(minLength: 6)
+
+                    laneModeSelector(lane)
                 } else {
                     Text("NO ACTIVE TASK")
                         .foregroundStyle(theme.chrome.panelAccent)
@@ -712,13 +714,16 @@ private struct CodexCommandConsole: View {
 
     @ViewBuilder
     private var conversationPreview: some View {
-        if let failure = store.failure {
+        if let number = store.activeLaneNumber,
+           let activity = store.activity(for: number) {
+            liveActivity(activity, laneNumber: number)
+        } else if let failure = store.failure {
             Label(failure.combined, systemImage: "exclamationmark.triangle.fill")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(Color(red: 0.92, green: 0.42, blue: 0.30))
                 .lineLimit(2)
-        } else if let turn = store.lastTurn,
-                  turn.laneNumber == store.activeLaneNumber {
+        } else if let number = store.activeLaneNumber,
+                  let turn = store.latestTurn(for: number) {
             VStack(alignment: .leading, spacing: 4) {
                 conversationLine(label: "YOU", text: turn.instruction, lineLimit: 1)
                 conversationLine(label: "CODEX", text: turn.response, lineLimit: 2)
@@ -737,6 +742,93 @@ private struct CodexCommandConsole: View {
         }
     }
 
+    private func laneModeSelector(_ lane: CodexLane) -> some View {
+        HStack(spacing: 2) {
+            laneModeButton(.steer, lane: lane)
+            laneModeButton(.queue, lane: lane)
+        }
+        .padding(2)
+        .background(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(theme.chrome.panelInk.opacity(0.07))
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .stroke(theme.chrome.panelInk.opacity(0.13), lineWidth: theme.chrome.hairlineWidth)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Lane \(lane.number) delivery mode")
+    }
+
+    private func laneModeButton(_ mode: CodexMessageMode, lane: CodexLane) -> some View {
+        let isActive = lane.preferredMessageMode == mode
+        return Button {
+            store.setMessageMode(mode, for: lane.number)
+        } label: {
+            Text(mode.label.uppercased())
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .tracking(0.7)
+                .foregroundStyle(isActive ? theme.chrome.panel : theme.chrome.panelInkFaint)
+                .frame(minWidth: 43, minHeight: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(isActive ? theme.chrome.panelAccent : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(mode.label)
+        .accessibilityAddTraits(isActive ? .isSelected : [])
+    }
+
+    private func liveActivity(_ activity: CodexLaneActivity, laneNumber: Int) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            conversationLine(label: "TX", text: activity.instruction, lineLimit: 1)
+
+            switch activity.state {
+            case .working(let mode):
+                CodexWorkingSignal(
+                    mode: mode,
+                    queuedCount: store.queuedMessageCount(for: laneNumber),
+                    color: theme.chrome.panelAccent,
+                    secondaryColor: theme.chrome.panelInkFaint
+                )
+            case .accepted:
+                technicalLine("HOST> STEER ACCEPTED // TURN CONTINUES")
+            case .receiving:
+                if let response = activity.response {
+                    HStack(alignment: .firstTextBaseline, spacing: 7) {
+                        Text("RX")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .tracking(0.8)
+                            .foregroundStyle(theme.chrome.panelAccent)
+                            .frame(width: 38, alignment: .leading)
+
+                        CodexPipedText(
+                            text: response,
+                            color: theme.chrome.panelInk.opacity(0.88)
+                        )
+                    }
+                }
+            case .failed(let message):
+                technicalLine("ERR> \(message)", isFailure: true)
+            }
+        }
+        .padding(.top, 2)
+    }
+
+    private func technicalLine(_ text: String, isFailure: Bool = false) -> some View {
+        Text(text)
+            .font(.system(size: 9, weight: .medium, design: .monospaced))
+            .tracking(0.25)
+            .foregroundStyle(
+                isFailure
+                    ? Color(red: 0.92, green: 0.42, blue: 0.30)
+                    : theme.chrome.panelInkFaint
+            )
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
+    }
+
     private func conversationLine(label: String, text: String, lineLimit: Int) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 7) {
             Text(label)
@@ -752,7 +844,37 @@ private struct CodexCommandConsole: View {
         }
     }
 
+    private var consoleStatusLabel: String {
+        switch store.phase {
+        case .listening, .transcribing, .preparingSpeech, .speaking:
+            return store.phase.label.uppercased()
+        case .failed:
+            return "ERROR"
+        case .idle, .submitting:
+            break
+        }
+
+        guard let number = store.activeLaneNumber,
+              let activity = store.activity(for: number) else {
+            return store.activeLaneNumber == nil ? "NO LANE" : "READY"
+        }
+        switch activity.state {
+        case .working(let mode):
+            return mode == .queue ? "QUEUED" : "WORKING"
+        case .accepted:
+            return "STEERED"
+        case .receiving:
+            return "RESPONSE"
+        case .failed:
+            return "ERROR"
+        }
+    }
+
     private var phaseColor: Color {
+        if let number = store.activeLaneNumber,
+           case .failed = store.activity(for: number)?.state {
+            return Color(red: 0.92, green: 0.42, blue: 0.30)
+        }
         switch store.phase {
         case .failed: return Color(red: 0.92, green: 0.42, blue: 0.30)
         case .idle: return store.activeLaneNumber == nil
@@ -831,7 +953,7 @@ private struct CodexCommandConsole: View {
                 .foregroundStyle(theme.chrome.panelInk)
                 .lineLimit(2)
 
-            Text(store.isTurnInFlight ? "Turn active. Choose Queue or Steer in keys 09–10." : "Hold key 14–15 to talk directly to this task.")
+            Text(store.activeLaneIsInFlight ? "Turn active. Delivery mode is set with the lane control above." : "Hold key 14–15 to talk directly to this task.")
                 .font(.caption)
                 .foregroundStyle(theme.chrome.panelInkFaint)
                 .lineLimit(2)
@@ -852,6 +974,103 @@ private struct CodexCommandConsole: View {
             return "No active Codex task. Choose a lane or open the mapper."
         }
         return "Lane \(lane.number), \(lane.task.projectName), \(lane.task.title)"
+    }
+}
+
+private struct CodexWorkingSignal: View {
+    let mode: CodexMessageMode
+    let queuedCount: Int
+    let color: Color
+    let secondaryColor: Color
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Group {
+            if reduceMotion {
+                signal(frame: 0)
+            } else {
+                TimelineView(.animation(minimumInterval: 0.14)) { timeline in
+                    let frame = Int(timeline.date.timeIntervalSinceReferenceDate * 7) % 7
+                    signal(frame: frame)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private func signal(frame: Int) -> some View {
+        let cells = (0..<7)
+            .map { $0 == frame ? "◆" : "·" }
+            .joined()
+        return HStack(spacing: 7) {
+            Text("HOST>")
+                .foregroundStyle(color)
+            Text("[\(cells)]")
+                .foregroundStyle(color)
+            Text(statusText)
+                .foregroundStyle(secondaryColor)
+        }
+        .font(.system(size: 9, weight: .medium, design: .monospaced))
+        .tracking(0.25)
+        .lineLimit(1)
+    }
+
+    private var statusText: String {
+        switch mode {
+        case .queue:
+            return queuedCount > 0 ? "QUEUE \(queuedCount) // WAIT" : "QUEUE // WAIT"
+        case .steer:
+            return "STEER // WORK"
+        case .auto:
+            return "TURN // WORK"
+        }
+    }
+
+    private var accessibilityLabel: String {
+        switch mode {
+        case .queue: return "Message queued. Codex is working."
+        case .steer: return "Steering message sent. Codex is working."
+        case .auto: return "Message sent. Codex is working."
+        }
+    }
+}
+
+private struct CodexPipedText: View {
+    let text: String
+    let color: Color
+
+    @State private var visibleCharacterCount = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Text(displayedText)
+            .font(.system(size: 10, weight: .regular))
+            .foregroundStyle(color)
+            .lineLimit(2)
+            .task(id: text) {
+                await revealText()
+            }
+            .accessibilityLabel(text)
+    }
+
+    private var displayedText: String {
+        let visible = String(text.prefix(visibleCharacterCount))
+        return visibleCharacterCount < text.count ? "\(visible)▌" : visible
+    }
+
+    private func revealText() async {
+        guard !reduceMotion else {
+            visibleCharacterCount = text.count
+            return
+        }
+
+        visibleCharacterCount = 0
+        while visibleCharacterCount < text.count, !Task.isCancelled {
+            visibleCharacterCount = min(text.count, visibleCharacterCount + 4)
+            try? await Task.sleep(for: .milliseconds(24))
+        }
     }
 }
 

@@ -35,9 +35,9 @@ final class CodexLaneStore: ObservableObject {
     @Published private(set) var failure: CodexLaneFailure?
     @Published private(set) var lastTurn: CodexTurnRecord?
     @Published private(set) var history: [CodexTurnRecord] = []
-    @Published private(set) var isTurnInFlight = false
-    @Published private(set) var queuedMessageCount = 0
-    @Published private(set) var duringTurnMessageMode: CodexMessageMode = .queue
+    @Published private(set) var liveActivityByLane: [Int: CodexLaneActivity] = [:]
+    @Published private(set) var inFlightRequestCounts: [Int: Int] = [:]
+    @Published private(set) var queuedMessageCounts: [Int: Int] = [:]
 
     // MARK: - Mapper catalog
 
@@ -53,14 +53,13 @@ final class CodexLaneStore: ObservableObject {
     private var catalogViewers = 0
     private var speakingTask: Task<Void, Never>?
     private var isPushToTalkHeld = false
-    private var submissionRequestCount = 0
 
     init(
         defaults: UserDefaults = .standard,
-        bridge: BridgeManager = .shared
+        bridge: BridgeManager? = nil
     ) {
         self.defaults = defaults
-        self.bridge = bridge
+        self.bridge = bridge ?? .shared
         loadPersistedLanes()
     }
 
@@ -74,7 +73,35 @@ final class CodexLaneStore: ObservableObject {
         activeLaneNumber.flatMap { lanes[$0] }
     }
 
+    var isTurnInFlight: Bool {
+        inFlightRequestCounts.values.contains { $0 > 0 }
+    }
+
+    var activeLaneIsInFlight: Bool {
+        activeLaneNumber.map(isTurnInFlight(on:)) ?? false
+    }
+
+    var activeLaneMessageMode: CodexMessageMode {
+        activeLane?.preferredMessageMode ?? .steer
+    }
+
     func lane(_ number: Int) -> CodexLane? { lanes[number] }
+
+    func activity(for number: Int) -> CodexLaneActivity? {
+        liveActivityByLane[number]
+    }
+
+    func isTurnInFlight(on number: Int) -> Bool {
+        inFlightRequestCounts[number, default: 0] > 0
+    }
+
+    func queuedMessageCount(for number: Int) -> Int {
+        queuedMessageCounts[number, default: 0]
+    }
+
+    func latestTurn(for number: Int) -> CodexTurnRecord? {
+        history.first { $0.laneNumber == number }
+    }
 
     var filteredCatalog: [CodexTaskSummary] {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -133,8 +160,13 @@ final class CodexLaneStore: ObservableObject {
     func assign(_ task: CodexTaskSummary, to number: Int) {
         guard CodexLane.range.contains(number) else { return }
 
-        let existingOverride = lanes[number]?.voiceOverride
-        lanes[number] = CodexLane(number: number, task: task, voiceOverride: existingOverride)
+        let existingLane = lanes[number]
+        lanes[number] = CodexLane(
+            number: number,
+            task: task,
+            messageMode: existingLane?.preferredMessageMode ?? .steer,
+            voiceOverride: existingLane?.voiceOverride
+        )
 
         persistLanes()
     }
@@ -153,6 +185,15 @@ final class CodexLaneStore: ObservableObject {
     func setVoiceOverride(_ override: CodexLaneVoiceOverride?, for number: Int) {
         guard var lane = lanes[number] else { return }
         lane.voiceOverride = override
+        lanes[number] = lane
+        persistLanes()
+    }
+
+    /// Sets the delivery preference on the lane itself so it stays predictable
+    /// while the user moves between tasks and across app launches.
+    func setMessageMode(_ mode: CodexMessageMode, for number: Int) {
+        guard mode == .queue || mode == .steer, var lane = lanes[number] else { return }
+        lane.messageMode = mode
         lanes[number] = lane
         persistLanes()
     }
@@ -251,13 +292,6 @@ final class CodexLaneStore: ObservableObject {
         }
     }
 
-    /// Selects what the next utterance means while Codex is already working.
-    /// Queue is the default; steer is always an explicit choice.
-    func setDuringTurnMessageMode(_ mode: CodexMessageMode) {
-        guard mode == .queue || mode == .steer else { return }
-        duringTurnMessageMode = mode
-    }
-
     /// Reads the last successful response again using the currently selected
     /// output route. The response remains available as text whether speech
     /// succeeds, fails, or is deliberately silent.
@@ -353,7 +387,12 @@ final class CodexLaneStore: ObservableObject {
             return
         }
 
-        let mode = isTurnInFlight ? duringTurnMessageMode : .auto
+        // Delivery is a lane setting, not a transient inference from this
+        // phone's request count. The host makes either preference safe when
+        // idle: steer falls back to a new turn and queue starts immediately.
+        // Keeping the explicit mode also honors work started on the Mac, which
+        // this store cannot reliably infer from local state alone.
+        let mode = lane.preferredMessageMode
         await deliver(
             instruction: text,
             to: lane,
@@ -368,11 +407,16 @@ final class CodexLaneStore: ObservableObject {
         laneNumber: Int,
         mode: CodexMessageMode
     ) async {
-        submissionRequestCount += 1
-        isTurnInFlight = true
+        let activityID = UUID()
+        beginSubmission(on: laneNumber)
         if mode == .queue {
-            queuedMessageCount += 1
+            queuedMessageCounts[laneNumber, default: 0] += 1
         }
+        liveActivityByLane[laneNumber] = CodexLaneActivity(
+            id: activityID,
+            instruction: instruction,
+            state: .working(mode)
+        )
         phase = .submitting
         failure = nil
 
@@ -384,26 +428,28 @@ final class CodexLaneStore: ObservableObject {
                 mode: mode
             )
         } catch {
-            finishSubmission(mode: mode)
+            finishSubmission(on: laneNumber, mode: mode)
             let described = Self.describe(error)
             failure = described
+            failActivity(activityID, on: laneNumber, message: described.combined)
             phase = .failed(described.message)
             AppLogger.ai.warning("Codex submit failed on lane \(laneNumber): \(described.combined)")
             return
         }
 
         guard let delivery = CodexTurnDelivery(rawValue: response.delivery) else {
-            finishSubmission(mode: mode)
+            finishSubmission(on: laneNumber, mode: mode)
             let message = "Codex reported an unrecognized delivery (\(response.delivery))."
             failure = CodexLaneFailure(
                 message: message,
                 hint: "Update Talkie so it understands this version of Codex Desktop."
             )
+            failActivity(activityID, on: laneNumber, message: message)
             phase = .failed(message)
             return
         }
 
-        finishSubmission(mode: mode)
+        finishSubmission(on: laneNumber, mode: mode)
 
         AppLogger.ai.info(
             "Codex response received lane=\(laneNumber) delivery=\(response.delivery) "
@@ -420,12 +466,20 @@ final class CodexLaneStore: ObservableObject {
                     message: message,
                     hint: "Open the task on your Mac to inspect the turn."
                 )
+                failActivity(activityID, on: laneNumber, message: message)
                 phase = .failed(message)
                 return
             }
+            acceptActivity(activityID, on: laneNumber, delivery: delivery)
             phase = isTurnInFlight ? .submitting : .idle
             return
         }
+
+        receiveActivity(
+            on: laneNumber,
+            response: responseText,
+            delivery: delivery
+        )
 
         var record = CodexTurnRecord(
             laneNumber: laneNumber,
@@ -443,12 +497,52 @@ final class CodexLaneStore: ObservableObject {
         remember(record)
     }
 
-    private func finishSubmission(mode: CodexMessageMode) {
-        submissionRequestCount = max(0, submissionRequestCount - 1)
-        isTurnInFlight = submissionRequestCount > 0
-        if mode == .queue {
-            queuedMessageCount = max(0, queuedMessageCount - 1)
+    private func beginSubmission(on laneNumber: Int) {
+        inFlightRequestCounts[laneNumber, default: 0] += 1
+    }
+
+    private func finishSubmission(on laneNumber: Int, mode: CodexMessageMode) {
+        let remaining = max(0, inFlightRequestCounts[laneNumber, default: 0] - 1)
+        if remaining == 0 {
+            inFlightRequestCounts[laneNumber] = nil
+        } else {
+            inFlightRequestCounts[laneNumber] = remaining
         }
+        if mode == .queue {
+            let queued = max(0, queuedMessageCounts[laneNumber, default: 0] - 1)
+            if queued == 0 {
+                queuedMessageCounts[laneNumber] = nil
+            } else {
+                queuedMessageCounts[laneNumber] = queued
+            }
+        }
+    }
+
+    private func acceptActivity(
+        _ id: UUID,
+        on laneNumber: Int,
+        delivery: CodexTurnDelivery
+    ) {
+        guard liveActivityByLane[laneNumber]?.id == id else { return }
+        liveActivityByLane[laneNumber]?.state = .accepted(delivery)
+    }
+
+    private func receiveActivity(
+        on laneNumber: Int,
+        response: String,
+        delivery: CodexTurnDelivery
+    ) {
+        // A later steer may be the most recent visible instruction while the
+        // original request still owns the final response. Preserve that newer
+        // instruction and pipe the task's final response into the same lane.
+        guard liveActivityByLane[laneNumber] != nil else { return }
+        liveActivityByLane[laneNumber]?.response = response
+        liveActivityByLane[laneNumber]?.state = .receiving(delivery)
+    }
+
+    private func failActivity(_ id: UUID, on laneNumber: Int, message: String) {
+        guard liveActivityByLane[laneNumber]?.id == id else { return }
+        liveActivityByLane[laneNumber]?.state = .failed(message)
     }
 
     // MARK: - Narration
