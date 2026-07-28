@@ -9,6 +9,7 @@
 //
 
 import Foundation
+import UIKit
 
 @MainActor
 final class CodexLaneStore: ObservableObject {
@@ -53,6 +54,7 @@ final class CodexLaneStore: ObservableObject {
     private var catalogViewers = 0
     private var speakingTask: Task<Void, Never>?
     private var isPushToTalkHeld = false
+    private var notificationNarratedJobIDs: Set<String> = []
 
     init(
         defaults: UserDefaults = .standard,
@@ -420,10 +422,11 @@ final class CodexLaneStore: ObservableObject {
         phase = .submitting
         failure = nil
 
-        let response: CodexSubmitResponse
+        let receipt: CodexTurnJob
         do {
-            response = try await bridge.codexSubmit(
+            receipt = try await bridge.codexStartTurn(
                 taskId: lane.task.id,
+                taskTitle: lane.task.title,
                 text: instruction,
                 mode: mode
             )
@@ -437,9 +440,30 @@ final class CodexLaneStore: ObservableObject {
             return
         }
 
-        guard let delivery = CodexTurnDelivery(rawValue: response.delivery) else {
+        if liveActivityByLane[laneNumber]?.id == activityID {
+            liveActivityByLane[laneNumber]?.jobID = receipt.id
+        }
+
+        let job = await waitForTurnJob(receipt, activityID: activityID, laneNumber: laneNumber)
+        guard let job else {
             finishSubmission(on: laneNumber, mode: mode)
-            let message = "Codex reported an unrecognized delivery (\(response.delivery))."
+            phase = .failed("Timed out waiting for the Mac-owned turn.")
+            return
+        }
+
+        if job.status == "failed" {
+            finishSubmission(on: laneNumber, mode: mode)
+            let message = job.error ?? "The Codex turn failed on the Mac."
+            failure = CodexLaneFailure(message: message, hint: nil)
+            failActivity(activityID, on: laneNumber, message: message)
+            phase = .failed(message)
+            return
+        }
+
+        guard let deliveryValue = job.delivery,
+              let delivery = CodexTurnDelivery(rawValue: deliveryValue) else {
+            finishSubmission(on: laneNumber, mode: mode)
+            let message = "Codex reported an incomplete delivery receipt."
             failure = CodexLaneFailure(
                 message: message,
                 hint: "Update Talkie so it understands this version of Codex Desktop."
@@ -452,13 +476,13 @@ final class CodexLaneStore: ObservableObject {
         finishSubmission(on: laneNumber, mode: mode)
 
         AppLogger.ai.info(
-            "Codex response received lane=\(laneNumber) delivery=\(response.delivery) "
-                + "hasResponse=\(response.response?.isEmpty == false)"
+            "Codex response received lane=\(laneNumber) delivery=\(deliveryValue) "
+                + "hasResponse=\(job.response?.isEmpty == false)"
         )
 
         // A steer is an immediate receipt. The request which started the active
         // turn remains responsible for its one final response and narration.
-        guard let responseText = response.response?.trimmingCharacters(in: .whitespacesAndNewlines),
+        guard let responseText = job.response?.trimmingCharacters(in: .whitespacesAndNewlines),
               !responseText.isEmpty else {
             guard delivery == .steeredActiveTurn else {
                 let message = "Codex completed without a readable response."
@@ -493,8 +517,59 @@ final class CodexLaneStore: ObservableObject {
         // The turn already succeeded. Everything below is presentation, and it
         // records the response before narration is attempted so the text stays
         // readable no matter what speech does.
-        record = await narrate(record)
+        if UIApplication.shared.applicationState == .active,
+           !notificationNarratedJobIDs.contains(job.id) {
+            record = await narrate(record)
+        } else {
+            record.narrationSuppressed = true
+            phase = isTurnInFlight ? .submitting : .idle
+        }
         remember(record)
+    }
+
+    private func waitForTurnJob(
+        _ receipt: CodexTurnJob,
+        activityID: UUID,
+        laneNumber: Int
+    ) async -> CodexTurnJob? {
+        var job = receipt
+        let deadline = Date().addingTimeInterval(62 * 60)
+        while Date() < deadline, !Task.isCancelled {
+            updateActivity(activityID, on: laneNumber, from: job)
+            if job.status == "completed" || job.status == "failed" {
+                return job
+            }
+
+            try? await Task.sleep(for: .milliseconds(700))
+            do {
+                job = try await bridge.codexTurnStatus(jobId: job.id)
+            } catch {
+                // Leaving the foreground may suspend network work. Keep the
+                // Mac-owned receipt alive and retry when iOS gives us time.
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
+        failActivity(activityID, on: laneNumber, message: "Timed out waiting for the Mac-owned turn.")
+        return nil
+    }
+
+    private func updateActivity(
+        _ id: UUID,
+        on laneNumber: Int,
+        from job: CodexTurnJob
+    ) {
+        guard liveActivityByLane[laneNumber]?.id == id else { return }
+        liveActivityByLane[laneNumber]?.jobID = job.id
+        liveActivityByLane[laneNumber]?.updates = job.updates ?? []
+    }
+
+    func narrateNotificationResponse(
+        _ response: String,
+        preview: String,
+        jobID: String
+    ) async {
+        notificationNarratedJobIDs.insert(jobID)
+        _ = await AIResponseSpeechRouter.shared.speak(response, preview: preview)
     }
 
     private func beginSubmission(on laneNumber: Int) {

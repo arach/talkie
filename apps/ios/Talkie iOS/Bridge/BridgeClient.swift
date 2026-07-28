@@ -318,6 +318,32 @@ actor BridgeClient {
         return try JSONDecoder().decode(CodexSubmitResponse.self, from: data)
     }
 
+    /// Hands a Codex turn to the Mac and returns a receipt without waiting for completion.
+    func codexStartTurn(
+        taskId: String,
+        taskTitle: String,
+        text: String,
+        mode: CodexMessageMode
+    ) async throws -> CodexTurnJob {
+        struct Request: Encodable {
+            let taskId: String
+            let taskTitle: String
+            let text: String
+            let mode: CodexMessageMode
+        }
+        let data = try await post(
+            "/codex/turns",
+            body: Request(taskId: taskId, taskTitle: taskTitle, text: text, mode: mode)
+        )
+        return try JSONDecoder().decode(CodexTurnJobResponse.self, from: data).job
+    }
+
+    /// Reads a host-owned Codex turn receipt, including public interim updates.
+    func codexTurnStatus(jobId: String) async throws -> CodexTurnJob {
+        let data = try await get("/codex/turns/\(jobId)")
+        return try JSONDecoder().decode(CodexTurnJobResponse.self, from: data).job
+    }
+
     func companionActivateApp(
         processIdentifier: Int32,
         bundleIdentifier: String?
@@ -1009,6 +1035,33 @@ struct CodexSubmitResponse: Codable {
     /// Raw delivery discriminator; decoded into `CodexTurnDelivery` by the store
     /// so an unrecognized value fails loudly instead of being coerced.
     let delivery: String
+}
+
+struct CodexProgressUpdate: Codable, Equatable, Sendable, Identifiable {
+    let id: String
+    let kind: String
+    let text: String
+    let timestamp: String?
+}
+
+struct CodexTurnJob: Codable, Equatable, Sendable {
+    let id: String
+    let taskId: String
+    let taskTitle: String
+    let status: String
+    let mode: CodexMessageMode
+    let createdAt: String
+    let updatedAt: String
+    let turnId: String?
+    let delivery: String?
+    let response: String?
+    let updates: [CodexProgressUpdate]?
+    let error: String?
+    let code: String?
+}
+
+struct CodexTurnJobResponse: Codable {
+    let job: CodexTurnJob
 }
 
 struct CompanionTriggerResponse: Codable {

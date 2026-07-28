@@ -30,7 +30,8 @@ struct CodexCommandDeckSurface: View {
     var body: some View {
         VStack(spacing: 12) {
             CodexCommandConsole(onShowMapper: openMapper)
-                .frame(height: 274)
+                .frame(height: store.activeLaneIsInFlight ? 318 : 274)
+                .animation(.easeInOut(duration: 0.22), value: store.activeLaneIsInFlight)
 
             keybed
                 .layoutPriority(60)
@@ -555,7 +556,7 @@ private struct CodexCommandConsole: View {
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
-        .opacity(isEnabled ? 1 : 0.56)
+        .opacity(isEnabled || isActive ? 1 : 0.56)
         .accessibilityLabel(lanePickerAccessibilityLabel(number: number, lane: lane, isActive: isActive))
         .accessibilityHint(lane == nil ? "Opens the task mapper" : "Selects this exact Codex task")
         .accessibilityAddTraits(isActive ? .isSelected : [])
@@ -683,11 +684,13 @@ private struct CodexCommandConsole: View {
                 .foregroundStyle(theme.chrome.panelInkFaint)
                 .lineLimit(1)
 
-                Text(task.compactPath)
-                    .font(.system(size: 9, weight: .regular, design: .monospaced))
-                    .foregroundStyle(theme.chrome.panelInkFaint.opacity(0.82))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                if !store.activeLaneIsInFlight {
+                    Text(task.compactPath)
+                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                        .foregroundStyle(theme.chrome.panelInkFaint.opacity(0.82))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
             } else {
                 Text("Tap an empty lane above to map an exact Codex task.")
                     .font(.system(size: 9, weight: .regular, design: .monospaced))
@@ -699,7 +702,11 @@ private struct CodexCommandConsole: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, minHeight: 145, alignment: .topLeading)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: store.activeLaneIsInFlight ? 189 : 145,
+            alignment: .topLeading
+        )
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(theme.chrome.panel)
@@ -786,6 +793,14 @@ private struct CodexCommandConsole: View {
 
             switch activity.state {
             case .working(let mode):
+                if !activity.updates.isEmpty {
+                    ForEach(Array(activity.updates.suffix(2))) { update in
+                        progressLine(
+                            update,
+                            isLatest: update.id == activity.updates.last?.id
+                        )
+                    }
+                }
                 CodexWorkingSignal(
                     mode: mode,
                     queuedCount: store.queuedMessageCount(for: laneNumber),
@@ -814,6 +829,27 @@ private struct CodexCommandConsole: View {
             }
         }
         .padding(.top, 2)
+    }
+
+    private func progressLine(_ update: CodexProgressUpdate, isLatest: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            Text(update.kind == "tool" ? "SYS" : "LIVE")
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .tracking(0.8)
+                .foregroundStyle(
+                    update.kind == "tool"
+                        ? theme.chrome.panelInkFaint
+                        : theme.chrome.panelAccent
+                )
+                .frame(width: 38, alignment: .leading)
+
+            Text(update.text)
+                .font(.system(size: 10, weight: .regular))
+                .foregroundStyle(theme.chrome.panelInk.opacity(isLatest ? 0.90 : 0.62))
+                .lineLimit(isLatest && update.kind != "tool" ? 3 : 1)
+        }
+        .transition(.opacity.combined(with: .move(edge: .bottom)))
+        .accessibilityElement(children: .combine)
     }
 
     private func technicalLine(_ text: String, isFailure: Bool = false) -> some View {

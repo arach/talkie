@@ -1,13 +1,15 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
-import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { listTasks } = require("./codex-desktop-bridge.cjs") as {
+const { listTasks, readTurnActivity, taskRolloutPath } = require("./codex-desktop-bridge.cjs") as {
   listTasks: (limit: number) => Array<Record<string, unknown>>;
+  readTurnActivity: (rolloutPath: string) => Record<string, unknown>;
+  taskRolloutPath: (taskId: string) => string;
 };
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -42,11 +44,16 @@ describe("Codex task catalog", () => {
         thread_source TEXT,
         recency_at_ms INTEGER NOT NULL,
         updated_at_ms INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
+        updated_at INTEGER NOT NULL,
+        rollout_path TEXT NOT NULL DEFAULT ''
       );
     `);
     const insert = database.prepare(`
-      INSERT INTO threads VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO threads (
+        id, archived, name, title, first_user_message, preview, cwd,
+        git_branch, git_origin_url, agent_role, thread_source,
+        recency_at_ms, updated_at_ms, updated_at
+      ) VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     insert.run(
       "user-task", "Add steer and queue support", "fallback title", "original request",
@@ -81,5 +88,47 @@ describe("Codex task catalog", () => {
         project: "talkie",
       },
     ]);
+  });
+
+  test("returns only public commentary and technical completion signals", () => {
+    fixtureHome = mkdtempSync(path.join(tmpdir(), "talkie-codex-activity-"));
+    const taskId = "019fa94d-8b11-7030-a252-5debffd976ae";
+    const sessions = path.join(fixtureHome, "sessions", "2026", "07", "28");
+    mkdirSync(sessions, { recursive: true });
+    process.env.CODEX_HOME = fixtureHome;
+    const rollout = path.join(sessions, `rollout-${taskId}.jsonl`);
+    writeFileSync(rollout, [
+      { type: "event_msg", timestamp: "2026-07-28T10:00:00Z", payload: { type: "task_started", turn_id: "turn-1" } },
+      { type: "response_item", payload: { type: "reasoning", summary: "private" } },
+      { type: "event_msg", timestamp: "2026-07-28T10:00:01Z", payload: { type: "agent_reasoning", text: "private" } },
+      { type: "event_msg", timestamp: "2026-07-28T10:00:02Z", payload: { type: "agent_message", phase: "commentary", message: "Tracing the host signal." } },
+      { type: "event_msg", timestamp: "2026-07-28T10:00:03Z", payload: { type: "patch_apply_end", turn_id: "turn-1", success: true } },
+    ].map(JSON.stringify).join("\n") + "\n");
+
+    const database = new Database(path.join(fixtureHome, "state_5.sqlite"), { create: true });
+    database.exec("CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT NOT NULL);");
+    database.prepare("INSERT INTO threads VALUES (?, ?)").run(taskId, rollout);
+    database.close();
+
+    expect(taskRolloutPath(taskId)).toBe(rollout);
+    expect(readTurnActivity(rollout)).toEqual({
+      ok: true,
+      active: true,
+      turnId: "turn-1",
+      updates: [
+        {
+          id: "2026-07-28T10:00:02Z-1",
+          kind: "commentary",
+          text: "Tracing the host signal.",
+          timestamp: "2026-07-28T10:00:02Z",
+        },
+        {
+          id: "2026-07-28T10:00:03Z-2",
+          kind: "tool",
+          text: "PATCH APPLIED",
+          timestamp: "2026-07-28T10:00:03Z",
+        },
+      ],
+    });
   });
 });

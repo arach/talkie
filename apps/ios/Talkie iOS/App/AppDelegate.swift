@@ -20,6 +20,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     private static let reportNotificationRecordType = "TalkieReportNotification"
     private static let reportNotificationSubscriptionID = "talkie-ios-report-notification"
     private static let legacyPushNotificationSubscriptionID = "talkie-ios-push-notification"
+    private static let agentReportCategoryID = "talkie-agent-report"
+    private static let hearAgentReportActionID = "talkie-agent-report-hear"
 
     private var cloudKitSubscriptionSetUp = false
     private var cancellables = Set<AnyCancellable>()
@@ -41,6 +43,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 
         // Set up notification center delegate
         UNUserNotificationCenter.current().delegate = self
+        registerNotificationCategories()
 
         // Set up CloudKit subscription when iCloud becomes available (non-blocking)
         setupCloudKitSubscriptionWhenReady()
@@ -362,6 +365,20 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         }
     }
 
+    private func registerNotificationCategories() {
+        let hear = UNNotificationAction(
+            identifier: Self.hearAgentReportActionID,
+            title: "Hear response",
+            options: [.foreground]
+        )
+        let category = UNNotificationCategory(
+            identifier: Self.agentReportCategoryID,
+            actions: [hear],
+            intentIdentifiers: []
+        )
+        UNUserNotificationCenter.current().setNotificationCategories([category])
+    }
+
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         AppLogger.app.info("Registered for remote notifications (\(deviceToken.count)-byte token)")
     }
@@ -575,7 +592,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     }
 
     // Bump this version when changing subscription configuration to force recreation
-    private static let pushSubscriptionVersion = 3
+    private static let pushSubscriptionVersion = 4
 
     private func setupPushNotificationSubscription(database: CKDatabase, subscriptionID: String, zoneID: CKRecordZone.ID) {
         let versionKey = "reportPushSubscriptionVersion"
@@ -633,9 +650,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         notificationInfo.alertLocalizationKey = "PUSH_NOTIFICATION_BODY"
         notificationInfo.alertLocalizationArgs = ["body"]
         notificationInfo.soundName = "default"
+        notificationInfo.category = Self.agentReportCategoryID
         notificationInfo.shouldSendContentAvailable = true // Also trigger background fetch
         notificationInfo.shouldBadge = false
-        notificationInfo.desiredKeys = ["title", "body", "sessionId", "source", "kind"]
+        notificationInfo.desiredKeys = ["title", "body", "detail", "sessionId", "source", "kind"]
 
         subscription.notificationInfo = notificationInfo
         subscription.zoneID = zoneID
@@ -698,6 +716,19 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                        record.recordType == Self.reportNotificationRecordType {
                         let sessionId = record["sessionId"] as? String ?? "unknown"
                         AppLogger.app.info("[Push] Opened report notification for session: \(sessionId)")
+                        if response.actionIdentifier == Self.hearAgentReportActionID {
+                            let spokenResponse = (record["detail"] as? String)
+                                ?? (record["body"] as? String)
+                                ?? "The Codex response is ready."
+                            let preview = (record["title"] as? String) ?? "Codex response"
+                            Task { @MainActor in
+                                await CodexLaneStore.shared.narrateNotificationResponse(
+                                    spokenResponse,
+                                    preview: preview,
+                                    jobID: sessionId
+                                )
+                            }
+                        }
                     } else if let record = record,
                               let memoIdData = record["CD_memoId"],
                               let memoId = self?.extractUUID(from: memoIdData) {

@@ -1022,6 +1022,32 @@ final class BridgeManager {
         return response
     }
 
+    func codexStartTurn(
+        taskId: String,
+        taskTitle: String,
+        text: String,
+        mode: CodexMessageMode
+    ) async throws -> CodexTurnJob {
+        try await requireConnectedBridge()
+        let job = try await client.codexStartTurn(
+            taskId: taskId,
+            taskTitle: taskTitle,
+            text: text,
+            mode: mode
+        )
+        lastSuccessfulContactAt = .now
+        updateActiveMacContactDate(.now)
+        return job
+    }
+
+    func codexTurnStatus(jobId: String) async throws -> CodexTurnJob {
+        try await requireConnectedBridge()
+        let job = try await client.codexTurnStatus(jobId: jobId)
+        lastSuccessfulContactAt = .now
+        updateActiveMacContactDate(.now)
+        return job
+    }
+
     func activateCompanionApp(_ app: CompanionAppSwitcherApp) async throws -> CompanionTriggerResponse {
         guard isPaired else {
             throw BridgeError.notConfigured

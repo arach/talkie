@@ -135,6 +135,19 @@ private struct WorkflowHostStepResponse: Codable {
     }
 }
 
+private struct AgentReportNotificationRequest: Codable {
+    let title: String
+    let body: String
+    let detail: String?
+    let sessionId: String
+    let source: String?
+}
+
+private struct AgentReportNotificationResponse: Codable {
+    let ok: Bool
+    let error: String?
+}
+
 private struct WorkflowHostRecordResolution {
     let memo: MemoModel
     let assets: TalkieObjectAssets?
@@ -657,6 +670,8 @@ final class TalkieServer {
             return LocalBridgeCapability.messageInject
         case ("POST", "/workflows/host/execute-step"):
             return LocalBridgeCapability.workflowExecute
+        case ("POST", "/notifications/agent-report"):
+            return LocalBridgeCapability.workflowExecute
         default:
             if method == "GET" && path.hasPrefix("/screenshot/window/") {
                 return LocalBridgeCapability.desktopScreenshotRead
@@ -810,6 +825,16 @@ final class TalkieServer {
                 body: bodyData
             ) else { return }
             await handleWorkflowHostExecuteStep(connection, body: body)
+        } else if path == "/notifications/agent-report" && method == "POST" {
+            guard authorizeLocalClientIfNeeded(
+                connection: connection,
+                method: method,
+                rawPath: rawPath,
+                path: path,
+                headers: headers,
+                body: bodyData
+            ) else { return }
+            await handleAgentReportNotification(connection, body: body)
         } else if (path == "/message" || path == "/inject") && method == "POST" {
             guard authorizeLocalClientIfNeeded(
                 connection: connection,
@@ -914,6 +939,63 @@ final class TalkieServer {
         } else {
             log.warning("TalkieServer 404: method='\(method)' path='\(path)'")
             sendResponse(connection, statusCode: 404, body: "Not found")
+        }
+    }
+
+    private func handleAgentReportNotification(_ connection: NWConnection, body: Data?) async {
+        guard let body else {
+            sendJSONResponse(
+                connection,
+                statusCode: 400,
+                body: AgentReportNotificationResponse(ok: false, error: "No body")
+            )
+            return
+        }
+
+        let request: AgentReportNotificationRequest
+        do {
+            request = try JSONDecoder().decode(AgentReportNotificationRequest.self, from: body)
+        } catch {
+            sendJSONResponse(
+                connection,
+                statusCode: 400,
+                body: AgentReportNotificationResponse(ok: false, error: "Invalid JSON")
+            )
+            return
+        }
+
+        let title = request.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let notificationBody = request.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sessionId = request.sessionId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty, !notificationBody.isEmpty, !sessionId.isEmpty else {
+            sendJSONResponse(
+                connection,
+                statusCode: 400,
+                body: AgentReportNotificationResponse(ok: false, error: "Title, body, and session ID are required")
+            )
+            return
+        }
+
+        do {
+            _ = try await CloudKitReportNotificationSender().sendReport(
+                title: title,
+                body: notificationBody,
+                detail: request.detail,
+                sessionId: sessionId,
+                source: request.source
+            )
+            sendJSONResponse(
+                connection,
+                statusCode: 200,
+                body: AgentReportNotificationResponse(ok: true, error: nil)
+            )
+        } catch {
+            log.warning("Failed to queue agent report for iPhone: \(error.localizedDescription)")
+            sendJSONResponse(
+                connection,
+                statusCode: 503,
+                body: AgentReportNotificationResponse(ok: false, error: error.localizedDescription)
+            )
         }
     }
 

@@ -14,6 +14,7 @@
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { log } from "../../log";
+import { talkieServerFetch } from "../talkie-local-client";
 import { badRequest } from "./responses";
 
 /** Where the vendored Codex Desktop adapter lives (sibling of this routes dir). */
@@ -24,6 +25,10 @@ const SNAPSHOT_TIMEOUT_MS = 20_000;
 const TURN_TIMEOUT_MS = 31 * 60_000;
 // A queue command may wait for one full turn and then run another.
 const QUEUED_TURN_TIMEOUT_MS = 61 * 60_000;
+const TALKIESERVER_PORT = 8766;
+const TALKIESERVER_BASE_URL = `http://127.0.0.1:${TALKIESERVER_PORT}`;
+const AGENT_REPORT_PATH = "/notifications/agent-report";
+const AGENT_REPORT_URL = new URL(AGENT_REPORT_PATH, TALKIESERVER_BASE_URL).toString();
 
 export interface CodexTaskSummary {
   id: string;
@@ -48,8 +53,17 @@ export interface BridgeEnvelope {
   turnId?: string;
   response?: string;
   delivery?: string;
+  active?: boolean;
+  updates?: CodexProgressUpdate[];
   error?: string;
   code?: string;
+}
+
+export interface CodexProgressUpdate {
+  id: string;
+  kind: "commentary" | "tool";
+  text: string;
+  timestamp?: string | null;
 }
 
 /**
@@ -177,22 +191,24 @@ export class CodexTaskMessageCoordinator {
     taskId: string,
     text: string,
     mode: CodexMessageMode,
+    onStart?: () => void,
   ): Promise<BridgeEnvelope> {
     if (mode === "queue") {
-      return this.enqueueTurn(taskId, text, "queue");
+      return this.enqueueTurn(taskId, text, "queue", onStart);
     }
 
     if (mode === "steer" || (mode === "auto" && this.activeTurns.has(taskId))) {
-      return this.steer(taskId, text);
+      return this.steer(taskId, text, onStart);
     }
 
-    return this.enqueueTurn(taskId, text, "submit");
+    return this.enqueueTurn(taskId, text, "submit", onStart);
   }
 
   private enqueueTurn(
     taskId: string,
     text: string,
     firstCommand: "submit" | "queue",
+    onStart?: () => void,
   ): Promise<BridgeEnvelope> {
     const predecessor = this.turnTails.get(taskId);
     // Once another Talkie turn is ahead of us, ordinary submit is sufficient:
@@ -200,6 +216,7 @@ export class CodexTaskMessageCoordinator {
     const command: "submit" | "queue" = predecessor ? "submit" : firstCommand;
     const ready = predecessor?.catch(() => undefined) ?? Promise.resolve();
     const result = ready.then(async () => {
+      onStart?.();
       this.activeTurns.add(taskId);
       try {
         return await this.run(command, taskId, text);
@@ -217,11 +234,14 @@ export class CodexTaskMessageCoordinator {
     return result;
   }
 
-  private steer(taskId: string, text: string): Promise<BridgeEnvelope> {
+  private steer(taskId: string, text: string, onStart?: () => void): Promise<BridgeEnvelope> {
     const predecessor = this.steerTails.get(taskId);
     const ready = predecessor?.catch(() => undefined) ?? Promise.resolve();
     const result = ready
-      .then(() => this.run("steer", taskId, text))
+      .then(() => {
+        onStart?.();
+        return this.run("steer", taskId, text);
+      })
       .catch((error: unknown) => {
         // The current turn can finish between speech capture and delivery.
         // Preserve the user's message by making it the next turn.
@@ -255,6 +275,145 @@ async function runCodexCommand(
 }
 
 const messageCoordinator = new CodexTaskMessageCoordinator(runCodexCommand);
+
+export type CodexTurnJobStatus = "queued" | "running" | "completed" | "failed";
+
+export interface CodexTurnJobSnapshot {
+  id: string;
+  taskId: string;
+  taskTitle: string;
+  status: CodexTurnJobStatus;
+  mode: CodexMessageMode;
+  createdAt: string;
+  updatedAt: string;
+  turnId?: string;
+  delivery?: string;
+  response?: string;
+  updates?: CodexProgressUpdate[];
+  error?: string;
+  code?: string;
+}
+
+type CodexActivityReader = (taskId: string) => Promise<BridgeEnvelope>;
+type CodexCompletionNotifier = (job: CodexTurnJobSnapshot) => Promise<void>;
+
+export class CodexTurnJobManager {
+  private readonly jobs = new Map<string, CodexTurnJobSnapshot>();
+
+  constructor(
+    private readonly coordinator: CodexTaskMessageCoordinator,
+    private readonly readActivity: CodexActivityReader,
+    private readonly notifyCompletion: CodexCompletionNotifier,
+  ) {}
+
+  start(taskId: string, taskTitle: string, text: string, mode: CodexMessageMode): CodexTurnJobSnapshot {
+    this.prune();
+    const now = new Date().toISOString();
+    const job: CodexTurnJobSnapshot = {
+      id: crypto.randomUUID(),
+      taskId,
+      taskTitle,
+      status: "queued",
+      mode,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.jobs.set(job.id, job);
+
+    void this.coordinator.deliver(taskId, text, mode, () => {
+      job.status = "running";
+      job.updatedAt = new Date().toISOString();
+    }).then(async (envelope) => {
+      job.status = "completed";
+      job.updatedAt = new Date().toISOString();
+      job.turnId = envelope.turnId;
+      job.delivery = envelope.delivery;
+      job.response = envelope.response?.trim() || undefined;
+      if (job.response) {
+        await this.notifyCompletion({ ...job });
+      }
+    }).catch((error: unknown) => {
+      job.status = "failed";
+      job.updatedAt = new Date().toISOString();
+      job.error = error instanceof Error ? error.message : String(error);
+      job.code = error instanceof CodexBridgeError ? error.code : "bridge-failed";
+      log.warn(`[codex] async job ${job.id} failed: ${job.code}: ${job.error}`);
+    });
+
+    return { ...job };
+  }
+
+  async snapshot(jobId: string): Promise<CodexTurnJobSnapshot | undefined> {
+    const job = this.jobs.get(jobId);
+    if (!job) return undefined;
+    if (job.status !== "running") return { ...job };
+
+    try {
+      const activity = await this.readActivity(job.taskId);
+      return {
+        ...job,
+        turnId: job.turnId ?? activity.turnId,
+        updates: activity.updates ?? [],
+      };
+    } catch (error) {
+      // Progress is best-effort. The owning delivery process remains the
+      // authority for completion and failure.
+      log.debug(`[codex] activity snapshot unavailable for ${job.id}: ${error}`);
+      return { ...job };
+    }
+  }
+
+  private prune() {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1_000;
+    for (const [id, job] of this.jobs) {
+      if (Date.parse(job.updatedAt) < cutoff) this.jobs.delete(id);
+    }
+    while (this.jobs.size >= 100) {
+      const oldest = this.jobs.keys().next().value;
+      if (!oldest) break;
+      this.jobs.delete(oldest);
+    }
+  }
+}
+
+async function readCodexActivity(taskId: string): Promise<BridgeEnvelope> {
+  const envelope = await runBridge(["activity", taskId], { timeoutMs: SNAPSHOT_TIMEOUT_MS });
+  if (!envelope.ok) throw envelopeError(envelope);
+  return envelope;
+}
+
+async function notifyCodexCompletion(job: CodexTurnJobSnapshot): Promise<void> {
+  if (!job.response) return;
+  const notificationBody = job.response.length > 280
+    ? `${job.response.slice(0, 277).trimEnd()}...`
+    : job.response;
+  const body = JSON.stringify({
+    title: `${job.taskTitle} is ready`,
+    body: notificationBody,
+    detail: job.response,
+    sessionId: job.id,
+    source: "codex",
+  });
+  try {
+    const response = await talkieServerFetch(AGENT_REPORT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      signal: AbortSignal.timeout(SNAPSHOT_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      log.warn(`[codex] iPhone completion notification unavailable (${response.status})`);
+    }
+  } catch (error) {
+    log.warn(`[codex] iPhone completion notification unavailable: ${error}`);
+  }
+}
+
+const turnJobs = new CodexTurnJobManager(
+  messageCoordinator,
+  readCodexActivity,
+  notifyCodexCompletion,
+);
 
 /** Maps a bridge failure onto an HTTP response, preserving code + recovery hint. */
 function bridgeFailureResponse(error: unknown): Response {
@@ -356,4 +515,42 @@ export async function codexSubmitRoute(body: unknown): Promise<Response> {
   } catch (error) {
     return bridgeFailureResponse(error);
   }
+}
+
+/** POST /codex/turns — hand a turn to the Mac and return immediately. */
+export async function codexTurnStartRoute(body: unknown): Promise<Response> {
+  const payload = body as {
+    taskId?: unknown;
+    taskTitle?: unknown;
+    text?: unknown;
+    mode?: unknown;
+  };
+  const taskId = typeof payload?.taskId === "string" ? payload.taskId.trim() : "";
+  const taskTitle = typeof payload?.taskTitle === "string" ? payload.taskTitle.trim() : "";
+  const text = typeof payload?.text === "string" ? payload.text.trim() : "";
+  const mode = payload?.mode ?? "auto";
+
+  if (!taskId) return badRequest("taskId is required");
+  if (!text) return badRequest("text is required");
+  if (mode !== "auto" && mode !== "queue" && mode !== "steer") {
+    return badRequest("mode must be auto, queue, or steer");
+  }
+
+  const job = turnJobs.start(taskId, taskTitle || "Codex task", text, mode);
+  log.info(`[codex] accepted async job ${job.id} for task ${taskId}`);
+  return Response.json({ job }, { status: 202 });
+}
+
+/** GET /codex/turns/:id — current progress or durable in-process result. */
+export async function codexTurnStatusRoute(jobId: string): Promise<Response> {
+  const id = jobId.trim();
+  if (!id) return badRequest("job id is required");
+  const job = await turnJobs.snapshot(id);
+  if (!job) {
+    return Response.json(
+      { error: "This Codex turn receipt is no longer available.", code: "turn-job-not-found" },
+      { status: 404 },
+    );
+  }
+  return Response.json({ job });
 }

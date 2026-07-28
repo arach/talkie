@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   CodexTaskMessageCoordinator,
+  CodexTurnJobManager,
   type BridgeEnvelope,
 } from "./codex";
 
@@ -76,6 +77,46 @@ describe("CodexTaskMessageCoordinator", () => {
 
     expect(calls).toEqual(["queue"]);
     expect(result.delivery).toBe("queued-turn");
+  });
+});
+
+describe("CodexTurnJobManager", () => {
+  test("returns immediately, publishes public progress, and keeps the final response", async () => {
+    let finishTurn: (() => void) | undefined;
+    const turnGate = new Promise<void>((resolve) => {
+      finishTurn = resolve;
+    });
+    const coordinator = new CodexTaskMessageCoordinator(async () => {
+      await turnGate;
+      return completed("started-turn", "Finished in the background");
+    });
+    const notified: string[] = [];
+    const manager = new CodexTurnJobManager(
+      coordinator,
+      async () => ({
+        ok: true,
+        active: true,
+        turnId: "turn-1",
+        updates: [{ id: "u1", kind: "commentary", text: "Checking the host.", timestamp: null }],
+      }),
+      async (job) => { if (job.response) notified.push(job.response); },
+    );
+
+    const receipt = manager.start("task-1", "Command Deck", "keep working", "steer");
+    expect(receipt.status).toBe("queued");
+    await Promise.resolve();
+
+    const running = await manager.snapshot(receipt.id);
+    expect(running?.status).toBe("running");
+    expect(running?.updates?.[0]?.text).toBe("Checking the host.");
+
+    finishTurn?.();
+    await Bun.sleep(0);
+    await Bun.sleep(0);
+    const completedJob = await manager.snapshot(receipt.id);
+    expect(completedJob?.status).toBe("completed");
+    expect(completedJob?.response).toBe("Finished in the background");
+    expect(notified).toEqual(["Finished in the background"]);
   });
 });
 

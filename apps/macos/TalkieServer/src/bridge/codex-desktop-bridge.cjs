@@ -169,6 +169,116 @@ function latestActiveTurnId(rolloutPath) {
   return activeTurnId;
 }
 
+function taskRolloutPath(threadId) {
+  if (!/^[0-9a-f-]{36}$/i.test(threadId)) {
+    fail('The Codex task id is invalid.', 'invalid-task-id');
+  }
+  const database = path.join(codexHome(), 'state_5.sqlite');
+  if (!fs.existsSync(database)) {
+    fail('Codex task catalog is unavailable.', 'catalog-unavailable');
+  }
+  const query = `SELECT rollout_path FROM threads WHERE id = '${threadId}' LIMIT 1;`;
+  const rolloutPath = execFileSync('/usr/bin/sqlite3', ['-readonly', database, query], {
+    encoding: 'utf8',
+    maxBuffer: 1024 * 1024,
+  }).trim();
+  if (!rolloutPath) fail('The selected Codex task no longer exists.', 'task-not-found');
+  return assertRolloutPath(rolloutPath, threadId);
+}
+
+/**
+ * Reads only user-visible progress from the active turn. Commentary is the
+ * same assistant text Codex Desktop presents during work; reasoning records
+ * are deliberately ignored and never cross the bridge.
+ */
+function readTurnActivity(rolloutPath) {
+  const size = fs.statSync(rolloutPath).size;
+  const maximumScan = 32 * 1024 * 1024;
+  const start = Math.max(0, size - maximumScan);
+  const descriptor = fs.openSync(rolloutPath, 'r');
+  let text;
+  try {
+    const data = Buffer.allocUnsafe(size - start);
+    fs.readSync(descriptor, data, 0, data.length, start);
+    text = data.toString('utf8');
+  } finally {
+    fs.closeSync(descriptor);
+  }
+  if (start > 0) text = text.slice(text.indexOf('\n') + 1);
+
+  let turnId = null;
+  let updates = [];
+  let ordinal = 0;
+  for (const line of text.split('\n')) {
+    if (!line) continue;
+    let record;
+    try { record = JSON.parse(line); } catch { continue; }
+    const payload = record?.type === 'event_msg' ? record.payload : null;
+    if (payload?.type === 'task_started' && typeof payload.turn_id === 'string') {
+      turnId = payload.turn_id;
+      updates = [];
+      ordinal = 0;
+      continue;
+    }
+    if (!turnId || !payload) continue;
+
+    if (payload.type === 'agent_message' && payload.phase === 'commentary') {
+      const message = String(payload.message || '').trim();
+      if (message) {
+        ordinal += 1;
+        updates.push({
+          id: `${record.timestamp || 'progress'}-${ordinal}`,
+          kind: 'commentary',
+          text: message,
+          timestamp: record.timestamp || null,
+        });
+      }
+      continue;
+    }
+
+    if (payload.turn_id === turnId && payload.type === 'patch_apply_end' && payload.success) {
+      ordinal += 1;
+      updates.push({
+        id: `${record.timestamp || 'patch'}-${ordinal}`,
+        kind: 'tool',
+        text: 'PATCH APPLIED',
+        timestamp: record.timestamp || null,
+      });
+      continue;
+    }
+
+    if (payload.turn_id === turnId && payload.type === 'mcp_tool_call_end') {
+      const tool = String(payload.invocation?.tool || payload.invocation?.server || 'TOOL')
+        .replaceAll('_', ' ')
+        .trim()
+        .toUpperCase();
+      ordinal += 1;
+      updates.push({
+        id: `${record.timestamp || 'tool'}-${ordinal}`,
+        kind: 'tool',
+        text: `${tool} COMPLETE`,
+        timestamp: record.timestamp || null,
+      });
+      continue;
+    }
+
+    if (
+      ['task_complete', 'task_failed', 'turn_aborted'].includes(payload.type) &&
+      payload.turn_id === turnId
+    ) {
+      turnId = null;
+      updates = [];
+    }
+  }
+
+  return {
+    ok: true,
+    active: Boolean(turnId),
+    turnId,
+    updates: updates.slice(-4),
+  };
+}
+
 function frame(message) {
   const body = Buffer.from(JSON.stringify(message), 'utf8');
   if (body.length === 0 || body.length > MAX_FRAME_BYTES) fail('Desktop IPC message is too large.');
@@ -766,6 +876,10 @@ async function main() {
     writeResult({ ok: true, tasks: listTasks(argument) });
     return;
   }
+  if (command === 'activity' && argument) {
+    writeResult(readTurnActivity(taskRolloutPath(argument)));
+    return;
+  }
   if ((command === 'validate' || command === 'submit' || command === 'steer' || command === 'queue') && argument) {
     const acceptsText = command === 'submit' || command === 'steer' || command === 'queue';
     const text = acceptsText ? (await readStdin()).trim() : '';
@@ -781,7 +895,7 @@ async function main() {
     return;
   }
   fail(
-    'Usage: codex-desktop-bridge.cjs list [limit] | validate <task-id> | submit|steer|queue <task-id>',
+    'Usage: codex-desktop-bridge.cjs list [limit] | activity|validate <task-id> | submit|steer|queue <task-id>',
     'usage',
   );
 }
@@ -797,4 +911,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { listTasks, projectName };
+module.exports = { listTasks, projectName, readTurnActivity, taskRolloutPath };
