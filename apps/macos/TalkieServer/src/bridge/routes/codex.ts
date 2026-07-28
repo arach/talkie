@@ -53,6 +53,10 @@ export interface BridgeEnvelope {
   turnId?: string;
   response?: string;
   delivery?: string;
+  decision?: {
+    snapshotRuntimeStatus?: string;
+    rolloutActiveTurnId?: string | null;
+  };
   active?: boolean;
   updates?: CodexProgressUpdate[];
   error?: string;
@@ -340,9 +344,12 @@ export class CodexTurnJobManager {
       job.turnId = envelope.turnId;
       job.delivery = envelope.delivery;
       job.response = envelope.response?.trim() || undefined;
+      const decisionDetail = envelope.decision
+        ? ` decision=${JSON.stringify(envelope.decision)}`
+        : "";
       log.info(
         `[codex] async job ${job.id} completed task=${taskId} delivery=${job.delivery ?? "unknown"} `
-          + `responseChars=${job.response?.length ?? 0}`,
+          + `responseChars=${job.response?.length ?? 0}${decisionDetail}`,
       );
       if (job.response) {
         await this.notifyCompletion({ ...job });
@@ -520,7 +527,10 @@ export async function codexSubmitRoute(body: unknown): Promise<Response> {
     }
 
     const responseDetail = response ? ` (${response.length} chars)` : "";
-    log.info(`[codex] ${delivery} for task ${taskId}${responseDetail}`);
+    const decisionDetail = envelope.decision
+      ? ` decision=${JSON.stringify(envelope.decision)}`
+      : "";
+    log.info(`[codex] ${delivery} for task ${taskId}${responseDetail}${decisionDetail}`);
     return Response.json({
       taskId,
       ...(envelope.turnId && { turnId: envelope.turnId }),

@@ -203,22 +203,39 @@ function latestActiveTurnId(rolloutPath) {
   }
   if (start > 0) text = text.slice(text.indexOf('\n') + 1);
 
-  let activeTurnId = null;
+  const activeTurnIds = [];
   for (const line of text.split('\n')) {
     if (!line) continue;
     let record;
     try { record = JSON.parse(line); } catch { continue; }
     const payload = record?.type === 'event_msg' ? record.payload : null;
     if (payload?.type === 'task_started' && typeof payload.turn_id === 'string') {
-      activeTurnId = payload.turn_id;
+      const existingIndex = activeTurnIds.indexOf(payload.turn_id);
+      if (existingIndex >= 0) activeTurnIds.splice(existingIndex, 1);
+      activeTurnIds.push(payload.turn_id);
     } else if (
       ['task_complete', 'task_failed', 'turn_aborted'].includes(payload?.type) &&
-      payload?.turn_id === activeTurnId
+      typeof payload?.turn_id === 'string'
     ) {
-      activeTurnId = null;
+      const completedIndex = activeTurnIds.indexOf(payload.turn_id);
+      if (completedIndex >= 0) activeTurnIds.splice(completedIndex, 1);
     }
   }
-  return activeTurnId;
+  return activeTurnIds.at(-1) ?? null;
+}
+
+function resolveDesktopTurnState(rolloutPath, snapshotRuntimeStatus) {
+  const activeTurnId = latestActiveTurnId(rolloutPath);
+  if (snapshotRuntimeStatus === 'active' && !activeTurnId) {
+    fail('Codex Desktop reports an active task without a correlatable turn.', 'protocol-mismatch');
+  }
+  return {
+    activeTurnId,
+    decision: {
+      snapshotRuntimeStatus: snapshotRuntimeStatus || 'unknown',
+      rolloutActiveTurnId: activeTurnId,
+    },
+  };
 }
 
 function taskRolloutPath(threadId) {
@@ -921,11 +938,13 @@ async function runDesktopCommand(command, threadId, text) {
       };
     }
     let offset = fs.statSync(rolloutPath).size;
-    const taskIsActive = state?.threadRuntimeStatus?.type === 'active';
-    const activeTurnId = taskIsActive ? latestActiveTurnId(rolloutPath) : null;
-    if (taskIsActive && !activeTurnId) {
-      fail('Codex Desktop reports an active task without a correlatable turn.', 'protocol-mismatch');
-    }
+    // The rollout is authoritative for activity. Desktop snapshots can lag the
+    // open thread by a render tick; treating a stale "idle" snapshot as truth
+    // starts a concurrent hidden turn instead of publishing a visible queue.
+    const { activeTurnId, decision } = resolveDesktopTurnState(
+      rolloutPath,
+      state?.threadRuntimeStatus?.type,
+    );
 
     if (command === 'steer') {
       if (!activeTurnId) {
@@ -937,6 +956,7 @@ async function runDesktopCommand(command, threadId, text) {
         threadId,
         turnId: activeTurnId,
         delivery: 'steered-active-turn',
+        decision,
       };
     }
 
@@ -947,7 +967,7 @@ async function runDesktopCommand(command, threadId, text) {
       // until that exact instruction completes so async narration still works.
       await client.queueTurn(text, snapshot.ownerClientId, state);
       const { turnId, response } = await waitForQueuedTurn(rolloutPath, offset, text);
-      return { ok: true, threadId, turnId, delivery: 'queued-turn', response };
+      return { ok: true, threadId, turnId, delivery: 'queued-turn', response, decision };
     }
 
     let turnId;
@@ -961,7 +981,7 @@ async function runDesktopCommand(command, threadId, text) {
       delivery = 'started-turn';
     }
     const response = await waitForTurn(rolloutPath, offset, turnId);
-    return { ok: true, threadId, turnId, delivery, response };
+    return { ok: true, threadId, turnId, delivery, response, decision };
   });
 }
 
@@ -1062,6 +1082,7 @@ module.exports = {
   projectName,
   readQueuedFollowUps,
   readTurnActivity,
+  resolveDesktopTurnState,
   taskRolloutPath,
   waitForQueuedTurn,
 };

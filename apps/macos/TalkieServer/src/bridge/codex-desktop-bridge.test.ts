@@ -11,6 +11,7 @@ const {
   listTasks,
   readQueuedFollowUps,
   readTurnActivity,
+  resolveDesktopTurnState,
   taskRolloutPath,
   waitForQueuedTurn,
 } = require("./codex-desktop-bridge.cjs") as {
@@ -22,6 +23,13 @@ const {
   listTasks: (limit: number) => Array<Record<string, unknown>>;
   readQueuedFollowUps: () => Record<string, Array<Record<string, unknown>>>;
   readTurnActivity: (rolloutPath: string) => Record<string, unknown>;
+  resolveDesktopTurnState: (
+    rolloutPath: string,
+    snapshotRuntimeStatus?: string,
+  ) => {
+    activeTurnId: string | null;
+    decision: { snapshotRuntimeStatus: string; rolloutActiveTurnId: string | null };
+  };
   taskRolloutPath: (taskId: string) => string;
   waitForQueuedTurn: (
     rolloutPath: string,
@@ -152,6 +160,35 @@ describe.serial("Codex task catalog", () => {
 });
 
 describe.serial("Codex Desktop queued follow-ups", () => {
+  test("trusts rollout activity when a Desktop snapshot still says idle", () => {
+    fixtureHome = mkdtempSync(path.join(tmpdir(), "talkie-codex-active-turn-"));
+    const rollout = path.join(fixtureHome, "rollout.jsonl");
+    writeFileSync(rollout, [
+      { type: "event_msg", payload: { type: "task_started", turn_id: "visible-turn" } },
+      { type: "event_msg", payload: { type: "user_message", message: "Desktop request" } },
+    ].map(JSON.stringify).join("\n") + "\n");
+
+    expect(resolveDesktopTurnState(rollout, "idle")).toEqual({
+      activeTurnId: "visible-turn",
+      decision: {
+        snapshotRuntimeStatus: "idle",
+        rolloutActiveTurnId: "visible-turn",
+      },
+    });
+  });
+
+  test("keeps the original active turn when a concurrent turn completes", () => {
+    fixtureHome = mkdtempSync(path.join(tmpdir(), "talkie-codex-concurrent-turn-"));
+    const rollout = path.join(fixtureHome, "rollout.jsonl");
+    writeFileSync(rollout, [
+      { type: "event_msg", payload: { type: "task_started", turn_id: "visible-turn" } },
+      { type: "event_msg", payload: { type: "task_started", turn_id: "hidden-turn" } },
+      { type: "event_msg", payload: { type: "task_complete", turn_id: "hidden-turn" } },
+    ].map(JSON.stringify).join("\n") + "\n");
+
+    expect(resolveDesktopTurnState(rollout, "active").activeTurnId).toBe("visible-turn");
+  });
+
   test("preserves queues for other tasks when appending a Talkie message", () => {
     fixtureHome = mkdtempSync(path.join(tmpdir(), "talkie-codex-queue-"));
     process.env.CODEX_HOME = fixtureHome;
