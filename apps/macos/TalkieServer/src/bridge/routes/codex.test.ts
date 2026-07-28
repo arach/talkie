@@ -118,6 +118,24 @@ describe("CodexTurnJobManager", () => {
     expect(completedJob?.response).toBe("Finished in the background");
     expect(notified).toEqual(["Finished in the background"]);
   });
+
+  test("fails an async job when the adapter returns an unknown delivery", async () => {
+    const coordinator = new CodexTaskMessageCoordinator(async () =>
+      completed("adapter-internal-delivery", "Finished in the background"));
+    const manager = new CodexTurnJobManager(
+      coordinator,
+      async () => ({ ok: true }),
+      async () => {},
+    );
+
+    const receipt = manager.start("task-1", "Command Deck", "keep working", "queue");
+    await Bun.sleep(0);
+    await Bun.sleep(0);
+
+    const failedJob = await manager.snapshot(receipt.id);
+    expect(failedJob?.status).toBe("failed");
+    expect(failedJob?.code).toBe("protocol-mismatch");
+  });
 });
 
 function completed(delivery: string, response: string): BridgeEnvelope {

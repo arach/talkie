@@ -46,6 +46,10 @@ export type CodexMessageMode = "auto" | "queue" | "steer";
 export type CodexTurnDelivery = "started-turn" | "queued-turn" | "steered-active-turn";
 type CodexBridgeCommand = "submit" | "queue" | "steer";
 
+function isCodexTurnDelivery(value: unknown): value is CodexTurnDelivery {
+  return value === "started-turn" || value === "queued-turn" || value === "steered-active-turn";
+}
+
 export interface BridgeEnvelope {
   ok: boolean;
   tasks?: CodexTaskSummary[];
@@ -339,6 +343,12 @@ export class CodexTurnJobManager {
       job.updatedAt = new Date().toISOString();
       log.info(`[codex] async job ${job.id} running task=${taskId} mode=${mode}`);
     }).then(async (envelope) => {
+      if (!isCodexTurnDelivery(envelope.delivery)) {
+        throw new CodexBridgeError(
+          "Codex Desktop returned an unknown turn delivery.",
+          "protocol-mismatch",
+        );
+      }
       job.status = "completed";
       job.updatedAt = new Date().toISOString();
       job.turnId = envelope.turnId;

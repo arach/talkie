@@ -9,6 +9,7 @@ const require = createRequire(import.meta.url);
 const {
   appendQueuedFollowUp,
   listTasks,
+  makeQueuedFollowUp,
   readQueuedFollowUps,
   readTurnActivity,
   resolveDesktopTurnState,
@@ -21,6 +22,7 @@ const {
     message: Record<string, unknown>,
   ) => Record<string, Array<Record<string, unknown>>>;
   listTasks: (limit: number) => Array<Record<string, unknown>>;
+  makeQueuedFollowUp: (text: string, state: Record<string, unknown>) => Record<string, any>;
   readQueuedFollowUps: () => Record<string, Array<Record<string, unknown>>>;
   readTurnActivity: (rolloutPath: string) => Record<string, unknown>;
   resolveDesktopTurnState: (
@@ -209,6 +211,25 @@ describe.serial("Codex Desktop queued follow-ups", () => {
       "other-task": [{ id: "existing", text: "Keep me" }],
       "talkie-task": [{ id: "talkie-message", text: "Queue me" }],
     });
+  });
+
+  test("builds a native Desktop follow-up with the selected task context", () => {
+    const message = makeQueuedFollowUp("Visible from Talkie", {
+      cwd: "/Users/arach/dev/talkie",
+      latestCollaborationMode: { mode: "default" },
+    });
+
+    expect(message).toMatchObject({
+      text: "Visible from Talkie",
+      cwd: "/Users/arach/dev/talkie",
+      context: {
+        prompt: "Visible from Talkie",
+        workspaceRoots: ["/Users/arach/dev/talkie"],
+        collaborationMode: { mode: "default" },
+      },
+    });
+    expect(message.id).toBeString();
+    expect(message.createdAt).toBeNumber();
   });
 
   test("observes the exact queued instruction through its completed turn", async () => {

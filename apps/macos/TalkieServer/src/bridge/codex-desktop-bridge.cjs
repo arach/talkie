@@ -16,6 +16,7 @@ const START_TURN_VERSION = 1;
 const STEER_TURN_VERSION = 1;
 const QUEUED_FOLLOW_UPS_VERSION = 1;
 const SNAPSHOT_TIMEOUT_MS = 5_000;
+const QUEUE_PERSIST_TIMEOUT_MS = 5_000;
 const TURN_TIMEOUT_MS = 30 * 60_000;
 const QUEUED_TURN_TIMEOUT_MS = 60 * 60_000;
 const APP_SERVER_REQUEST_TIMEOUT_MS = 30_000;
@@ -170,6 +171,30 @@ function appendQueuedFollowUp(queued, threadId, message) {
   };
 }
 
+function makeQueuedFollowUp(text, state) {
+  return {
+    id: randomUUID(),
+    text,
+    context: {
+      addedFiles: [],
+      prompt: text,
+      ideContext: null,
+      imageAttachments: [],
+      fileAttachments: [],
+      commentAttachments: [],
+      pullRequestChecks: [],
+      reviewFindings: [],
+      workspaceRoots: state.cwd ? [state.cwd] : [],
+      collaborationMode: state.latestCollaborationMode || null,
+      pastedTextAttachments: [],
+      appshotContexts: [],
+      mcpAppModelContextAttachments: [],
+    },
+    cwd: state.cwd || '/',
+    createdAt: Date.now(),
+  };
+}
+
 function codexExecutable() {
   for (const candidate of CODEX_EXECUTABLE_CANDIDATES) {
     try {
@@ -253,6 +278,15 @@ function taskRolloutPath(threadId) {
   }).trim();
   if (!rolloutPath) fail('The selected Codex task no longer exists.', 'task-not-found');
   return assertRolloutPath(rolloutPath, threadId);
+}
+
+function taskWorkingDirectory(threadId) {
+  const database = path.join(codexHome(), 'state_5.sqlite');
+  const query = `SELECT cwd FROM threads WHERE id = '${threadId}' LIMIT 1;`;
+  return execFileSync('/usr/bin/sqlite3', ['-readonly', database, query], {
+    encoding: 'utf8',
+    maxBuffer: 1024 * 1024,
+  }).trim();
 }
 
 /**
@@ -476,27 +510,7 @@ class DesktopIPCClient {
   }
 
   async queueTurn(text, ownerClientId, state) {
-    const message = {
-      id: randomUUID(),
-      text,
-      context: {
-        addedFiles: [],
-        prompt: text,
-        ideContext: null,
-        imageAttachments: [],
-        fileAttachments: [],
-        commentAttachments: [],
-        pullRequestChecks: [],
-        reviewFindings: [],
-        workspaceRoots: state.cwd ? [state.cwd] : [],
-        collaborationMode: state.latestCollaborationMode || null,
-        pastedTextAttachments: [],
-        appshotContexts: [],
-        mcpAppModelContextAttachments: [],
-      },
-      cwd: state.cwd || '/',
-      createdAt: Date.now(),
-    };
+    const message = makeQueuedFollowUp(text, state);
     const queued = appendQueuedFollowUp(readQueuedFollowUps(), this.threadId, message);
     const response = await this.request('thread-follower-set-queued-follow-ups-state', {
       conversationId: this.threadId,
@@ -510,6 +524,16 @@ class DesktopIPCClient {
       fail(`Codex Desktop could not queue the follow-up: ${response.error || 'unknown error'}`, 'turn-queue-failed');
     }
     return message.id;
+  }
+
+  queueVisibleTurn(text, state) {
+    const message = makeQueuedFollowUp(text, state);
+    const queued = appendQueuedFollowUp(readQueuedFollowUps(), this.threadId, message);
+    this.broadcast('thread-queued-followups-changed', {
+      conversationId: this.threadId,
+      messages: queued[this.threadId],
+    }, QUEUED_FOLLOW_UPS_VERSION);
+    return message;
   }
 
   broadcast(method, params, version) {
@@ -917,6 +941,23 @@ async function withAppServer(threadId, action) {
   }
 }
 
+async function waitForQueuedFollowUpPersistence(threadId, messageId) {
+  const deadline = Date.now() + QUEUE_PERSIST_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    try {
+      const message = (readQueuedFollowUps()[threadId] || []).find((item) => item?.id === messageId);
+      if (message) return;
+    } catch (error) {
+      if (error?.code !== 'protocol-mismatch') throw error;
+    }
+    await sleep(50);
+  }
+  fail(
+    'Codex Desktop did not accept the Talkie message in the visible task.',
+    'task-owner-unavailable',
+  );
+}
+
 function shouldUseAppServerFallback(error) {
   return [
     'task-owner-unavailable',
@@ -924,6 +965,30 @@ function shouldUseAppServerFallback(error) {
     'ENOENT',
     'ECONNREFUSED',
   ].includes(error?.code);
+}
+
+async function runVisibleDesktopQueue(threadId, text, requestedDelivery) {
+  const rolloutPath = taskRolloutPath(threadId);
+  const offset = fs.statSync(rolloutPath).size;
+  const client = new DesktopIPCClient(threadId);
+  try {
+    await client.connect();
+    const message = client.queueVisibleTurn(text, { cwd: taskWorkingDirectory(threadId) });
+    await waitForQueuedFollowUpPersistence(threadId, message.id);
+    const { turnId, response } = await waitForQueuedTurn(rolloutPath, offset, text);
+    return {
+      ok: true,
+      threadId,
+      turnId,
+      // Whether Desktop or the app server owns the queue is an adapter detail.
+      // Clients only need the stable protocol fact that this ran as a queued turn.
+      delivery: 'queued-turn',
+      requestedDelivery,
+      response,
+    };
+  } finally {
+    client.close();
+  }
 }
 
 async function runDesktopCommand(command, threadId, text) {
@@ -1053,6 +1118,11 @@ async function main() {
     try {
       result = await runDesktopCommand(command, argument, text);
     } catch (error) {
+      if (acceptsText && error?.code === 'task-owner-unavailable') {
+        result = await runVisibleDesktopQueue(argument, text, command);
+        writeResult(result);
+        return;
+      }
       if (!shouldUseAppServerFallback(error)) throw error;
       result = await runAppServerCommand(command, argument, text);
     }
@@ -1079,6 +1149,7 @@ if (require.main === module) {
 module.exports = {
   appendQueuedFollowUp,
   listTasks,
+  makeQueuedFollowUp,
   projectName,
   readQueuedFollowUps,
   readTurnActivity,
