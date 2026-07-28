@@ -247,7 +247,8 @@ final class ScreenRecordingController {
             let seconds = max(1, Int((Double(durationMs) / 1000.0).rounded()))
             ToastOverlayController.shared.show(
                 ToastMessage(
-                    icon: "⚠️",
+                    icon: "exclamationmark.triangle",
+                    code: "CAPTURE",
                     text: "Screen recording stopped",
                     detail: "macOS interrupted capture — partial clip saved (\(seconds)s)",
                     actionLabel: nil,
@@ -257,7 +258,8 @@ final class ScreenRecordingController {
         } else {
             ToastOverlayController.shared.show(
                 ToastMessage(
-                    icon: "❌",
+                    icon: "xmark.octagon",
+                    code: "CAPTURE",
                     text: "Screen recording stopped",
                     detail: "macOS interrupted capture before a clip could be saved",
                     actionLabel: nil,
@@ -271,7 +273,8 @@ final class ScreenRecordingController {
         log.error("Screen recording save failed; temporary clip remains at \(tempURL.path)")
         ToastOverlayController.shared.show(
             ToastMessage(
-                icon: "❌",
+                icon: "xmark.octagon",
+                code: "CAPTURE",
                 text: interrupted ? "Screen recording interrupted" : "Screen recording not saved",
                 detail: "Temporary clip is still available.",
                 actionLabel: "Reveal",
