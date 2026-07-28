@@ -67,6 +67,7 @@ public struct ResizableSidebar<Selection: Hashable, RailHeader: View, LabelHeade
     let collapseWidth: Double
     @Binding var isDragging: Bool
     let onToggle: () -> Void
+    let onRailHeaderTap: (() -> Void)?
     let onResizeEnded: (Double) -> Void
     let onCollapse: (Double) -> Void
     let onExpand: (Double) -> Void
@@ -92,6 +93,7 @@ public struct ResizableSidebar<Selection: Hashable, RailHeader: View, LabelHeade
         collapseWidth: Double,
         isDragging: Binding<Bool>,
         onToggle: @escaping () -> Void,
+        onRailHeaderTap: (() -> Void)? = nil,
         onResizeEnded: @escaping (Double) -> Void,
         onCollapse: @escaping (Double) -> Void,
         onExpand: @escaping (Double) -> Void,
@@ -115,6 +117,7 @@ public struct ResizableSidebar<Selection: Hashable, RailHeader: View, LabelHeade
         self.collapseWidth = collapseWidth
         self._isDragging = isDragging
         self.onToggle = onToggle
+        self.onRailHeaderTap = onRailHeaderTap
         self.onResizeEnded = onResizeEnded
         self.onCollapse = onCollapse
         self.onExpand = onExpand
@@ -203,6 +206,7 @@ public struct ResizableSidebar<Selection: Hashable, RailHeader: View, LabelHeade
             allCaps: allCaps,
             labelWidth: CGFloat(effectiveLabelWidth),
             onHeaderTap: onToggle,
+            onRailHeaderTap: onRailHeaderTap,
             tooltipState: tooltipState,
             isScopeTheme: isScopeTheme,
             railHeader: railHeader,
@@ -275,6 +279,7 @@ public struct ManagedResizableSidebar<Selection: Hashable, RailHeader: View, Lab
     let maxWidth: Double
     let collapseWidth: Double
     let activationDistance: CGFloat
+    let onRailHeaderTap: (() -> Void)?
     /// Optional side-effect hook fired whenever compact mode changes
     /// (e.g. a frame-rate / instrumentation probe). Pure observation —
     /// the binding is already updated when this fires.
@@ -300,6 +305,7 @@ public struct ManagedResizableSidebar<Selection: Hashable, RailHeader: View, Lab
         maxWidth: Double = 220,
         collapseWidth: Double = 44,
         activationDistance: CGFloat = 6,
+        onRailHeaderTap: (() -> Void)? = nil,
         onModeChange: ((Bool) -> Void)? = nil,
         @ViewBuilder railHeader: @escaping () -> RailHeader,
         @ViewBuilder labelHeader: @escaping () -> LabelHeader,
@@ -318,6 +324,7 @@ public struct ManagedResizableSidebar<Selection: Hashable, RailHeader: View, Lab
         self.maxWidth = maxWidth
         self.collapseWidth = collapseWidth
         self.activationDistance = activationDistance
+        self.onRailHeaderTap = onRailHeaderTap
         self.onModeChange = onModeChange
         self.railHeader = railHeader
         self.labelHeader = labelHeader
@@ -345,6 +352,7 @@ public struct ManagedResizableSidebar<Selection: Hashable, RailHeader: View, Lab
                 withAnimation(SidebarMotion.defaultSpring) { isCompact.toggle() }
                 onModeChange?(isCompact)
             },
+            onRailHeaderTap: onRailHeaderTap,
             onResizeEnded: { width in
                 labelWidth = clamped(width)
             },

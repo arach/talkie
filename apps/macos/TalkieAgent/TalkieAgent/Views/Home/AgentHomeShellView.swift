@@ -111,6 +111,9 @@ struct AgentHomeShellView: View {
             tooltipState: sidebarTooltipState,
             isScopeTheme: true,
             handleTint: ScopeInk.primary,
+            onRailHeaderTap: {
+                AgentVoiceController.shared.startLatchedTransmission()
+            },
             railHeader: { brandMark },
             labelHeader: { brandWordmark },
             footer: { sidebarFooter }
@@ -150,6 +153,8 @@ struct AgentHomeShellView: View {
                 RoundedRectangle(cornerRadius: OpsRadius.standard, style: .continuous)
                     .fill(AgentTheme.brandAccent)
             )
+            .accessibilityLabel("Talk to agents")
+            .help("Talk to agents")
     }
 
     private var brandWordmark: some View {
