@@ -561,6 +561,13 @@ final class FloatingPillController: ObservableObject {
         overlayAppearanceTasks.removeAll()
     }
 
+    /// Close the always-on pill without terminating TalkieAgent.
+    /// The pill can be restored from Agent Home's overlay settings.
+    func close() {
+        pillLogger.info("Closing floating pill from context menu")
+        LiveSettings.shared.pillEnabled = false
+    }
+
     func toggle() {
         if isVisible {
             hide()
@@ -1005,6 +1012,11 @@ struct FloatingPillView: View {
         // Reserve a stable companion lane without enlarging the unlocked hit target.
         .frame(width: currentWidth, height: componentHeight, alignment: componentAlignment)
         .contentShape(RoundedRectangle(cornerRadius: pillCornerRadius))
+        .contextMenu {
+            Button("Close") {
+                controller.close()
+            }
+        }
         .scaleEffect(slideInOpacity == 0 ? 0.8 : 1.0)  // Scale up instead of offset (stays in bounds)
         .opacity(slideInOpacity)
         .animation(.easeInOut(duration: 0.15), value: showDevInfo)

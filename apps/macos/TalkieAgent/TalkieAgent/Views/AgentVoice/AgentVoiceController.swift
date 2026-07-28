@@ -60,6 +60,16 @@ final class AgentVoiceController {
 
     /// Hyper+T pressed.
     func press() {
+        presentPanel(latched: false)
+    }
+
+    /// Clicked from Agent Home. The transmission stays live until the
+    /// instrument's Send control is chosen.
+    func startLatchedTransmission() {
+        presentPanel(latched: true)
+    }
+
+    private func presentPanel(latched: Bool) {
         let panel = ensurePanel()
         session.prepareTransmission()
         // Reset to compact size each press; the phase sink will
@@ -76,9 +86,16 @@ final class AgentVoiceController {
         }
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(20))
-            self?.session.beginTransmission()
+            if latched {
+                self?.session.beginLatchedTransmission()
+            } else {
+                self?.session.beginTransmission()
+            }
         }
-        log.info("Agent voice panel up", detail: "phase=arming")
+        log.info(
+            "Agent voice panel up",
+            detail: "phase=arming interaction=\(latched ? "latched" : "hold")"
+        )
     }
 
     /// Hyper+T released. Session drives the rest of the lifecycle —

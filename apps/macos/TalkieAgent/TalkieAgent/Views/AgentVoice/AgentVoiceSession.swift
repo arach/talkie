@@ -84,6 +84,18 @@ final class AgentVoiceSession: ObservableObject {
         )
     }
 
+    /// Start a click-driven transmission that records until the user chooses
+    /// Send in the instrument. Hyper+T continues to use hold-to-talk.
+    func beginLatchedTransmission() {
+        guard phase == .arming || phase == .ready else { return }
+        startCapture(
+            phase: .transmitting,
+            clearsVisibleTurn: true,
+            clearsContinuation: false,
+            isLatched: true
+        )
+    }
+
     func beginVoiceFollowUp() {
         guard phase == .receiving, executorBranchState != .working else { return }
         startCapture(

@@ -75,6 +75,7 @@ public struct Sidebar<Selection: Hashable, RailHeader: View, LabelHeader: View, 
     let allCaps: Bool
     let labelWidth: CGFloat
     let onHeaderTap: (() -> Void)?
+    let onRailHeaderTap: (() -> Void)?
     let tooltipState: SidebarTooltipState
     /// Scope-theme chrome tweak (header rule + flat rail surface). Injected by
     /// the host so this component carries no app-target dependency
@@ -99,6 +100,7 @@ public struct Sidebar<Selection: Hashable, RailHeader: View, LabelHeader: View, 
         allCaps: Bool = false,
         labelWidth: CGFloat = SidebarLayout.labelWidth,
         onHeaderTap: (() -> Void)? = nil,
+        onRailHeaderTap: (() -> Void)? = nil,
         tooltipState: SidebarTooltipState? = nil,
         isScopeTheme: Bool = false,
         @ViewBuilder railHeader: @escaping () -> RailHeader,
@@ -112,6 +114,7 @@ public struct Sidebar<Selection: Hashable, RailHeader: View, LabelHeader: View, 
         self.allCaps = allCaps
         self.labelWidth = labelWidth
         self.onHeaderTap = onHeaderTap
+        self.onRailHeaderTap = onRailHeaderTap
         self.tooltipState = tooltipState ?? .shared
         self.isScopeTheme = isScopeTheme
         self.railHeader = railHeader
@@ -290,12 +293,9 @@ public struct Sidebar<Selection: Hashable, RailHeader: View, LabelHeader: View, 
     private var railColumn: some View {
         VStack(spacing: 0) {
             // Header rail slot — host's logo lives here, centered in 32pt.
-            railHeader()
-                .frame(width: SidebarLayout.railWidth, height: SidebarLayout.headerHeight)
+            railHeaderCell
                 .padding(.top, SidebarLayout.headerTopPadding)
                 .padding(.bottom, SidebarLayout.headerBottomPadding)
-                .contentShape(Rectangle())
-                .onTapGesture { onHeaderTap?() }
 
             // Per-entry rail cells. Section headers are empty space here so
             // y-positions stay aligned with the label column.
@@ -304,6 +304,23 @@ public struct Sidebar<Selection: Hashable, RailHeader: View, LabelHeader: View, 
             }
         }
         .frame(width: SidebarLayout.railWidth)
+    }
+
+    @ViewBuilder
+    private var railHeaderCell: some View {
+        if let action = onRailHeaderTap {
+            Button(action: action) {
+                railHeader()
+                    .frame(width: SidebarLayout.railWidth, height: SidebarLayout.headerHeight)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        } else {
+            railHeader()
+                .frame(width: SidebarLayout.railWidth, height: SidebarLayout.headerHeight)
+                .contentShape(Rectangle())
+                .onTapGesture { onHeaderTap?() }
+        }
     }
 
     @ViewBuilder

@@ -1548,10 +1548,6 @@ struct DebugOverlaysModifier: ViewModifier {
                     .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .bottomTrailing)))
                 }
             }
-            // FPS readout moved off this floating bottomLeading overlay
-            // (it overlapped content like the capture-markup speak strip)
-            // and into the status bar's dev cluster — see PerfStatusReadout
-            // in StatusBar.swift. CVDisplayLink monitor is started there.
             .overlay {
                 DesignToolsOverlay()
             }

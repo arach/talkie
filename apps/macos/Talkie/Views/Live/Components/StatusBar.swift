@@ -263,11 +263,6 @@ struct StatusBar: View {
 
                         #if DEBUG
                         if shouldShowDevelopmentReadouts {
-                            // FPS — relocated here from a floating overlay that
-                            // overlapped content. Dev-only (DEBUG + dev bundle),
-                            // sitting with the other dev readouts.
-                            PerfStatusReadout()
-
                             Text(verbatim: "PID \(ProcessInfo.processInfo.processIdentifier)")
                                 .font(Theme.current.fontXSMedium)
                                 .foregroundColor(TalkieTheme.textMuted)
