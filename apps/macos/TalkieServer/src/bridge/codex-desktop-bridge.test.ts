@@ -14,6 +14,7 @@ const {
   readTurnActivity,
   resolveDesktopTurnState,
   taskRolloutPath,
+  withQueuedFollowUpMutationLock,
   waitForQueuedTurn,
 } = require("./codex-desktop-bridge.cjs") as {
   appendQueuedFollowUp: (
@@ -33,10 +34,12 @@ const {
     decision: { snapshotRuntimeStatus: string; rolloutActiveTurnId: string | null };
   };
   taskRolloutPath: (taskId: string) => string;
+  withQueuedFollowUpMutationLock: <T>(taskId: string, action: () => Promise<T>) => Promise<T>;
   waitForQueuedTurn: (
     rolloutPath: string,
     offset: number,
     text: string,
+    matchingPredecessors?: number,
   ) => Promise<{ turnId: string; response: string }>;
 };
 
@@ -162,6 +165,26 @@ describe.serial("Codex task catalog", () => {
 });
 
 describe.serial("Codex Desktop queued follow-ups", () => {
+  test("serializes native queue state mutations for one task", async () => {
+    fixtureHome = mkdtempSync(path.join(tmpdir(), "talkie-codex-queue-lock-"));
+    process.env.CODEX_HOME = fixtureHome;
+    const order: string[] = [];
+
+    await Promise.all([
+      withQueuedFollowUpMutationLock("task-1", async () => {
+        order.push("first-start");
+        await Bun.sleep(20);
+        order.push("first-end");
+      }),
+      withQueuedFollowUpMutationLock("task-1", async () => {
+        order.push("second-start");
+        order.push("second-end");
+      }),
+    ]);
+
+    expect(order).toEqual(["first-start", "first-end", "second-start", "second-end"]);
+  });
+
   test("trusts rollout activity when a Desktop snapshot still says idle", () => {
     fixtureHome = mkdtempSync(path.join(tmpdir(), "talkie-codex-active-turn-"));
     const rollout = path.join(fixtureHome, "rollout.jsonl");
@@ -247,6 +270,24 @@ describe.serial("Codex Desktop queued follow-ups", () => {
     await expect(waitForQueuedTurn(rollout, 0, "Talkie queued message")).resolves.toEqual({
       turnId: "talkie-turn",
       response: "Talkie response",
+    });
+  });
+
+  test("distinguishes identical queued instructions by their queue position", async () => {
+    fixtureHome = mkdtempSync(path.join(tmpdir(), "talkie-codex-duplicate-queue-"));
+    const rollout = path.join(fixtureHome, "rollout.jsonl");
+    writeFileSync(rollout, [
+      { type: "event_msg", payload: { type: "task_started", turn_id: "first-turn" } },
+      { type: "event_msg", payload: { type: "user_message", message: "Same spoken message" } },
+      { type: "event_msg", payload: { type: "task_complete", turn_id: "first-turn", last_agent_message: "First response" } },
+      { type: "event_msg", payload: { type: "task_started", turn_id: "second-turn" } },
+      { type: "event_msg", payload: { type: "user_message", message: "Same spoken message" } },
+      { type: "event_msg", payload: { type: "task_complete", turn_id: "second-turn", last_agent_message: "Second response" } },
+    ].map(JSON.stringify).join("\n") + "\n");
+
+    await expect(waitForQueuedTurn(rollout, 0, "Same spoken message", 1)).resolves.toEqual({
+      turnId: "second-turn",
+      response: "Second response",
     });
   });
 });

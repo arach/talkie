@@ -78,6 +78,21 @@ describe("CodexTaskMessageCoordinator", () => {
     expect(calls).toEqual(["queue"]);
     expect(result.delivery).toBe("queued-turn");
   });
+
+  test("explicit steer observes an externally owned active turn through completion", async () => {
+    const calls: string[] = [];
+    const coordinator = new CodexTaskMessageCoordinator(async (command) => {
+      calls.push(command);
+      return command === "submit"
+        ? completed("steered-active-turn", "external turn response")
+        : { ok: true, turnId: "turn-1", delivery: "steered-active-turn" };
+    });
+
+    const result = await coordinator.deliver("task-1", "more context", "steer");
+
+    expect(calls).toEqual(["submit"]);
+    expect(result.response).toBe("external turn response");
+  });
 });
 
 describe("CodexTurnJobManager", () => {

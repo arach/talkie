@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
-const { randomUUID } = require('node:crypto');
+const { createHash, randomUUID } = require('node:crypto');
 const { execFileSync, spawn } = require('node:child_process');
 
 const MAX_FRAME_BYTES = 256 * 1024 * 1024;
@@ -17,6 +17,7 @@ const STEER_TURN_VERSION = 1;
 const QUEUED_FOLLOW_UPS_VERSION = 1;
 const SNAPSHOT_TIMEOUT_MS = 5_000;
 const QUEUE_PERSIST_TIMEOUT_MS = 5_000;
+const QUEUE_MUTATION_LOCK_TIMEOUT_MS = 10_000;
 const TURN_TIMEOUT_MS = 30 * 60_000;
 const QUEUED_TURN_TIMEOUT_MS = 60 * 60_000;
 const APP_SERVER_REQUEST_TIMEOUT_MS = 30_000;
@@ -169,6 +170,56 @@ function appendQueuedFollowUp(queued, threadId, message) {
     ...queued,
     [threadId]: [...existing, message],
   };
+}
+
+function queuedTextPredecessorCount(queued, threadId, text) {
+  const normalizedText = text.trim();
+  return (queued[threadId] || []).filter(
+    (message) => String(message?.text || '').trim() === normalizedText,
+  ).length;
+}
+
+async function withQueuedFollowUpMutationLock(threadId, action) {
+  const lockDirectory = path.join(codexHome(), '.talkie-queue-locks');
+  fs.mkdirSync(lockDirectory, { recursive: true, mode: 0o700 });
+  const directoryInfo = fs.lstatSync(lockDirectory);
+  if (
+    !directoryInfo.isDirectory() ||
+    directoryInfo.isSymbolicLink() ||
+    directoryInfo.uid !== process.getuid() ||
+    (directoryInfo.mode & 0o077) !== 0
+  ) {
+    fail('Talkie queue lock storage is not private.', 'unsafe-queue-lock');
+  }
+
+  const digest = createHash('sha256').update(threadId).digest('hex');
+  const lockPath = path.join(lockDirectory, `${digest}.lock`);
+  const deadline = Date.now() + QUEUE_MUTATION_LOCK_TIMEOUT_MS;
+  let descriptor;
+  while (Date.now() < deadline) {
+    try {
+      descriptor = fs.openSync(lockPath, 'wx', 0o600);
+      fs.writeFileSync(descriptor, `${process.pid}\n`, 'utf8');
+      break;
+    } catch (error) {
+      if (error?.code !== 'EEXIST') throw error;
+      await sleep(25);
+    }
+  }
+  if (descriptor === undefined) {
+    fail('Timed out while another Talkie message updated this Codex queue.', 'queue-lock-timeout');
+  }
+
+  try {
+    return await action();
+  } finally {
+    fs.closeSync(descriptor);
+    try {
+      fs.unlinkSync(lockPath);
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+  }
 }
 
 function makeQueuedFollowUp(text, state) {
@@ -511,7 +562,9 @@ class DesktopIPCClient {
 
   async queueTurn(text, ownerClientId, state) {
     const message = makeQueuedFollowUp(text, state);
-    const queued = appendQueuedFollowUp(readQueuedFollowUps(), this.threadId, message);
+    const existing = readQueuedFollowUps();
+    const matchingPredecessors = queuedTextPredecessorCount(existing, this.threadId, text);
+    const queued = appendQueuedFollowUp(existing, this.threadId, message);
     const response = await this.request('thread-follower-set-queued-follow-ups-state', {
       conversationId: this.threadId,
       state: queued,
@@ -523,17 +576,19 @@ class DesktopIPCClient {
     if (response.resultType !== 'success') {
       fail(`Codex Desktop could not queue the follow-up: ${response.error || 'unknown error'}`, 'turn-queue-failed');
     }
-    return message.id;
+    return { messageId: message.id, matchingPredecessors };
   }
 
   queueVisibleTurn(text, state) {
     const message = makeQueuedFollowUp(text, state);
-    const queued = appendQueuedFollowUp(readQueuedFollowUps(), this.threadId, message);
+    const existing = readQueuedFollowUps();
+    const matchingPredecessors = queuedTextPredecessorCount(existing, this.threadId, text);
+    const queued = appendQueuedFollowUp(existing, this.threadId, message);
     this.broadcast('thread-queued-followups-changed', {
       conversationId: this.threadId,
       messages: queued[this.threadId],
     }, QUEUED_FOLLOW_UPS_VERSION);
-    return message;
+    return { message, matchingPredecessors };
   }
 
   broadcast(method, params, version) {
@@ -862,12 +917,13 @@ async function waitForTurn(rolloutPath, offset, turnId) {
   fail('Timed out waiting for the Codex response.', 'turn-timeout');
 }
 
-async function waitForQueuedTurn(rolloutPath, offset, text) {
+async function waitForQueuedTurn(rolloutPath, offset, text, matchingPredecessors = 0) {
   const descriptor = fs.openSync(rolloutPath, 'r');
   let position = offset;
   let pending = '';
   let latestStartedTurnId = null;
   let queuedTurnId = null;
+  let remainingMatches = matchingPredecessors;
   const deadline = Date.now() + QUEUED_TURN_TIMEOUT_MS;
   try {
     while (Date.now() < deadline) {
@@ -895,6 +951,10 @@ async function waitForQueuedTurn(rolloutPath, offset, text) {
             payload.type === 'user_message' &&
             String(payload.message || '').trim() === text.trim()
           ) {
+            if (remainingMatches > 0) {
+              remainingMatches -= 1;
+              continue;
+            }
             queuedTurnId = latestStartedTurnId;
             continue;
           }
@@ -969,13 +1029,24 @@ function shouldUseAppServerFallback(error) {
 
 async function runVisibleDesktopQueue(threadId, text, requestedDelivery) {
   const rolloutPath = taskRolloutPath(threadId);
-  const offset = fs.statSync(rolloutPath).size;
   const client = new DesktopIPCClient(threadId);
   try {
     await client.connect();
-    const message = client.queueVisibleTurn(text, { cwd: taskWorkingDirectory(threadId) });
-    await waitForQueuedFollowUpPersistence(threadId, message.id);
-    const { turnId, response } = await waitForQueuedTurn(rolloutPath, offset, text);
+    const queued = await withQueuedFollowUpMutationLock(threadId, async () => {
+      const offset = fs.statSync(rolloutPath).size;
+      const { message, matchingPredecessors } = client.queueVisibleTurn(
+        text,
+        { cwd: taskWorkingDirectory(threadId) },
+      );
+      await waitForQueuedFollowUpPersistence(threadId, message.id);
+      return { offset, matchingPredecessors };
+    });
+    const { turnId, response } = await waitForQueuedTurn(
+      rolloutPath,
+      queued.offset,
+      text,
+      queued.matchingPredecessors,
+    );
     return {
       ok: true,
       threadId,
@@ -1030,8 +1101,17 @@ async function runDesktopCommand(command, threadId, text) {
       // it is visible beside messages queued from Desktop itself. The owner
       // starts it when the current turn becomes idle; Talkie keeps observing
       // until that exact instruction completes so async narration still works.
-      await client.queueTurn(text, snapshot.ownerClientId, state);
-      const { turnId, response } = await waitForQueuedTurn(rolloutPath, offset, text);
+      const queued = await withQueuedFollowUpMutationLock(threadId, async () => {
+        const queuedOffset = fs.statSync(rolloutPath).size;
+        const queuedResult = await client.queueTurn(text, snapshot.ownerClientId, state);
+        return { offset: queuedOffset, ...queuedResult };
+      });
+      const { turnId, response } = await waitForQueuedTurn(
+        rolloutPath,
+        queued.offset,
+        text,
+        queued.matchingPredecessors,
+      );
       return { ok: true, threadId, turnId, delivery: 'queued-turn', response, decision };
     }
 
@@ -1155,5 +1235,6 @@ module.exports = {
   readTurnActivity,
   resolveDesktopTurnState,
   taskRolloutPath,
+  withQueuedFollowUpMutationLock,
   waitForQueuedTurn,
 };

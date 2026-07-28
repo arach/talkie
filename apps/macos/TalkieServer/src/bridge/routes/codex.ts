@@ -207,7 +207,17 @@ export class CodexTaskMessageCoordinator {
       return this.queue(taskId, text, onStart);
     }
 
-    if (mode === "steer" || (mode === "auto" && this.activeTurns.has(taskId))) {
+    if (mode === "steer") {
+      // A Talkie-owned turn already has one long-lived observer responsible for
+      // its final response. External active turns do not, so submit through the
+      // observing path: the adapter will steer if still active or start the next
+      // turn if the race has already completed.
+      return this.activeTurns.has(taskId)
+        ? this.steer(taskId, text, onStart)
+        : this.enqueueTurn(taskId, text, "submit", onStart);
+    }
+
+    if (mode === "auto" && this.activeTurns.has(taskId)) {
       return this.steer(taskId, text, onStart);
     }
 

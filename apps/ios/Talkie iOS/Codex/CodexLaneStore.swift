@@ -616,13 +616,53 @@ final class CodexLaneStore: ObservableObject {
             do {
                 job = try await bridge.codexTurnStatus(jobId: job.id)
             } catch {
+                guard Self.shouldRetryTurnStatus(after: error) else {
+                    let described = Self.describe(error)
+                    AppLogger.ai.warning(
+                        "Codex receipt became terminal lane=\(laneNumber) id=\(activityID) "
+                            + "job=\(job.id): \(described.combined)"
+                    )
+                    return CodexTurnJob(
+                        id: job.id,
+                        taskId: job.taskId,
+                        taskTitle: job.taskTitle,
+                        status: "failed",
+                        mode: job.mode,
+                        createdAt: job.createdAt,
+                        updatedAt: job.updatedAt,
+                        turnId: job.turnId,
+                        delivery: job.delivery,
+                        response: job.response,
+                        updates: job.updates,
+                        error: described.combined,
+                        code: "turn-receipt-unavailable"
+                    )
+                }
                 // Leaving the foreground may suspend network work. Keep the
-                // Mac-owned receipt alive and retry when iOS gives us time.
+                // Mac-owned receipt alive for genuinely transient failures.
                 try? await Task.sleep(for: .seconds(2))
             }
         }
         failActivity(activityID, on: laneNumber, message: "Timed out waiting for the Mac-owned turn.")
         return nil
+    }
+
+    static func shouldRetryTurnStatus(after error: Error) -> Bool {
+        if error is URLError { return true }
+
+        guard let bridgeError = error as? BridgeError else { return false }
+        switch bridgeError {
+        case .connectionFailed:
+            return true
+        case .httpError(let status, _):
+            return status == 408 || status == 425 || status == 429 || (500..<600).contains(status)
+        case .notConfigured,
+             .invalidResponse,
+             .pairingRejected,
+             .messageFailed,
+             .encryptionDowngrade:
+            return false
+        }
     }
 
     private func updateActivity(
