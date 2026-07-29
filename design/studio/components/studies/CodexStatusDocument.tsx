@@ -163,14 +163,14 @@ const TREATMENTS: Array<{
   note: string;
 }> = [
   {
-    key: "keyfile",
-    label: "Keyfile",
-    note: "Recommended · task and repository truth merged into one compact masthead.",
-  },
-  {
     key: "ribbon",
     label: "Ribbon",
-    note: "Maximum compression through two continuous telemetry bands.",
+    note: "Recommended · native task title, then immediate repository telemetry.",
+  },
+  {
+    key: "keyfile",
+    label: "Keyfile",
+    note: "A slightly more grouped field-to-value masthead.",
   },
   {
     key: "index",
@@ -264,7 +264,7 @@ export function CodexStatusDocumentStudy() {
           data-appearance={appearance}
         >
           <NativeStatusBar />
-          <NativeNavigation />
+          <NativeNavigation title={FIXTURE.task.title} />
           <main
             className={`${styles.document} ${styles[treatment]}`}
             aria-label={`${TREATMENTS.find((candidate) => candidate.key === treatment)?.label} Codex task status prototype`}
@@ -297,14 +297,14 @@ function NativeStatusBar() {
   );
 }
 
-function NativeNavigation() {
+function NativeNavigation({ title }: { title: string }) {
   return (
     <header className={styles.nativeNavigation}>
-      <button type="button" className={styles.doneButton}>Done</button>
-      <strong>Task status</strong>
-      <button type="button" className={styles.reloadButton} aria-label="Reload status">
-        ↻
+      <button type="button" className={styles.backButton} aria-label="Back to Codex deck">
+        <span aria-hidden>‹</span>
       </button>
+      <strong title={title}>{title}</strong>
+      <button type="button" className={styles.doneButton}>Done</button>
     </header>
   );
 }
@@ -331,8 +331,6 @@ function KeyfileMasthead({ fixture }: { fixture: StatusFixture }) {
   const repository = fixture.repository;
   return (
     <header className={`${styles.taskIdentity} ${styles.keyfileMasthead}`}>
-      <LifecycleLine fixture={fixture} />
-      <CompactTitle fixture={fixture} />
       <div
         className={styles.keyfileRows}
         role="table"
@@ -374,9 +372,13 @@ function TelemetryRibbon({ fixture }: { fixture: StatusFixture }) {
   const repository = fixture.repository;
   return (
     <header className={`${styles.taskIdentity} ${styles.ribbonMasthead}`}>
-      <LifecycleLine fixture={fixture} />
-      <CompactTitle fixture={fixture} />
       <div className={styles.ribbonBand}>
+        <p>
+          <span>repo</span>{" "}
+          <code>
+            {fixture.task.repository} · {fixture.task.host}
+          </code>
+        </p>
         <p>
           <span>task</span> <code>{fixture.task.taskID}</code>
         </p>
@@ -421,10 +423,6 @@ function IndexTable({ fixture }: { fixture: StatusFixture }) {
   const repository = fixture.repository;
   return (
     <header className={`${styles.taskIdentity} ${styles.indexMasthead}`}>
-      <div className={styles.indexTitle}>
-        <LifecycleLine fixture={fixture} />
-        <CompactTitle fixture={fixture} context={false} />
-      </div>
       <div className={styles.indexRows} role="table" aria-label="Task and repository index">
         <InlineMetric
           label="Repository"
@@ -451,37 +449,6 @@ function IndexTable({ fixture }: { fixture: StatusFixture }) {
         <DiffMeasure fixture={fixture} />
       </div>
     </header>
-  );
-}
-
-function LifecycleLine({ fixture }: { fixture: StatusFixture }) {
-  return (
-    <div className={styles.stateLine}>
-      <span className={styles.liveLamp} aria-hidden />
-      <strong>{fixture.turn.status.toUpperCase()}</strong>
-      <span>{fixture.turn.mode.toUpperCase()}</span>
-      <time>{fixture.turn.elapsed}</time>
-    </div>
-  );
-}
-
-function CompactTitle({
-  fixture,
-  context = true,
-}: {
-  fixture: StatusFixture;
-  context?: boolean;
-}) {
-  return (
-    <>
-      <h2>{fixture.task.title}</h2>
-      {context ? (
-        <p className={styles.contextLine}>
-          <span>{fixture.task.repository}</span>
-          <span>{fixture.task.host}</span>
-        </p>
-      ) : null}
-    </>
   );
 }
 
@@ -653,7 +620,7 @@ function Metric({
 }
 
 function parseTreatment(value: string | null): Treatment {
-  return value === "ribbon" || value === "index" ? value : "keyfile";
+  return value === "keyfile" || value === "index" ? value : "ribbon";
 }
 
 function parseAppearance(value: string | null): Appearance {
