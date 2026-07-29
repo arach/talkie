@@ -14,9 +14,10 @@ responsible for trust, loading, navigation, accessibility, and dismissal.
 TalkieServer owns repository inspection and the assembly of a task-scoped HTML
 document.
 
-The Studio study recommends the **Ledger** treatment. It makes the task and
-repository state legible at a glance, keeps the live turn prominent, and allows
-small diff hunks to expand without turning the sheet into an IDE.
+The Studio study recommends the **Keyfile** treatment. It merges task identity,
+runtime, and repository truth into one high-contrast masthead before moving
+directly into changed files. Small diff hunks can expand without turning the
+sheet into an IDE.
 
 ## Current system audit
 
@@ -66,13 +67,15 @@ access and belong on the paired Mac.
 
 ## Recommended interaction
 
-Use the Ledger treatment from the Studio study:
+Use the Keyfile treatment from the Studio study:
 
 1. A native header establishes the trusted task title, loading state, reload,
    and dismissal.
-2. The document opens with a compact task identity and lifecycle line.
-3. Repository truth is the primary technical block: branch, upstream, HEAD,
-   clean state, divergence, and totals.
+2. The document opens with one compact masthead containing lifecycle, title,
+   repository, host, task identity, harness, adapter, route, branch, upstream,
+   base, HEAD, tree state, divergence, and diff totals.
+3. The complete masthead fits within 280 points at a 390-point phone width, so
+   changed files begin within the first viewport.
 4. Changed files remain a concise ledger. Only useful hunks expand through
    native HTML `details` elements.
 5. Recent agent updates and the previous delivery complete the explanation of
@@ -80,9 +83,10 @@ Use the Ledger treatment from the Studio study:
 6. Bridge health and render time sit in a quiet footer rather than competing
    with task status.
 
-The Instrument and Trace treatments remain useful comparison points but are not
-recommended. Instrument over-separates the data into panels. Trace gives live
-events too much visual weight for a status surface.
+The Ribbon and Index treatments remain useful comparison points but are not
+recommended. Ribbon is extremely fast to scan but weakens grouping between
+task and repository facts. Index is the most literal field-to-value structure,
+but its narrow title column feels more administrative than instrumental.
 
 ## Ownership boundary
 

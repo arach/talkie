@@ -22,7 +22,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import styles from "./CodexStatusDocument.module.css";
 
-type Treatment = "ledger" | "instrument" | "trace";
+type Treatment = "keyfile" | "ribbon" | "index";
 type Appearance = "dark" | "light";
 
 interface ChangedFile {
@@ -163,19 +163,19 @@ const TREATMENTS: Array<{
   note: string;
 }> = [
   {
-    key: "ledger",
-    label: "Run ledger",
-    note: "Recommended · one ruled technical document with the least chrome.",
+    key: "keyfile",
+    label: "Keyfile",
+    note: "Recommended · task and repository truth merged into one compact masthead.",
   },
   {
-    key: "instrument",
-    label: "Instrument",
-    note: "Stronger live readout; repository evidence remains document-like.",
+    key: "ribbon",
+    label: "Ribbon",
+    note: "Maximum compression through two continuous telemetry bands.",
   },
   {
-    key: "trace",
-    label: "Trace",
-    note: "A chronological spine emphasizes what changed and what happened.",
+    key: "index",
+    label: "Index",
+    note: "The most literal and accessible field-to-value technical table.",
   },
 ];
 
@@ -269,8 +269,7 @@ export function CodexStatusDocumentStudy() {
             className={`${styles.document} ${styles[treatment]}`}
             aria-label={`${TREATMENTS.find((candidate) => candidate.key === treatment)?.label} Codex task status prototype`}
           >
-            <TaskIdentity fixture={FIXTURE} />
-            <RepositoryState fixture={FIXTURE} />
+            <TaskIdentity fixture={FIXTURE} treatment={treatment} />
             <ChangeSet fixture={FIXTURE} />
             <LiveTurn fixture={FIXTURE} />
             <RecentDelivery fixture={FIXTURE} />
@@ -310,71 +309,222 @@ function NativeNavigation() {
   );
 }
 
-function TaskIdentity({ fixture }: { fixture: StatusFixture }) {
+function TaskIdentity({
+  fixture,
+  treatment,
+}: {
+  fixture: StatusFixture;
+  treatment: Treatment;
+}) {
+  if (treatment === "ribbon") {
+    return <TelemetryRibbon fixture={fixture} />;
+  }
+
+  if (treatment === "index") {
+    return <IndexTable fixture={fixture} />;
+  }
+
+  return <KeyfileMasthead fixture={fixture} />;
+}
+
+function KeyfileMasthead({ fixture }: { fixture: StatusFixture }) {
+  const repository = fixture.repository;
   return (
-    <header className={styles.taskIdentity}>
-      <div className={styles.stateLine}>
-        <span className={styles.liveLamp} aria-hidden />
-        <strong>{fixture.turn.status.toUpperCase()}</strong>
-        <span>{fixture.turn.mode.toUpperCase()}</span>
-        <time>{fixture.turn.elapsed}</time>
+    <header className={`${styles.taskIdentity} ${styles.keyfileMasthead}`}>
+      <LifecycleLine fixture={fixture} />
+      <CompactTitle fixture={fixture} />
+      <div
+        className={styles.keyfileRows}
+        role="table"
+        aria-label="Task and repository keyfile"
+      >
+        <InlineMetric label="Task" value={fixture.task.taskID} />
+        <InlineMetric
+          label="Runtime"
+          value={`${fixture.task.harness} · ${fixture.task.adapter}`}
+        />
+        <InlineMetric label="Branch" value={repository.branch} />
+        <InlineMetric label="HEAD" value={repository.head} compact />
+        <InlineMetric
+          label="Tree"
+          value={repository.clean ? "CLEAN" : "DIRTY"}
+          state
+          compact
+        />
+        <InlineMetric
+          label="Route"
+          value={`${fixture.task.route} · ${fixture.bridge.transport}`}
+          compact
+        />
+        <InlineMetric
+          label="Base"
+          value={`${repository.base}  +${repository.aheadBase} / −${repository.behindBase}`}
+        />
+        <InlineMetric
+          label="Upstream"
+          value={`${repository.upstream}  +${repository.aheadUpstream} / −${repository.behindUpstream}`}
+        />
+        <DiffMeasure fixture={fixture} />
       </div>
-      <h2>{fixture.task.title}</h2>
-      <p className={styles.contextLine}>
-        <span>{fixture.task.repository}</span>
-        <span>{fixture.task.host}</span>
-      </p>
-      <dl className={styles.identityGrid}>
-        <Metric label="Task / thread" value={fixture.task.taskID} wide />
-        <Metric label="Harness" value={fixture.task.harness} />
-        <Metric label="Adapter" value={fixture.task.adapter} wide />
-        <Metric label="Route" value={`${fixture.task.route} · ${fixture.bridge.transport}`} wide />
-      </dl>
     </header>
   );
 }
 
-function RepositoryState({ fixture }: { fixture: StatusFixture }) {
+function TelemetryRibbon({ fixture }: { fixture: StatusFixture }) {
   const repository = fixture.repository;
   return (
-    <DocumentSection kicker="Repository" title="Working state">
-      <div className={styles.branchBlock}>
-        <div>
-          <span className={styles.fieldLabel}>Branch</span>
-          <code>{repository.branch}</code>
-        </div>
-        <span className={repository.clean ? styles.cleanState : styles.dirtyState}>
-          {repository.clean ? "CLEAN" : "DIRTY"}
-        </span>
+    <header className={`${styles.taskIdentity} ${styles.ribbonMasthead}`}>
+      <LifecycleLine fixture={fixture} />
+      <CompactTitle fixture={fixture} />
+      <div className={styles.ribbonBand}>
+        <p>
+          <span>task</span> <code>{fixture.task.taskID}</code>
+        </p>
+        <p>
+          <span>runtime</span>{" "}
+          <code>
+            {fixture.task.harness} · {fixture.task.adapter}
+          </code>
+        </p>
+        <p>
+          <span>route</span>{" "}
+          <code>
+            {fixture.task.route} · {fixture.bridge.transport}
+          </code>
+        </p>
       </div>
+      <div className={`${styles.ribbonBand} ${styles.repositoryRibbon}`}>
+        <p>
+          <span>branch</span> <code>{repository.branch}</code>
+        </p>
+        <p>
+          <span>head</span> <code>{repository.head}</code>
+          <b className={repository.clean ? styles.cleanState : styles.dirtyState}>
+            {repository.clean ? "CLEAN" : "DIRTY"}
+          </b>
+        </p>
+        <p>
+          <span>base</span> <code>{repository.base}</code>{" "}
+          <b>+{repository.aheadBase}/−{repository.behindBase}</b>
+        </p>
+        <p>
+          <span>up</span> <code>{repository.upstream}</code>{" "}
+          <b>+{repository.aheadUpstream}/−{repository.behindUpstream}</b>
+        </p>
+        <DiffMeasure fixture={fixture} />
+      </div>
+    </header>
+  );
+}
 
-      <dl className={styles.repoGrid}>
-        <Metric label="Base" value={repository.base} />
-        <Metric label="Base delta" value={`+${repository.aheadBase} / −${repository.behindBase}`} />
-        <Metric label="Upstream" value={repository.upstream} wide />
-        <Metric
-          label="Upstream delta"
-          value={`+${repository.aheadUpstream} / −${repository.behindUpstream}`}
+function IndexTable({ fixture }: { fixture: StatusFixture }) {
+  const repository = fixture.repository;
+  return (
+    <header className={`${styles.taskIdentity} ${styles.indexMasthead}`}>
+      <div className={styles.indexTitle}>
+        <LifecycleLine fixture={fixture} />
+        <CompactTitle fixture={fixture} context={false} />
+      </div>
+      <div className={styles.indexRows} role="table" aria-label="Task and repository index">
+        <InlineMetric
+          label="Repository"
+          value={`${fixture.task.repository} · ${fixture.task.host}`}
         />
-        <Metric label="HEAD" value={repository.head} />
-      </dl>
+        <InlineMetric label="Task" value={fixture.task.taskID} />
+        <InlineMetric label="Harness" value={fixture.task.harness} />
+        <InlineMetric label="Adapter" value={fixture.task.adapter} />
+        <InlineMetric label="Route" value={`${fixture.task.route} · ${fixture.bridge.transport}`} />
+        <InlineMetric label="Branch" value={repository.branch} />
+        <InlineMetric
+          label="HEAD / tree"
+          value={`${repository.head} · ${repository.clean ? "CLEAN" : "DIRTY"}`}
+          state
+        />
+        <InlineMetric
+          label="Base Δ"
+          value={`${repository.base} · +${repository.aheadBase}/−${repository.behindBase}`}
+        />
+        <InlineMetric
+          label="Upstream Δ"
+          value={`${repository.upstream} · +${repository.aheadUpstream}/−${repository.behindUpstream}`}
+        />
+        <DiffMeasure fixture={fixture} />
+      </div>
+    </header>
+  );
+}
 
-      <p className={styles.commitSubject}>{repository.subject}</p>
-    </DocumentSection>
+function LifecycleLine({ fixture }: { fixture: StatusFixture }) {
+  return (
+    <div className={styles.stateLine}>
+      <span className={styles.liveLamp} aria-hidden />
+      <strong>{fixture.turn.status.toUpperCase()}</strong>
+      <span>{fixture.turn.mode.toUpperCase()}</span>
+      <time>{fixture.turn.elapsed}</time>
+    </div>
+  );
+}
+
+function CompactTitle({
+  fixture,
+  context = true,
+}: {
+  fixture: StatusFixture;
+  context?: boolean;
+}) {
+  return (
+    <>
+      <h2>{fixture.task.title}</h2>
+      {context ? (
+        <p className={styles.contextLine}>
+          <span>{fixture.task.repository}</span>
+          <span>{fixture.task.host}</span>
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+function InlineMetric({
+  label,
+  value,
+  state = false,
+  compact = false,
+}: {
+  label: string;
+  value: string;
+  state?: boolean;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={`${styles.inlineMetric} ${compact ? styles.compactMetric : ""}`}
+      role="row"
+    >
+      <span role="rowheader">{label}</span>
+      <code className={state ? styles.stateValue : undefined} role="cell">
+        {value}
+      </code>
+    </div>
+  );
+}
+
+function DiffMeasure({ fixture }: { fixture: StatusFixture }) {
+  const repository = fixture.repository;
+  return (
+    <div className={styles.diffMeasure} aria-label="Diff summary">
+      <span>Diff</span>
+      <strong>{repository.files} files</strong>
+      <b>+{formatNumber(repository.additions)}</b>
+      <i>−{formatNumber(repository.deletions)}</i>
+    </div>
   );
 }
 
 function ChangeSet({ fixture }: { fixture: StatusFixture }) {
   const repository = fixture.repository;
   return (
-    <DocumentSection kicker="Changes" title="Branch diff">
-      <div className={styles.diffSummary} aria-label="Diff summary">
-        <strong>{repository.files}</strong>
-        <span>files</span>
-        <strong className={styles.additions}>+{formatNumber(repository.additions)}</strong>
-        <span className={styles.deletions}>−{formatNumber(repository.deletions)}</span>
-      </div>
-
+    <DocumentSection kicker="Changes" title="Changed files">
       <div className={styles.fileList}>
         {repository.changedFiles.map((file) => (
           <div className={styles.fileRow} key={file.path}>
@@ -503,7 +653,7 @@ function Metric({
 }
 
 function parseTreatment(value: string | null): Treatment {
-  return value === "instrument" || value === "trace" ? value : "ledger";
+  return value === "ribbon" || value === "index" ? value : "keyfile";
 }
 
 function parseAppearance(value: string | null): Appearance {
