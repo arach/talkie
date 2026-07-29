@@ -45,7 +45,6 @@ struct CodexCommandDeckSurface: View {
         .overlay(alignment: .bottom) {
             if voicePlayback.isVoicePlaybackActive {
                 voicePlaybackRail
-                    .offset(y: 10)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .zIndex(1)
             }
@@ -66,48 +65,82 @@ struct CodexCommandDeckSurface: View {
     }
 
     private var voicePlaybackRail: some View {
-        HStack(spacing: 8) {
-            VoicePlaybackWaveform(
-                samples: voicePlayback.voiceWaveform,
-                progress: voicePlayback.voicePlaybackProgress,
-                isPlaying: voicePlayback.voicePlaybackState == .playing,
-                accent: theme.chrome.accent,
-                inactive: utilityInkFaint.opacity(0.22)
-            )
-
+        HStack(spacing: 6) {
             Button(action: voicePlayback.toggleVoicePlayback) {
                 Image(systemName: voicePlayback.voicePlaybackState == .paused ? "play.fill" : "pause.fill")
-                    .font(.system(size: 9, weight: .semibold))
-                    .frame(width: 26, height: 26)
-                    .contentShape(.rect)
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 44, height: 44)
+                    .contentShape(.circle)
             }
             .buttonStyle(.plain)
             .foregroundStyle(theme.chrome.accent)
             .accessibilityLabel(voicePlayback.voicePlaybackState == .paused ? "Resume narration" : "Pause narration")
 
+            VStack(spacing: 3) {
+                HStack(spacing: 6) {
+                    Text("VOICE")
+                        .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                        .tracking(1.0)
+                        .foregroundStyle(utilityInkFaint)
+
+                    Spacer(minLength: 0)
+
+                    Text(playbackTimeReadout)
+                        .font(.system(size: 8, weight: .medium, design: .monospaced))
+                        .monospacedDigit()
+                        .foregroundStyle(utilityInkFaint)
+                }
+
+                VoicePlaybackWaveform(
+                    samples: voicePlayback.voiceWaveform,
+                    progress: voicePlayback.voicePlaybackProgress,
+                    isPlaying: voicePlayback.voicePlaybackState == .playing,
+                    accent: theme.chrome.accent,
+                    inactive: utilityInkFaint.opacity(0.22),
+                    onSeek: voicePlayback.seekVoicePlayback,
+                    onSkip: skipVoicePlayback
+                )
+            }
+
             Button(action: store.interruptNarration) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 9, weight: .semibold))
-                    .frame(width: 26, height: 26)
-                    .contentShape(.rect)
+                    .font(.system(size: 10, weight: .semibold))
+                    .frame(width: 44, height: 44)
+                    .contentShape(.circle)
             }
             .buttonStyle(.plain)
             .foregroundStyle(utilityInkFaint)
             .accessibilityLabel("Dismiss narration")
         }
-        .padding(.leading, 10)
-        .padding(.trailing, 5)
-        .frame(height: 28)
+        .padding(.horizontal, 4)
+        .frame(height: 54)
         .background {
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(utilityInk.opacity(colorScheme == .dark ? 0.035 : 0.025))
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(theme.chrome.panel.opacity(colorScheme == .dark ? 0.96 : 0.98))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .strokeBorder(utilityInkFaint.opacity(0.12), lineWidth: theme.chrome.hairlineWidth)
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .strokeBorder(utilityInkFaint.opacity(0.16), lineWidth: theme.chrome.hairlineWidth)
                 }
+                .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.28 : 0.12), radius: 8, y: 3)
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 12)
         .accessibilityElement(children: .contain)
+    }
+
+    private var playbackTimeReadout: String {
+        "\(formatPlaybackTime(voicePlayback.voicePlaybackCurrentTime))  ·  −\(formatPlaybackTime(max(0, voicePlayback.voicePlaybackDuration - voicePlayback.voicePlaybackCurrentTime)))"
+    }
+
+    private func formatPlaybackTime(_ interval: TimeInterval) -> String {
+        let totalSeconds = max(0, Int(interval.rounded(.down)))
+        let minutes = totalSeconds / 60
+        let seconds = totalSeconds % 60
+        return "\(minutes):\(seconds < 10 ? "0" : "")\(seconds)"
+    }
+
+    private func skipVoicePlayback(by interval: TimeInterval) {
+        voicePlayback.skipVoicePlayback(by: interval)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
     private var keybed: some View {
@@ -759,38 +792,121 @@ private struct VoicePlaybackWaveform: View {
     let isPlaying: Bool
     let accent: Color
     let inactive: Color
+    let onSeek: (Double) -> Void
+    let onSkip: (TimeInterval) -> Void
+    @State private var scrubProgress: Double?
+    @State private var skipFeedback: Int?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 15, paused: !isPlaying || reduceMotion)) { timeline in
-            GeometryReader { geometry in
+        GeometryReader { geometry in
+            TimelineView(.animation(minimumInterval: 1 / 15, paused: !isPlaying || reduceMotion || scrubProgress != nil)) { timeline in
                 let count = max(1, samples.count)
                 let spacing: CGFloat = 1.5
                 let width = max(1, (geometry.size.width - (CGFloat(count - 1) * spacing)) / CGFloat(count))
-                let playhead = min(1, max(0, progress))
+                let playhead = min(1, max(0, scrubProgress ?? progress))
                 let phase = timeline.date.timeIntervalSinceReferenceDate * 3.8
 
-                HStack(spacing: spacing) {
-                    ForEach(samples.enumerated(), id: \.offset) { index, sample in
-                        let position = Double(index + 1) / Double(count)
-                        let isPassed = position <= playhead
-                        let motion = isPlaying && !reduceMotion
-                            ? 0.95 + (0.05 * sin(phase + (Double(index) * 0.52)))
-                            : 1
+                ZStack {
+                    HStack(spacing: spacing) {
+                        ForEach(samples.enumerated(), id: \.offset) { index, sample in
+                            let position = Double(index + 1) / Double(count)
+                            let isPassed = position <= playhead
+                            let motion = isPlaying && !reduceMotion && scrubProgress == nil
+                                ? 0.95 + (0.05 * sin(phase + (Double(index) * 0.52)))
+                                : 1
 
-                        Capsule()
-                            .fill(isPassed ? accent : inactive)
-                            .frame(
-                                width: width,
-                                height: max(1.5, geometry.size.height * sample * motion)
-                            )
+                            Capsule()
+                                .fill(isPassed ? accent : inactive)
+                                .frame(
+                                    width: width,
+                                    height: max(1.5, geometry.size.height * sample * motion)
+                                )
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+
+                    Rectangle()
+                        .fill(accent)
+                        .frame(width: 1, height: geometry.size.height)
+                        .shadow(color: accent.opacity(scrubProgress == nil ? 0 : 0.35), radius: 3)
+                        .position(x: max(0.5, geometry.size.width * playhead), y: geometry.size.height / 2)
+
+                    if let skipFeedback {
+                        Text(skipFeedback > 0 ? "+15" : "−15")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundStyle(accent)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(themeFill)
+                            .clipShape(.rect(cornerRadius: 4))
+                            .frame(maxWidth: .infinity, alignment: skipFeedback > 0 ? .trailing : .leading)
+                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
                     }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                .contentShape(.rect)
+                .gesture(scrubGesture(width: geometry.size.width))
+                .simultaneousGesture(tapGesture(width: geometry.size.width))
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 12, maxHeight: 16)
-        .accessibilityHidden(true)
+        .frame(maxWidth: .infinity, minHeight: 24, maxHeight: 24)
+        .accessibilityElement()
+        .accessibilityLabel("Narration position")
+        .accessibilityValue("\(Int((scrubProgress ?? progress) * 100)) percent")
+        .accessibilityAdjustableAction { direction in
+            onSkip(direction == .increment ? 15 : -15)
+        }
+        .accessibilityAction(named: "Skip back 15 seconds") { onSkip(-15) }
+        .accessibilityAction(named: "Skip forward 15 seconds") { onSkip(15) }
+        .accessibilityHint("Drag to seek. Double tap the left or right half to skip 15 seconds.")
+    }
+
+    private var themeFill: Color {
+        Color(uiColor: .secondarySystemBackground).opacity(0.92)
+    }
+
+    private func scrubGesture(width: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 6, coordinateSpace: .local)
+            .onChanged { value in
+                scrubProgress = progress(at: value.location.x, width: width)
+            }
+            .onEnded { value in
+                let target = progress(at: value.location.x, width: width)
+                scrubProgress = nil
+                onSeek(target)
+            }
+    }
+
+    private func tapGesture(width: CGFloat) -> some Gesture {
+        SpatialTapGesture(count: 2, coordinateSpace: .local)
+            .exclusively(before: SpatialTapGesture(count: 1, coordinateSpace: .local))
+            .onEnded { value in
+                switch value {
+                case let .first(doubleTap):
+                    let interval: TimeInterval = doubleTap.location.x < width / 2 ? -15 : 15
+                    onSkip(interval)
+                    showSkipFeedback(Int(interval))
+                case let .second(singleTap):
+                    onSeek(progress(at: singleTap.location.x, width: width))
+                }
+            }
+    }
+
+    private func showSkipFeedback(_ interval: Int) {
+        withAnimation(.easeOut(duration: 0.12)) {
+            skipFeedback = interval
+        }
+        Task {
+            try? await Task.sleep(for: .milliseconds(420))
+            withAnimation(.easeOut(duration: 0.16)) {
+                skipFeedback = nil
+            }
+        }
+    }
+
+    private func progress(at xPosition: CGFloat, width: CGFloat) -> Double {
+        guard width > 0 else { return 0 }
+        return min(1, max(0, xPosition / width))
     }
 }
 

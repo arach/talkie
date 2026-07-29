@@ -18,6 +18,7 @@ final class WalkieFX {
 
     private(set) var voicePlaybackState: VoicePlaybackState = .idle
     private(set) var voicePlaybackProgress: Double = 0
+    private(set) var voicePlaybackDuration: TimeInterval = 0
     private(set) var voiceWaveform: [Double] = []
 
     private let sampleRate: Double = 44100
@@ -33,11 +34,12 @@ final class WalkieFX {
     private var engineStarted = false
     private var kerchunkBuffer: AVAudioPCMBuffer?
     private var tailBuffer: AVAudioPCMBuffer?
-    private var voicePlaybackDuration: TimeInterval = 0
     private var voicePlaybackElapsed: TimeInterval = 0
     private var voicePlaybackStartedAt: Date?
     private var voiceProgressTask: Task<Void, Never>?
     private var isUsingFallbackVoicePlayback = false
+    private var voicePlaybackFile: AVAudioFile?
+    private var voicePlaybackFileURL: URL?
 
     private init() {
         // Mono float32 at 44.1kHz. Connecting through the main mixer lets
@@ -156,8 +158,12 @@ final class WalkieFX {
             if voicePlayer.isPlaying {
                 voicePlayer.stop()
             }
+            clearVoicePlaybackFile()
+            let stagedVoice = try stageVoicePlaybackFile(from: playbackBuffer)
             isUsingFallbackVoicePlayback = false
-            voicePlayer.scheduleBuffer(playbackBuffer, at: nil, options: [], completionHandler: nil)
+            voicePlaybackFile = stagedVoice.file
+            voicePlaybackFileURL = stagedVoice.url
+            scheduleVoicePlaybackSegment(startingAt: 0)
             if !voicePlayer.isPlaying {
                 voicePlayer.play()
             }
@@ -175,6 +181,10 @@ final class WalkieFX {
 
     var isVoicePlaybackActive: Bool {
         voicePlaybackState != .idle
+    }
+
+    var voicePlaybackCurrentTime: TimeInterval {
+        voicePlaybackProgress * voicePlaybackDuration
     }
 
     func toggleVoicePlayback() {
@@ -205,16 +215,55 @@ final class WalkieFX {
     }
 
     func resumeVoicePlayback() {
-        guard voicePlaybackState == .paused, ensureRunning() else { return }
+        guard voicePlaybackState == .paused else { return }
 
         if isUsingFallbackVoicePlayback {
             fallbackPlayer.resumePlayback()
         } else {
+            guard ensureRunning() else { return }
             voicePlayer.play()
         }
         voicePlaybackStartedAt = Date()
         voicePlaybackState = .playing
         startVoiceProgressUpdates()
+    }
+
+    func seekVoicePlayback(to progress: Double) {
+        guard isVoicePlaybackActive, voicePlaybackDuration > 0 else { return }
+
+        let targetProgress = min(1, max(0, progress))
+        if targetProgress >= 1 {
+            finishVoicePlayback()
+            return
+        }
+
+        let wasPlaying = voicePlaybackState == .playing
+        if isUsingFallbackVoicePlayback {
+            fallbackPlayer.seek(to: targetProgress * fallbackPlayer.duration)
+        } else {
+            guard ensureRunning(),
+                  let voicePlaybackFile else { return }
+
+            voicePlayer.stop()
+            let startFrame = AVAudioFramePosition(Double(voicePlaybackFile.length) * targetProgress)
+            scheduleVoicePlaybackSegment(startingAt: startFrame)
+            if wasPlaying {
+                voicePlayer.play()
+            }
+        }
+
+        voicePlaybackProgress = targetProgress
+        voicePlaybackElapsed = targetProgress * voicePlaybackDuration
+        voicePlaybackStartedAt = wasPlaying ? Date() : nil
+        if wasPlaying {
+            startVoiceProgressUpdates()
+        }
+    }
+
+    func skipVoicePlayback(by interval: TimeInterval) {
+        guard voicePlaybackDuration > 0 else { return }
+        let targetTime = voicePlaybackCurrentTime + interval
+        seekVoicePlayback(to: targetTime / voicePlaybackDuration)
     }
 
     /// Converts provider-specific TTS output into the exact format used by the
@@ -279,6 +328,49 @@ final class WalkieFX {
         return convertedBuffer
     }
 
+    private func stageVoicePlaybackFile(
+        from buffer: AVAudioPCMBuffer
+    ) throws -> (file: AVAudioFile, url: URL) {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("walkie-voice-normalized-\(UUID().uuidString).caf")
+        do {
+            var writer: AVAudioFile? = try AVAudioFile(
+                forWriting: url,
+                settings: buffer.format.settings,
+                commonFormat: buffer.format.commonFormat,
+                interleaved: buffer.format.isInterleaved
+            )
+            try writer?.write(from: buffer)
+            writer = nil
+            return (try AVAudioFile(forReading: url), url)
+        } catch {
+            try? FileManager.default.removeItem(at: url)
+            throw error
+        }
+    }
+
+    private func scheduleVoicePlaybackSegment(startingAt requestedFrame: AVAudioFramePosition) {
+        guard let voicePlaybackFile else { return }
+        let startFrame = min(max(0, requestedFrame), max(0, voicePlaybackFile.length - 1))
+        let remainingFrames = AVAudioFrameCount(voicePlaybackFile.length - startFrame)
+        guard remainingFrames > 0 else { return }
+        voicePlayer.scheduleSegment(
+            voicePlaybackFile,
+            startingFrame: startFrame,
+            frameCount: remainingFrames,
+            at: nil,
+            completionHandler: nil
+        )
+    }
+
+    private func clearVoicePlaybackFile() {
+        voicePlaybackFile = nil
+        if let voicePlaybackFileURL {
+            try? FileManager.default.removeItem(at: voicePlaybackFileURL)
+        }
+        voicePlaybackFileURL = nil
+    }
+
     /// Immediately silences voice playback and any scheduled bookend FX.
     ///
     /// Used when the user starts a new capture while a response is still being
@@ -297,10 +389,12 @@ final class WalkieFX {
         voicePlayer.stop()
         player.stop()
         fallbackPlayer.stopPlayback()
+        clearVoicePlaybackFile()
     }
 
     private func playFallbackVoiceAudio(data: Data, playbackRate: Float) -> TimeInterval {
         isUsingFallbackVoicePlayback = true
+        clearVoicePlaybackFile()
         fallbackPlayer.setPlaybackRate(playbackRate)
         fallbackPlayer.playAudio(data: data)
         let duration = effectiveDuration(
@@ -352,6 +446,9 @@ final class WalkieFX {
         voicePlaybackDuration = 0
         voicePlaybackElapsed = 0
         voicePlaybackStartedAt = nil
+        voicePlayer.stop()
+        fallbackPlayer.stopPlayback()
+        clearVoicePlaybackFile()
         playClosingSequence(after: 0)
     }
 
