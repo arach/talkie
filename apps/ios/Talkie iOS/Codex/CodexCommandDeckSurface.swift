@@ -66,12 +66,7 @@ struct CodexCommandDeckSurface: View {
                     isEnabled: !store.history.isEmpty,
                     action: { showingHistory = true }
                 )
-                actionKey(
-                    index: 4,
-                    label: "Status",
-                    icon: "rectangle.inset.filled",
-                    action: { showingStatus = true }
-                )
+                activityKey(index: 4)
             }
             .frame(height: 62)
 
@@ -110,8 +105,8 @@ struct CodexCommandDeckSurface: View {
                     isEnabled: !store.isLoadingCatalog,
                     action: { Task { await store.refreshCatalog() } }
                 )
-                openSocket(index: 11)
-                openSocket(index: 12)
+                laneStepKey(index: 11, direction: -1)
+                laneStepKey(index: 12, direction: 1)
             }
             .frame(height: 58)
 
@@ -137,11 +132,17 @@ struct CodexCommandDeckSurface: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            VStack(spacing: 7) {
+            VStack(spacing: 6) {
                 Spacer(minLength: 0)
-                Image(systemName: icon)
-                    .font(.system(size: 15, weight: .light))
-                    .frame(height: 18)
+                ZStack {
+                    Circle()
+                        .fill(utilityInk.opacity(isEnabled ? 0.055 : 0.025))
+                    Circle()
+                        .stroke(utilityInkFaint.opacity(isEnabled ? 0.14 : 0.06), lineWidth: 0.6)
+                    Image(systemName: icon)
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .frame(width: 25, height: 25)
                 Text(label.uppercased())
                     .font(.system(size: 9, weight: .semibold, design: .monospaced))
                     .tracking(1.1)
@@ -299,6 +300,32 @@ struct CodexCommandDeckSurface: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    private func activityKey(index: Int) -> some View {
+        Button(action: { showingStatus = true }) {
+            VStack(spacing: 3) {
+                Spacer(minLength: 0)
+                CodexConsoleActivityMeter(
+                    label: deckMeterLabel,
+                    isActive: deckMeterIsActive,
+                    isFailure: deckMeterIsFailure,
+                    color: deckPhaseColor,
+                    baseColor: utilityInkFaint
+                )
+                .scaleEffect(0.94)
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 5)
+            .background(keycapSurface(active: deckMeterIsActive, isEmpty: false))
+            .overlay(alignment: .topLeading) { keyIndexLabel(index: index) }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Codex status, \(deckStatusLabel)")
+        .accessibilityHint("Opens Codex connection and delivery status")
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     private var outputRouteDial: some View {
         ZStack {
             Circle()
@@ -381,6 +408,51 @@ struct CodexCommandDeckSurface: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    private func laneStepKey(index: Int, direction: Int) -> some View {
+        let number = adjacentLaneNumber(direction: direction)
+        let lane = number.flatMap(store.lane)
+        let isEnabled = number != nil && !store.phase.isCapturing
+
+        return Button {
+            guard let number else { return }
+            guard lane != nil else {
+                openMapper()
+                return
+            }
+            Task { await store.activate(number) }
+        } label: {
+            VStack(spacing: 5) {
+                Spacer(minLength: 0)
+                ZStack {
+                    Circle()
+                        .fill(utilityInk.opacity(isEnabled ? 0.055 : 0.025))
+                    Circle()
+                        .stroke(utilityInkFaint.opacity(isEnabled ? 0.14 : 0.06), lineWidth: 0.6)
+                    Image(systemName: direction < 0 ? "chevron.left" : "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .frame(width: 23, height: 23)
+
+                Text(number.map { "LANE \($0 < 10 ? "0\($0)" : "\($0)")" } ?? "LANE")
+                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                    .tracking(0.8)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(isEnabled ? utilityInk : utilityInkFaint.opacity(0.42))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 6)
+            .background(keycapSurface(active: false, isEmpty: false))
+            .overlay(alignment: .topLeading) { keyIndexLabel(index: index) }
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .accessibilityLabel(direction < 0 ? "Previous lane" : "Next lane")
+        .accessibilityHint(lane == nil ? "Opens the mapper for this empty lane" : "Selects lane \(number ?? 0)")
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     private func openSocket(index: Int) -> some View {
         keycapSurface(active: false, isEmpty: true)
         .overlay(alignment: .topLeading) { keyIndexLabel(index: index) }
@@ -413,7 +485,7 @@ struct CodexCommandDeckSurface: View {
 
     private func keycapSurface(active: Bool, isEmpty: Bool) -> some View {
         let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
-        let raisedShadow = colorScheme == .dark ? Color.black.opacity(0.42) : Color.black.opacity(0.16)
+        let raisedShadow = colorScheme == .dark ? Color.black.opacity(0.30) : Color.black.opacity(0.11)
         return shape
             .fill(
                 active
@@ -424,7 +496,7 @@ struct CodexCommandDeckSurface: View {
                 if !isEmpty {
                     shape.fill(
                         LinearGradient(
-                            colors: [Color.white.opacity(colorScheme == .dark ? 0.12 : 0.58), .clear, Color.black.opacity(0.045)],
+                            colors: [Color.white.opacity(colorScheme == .dark ? 0.07 : 0.26), .clear, Color.black.opacity(0.035)],
                             startPoint: .top,
                             endPoint: .bottom
                         )
@@ -434,20 +506,23 @@ struct CodexCommandDeckSurface: View {
             .overlay {
                 if active {
                     shape.strokeBorder(theme.chrome.accent.opacity(0.72), lineWidth: 1)
-                } else if isEmpty {
-                    shape.strokeBorder(theme.chrome.edgeFaint, lineWidth: theme.chrome.hairlineWidth)
+                } else {
+                    shape.strokeBorder(
+                        isEmpty ? theme.chrome.edgeFaint : utilityInkFaint.opacity(0.10),
+                        lineWidth: theme.chrome.hairlineWidth
+                    )
                 }
             }
             .compositingGroup()
             .shadow(
                 color: isEmpty ? .clear : raisedShadow,
-                radius: isEmpty ? 0 : 8,
-                y: isEmpty ? 0 : 5
+                radius: isEmpty ? 0 : 5,
+                y: isEmpty ? 0 : 3
             )
             .shadow(
-                color: isEmpty ? .clear : Color.black.opacity(0.18),
-                radius: isEmpty ? 0 : 2,
-                y: isEmpty ? 0 : 2
+                color: isEmpty ? .clear : Color.black.opacity(0.10),
+                radius: isEmpty ? 0 : 1,
+                y: isEmpty ? 0 : 1
             )
     }
 
@@ -521,6 +596,61 @@ struct CodexCommandDeckSurface: View {
         store.setMessageMode(next, for: lane.number)
     }
 
+    private func adjacentLaneNumber(direction: Int) -> Int? {
+        guard let active = store.activeLaneNumber else {
+            return direction < 0 ? CodexLane.range.upperBound : CodexLane.range.lowerBound
+        }
+        if direction < 0 {
+            return active == CodexLane.range.lowerBound ? CodexLane.range.upperBound : active - 1
+        }
+        return active == CodexLane.range.upperBound ? CodexLane.range.lowerBound : active + 1
+    }
+
+    private var deckStatusLabel: String {
+        switch store.phase {
+        case .listening: return "LISTENING"
+        case .transcribing: return "TRANSCRIBING"
+        case .submitting: return store.activeLaneMessageMode == .queue ? "QUEUED" : "SENDING"
+        case .preparingSpeech: return "VOICE INBOUND"
+        case .speaking: return "SPEAKING"
+        case .failed: return "ERROR"
+        case .idle:
+            guard let number = store.activeLaneNumber,
+                  let activity = store.activity(for: number) else {
+                return store.activeLaneNumber == nil ? "NO LANE" : "READY"
+            }
+            switch activity.state {
+            case .working(let mode): return mode == .queue ? "QUEUED" : "WORKING"
+            case .accepted: return "STEERED"
+            case .receiving: return "RESPONSE"
+            case .failed: return "ERROR"
+            }
+        }
+    }
+
+    private var deckMeterLabel: String {
+        switch deckStatusLabel {
+        case "LISTENING": return "MIC"
+        case "TRANSCRIBING", "SENDING": return "TX"
+        case "WORKING", "STEERED", "QUEUED": return "RUN"
+        case "RESPONSE": return "RX"
+        case "VOICE INBOUND": return "VOX"
+        case "SPEAKING": return "PLAY"
+        case "ERROR": return "ERR"
+        default: return "—"
+        }
+    }
+
+    private var deckMeterIsFailure: Bool { deckStatusLabel == "ERROR" }
+
+    private var deckMeterIsActive: Bool {
+        !["READY", "NO LANE", "ERROR"].contains(deckStatusLabel)
+    }
+
+    private var deckPhaseColor: Color {
+        deckMeterIsFailure ? Color(red: 0.92, green: 0.42, blue: 0.30) : theme.chrome.accent
+    }
+
     private func openMapper() {
         showingMapper = true
     }
@@ -542,8 +672,8 @@ private struct CodexCommandConsole: View {
                 accessibilityLaneTransport
                 accessibilityTaskIdentity
             } else {
-                taskIdentity
                 lanePicker
+                taskIdentity
             }
         }
         .padding(.horizontal, 10)
@@ -727,8 +857,9 @@ private struct CodexCommandConsole: View {
 
                 Spacer(minLength: 6)
 
-                Text(store.activeLaneMessageMode.label.uppercased())
-                    .foregroundStyle(theme.chrome.panelInkFaint)
+                if let lane = store.activeLane {
+                    laneModeSelector(lane)
+                }
             }
             .font(.system(size: 8, weight: .semibold, design: .monospaced))
             .tracking(0.9)
@@ -766,14 +897,6 @@ private struct CodexCommandConsole: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-
-                CodexConsoleActivityMeter(
-                    label: consoleMeterLabel,
-                    isActive: consoleMeterIsActive,
-                    isFailure: consoleMeterIsFailure,
-                    color: phaseColor,
-                    baseColor: theme.chrome.panelInkFaint
-                )
             }
 
             conversationPreview
@@ -1082,31 +1205,6 @@ private struct CodexCommandConsole: View {
             ? theme.chrome.panelInkFaint
             : theme.chrome.panelAccent
         default: return theme.chrome.panelAccent
-        }
-    }
-
-    private var consoleMeterIsFailure: Bool {
-        consoleStatusLabel.localizedStandardContains("ERROR")
-            || consoleStatusLabel.localizedStandardContains("FAILED")
-    }
-
-    private var consoleMeterIsActive: Bool {
-        switch consoleStatusLabel {
-        case "READY", "NO LANE", "SILENT", "VOICE SKIPPED": return false
-        default: return !consoleMeterIsFailure
-        }
-    }
-
-    private var consoleMeterLabel: String {
-        switch consoleStatusLabel {
-        case "LISTENING": return "MIC"
-        case "TRANSCRIBING": return "TX"
-        case "WORKING", "STEERED", "QUEUED": return "RUN"
-        case "RESPONSE": return "RX"
-        case "VOICE INBOUND": return "VOX"
-        case "SPEAKING": return "PLAY"
-        case "ERROR", "VOICE FAILED": return "ERR"
-        default: return "—"
         }
     }
 
