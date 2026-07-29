@@ -95,8 +95,8 @@
   --doc-ink-secondary: #deddd7;
   --doc-ink-muted: #bbbcb5;
   --doc-ink-faint: #9b9d95;
-  --doc-rule: rgba(251, 250, 246, 0.22);
-  --doc-rule-strong: rgba(251, 250, 246, 0.38);
+  --doc-rule: rgba(251, 250, 246, 0.13);
+  --doc-rule-strong: rgba(251, 250, 246, 0.24);
   --doc-accent: #f0aa4d;
   --doc-accent-faint: rgba(240, 170, 77, 0.12);
   --doc-add: #9bceb0;
