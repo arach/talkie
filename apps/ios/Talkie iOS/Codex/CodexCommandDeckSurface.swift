@@ -22,6 +22,7 @@ struct CodexCommandDeckSurface: View {
     @ObservedObject private var store = CodexLaneStore.shared
     @ObservedObject private var theme = ThemeManager.shared
     @State private var appSettings = TalkieAppSettings.shared
+    @Namespace private var outputRouteThumbNamespace
     @State private var showingMapper = false
     @State private var showingHistory = false
     @State private var selectedResponseTurn: CodexTurnRecord?
@@ -290,7 +291,7 @@ struct CodexCommandDeckSurface: View {
         Button(action: cycleOutputRoute) {
             VStack(spacing: 3) {
                 Spacer(minLength: 0)
-                outputRouteDial
+                outputRouteSelector
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -371,57 +372,61 @@ struct CodexCommandDeckSurface: View {
             .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.20 : 0.04), radius: 1, y: 1)
     }
 
-    private var outputRouteDial: some View {
-        ZStack {
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [utilityFace, utilityFace.opacity(0.86), Color.black.opacity(0.10)],
-                        center: .topLeading,
-                        startRadius: 2,
-                        endRadius: 30
-                    )
-                )
-                .overlay {
-                    Circle()
-                        .stroke(utilityInkFaint.opacity(0.28), lineWidth: 1)
-                }
-                .shadow(color: Color.black.opacity(0.24), radius: 5, y: 3)
-
-            ForEach(0..<9, id: \.self) { tick in
-                Capsule()
-                    .fill(utilityInkFaint.opacity(tick.isMultiple(of: 4) ? 0.55 : 0.22))
-                    .frame(width: 1, height: tick.isMultiple(of: 4) ? 5 : 3)
-                    .offset(y: -23)
-                    .rotationEffect(.degrees(Double(tick) * 30 - 120))
-            }
-
-            Capsule()
-                .fill(theme.chrome.accent)
-                .frame(width: 2, height: 13)
-                .offset(y: -13)
-                .rotationEffect(outputRouteDialAngle)
-                .shadow(color: theme.chrome.accent.opacity(0.28), radius: 2, y: 1)
-
-            VStack(spacing: 1) {
-                Image(systemName: outputRouteIcon)
-                    .font(.system(size: 11, weight: .medium))
+    private var outputRouteSelector: some View {
+        VStack(spacing: 4) {
+            HStack {
+                Text("OUT")
+                    .font(.system(size: 6.5, weight: .bold, design: .monospaced))
+                    .tracking(0.9)
+                    .foregroundStyle(utilityInkFaint.opacity(0.66))
+                Spacer(minLength: 2)
                 Text(outputRoute.shortLabel.uppercased())
-                    .font(.system(size: 5.5, weight: .bold, design: .monospaced))
-                    .tracking(0.35)
+                    .font(.system(size: 6.5, weight: .bold, design: .monospaced))
+                    .tracking(0.9)
+                    .foregroundStyle(theme.chrome.accent)
             }
-            .foregroundStyle(utilityInk)
-            .offset(y: 5)
+            .padding(.horizontal, 2)
+
+            ZStack {
+                Capsule()
+                    .fill(utilityInk.opacity(0.05))
+                Capsule()
+                    .stroke(utilityInkFaint.opacity(0.14), lineWidth: 0.6)
+
+                HStack(spacing: 0) {
+                    ForEach(outputRouteOrder, id: \.rawValue) { route in
+                        outputRouteDetent(route)
+                    }
+                }
+                .padding(.horizontal, 4)
+            }
+            .frame(height: 30)
         }
-        .frame(width: 54, height: 54)
     }
 
-    private var outputRouteDialAngle: Angle {
-        switch outputRoute {
-        case .phone: return .degrees(-38)
-        case .watch: return .degrees(0)
-        case .silent: return .degrees(38)
+    private func outputRouteDetent(_ route: AIResponseSpeechRoute) -> some View {
+        let isActive = route == outputRoute
+        return ZStack {
+            if isActive {
+                Circle()
+                    .fill(theme.chrome.accent.opacity(0.16))
+                    .overlay {
+                        Circle()
+                            .stroke(theme.chrome.accent.opacity(0.55), lineWidth: 0.8)
+                    }
+                    .shadow(color: theme.chrome.accent.opacity(0.30), radius: 2, y: 1)
+                    .matchedGeometryEffect(id: "outputRouteThumb", in: outputRouteThumbNamespace)
+            }
+            Image(systemName: outputRouteIcon(for: route))
+                .font(.system(size: 11, weight: isActive ? .semibold : .medium))
+                .foregroundStyle(isActive ? theme.chrome.accent : utilityInkFaint.opacity(0.50))
         }
+        .frame(maxWidth: .infinity)
+        .frame(height: 24)
+    }
+
+    private var outputRouteOrder: [AIResponseSpeechRoute] {
+        [.phone, .watch, .silent]
     }
 
     private func laneStepKey(index: Int, direction: Int) -> some View {
@@ -569,8 +574,8 @@ struct CodexCommandDeckSurface: View {
         return store.latestTurn(for: laneNumber)
     }
 
-    private var outputRouteIcon: String {
-        switch outputRoute {
+    private func outputRouteIcon(for route: AIResponseSpeechRoute) -> String {
+        switch route {
         case .silent: return "speaker.slash"
         case .phone: return "iphone"
         case .watch: return "applewatch"
