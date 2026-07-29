@@ -341,13 +341,34 @@ final class CodexLaneStore: ObservableObject {
     /// output route. The response remains available as text whether speech
     /// succeeds, fails, or is deliberately silent.
     func narrateLastResponse() {
-        guard var record = lastTurn else {
+        guard let record = lastTurn else {
             failure = CodexLaneFailure(
                 message: "There is no response to narrate yet.",
                 hint: "Send an instruction to Codex first."
             )
             return
         }
+
+        replayNarration(record)
+    }
+
+    /// Replays the latest response belonging to one lane. This keeps deck
+    /// controls attached to the task currently in view instead of whichever
+    /// lane happened to finish most recently.
+    func narrateLatestResponse(for laneNumber: Int) {
+        guard let record = latestTurn(for: laneNumber) else {
+            failure = CodexLaneFailure(
+                message: "There is no response to narrate for this lane yet.",
+                hint: "Send an instruction to this Codex task first."
+            )
+            return
+        }
+
+        replayNarration(record)
+    }
+
+    private func replayNarration(_ record: CodexTurnRecord) {
+        var record = record
 
         interruptNarration()
         record.speechFailure = nil
@@ -356,7 +377,9 @@ final class CodexLaneStore: ObservableObject {
         Task { [weak self] in
             guard let self else { return }
             let updated = await self.narrate(record)
-            self.lastTurn = updated
+            if self.lastTurn?.id == updated.id {
+                self.lastTurn = updated
+            }
             if let index = self.history.firstIndex(where: { $0.id == updated.id }) {
                 self.history[index] = updated
             }

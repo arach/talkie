@@ -14,6 +14,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct CodexCommandDeckSurface: View {
     let onShowSpaces: () -> Void
@@ -23,8 +24,9 @@ struct CodexCommandDeckSurface: View {
     @State private var appSettings = TalkieAppSettings.shared
     @State private var showingMapper = false
     @State private var showingHistory = false
-    @State private var showingResponse = false
+    @State private var selectedResponseTurn: CodexTurnRecord?
     @State private var showingStatus = false
+    @State private var copiedResponse = false
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -44,10 +46,8 @@ struct CodexCommandDeckSurface: View {
         .sheet(isPresented: $showingHistory) {
             CodexTurnHistorySheet()
         }
-        .sheet(isPresented: $showingResponse) {
-            if let turn = store.lastTurn {
-                CodexResponseSheet(turn: turn)
-            }
+        .sheet(item: $selectedResponseTurn) { turn in
+            CodexResponseSheet(turn: turn)
         }
         .sheet(isPresented: $showingStatus) {
             CodexDeckStatusSheet()
@@ -59,53 +59,59 @@ struct CodexCommandDeckSurface: View {
             GridRow {
                 audioKey(index: 1)
                 actionKey(index: 2, label: "Mapper", icon: "rectangle.3.group", action: openMapper)
+                actionKey(index: 3, label: "Spaces", icon: "square.grid.2x2", action: onShowSpaces)
+                statusReadoutKey(index: 4)
+            }
+            .frame(height: 62)
+
+            GridRow {
                 actionKey(
-                    index: 3,
+                    index: 5,
                     label: "History",
                     icon: "clock.arrow.circlepath",
                     isEnabled: !store.history.isEmpty,
                     action: { showingHistory = true }
                 )
-                activityKey(index: 4)
-            }
-            .frame(height: 62)
-
-            GridRow {
-                actionKey(index: 5, label: "Spaces", icon: "square.grid.2x2", action: onShowSpaces)
                 actionKey(
                     index: 6,
-                    label: "Replay",
-                    icon: "play",
-                    isEnabled: store.lastTurn != nil,
-                    action: { showingResponse = true }
+                    label: "Read",
+                    icon: "doc.text",
+                    isEnabled: activeLaneTurn != nil,
+                    action: { selectedResponseTurn = activeLaneTurn }
                 )
                 actionKey(
                     index: 7,
-                    label: "Narrate",
-                    icon: "speaker.wave.2",
-                    isEnabled: store.lastTurn != nil && store.phase != .preparingSpeech,
-                    action: store.narrateLastResponse
+                    label: copiedResponse ? "Copied" : "Copy",
+                    icon: copiedResponse ? "checkmark" : "doc.on.doc",
+                    isEnabled: activeLaneTurn != nil,
+                    action: copyActiveLaneResponse
                 )
                 actionKey(
                     index: 8,
-                    label: "Stop",
-                    icon: "stop.fill",
-                    isEnabled: store.phase == .speaking,
-                    action: store.interruptNarration
-                )
-            }
-            .frame(height: 62)
-
-            GridRow {
-                modeKey(index: 9)
-                actionKey(
-                    index: 10,
                     label: "Refresh",
                     icon: "arrow.clockwise",
                     isEnabled: !store.isLoadingCatalog,
                     action: { Task { await store.refreshCatalog() } }
                 )
-                laneStepKey(index: 11, direction: -1)
+            }
+            .frame(height: 62)
+
+            GridRow {
+                laneStepKey(index: 9, direction: -1)
+                actionKey(
+                    index: 10,
+                    label: "Replay",
+                    icon: "speaker.wave.2",
+                    isEnabled: activeLaneTurn != nil && store.phase != .preparingSpeech,
+                    action: replayActiveLaneResponse
+                )
+                actionKey(
+                    index: 11,
+                    label: "Stop",
+                    icon: "stop.fill",
+                    isEnabled: store.phase == .speaking,
+                    action: store.interruptNarration
+                )
                 laneStepKey(index: 12, direction: 1)
             }
             .frame(height: 58)
@@ -121,6 +127,7 @@ struct CodexCommandDeckSurface: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 2)
         .dynamicTypeSize(.xSmall ... .xxxLarge)
+        .sensoryFeedback(.success, trigger: copiedResponse)
     }
 
     private func actionKey(
@@ -300,30 +307,68 @@ struct CodexCommandDeckSurface: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func activityKey(index: Int) -> some View {
+    private func statusReadoutKey(index: Int) -> some View {
         Button(action: { showingStatus = true }) {
-            VStack(spacing: 3) {
+            VStack(alignment: .leading, spacing: 5) {
                 Spacer(minLength: 0)
-                CodexConsoleActivityMeter(
-                    label: deckMeterLabel,
-                    isActive: deckMeterIsActive,
-                    isFailure: deckMeterIsFailure,
-                    color: deckPhaseColor,
-                    baseColor: utilityInkFaint
-                )
-                .scaleEffect(0.94)
+
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(deckMeterIsActive || deckMeterIsFailure ? deckPhaseColor : utilityInkFaint.opacity(0.44))
+                        .frame(width: 4, height: 4)
+
+                    Text(deckMeterLabel)
+                        .foregroundStyle(deckMeterIsActive || deckMeterIsFailure ? deckPhaseColor : utilityInkFaint)
+
+                    Spacer(minLength: 2)
+
+                    Text(deckStatusLabel)
+                        .foregroundStyle(utilityInk)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.64)
+                }
+                .font(.system(size: 6.5, weight: .semibold, design: .monospaced))
+                .tracking(0.45)
+                .padding(.horizontal, 6)
+                .frame(maxWidth: .infinity, minHeight: 22)
+                .background(statusDisplaySurface)
+
+                HStack(spacing: 4) {
+                    Image(systemName: "terminal")
+                        .font(.system(size: 7, weight: .medium))
+                    Text("STATUS")
+                        .font(.system(size: 7.5, weight: .semibold, design: .monospaced))
+                        .tracking(0.8)
+                }
+                .foregroundStyle(utilityInkFaint.opacity(0.82))
+
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.horizontal, 4)
-            .padding(.vertical, 5)
-            .background(keycapSurface(active: deckMeterIsActive, isEmpty: false))
+            .padding(.horizontal, 7)
+            .padding(.top, 13)
+            .padding(.bottom, 6)
+            .background(keycapSurface(active: false, isEmpty: false))
             .overlay(alignment: .topLeading) { keyIndexLabel(index: index) }
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Codex status, \(deckStatusLabel)")
         .accessibilityHint("Opens Codex connection and delivery status")
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var statusDisplaySurface: some View {
+        let shape = RoundedRectangle(cornerRadius: 5, style: .continuous)
+        return shape
+            .fill(
+                colorScheme == .dark
+                    ? Color.black.opacity(0.34)
+                    : Color(red: 0.23, green: 0.20, blue: 0.16).opacity(0.075)
+            )
+            .overlay {
+                shape.strokeBorder(utilityInkFaint.opacity(0.18), lineWidth: 0.6)
+            }
+            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.20 : 0.04), radius: 1, y: 1)
     }
 
     private var outputRouteDial: some View {
@@ -377,35 +422,6 @@ struct CodexCommandDeckSurface: View {
         case .watch: return .degrees(0)
         case .silent: return .degrees(38)
         }
-    }
-
-    private func modeKey(index: Int) -> some View {
-        let mode = store.activeLaneMessageMode
-        return Button(action: toggleMessageMode) {
-            VStack(alignment: .leading, spacing: 5) {
-                Spacer(minLength: 0)
-                Text("DELIVER")
-                    .font(.system(size: 7, weight: .medium, design: .monospaced))
-                    .tracking(0.8)
-                    .foregroundStyle(utilityInkFaint.opacity(0.72))
-                Text(mode.label.uppercased())
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .tracking(1.1)
-                    .foregroundStyle(utilityInk)
-                Spacer(minLength: 0)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(keycapSurface(active: false, isEmpty: false))
-            .overlay(alignment: .topLeading) { keyIndexLabel(index: index) }
-        }
-        .buttonStyle(.plain)
-        .disabled(store.activeLane == nil)
-        .opacity(store.activeLane == nil ? 0.44 : 1)
-        .accessibilityLabel("Delivery mode, \(mode.label)")
-        .accessibilityHint("Switches this lane between steer and queue")
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func laneStepKey(index: Int, direction: Int) -> some View {
@@ -548,6 +564,11 @@ struct CodexCommandDeckSurface: View {
         AIResponseSpeechRoute(rawValue: appSettings.aiVoiceOutputRoute) ?? .phone
     }
 
+    private var activeLaneTurn: CodexTurnRecord? {
+        guard let laneNumber = store.activeLaneNumber else { return nil }
+        return store.latestTurn(for: laneNumber)
+    }
+
     private var outputRouteIcon: String {
         switch outputRoute {
         case .silent: return "speaker.slash"
@@ -590,10 +611,25 @@ struct CodexCommandDeckSurface: View {
         appSettings.aiVoiceOutputRoute = next.rawValue
     }
 
-    private func toggleMessageMode() {
-        guard let lane = store.activeLane else { return }
-        let next: CodexMessageMode = lane.preferredMessageMode == .queue ? .steer : .queue
-        store.setMessageMode(next, for: lane.number)
+    private func copyActiveLaneResponse() {
+        guard let response = activeLaneTurn?.response, !response.isEmpty else { return }
+        UIPasteboard.general.string = response
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+
+        withAnimation(.easeInOut(duration: 0.16)) {
+            copiedResponse = true
+        }
+        Task {
+            try? await Task.sleep(for: .seconds(1.2))
+            withAnimation(.easeInOut(duration: 0.16)) {
+                copiedResponse = false
+            }
+        }
+    }
+
+    private func replayActiveLaneResponse() {
+        guard let laneNumber = store.activeLaneNumber else { return }
+        store.narrateLatestResponse(for: laneNumber)
     }
 
     private func adjacentLaneNumber(direction: Int) -> Int? {
@@ -1299,76 +1335,6 @@ private struct CodexCommandConsole: View {
             return "No active Codex task. Choose a lane or open the mapper."
         }
         return "Lane \(lane.number), \(lane.task.projectName), \(lane.task.title), \(consoleStatusLabel)"
-    }
-}
-
-private struct CodexConsoleActivityMeter: View {
-    let label: String
-    let isActive: Bool
-    let isFailure: Bool
-    let color: Color
-    let baseColor: Color
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        Group {
-            if isActive, !reduceMotion {
-                TimelineView(.animation(minimumInterval: 0.08)) { timeline in
-                    meter(angle: timeline.date.timeIntervalSinceReferenceDate * 96)
-                }
-            } else {
-                meter(angle: 0)
-            }
-        }
-        .frame(width: 56, height: 56)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityLabel)
-    }
-
-    private func meter(angle: Double) -> some View {
-        ZStack {
-            Circle()
-                .fill(baseColor.opacity(0.045))
-                .overlay {
-                    Circle()
-                        .stroke(baseColor.opacity(0.22), lineWidth: 1)
-                }
-
-            Circle()
-                .stroke(
-                    isFailure ? color.opacity(0.82) : baseColor.opacity(0.15),
-                    style: StrokeStyle(lineWidth: 2, dash: [1.5, 3.5])
-                )
-                .padding(5)
-
-            if isActive {
-                Circle()
-                    .fill(color)
-                    .frame(width: 5, height: 5)
-                    .offset(y: -22)
-                    .rotationEffect(.degrees(angle))
-                    .talkieAccentGlow(radius: 3)
-            }
-
-            VStack(spacing: 2) {
-                Text(label)
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(0.7)
-                    .foregroundStyle(isActive || isFailure ? color : baseColor.opacity(0.62))
-
-                Text(isActive ? "LIVE" : (isFailure ? "FAULT" : "IDLE"))
-                    .font(.system(size: 5.5, weight: .medium, design: .monospaced))
-                    .tracking(0.55)
-                    .foregroundStyle(baseColor.opacity(0.62))
-            }
-        }
-    }
-
-    private var accessibilityLabel: String {
-        if isFailure { return "Codex activity failed" }
-        if isActive { return "Codex activity live, \(label)" }
-        return "Codex activity idle"
     }
 }
 
