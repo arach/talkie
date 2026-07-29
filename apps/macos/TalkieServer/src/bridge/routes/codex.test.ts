@@ -1,9 +1,21 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import {
   CodexTaskMessageCoordinator,
   CodexTurnJobManager,
   type BridgeEnvelope,
 } from "./codex";
+
+const submission1 = "019fae56-598a-70b0-83dd-539cda1c7704";
+const submission2 = "019fae56-598a-70b0-83dd-539cda1c7705";
+let receiptDirectory: string | undefined;
+
+afterEach(() => {
+  if (receiptDirectory) rmSync(receiptDirectory, { recursive: true, force: true });
+  receiptDirectory = undefined;
+});
 
 describe("CodexTaskMessageCoordinator", () => {
   test("auto steers immediately while Talkie is waiting for the active turn", async () => {
@@ -25,10 +37,10 @@ describe("CodexTaskMessageCoordinator", () => {
       };
     });
 
-    const activeTurn = coordinator.deliver("task-1", "first", "auto");
+    const activeTurn = coordinator.deliver("task-1", "first", "auto", submission1);
     await Promise.resolve();
 
-    const steering = await coordinator.deliver("task-1", "more context", "auto");
+    const steering = await coordinator.deliver("task-1", "more context", "auto", submission2);
 
     expect(steering.delivery).toBe("steered-active-turn");
     expect(calls).toEqual(["submit", "steer"]);
@@ -52,9 +64,9 @@ describe("CodexTaskMessageCoordinator", () => {
       return completed("queued-turn", "queued response");
     });
 
-    const activeTurn = coordinator.deliver("task-1", "first", "auto");
+    const activeTurn = coordinator.deliver("task-1", "first", "auto", submission1);
     await Promise.resolve();
-    const queuedTurn = coordinator.deliver("task-1", "next", "queue");
+    const queuedTurn = coordinator.deliver("task-1", "next", "queue", submission2);
     await Promise.resolve();
 
     expect(calls).toEqual(["submit", "queue"]);
@@ -73,7 +85,7 @@ describe("CodexTaskMessageCoordinator", () => {
       return completed("queued-turn", "queued response");
     });
 
-    const result = await coordinator.deliver("task-1", "next", "queue");
+    const result = await coordinator.deliver("task-1", "next", "queue", submission1);
 
     expect(calls).toEqual(["queue"]);
     expect(result.delivery).toBe("queued-turn");
@@ -88,7 +100,7 @@ describe("CodexTaskMessageCoordinator", () => {
         : { ok: true, turnId: "turn-1", delivery: "steered-active-turn" };
     });
 
-    const result = await coordinator.deliver("task-1", "more context", "steer");
+    const result = await coordinator.deliver("task-1", "more context", "steer", submission1);
 
     expect(calls).toEqual(["submit"]);
     expect(result.response).toBe("external turn response");
@@ -117,7 +129,7 @@ describe("CodexTurnJobManager", () => {
       async (job) => { if (job.response) notified.push(job.response); },
     );
 
-    const receipt = manager.start("task-1", "Command Deck", "keep working", "steer");
+    const receipt = manager.start(submission1, "task-1", "Command Deck", "keep working", "steer");
     expect(receipt.status).toBe("queued");
     await Promise.resolve();
 
@@ -143,13 +155,45 @@ describe("CodexTurnJobManager", () => {
       async () => {},
     );
 
-    const receipt = manager.start("task-1", "Command Deck", "keep working", "queue");
+    const receipt = manager.start(submission1, "task-1", "Command Deck", "keep working", "queue");
     await Bun.sleep(0);
     await Bun.sleep(0);
 
     const failedJob = await manager.snapshot(receipt.id);
     expect(failedJob?.status).toBe("failed");
     expect(failedJob?.code).toBe("protocol-mismatch");
+  });
+
+  test("deduplicates a repeated durable submission before invoking Codex twice", async () => {
+    let invocations = 0;
+    let finishTurn: (() => void) | undefined;
+    const turnGate = new Promise<void>((resolve) => { finishTurn = resolve; });
+    const coordinator = new CodexTaskMessageCoordinator(async () => {
+      invocations += 1;
+      await turnGate;
+      return completed("started-turn", "Done once");
+    });
+    receiptDirectory = mkdtempSync(path.join(tmpdir(), "talkie-codex-receipts-"));
+    const receiptPath = path.join(receiptDirectory, "jobs.json");
+    const manager = new CodexTurnJobManager(
+      coordinator,
+      async () => ({ ok: true }),
+      async () => {},
+      receiptPath,
+    );
+
+    const first = manager.start(submission1, "task-1", "Command Deck", "same text", "queue");
+    const retry = manager.start(submission1, "task-1", "Command Deck", "same text", "queue");
+    await Promise.resolve();
+
+    expect(retry.id).toBe(first.id);
+    expect(invocations).toBe(1);
+    expect(JSON.parse(readFileSync(receiptPath, "utf8")).jobs[0].job.submissionId).toBe(submission1);
+
+    expect(() => manager.start(submission1, "task-1", "Command Deck", "different", "queue"))
+      .toThrow("already belongs to another Codex instruction");
+    finishTurn?.();
+    await Bun.sleep(0);
   });
 });
 

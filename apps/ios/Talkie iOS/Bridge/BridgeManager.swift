@@ -1023,6 +1023,7 @@ final class BridgeManager {
     }
 
     func codexStartTurn(
+        submissionId: UUID,
         taskId: String,
         taskTitle: String,
         text: String,
@@ -1030,6 +1031,7 @@ final class BridgeManager {
     ) async throws -> CodexTurnJob {
         try await requireConnectedBridge()
         let job = try await client.codexStartTurn(
+            submissionId: submissionId,
             taskId: taskId,
             taskTitle: taskTitle,
             text: text,

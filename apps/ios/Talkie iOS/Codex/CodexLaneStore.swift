@@ -66,6 +66,7 @@ final class CodexLaneStore: ObservableObject {
     private var speakingTask: Task<Void, Never>?
     private var isPushToTalkHeld = false
     private var notificationNarratedJobIDs: Set<String> = []
+    private var queuedActivityIDs: Set<UUID> = []
     private var loadedHostID: String?
 
     init(
@@ -151,6 +152,7 @@ final class CodexLaneStore: ObservableObject {
         liveActivitiesByLane = [:]
         inFlightRequestCounts = [:]
         queuedMessageCounts = [:]
+        queuedActivityIDs = []
         lastTurn = nil
         history = []
         failure = nil
@@ -478,9 +480,6 @@ final class CodexLaneStore: ObservableObject {
     ) async {
         let activityID = UUID()
         beginSubmission(on: laneNumber)
-        if mode == .queue {
-            queuedMessageCounts[laneNumber, default: 0] += 1
-        }
         appendActivity(CodexLaneActivity(
             id: activityID,
             instruction: instruction,
@@ -496,13 +495,14 @@ final class CodexLaneStore: ObservableObject {
         let receipt: CodexTurnJob
         do {
             receipt = try await bridge.codexStartTurn(
+                submissionId: activityID,
                 taskId: lane.task.id,
                 taskTitle: lane.task.title,
                 text: instruction,
                 mode: mode
             )
         } catch {
-            finishSubmission(on: laneNumber, mode: mode)
+            finishSubmission(activityID, on: laneNumber)
             guard isCurrentActivity(activityID, on: laneNumber) else { return }
             let described = Self.describe(error)
             failure = described
@@ -515,6 +515,7 @@ final class CodexLaneStore: ObservableObject {
         mutateActivity(activityID, on: laneNumber) { activity in
             activity.jobID = receipt.id
         }
+        updateQueuedDisposition(activityID, on: laneNumber, from: receipt)
         AppLogger.ai.info(
             "Codex activity accepted lane=\(laneNumber) id=\(activityID) job=\(receipt.id) "
                 + "status=\(receipt.status)"
@@ -522,25 +523,29 @@ final class CodexLaneStore: ObservableObject {
 
         let job = await waitForTurnJob(receipt, activityID: activityID, laneNumber: laneNumber)
         guard let job else {
-            finishSubmission(on: laneNumber, mode: mode)
+            finishSubmission(activityID, on: laneNumber)
             guard isCurrentActivity(activityID, on: laneNumber) else { return }
             phase = .failed("Timed out waiting for the Mac-owned turn.")
             return
         }
 
-        if job.status == "failed" {
-            finishSubmission(on: laneNumber, mode: mode)
+        if job.status == "failed" || job.status == "blocked" || job.status == "unknown" {
+            finishSubmission(activityID, on: laneNumber)
             guard isCurrentActivity(activityID, on: laneNumber) else { return }
-            let message = job.error ?? "The Codex turn failed on the Mac."
-            failure = CodexLaneFailure(message: message, hint: nil)
+            let message = job.error
+                ?? (job.status == "blocked" ? "Codex needs attention on the Mac." : "The Codex turn failed on the Mac.")
+            failure = CodexLaneFailure(message: message, hint: job.hint)
             failActivity(activityID, on: laneNumber, message: message)
             phase = .failed(message)
+            if job.code == "stale-thread" {
+                clearLane(laneNumber)
+            }
             return
         }
 
         guard let deliveryValue = job.delivery,
               let delivery = CodexTurnDelivery(rawValue: deliveryValue) else {
-            finishSubmission(on: laneNumber, mode: mode)
+            finishSubmission(activityID, on: laneNumber)
             guard isCurrentActivity(activityID, on: laneNumber) else { return }
             let message = "Codex reported an incomplete delivery receipt."
             failure = CodexLaneFailure(
@@ -552,7 +557,7 @@ final class CodexLaneStore: ObservableObject {
             return
         }
 
-        finishSubmission(on: laneNumber, mode: mode)
+        finishSubmission(activityID, on: laneNumber)
 
         AppLogger.ai.info(
             "Codex response received lane=\(laneNumber) delivery=\(deliveryValue) "
@@ -631,7 +636,8 @@ final class CodexLaneStore: ObservableObject {
                         + "job=\(job.id) status=\(job.status) updates=\(job.updates?.count ?? 0)"
                 )
             }
-            if job.status == "completed" || job.status == "failed" {
+            if job.status == "completed" || job.status == "failed"
+                || job.status == "blocked" || job.status == "unknown" {
                 return job
             }
 
@@ -647,6 +653,7 @@ final class CodexLaneStore: ObservableObject {
                     )
                     return CodexTurnJob(
                         id: job.id,
+                        submissionId: job.submissionId,
                         taskId: job.taskId,
                         taskTitle: job.taskTitle,
                         status: "failed",
@@ -658,7 +665,9 @@ final class CodexLaneStore: ObservableObject {
                         response: job.response,
                         updates: job.updates,
                         error: described.combined,
-                        code: "turn-receipt-unavailable"
+                        code: "turn-receipt-unavailable",
+                        hint: described.hint,
+                        retryable: false
                     )
                 }
                 // Leaving the foreground may suspend network work. Keep the
@@ -693,6 +702,7 @@ final class CodexLaneStore: ObservableObject {
         on laneNumber: Int,
         from job: CodexTurnJob
     ) {
+        updateQueuedDisposition(id, on: laneNumber, from: job)
         mutateActivity(id, on: laneNumber) { activity in
             activity.jobID = job.id
             activity.updates = job.updates ?? []
@@ -716,14 +726,14 @@ final class CodexLaneStore: ObservableObject {
         inFlightRequestCounts[laneNumber, default: 0] += 1
     }
 
-    private func finishSubmission(on laneNumber: Int, mode: CodexMessageMode) {
+    private func finishSubmission(_ activityID: UUID, on laneNumber: Int) {
         let remaining = max(0, inFlightRequestCounts[laneNumber, default: 0] - 1)
         if remaining == 0 {
             inFlightRequestCounts[laneNumber] = nil
         } else {
             inFlightRequestCounts[laneNumber] = remaining
         }
-        if mode == .queue {
+        if queuedActivityIDs.remove(activityID) != nil {
             let queued = max(0, queuedMessageCounts[laneNumber, default: 0] - 1)
             if queued == 0 {
                 queuedMessageCounts[laneNumber] = nil
@@ -731,6 +741,16 @@ final class CodexLaneStore: ObservableObject {
                 queuedMessageCounts[laneNumber] = queued
             }
         }
+    }
+
+    private func updateQueuedDisposition(
+        _ activityID: UUID,
+        on laneNumber: Int,
+        from job: CodexTurnJob
+    ) {
+        guard job.delivery == CodexTurnDelivery.queuedTurn.rawValue,
+              queuedActivityIDs.insert(activityID).inserted else { return }
+        queuedMessageCounts[laneNumber, default: 0] += 1
     }
 
     private func acceptActivity(

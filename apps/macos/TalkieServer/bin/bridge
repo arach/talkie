@@ -24,10 +24,18 @@ LAUNCHD_DIR="$BRIDGE_DIR/launchd"
 LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
 LOG_DIR="$HOME/Library/Logs/TalkieBridge"
 
-PROD_PLIST="com.talkie.bridge.plist"
-DEV_PLIST="com.talkie.bridge-dev.plist"
-PROD_LABEL="com.talkie.bridge"
-DEV_LABEL="com.talkie.bridge-dev"
+PROD_PLIST="to.talkie.bridge.plist"
+DEV_PLIST="to.talkie.bridge-dev.plist"
+PROD_LABEL="to.talkie.bridge"
+DEV_LABEL="to.talkie.bridge-dev"
+
+# Previous releases used the placeholder com.talkie namespace. Keep the
+# migration targets explicit so an old KeepAlive job cannot reclaim a port
+# after the correctly namespaced service starts.
+LEGACY_PROD_PLIST="com.talkie.bridge.plist"
+LEGACY_DEV_PLIST="com.talkie.bridge-dev.plist"
+LEGACY_PROD_LABEL="com.talkie.bridge"
+LEGACY_DEV_LABEL="com.talkie.bridge-dev"
 
 # DNS entry - single subdomain, different ports
 HOSTS_MARKER="# TalkieBridge DNS"
@@ -94,14 +102,29 @@ ensure_log_dir() {
     mkdir -p "$LOG_DIR"
 }
 
+unload_service() {
+    local label="$1"
+    local plist_path="$2"
+
+    launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+    launchctl unload "$plist_path" 2>/dev/null || true
+}
+
+remove_legacy_services() {
+    unload_service "$LEGACY_PROD_LABEL" "$LAUNCH_AGENTS/$LEGACY_PROD_PLIST"
+    unload_service "$LEGACY_DEV_LABEL" "$LAUNCH_AGENTS/$LEGACY_DEV_PLIST"
+    rm -f "$LAUNCH_AGENTS/$LEGACY_PROD_PLIST" "$LAUNCH_AGENTS/$LEGACY_DEV_PLIST"
+}
+
 install_plists() {
     log_info "Installing launchd plists..."
     mkdir -p "$LAUNCH_AGENTS"
     ensure_log_dir
 
     # Stop services if running (prevents "service already loaded" errors)
-    launchctl unload "$LAUNCH_AGENTS/$PROD_PLIST" 2>/dev/null || true
-    launchctl unload "$LAUNCH_AGENTS/$DEV_PLIST" 2>/dev/null || true
+    unload_service "$PROD_LABEL" "$LAUNCH_AGENTS/$PROD_PLIST"
+    unload_service "$DEV_LABEL" "$LAUNCH_AGENTS/$DEV_PLIST"
+    remove_legacy_services
 
     # Generate plists with correct paths for this machine
     generate_plist "$PROD_LABEL" "" "$LAUNCH_AGENTS/$PROD_PLIST" "bridge.log"
@@ -179,12 +202,12 @@ uninstall_plists() {
     log_info "Uninstalling launchd plists..."
 
     # Stop services first
-    launchctl unload "$LAUNCH_AGENTS/$PROD_PLIST" 2>/dev/null || true
-    launchctl unload "$LAUNCH_AGENTS/$DEV_PLIST" 2>/dev/null || true
+    unload_service "$PROD_LABEL" "$LAUNCH_AGENTS/$PROD_PLIST"
+    unload_service "$DEV_LABEL" "$LAUNCH_AGENTS/$DEV_PLIST"
+    remove_legacy_services
 
     # Remove plists
-    rm -f "$LAUNCH_AGENTS/$PROD_PLIST"
-    rm -f "$LAUNCH_AGENTS/$DEV_PLIST"
+    rm -f "$LAUNCH_AGENTS/$PROD_PLIST" "$LAUNCH_AGENTS/$DEV_PLIST"
 
     log_success "Uninstalled"
 }
@@ -192,6 +215,8 @@ uninstall_plists() {
 start_prod() {
     ensure_log_dir
     log_info "Starting production bridge (port 8765)..."
+
+    remove_legacy_services
 
     if ! [ -f "$LAUNCH_AGENTS/$PROD_PLIST" ]; then
         log_error "Not installed. Run: bridge install"
@@ -212,14 +237,15 @@ start_prod() {
 
 stop_prod() {
     log_info "Stopping production bridge..."
-    launchctl stop "$PROD_LABEL" 2>/dev/null || true
-    launchctl unload "$LAUNCH_AGENTS/$PROD_PLIST" 2>/dev/null || true
+    unload_service "$PROD_LABEL" "$LAUNCH_AGENTS/$PROD_PLIST"
     log_success "Stopped"
 }
 
 start_dev() {
     ensure_log_dir
     log_info "Starting dev bridge (port 8767, local mode)..."
+
+    remove_legacy_services
 
     if ! [ -f "$LAUNCH_AGENTS/$DEV_PLIST" ]; then
         log_error "Not installed. Run: bridge install"
@@ -239,8 +265,7 @@ start_dev() {
 
 stop_dev() {
     log_info "Stopping dev bridge..."
-    launchctl stop "$DEV_LABEL" 2>/dev/null || true
-    launchctl unload "$LAUNCH_AGENTS/$DEV_PLIST" 2>/dev/null || true
+    unload_service "$DEV_LABEL" "$LAUNCH_AGENTS/$DEV_PLIST"
     log_success "Stopped"
 }
 

@@ -16,7 +16,6 @@ const START_TURN_VERSION = 1;
 const STEER_TURN_VERSION = 1;
 const QUEUED_FOLLOW_UPS_VERSION = 1;
 const SNAPSHOT_TIMEOUT_MS = 5_000;
-const QUEUE_PERSIST_TIMEOUT_MS = 5_000;
 const QUEUE_MUTATION_LOCK_TIMEOUT_MS = 10_000;
 const TURN_TIMEOUT_MS = 30 * 60_000;
 const QUEUED_TURN_TIMEOUT_MS = 60 * 60_000;
@@ -222,9 +221,9 @@ async function withQueuedFollowUpMutationLock(threadId, action) {
   }
 }
 
-function makeQueuedFollowUp(text, state) {
+function makeQueuedFollowUp(text, state, clientUserMessageId = randomUUID()) {
   return {
-    id: randomUUID(),
+    id: clientUserMessageId,
     text,
     context: {
       addedFiles: [],
@@ -244,6 +243,35 @@ function makeQueuedFollowUp(text, state) {
     cwd: state.cwd || '/',
     createdAt: Date.now(),
   };
+}
+
+function normalizeClientUserMessageId(value) {
+  if (value === undefined || value === null || value === '') return randomUUID();
+  const normalized = String(value).trim();
+  if (!/^[0-9a-f-]{36}$/i.test(normalized)) {
+    fail('The Talkie submission id is invalid.', 'invalid-submission-id');
+  }
+  return normalized;
+}
+
+function normalizeKnownDelivery(value) {
+  if (value === undefined || value === null || value === '') return null;
+  if (!['started-turn', 'queued-turn', 'steered-active-turn'].includes(value)) {
+    fail('The prior Talkie delivery is invalid.', 'protocol-mismatch');
+  }
+  return value;
+}
+
+function existingQueuedFollowUp(queued, threadId, clientUserMessageId) {
+  const messages = queued[threadId] || [];
+  const index = messages.findIndex((message) => message?.id === clientUserMessageId);
+  if (index < 0) return null;
+  const message = messages[index];
+  const matchingPredecessors = messages
+    .slice(0, index)
+    .filter((candidate) => String(candidate?.text || '').trim() === String(message?.text || '').trim())
+    .length;
+  return { message, matchingPredecessors };
 }
 
 function codexExecutable() {
@@ -300,6 +328,119 @@ function latestActiveTurnId(rolloutPath) {
   return activeTurnIds.at(-1) ?? null;
 }
 
+function findSubmissionTurn(rolloutPath, clientUserMessageId, expectedText, allowTextFallback = false) {
+  const size = fs.statSync(rolloutPath).size;
+  const maximumScan = 32 * 1024 * 1024;
+  const scanStart = Math.max(0, size - maximumScan);
+  const descriptor = fs.openSync(rolloutPath, 'r');
+  let text;
+  try {
+    const data = Buffer.allocUnsafe(size - scanStart);
+    fs.readSync(descriptor, data, 0, data.length, scanStart);
+    text = data.toString('utf8');
+  } finally {
+    fs.closeSync(descriptor);
+  }
+  if (scanStart > 0) text = text.slice(text.indexOf('\n') + 1);
+
+  let latestStartedTurnId = null;
+  let userMessageOrdinal = 0;
+  let match = null;
+  for (const line of text.split('\n')) {
+    if (!line) continue;
+    let record;
+    try { record = JSON.parse(line); } catch { continue; }
+    const payload = record?.type === 'event_msg' ? record.payload : null;
+    if (!payload) continue;
+    if (payload.type === 'task_started' && typeof payload.turn_id === 'string') {
+      latestStartedTurnId = payload.turn_id;
+      userMessageOrdinal = 0;
+      continue;
+    }
+    if (payload.type === 'user_message' && latestStartedTurnId) {
+      userMessageOrdinal += 1;
+      if (
+        payload.client_id === clientUserMessageId ||
+        (allowTextFallback && String(payload.message || '').trim() === expectedText.trim())
+      ) {
+        match = {
+          turnId: latestStartedTurnId,
+          text: String(payload.message || '').trim(),
+          userMessageOrdinal,
+          status: 'active',
+          response: null,
+          scanStart,
+        };
+      }
+      continue;
+    }
+    if (!match || payload.turn_id !== match.turnId) continue;
+    if (payload.type === 'task_complete') {
+      match.status = 'completed';
+      match.response = String(payload.last_agent_message || '').trim();
+    } else if (payload.type === 'task_failed' || payload.type === 'turn_aborted') {
+      match.status = 'failed';
+      match.response = String(payload.message || '').trim();
+    }
+  }
+  return match;
+}
+
+async function reconcileExistingSubmission(
+  rolloutPath,
+  threadId,
+  command,
+  text,
+  clientUserMessageId,
+  knownDelivery,
+  onAccepted,
+  blockingError,
+) {
+  // Codex Desktop currently assigns a fresh client_id when it promotes a
+  // queued follow-up into a turn. For a durable queued receipt, the exact text
+  // is therefore the only rollout correlation that survives a bridge restart.
+  const match = findSubmissionTurn(
+    rolloutPath,
+    clientUserMessageId,
+    text,
+    knownDelivery === 'queued-turn',
+  );
+  if (!match) return null;
+  if (match.text !== text.trim()) {
+    fail('The Talkie submission id already belongs to another message.', 'submission-conflict');
+  }
+
+  const inferredDelivery = command === 'steer' || match.userMessageOrdinal > 1
+    ? 'steered-active-turn'
+    : command === 'queue'
+      ? 'queued-turn'
+      : 'started-turn';
+  const delivery = knownDelivery || inferredDelivery;
+  const accepted = acceptedDisposition(threadId, delivery, command, match.turnId);
+  onAccepted?.(accepted);
+  if (delivery === 'steered-active-turn') return accepted;
+  if (match.status === 'failed') {
+    fail(match.response || 'The existing Codex turn failed.', 'turn-failed');
+  }
+  const response = match.status === 'completed'
+    ? match.response
+    : await waitForTurn(
+        rolloutPath,
+        match.scanStart,
+        match.turnId,
+        blockingError,
+      );
+  if (!response) fail('Codex completed without a final answer.', 'empty-response');
+  return {
+    ok: true,
+    threadId,
+    turnId: match.turnId,
+    delivery,
+    requestedDelivery: command,
+    response,
+  };
+}
+
 function resolveDesktopTurnState(rolloutPath, snapshotRuntimeStatus) {
   const activeTurnId = latestActiveTurnId(rolloutPath);
   if (snapshotRuntimeStatus === 'active' && !activeTurnId) {
@@ -327,17 +468,8 @@ function taskRolloutPath(threadId) {
     encoding: 'utf8',
     maxBuffer: 1024 * 1024,
   }).trim();
-  if (!rolloutPath) fail('The selected Codex task no longer exists.', 'task-not-found');
+  if (!rolloutPath) fail('The selected Codex task no longer exists.', 'stale-thread');
   return assertRolloutPath(rolloutPath, threadId);
-}
-
-function taskWorkingDirectory(threadId) {
-  const database = path.join(codexHome(), 'state_5.sqlite');
-  const query = `SELECT cwd FROM threads WHERE id = '${threadId}' LIMIT 1;`;
-  return execFileSync('/usr/bin/sqlite3', ['-readonly', database, query], {
-    encoding: 'utf8',
-    maxBuffer: 1024 * 1024,
-  }).trim();
 }
 
 /**
@@ -501,12 +633,13 @@ class DesktopIPCClient {
     return snapshotPromise;
   }
 
-  async startTurn(text, ownerClientId) {
+  async startTurn(text, ownerClientId, clientUserMessageId) {
     const response = await this.request('thread-follower-start-turn', {
       conversationId: this.threadId,
       turnStartParams: {
         input: [{ type: 'text', text, text_elements: [] }],
         attachments: [],
+        clientUserMessageId,
       },
     }, {
       targetClientId: ownerClientId,
@@ -523,8 +656,7 @@ class DesktopIPCClient {
     return turnId;
   }
 
-  async steerTurn(text, ownerClientId, state) {
-    const clientUserMessageId = randomUUID();
+  async steerTurn(text, ownerClientId, state, clientUserMessageId) {
     const context = {
       prompt: text,
       workspaceRoots: state.cwd ? [state.cwd] : [],
@@ -560,9 +692,16 @@ class DesktopIPCClient {
     }
   }
 
-  async queueTurn(text, ownerClientId, state) {
-    const message = makeQueuedFollowUp(text, state);
+  async queueTurn(text, ownerClientId, state, clientUserMessageId) {
     const existing = readQueuedFollowUps();
+    const queuedBefore = existingQueuedFollowUp(existing, this.threadId, clientUserMessageId);
+    if (queuedBefore) {
+      if (String(queuedBefore.message?.text || '').trim() !== text.trim()) {
+        fail('The Talkie submission id already belongs to another message.', 'submission-conflict');
+      }
+      return { messageId: clientUserMessageId, matchingPredecessors: queuedBefore.matchingPredecessors };
+    }
+    const message = makeQueuedFollowUp(text, state, clientUserMessageId);
     const matchingPredecessors = queuedTextPredecessorCount(existing, this.threadId, text);
     const queued = appendQueuedFollowUp(existing, this.threadId, message);
     const response = await this.request('thread-follower-set-queued-follow-ups-state', {
@@ -577,18 +716,6 @@ class DesktopIPCClient {
       fail(`Codex Desktop could not queue the follow-up: ${response.error || 'unknown error'}`, 'turn-queue-failed');
     }
     return { messageId: message.id, matchingPredecessors };
-  }
-
-  queueVisibleTurn(text, state) {
-    const message = makeQueuedFollowUp(text, state);
-    const existing = readQueuedFollowUps();
-    const matchingPredecessors = queuedTextPredecessorCount(existing, this.threadId, text);
-    const queued = appendQueuedFollowUp(existing, this.threadId, message);
-    this.broadcast('thread-queued-followups-changed', {
-      conversationId: this.threadId,
-      messages: queued[this.threadId],
-    }, QUEUED_FOLLOW_UPS_VERSION);
-    return { message, matchingPredecessors };
   }
 
   broadcast(method, params, version) {
@@ -709,6 +836,7 @@ class AppServerClient {
     this.pending = new Map();
     this.nextRequestId = 1;
     this.closing = false;
+    this.blockingError = null;
   }
 
   async connect() {
@@ -756,11 +884,11 @@ class AppServerClient {
     return { ...result, thread };
   }
 
-  async startTurn(threadId, text) {
+  async startTurn(threadId, text, clientUserMessageId) {
     const result = await this.request('turn/start', {
       threadId,
       input: [{ type: 'text', text }],
-      clientUserMessageId: randomUUID(),
+      clientUserMessageId,
     });
     const turnId = result?.turn?.id;
     if (typeof turnId !== 'string' || turnId.length === 0) {
@@ -769,12 +897,12 @@ class AppServerClient {
     return turnId;
   }
 
-  async steerTurn(threadId, expectedTurnId, text) {
+  async steerTurn(threadId, expectedTurnId, text, clientUserMessageId) {
     const result = await this.request('turn/steer', {
       threadId,
       expectedTurnId,
       input: [{ type: 'text', text }],
-      clientUserMessageId: randomUUID(),
+      clientUserMessageId,
     });
     if (result?.turnId !== expectedTurnId) {
       fail('Codex app-server returned the wrong active turn.', 'protocol-mismatch');
@@ -825,10 +953,11 @@ class AppServerClient {
         // Notifications are observed through the private transcript below. A
         // server-initiated approval request must never be approved by Talkie.
         if (message.id !== undefined && message.method) {
-          this.rejectAll(Object.assign(
+          this.blockingError = Object.assign(
             new Error('This Codex turn needs approval in Codex Desktop.'),
             { code: 'approval-required' },
-          ));
+          );
+          this.rejectAll(this.blockingError);
         }
         continue;
       }
@@ -837,9 +966,16 @@ class AppServerClient {
       clearTimeout(waiter.timer);
       this.pending.delete(message.id);
       if (message.error) {
+        const messageText = message.error.message || `Codex app-server rejected ${waiter.method}.`;
+        const serverCode = String(message.error.code || message.error.data?.code || '');
+        const missingThread = waiter.method === 'thread/resume' && (
+          /thread.*(?:not[ -]?found|does not exist|unknown)/i.test(messageText) ||
+          /(?:not[ -]?found|does not exist|unknown).*thread/i.test(messageText) ||
+          /thread.*not[ -]?found/i.test(serverCode)
+        );
         waiter.reject(Object.assign(
-          new Error(message.error.message || `Codex app-server rejected ${waiter.method}.`),
-          { code: 'app-server-request-failed' },
+          new Error(messageText),
+          { code: missingThread ? 'stale-thread' : 'app-server-request-failed' },
         ));
       } else {
         waiter.resolve(message.result);
@@ -853,6 +989,10 @@ class AppServerClient {
       waiter.reject(error);
     }
     this.pending.clear();
+  }
+
+  pendingBlockingError() {
+    return this.blockingError;
   }
 
   close() {
@@ -875,13 +1015,19 @@ function sleep(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-async function waitForTurn(rolloutPath, offset, turnId) {
+function throwIfBlocked(blockingError) {
+  const error = blockingError?.();
+  if (error) throw error;
+}
+
+async function waitForTurn(rolloutPath, offset, turnId, blockingError) {
   const descriptor = fs.openSync(rolloutPath, 'r');
   let position = offset;
   let pending = '';
   const deadline = Date.now() + TURN_TIMEOUT_MS;
   try {
     while (Date.now() < deadline) {
+      throwIfBlocked(blockingError);
       const size = fs.fstatSync(descriptor).size;
       if (size > position) {
         const chunk = Buffer.allocUnsafe(Math.min(size - position, 1024 * 1024));
@@ -917,7 +1063,14 @@ async function waitForTurn(rolloutPath, offset, turnId) {
   fail('Timed out waiting for the Codex response.', 'turn-timeout');
 }
 
-async function waitForQueuedTurn(rolloutPath, offset, text, matchingPredecessors = 0) {
+async function waitForQueuedTurn(
+  rolloutPath,
+  offset,
+  text,
+  matchingPredecessors = 0,
+  clientUserMessageId = null,
+  blockingError,
+) {
   const descriptor = fs.openSync(rolloutPath, 'r');
   let position = offset;
   let pending = '';
@@ -927,6 +1080,7 @@ async function waitForQueuedTurn(rolloutPath, offset, text, matchingPredecessors
   const deadline = Date.now() + QUEUED_TURN_TIMEOUT_MS;
   try {
     while (Date.now() < deadline) {
+      throwIfBlocked(blockingError);
       const size = fs.fstatSync(descriptor).size;
       if (size > position) {
         const chunk = Buffer.allocUnsafe(Math.min(size - position, 1024 * 1024));
@@ -949,7 +1103,10 @@ async function waitForQueuedTurn(rolloutPath, offset, text, matchingPredecessors
             !queuedTurnId &&
             latestStartedTurnId &&
             payload.type === 'user_message' &&
-            String(payload.message || '').trim() === text.trim()
+            (
+              (clientUserMessageId && payload.client_id === clientUserMessageId) ||
+              String(payload.message || '').trim() === text.trim()
+            )
           ) {
             if (remainingMatches > 0) {
               remainingMatches -= 1;
@@ -979,6 +1136,16 @@ async function waitForQueuedTurn(rolloutPath, offset, text, matchingPredecessors
   fail('Timed out waiting for the queued Codex response.', 'turn-timeout');
 }
 
+async function waitForTaskToBecomeIdle(rolloutPath, blockingError) {
+  const deadline = Date.now() + QUEUED_TURN_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    throwIfBlocked(blockingError);
+    if (!latestActiveTurnId(rolloutPath)) return;
+    await sleep(150);
+  }
+  fail('Timed out waiting for the active Codex turn to finish.', 'turn-timeout');
+}
+
 async function withClient(threadId, action) {
   const client = new DesktopIPCClient(threadId);
   try {
@@ -1001,23 +1168,6 @@ async function withAppServer(threadId, action) {
   }
 }
 
-async function waitForQueuedFollowUpPersistence(threadId, messageId) {
-  const deadline = Date.now() + QUEUE_PERSIST_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    try {
-      const message = (readQueuedFollowUps()[threadId] || []).find((item) => item?.id === messageId);
-      if (message) return;
-    } catch (error) {
-      if (error?.code !== 'protocol-mismatch') throw error;
-    }
-    await sleep(50);
-  }
-  fail(
-    'Codex Desktop did not accept the Talkie message in the visible task.',
-    'task-owner-unavailable',
-  );
-}
-
 function shouldUseAppServerFallback(error) {
   return [
     'task-owner-unavailable',
@@ -1027,42 +1177,26 @@ function shouldUseAppServerFallback(error) {
   ].includes(error?.code);
 }
 
-async function runVisibleDesktopQueue(threadId, text, requestedDelivery) {
-  const rolloutPath = taskRolloutPath(threadId);
-  const client = new DesktopIPCClient(threadId);
-  try {
-    await client.connect();
-    const queued = await withQueuedFollowUpMutationLock(threadId, async () => {
-      const offset = fs.statSync(rolloutPath).size;
-      const { message, matchingPredecessors } = client.queueVisibleTurn(
-        text,
-        { cwd: taskWorkingDirectory(threadId) },
-      );
-      await waitForQueuedFollowUpPersistence(threadId, message.id);
-      return { offset, matchingPredecessors };
-    });
-    const { turnId, response } = await waitForQueuedTurn(
-      rolloutPath,
-      queued.offset,
-      text,
-      queued.matchingPredecessors,
-    );
-    return {
-      ok: true,
-      threadId,
-      turnId,
-      // Whether Desktop or the app server owns the queue is an adapter detail.
-      // Clients only need the stable protocol fact that this ran as a queued turn.
-      delivery: 'queued-turn',
-      requestedDelivery,
-      response,
-    };
-  } finally {
-    client.close();
-  }
+function acceptedDisposition(threadId, delivery, requestedDelivery, turnId, decision) {
+  return {
+    ok: true,
+    phase: 'accepted',
+    threadId,
+    delivery,
+    requestedDelivery,
+    ...(turnId && { turnId }),
+    ...(decision && { decision }),
+  };
 }
 
-async function runDesktopCommand(command, threadId, text) {
+async function runDesktopCommand(
+  command,
+  threadId,
+  text,
+  clientUserMessageId,
+  knownDelivery,
+  onAccepted,
+) {
   return withClient(threadId, async (client, snapshot) => {
     const state = snapshot.state || {};
     const rolloutPath = assertRolloutPath(state.rolloutPath, threadId);
@@ -1073,6 +1207,16 @@ async function runDesktopCommand(command, threadId, text) {
         task: { id: state.id, title: state.title || 'Untitled task', cwd: state.cwd || '' },
       };
     }
+    const reconciled = await reconcileExistingSubmission(
+      rolloutPath,
+      threadId,
+      command,
+      text,
+      clientUserMessageId,
+      knownDelivery,
+      onAccepted,
+    );
+    if (reconciled) return reconciled;
     let offset = fs.statSync(rolloutPath).size;
     // The rollout is authoritative for activity. Desktop snapshots can lag the
     // open thread by a render tick; treating a stale "idle" snapshot as truth
@@ -1086,14 +1230,23 @@ async function runDesktopCommand(command, threadId, text) {
       if (!activeTurnId) {
         fail('The Codex task no longer has an active turn to steer.', 'turn-not-active');
       }
-      await client.steerTurn(text, snapshot.ownerClientId, state);
-      return {
-        ok: true,
+      try {
+        await client.steerTurn(text, snapshot.ownerClientId, state, clientUserMessageId);
+      } catch (error) {
+        if (latestActiveTurnId(rolloutPath) !== activeTurnId) {
+          fail('The Codex task no longer has the active turn Talkie tried to steer.', 'turn-not-active');
+        }
+        throw error;
+      }
+      const accepted = acceptedDisposition(
         threadId,
-        turnId: activeTurnId,
-        delivery: 'steered-active-turn',
+        'steered-active-turn',
+        command,
+        activeTurnId,
         decision,
-      };
+      );
+      onAccepted?.(accepted);
+      return accepted;
     }
 
     if (command === 'queue' && activeTurnId) {
@@ -1103,34 +1256,101 @@ async function runDesktopCommand(command, threadId, text) {
       // until that exact instruction completes so async narration still works.
       const queued = await withQueuedFollowUpMutationLock(threadId, async () => {
         const queuedOffset = fs.statSync(rolloutPath).size;
-        const queuedResult = await client.queueTurn(text, snapshot.ownerClientId, state);
+        const queuedResult = await client.queueTurn(
+          text,
+          snapshot.ownerClientId,
+          state,
+          clientUserMessageId,
+        );
         return { offset: queuedOffset, ...queuedResult };
       });
+      onAccepted?.(acceptedDisposition(threadId, 'queued-turn', command, null, decision));
       const { turnId, response } = await waitForQueuedTurn(
         rolloutPath,
         queued.offset,
         text,
         queued.matchingPredecessors,
+        clientUserMessageId,
       );
-      return { ok: true, threadId, turnId, delivery: 'queued-turn', response, decision };
+      return {
+        ok: true,
+        threadId,
+        turnId,
+        delivery: 'queued-turn',
+        requestedDelivery: command,
+        response,
+        decision,
+      };
     }
 
     let turnId;
     let delivery;
     if (activeTurnId) {
-      await client.steerTurn(text, snapshot.ownerClientId, state);
-      turnId = activeTurnId;
-      delivery = 'steered-active-turn';
+      try {
+        await client.steerTurn(text, snapshot.ownerClientId, state, clientUserMessageId);
+        turnId = activeTurnId;
+        delivery = 'steered-active-turn';
+      } catch (error) {
+        const currentTurnId = latestActiveTurnId(rolloutPath);
+        if (currentTurnId === activeTurnId) throw error;
+        if (currentTurnId) {
+          await client.steerTurn(text, snapshot.ownerClientId, state, clientUserMessageId);
+          turnId = currentTurnId;
+          delivery = 'steered-active-turn';
+        } else {
+          offset = fs.statSync(rolloutPath).size;
+          turnId = await client.startTurn(text, snapshot.ownerClientId, clientUserMessageId);
+          delivery = 'started-turn';
+        }
+      }
     } else {
-      turnId = await client.startTurn(text, snapshot.ownerClientId);
+      turnId = await client.startTurn(text, snapshot.ownerClientId, clientUserMessageId);
       delivery = 'started-turn';
     }
+    onAccepted?.(acceptedDisposition(threadId, delivery, command, turnId, decision));
     const response = await waitForTurn(rolloutPath, offset, turnId);
-    return { ok: true, threadId, turnId, delivery, response, decision };
+    return {
+      ok: true,
+      threadId,
+      turnId,
+      delivery,
+      requestedDelivery: command,
+      response,
+      decision,
+    };
   });
 }
 
-async function runAppServerCommand(command, threadId, text) {
+async function startQueuedAppServerTurn(client, threadId, rolloutPath, text, clientUserMessageId) {
+  const deadline = Date.now() + QUEUED_TURN_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    await waitForTaskToBecomeIdle(rolloutPath, () => client.pendingBlockingError());
+    const refreshed = await client.resume(threadId);
+    const activeTurn = [...(refreshed.thread?.turns || [])]
+      .reverse()
+      .find((turn) => turn?.status === 'inProgress');
+    if (activeTurn?.id || latestActiveTurnId(rolloutPath)) continue;
+
+    const offset = fs.statSync(rolloutPath).size;
+    try {
+      const turnId = await client.startTurn(threadId, text, clientUserMessageId);
+      return { offset, turnId };
+    } catch (error) {
+      if (latestActiveTurnId(rolloutPath)) continue;
+      throw error;
+    }
+  }
+  fail('Timed out waiting to start the queued Codex turn.', 'turn-timeout');
+}
+
+async function runAppServerCommand(
+  command,
+  threadId,
+  text,
+  clientUserMessageId,
+  knownDelivery,
+  onAccepted,
+) {
   return withAppServer(threadId, async (client, resumed) => {
     const thread = resumed.thread;
     const rolloutPath = assertRolloutPath(thread.path, threadId);
@@ -1144,6 +1364,17 @@ async function runAppServerCommand(command, threadId, text) {
         },
       };
     }
+    const reconciled = await reconcileExistingSubmission(
+      rolloutPath,
+      threadId,
+      command,
+      text,
+      clientUserMessageId,
+      knownDelivery,
+      onAccepted,
+      () => client.pendingBlockingError(),
+    );
+    if (reconciled) return reconciled;
     let offset = fs.statSync(rolloutPath).size;
     const activeTurn = [...(thread.turns || [])].reverse().find((turn) => turn?.status === 'inProgress');
     const taskIsActive = thread?.status?.type === 'active';
@@ -1155,33 +1386,92 @@ async function runAppServerCommand(command, threadId, text) {
       if (!activeTurn?.id) {
         fail('The Codex task no longer has an active turn to steer.', 'turn-not-active');
       }
-      const turnId = await client.steerTurn(threadId, activeTurn.id, text);
-      return { ok: true, threadId, turnId, delivery: 'steered-active-turn' };
+      let turnId;
+      try {
+        turnId = await client.steerTurn(threadId, activeTurn.id, text, clientUserMessageId);
+      } catch (error) {
+        if (latestActiveTurnId(rolloutPath) !== activeTurn.id) {
+          fail('The Codex task no longer has the active turn Talkie tried to steer.', 'turn-not-active');
+        }
+        throw error;
+      }
+      const accepted = acceptedDisposition(threadId, 'steered-active-turn', command, turnId);
+      onAccepted?.(accepted);
+      return accepted;
     }
 
     if (command === 'queue' && activeTurn?.id) {
-      fail(
-        'Open this task in Codex Desktop so Talkie can add the message to its visible queue.',
-        'task-owner-unavailable',
+      onAccepted?.(acceptedDisposition(threadId, 'queued-turn', command));
+      const queued = await startQueuedAppServerTurn(
+        client,
+        threadId,
+        rolloutPath,
+        text,
+        clientUserMessageId,
       );
+      const response = await waitForTurn(
+        rolloutPath,
+        queued.offset,
+        queued.turnId,
+        () => client.pendingBlockingError(),
+      );
+      return {
+        ok: true,
+        threadId,
+        turnId: queued.turnId,
+        delivery: 'queued-turn',
+        requestedDelivery: command,
+        response,
+      };
     }
 
     let turnId;
     let delivery;
     if (activeTurn?.id) {
-      turnId = await client.steerTurn(threadId, activeTurn.id, text);
-      delivery = 'steered-active-turn';
+      try {
+        turnId = await client.steerTurn(threadId, activeTurn.id, text, clientUserMessageId);
+        delivery = 'steered-active-turn';
+      } catch (error) {
+        const currentTurnId = latestActiveTurnId(rolloutPath);
+        if (currentTurnId === activeTurn.id) throw error;
+        if (currentTurnId) {
+          const refreshed = await client.resume(threadId);
+          const currentTurn = [...(refreshed.thread?.turns || [])]
+            .reverse()
+            .find((turn) => turn?.status === 'inProgress' && turn.id === currentTurnId);
+          if (!currentTurn) throw error;
+          turnId = await client.steerTurn(threadId, currentTurnId, text, clientUserMessageId);
+          delivery = 'steered-active-turn';
+        } else {
+          offset = fs.statSync(rolloutPath).size;
+          turnId = await client.startTurn(threadId, text, clientUserMessageId);
+          delivery = 'started-turn';
+        }
+      }
     } else {
-      turnId = await client.startTurn(threadId, text);
+      turnId = await client.startTurn(threadId, text, clientUserMessageId);
       delivery = 'started-turn';
     }
-    const response = await waitForTurn(rolloutPath, offset, turnId);
-    return { ok: true, threadId, turnId, delivery, response };
+    onAccepted?.(acceptedDisposition(threadId, delivery, command, turnId));
+    const response = await waitForTurn(
+      rolloutPath,
+      offset,
+      turnId,
+      () => client.pendingBlockingError(),
+    );
+    return {
+      ok: true,
+      threadId,
+      turnId,
+      delivery,
+      requestedDelivery: command,
+      response,
+    };
   });
 }
 
 async function main() {
-  const [command, argument] = process.argv.slice(2);
+  const [command, argument, rawClientUserMessageId, rawKnownDelivery] = process.argv.slice(2);
   if (command === 'list') {
     writeResult({ ok: true, tasks: listTasks(argument) });
     return;
@@ -1194,23 +1484,37 @@ async function main() {
     const acceptsText = command === 'submit' || command === 'steer' || command === 'queue';
     const text = acceptsText ? (await readStdin()).trim() : '';
     if (acceptsText && !text) fail('The transcript is empty.', 'empty-transcript');
+    const clientUserMessageId = acceptsText
+      ? normalizeClientUserMessageId(rawClientUserMessageId)
+      : undefined;
+    const knownDelivery = acceptsText ? normalizeKnownDelivery(rawKnownDelivery) : null;
+    const onAccepted = acceptsText ? (accepted) => writeResult(accepted) : undefined;
     let result;
     try {
-      result = await runDesktopCommand(command, argument, text);
+      result = await runDesktopCommand(
+        command,
+        argument,
+        text,
+        clientUserMessageId,
+        knownDelivery,
+        onAccepted,
+      );
     } catch (error) {
-      if (acceptsText && error?.code === 'task-owner-unavailable') {
-        result = await runVisibleDesktopQueue(argument, text, command);
-        writeResult(result);
-        return;
-      }
       if (!shouldUseAppServerFallback(error)) throw error;
-      result = await runAppServerCommand(command, argument, text);
+      result = await runAppServerCommand(
+        command,
+        argument,
+        text,
+        clientUserMessageId,
+        knownDelivery,
+        onAccepted,
+      );
     }
     writeResult(result);
     return;
   }
   fail(
-    'Usage: codex-desktop-bridge.cjs list [limit] | activity|validate <task-id> | submit|steer|queue <task-id>',
+    'Usage: codex-desktop-bridge.cjs list [limit] | activity|validate <task-id> | submit|steer|queue <task-id> [submission-id]',
     'usage',
   );
 }

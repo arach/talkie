@@ -327,12 +327,14 @@ actor BridgeClient {
 
     /// Hands a Codex turn to the Mac and returns a receipt without waiting for completion.
     func codexStartTurn(
+        submissionId: UUID,
         taskId: String,
         taskTitle: String,
         text: String,
         mode: CodexMessageMode
     ) async throws -> CodexTurnJob {
         struct Request: Encodable {
+            let submissionId: UUID
             let taskId: String
             let taskTitle: String
             let text: String
@@ -340,7 +342,13 @@ actor BridgeClient {
         }
         let data = try await post(
             "/codex/turns",
-            body: Request(taskId: taskId, taskTitle: taskTitle, text: text, mode: mode)
+            body: Request(
+                submissionId: submissionId,
+                taskId: taskId,
+                taskTitle: taskTitle,
+                text: text,
+                mode: mode
+            )
         )
         return try JSONDecoder().decode(CodexTurnJobResponse.self, from: data).job
     }
@@ -1053,6 +1061,7 @@ struct CodexProgressUpdate: Codable, Equatable, Sendable, Identifiable {
 
 struct CodexTurnJob: Codable, Equatable, Sendable {
     let id: String
+    let submissionId: String
     let taskId: String
     let taskTitle: String
     let status: String
@@ -1065,6 +1074,8 @@ struct CodexTurnJob: Codable, Equatable, Sendable {
     let updates: [CodexProgressUpdate]?
     let error: String?
     let code: String?
+    let hint: String?
+    let retryable: Bool?
 }
 
 struct CodexTurnJobResponse: Codable {
