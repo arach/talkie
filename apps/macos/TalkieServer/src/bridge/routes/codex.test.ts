@@ -49,7 +49,7 @@ describe("CodexTaskMessageCoordinator", () => {
     await activeTurn;
   });
 
-  test("queue is published immediately while a Talkie turn is still running", async () => {
+  test("serializes a second queue request behind a Talkie-started queue turn", async () => {
     const calls: string[] = [];
     let finishTurn: (() => void) | undefined;
     const turnGate = new Promise<void>((resolve) => {
@@ -57,25 +57,26 @@ describe("CodexTaskMessageCoordinator", () => {
     });
     const coordinator = new CodexTaskMessageCoordinator(async (command) => {
       calls.push(command);
-      if (command === "submit") {
+      if (calls.length === 1) {
         await turnGate;
         return completed("started-turn", "first response");
       }
-      return completed("queued-turn", "queued response");
+      return completed("started-turn", "second response");
     });
 
-    const activeTurn = coordinator.deliver("task-1", "first", "auto", submission1);
+    const activeTurn = coordinator.deliver("task-1", "first", "queue", submission1);
     await Promise.resolve();
     const queuedTurn = coordinator.deliver("task-1", "next", "queue", submission2);
     await Promise.resolve();
 
-    expect(calls).toEqual(["submit", "queue"]);
-
-    const result = await queuedTurn;
-    expect(result.response).toBe("queued response");
+    expect(calls).toEqual(["queue"]);
 
     finishTurn?.();
     await activeTurn;
+    const result = await queuedTurn;
+
+    expect(calls).toEqual(["queue", "submit"]);
+    expect(result.response).toBe("second response");
   });
 
   test("queue uses the adapter queue command when Codex may already be active externally", async () => {

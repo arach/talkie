@@ -251,11 +251,11 @@ type CodexCommandRunner = (
 /**
  * Coordinates Talkie-originated messages per exact task.
  *
- * Ordinary Talkie-started turns are serialized because every adapter process
- * tails one rollout offset. Explicit queue requests enter the exact task's
- * owner-specific queue path immediately; the Desktop adapter uses its native
- * queue, while app-server safely waits and starts the same thread. Steering
- * remains a separate, ordered lane.
+ * Talkie-started turns and explicit queue requests are serialized because
+ * every adapter process tails one rollout offset. The first explicit queue
+ * request still enters the exact task's owner-specific queue path; subsequent
+ * requests wait on the per-task turn tail so an idle-to-active race cannot
+ * start concurrent hidden turns. Steering remains a separate, ordered lane.
  */
 export class CodexTaskMessageCoordinator {
   private readonly activeTurns = new Set<string>();
@@ -318,8 +318,15 @@ export class CodexTaskMessageCoordinator {
     onDisposition?: (envelope: BridgeEnvelope) => void,
     knownDelivery?: CodexTurnDelivery,
   ): Promise<BridgeEnvelope> {
-    onStart?.();
-    return this.run("queue", taskId, text, submissionId, onDisposition, knownDelivery);
+    return this.enqueueTurn(
+      taskId,
+      text,
+      "queue",
+      submissionId,
+      onStart,
+      onDisposition,
+      knownDelivery,
+    );
   }
 
   private enqueueTurn(
