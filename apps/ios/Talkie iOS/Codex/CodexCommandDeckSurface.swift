@@ -28,14 +28,14 @@ struct CodexCommandDeckSurface: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 6) {
             CodexCommandConsole(onShowMapper: openMapper)
                 .frame(height: 316)
 
             keybed
                 .layoutPriority(60)
         }
-        .padding(.top, 4)
+        .padding(.top, 0)
         .padding(.bottom, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .sheet(isPresented: $showingMapper) {
@@ -667,7 +667,7 @@ private struct CodexCommandConsole: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 5) {
             if dynamicTypeSize.isAccessibilitySize {
                 accessibilityLaneTransport
                 accessibilityTaskIdentity
@@ -688,7 +688,7 @@ private struct CodexCommandConsole: View {
                 if number != CodexLane.range.upperBound {
                     Rectangle()
                         .fill(theme.chrome.panelInk.opacity(0.09))
-                        .frame(width: theme.chrome.hairlineWidth, height: 20)
+                        .frame(width: theme.chrome.hairlineWidth, height: 16)
                 }
             }
         }
@@ -701,7 +701,7 @@ private struct CodexCommandConsole: View {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .stroke(theme.chrome.panelInk.opacity(0.12), lineWidth: theme.chrome.hairlineWidth)
         }
-        .shadow(color: Color.black.opacity(0.16), radius: 2, y: 1)
+        .shadow(color: Color.black.opacity(0.12), radius: 2, y: 1)
         .frame(height: 44)
         .sensoryFeedback(.selection, trigger: store.activeLaneNumber)
         .accessibilityLabel("Codex lanes")
@@ -727,16 +727,23 @@ private struct CodexCommandConsole: View {
                         .talkieAccentGlow(radius: 3)
                 }
 
-                HStack(spacing: 3) {
+                VStack(spacing: 2) {
                     Text(number < 10 ? "0\(number)" : "\(number)")
                         .font(.system(size: 8, weight: isActive ? .bold : .medium, design: .monospaced))
                         .tracking(0.55)
 
-                    if lane.map({ store.isTurnInFlight(on: $0.number) }) == true {
-                        Circle()
-                            .fill(theme.chrome.panelAccent)
-                            .frame(width: 4, height: 4)
-                            .talkieAccentGlow(radius: 2)
+                    if let signal = laneRailSignal(number: number, lane: lane) {
+                        HStack(spacing: 3) {
+                            Circle()
+                                .fill(signal.color)
+                                .frame(width: 3, height: 3)
+                                .talkieAccentGlow(radius: signal.isLive ? 2 : 0)
+
+                            Text(signal.label)
+                                .font(.system(size: 5.5, weight: .semibold, design: .monospaced))
+                                .tracking(0.45)
+                        }
+                        .foregroundStyle(signal.color)
                     }
                 }
                 .foregroundStyle(
@@ -780,16 +787,43 @@ private struct CodexCommandConsole: View {
             .shadow(color: Color.black.opacity(0.12), radius: 3, y: 2)
     }
 
-    private func laneStatusColor(lane: CodexLane?, isActive: Bool) -> Color {
-        guard lane != nil else { return theme.chrome.panelInkFaint.opacity(0.30) }
-        return theme.chrome.panelAccent.opacity(isActive ? 1 : 0.62)
-    }
+    private func laneRailSignal(
+        number: Int,
+        lane: CodexLane?
+    ) -> (label: String, color: Color, isLive: Bool)? {
+        guard lane != nil else { return nil }
 
-    private func laneModeMark(_ lane: CodexLane?) -> String {
-        guard let lane else { return "––" }
-        let mode = lane.preferredMessageMode == .queue ? "Q" : "S"
-        guard store.isTurnInFlight(on: lane.number) else { return mode }
-        return "\(mode)•"
+        let queuedCount = store.queuedMessageCount(for: number)
+        if queuedCount > 0 {
+            return (queuedCount > 1 ? "Q\(min(queuedCount, 9))" : "QUE", theme.chrome.panelAccent, true)
+        }
+
+        if let activity = store.activity(for: number) {
+            switch activity.state {
+            case .working(let mode):
+                return (mode == .queue ? "QUE" : "RUN", theme.chrome.panelAccent, true)
+            case .accepted(let delivery):
+                return (
+                    delivery == .queuedTurn ? "QUE" : "RUN",
+                    theme.chrome.panelAccent,
+                    true
+                )
+            case .receiving:
+                return ("RX", theme.chrome.panelAccent, true)
+            case .failed:
+                return ("ERR", Color(red: 0.92, green: 0.42, blue: 0.30), false)
+            }
+        }
+
+        if store.isTurnInFlight(on: number) {
+            return ("RUN", theme.chrome.panelAccent, true)
+        }
+
+        if store.latestTurn(for: number) != nil {
+            return ("RX", theme.chrome.panelInkFaint.opacity(0.78), false)
+        }
+
+        return ("RDY", theme.chrome.panelInkFaint.opacity(0.50), false)
     }
 
     private func lanePickerAccessibilityLabel(
@@ -844,16 +878,10 @@ private struct CodexCommandConsole: View {
     private var taskIdentity: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                if let lane = store.activeLane {
-                    Text(lane.number < 10 ? "LANE 0\(lane.number)" : "LANE \(lane.number)")
-                        .foregroundStyle(theme.chrome.panelAccent)
-
-                    Text(lane.task.activityLabel().uppercased())
-                        .foregroundStyle(theme.chrome.panelInkFaint)
-                } else {
-                    Text("NO ACTIVE TASK")
-                        .foregroundStyle(theme.chrome.panelAccent)
-                }
+                Text(store.activeLane?.task.title ?? "Choose a lane")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(theme.chrome.panelInk)
+                    .lineLimit(1)
 
                 Spacer(minLength: 6)
 
@@ -861,42 +889,29 @@ private struct CodexCommandConsole: View {
                     laneModeSelector(lane)
                 }
             }
-            .font(.system(size: 8, weight: .semibold, design: .monospaced))
-            .tracking(0.9)
-
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(store.activeLane?.task.title ?? "Choose a lane")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(theme.chrome.panelInk)
-                        .lineLimit(2)
-
-                    if let task = store.activeLane?.task {
-                        HStack(spacing: 6) {
-                            Label(task.projectName, systemImage: "folder")
-                            if let branch = task.branchName {
-                                Text("/")
-                                    .foregroundStyle(theme.chrome.panelInkFaint.opacity(0.55))
-                                Label(branch, systemImage: "arrow.triangle.branch")
-                            }
-                        }
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundStyle(theme.chrome.panelInkFaint)
-                        .lineLimit(1)
-
-                        Text(task.compactPath)
-                            .font(.system(size: 8, weight: .regular, design: .monospaced))
-                            .foregroundStyle(theme.chrome.panelInkFaint.opacity(0.70))
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    } else {
-                        Text("Tap an empty lane below to map an exact Codex task.")
-                            .font(.system(size: 9, weight: .regular, design: .monospaced))
-                            .foregroundStyle(theme.chrome.panelInkFaint)
-                            .lineLimit(2)
+            if let task = store.activeLane?.task {
+                HStack(spacing: 6) {
+                    Label(task.projectName, systemImage: "folder")
+                    if let branch = task.branchName {
+                        Text("/")
+                            .foregroundStyle(theme.chrome.panelInkFaint.opacity(0.55))
+                        Label(branch, systemImage: "arrow.triangle.branch")
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .foregroundStyle(theme.chrome.panelInkFaint)
+                .lineLimit(1)
+
+                Text(task.compactPath)
+                    .font(.system(size: 8, weight: .regular, design: .monospaced))
+                    .foregroundStyle(theme.chrome.panelInkFaint.opacity(0.70))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            } else {
+                Text("Tap an empty lane above to map an exact Codex task.")
+                    .font(.system(size: 9, weight: .regular, design: .monospaced))
+                    .foregroundStyle(theme.chrome.panelInkFaint)
+                    .lineLimit(2)
             }
 
             conversationPreview

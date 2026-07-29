@@ -200,7 +200,7 @@ struct DeckMirrorNext: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             Text("TALKIE")
                 .talkieType(.wordmark)
                 .foregroundStyle(theme.colors.textPrimary.opacity(0.78))
@@ -231,8 +231,8 @@ struct DeckMirrorNext: View {
         }
         .padding(.leading, 20)
         .padding(.trailing, 8)
-        .padding(.top, 10)
-        .padding(.bottom, 6)
+        .padding(.top, 4)
+        .padding(.bottom, 0)
     }
 
     private var deckMenu: some View {
@@ -262,7 +262,6 @@ struct DeckMirrorNext: View {
             }
         } label: {
             headerSelectorLabel(
-                eyebrow: "DECK",
                 title: selectedSurfaceTitle,
                 icon: showingCodexDeck ? "terminal" : "square.grid.2x2",
                 tint: showingCodexDeck ? theme.chrome.accent : theme.colors.textSecondary
@@ -302,7 +301,6 @@ struct DeckMirrorNext: View {
             }
         } label: {
             headerSelectorLabel(
-                eyebrow: switchingPairedMacID == nil ? "HOST" : "CONNECTING",
                 title: activeHostTitle,
                 icon: "desktopcomputer",
                 tint: bridgeManager.status == .connected
@@ -320,29 +318,28 @@ struct DeckMirrorNext: View {
     }
 
     private func headerSelectorLabel(
-        eyebrow: String,
         title: String,
         icon: String,
         tint: Color
     ) -> some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: 10, weight: .medium))
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text(eyebrow)
-                    .font(.system(size: 7, weight: .medium, design: .monospaced))
-                    .tracking(1)
-                    .foregroundStyle(theme.colors.textTertiary.opacity(0.72))
-                Text(title)
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .tracking(0.65)
-                    .lineLimit(1)
-            }
+            Text(title)
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .tracking(0.65)
+                .lineLimit(1)
 
             Image(systemName: "chevron.down")
                 .font(.system(size: 7, weight: .semibold))
                 .foregroundStyle(theme.colors.textTertiary.opacity(0.72))
+
+            if switchingPairedMacID != nil, icon == "desktopcomputer" {
+                ProgressView()
+                    .controlSize(.mini)
+                    .tint(tint)
+            }
         }
         .foregroundStyle(tint)
         .frame(minHeight: 44)
