@@ -38,15 +38,18 @@ struct CodexCommandDeckSurface: View {
 
             keybed
                 .layoutPriority(60)
-
-            if voicePlayback.isVoicePlaybackActive {
-                voicePlaybackRail
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
         }
         .padding(.top, 0)
         .padding(.bottom, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .bottom) {
+            if voicePlayback.isVoicePlaybackActive {
+                voicePlaybackRail
+                    .offset(y: 10)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(1)
+            }
+        }
         .animation(.easeInOut(duration: 0.2), value: voicePlayback.isVoicePlaybackActive)
         .sheet(isPresented: $showingMapper) {
             CodexLaneMapperView()
@@ -756,27 +759,30 @@ private struct VoicePlaybackWaveform: View {
     let isPlaying: Bool
     let accent: Color
     let inactive: Color
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 0.12, paused: !isPlaying)) { timeline in
+        TimelineView(.animation(minimumInterval: 1 / 15, paused: !isPlaying || reduceMotion)) { timeline in
             GeometryReader { geometry in
                 let count = max(1, samples.count)
                 let spacing: CGFloat = 1.5
                 let width = max(1, (geometry.size.width - (CGFloat(count - 1) * spacing)) / CGFloat(count))
                 let playhead = min(1, max(0, progress))
-                let pulse = 0.92 + (0.08 * sin(timeline.date.timeIntervalSinceReferenceDate * 8))
+                let phase = timeline.date.timeIntervalSinceReferenceDate * 3.8
 
                 HStack(spacing: spacing) {
                     ForEach(samples.enumerated(), id: \.offset) { index, sample in
                         let position = Double(index + 1) / Double(count)
                         let isPassed = position <= playhead
-                        let isAtPlayhead = abs(position - playhead) < (2 / Double(count))
+                        let motion = isPlaying && !reduceMotion
+                            ? 0.95 + (0.05 * sin(phase + (Double(index) * 0.52)))
+                            : 1
 
                         Capsule()
                             .fill(isPassed ? accent : inactive)
                             .frame(
                                 width: width,
-                                height: max(2, geometry.size.height * sample * (isAtPlayhead && isPlaying ? pulse : 1))
+                                height: max(1.5, geometry.size.height * sample * motion)
                             )
                     }
                 }
