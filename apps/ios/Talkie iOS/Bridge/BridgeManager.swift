@@ -971,6 +971,85 @@ final class BridgeManager {
         return response
     }
 
+    // MARK: - Codex exact-task lanes
+
+    /// Brings the bridge up if needed, or throws. Shared by the Codex calls so
+    /// each one fails the same way when the Mac is unreachable — the deck must
+    /// never silently degrade a Codex request into a no-op.
+    private func requireConnectedBridge() async throws {
+        guard isPaired else {
+            throw BridgeError.notConfigured
+        }
+
+        if status != .connected {
+            await connect()
+        }
+
+        guard status == .connected else {
+            throw BridgeError.connectionFailed
+        }
+    }
+
+    /// Recent Codex Desktop tasks, for mapping onto lanes.
+    func codexRecentTasks(limit: Int = 25) async throws -> [CodexTaskSummary] {
+        try await requireConnectedBridge()
+        let tasks = try await client.codexTasks(limit: limit)
+        lastSuccessfulContactAt = .now
+        updateActiveMacContactDate(.now)
+        return tasks
+    }
+
+    /// Confirms Codex Desktop still owns this exact task. Throwing means the
+    /// lane must not be shown as locked.
+    func codexValidateTask(taskId: String) async throws -> CodexValidatedTask {
+        try await requireConnectedBridge()
+        let task = try await client.codexValidate(taskId: taskId)
+        lastSuccessfulContactAt = .now
+        updateActiveMacContactDate(.now)
+        return task
+    }
+
+    /// Sends an instruction into one exact Codex task and waits for the turn.
+    func codexSubmit(
+        taskId: String,
+        text: String,
+        mode: CodexMessageMode = .auto
+    ) async throws -> CodexSubmitResponse {
+        try await requireConnectedBridge()
+        let response = try await client.codexSubmit(taskId: taskId, text: text, mode: mode)
+        lastSuccessfulContactAt = .now
+        updateActiveMacContactDate(.now)
+        return response
+    }
+
+    func codexStartTurn(
+        submissionId: UUID,
+        taskId: String,
+        taskTitle: String,
+        text: String,
+        mode: CodexMessageMode
+    ) async throws -> CodexTurnJob {
+        try await requireConnectedBridge()
+        let job = try await client.codexStartTurn(
+            submissionId: submissionId,
+            taskId: taskId,
+            taskTitle: taskTitle,
+            text: text,
+            mode: mode
+        )
+        lastSuccessfulContactAt = .now
+        updateActiveMacContactDate(.now)
+        return job
+    }
+
+    func codexTurnStatus(jobId: String) async throws -> CodexTurnJob {
+        try await requireConnectedBridge()
+        let job = try await client.codexTurnStatus(jobId: jobId)
+        lastSuccessfulContactAt = .now
+        updateActiveMacContactDate(.now)
+        return job
+    }
+
     func activateCompanionApp(_ app: CompanionAppSwitcherApp) async throws -> CompanionTriggerResponse {
         guard isPaired else {
             throw BridgeError.notConfigured

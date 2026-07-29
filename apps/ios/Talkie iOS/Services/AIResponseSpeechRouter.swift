@@ -23,16 +23,34 @@ final class AIResponseSpeechRouter {
         let settings = TalkieAppSettings.shared
         let route = AIResponseSpeechRoute(rawValue: settings.aiVoiceOutputRoute) ?? .phone
 
+        AppLogger.ai.info(
+            "AI speech start route=\(route.rawValue) provider=\(settings.ttsProvider) "
+                + "mode=\(settings.ttsMode) chars=\(text.count)"
+        )
+
         guard route != .silent else {
+            AppLogger.ai.info("AI speech skipped route=silent")
             return AIResponseSpeechResult(didSpeak: false, route: route)
         }
 
+        // Interrupt anything still being read aloud. Without this a new
+        // response would overlap the tail of the previous one.
+        WalkieFX.shared.stopVoicePlayback()
+
         do {
             let audioData = try await synthesizeSpeech(text, provider: provider, settings: settings)
+            AppLogger.ai.info("AI speech synthesized bytes=\(audioData.count) route=\(route.rawValue)")
 
             switch route {
             case .phone:
                 let playbackRate = Float(settings.ttsPlaybackRate)
+
+                let session = AVAudioSession.sharedInstance()
+                let outputs = session.currentRoute.outputs.map(\.portType.rawValue).joined(separator: ",")
+                AppLogger.ai.info(
+                    "AI speech phone playback rate=\(playbackRate) category=\(session.category.rawValue) "
+                        + "outputs=\(outputs.isEmpty ? "none" : outputs)"
+                )
 
                 // Walkie bookend: opening kerchunk -> speech -> tail + closing
                 // kerchunk. Synthesized at runtime; failures are silent so the
@@ -40,14 +58,18 @@ final class AIResponseSpeechRouter {
                 WalkieFX.shared.playOpeningClick()
                 try? await Task.sleep(for: .milliseconds(60))
 
-                await WalkieFX.shared.playVoiceAudio(data: audioData, playbackRate: playbackRate)
+                let speechDuration = await WalkieFX.shared.playVoiceAudio(
+                    data: audioData,
+                    playbackRate: playbackRate
+                )
 
-                let rawDuration = aiAudioDuration(of: audioData)
-                let effectiveRate = playbackRate > 0 ? Double(playbackRate) : 1.0
-                let speechDuration = rawDuration / effectiveRate
-                WalkieFX.shared.playClosingSequence(after: speechDuration)
+                AppLogger.ai.info("AI speech phone scheduled duration=\(speechDuration)")
 
-                return AIResponseSpeechResult(didSpeak: true, route: route)
+                return AIResponseSpeechResult(
+                    didSpeak: true,
+                    route: route,
+                    speechDuration: speechDuration
+                )
 
             case .watch:
                 let didSend = WatchSessionManager.shared.sendAIAudio(
@@ -55,14 +77,25 @@ final class AIResponseSpeechRouter {
                     audioData: audioData,
                     preview: preview ?? text
                 )
-                return AIResponseSpeechResult(didSpeak: didSend, route: route)
+                return AIResponseSpeechResult(
+                    didSpeak: didSend,
+                    route: route,
+                    failure: didSend ? nil : "The Watch did not accept the audio."
+                )
 
             case .silent:
                 return AIResponseSpeechResult(didSpeak: false, route: route)
             }
         } catch {
             AppLogger.ai.warning("AI speech skipped: \(error.localizedDescription)")
-            return AIResponseSpeechResult(didSpeak: false, route: route)
+            // Reported, not thrown: callers narrate the result of work that
+            // already succeeded, so a speech failure must stay separable from
+            // the success of that work.
+            return AIResponseSpeechResult(
+                didSpeak: false,
+                route: route,
+                failure: error.localizedDescription
+            )
         }
     }
 
@@ -93,19 +126,9 @@ final class AIResponseSpeechRouter {
         return try await TTSService.synthesizeConfigured(text: text, settings: settings)
     }
 
-    /// Best-effort duration probe for the TTS audio payload. Returns 0 if the
-    /// data cannot be parsed; callers should treat that as a no-op for any
-    /// time-based scheduling.
-    private func aiAudioDuration(of data: Data) -> TimeInterval {
-        if let probe = try? AVAudioPlayer(data: data) {
-            let duration = probe.duration
-            return duration.isFinite ? duration : 0
-        }
-        return 0
-    }
 }
 
-enum AIResponseSpeechRoute: String {
+enum AIResponseSpeechRoute: String, Equatable, Sendable {
     case phone
     case watch
     case silent
@@ -125,4 +148,22 @@ enum AIResponseSpeechRoute: String {
 struct AIResponseSpeechResult {
     let didSpeak: Bool
     let route: AIResponseSpeechRoute
+    /// Why narration did not happen, when it was attempted and failed.
+    /// `nil` for both success and a deliberately silent route.
+    let failure: String?
+    /// Best-effort length of the spoken audio, so callers can hold a
+    /// "speaking" state for as long as speech is actually playing.
+    let speechDuration: TimeInterval
+
+    init(
+        didSpeak: Bool,
+        route: AIResponseSpeechRoute,
+        failure: String? = nil,
+        speechDuration: TimeInterval = 0
+    ) {
+        self.didSpeak = didSpeak
+        self.route = route
+        self.failure = failure
+        self.speechDuration = speechDuration
+    }
 }

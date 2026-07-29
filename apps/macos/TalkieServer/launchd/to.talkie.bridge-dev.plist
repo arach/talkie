@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.talkie.bridge-dev</string>
+    <string>to.talkie.bridge-dev</string>
 
     <key>ProgramArguments</key>
     <array>

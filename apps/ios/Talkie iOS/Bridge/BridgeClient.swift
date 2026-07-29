@@ -65,6 +65,13 @@ actor BridgeClient {
         path != "/pair"
     }
 
+    /// HTTP success is the full 2xx class. In particular, asynchronous bridge
+    /// routes return 202 Accepted with a decodable receipt while work continues
+    /// on the Mac.
+    static func accepts(statusCode: Int) -> Bool {
+        (200..<300).contains(statusCode)
+    }
+
     /// Whether stream frames should be sealed/opened — gated on the server
     /// advertising per-frame stream support, or on the per-Mac pin. Old servers
     /// that never advertised encStream → plaintext streams, unchanged (fully
@@ -275,6 +282,81 @@ actor BridgeClient {
     func companionTrigger(shortcutId: String) async throws -> CompanionTriggerResponse {
         let data = try await post("/companion/trigger", body: CompanionTriggerRequest(shortcutId: shortcutId))
         return try JSONDecoder().decode(CompanionTriggerResponse.self, from: data)
+    }
+
+    // MARK: - Codex exact-task lanes
+
+    /// Recent Codex Desktop tasks for the lane mapper.
+    func codexTasks(limit: Int = 25) async throws -> [CodexTaskSummary] {
+        let bounded = max(1, min(limit, 100))
+        let data = try await get("/codex/tasks?limit=\(bounded)")
+        return try JSONDecoder().decode(CodexTasksResponse.self, from: data).tasks
+    }
+
+    /// Confirms Codex Desktop still owns this exact task.
+    ///
+    /// Throws when ownership cannot be confirmed — callers must treat a throw as
+    /// "do not show this lane as locked" rather than retrying into a guess.
+    func codexValidate(taskId: String) async throws -> CodexValidatedTask {
+        struct Request: Encodable { let taskId: String }
+        let data = try await post("/codex/validate", body: Request(taskId: taskId))
+        return try JSONDecoder().decode(CodexValidateResponse.self, from: data).task
+    }
+
+    /// Delivers an instruction into one exact Codex task and waits for the turn.
+    ///
+    /// Queue receives two turn ceilings because it can wait for an active turn
+    /// before its own turn begins. Steer normally returns immediately.
+    func codexSubmit(
+        taskId: String,
+        text: String,
+        mode: CodexMessageMode = .auto
+    ) async throws -> CodexSubmitResponse {
+        struct Request: Encodable {
+            let taskId: String
+            let text: String
+            let mode: CodexMessageMode
+        }
+        let data = try await post(
+            "/codex/submit",
+            body: Request(taskId: taskId, text: text, mode: mode),
+            timeout: mode == .queue ? 3_660 : 1_860
+        )
+        return try JSONDecoder().decode(CodexSubmitResponse.self, from: data)
+    }
+
+    /// Hands a Codex turn to the Mac and returns a receipt without waiting for completion.
+    func codexStartTurn(
+        submissionId: UUID,
+        taskId: String,
+        taskTitle: String,
+        text: String,
+        mode: CodexMessageMode
+    ) async throws -> CodexTurnJob {
+        struct Request: Encodable {
+            let submissionId: UUID
+            let taskId: String
+            let taskTitle: String
+            let text: String
+            let mode: CodexMessageMode
+        }
+        let data = try await post(
+            "/codex/turns",
+            body: Request(
+                submissionId: submissionId,
+                taskId: taskId,
+                taskTitle: taskTitle,
+                text: text,
+                mode: mode
+            )
+        )
+        return try JSONDecoder().decode(CodexTurnJobResponse.self, from: data).job
+    }
+
+    /// Reads a host-owned Codex turn receipt, including public interim updates.
+    func codexTurnStatus(jobId: String) async throws -> CodexTurnJob {
+        let data = try await get("/codex/turns/\(jobId)")
+        return try JSONDecoder().decode(CodexTurnJobResponse.self, from: data).job
     }
 
     func companionActivateApp(
@@ -711,7 +793,7 @@ actor BridgeClient {
             throw BridgeError.invalidResponse
         }
 
-        guard httpResponse.statusCode == 200 else {
+        guard Self.accepts(statusCode: httpResponse.statusCode) else {
             throw BridgeError.httpError(httpResponse.statusCode, detail: bridgeErrorDetail(from: data))
         }
 
@@ -754,7 +836,7 @@ actor BridgeClient {
             }
         }
 
-        guard httpResponse.statusCode == 200 else {
+        guard Self.accepts(statusCode: httpResponse.statusCode) else {
             throw BridgeError.httpError(httpResponse.statusCode, detail: bridgeErrorDetail(from: data))
         }
 
@@ -801,7 +883,7 @@ actor BridgeClient {
             }
         }
 
-        guard httpResponse.statusCode == 200 else {
+        guard Self.accepts(statusCode: httpResponse.statusCode) else {
             throw BridgeError.httpError(httpResponse.statusCode, detail: bridgeErrorDetail(from: data))
         }
 
@@ -939,6 +1021,65 @@ struct DeviceSetupStateRequest: Codable, Equatable {
 
 struct CompanionTriggerRequest: Codable {
     let shortcutId: String
+}
+
+// MARK: - Codex lane payloads
+
+struct CodexTasksResponse: Codable {
+    let tasks: [CodexTaskSummary]
+}
+
+/// The subset of a task the Mac re-confirms at validation time. Ownership is
+/// what is being asserted here, so only the identifying fields come back.
+struct CodexValidatedTask: Codable, Equatable {
+    let id: String
+    let title: String?
+    let cwd: String?
+}
+
+struct CodexValidateResponse: Codable {
+    let task: CodexValidatedTask
+}
+
+struct CodexSubmitResponse: Codable {
+    let taskId: String
+    let turnId: String?
+    /// Steering is acknowledged immediately; the original submit owns the
+    /// active turn's eventual response.
+    let response: String?
+    /// Raw delivery discriminator; decoded into `CodexTurnDelivery` by the store
+    /// so an unrecognized value fails loudly instead of being coerced.
+    let delivery: String
+}
+
+struct CodexProgressUpdate: Codable, Equatable, Sendable, Identifiable {
+    let id: String
+    let kind: String
+    let text: String
+    let timestamp: String?
+}
+
+struct CodexTurnJob: Codable, Equatable, Sendable {
+    let id: String
+    let submissionId: String
+    let taskId: String
+    let taskTitle: String
+    let status: String
+    let mode: CodexMessageMode
+    let createdAt: String
+    let updatedAt: String
+    let turnId: String?
+    let delivery: String?
+    let response: String?
+    let updates: [CodexProgressUpdate]?
+    let error: String?
+    let code: String?
+    let hint: String?
+    let retryable: Bool?
+}
+
+struct CodexTurnJobResponse: Codable {
+    let job: CodexTurnJob
 }
 
 struct CompanionTriggerResponse: Codable {

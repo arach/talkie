@@ -55,6 +55,13 @@ import {
   companionTrackpadRoute,
   companionPasteImageRoute,
 } from "./routes/companion";
+import {
+  codexTasksRoute,
+  codexValidateRoute,
+  codexSubmitRoute,
+  codexTurnStartRoute,
+  codexTurnStatusRoute,
+} from "./routes/codex";
 import { companionEventsSocket } from "./routes/companion-events";
 import { companionScreenStreamSocket } from "./routes/screen-stream";
 import { terminalAccessRoute } from "./routes/terminal";
@@ -473,6 +480,22 @@ export const bridge = new Elysia({ name: "bridge" })
   })
   .ws("/companion/events", companionEventsSocket)
   .ws("/companion/screen", companionScreenStreamSocket)
+
+  // ===== Codex exact-task lanes =====
+  .get("/codex/tasks", ({ query }) => codexTasksRoute(query.limit))
+  .post("/codex/validate", async ({ request }) => {
+    const body = await readJsonBody(request);
+    return codexValidateRoute(body);
+  })
+  .post("/codex/submit", async ({ request }) => {
+    const body = await readJsonBody(request);
+    return codexSubmitRoute(body);
+  })
+  .post("/codex/turns", async ({ request }) => {
+    const body = await readJsonBody(request);
+    return codexTurnStartRoute(body);
+  })
+  .get("/codex/turns/:id", ({ params }) => codexTurnStatusRoute(params.id))
 
   // ===== Terminal =====
   .post("/terminal/access", () => terminalAccessRoute())

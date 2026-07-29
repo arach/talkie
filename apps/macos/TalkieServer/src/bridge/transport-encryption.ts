@@ -29,6 +29,28 @@ interface Envelope {
   ciphertext: string;
 }
 
+/** Successful HTTP responses carry application data and must honor encryption negotiation. */
+export function isSuccessfulResponseStatus(status: number): boolean {
+  return status >= 200 && status < 300;
+}
+
+/** Seal a successful response body while preserving its HTTP status. */
+export async function sealSuccessfulResponse(
+  bytes: Uint8Array,
+  status: number,
+  key: CryptoKey
+): Promise<Response> {
+  const ciphertext = await sealBytes(bytes, key);
+  const envelope: Envelope = { enc: 2, ciphertext };
+  return new Response(JSON.stringify(envelope), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      "X-Enc": ENC_VERSION,
+    },
+  });
+}
+
 /** Whether a request opted into transport encryption and is eligible (not a bootstrap path). */
 export function isEncryptedRequest(request: Request): boolean {
   if (request.headers.get(ENC_HEADER) !== ENC_VERSION) return false;
@@ -193,7 +215,7 @@ async function responseToBytes(
 }
 
 /**
- * Encrypt an outgoing response when the request opted in. Only successful (200)
+ * Encrypt an outgoing response when the request opted in. All successful (2xx)
  * responses are sealed; error bodies (e.g. 401 carrying serverTime) stay plaintext
  * so the client can always read them. Returns a new Response, or `undefined` to
  * leave the response unchanged.
@@ -217,15 +239,7 @@ export async function encryptResponse(
 
   const serialized = await responseToBytes(response, fallbackStatus);
   if (!serialized) return undefined;
-  if (serialized.status !== 200) return undefined; // never seal error responses
+  if (!isSuccessfulResponseStatus(serialized.status)) return undefined;
 
-  const ciphertext = await sealBytes(serialized.bytes, key);
-  const envelope: Envelope = { enc: 2, ciphertext };
-  return new Response(JSON.stringify(envelope), {
-    status: 200,
-    headers: {
-      "Content-Type": "application/json",
-      "X-Enc": ENC_VERSION,
-    },
-  });
+  return sealSuccessfulResponse(serialized.bytes, serialized.status, key);
 }

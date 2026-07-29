@@ -28,6 +28,7 @@ export const DEVICES_FILE = `${CONFIG_DIR}/devices.json`;
 export const MAPPINGS_FILE = `${CONFIG_DIR}/mappings.json`;
 export const LOCAL_AUTH_TOKEN_FILE = `${CONFIG_DIR}/.local-auth-token`;
 export const SECURITY_EVENTS_FILE = `${CONFIG_DIR}/security-events.json`;
+export const CODEX_TURN_JOBS_FILE = `${CONFIG_DIR}/.codex-turn-jobs.json`;
 
 // Ensure directories exist
 export async function ensureDirectories(): Promise<void> {

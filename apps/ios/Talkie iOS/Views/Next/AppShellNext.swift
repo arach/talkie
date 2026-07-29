@@ -111,15 +111,20 @@ struct AppShellNext<Content: View>: View {
             // One-time "HOLD TO TALK" caption - rides just above the pivot
             // button's bottom-center slot the first time controls are summoned,
             // then never again (persisted via hasSeenWalkieHint).
-            if showWalkieHint && !router.isEditorKeyboardUp {
+            if router.surface != .deck && showWalkieHint && !router.isEditorKeyboardUp {
                 WalkieHintCaption()
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
 
-            VoicePivotButton()
-                .opacity(router.isEditorKeyboardUp ? 0 : 1)
-                .allowsHitTesting(!router.isEditorKeyboardUp)
-                .animation(.easeOut(duration: 0.2), value: router.isEditorKeyboardUp)
+            // The Codex deck owns its exact-task push-to-talk control. Keeping
+            // the global pivot here would cover two keycaps and offer a second,
+            // generic voice destination beside the explicitly selected task.
+            if router.surface != .deck {
+                VoicePivotButton()
+                    .opacity(router.isEditorKeyboardUp ? 0 : 1)
+                    .allowsHitTesting(!router.isEditorKeyboardUp)
+                    .animation(.easeOut(duration: 0.2), value: router.isEditorKeyboardUp)
+            }
         }
         .environmentObject(chrome)
         .environmentObject(router)
