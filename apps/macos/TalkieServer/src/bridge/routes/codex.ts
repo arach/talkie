@@ -731,7 +731,9 @@ const turnJobs = new CodexTurnJobManager(
   messageCoordinator,
   readCodexActivity,
   notifyCodexCompletion,
-  CODEX_TURN_JOBS_FILE,
+  // `bun test` imports this route module to exercise the coordinator and job
+  // manager. Never let that import restore or mutate the live device receipts.
+  process.env.NODE_ENV === "test" ? undefined : CODEX_TURN_JOBS_FILE,
 );
 
 /** Maps a bridge failure onto an HTTP response, preserving code + recovery hint. */
