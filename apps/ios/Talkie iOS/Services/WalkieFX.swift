@@ -9,10 +9,16 @@
 
 import Foundation
 @preconcurrency import AVFoundation
+import Observation
 
 @MainActor
+@Observable
 final class WalkieFX {
     static let shared = WalkieFX()
+
+    private(set) var voicePlaybackState: VoicePlaybackState = .idle
+    private(set) var voicePlaybackProgress: Double = 0
+    private(set) var voiceWaveform: [Double] = []
 
     private let sampleRate: Double = 44100
     private let engine = AVAudioEngine()
@@ -27,6 +33,11 @@ final class WalkieFX {
     private var engineStarted = false
     private var kerchunkBuffer: AVAudioPCMBuffer?
     private var tailBuffer: AVAudioPCMBuffer?
+    private var voicePlaybackDuration: TimeInterval = 0
+    private var voicePlaybackElapsed: TimeInterval = 0
+    private var voicePlaybackStartedAt: Date?
+    private var voiceProgressTask: Task<Void, Never>?
+    private var isUsingFallbackVoicePlayback = false
 
     private init() {
         // Mono float32 at 44.1kHz. Connecting through the main mixer lets
@@ -86,18 +97,17 @@ final class WalkieFX {
     }
 
     /// Plays a chunk of TTS audio data through a fixed radio-voice filter
-    /// chain (high-pass + low-pass + presence peak). Returns immediately;
-    /// the caller is responsible for its own duration-based scheduling.
+    /// chain (high-pass + low-pass + presence peak). Returns its effective
+    /// duration while this player owns progress, pause, resume, and completion.
     /// Falls back to plain `AudioPlayerManager` playback if anything fails.
-    func playVoiceAudio(data: Data, playbackRate: Float = 1.0) async {
+    @discardableResult
+    func playVoiceAudio(data: Data, playbackRate: Float = 1.0) async -> TimeInterval {
         voiceVarispeed.rate = playbackRate > 0 ? playbackRate : 1.0
         AppLogger.ai.info("WalkieFX voice requested bytes=\(data.count) rate=\(voiceVarispeed.rate)")
 
         guard ensureRunning() else {
             AppLogger.ai.warning("WalkieFX voice engine unavailable; using unfiltered playback")
-            fallbackPlayer.setPlaybackRate(playbackRate)
-            fallbackPlayer.playAudio(data: data)
-            return
+            return playFallbackVoiceAudio(data: data, playbackRate: playbackRate)
         }
 
         let tempURL = FileManager.default.temporaryDirectory
@@ -107,9 +117,7 @@ final class WalkieFX {
             try data.write(to: tempURL, options: .atomic)
         } catch {
             AppLogger.ai.warning("WalkieFX failed to stage TTS data: \(error.localizedDescription)")
-            fallbackPlayer.setPlaybackRate(playbackRate)
-            fallbackPlayer.playAudio(data: data)
-            return
+            return playFallbackVoiceAudio(data: data, playbackRate: playbackRate)
         }
 
         defer { try? FileManager.default.removeItem(at: tempURL) }
@@ -134,6 +142,11 @@ final class WalkieFX {
             try file.read(into: decodedBuffer)
 
             let playbackBuffer = try makeVoicePlaybackBuffer(from: decodedBuffer)
+            let duration = effectiveDuration(
+                frameLength: playbackBuffer.frameLength,
+                sampleRate: playbackBuffer.format.sampleRate,
+                playbackRate: voiceVarispeed.rate
+            )
             AppLogger.ai.info(
                 "WalkieFX voice ready frames=\(playbackBuffer.frameLength) "
                     + "rate=\(playbackBuffer.format.sampleRate) "
@@ -143,16 +156,65 @@ final class WalkieFX {
             if voicePlayer.isPlaying {
                 voicePlayer.stop()
             }
+            isUsingFallbackVoicePlayback = false
             voicePlayer.scheduleBuffer(playbackBuffer, at: nil, options: [], completionHandler: nil)
             if !voicePlayer.isPlaying {
                 voicePlayer.play()
             }
+            beginVoicePlayback(
+                duration: duration,
+                waveform: waveformSamples(from: playbackBuffer)
+            )
             AppLogger.ai.info("WalkieFX voice scheduled playing=\(voicePlayer.isPlaying)")
+            return duration
         } catch {
             AppLogger.ai.warning("WalkieFX voice decode failed: \(error.localizedDescription); falling back to plain playback")
-            fallbackPlayer.setPlaybackRate(playbackRate)
-            fallbackPlayer.playAudio(data: data)
+            return playFallbackVoiceAudio(data: data, playbackRate: playbackRate)
         }
+    }
+
+    var isVoicePlaybackActive: Bool {
+        voicePlaybackState != .idle
+    }
+
+    func toggleVoicePlayback() {
+        switch voicePlaybackState {
+        case .idle:
+            return
+        case .playing:
+            pauseVoicePlayback()
+        case .paused:
+            resumeVoicePlayback()
+        }
+    }
+
+    func pauseVoicePlayback() {
+        guard voicePlaybackState == .playing else { return }
+        updateVoicePlaybackProgress()
+        voicePlaybackElapsed = voicePlaybackProgress * voicePlaybackDuration
+        voicePlaybackStartedAt = nil
+        voiceProgressTask?.cancel()
+        voiceProgressTask = nil
+
+        if isUsingFallbackVoicePlayback {
+            fallbackPlayer.pausePlayback()
+        } else {
+            voicePlayer.pause()
+        }
+        voicePlaybackState = .paused
+    }
+
+    func resumeVoicePlayback() {
+        guard voicePlaybackState == .paused, ensureRunning() else { return }
+
+        if isUsingFallbackVoicePlayback {
+            fallbackPlayer.resumePlayback()
+        } else {
+            voicePlayer.play()
+        }
+        voicePlaybackStartedAt = Date()
+        voicePlaybackState = .playing
+        startVoiceProgressUpdates()
     }
 
     /// Converts provider-specific TTS output into the exact format used by the
@@ -224,13 +286,124 @@ final class WalkieFX {
     /// the closing squelch/kerchunk are scheduled ahead of time, so without this
     /// they would fire into the middle of the next utterance.
     func stopVoicePlayback() {
-        if voicePlayer.isPlaying {
-            voicePlayer.stop()
-        }
-        if player.isPlaying {
-            player.stop()
-        }
+        voiceProgressTask?.cancel()
+        voiceProgressTask = nil
+        voicePlaybackState = .idle
+        voicePlaybackProgress = 0
+        voicePlaybackDuration = 0
+        voicePlaybackElapsed = 0
+        voicePlaybackStartedAt = nil
+        isUsingFallbackVoicePlayback = false
+        voicePlayer.stop()
+        player.stop()
         fallbackPlayer.stopPlayback()
+    }
+
+    private func playFallbackVoiceAudio(data: Data, playbackRate: Float) -> TimeInterval {
+        isUsingFallbackVoicePlayback = true
+        fallbackPlayer.setPlaybackRate(playbackRate)
+        fallbackPlayer.playAudio(data: data)
+        let duration = effectiveDuration(
+            duration: fallbackPlayer.duration,
+            playbackRate: fallbackPlayer.playbackRate
+        )
+        beginVoicePlayback(duration: duration, waveform: fallbackWaveform)
+        return duration
+    }
+
+    private func beginVoicePlayback(duration: TimeInterval, waveform: [Double]) {
+        voiceProgressTask?.cancel()
+        voicePlaybackDuration = max(0, duration)
+        voicePlaybackElapsed = 0
+        voicePlaybackStartedAt = Date()
+        voicePlaybackProgress = 0
+        voiceWaveform = waveform
+        voicePlaybackState = .playing
+        startVoiceProgressUpdates()
+    }
+
+    private func startVoiceProgressUpdates() {
+        voiceProgressTask?.cancel()
+        voiceProgressTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(60))
+                guard !Task.isCancelled, let self else { return }
+                guard self.voicePlaybackState == .playing else { return }
+                self.updateVoicePlaybackProgress()
+                if self.voicePlaybackProgress >= 1 {
+                    self.finishVoicePlayback()
+                    return
+                }
+            }
+        }
+    }
+
+    private func updateVoicePlaybackProgress() {
+        guard voicePlaybackDuration > 0 else { return }
+        let runningElapsed = voicePlaybackStartedAt.map { Date().timeIntervalSince($0) } ?? 0
+        voicePlaybackProgress = min(1, max(0, (voicePlaybackElapsed + runningElapsed) / voicePlaybackDuration))
+    }
+
+    private func finishVoicePlayback() {
+        voiceProgressTask?.cancel()
+        voiceProgressTask = nil
+        voicePlaybackProgress = 1
+        voicePlaybackState = .idle
+        voicePlaybackDuration = 0
+        voicePlaybackElapsed = 0
+        voicePlaybackStartedAt = nil
+        playClosingSequence(after: 0)
+    }
+
+    private func effectiveDuration(
+        frameLength: AVAudioFrameCount,
+        sampleRate: Double,
+        playbackRate: Float
+    ) -> TimeInterval {
+        guard sampleRate > 0 else { return 0 }
+        return effectiveDuration(
+            duration: Double(frameLength) / sampleRate,
+            playbackRate: playbackRate
+        )
+    }
+
+    private func effectiveDuration(duration: TimeInterval, playbackRate: Float) -> TimeInterval {
+        let rate = playbackRate > 0 ? Double(playbackRate) : 1
+        return duration.isFinite ? duration / rate : 0
+    }
+
+    private func waveformSamples(from buffer: AVAudioPCMBuffer, count: Int = 36) -> [Double] {
+        guard count > 0,
+              let channel = buffer.floatChannelData?[0],
+              buffer.frameLength > 0 else { return fallbackWaveform }
+
+        let frameCount = Int(buffer.frameLength)
+        let binSize = max(1, frameCount / count)
+        var samples: [Double] = []
+        samples.reserveCapacity(count)
+
+        for bin in 0..<count {
+            let start = min(frameCount - 1, bin * binSize)
+            let end = min(frameCount, start + binSize)
+            let strideSize = max(1, (end - start) / 96)
+            var peak: Float = 0
+            var frame = start
+            while frame < end {
+                peak = max(peak, abs(channel[frame]))
+                frame += strideSize
+            }
+            samples.append(Double(peak))
+        }
+
+        let maximum = samples.max() ?? 0
+        guard maximum > 0 else { return fallbackWaveform }
+        return samples.map { min(1, max(0.16, $0 / maximum)) }
+    }
+
+    private var fallbackWaveform: [Double] {
+        [0.24, 0.36, 0.52, 0.30, 0.68, 0.44, 0.78, 0.38, 0.60, 0.88, 0.50, 0.72,
+         0.32, 0.62, 0.84, 0.46, 0.74, 0.40, 0.58, 0.80, 0.36, 0.66, 0.48, 0.76,
+         0.30, 0.56, 0.70, 0.42, 0.82, 0.52, 0.64, 0.34, 0.72, 0.46, 0.60, 0.28]
     }
 
     /// Schedules a squelch tail followed by a closing kerchunk so that the
@@ -364,4 +537,10 @@ final class WalkieFX {
         }
         return buffer
     }
+}
+
+enum VoicePlaybackState: Equatable {
+    case idle
+    case playing
+    case paused
 }

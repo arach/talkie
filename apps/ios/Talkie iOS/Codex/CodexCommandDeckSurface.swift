@@ -22,6 +22,7 @@ struct CodexCommandDeckSurface: View {
     @ObservedObject private var store = CodexLaneStore.shared
     @ObservedObject private var theme = ThemeManager.shared
     @State private var appSettings = TalkieAppSettings.shared
+    @State private var voicePlayback = WalkieFX.shared
     @Namespace private var outputRouteThumbNamespace
     @State private var showingMapper = false
     @State private var showingHistory = false
@@ -37,10 +38,16 @@ struct CodexCommandDeckSurface: View {
 
             keybed
                 .layoutPriority(60)
+
+            if voicePlayback.isVoicePlaybackActive {
+                voicePlaybackRail
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
         .padding(.top, 0)
         .padding(.bottom, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(.easeInOut(duration: 0.2), value: voicePlayback.isVoicePlaybackActive)
         .sheet(isPresented: $showingMapper) {
             CodexLaneMapperView()
         }
@@ -53,6 +60,51 @@ struct CodexCommandDeckSurface: View {
         .sheet(isPresented: $showingStatus) {
             CodexDeckStatusSheet()
         }
+    }
+
+    private var voicePlaybackRail: some View {
+        HStack(spacing: 8) {
+            VoicePlaybackWaveform(
+                samples: voicePlayback.voiceWaveform,
+                progress: voicePlayback.voicePlaybackProgress,
+                isPlaying: voicePlayback.voicePlaybackState == .playing,
+                accent: theme.chrome.accent,
+                inactive: utilityInkFaint.opacity(0.22)
+            )
+
+            Button(action: voicePlayback.toggleVoicePlayback) {
+                Image(systemName: voicePlayback.voicePlaybackState == .paused ? "play.fill" : "pause.fill")
+                    .font(.system(size: 9, weight: .semibold))
+                    .frame(width: 26, height: 26)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(theme.chrome.accent)
+            .accessibilityLabel(voicePlayback.voicePlaybackState == .paused ? "Resume narration" : "Pause narration")
+
+            Button(action: store.interruptNarration) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .semibold))
+                    .frame(width: 26, height: 26)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(utilityInkFaint)
+            .accessibilityLabel("Dismiss narration")
+        }
+        .padding(.leading, 10)
+        .padding(.trailing, 5)
+        .frame(height: 28)
+        .background {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(utilityInk.opacity(colorScheme == .dark ? 0.035 : 0.025))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .strokeBorder(utilityInkFaint.opacity(0.12), lineWidth: theme.chrome.hairlineWidth)
+                }
+        }
+        .padding(.horizontal, 10)
+        .accessibilityElement(children: .contain)
     }
 
     private var keybed: some View {
@@ -696,6 +748,44 @@ struct CodexCommandDeckSurface: View {
         showingMapper = true
     }
 
+}
+
+private struct VoicePlaybackWaveform: View {
+    let samples: [Double]
+    let progress: Double
+    let isPlaying: Bool
+    let accent: Color
+    let inactive: Color
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 0.12, paused: !isPlaying)) { timeline in
+            GeometryReader { geometry in
+                let count = max(1, samples.count)
+                let spacing: CGFloat = 1.5
+                let width = max(1, (geometry.size.width - (CGFloat(count - 1) * spacing)) / CGFloat(count))
+                let playhead = min(1, max(0, progress))
+                let pulse = 0.92 + (0.08 * sin(timeline.date.timeIntervalSinceReferenceDate * 8))
+
+                HStack(spacing: spacing) {
+                    ForEach(samples.enumerated(), id: \.offset) { index, sample in
+                        let position = Double(index + 1) / Double(count)
+                        let isPassed = position <= playhead
+                        let isAtPlayhead = abs(position - playhead) < (2 / Double(count))
+
+                        Capsule()
+                            .fill(isPassed ? accent : inactive)
+                            .frame(
+                                width: width,
+                                height: max(2, geometry.size.height * sample * (isAtPlayhead && isPlaying ? pulse : 1))
+                            )
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 12, maxHeight: 16)
+        .accessibilityHidden(true)
+    }
 }
 
 private struct CodexCommandConsole: View {

@@ -868,11 +868,10 @@ final class CodexLaneStore: ObservableObject {
         // while the response is still being read.
         narrationState = .speaking(laneNumber: record.laneNumber, route: result.route)
         phase = .speaking
-        let duration = result.speechDuration
         speakingTask?.cancel()
         speakingTask = Task { [weak self] in
-            if duration > 0 {
-                try? await Task.sleep(for: .seconds(duration))
+            while WalkieFX.shared.isVoicePlaybackActive, !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(100))
             }
             guard !Task.isCancelled else { return }
             guard let self else { return }
