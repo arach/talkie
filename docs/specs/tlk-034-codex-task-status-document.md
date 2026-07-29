@@ -14,10 +14,10 @@ responsible for trust, loading, navigation, accessibility, and dismissal.
 TalkieServer owns repository inspection and the assembly of a task-scoped HTML
 document.
 
-The Studio study recommends the **Keyfile** treatment. It merges task identity,
-runtime, and repository truth into one high-contrast masthead before moving
-directly into changed files. Small diff hunks can expand without turning the
-sheet into an IDE.
+The Studio study recommends the **Ribbon** treatment. The native navigation bar
+owns the selected task title. The server document therefore opens directly on
+high-contrast repository and runtime telemetry before moving into changed
+files. Small diff hunks can expand without turning the sheet into an IDE.
 
 ## Current system audit
 
@@ -67,15 +67,17 @@ access and belong on the paired Mac.
 
 ## Recommended interaction
 
-Use the Keyfile treatment from the Studio study:
+Use the Ribbon treatment from the Studio study:
 
-1. A native header establishes the trusted task title, loading state, reload,
-   and dismissal.
-2. The document opens with one compact masthead containing lifecycle, title,
-   repository, host, task identity, harness, adapter, route, branch, upstream,
-   base, HEAD, tree state, divergence, and diff totals.
-3. The complete masthead fits within 280 points at a 390-point phone width, so
-   changed files begin within the first viewport.
+1. A single-line native header establishes the trusted task title, back
+   navigation, and dismissal. Long titles truncate visually but retain their
+   full accessibility label.
+2. Native pull-to-refresh owns reload. The sheet does not add a second reload
+   button or explanatory refresh row.
+3. The document opens immediately with repository, host, task identity,
+   harness, adapter, route, branch, upstream, base, HEAD, tree state,
+   divergence, and diff totals. Lifecycle, turn mode, and elapsed time appear
+   later with live activity rather than consuming the masthead.
 4. Changed files remain a concise ledger. Only useful hunks expand through
    native HTML `details` elements.
 5. Recent agent updates and the previous delivery complete the explanation of
@@ -83,10 +85,10 @@ Use the Keyfile treatment from the Studio study:
 6. Bridge health and render time sit in a quiet footer rather than competing
    with task status.
 
-The Ribbon and Index treatments remain useful comparison points but are not
-recommended. Ribbon is extremely fast to scan but weakens grouping between
-task and repository facts. Index is the most literal field-to-value structure,
-but its narrow title column feels more administrative than instrumental.
+The Keyfile and Index treatments remain useful comparison points but are not
+recommended. Keyfile adds grouping that is unnecessary once the native title
+is trusted. Index is the most literal field-to-value structure, but feels more
+administrative than instrumental.
 
 ## Ownership boundary
 

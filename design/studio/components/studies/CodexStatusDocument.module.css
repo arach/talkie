@@ -52,7 +52,7 @@
 
 .segment:focus-visible,
 .doneButton:focus-visible,
-.reloadButton:focus-visible,
+.backButton:focus-visible,
 .hunk summary:focus-visible {
   outline: 2px solid #b5823a;
   outline-offset: 2px;
@@ -163,7 +163,8 @@
   position: relative;
   height: 49px;
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: 34px minmax(0, 1fr) 42px;
+  gap: 8px;
   align-items: center;
   border-bottom: 1px solid var(--doc-rule-strong);
   background: var(--doc-native-bg);
@@ -172,12 +173,17 @@
 }
 
 .nativeNavigation strong {
+  min-width: 0;
   color: var(--doc-ink);
   font-size: 15px;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .doneButton,
-.reloadButton {
+.backButton {
   border: 0;
   background: transparent;
   color: var(--doc-accent);
@@ -186,12 +192,14 @@
 }
 
 .doneButton {
-  justify-self: start;
+  justify-self: end;
 }
 
-.reloadButton {
-  justify-self: end;
-  font-size: 20px;
+.backButton {
+  justify-self: start;
+  font-size: 29px;
+  font-weight: 350;
+  line-height: 0.8;
 }
 
 .document {
@@ -211,61 +219,6 @@
 
 .taskIdentity {
   padding: 10px 16px 8px;
-}
-
-.stateLine {
-  display: grid;
-  grid-template-columns: auto auto 1fr auto;
-  align-items: center;
-  gap: 7px;
-  color: var(--doc-accent);
-  font: 600 calc(0.625rem * var(--doc-text-scale))/1.2 "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  letter-spacing: 0.12em;
-}
-
-.stateLine span:nth-of-type(2) {
-  color: var(--doc-ink-faint);
-}
-
-.stateLine time {
-  color: var(--doc-ink-secondary);
-  font-size: 11px;
-  letter-spacing: 0.04em;
-}
-
-.liveLamp {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--doc-accent);
-  box-shadow: 0 2px 6px color-mix(in srgb, var(--doc-accent) 45%, transparent);
-  animation: breathe 2.8s cubic-bezier(0.16, 1, 0.3, 1) infinite;
-}
-
-.taskIdentity h2 {
-  margin: 6px 0 3px;
-  color: var(--doc-ink);
-  font-size: 16px;
-  font-weight: 650;
-  line-height: 1.16;
-  letter-spacing: -0.018em;
-  text-wrap: balance;
-}
-
-.contextLine {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px 12px;
-  margin: 0 0 5px;
-  color: var(--doc-ink-secondary);
-  font-size: 11px;
-  line-height: 1.3;
-}
-
-.contextLine span + span::before {
-  content: "·";
-  margin-right: 12px;
-  color: var(--doc-ink-faint);
 }
 
 .healthLine {
@@ -400,19 +353,14 @@
 }
 
 .ribbonMasthead {
+  padding-top: 0;
   padding-inline: 0;
   padding-bottom: 0;
 }
 
-.ribbonMasthead > .stateLine,
-.ribbonMasthead > h2,
-.ribbonMasthead > .contextLine {
-  margin-inline: 16px;
-}
-
 .ribbonBand {
   display: grid;
-  margin-top: 8px;
+  margin-top: 0;
   border-top: 1px solid var(--doc-rule-strong);
   background: var(--doc-bg-raised);
 }
@@ -454,24 +402,9 @@
 }
 
 .indexMasthead {
-  display: grid;
-  grid-template-columns: 112px minmax(0, 1fr);
-  gap: 11px;
-}
-
-.indexTitle .stateLine {
-  grid-template-columns: auto 1fr;
-  gap: 5px;
-}
-
-.indexTitle .stateLine span:nth-of-type(2),
-.indexTitle .stateLine time {
-  grid-column: 2;
-}
-
-.indexTitle h2 {
-  margin-top: 12px;
-  font-size: 15px;
+  display: block;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .indexRows {
@@ -831,23 +764,7 @@
   box-shadow: none;
 }
 
-@keyframes breathe {
-  0%,
-  100% {
-    filter: brightness(0.86);
-    box-shadow: 0 2px 4px color-mix(in srgb, var(--doc-accent) 25%, transparent);
-  }
-  48% {
-    filter: brightness(1.12);
-    box-shadow: 0 3px 8px color-mix(in srgb, var(--doc-accent) 50%, transparent);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .liveLamp {
-    animation: none;
-  }
-
   .segment,
   .disclosure {
     transition: none;
