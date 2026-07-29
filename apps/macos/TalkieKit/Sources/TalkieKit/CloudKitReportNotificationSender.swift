@@ -32,6 +32,7 @@ public struct CloudKitReportNotificationSender: Sendable {
     public func sendReport(
         title: String,
         body: String,
+        detail: String? = nil,
         sessionId: String,
         source: String?
     ) async throws -> CKRecord.ID {
@@ -55,6 +56,9 @@ public struct CloudKitReportNotificationSender: Sendable {
         record["kind"] = "agent_report" as CKRecordValue
         record["title"] = sanitized(title, maxLength: 90) as CKRecordValue
         record["body"] = sanitized(body, maxLength: 800) as CKRecordValue
+        if let detail, !detail.isEmpty {
+            record["detail"] = sanitized(detail, maxLength: 12_000) as CKRecordValue
+        }
         record["sessionId"] = sessionId as CKRecordValue
         record["source"] = (source ?? "") as CKRecordValue
         record["createdAt"] = Date() as CKRecordValue

@@ -607,6 +607,28 @@ export const STUDIO_PAGES: StudioPage[] = [
     blurb: "Unify the floating control-strip keys into one recessed instrument — 3 depth variants (inset / routed / sunk).",
   },
   {
+    href: "/ios-deck-codex",
+    label: "Deck · Codex Lanes",
+    bucket: "surfaces",
+    platform: "iphone",
+    family: "deck",
+    status: "concept",
+    swift: [
+      "apps/ios/Talkie iOS/Codex/CodexCommandDeckSurface.swift",
+      "apps/ios/Talkie iOS/Codex/CodexLaneBar.swift",
+    ],
+    blurb: "Five lane-picker and host-signal treatments above the selected Bottom Sill Rail, with current and proposed telemetry kept explicit.",
+  },
+  {
+    href: "/ios-deck-codex-kimi",
+    label: "Deck · Codex Alt K",
+    bucket: "surfaces",
+    platform: "iphone",
+    family: "deck",
+    status: "concept",
+    blurb: "Alternate composition — one display, one lane scale, one keyboard.",
+  },
+  {
     href: "/ios-memo-connected",
     label: "Memo · Connected",
     bucket: "surfaces",

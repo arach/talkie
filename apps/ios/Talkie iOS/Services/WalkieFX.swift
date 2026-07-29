@@ -8,7 +8,7 @@
 //
 
 import Foundation
-import AVFoundation
+@preconcurrency import AVFoundation
 
 @MainActor
 final class WalkieFX {
@@ -91,6 +91,7 @@ final class WalkieFX {
     /// Falls back to plain `AudioPlayerManager` playback if anything fails.
     func playVoiceAudio(data: Data, playbackRate: Float = 1.0) async {
         voiceVarispeed.rate = playbackRate > 0 ? playbackRate : 1.0
+        AppLogger.ai.info("WalkieFX voice requested bytes=\(data.count) rate=\(voiceVarispeed.rate)")
 
         guard ensureRunning() else {
             AppLogger.ai.warning("WalkieFX voice engine unavailable; using unfiltered playback")
@@ -117,26 +118,119 @@ final class WalkieFX {
             let file = try AVAudioFile(forReading: tempURL)
             let processingFormat = file.processingFormat
             let frameCount = AVAudioFrameCount(file.length)
+            AppLogger.ai.info(
+                "WalkieFX voice decoded frames=\(frameCount) rate=\(processingFormat.sampleRate) "
+                    + "channels=\(processingFormat.channelCount)"
+            )
             guard frameCount > 0,
-                  let buffer = AVAudioPCMBuffer(pcmFormat: processingFormat, frameCapacity: frameCount) else {
+                  let decodedBuffer = AVAudioPCMBuffer(
+                      pcmFormat: processingFormat,
+                      frameCapacity: frameCount
+                  ) else {
                 throw NSError(domain: "WalkieFX", code: -1, userInfo: [
                     NSLocalizedDescriptionKey: "Failed to allocate decode buffer"
                 ])
             }
-            try file.read(into: buffer)
+            try file.read(into: decodedBuffer)
+
+            let playbackBuffer = try makeVoicePlaybackBuffer(from: decodedBuffer)
+            AppLogger.ai.info(
+                "WalkieFX voice ready frames=\(playbackBuffer.frameLength) "
+                    + "rate=\(playbackBuffer.format.sampleRate) "
+                    + "channels=\(playbackBuffer.format.channelCount)"
+            )
 
             if voicePlayer.isPlaying {
                 voicePlayer.stop()
             }
-            voicePlayer.scheduleBuffer(buffer, at: nil, options: [], completionHandler: nil)
+            voicePlayer.scheduleBuffer(playbackBuffer, at: nil, options: [], completionHandler: nil)
             if !voicePlayer.isPlaying {
                 voicePlayer.play()
             }
+            AppLogger.ai.info("WalkieFX voice scheduled playing=\(voicePlayer.isPlaying)")
         } catch {
             AppLogger.ai.warning("WalkieFX voice decode failed: \(error.localizedDescription); falling back to plain playback")
             fallbackPlayer.setPlaybackRate(playbackRate)
             fallbackPlayer.playAudio(data: data)
         }
+    }
+
+    /// Converts provider-specific TTS output into the exact format used by the
+    /// fixed radio filter graph. `AVAudioPlayerNode.scheduleBuffer` raises an
+    /// Objective-C exception (rather than a catchable Swift error) when these
+    /// formats differ, so the invariant must be established before scheduling.
+    private func makeVoicePlaybackBuffer(
+        from decodedBuffer: AVAudioPCMBuffer
+    ) throws -> AVAudioPCMBuffer {
+        let decodedFormat = decodedBuffer.format
+        let alreadyMatchesVoiceGraph = decodedFormat.sampleRate == voiceFormat.sampleRate
+            && decodedFormat.channelCount == voiceFormat.channelCount
+            && decodedFormat.commonFormat == voiceFormat.commonFormat
+            && decodedFormat.isInterleaved == voiceFormat.isInterleaved
+
+        if alreadyMatchesVoiceGraph {
+            return decodedBuffer
+        }
+
+        guard let converter = AVAudioConverter(from: decodedFormat, to: voiceFormat) else {
+            throw NSError(domain: "WalkieFX", code: -2, userInfo: [
+                NSLocalizedDescriptionKey: "Failed to create voice format converter"
+            ])
+        }
+
+        let sampleRateRatio = voiceFormat.sampleRate / decodedFormat.sampleRate
+        let convertedFrameCapacity = AVAudioFrameCount(
+            ceil(Double(decodedBuffer.frameLength) * sampleRateRatio) + 32
+        )
+        guard convertedFrameCapacity > 0,
+              let convertedBuffer = AVAudioPCMBuffer(
+                  pcmFormat: voiceFormat,
+                  frameCapacity: convertedFrameCapacity
+              ) else {
+            throw NSError(domain: "WalkieFX", code: -3, userInfo: [
+                NSLocalizedDescriptionKey: "Failed to allocate converted voice buffer"
+            ])
+        }
+
+        var suppliedInput = false
+        var conversionError: NSError?
+        let status = converter.convert(to: convertedBuffer, error: &conversionError) {
+            _, inputStatus in
+            guard !suppliedInput else {
+                inputStatus.pointee = .endOfStream
+                return nil
+            }
+            suppliedInput = true
+            inputStatus.pointee = .haveData
+            return decodedBuffer
+        }
+
+        if let conversionError {
+            throw conversionError
+        }
+        guard status != .error, convertedBuffer.frameLength > 0 else {
+            throw NSError(domain: "WalkieFX", code: -4, userInfo: [
+                NSLocalizedDescriptionKey: "Voice format conversion produced no audio"
+            ])
+        }
+
+        return convertedBuffer
+    }
+
+    /// Immediately silences voice playback and any scheduled bookend FX.
+    ///
+    /// Used when the user starts a new capture while a response is still being
+    /// read aloud. Stopping `player` matters as much as stopping `voicePlayer`:
+    /// the closing squelch/kerchunk are scheduled ahead of time, so without this
+    /// they would fire into the middle of the next utterance.
+    func stopVoicePlayback() {
+        if voicePlayer.isPlaying {
+            voicePlayer.stop()
+        }
+        if player.isPlaying {
+            player.stop()
+        }
+        fallbackPlayer.stopPlayback()
     }
 
     /// Schedules a squelch tail followed by a closing kerchunk so that the
@@ -164,18 +258,30 @@ final class WalkieFX {
 
     @discardableResult
     private func ensureRunning() -> Bool {
-        if engineStarted && engine.isRunning {
-            return true
-        }
         do {
+            // Inline dictation releases the shared audio session as soon as the
+            // mic closes. Narration owns the next phase, so it must explicitly
+            // reactivate a playback session even when this engine survived the
+            // previous turn. AVAudioEngine state alone does not prove that iOS
+            // currently has an audible output route.
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, mode: .spokenAudio, options: [])
+            try session.setActive(true)
+
+            if engineStarted && engine.isRunning {
+                return true
+            }
+
             if !engine.isRunning {
                 engine.prepare()
                 try engine.start()
             }
             engineStarted = true
+            AppLogger.ai.info("WalkieFX engine running=\(engine.isRunning)")
             return true
         } catch {
             engineStarted = false
+            AppLogger.ai.error("WalkieFX engine start failed: \(error.localizedDescription)")
             return false
         }
     }

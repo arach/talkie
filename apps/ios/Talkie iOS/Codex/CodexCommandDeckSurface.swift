@@ -1,0 +1,1484 @@
+//
+//  CodexCommandDeckSurface.swift
+//  Talkie iOS
+//
+//  THESIS: This is an exact-task instrument, not a generic remote-control grid.
+//  OWN WORLD: Paper chassis, recessed graphite console, precise circular
+//  instruments, raised cream keycaps, amber lane signals, and red failures.
+//  STORY: Pick one known task in the console lid, speak, see where the turn went,
+//  then read or hear the answer without returning to the Mac.
+//  FIRST VIEWPORT: Live console, mounted lane spine, then a stable command
+//  keybed. The console owns task activity; the keybed owns talk.
+//  FORM: Extends Talkie's established Scope instrument language and existing
+//  bridge behavior. A lane is a direct destination, not a separate claim.
+//
+
+import SwiftUI
+
+struct CodexCommandDeckSurface: View {
+    let onShowSpaces: () -> Void
+
+    @ObservedObject private var store = CodexLaneStore.shared
+    @ObservedObject private var theme = ThemeManager.shared
+    @State private var appSettings = TalkieAppSettings.shared
+    @State private var showingMapper = false
+    @State private var showingHistory = false
+    @State private var showingResponse = false
+    @State private var showingStatus = false
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        VStack(spacing: 8) {
+            CodexCommandConsole(onShowMapper: openMapper)
+                .frame(height: 316)
+
+            keybed
+                .layoutPriority(60)
+        }
+        .padding(.top, 4)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .sheet(isPresented: $showingMapper) {
+            CodexLaneMapperView()
+        }
+        .sheet(isPresented: $showingHistory) {
+            CodexTurnHistorySheet()
+        }
+        .sheet(isPresented: $showingResponse) {
+            if let turn = store.lastTurn {
+                CodexResponseSheet(turn: turn)
+            }
+        }
+        .sheet(isPresented: $showingStatus) {
+            CodexDeckStatusSheet()
+        }
+    }
+
+    private var keybed: some View {
+        Grid(horizontalSpacing: 8, verticalSpacing: 8) {
+            GridRow {
+                audioKey(index: 1)
+                actionKey(index: 2, label: "Mapper", icon: "rectangle.3.group", action: openMapper)
+                actionKey(
+                    index: 3,
+                    label: "History",
+                    icon: "clock.arrow.circlepath",
+                    isEnabled: !store.history.isEmpty,
+                    action: { showingHistory = true }
+                )
+                actionKey(
+                    index: 4,
+                    label: "Status",
+                    icon: "rectangle.inset.filled",
+                    action: { showingStatus = true }
+                )
+            }
+            .frame(height: 62)
+
+            GridRow {
+                actionKey(index: 5, label: "Spaces", icon: "square.grid.2x2", action: onShowSpaces)
+                actionKey(
+                    index: 6,
+                    label: "Replay",
+                    icon: "play",
+                    isEnabled: store.lastTurn != nil,
+                    action: { showingResponse = true }
+                )
+                actionKey(
+                    index: 7,
+                    label: "Narrate",
+                    icon: "speaker.wave.2",
+                    isEnabled: store.lastTurn != nil && store.phase != .preparingSpeech,
+                    action: store.narrateLastResponse
+                )
+                actionKey(
+                    index: 8,
+                    label: "Stop",
+                    icon: "stop.fill",
+                    isEnabled: store.phase == .speaking,
+                    action: store.interruptNarration
+                )
+            }
+            .frame(height: 62)
+
+            GridRow {
+                modeKey(index: 9)
+                actionKey(
+                    index: 10,
+                    label: "Refresh",
+                    icon: "arrow.clockwise",
+                    isEnabled: !store.isLoadingCatalog,
+                    action: { Task { await store.refreshCatalog() } }
+                )
+                openSocket(index: 11)
+                openSocket(index: 12)
+            }
+            .frame(height: 58)
+
+            GridRow {
+                openSocket(index: 13)
+                captureKey
+                    .gridCellColumns(2)
+                openSocket(index: 16)
+            }
+            .frame(height: 78)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 2)
+        .dynamicTypeSize(.xSmall ... .xxxLarge)
+    }
+
+    private func actionKey(
+        index: Int,
+        label: String,
+        icon: String,
+        isEnabled: Bool = true,
+        isActive: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(spacing: 7) {
+                Spacer(minLength: 0)
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .light))
+                    .frame(height: 18)
+                Text(label.uppercased())
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .tracking(1.1)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(isEnabled ? utilityInk : utilityInkFaint.opacity(0.42))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 8)
+            .background(keycapSurface(active: isActive, isEmpty: false))
+            .overlay(alignment: .topLeading) { keyIndexLabel(index: index) }
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(isActive ? .isSelected : [])
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var captureKey: some View {
+        Button(action: {}) {
+            VStack(spacing: 4) {
+                Spacer(minLength: 0)
+
+                HStack(spacing: 7) {
+                    Image(systemName: captureIcon)
+                        .font(.system(size: 12, weight: .semibold))
+                    Text(captureTitle)
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .tracking(1.2)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                }
+
+                Text(captureSubtitle)
+                    .font(.system(size: 7, weight: .semibold, design: .monospaced))
+                    .tracking(0.45)
+                    .foregroundStyle(theme.colors.accent.opacity(0.72))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.68)
+
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(theme.colors.accent)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 8)
+            .background(talkKeySurface)
+            .overlay(alignment: .topLeading) { keyIndexLabel(index: 14) }
+            .overlay(alignment: .topTrailing) { trailingKeyIndexLabel(index: 15) }
+        }
+        .buttonStyle(
+            CodexPressAndHoldButtonStyle { isPressed in
+                if isPressed {
+                    store.beginPushToTalk()
+                } else {
+                    store.endPushToTalk()
+                }
+            }
+        )
+        .disabled(!canCapture)
+        .opacity(store.activeLaneNumber == nil ? 0.48 : 1)
+        .accessibilityLabel(captureTitle)
+        .accessibilityHint(captureAccessibilityHint)
+        .accessibilityAction { store.handleCaptureControl() }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var canCapture: Bool {
+        store.activeLaneNumber != nil
+            && (!store.phase.isBusy
+                || store.phase.isCapturing
+                || store.phase == .speaking
+                || store.isTurnInFlight)
+    }
+
+    private var captureTitle: String {
+        switch store.phase {
+        case .listening:
+            return store.activeLaneIsInFlight
+                ? "RELEASE TO \(store.activeLaneMessageMode.label.uppercased())"
+                : "RELEASE TO SEND"
+        case .speaking: return "INTERRUPT + TALK"
+        case .preparingSpeech: return "VOICE INBOUND"
+        case .submitting where store.activeLaneIsInFlight:
+            return "HOLD TO \(store.activeLaneMessageMode.label.uppercased())"
+        default: return "HOLD TO TALK"
+        }
+    }
+
+    private var captureSubtitle: String {
+        switch store.phase {
+        case .listening: return "KEEP HOLDING WHILE YOU SPEAK"
+        case .speaking: return "STOPS NARRATION, THEN LISTENS"
+        case .preparingSpeech:
+            let destination = store.narrationState.route?.displayName.uppercased() ?? "VOICE"
+            return "\(destination) AUDIO IS PREPARING"
+        case .submitting where store.activeLaneIsInFlight:
+            if store.activeLaneMessageMode == .queue {
+                let queued = store.activeLaneNumber.map(store.queuedMessageCount(for:)) ?? 0
+                let suffix = queued > 0
+                    ? " · \(queued) WAITING"
+                    : ""
+                return "AFTER THIS TURN\(suffix)"
+            }
+            return "ADDS TO THE ACTIVE TURN NOW"
+        default: return "EXACT TASK ROUTING"
+        }
+    }
+
+    private var captureIcon: String {
+        switch store.phase {
+        case .listening: return "arrow.up"
+        case .speaking: return "waveform"
+        case .submitting where store.activeLaneIsInFlight: return "mic"
+        case .transcribing, .submitting, .preparingSpeech: return "ellipsis"
+        case .idle, .failed: return "mic"
+        }
+    }
+
+    private var captureAccessibilityHint: String {
+        guard store.activeLaneIsInFlight else {
+            return "Sends speech to the active Codex task"
+        }
+        switch store.activeLaneMessageMode {
+        case .queue:
+            return "Queues the message to run after the current Codex turn"
+        case .steer:
+            return "Steers the current Codex turn immediately"
+        case .auto:
+            return "Sends speech to the active Codex task"
+        }
+    }
+
+    private func audioKey(index: Int) -> some View {
+        Button(action: cycleOutputRoute) {
+            VStack(spacing: 3) {
+                Spacer(minLength: 0)
+                outputRouteDial
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 5)
+            .background(keycapSurface(active: false, isEmpty: false))
+            .overlay(alignment: .topLeading) { keyIndexLabel(index: index) }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Response output, \(outputRoute.displayName)")
+        .accessibilityHint("Cycles between iPhone, Watch, and silent output")
+        .animation(.spring(response: 0.32, dampingFraction: 0.74), value: outputRoute.rawValue)
+        .sensoryFeedback(.selection, trigger: outputRoute.rawValue)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var outputRouteDial: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [utilityFace, utilityFace.opacity(0.86), Color.black.opacity(0.10)],
+                        center: .topLeading,
+                        startRadius: 2,
+                        endRadius: 30
+                    )
+                )
+                .overlay {
+                    Circle()
+                        .stroke(utilityInkFaint.opacity(0.28), lineWidth: 1)
+                }
+                .shadow(color: Color.black.opacity(0.24), radius: 5, y: 3)
+
+            ForEach(0..<9, id: \.self) { tick in
+                Capsule()
+                    .fill(utilityInkFaint.opacity(tick.isMultiple(of: 4) ? 0.55 : 0.22))
+                    .frame(width: 1, height: tick.isMultiple(of: 4) ? 5 : 3)
+                    .offset(y: -23)
+                    .rotationEffect(.degrees(Double(tick) * 30 - 120))
+            }
+
+            Capsule()
+                .fill(theme.chrome.accent)
+                .frame(width: 2, height: 13)
+                .offset(y: -13)
+                .rotationEffect(outputRouteDialAngle)
+                .shadow(color: theme.chrome.accent.opacity(0.28), radius: 2, y: 1)
+
+            VStack(spacing: 1) {
+                Image(systemName: outputRouteIcon)
+                    .font(.system(size: 11, weight: .medium))
+                Text(outputRoute.shortLabel.uppercased())
+                    .font(.system(size: 5.5, weight: .bold, design: .monospaced))
+                    .tracking(0.35)
+            }
+            .foregroundStyle(utilityInk)
+            .offset(y: 5)
+        }
+        .frame(width: 54, height: 54)
+    }
+
+    private var outputRouteDialAngle: Angle {
+        switch outputRoute {
+        case .phone: return .degrees(-38)
+        case .watch: return .degrees(0)
+        case .silent: return .degrees(38)
+        }
+    }
+
+    private func modeKey(index: Int) -> some View {
+        let mode = store.activeLaneMessageMode
+        return Button(action: toggleMessageMode) {
+            VStack(alignment: .leading, spacing: 5) {
+                Spacer(minLength: 0)
+                Text("DELIVER")
+                    .font(.system(size: 7, weight: .medium, design: .monospaced))
+                    .tracking(0.8)
+                    .foregroundStyle(utilityInkFaint.opacity(0.72))
+                Text(mode.label.uppercased())
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .tracking(1.1)
+                    .foregroundStyle(utilityInk)
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(keycapSurface(active: false, isEmpty: false))
+            .overlay(alignment: .topLeading) { keyIndexLabel(index: index) }
+        }
+        .buttonStyle(.plain)
+        .disabled(store.activeLane == nil)
+        .opacity(store.activeLane == nil ? 0.44 : 1)
+        .accessibilityLabel("Delivery mode, \(mode.label)")
+        .accessibilityHint("Switches this lane between steer and queue")
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func openSocket(index: Int) -> some View {
+        keycapSurface(active: false, isEmpty: true)
+        .overlay(alignment: .topLeading) { keyIndexLabel(index: index) }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Empty deck slot \(index)")
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var talkKeySurface: some View {
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        return shape
+            .fill(theme.chrome.accent.opacity(store.phase.isCapturing ? 0.30 : 0.17))
+            .overlay {
+                shape.fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.10), .clear, Color.black.opacity(0.10)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+            }
+            .overlay {
+                shape.strokeBorder(
+                    theme.chrome.accent.opacity(store.phase.isCapturing ? 0.92 : 0.55),
+                    lineWidth: store.phase.isCapturing ? 1.5 : 1
+                )
+            }
+            .shadow(color: Color.black.opacity(0.28), radius: 7, y: 4)
+    }
+
+    private func keycapSurface(active: Bool, isEmpty: Bool) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        let raisedShadow = colorScheme == .dark ? Color.black.opacity(0.42) : Color.black.opacity(0.16)
+        return shape
+            .fill(
+                active
+                    ? theme.chrome.accent.opacity(0.18)
+                    : (isEmpty ? emptyKeyFace : utilityFace)
+            )
+            .overlay {
+                if !isEmpty {
+                    shape.fill(
+                        LinearGradient(
+                            colors: [Color.white.opacity(colorScheme == .dark ? 0.12 : 0.58), .clear, Color.black.opacity(0.045)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                }
+            }
+            .overlay {
+                if active {
+                    shape.strokeBorder(theme.chrome.accent.opacity(0.72), lineWidth: 1)
+                } else if isEmpty {
+                    shape.strokeBorder(theme.chrome.edgeFaint, lineWidth: theme.chrome.hairlineWidth)
+                }
+            }
+            .compositingGroup()
+            .shadow(
+                color: isEmpty ? .clear : raisedShadow,
+                radius: isEmpty ? 0 : 8,
+                y: isEmpty ? 0 : 5
+            )
+            .shadow(
+                color: isEmpty ? .clear : Color.black.opacity(0.18),
+                radius: isEmpty ? 0 : 2,
+                y: isEmpty ? 0 : 2
+            )
+    }
+
+    private func keyIndexLabel(index: Int) -> some View {
+        Text(index < 10 ? "0\(index)" : "\(index)")
+            .font(.system(size: 9, weight: .medium, design: .monospaced))
+            .foregroundStyle(utilityInkFaint.opacity(0.56))
+            .padding(.top, 7)
+            .padding(.leading, 8)
+            .allowsHitTesting(false)
+    }
+
+    private func trailingKeyIndexLabel(index: Int) -> some View {
+        Text("\(index)")
+            .font(.system(size: 9, weight: .medium, design: .monospaced))
+            .foregroundStyle(utilityInkFaint.opacity(0.56))
+            .padding(.top, 7)
+            .padding(.trailing, 8)
+            .allowsHitTesting(false)
+    }
+
+    private var outputRoute: AIResponseSpeechRoute {
+        AIResponseSpeechRoute(rawValue: appSettings.aiVoiceOutputRoute) ?? .phone
+    }
+
+    private var outputRouteIcon: String {
+        switch outputRoute {
+        case .silent: return "speaker.slash"
+        case .phone: return "iphone"
+        case .watch: return "applewatch"
+        }
+    }
+
+    private var utilityFace: Color {
+        colorScheme == .dark
+            ? theme.colors.cardBackground
+            : Color(red: 0.965, green: 0.945, blue: 0.905)
+    }
+
+    private var emptyKeyFace: Color {
+        colorScheme == .dark
+            ? theme.colors.textPrimary.opacity(0.035)
+            : Color(red: 0.30, green: 0.25, blue: 0.19).opacity(0.035)
+    }
+
+    private var utilityInk: Color {
+        colorScheme == .dark
+            ? theme.colors.textSecondary
+            : Color(red: 0.28, green: 0.24, blue: 0.19)
+    }
+
+    private var utilityInkFaint: Color {
+        colorScheme == .dark
+            ? theme.colors.textTertiary
+            : Color(red: 0.42, green: 0.36, blue: 0.28)
+    }
+
+    private func cycleOutputRoute() {
+        let next: AIResponseSpeechRoute
+        switch outputRoute {
+        case .phone: next = .watch
+        case .watch: next = .silent
+        case .silent: next = .phone
+        }
+        appSettings.aiVoiceOutputRoute = next.rawValue
+    }
+
+    private func toggleMessageMode() {
+        guard let lane = store.activeLane else { return }
+        let next: CodexMessageMode = lane.preferredMessageMode == .queue ? .steer : .queue
+        store.setMessageMode(next, for: lane.number)
+    }
+
+    private func openMapper() {
+        showingMapper = true
+    }
+
+}
+
+private struct CodexCommandConsole: View {
+    let onShowMapper: () -> Void
+
+    @ObservedObject private var store = CodexLaneStore.shared
+    @ObservedObject private var theme = ThemeManager.shared
+    @State private var bridge = BridgeManager.shared
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if dynamicTypeSize.isAccessibilitySize {
+                accessibilityLaneTransport
+                accessibilityTaskIdentity
+            } else {
+                taskIdentity
+                lanePicker
+            }
+        }
+        .padding(.horizontal, 10)
+        .dynamicTypeSize(.xSmall ... .accessibility1)
+    }
+
+    private var lanePicker: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(CodexLane.range), id: \.self) { number in
+                lanePickerButton(number)
+
+                if number != CodexLane.range.upperBound {
+                    Rectangle()
+                        .fill(theme.chrome.panelInk.opacity(0.09))
+                        .frame(width: theme.chrome.hairlineWidth, height: 20)
+                }
+            }
+        }
+        .padding(.horizontal, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(theme.chrome.panel.opacity(colorScheme == .dark ? 0.70 : 0.92))
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .stroke(theme.chrome.panelInk.opacity(0.12), lineWidth: theme.chrome.hairlineWidth)
+        }
+        .shadow(color: Color.black.opacity(0.16), radius: 2, y: 1)
+        .frame(height: 44)
+        .sensoryFeedback(.selection, trigger: store.activeLaneNumber)
+        .accessibilityLabel("Codex lanes")
+    }
+
+    private func lanePickerButton(_ number: Int) -> some View {
+        let lane = store.lane(number)
+        let isActive = store.activeLaneNumber == number
+        let isEnabled = !store.phase.isCapturing
+
+        return Button {
+            guard let lane else {
+                onShowMapper()
+                return
+            }
+            Task { await store.activate(lane.number) }
+        } label: {
+            ZStack(alignment: .top) {
+                if isActive {
+                    Capsule()
+                        .fill(theme.chrome.panelAccent)
+                        .frame(width: 22, height: 2)
+                        .talkieAccentGlow(radius: 3)
+                }
+
+                HStack(spacing: 3) {
+                    Text(number < 10 ? "0\(number)" : "\(number)")
+                        .font(.system(size: 8, weight: isActive ? .bold : .medium, design: .monospaced))
+                        .tracking(0.55)
+
+                    if lane.map({ store.isTurnInFlight(on: $0.number) }) == true {
+                        Circle()
+                            .fill(theme.chrome.panelAccent)
+                            .frame(width: 4, height: 4)
+                            .talkieAccentGlow(radius: 2)
+                    }
+                }
+                .foregroundStyle(
+                    lane == nil
+                        ? theme.chrome.panelInkFaint.opacity(0.28)
+                        : (isActive ? theme.chrome.panelAccent : theme.chrome.panelInkFaint.opacity(0.72))
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .opacity(isEnabled || isActive ? 1 : 0.56)
+        .accessibilityLabel(lanePickerAccessibilityLabel(number: number, lane: lane, isActive: isActive))
+        .accessibilityHint(lane == nil ? "Opens the task mapper" : "Selects this exact Codex task")
+        .accessibilityAddTraits(isActive ? .isSelected : [])
+    }
+
+    private func laneKeySurface(isActive: Bool) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+        return shape
+            .fill(isActive ? theme.colors.accent.opacity(0.20) : theme.chrome.panel)
+            .overlay {
+                shape.fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.16), .clear, Color.black.opacity(0.16)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+            }
+            .overlay {
+                shape.stroke(
+                    isActive ? theme.colors.accent.opacity(0.78) : theme.chrome.panelInk.opacity(0.15),
+                    lineWidth: isActive ? 1 : theme.chrome.hairlineWidth
+                )
+            }
+            .shadow(color: Color.black.opacity(0.12), radius: 3, y: 2)
+    }
+
+    private func laneStatusColor(lane: CodexLane?, isActive: Bool) -> Color {
+        guard lane != nil else { return theme.chrome.panelInkFaint.opacity(0.30) }
+        return theme.chrome.panelAccent.opacity(isActive ? 1 : 0.62)
+    }
+
+    private func laneModeMark(_ lane: CodexLane?) -> String {
+        guard let lane else { return "––" }
+        let mode = lane.preferredMessageMode == .queue ? "Q" : "S"
+        guard store.isTurnInFlight(on: lane.number) else { return mode }
+        return "\(mode)•"
+    }
+
+    private func lanePickerAccessibilityLabel(
+        number: Int,
+        lane: CodexLane?,
+        isActive: Bool
+    ) -> String {
+        guard let lane else { return "Lane \(number), empty" }
+        return "Lane \(number), \(lane.task.title), \(isActive ? "selected" : "mapped")"
+    }
+
+    private var consoleHeader: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "desktopcomputer")
+                .font(.system(size: 9, weight: .medium))
+            Text((bridge.pairedMacDisplayName ?? "MAC").uppercased())
+                .lineLimit(1)
+            Text("/")
+                .foregroundStyle(consoleInkFaint.opacity(0.60))
+            Text("CODEX")
+
+            Spacer(minLength: 8)
+
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(phaseColor)
+                    .frame(width: 5, height: 5)
+                Text(consoleStatusLabel)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                Capsule().fill(phaseColor.opacity(0.13))
+            )
+            .overlay(
+                Capsule().stroke(phaseColor.opacity(0.42), lineWidth: 0.6)
+            )
+        }
+        .font(.system(size: 9, weight: .medium, design: .monospaced))
+        .tracking(1.2)
+        .foregroundStyle(consoleInk)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(consoleInk.opacity(0.16))
+                .frame(height: theme.chrome.hairlineWidth)
+        }
+    }
+
+    private var taskIdentity: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                if let lane = store.activeLane {
+                    Text(lane.number < 10 ? "LANE 0\(lane.number)" : "LANE \(lane.number)")
+                        .foregroundStyle(theme.chrome.panelAccent)
+
+                    Text(lane.task.activityLabel().uppercased())
+                        .foregroundStyle(theme.chrome.panelInkFaint)
+                } else {
+                    Text("NO ACTIVE TASK")
+                        .foregroundStyle(theme.chrome.panelAccent)
+                }
+
+                Spacer(minLength: 6)
+
+                Text(store.activeLaneMessageMode.label.uppercased())
+                    .foregroundStyle(theme.chrome.panelInkFaint)
+            }
+            .font(.system(size: 8, weight: .semibold, design: .monospaced))
+            .tracking(0.9)
+
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(store.activeLane?.task.title ?? "Choose a lane")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(theme.chrome.panelInk)
+                        .lineLimit(2)
+
+                    if let task = store.activeLane?.task {
+                        HStack(spacing: 6) {
+                            Label(task.projectName, systemImage: "folder")
+                            if let branch = task.branchName {
+                                Text("/")
+                                    .foregroundStyle(theme.chrome.panelInkFaint.opacity(0.55))
+                                Label(branch, systemImage: "arrow.triangle.branch")
+                            }
+                        }
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundStyle(theme.chrome.panelInkFaint)
+                        .lineLimit(1)
+
+                        Text(task.compactPath)
+                            .font(.system(size: 8, weight: .regular, design: .monospaced))
+                            .foregroundStyle(theme.chrome.panelInkFaint.opacity(0.70))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    } else {
+                        Text("Tap an empty lane below to map an exact Codex task.")
+                            .font(.system(size: 9, weight: .regular, design: .monospaced))
+                            .foregroundStyle(theme.chrome.panelInkFaint)
+                            .lineLimit(2)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                CodexConsoleActivityMeter(
+                    label: consoleMeterLabel,
+                    isActive: consoleMeterIsActive,
+                    isFailure: consoleMeterIsFailure,
+                    color: phaseColor,
+                    baseColor: theme.chrome.panelInkFaint
+                )
+            }
+
+            conversationPreview
+
+            Spacer(minLength: 0)
+
+            Rectangle()
+                .fill(theme.chrome.panelInk.opacity(0.08))
+                .frame(height: theme.chrome.hairlineWidth)
+
+            Text(store.activeLane == nil ? "MAP A LANE TO BEGIN" : "HOLD TALK TO SPEAK INTO THIS LANE")
+                .font(.system(size: 7, weight: .medium, design: .monospaced))
+                .tracking(1.1)
+                .foregroundStyle(theme.chrome.panelInkFaint.opacity(0.58))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(
+            maxWidth: .infinity,
+            maxHeight: .infinity,
+            alignment: .topLeading
+        )
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(theme.chrome.panel)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(theme.chrome.panelEdge.opacity(0.78), lineWidth: theme.chrome.hairlineWidth)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(taskIdentityAccessibilityLabel)
+    }
+
+    @ViewBuilder
+    private var conversationPreview: some View {
+        if let number = store.activeLaneNumber,
+           !store.activities(for: number).isEmpty {
+            activityTimeline(store.activities(for: number), laneNumber: number)
+        } else if let failure = store.failure {
+            Label(failure.combined, systemImage: "exclamationmark.triangle.fill")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(Color(red: 0.92, green: 0.42, blue: 0.30))
+                .lineLimit(2)
+        } else if let number = store.activeLaneNumber,
+                  let turn = store.latestTurn(for: number) {
+            VStack(alignment: .leading, spacing: 4) {
+                conversationLine(label: "YOU", text: turn.instruction, lineLimit: 1)
+                conversationLine(label: "CODEX", text: turn.response, lineLimit: 2)
+            }
+            .padding(.top, 2)
+        } else if store.activeLane != nil {
+            Text("Hold the 14–15 key to talk directly to this task.")
+                .font(.system(size: 10, weight: .regular))
+                .foregroundStyle(theme.chrome.panelInkFaint)
+                .lineLimit(2)
+        } else {
+            Text("Pick a lane above, or open Mapper to choose an exact task.")
+                .font(.system(size: 10, weight: .regular))
+                .foregroundStyle(theme.chrome.panelInkFaint)
+                .lineLimit(2)
+        }
+    }
+
+    private func laneModeSelector(_ lane: CodexLane) -> some View {
+        HStack(spacing: 2) {
+            laneModeButton(.steer, lane: lane)
+            laneModeButton(.queue, lane: lane)
+        }
+        .padding(2)
+        .background(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(theme.chrome.panelInk.opacity(0.07))
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .stroke(theme.chrome.panelInk.opacity(0.13), lineWidth: theme.chrome.hairlineWidth)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Lane \(lane.number) delivery mode")
+    }
+
+    private func laneModeButton(_ mode: CodexMessageMode, lane: CodexLane) -> some View {
+        let isActive = lane.preferredMessageMode == mode
+        return Button {
+            store.setMessageMode(mode, for: lane.number)
+        } label: {
+            Text(mode.label.uppercased())
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .tracking(0.7)
+                .foregroundStyle(isActive ? theme.chrome.panel : theme.chrome.panelInkFaint)
+                .frame(minWidth: 43, minHeight: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(isActive ? theme.chrome.panelAccent : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(mode.label)
+        .accessibilityAddTraits(isActive ? .isSelected : [])
+    }
+
+    private func activityTimeline(_ activities: [CodexLaneActivity], laneNumber: Int) -> some View {
+        let visibleActivities = Array(activities.suffix(3))
+        return VStack(alignment: .leading, spacing: 7) {
+            ForEach(visibleActivities) { activity in
+                liveActivity(
+                    activity,
+                    laneNumber: laneNumber,
+                    isLatest: activity.id == visibleActivities.last?.id
+                )
+            }
+        }
+        .animation(.easeOut(duration: 0.18), value: visibleActivities)
+    }
+
+    private func liveActivity(
+        _ activity: CodexLaneActivity,
+        laneNumber: Int,
+        isLatest: Bool
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            conversationLine(label: "TX", text: activity.instruction, lineLimit: isLatest ? 2 : 1)
+
+            switch activity.state {
+            case .working(let mode):
+                if isLatest, !activity.updates.isEmpty {
+                    ForEach(Array(activity.updates.suffix(2))) { update in
+                        progressLine(
+                            update,
+                            isLatest: update.id == activity.updates.last?.id
+                        )
+                    }
+                }
+                if isLatest {
+                    CodexWorkingSignal(
+                        mode: mode,
+                        queuedCount: store.queuedMessageCount(for: laneNumber),
+                        color: theme.chrome.panelAccent,
+                        secondaryColor: theme.chrome.panelInkFaint
+                    )
+                } else {
+                    technicalLine(mode == .queue ? "Q> WAITING" : "HOST> WORKING")
+                }
+            case .accepted:
+                technicalLine("HOST> STEER ACCEPTED // TURN CONTINUES")
+            case .receiving:
+                if let response = activity.response {
+                    HStack(alignment: .firstTextBaseline, spacing: 7) {
+                        Text("RX")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .tracking(0.8)
+                            .foregroundStyle(theme.chrome.panelAccent)
+                            .frame(width: 38, alignment: .leading)
+
+                        CodexPipedText(
+                            text: response,
+                            color: theme.chrome.panelInk.opacity(0.88)
+                        )
+                    }
+                }
+                if isLatest, let narrationLine = narrationTechnicalLine(for: laneNumber) {
+                    technicalLine(narrationLine.text, isFailure: narrationLine.isFailure)
+                }
+            case .failed(let message):
+                technicalLine("ERR> \(message)", isFailure: true)
+            }
+        }
+        .padding(.top, 2)
+    }
+
+    private func progressLine(_ update: CodexProgressUpdate, isLatest: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            Text(update.kind == "tool" ? "SYS" : "LIVE")
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .tracking(0.8)
+                .foregroundStyle(
+                    update.kind == "tool"
+                        ? theme.chrome.panelInkFaint
+                        : theme.chrome.panelAccent
+                )
+                .frame(width: 38, alignment: .leading)
+
+            Text(update.text)
+                .font(.system(size: 10, weight: .regular))
+                .foregroundStyle(theme.chrome.panelInk.opacity(isLatest ? 0.90 : 0.62))
+                .lineLimit(isLatest && update.kind != "tool" ? 3 : 1)
+        }
+        .transition(.opacity.combined(with: .move(edge: .bottom)))
+        .accessibilityElement(children: .combine)
+    }
+
+    private func technicalLine(_ text: String, isFailure: Bool = false) -> some View {
+        Text(text)
+            .font(.system(size: 9, weight: .medium, design: .monospaced))
+            .tracking(0.25)
+            .foregroundStyle(
+                isFailure
+                    ? Color(red: 0.92, green: 0.42, blue: 0.30)
+                    : theme.chrome.panelInkFaint
+            )
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
+    }
+
+    private func conversationLine(label: String, text: String, lineLimit: Int) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            Text(label)
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .tracking(0.8)
+                .foregroundStyle(theme.chrome.panelAccent)
+                .frame(width: 38, alignment: .leading)
+
+            Text(text)
+                .font(.system(size: 10, weight: .regular))
+                .foregroundStyle(theme.chrome.panelInk.opacity(0.82))
+                .lineLimit(lineLimit)
+        }
+    }
+
+    private func narrationTechnicalLine(
+        for laneNumber: Int
+    ) -> (text: String, isFailure: Bool)? {
+        guard store.narrationState.laneNumber == laneNumber else { return nil }
+
+        switch store.narrationState {
+        case .idle:
+            return nil
+        case .preparing(_, let route):
+            return ("VOICE> \(route.displayName.uppercased()) // INBOUND", false)
+        case .speaking(_, let route):
+            return ("VOICE> \(route.displayName.uppercased()) // PLAYING", false)
+        case .failed:
+            return ("VOICE> FAILED // TAP NARRATE", true)
+        case .suppressed(_, let route):
+            if route == .silent {
+                return ("VOICE> SILENT // KEY 01", false)
+            }
+            return ("VOICE> NOT PLAYED // TAP NARRATE", false)
+        }
+    }
+
+    private var consoleStatusLabel: String {
+        if let narrationStatus = activeNarrationStatusLabel {
+            return narrationStatus
+        }
+
+        switch store.phase {
+        case .listening, .transcribing:
+            return store.phase.label.uppercased()
+        case .preparingSpeech, .speaking:
+            break
+        case .failed:
+            return "ERROR"
+        case .idle, .submitting:
+            break
+        }
+
+        guard let number = store.activeLaneNumber,
+              let activity = store.activity(for: number) else {
+            return store.activeLaneNumber == nil ? "NO LANE" : "READY"
+        }
+        switch activity.state {
+        case .working(let mode):
+            return mode == .queue ? "QUEUED" : "WORKING"
+        case .accepted:
+            return "STEERED"
+        case .receiving:
+            return "RESPONSE"
+        case .failed:
+            return "ERROR"
+        }
+    }
+
+    private var activeNarrationStatusLabel: String? {
+        guard let number = store.activeLaneNumber,
+              store.narrationState.laneNumber == number else { return nil }
+
+        switch store.narrationState {
+        case .idle:
+            return nil
+        case .preparing:
+            return "VOICE INBOUND"
+        case .speaking:
+            return "SPEAKING"
+        case .failed:
+            return "VOICE FAILED"
+        case .suppressed(_, let route):
+            return route == .silent ? "SILENT" : "VOICE SKIPPED"
+        }
+    }
+
+    private var phaseColor: Color {
+        if let number = store.activeLaneNumber,
+           store.narrationState.laneNumber == number,
+           case .failed = store.narrationState {
+            return Color(red: 0.92, green: 0.42, blue: 0.30)
+        }
+        if let number = store.activeLaneNumber,
+           case .failed = store.activity(for: number)?.state {
+            return Color(red: 0.92, green: 0.42, blue: 0.30)
+        }
+        switch store.phase {
+        case .failed: return Color(red: 0.92, green: 0.42, blue: 0.30)
+        case .idle: return store.activeLaneNumber == nil
+            ? theme.chrome.panelInkFaint
+            : theme.chrome.panelAccent
+        default: return theme.chrome.panelAccent
+        }
+    }
+
+    private var consoleMeterIsFailure: Bool {
+        consoleStatusLabel.localizedStandardContains("ERROR")
+            || consoleStatusLabel.localizedStandardContains("FAILED")
+    }
+
+    private var consoleMeterIsActive: Bool {
+        switch consoleStatusLabel {
+        case "READY", "NO LANE", "SILENT", "VOICE SKIPPED": return false
+        default: return !consoleMeterIsFailure
+        }
+    }
+
+    private var consoleMeterLabel: String {
+        switch consoleStatusLabel {
+        case "LISTENING": return "MIC"
+        case "TRANSCRIBING": return "TX"
+        case "WORKING", "STEERED", "QUEUED": return "RUN"
+        case "RESPONSE": return "RX"
+        case "VOICE INBOUND": return "VOX"
+        case "SPEAKING": return "PLAY"
+        case "ERROR", "VOICE FAILED": return "ERR"
+        default: return "—"
+        }
+    }
+
+    private var consoleChassis: Color {
+        colorScheme == .dark
+            ? theme.colors.cardBackground
+            : Color(red: 0.90, green: 0.875, blue: 0.825)
+    }
+
+    private var consoleInk: Color {
+        colorScheme == .dark
+            ? theme.colors.textSecondary
+            : Color(red: 0.25, green: 0.21, blue: 0.17)
+    }
+
+    private var consoleInkFaint: Color {
+        colorScheme == .dark
+            ? theme.colors.textTertiary
+            : Color(red: 0.40, green: 0.34, blue: 0.27)
+    }
+
+    private var accessibilityLaneTransport: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 6) {
+                ForEach(Array(CodexLane.range), id: \.self) { number in
+                    lanePickerButton(number)
+                        .frame(width: 44)
+                }
+
+                Button(action: onShowMapper) {
+                    Label("Map", systemImage: "rectangle.3.group")
+                        .font(.caption.bold())
+                        .frame(minWidth: 64, minHeight: 44)
+                        .background(laneKeySurface(isActive: false))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(6)
+        }
+        .scrollIndicators(.hidden)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(theme.chrome.panel)
+        )
+        .accessibilityLabel("Codex lane transport")
+    }
+
+    private var accessibilityTaskIdentity: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(store.activeLane.map { "Lane \($0.number), \($0.task.projectName)" } ?? "No active task")
+                .font(.caption.bold())
+                .foregroundStyle(theme.chrome.panelAccent)
+
+            Text(store.activeLane?.task.title ?? "Choose a lane")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(theme.chrome.panelInk)
+                .lineLimit(2)
+
+            Text(store.activeLaneIsInFlight ? "Turn active. Delivery mode is set with the lane control above." : "Hold key 14–15 to talk directly to this task.")
+                .font(.caption)
+                .foregroundStyle(theme.chrome.panelInkFaint)
+                .lineLimit(2)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, minHeight: 102, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(theme.chrome.panel)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(taskIdentityAccessibilityLabel)
+    }
+
+    private var taskIdentityAccessibilityLabel: String {
+        guard let lane = store.activeLane else {
+            return "No active Codex task. Choose a lane or open the mapper."
+        }
+        return "Lane \(lane.number), \(lane.task.projectName), \(lane.task.title), \(consoleStatusLabel)"
+    }
+}
+
+private struct CodexConsoleActivityMeter: View {
+    let label: String
+    let isActive: Bool
+    let isFailure: Bool
+    let color: Color
+    let baseColor: Color
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Group {
+            if isActive, !reduceMotion {
+                TimelineView(.animation(minimumInterval: 0.08)) { timeline in
+                    meter(angle: timeline.date.timeIntervalSinceReferenceDate * 96)
+                }
+            } else {
+                meter(angle: 0)
+            }
+        }
+        .frame(width: 56, height: 56)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private func meter(angle: Double) -> some View {
+        ZStack {
+            Circle()
+                .fill(baseColor.opacity(0.045))
+                .overlay {
+                    Circle()
+                        .stroke(baseColor.opacity(0.22), lineWidth: 1)
+                }
+
+            Circle()
+                .stroke(
+                    isFailure ? color.opacity(0.82) : baseColor.opacity(0.15),
+                    style: StrokeStyle(lineWidth: 2, dash: [1.5, 3.5])
+                )
+                .padding(5)
+
+            if isActive {
+                Circle()
+                    .fill(color)
+                    .frame(width: 5, height: 5)
+                    .offset(y: -22)
+                    .rotationEffect(.degrees(angle))
+                    .talkieAccentGlow(radius: 3)
+            }
+
+            VStack(spacing: 2) {
+                Text(label)
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .tracking(0.7)
+                    .foregroundStyle(isActive || isFailure ? color : baseColor.opacity(0.62))
+
+                Text(isActive ? "LIVE" : (isFailure ? "FAULT" : "IDLE"))
+                    .font(.system(size: 5.5, weight: .medium, design: .monospaced))
+                    .tracking(0.55)
+                    .foregroundStyle(baseColor.opacity(0.62))
+            }
+        }
+    }
+
+    private var accessibilityLabel: String {
+        if isFailure { return "Codex activity failed" }
+        if isActive { return "Codex activity live, \(label)" }
+        return "Codex activity idle"
+    }
+}
+
+private struct CodexWorkingSignal: View {
+    let mode: CodexMessageMode
+    let queuedCount: Int
+    let color: Color
+    let secondaryColor: Color
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Group {
+            if reduceMotion {
+                signal(frame: 0)
+            } else {
+                TimelineView(.animation(minimumInterval: 0.14)) { timeline in
+                    let frame = Int(timeline.date.timeIntervalSinceReferenceDate * 7) % 7
+                    signal(frame: frame)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private func signal(frame: Int) -> some View {
+        let cells = (0..<7)
+            .map { $0 == frame ? "◆" : "·" }
+            .joined()
+        return HStack(spacing: 7) {
+            Text("HOST>")
+                .foregroundStyle(color)
+            Text("[\(cells)]")
+                .foregroundStyle(color)
+            Text(statusText)
+                .foregroundStyle(secondaryColor)
+        }
+        .font(.system(size: 9, weight: .medium, design: .monospaced))
+        .tracking(0.25)
+        .lineLimit(1)
+    }
+
+    private var statusText: String {
+        switch mode {
+        case .queue:
+            return queuedCount > 0 ? "QUEUE \(queuedCount) // WAIT" : "QUEUE // WAIT"
+        case .steer:
+            return "STEER // WORK"
+        case .auto:
+            return "TURN // WORK"
+        }
+    }
+
+    private var accessibilityLabel: String {
+        switch mode {
+        case .queue: return "Message queued. Codex is working."
+        case .steer: return "Steering message sent. Codex is working."
+        case .auto: return "Message sent. Codex is working."
+        }
+    }
+}
+
+private struct CodexPipedText: View {
+    let text: String
+    let color: Color
+
+    @State private var visibleCharacterCount = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Text(displayedText)
+            .font(.system(size: 10, weight: .regular))
+            .foregroundStyle(color)
+            .lineLimit(2)
+            .task(id: text) {
+                await revealText()
+            }
+            .accessibilityLabel(text)
+    }
+
+    private var displayedText: String {
+        let visible = String(text.prefix(visibleCharacterCount))
+        return visibleCharacterCount < text.count ? "\(visible)▌" : visible
+    }
+
+    private func revealText() async {
+        guard !reduceMotion else {
+            visibleCharacterCount = text.count
+            return
+        }
+
+        visibleCharacterCount = 0
+        while visibleCharacterCount < text.count, !Task.isCancelled {
+            visibleCharacterCount = min(text.count, visibleCharacterCount + 4)
+            try? await Task.sleep(for: .milliseconds(24))
+        }
+    }
+}
+
+private struct CodexPressAndHoldButtonStyle: ButtonStyle {
+    let onPressingChanged: (Bool) -> Void
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
+            .animation(.easeOut(duration: 0.10), value: configuration.isPressed)
+            .onChange(of: configuration.isPressed) { _, isPressed in
+                onPressingChanged(isPressed)
+            }
+    }
+}
+
+private struct CodexDeckStatusSheet: View {
+    @ObservedObject private var store = CodexLaneStore.shared
+    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                theme.colors.background.ignoresSafeArea()
+
+                List {
+                    Section("Active task") {
+                        if let lane = store.activeLane {
+                            LabeledContent("Lane", value: "\(lane.number)")
+                            LabeledContent("Task", value: lane.task.title)
+                            LabeledContent("Project", value: lane.task.projectName)
+                        } else {
+                            Text("No lane is active.")
+                                .foregroundStyle(theme.colors.textTertiary)
+                        }
+                    }
+
+                    Section("Voice loop") {
+                        LabeledContent("Phase", value: store.phase.label)
+                        if let failure = store.failure {
+                            Text(failure.combined)
+                                .foregroundStyle(.orange)
+                        }
+                    }
+
+                    if let turn = store.lastTurn {
+                        Section("Last delivery") {
+                            LabeledContent("Result", value: turn.delivery.label)
+                            LabeledContent("Task", value: turn.taskTitle)
+                            Text(turn.response)
+                                .lineLimit(4)
+                                .foregroundStyle(theme.colors.textSecondary)
+                        }
+                    }
+                }
+                .scrollContentBackground(.hidden)
+            }
+            .navigationTitle("Codex Status")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+private struct CodexTurnHistorySheet: View {
+    @ObservedObject private var store = CodexLaneStore.shared
+    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                theme.colors.background.ignoresSafeArea()
+
+                List(store.history) { turn in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("LANE \(turn.laneNumber)")
+                            Spacer()
+                            Text(turn.delivery.label.uppercased())
+                        }
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(theme.colors.textTertiary)
+
+                        Text(turn.taskTitle)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(theme.colors.textPrimary)
+
+                        Text(turn.instruction)
+                            .font(.system(size: 12))
+                            .foregroundStyle(theme.colors.textSecondary)
+                            .lineLimit(2)
+
+                        Text(turn.response)
+                            .font(.system(size: 12))
+                            .foregroundStyle(theme.colors.textTertiary)
+                            .lineLimit(3)
+                    }
+                    .padding(.vertical, 5)
+                    .listRowBackground(theme.colors.background)
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+            }
+            .navigationTitle("Codex History")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+private extension AIResponseSpeechRoute {
+    var shortLabel: String {
+        switch self {
+        case .phone: return "PHONE"
+        case .watch: return "WATCH"
+        case .silent: return "MUTE"
+        }
+    }
+}
