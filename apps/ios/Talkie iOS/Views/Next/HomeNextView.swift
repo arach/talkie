@@ -164,7 +164,7 @@ enum SharedCaptureIngress {
         from url: URL,
         suggestedTitle: String? = nil,
         ingestionMethod: String,
-        onCapture: @escaping @MainActor (Capture) -> Void
+        onCapture: @escaping @MainActor @Sendable (Capture) -> Void
     ) {
         Task {
             let result = await URLBookmarkMetadataService.buildCapture(
@@ -180,15 +180,16 @@ enum SharedCaptureIngress {
                 capture = capture.copyWithImage(filename: filename)
             }
 
+            let importedCapture = capture
             await MainActor.run {
-                onCapture(capture)
+                onCapture(importedCapture)
             }
         }
     }
 
     static func processQueuedShare(
         id: String,
-        onCapture: @escaping @MainActor (Capture) -> Void
+        onCapture: @escaping @MainActor @Sendable (Capture) -> Void
     ) {
         guard let containerURL = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: TalkieMobileRuntimeIdentifiers.appGroupIdentifier
@@ -243,7 +244,7 @@ enum SharedCaptureIngress {
 
     private static func processSharedPhoto(
         imageBase64: String?,
-        onCapture: @escaping @MainActor (Capture) -> Void
+        onCapture: @escaping @MainActor @Sendable (Capture) -> Void
     ) async {
         guard let imageBase64,
               let imageData = Data(base64Encoded: imageBase64),

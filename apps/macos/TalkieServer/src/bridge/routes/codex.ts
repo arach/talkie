@@ -17,12 +17,14 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  realpathSync,
   renameSync,
+  statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { log } from "../../log";
-import { CODEX_TURN_JOBS_FILE } from "../../paths";
+import { CODEX_TASK_CREATIONS_FILE, CODEX_TURN_JOBS_FILE } from "../../paths";
 import { talkieServerFetch } from "../talkie-local-client";
 import { badRequest } from "./responses";
 
@@ -63,7 +65,8 @@ export interface BridgeEnvelope {
   ok: boolean;
   phase?: "accepted";
   tasks?: CodexTaskSummary[];
-  task?: { id: string; title?: string; cwd?: string };
+  task?: Partial<CodexTaskSummary> & { id: string };
+  nextCursor?: string | null;
   turnId?: string;
   response?: string;
   delivery?: string;
@@ -76,6 +79,13 @@ export interface BridgeEnvelope {
   updates?: CodexProgressUpdate[];
   error?: string;
   code?: string;
+}
+
+export interface CodexTaskCreation {
+  creationId: string;
+  cwd: string;
+  task: CodexTaskSummary;
+  createdAt: string;
 }
 
 export interface CodexProgressUpdate {
@@ -98,6 +108,7 @@ const UNAVAILABLE_CODES = new Set([
   "task-owner-unavailable",
   "app-server-unavailable",
   "bridge-missing",
+  "task-materialization-timeout",
 ]);
 
 /**
@@ -111,6 +122,8 @@ const RECOVERY_HINTS: Record<string, string> = {
   "task-owner-unavailable": "Open this task in Codex Desktop, then retry.",
   "app-server-unavailable": "Install or update Codex on this Mac, then retry.",
   "app-server-request-failed": "Open this task in Codex Desktop and retry from the deck.",
+  "task-materialization-timeout": "Codex did not finish creating the task. Retry the Watch instruction.",
+  "turn-interrupted": "The task and prompt reached Codex, but the turn was interrupted before it answered. Open the task to inspect it, then speak again.",
   "approval-required": "Open this task in Codex Desktop to review the approval request.",
   "stale-thread": "This lane no longer points to a Codex task. Re-map it.",
   "submission-conflict": "Create a new Talkie submission before sending different text.",
@@ -134,7 +147,34 @@ function parseSubmissionId(value: unknown): string {
   return value.toLowerCase();
 }
 
-class CodexBridgeError extends Error {
+function parseCreationId(value: unknown): string {
+  if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+    throw new CodexBridgeError("creationId must be a UUID.", "invalid-creation-id");
+  }
+  return value.toLowerCase();
+}
+
+export function canonicalCodexProjectDirectory(value: unknown): string {
+  const requested = typeof value === "string" ? value.trim() : "";
+  if (!requested || !path.isAbsolute(requested)) {
+    throw new CodexBridgeError(
+      "cwd must be an absolute project directory.",
+      "invalid-project-directory",
+    );
+  }
+  try {
+    const canonical = realpathSync(requested);
+    if (!statSync(canonical).isDirectory()) throw new Error("not a directory");
+    return canonical;
+  } catch {
+    throw new CodexBridgeError(
+      "cwd must refer to an existing project directory.",
+      "invalid-project-directory",
+    );
+  }
+}
+
+export class CodexBridgeError extends Error {
   constructor(message: string, readonly code: string) {
     super(message);
     this.name = "CodexBridgeError";
@@ -253,13 +293,15 @@ type CodexCommandRunner = (
  *
  * Talkie-started turns and explicit queue requests are serialized because
  * every adapter process tails one rollout offset. The first explicit queue
- * request still enters the exact task's owner-specific queue path; subsequent
- * requests wait on the per-task turn tail so an idle-to-active race cannot
- * start concurrent hidden turns. Steering remains a separate, ordered lane.
+ * request still enters the exact task's owner-specific queue path. Dispatches
+ * wait only for the preceding message to be accepted—not for its turn to
+ * complete—so explicit queue messages reach Codex's native queue immediately.
+ * Steering remains a separate, ordered lane.
  */
 export class CodexTaskMessageCoordinator {
   private readonly activeTurns = new Set<string>();
   private readonly turnTails = new Map<string, Promise<void>>();
+  private readonly queueDispatchTails = new Map<string, Promise<void>>();
   private readonly steerTails = new Map<string, Promise<void>>();
 
   constructor(private readonly run: CodexCommandRunner) {}
@@ -273,6 +315,12 @@ export class CodexTaskMessageCoordinator {
     onDisposition?: (envelope: BridgeEnvelope) => void,
     knownDelivery?: CodexTurnDelivery,
   ): Promise<BridgeEnvelope> {
+    log.info(
+      `[codex] route task=${taskId} mode=${mode} `
+        + `talkieActive=${this.activeTurns.has(taskId)} `
+        + `waitingTurn=${this.turnTails.has(taskId)} `
+        + `waitingQueueDispatch=${this.queueDispatchTails.has(taskId)}`,
+    );
     if (mode === "queue") {
       return this.queue(taskId, text, submissionId, onStart, onDisposition, knownDelivery);
     }
@@ -318,15 +366,42 @@ export class CodexTaskMessageCoordinator {
     onDisposition?: (envelope: BridgeEnvelope) => void,
     knownDelivery?: CodexTurnDelivery,
   ): Promise<BridgeEnvelope> {
-    return this.enqueueTurn(
-      taskId,
-      text,
-      "queue",
-      submissionId,
-      onStart,
-      onDisposition,
-      knownDelivery,
-    );
+    const predecessor = this.queueDispatchTails.get(taskId);
+    const ready = predecessor?.catch(() => undefined) ?? Promise.resolve();
+    let releaseDispatch: (() => void) | undefined;
+    const dispatched = new Promise<void>((resolve) => {
+      releaseDispatch = resolve;
+    });
+    const result = ready.then(async () => {
+      log.info(
+        `[codex] dispatching task=${taskId} command=queue `
+          + `waitedForPriorQueue=${Boolean(predecessor)}`,
+      );
+      onStart?.();
+      try {
+        return await this.run(
+          "queue",
+          taskId,
+          text,
+          submissionId,
+          (disposition) => {
+            onDisposition?.(disposition);
+            releaseDispatch?.();
+          },
+          knownDelivery,
+        );
+      } finally {
+        // Pre-acceptance errors must not strand later queue requests.
+        releaseDispatch?.();
+      }
+    });
+    this.queueDispatchTails.set(taskId, dispatched);
+    void dispatched.then(() => {
+      if (this.queueDispatchTails.get(taskId) === dispatched) {
+        this.queueDispatchTails.delete(taskId);
+      }
+    });
+    return result;
   }
 
   private enqueueTurn(
@@ -342,28 +417,33 @@ export class CodexTaskMessageCoordinator {
     // Once another Talkie turn is ahead of us, ordinary submit is sufficient:
     // the predecessor guarantees Codex is idle before this operation starts.
     const command: "submit" | "queue" = predecessor ? "submit" : firstCommand;
+    log.info(
+      `[codex] dispatch task=${taskId} requested=${firstCommand} command=${command} `
+        + `waitingForCompletion=${Boolean(predecessor)}`,
+    );
     const ready = predecessor?.catch(() => undefined) ?? Promise.resolve();
+    // Reserve the task synchronously. Durable recovery launches every pending
+    // receipt in one pass; waiting until the promise callback runs would let
+    // later steer requests misclassify themselves as separate idle turns.
+    this.activeTurns.add(taskId);
     const result = ready.then(async () => {
+      log.info(`[codex] dispatching task=${taskId} command=${command}`);
       onStart?.();
-      this.activeTurns.add(taskId);
-      try {
-        return await this.run(
-          command,
-          taskId,
-          text,
-          submissionId,
-          onDisposition,
-          knownDelivery,
-        );
-      } finally {
-        this.activeTurns.delete(taskId);
-      }
+      return await this.run(
+        command,
+        taskId,
+        text,
+        submissionId,
+        onDisposition,
+        knownDelivery,
+      );
     });
     const tail = result.then(() => undefined, () => undefined);
     this.turnTails.set(taskId, tail);
     void tail.then(() => {
       if (this.turnTails.get(taskId) === tail) {
         this.turnTails.delete(taskId);
+        this.activeTurns.delete(taskId);
       }
     });
     return result;
@@ -379,10 +459,18 @@ export class CodexTaskMessageCoordinator {
   ): Promise<BridgeEnvelope> {
     const predecessor = this.steerTails.get(taskId);
     const ready = predecessor?.catch(() => undefined) ?? Promise.resolve();
+    let releaseDispatch: (() => void) | undefined;
+    const dispatched = new Promise<void>((resolve) => {
+      releaseDispatch = resolve;
+    });
+    const recordDisposition = (disposition: BridgeEnvelope) => {
+      onDisposition?.(disposition);
+      releaseDispatch?.();
+    };
     const result = ready
       .then(() => {
         onStart?.();
-        return this.run("steer", taskId, text, submissionId, onDisposition, knownDelivery);
+        return this.run("steer", taskId, text, submissionId, recordDisposition, knownDelivery);
       })
       .catch((error: unknown) => {
         // The current turn can finish between speech capture and delivery.
@@ -394,20 +482,26 @@ export class CodexTaskMessageCoordinator {
             "submit",
             submissionId,
             undefined,
-            onDisposition,
+            recordDisposition,
           );
         }
         throw error;
+      })
+      .finally(() => {
+        // Pre-acceptance errors must not strand later steer requests. A
+        // successful direct steer or fallback submit releases this lane as
+        // soon as Codex acknowledges the message via recordDisposition.
+        releaseDispatch?.();
       });
-    const tail = result.then(() => undefined, () => undefined);
-    this.steerTails.set(taskId, tail);
-    void tail.then(() => {
-      if (this.steerTails.get(taskId) === tail) {
+    this.steerTails.set(taskId, dispatched);
+    void dispatched.then(() => {
+      if (this.steerTails.get(taskId) === dispatched) {
         this.steerTails.delete(taskId);
       }
     });
     return result;
   }
+
 }
 
 async function runCodexCommand(
@@ -426,6 +520,34 @@ async function runCodexCommand(
       onEnvelope: (candidate) => {
         if (candidate.ok && candidate.phase === "accepted" && isCodexTurnDelivery(candidate.delivery)) {
           onDisposition?.(candidate);
+        }
+      },
+    },
+  );
+  if (!envelope.ok) throw envelopeError(envelope);
+  return envelope;
+}
+
+async function runFreshCodexTurn(
+  cwd: string,
+  text: string,
+  submissionId: string,
+  onDisposition: (envelope: BridgeEnvelope) => void,
+): Promise<BridgeEnvelope> {
+  const envelope = await runBridge(
+    ["create-submit", cwd, submissionId],
+    {
+      stdin: text,
+      timeoutMs: TURN_TIMEOUT_MS,
+      onEnvelope: (candidate) => {
+        if (
+          candidate.ok
+          && (candidate.phase === "created"
+            || (candidate.phase === "accepted" && isCodexTurnDelivery(candidate.delivery)))
+          && candidate.task
+          && isCodexTaskSummary(candidate.task)
+        ) {
+          onDisposition(candidate);
         }
       },
     },
@@ -461,15 +583,23 @@ export interface CodexTurnJobSnapshot {
   code?: string;
   hint?: string;
   retryable?: boolean;
+  task?: CodexTaskSummary;
 }
 
 interface StoredCodexTurnJob {
   job: CodexTurnJobSnapshot;
   text: string;
+  freshCwd?: string;
 }
 
 type CodexActivityReader = (taskId: string) => Promise<BridgeEnvelope>;
 type CodexCompletionNotifier = (job: CodexTurnJobSnapshot) => Promise<void>;
+type CodexFreshTurnRunner = (
+  cwd: string,
+  text: string,
+  submissionId: string,
+  onDisposition: (envelope: BridgeEnvelope) => void,
+) => Promise<BridgeEnvelope>;
 
 export class CodexTurnJobManager {
   private readonly jobs = new Map<string, StoredCodexTurnJob>();
@@ -480,6 +610,7 @@ export class CodexTurnJobManager {
     private readonly readActivity: CodexActivityReader,
     private readonly notifyCompletion: CodexCompletionNotifier,
     private readonly storagePath?: string,
+    private readonly runFreshTurn?: CodexFreshTurnRunner,
   ) {
     const restoredPendingJobIDs = this.restore();
     if (restoredPendingJobIDs.length > 0) {
@@ -502,6 +633,7 @@ export class CodexTurnJobManager {
           "submission-conflict",
         );
       }
+      this.resumeRetryable(existing);
       return { ...existing.job };
     }
 
@@ -527,30 +659,150 @@ export class CodexTurnJobManager {
     return { ...job };
   }
 
+  async startFresh(
+    submissionId: string,
+    cwd: string,
+    text: string,
+  ): Promise<CodexTurnJobSnapshot> {
+    if (!this.runFreshTurn) {
+      throw new CodexBridgeError("Fresh Codex task dispatch is unavailable.", "bridge-failed");
+    }
+    const existing = this.jobs.get(submissionId);
+    if (existing) {
+      if (existing.freshCwd !== cwd || existing.text !== text || existing.job.mode !== "steer") {
+        throw new CodexBridgeError(
+          "This Talkie submission id already belongs to another Codex instruction.",
+          "submission-conflict",
+        );
+      }
+      this.resumeRetryable(existing);
+      return this.waitForFreshTask(existing);
+    }
+
+    this.prune();
+    const now = new Date().toISOString();
+    const job: CodexTurnJobSnapshot = {
+      id: submissionId,
+      submissionId,
+      taskId: "",
+      taskTitle: "New task",
+      status: "queued",
+      mode: "steer",
+      createdAt: now,
+      updatedAt: now,
+    };
+    const stored: StoredCodexTurnJob = { job, text, freshCwd: cwd };
+    this.jobs.set(job.id, stored);
+    this.persist();
+    log.info(`[codex] atomic fresh-task job ${job.id} created cwd=${cwd} chars=${text.length}`);
+    this.launch(stored);
+    return this.waitForFreshTask(stored);
+  }
+
   private launch(stored: StoredCodexTurnJob): void {
     const { job, text } = stored;
     if (this.runningExecutions.has(job.id)) return;
     this.runningExecutions.add(job.id);
 
-    const knownDelivery = isCodexTurnDelivery(job.delivery) ? job.delivery : undefined;
-    void this.coordinator.deliver(job.taskId, text, job.mode, job.submissionId, () => {
-      job.status = "running";
-      job.updatedAt = new Date().toISOString();
-      this.persist();
-      log.info(`[codex] async job ${job.id} running task=${job.taskId} mode=${job.mode}`);
-    }, (disposition) => {
-      if (!isCodexTurnDelivery(disposition.delivery)) return;
-      job.delivery = disposition.delivery;
-      job.turnId = disposition.turnId ?? job.turnId;
-      job.updatedAt = new Date().toISOString();
-      this.persist();
-      log.info(
-        `[codex] async job ${job.id} accepted task=${job.taskId} delivery=${job.delivery}`,
-      );
-    }, knownDelivery).then(async (envelope) => {
+    const deliver = async (): Promise<BridgeEnvelope> => {
+      if (stored.freshCwd && !job.taskId) {
+        job.status = "running";
+        job.updatedAt = new Date().toISOString();
+        this.persist();
+        return this.runFreshTurn!(
+          stored.freshCwd,
+          text,
+          job.submissionId,
+          (disposition) => {
+            if (!disposition.task || !isCodexTaskSummary(disposition.task)) {
+              throw new CodexBridgeError(
+                "Codex app-server accepted an unreadable fresh task.",
+                "protocol-mismatch",
+              );
+            }
+            job.taskId = disposition.task.id;
+            job.taskTitle = disposition.task.title;
+            job.task = disposition.task;
+            job.updatedAt = new Date().toISOString();
+            if (disposition.phase === "created") {
+              this.persist();
+              log.info(
+                `[codex] atomic fresh-task job ${job.id} created task=${job.taskId}`,
+              );
+              return;
+            }
+            if (!isCodexTurnDelivery(disposition.delivery)) {
+              throw new CodexBridgeError(
+                "Codex app-server accepted an unknown turn delivery.",
+                "protocol-mismatch",
+              );
+            }
+            job.delivery = disposition.delivery;
+            job.turnId = disposition.turnId;
+            this.persist();
+            log.info(
+              `[codex] atomic fresh-task job ${job.id} accepted task=${job.taskId} `
+                + `delivery=${job.delivery}`,
+            );
+          },
+        );
+      }
+
+      let preDeliveryTimeoutRetries = 0;
+      while (true) {
+        const knownDelivery = isCodexTurnDelivery(job.delivery) ? job.delivery : undefined;
+        try {
+          return await this.coordinator.deliver(
+            job.taskId,
+            text,
+            job.mode,
+            job.submissionId,
+            () => {
+              job.status = "running";
+              job.updatedAt = new Date().toISOString();
+              this.persist();
+              log.info(`[codex] async job ${job.id} running task=${job.taskId} mode=${job.mode}`);
+            },
+            (disposition) => {
+              if (!isCodexTurnDelivery(disposition.delivery)) return;
+              job.delivery = disposition.delivery;
+              job.turnId = disposition.turnId ?? job.turnId;
+              job.updatedAt = new Date().toISOString();
+              this.persist();
+              log.info(
+                `[codex] async job ${job.id} accepted task=${job.taskId} delivery=${job.delivery}`,
+              );
+            },
+            knownDelivery,
+          );
+        } catch (error) {
+          const code = error instanceof CodexBridgeError ? error.code : "bridge-failed";
+          const canRetry = code === "desktop-timeout"
+            && preDeliveryTimeoutRetries === 0
+            && !isCodexTurnDelivery(job.delivery);
+          if (!canRetry) throw error;
+
+          preDeliveryTimeoutRetries += 1;
+          job.status = "queued";
+          job.updatedAt = new Date().toISOString();
+          this.persist();
+          log.warn(
+            `[codex] async job ${job.id} timed out before acceptance; retrying once with the same submission`,
+          );
+        }
+      }
+    };
+
+    void deliver().then(async (envelope) => {
       if (!isCodexTurnDelivery(envelope.delivery)) {
         throw new CodexBridgeError(
           "Codex Desktop returned an unknown turn delivery.",
+          "protocol-mismatch",
+        );
+      }
+      if (!job.taskId) {
+        throw new CodexBridgeError(
+          "Codex completed a fresh turn without identifying its task.",
           "protocol-mismatch",
         );
       }
@@ -593,7 +845,7 @@ export class CodexTurnJobManager {
     const stored = this.jobs.get(jobId);
     if (!stored) return undefined;
     const { job } = stored;
-    if (job.status !== "running") return { ...job };
+    if (job.status !== "running" || !job.taskId) return { ...job };
 
     try {
       const activity = await this.readActivity(job.taskId);
@@ -624,8 +876,40 @@ export class CodexTurnJobManager {
     }
   }
 
+  private async waitForFreshTask(stored: StoredCodexTurnJob): Promise<CodexTurnJobSnapshot> {
+    const deadline = Date.now() + SNAPSHOT_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      if (stored.job.taskId) return { ...stored.job };
+      if (this.isTerminal(stored.job)) {
+        throw new CodexBridgeError(
+          stored.job.error || "Codex could not create the fresh task.",
+          stored.job.code || "bridge-failed",
+        );
+      }
+      await Bun.sleep(25);
+    }
+    throw new CodexBridgeError(
+      "Timed out waiting for Codex to accept the fresh task.",
+      "desktop-timeout",
+    );
+  }
+
   private isTerminal(job: CodexTurnJobSnapshot): boolean {
     return job.status === "blocked" || job.status === "completed" || job.status === "failed";
+  }
+
+  private resumeRetryable(stored: StoredCodexTurnJob): void {
+    const { job } = stored;
+    if (job.status !== "failed" || job.retryable !== true) return;
+    job.status = "queued";
+    job.updatedAt = new Date().toISOString();
+    job.error = undefined;
+    job.code = undefined;
+    job.hint = undefined;
+    job.retryable = undefined;
+    this.persist();
+    log.info(`[codex] retrying durable async job ${job.id} from its last accepted boundary`);
+    this.launch(stored);
   }
 
   private resumePendingJobs(jobIDs: string[]): void {
@@ -694,6 +978,124 @@ export class CodexTurnJobManager {
   }
 }
 
+type CodexTaskCreator = (cwd: string) => Promise<CodexTaskSummary>;
+
+/**
+ * Owns durable, client-keyed task creation so transport retries cannot create
+ * duplicate Codex threads. The same key is valid only for the same canonical
+ * working directory.
+ */
+export class CodexTaskCreationManager {
+  private readonly creations = new Map<string, CodexTaskCreation>();
+  private readonly inFlight = new Map<string, { cwd: string; task: Promise<CodexTaskSummary> }>();
+
+  constructor(
+    private readonly createTask: CodexTaskCreator,
+    private readonly storagePath?: string,
+  ) {
+    this.restore();
+  }
+
+  async create(creationId: string, cwd: string): Promise<CodexTaskSummary> {
+    const existing = this.creations.get(creationId);
+    if (existing) {
+      this.assertMatchingDirectory(existing.cwd, cwd);
+      return existing.task;
+    }
+
+    const active = this.inFlight.get(creationId);
+    if (active) {
+      this.assertMatchingDirectory(active.cwd, cwd);
+      return active.task;
+    }
+
+    const task = this.createTask(cwd).then((created) => {
+      if (!isCodexTaskSummary(created) || created.cwd !== cwd) {
+        throw new CodexBridgeError(
+          "Codex app-server returned an unreadable task.",
+          "protocol-mismatch",
+        );
+      }
+      this.creations.set(creationId, {
+        creationId,
+        cwd,
+        task: created,
+        createdAt: new Date().toISOString(),
+      });
+      this.persist();
+      return created;
+    }).finally(() => {
+      this.inFlight.delete(creationId);
+    });
+    this.inFlight.set(creationId, { cwd, task });
+    return task;
+  }
+
+  private assertMatchingDirectory(existing: string, requested: string): void {
+    if (existing === requested) return;
+    throw new CodexBridgeError(
+      "creationId already belongs to another project directory.",
+      "creation-conflict",
+    );
+  }
+
+  private restore(): void {
+    if (!this.storagePath || !existsSync(this.storagePath)) return;
+    try {
+      const decoded = JSON.parse(readFileSync(this.storagePath, "utf8")) as {
+        version?: unknown;
+        creations?: unknown;
+      };
+      if (decoded.version !== 1 || !Array.isArray(decoded.creations)) {
+        throw new Error("unsupported creation store");
+      }
+      for (const candidate of decoded.creations) {
+        const creation = candidate as CodexTaskCreation;
+        if (
+          typeof creation?.creationId !== "string" ||
+          typeof creation.cwd !== "string" ||
+          typeof creation.createdAt !== "string" ||
+          !isCodexTaskSummary(creation.task)
+        ) continue;
+        this.creations.set(creation.creationId, creation);
+      }
+    } catch (error) {
+      log.warn(`[codex] durable task creation store is unreadable: ${error}`);
+    }
+  }
+
+  private persist(): void {
+    if (!this.storagePath) return;
+    const directory = path.dirname(this.storagePath);
+    mkdirSync(directory, { recursive: true, mode: 0o700 });
+    chmodSync(directory, 0o700);
+    const temporaryPath = `${this.storagePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
+    try {
+      const payload = JSON.stringify({ version: 1, creations: [...this.creations.values()] });
+      writeFileSync(temporaryPath, payload, { encoding: "utf8", mode: 0o600 });
+      renameSync(temporaryPath, this.storagePath);
+      chmodSync(this.storagePath, 0o600);
+    } catch (error) {
+      try {
+        unlinkSync(temporaryPath);
+      } catch {
+        // The temp path may already have been atomically renamed.
+      }
+      log.warn(`[codex] could not persist task creations: ${error}`);
+    }
+  }
+}
+
+function isCodexTaskSummary(value: unknown): value is CodexTaskSummary {
+  const task = value as Partial<CodexTaskSummary> | undefined;
+  return typeof task?.id === "string" && task.id.length > 0
+    && typeof task.title === "string"
+    && typeof task.preview === "string"
+    && typeof task.cwd === "string" && path.isAbsolute(task.cwd)
+    && typeof task.project === "string"
+    && typeof task.updatedAt === "number" && Number.isFinite(task.updatedAt);
+}
+
 async function readCodexActivity(taskId: string): Promise<BridgeEnvelope> {
   const envelope = await runBridge(["activity", taskId], { timeoutMs: SNAPSHOT_TIMEOUT_MS });
   if (!envelope.ok) throw envelopeError(envelope);
@@ -734,6 +1136,24 @@ const turnJobs = new CodexTurnJobManager(
   // `bun test` imports this route module to exercise the coordinator and job
   // manager. Never let that import restore or mutate the live device receipts.
   process.env.NODE_ENV === "test" ? undefined : CODEX_TURN_JOBS_FILE,
+  runFreshCodexTurn,
+);
+
+const taskCreations = new CodexTaskCreationManager(
+  async (cwd) => {
+    const envelope = await runBridge(["create", cwd], { timeoutMs: SNAPSHOT_TIMEOUT_MS });
+    if (!envelope.ok) throw envelopeError(envelope);
+    if (!envelope.task || !isCodexTaskSummary(envelope.task)) {
+      throw new CodexBridgeError(
+        "Codex app-server returned an unreadable task.",
+        "protocol-mismatch",
+      );
+    }
+    return envelope.task;
+  },
+  // Tests inject their own creator and isolated storage. Importing this module
+  // must never read or mutate the live device's creation receipts.
+  process.env.NODE_ENV === "test" ? undefined : CODEX_TASK_CREATIONS_FILE,
 );
 
 /** Maps a bridge failure onto an HTTP response, preserving code + recovery hint. */
@@ -745,11 +1165,11 @@ function bridgeFailureResponse(error: unknown): Response {
   log.warn(`[codex] ${code}: ${message}`);
 
   const body = JSON.stringify({ error: message, code, ...(hint && { hint }) });
-  const status = code === "submission-conflict"
+  const status = code === "submission-conflict" || code === "creation-conflict"
     ? 409
     : code === "stale-thread"
       ? 410
-      : code === "invalid-submission-id"
+      : code === "invalid-submission-id" || code === "invalid-creation-id" || code === "invalid-project-directory"
         ? 400
         : UNAVAILABLE_CODES.has(code)
           ? 503
@@ -761,15 +1181,40 @@ function bridgeFailureResponse(error: unknown): Response {
  * GET /codex/tasks — recent Codex Desktop tasks for the lane mapper.
  * Read-only snapshot of the task catalog.
  */
-export async function codexTasksRoute(limitParam?: string | null): Promise<Response> {
+export async function codexTasksRoute(
+  limitParam?: string | null,
+  cursorParam?: string | null,
+): Promise<Response> {
   const parsed = Number(limitParam);
   const limit = Number.isFinite(parsed) && parsed > 0 ? Math.min(Math.floor(parsed), 100) : 25;
 
   try {
-    const envelope = await runBridge(["list", String(limit)], { timeoutMs: SNAPSHOT_TIMEOUT_MS });
+    const args = ["list", String(limit)];
+    if (cursorParam) args.push(cursorParam);
+    const envelope = await runBridge(args, { timeoutMs: SNAPSHOT_TIMEOUT_MS });
     if (!envelope.ok || !envelope.tasks) throw envelopeError(envelope);
+    if (!envelope.tasks.every(isCodexTaskSummary)) {
+      throw new CodexBridgeError(
+        "Codex app-server returned an unreadable task catalogue.",
+        "protocol-mismatch",
+      );
+    }
 
-    return Response.json({ tasks: envelope.tasks });
+    return Response.json({ tasks: envelope.tasks, nextCursor: envelope.nextCursor ?? null });
+  } catch (error) {
+    return bridgeFailureResponse(error);
+  }
+}
+
+/** POST /codex/tasks — create one durable Codex task in an exact project. */
+export async function codexTaskCreateRoute(body: unknown): Promise<Response> {
+  const payload = body as { creationId?: unknown; cwd?: unknown };
+  try {
+    const creationId = parseCreationId(payload?.creationId);
+    const cwd = canonicalCodexProjectDirectory(payload?.cwd);
+    const task = await taskCreations.create(creationId, cwd);
+    log.info(`[codex] resolved task creation ${creationId} as ${task.id} in ${cwd}`);
+    return Response.json({ task }, { status: 201 });
   } catch (error) {
     return bridgeFailureResponse(error);
   }
@@ -879,6 +1324,27 @@ export async function codexTurnStartRoute(body: unknown): Promise<Response> {
     const submissionId = parseSubmissionId(payload.submissionId);
     const job = turnJobs.start(submissionId, taskId, taskTitle || "Codex task", text, mode);
     log.info(`[codex] accepted async job ${job.id} for task ${taskId}`);
+    return Response.json({ job }, { status: 202 });
+  } catch (error) {
+    return bridgeFailureResponse(error);
+  }
+}
+
+/** POST /codex/task-turns — atomically create a task and start its first turn. */
+export async function codexFreshTurnStartRoute(body: unknown): Promise<Response> {
+  const payload = body as {
+    submissionId?: unknown;
+    cwd?: unknown;
+    text?: unknown;
+  };
+  const text = typeof payload?.text === "string" ? payload.text.trim() : "";
+  if (!text) return badRequest("text is required");
+
+  try {
+    const submissionId = parseSubmissionId(payload.submissionId);
+    const cwd = canonicalCodexProjectDirectory(payload.cwd);
+    const job = await turnJobs.startFresh(submissionId, cwd, text);
+    log.info(`[codex] accepted atomic fresh-task job ${job.id} for task ${job.taskId}`);
     return Response.json({ job }, { status: 202 });
   } catch (error) {
     return bridgeFailureResponse(error);

@@ -231,7 +231,7 @@ struct CodexResponseSheet: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Lane \(turn.laneNumber) · \(turn.taskTitle)")
+                            Text("\(turn.laneNumber.map { "Lane \($0)" } ?? "No lane") · \(turn.taskTitle)")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(theme.colors.textPrimary)
                             Text(turn.delivery.detailLabel)

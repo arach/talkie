@@ -153,8 +153,10 @@ struct RecordingView: View {
     private func toggleRecording() {
         if recorder.isRecording {
             // Stop and send
-            if let audioURL = recorder.stopRecording() {
-                sessionManager.sendAudio(fileURL: audioURL)
+            Task { @MainActor in
+                if let audioURL = await recorder.stopRecording() {
+                    sessionManager.sendAudio(fileURL: audioURL)
+                }
             }
         } else {
             // Start recording

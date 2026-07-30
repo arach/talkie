@@ -12,6 +12,29 @@
 
 import Foundation
 
+private func compactCodexWorkingDirectory(_ cwd: String) -> String {
+    let standardizedPath = URL(fileURLWithPath: cwd).standardizedFileURL.path
+    let localHome = URL.homeDirectory.standardizedFileURL.path
+
+    if standardizedPath == localHome { return "~" }
+    if standardizedPath.hasPrefix("\(localHome)/") {
+        return "~\(standardizedPath.dropFirst(localHome.count))"
+    }
+
+    // Project paths come from the paired host, not the iPhone. A Mac path
+    // therefore cannot be shortened by comparing it with the phone's home
+    // directory. Recognize conventional remote user homes structurally while
+    // keeping the actual username out of the presentation.
+    let components = standardizedPath.split(separator: "/", omittingEmptySubsequences: true)
+    guard components.count >= 2 else { return standardizedPath }
+
+    let isRemoteUserHome = components[0] == "Users" || components[0] == "home"
+    guard isRemoteUserHome else { return standardizedPath }
+
+    let suffix = components.dropFirst(2)
+    return suffix.isEmpty ? "~" : "~/\(suffix.joined(separator: "/"))"
+}
+
 /// How a message spoken while Codex is working should be delivered.
 ///
 /// Steer is the lane default because voice is primarily used to adjust work
@@ -77,12 +100,14 @@ struct CodexTaskSummary: Identifiable, Codable, Equatable, Sendable {
     }
 
     var compactPath: String {
-        let home = URL.homeDirectory.path
-        if cwd == home { return "~" }
-        if cwd.hasPrefix("\(home)/") {
-            return "~\(cwd.dropFirst(home.count))"
-        }
-        return cwd
+        compactCodexWorkingDirectory(cwd)
+    }
+
+    /// Stable project identity used by the phone-side picker. The Mac bridge
+    /// returns canonical paths; standardizing again keeps older task rows from
+    /// producing duplicate choices because of `.` or `..` segments.
+    var canonicalWorkingDirectory: String {
+        URL(fileURLWithPath: cwd).standardizedFileURL.path
     }
 
     var shortID: String { String(id.suffix(8)) }
@@ -118,6 +143,47 @@ struct CodexTaskSummary: Identifiable, Codable, Equatable, Sendable {
         if seconds < 86_400 { return "\(Int(seconds / 3_600))h" }
         if seconds < 604_800 { return "\(Int(seconds / 86_400))d" }
         return "\(Int(seconds / 604_800))w"
+    }
+}
+
+/// One project choice for creating a Codex channel.
+struct CodexProjectSummary: Identifiable, Equatable, Sendable {
+    let hostID: String
+    let cwd: String
+    let name: String
+    let updatedAt: Double
+    let isAssignedToLane: Bool
+
+    var id: String { "\(hostID)|\(cwd)" }
+
+    var compactPath: String {
+        compactCodexWorkingDirectory(cwd)
+    }
+}
+
+enum CodexDispatchError: LocalizedError, Equatable {
+    case emptyInstruction
+    case noActiveHost
+    case hostMismatch
+    case unavailableTask
+    case invalidProject
+    case projectMismatch
+
+    var errorDescription: String? {
+        switch self {
+        case .emptyInstruction:
+            return "The Codex instruction is empty."
+        case .noActiveHost:
+            return "No paired Mac is active."
+        case .hostMismatch:
+            return "The selected Codex channel belongs to another Mac."
+        case .unavailableTask:
+            return "That exact Codex task is no longer available on this iPhone."
+        case .invalidProject:
+            return "The selected Codex channel has an invalid project directory."
+        case .projectMismatch:
+            return "The selected Codex channel no longer matches its project. Pick it again."
+        }
     }
 }
 
@@ -254,10 +320,10 @@ enum CodexLanePhase: Equatable, Sendable {
 /// they switch to a different task.
 enum CodexNarrationState: Equatable, Sendable {
     case idle
-    case preparing(laneNumber: Int, route: AIResponseSpeechRoute)
-    case speaking(laneNumber: Int, route: AIResponseSpeechRoute)
-    case failed(laneNumber: Int, route: AIResponseSpeechRoute, message: String)
-    case suppressed(laneNumber: Int, route: AIResponseSpeechRoute)
+    case preparing(laneNumber: Int?, route: AIResponseSpeechRoute)
+    case speaking(laneNumber: Int?, route: AIResponseSpeechRoute)
+    case failed(laneNumber: Int?, route: AIResponseSpeechRoute, message: String)
+    case suppressed(laneNumber: Int?, route: AIResponseSpeechRoute)
 
     var laneNumber: Int? {
         switch self {
@@ -288,7 +354,8 @@ enum CodexNarrationState: Equatable, Sendable {
 /// narration ends (or when narration never happened at all).
 struct CodexTurnRecord: Identifiable, Equatable, Sendable {
     let id: UUID
-    let laneNumber: Int
+    /// Nil for an exact channel which has not been assigned to a numbered lane.
+    let laneNumber: Int?
     let taskID: String
     let taskTitle: String
     let instruction: String
@@ -303,7 +370,7 @@ struct CodexTurnRecord: Identifiable, Equatable, Sendable {
 
     init(
         id: UUID = UUID(),
-        laneNumber: Int,
+        laneNumber: Int?,
         taskID: String,
         taskTitle: String,
         instruction: String,

@@ -296,6 +296,7 @@ class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsD
 
     private var captureSession: AVCaptureSession?
     private var previewLayer: AVCaptureVideoPreviewLayer?
+    private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -352,6 +353,10 @@ class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsD
 
         self.captureSession = session
         self.previewLayer = preview
+        self.rotationCoordinator = AVCaptureDevice.RotationCoordinator(
+            device: device,
+            previewLayer: preview
+        )
         updatePreviewOrientation()
     }
 
@@ -367,23 +372,13 @@ class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsD
 
     private func updatePreviewOrientation() {
         guard let connection = previewLayer?.connection,
-              connection.isVideoOrientationSupported,
-              let interfaceOrientation = view.window?.windowScene?.interfaceOrientation else {
+              let rotationCoordinator else {
             return
         }
 
-        switch interfaceOrientation {
-        case .portrait:
-            connection.videoOrientation = .portrait
-        case .portraitUpsideDown:
-            connection.videoOrientation = .portraitUpsideDown
-        case .landscapeLeft:
-            connection.videoOrientation = .landscapeLeft
-        case .landscapeRight:
-            connection.videoOrientation = .landscapeRight
-        default:
-            break
-        }
+        let rotationAngle = rotationCoordinator.videoRotationAngleForHorizonLevelPreview
+        guard connection.isVideoRotationAngleSupported(rotationAngle) else { return }
+        connection.videoRotationAngle = rotationAngle
     }
 
     func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {

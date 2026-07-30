@@ -286,11 +286,36 @@ actor BridgeClient {
 
     // MARK: - Codex exact-task lanes
 
-    /// Recent Codex Desktop tasks for the lane mapper.
-    func codexTasks(limit: Int = 25) async throws -> [CodexTaskSummary] {
+    /// One cursor page of Codex Desktop tasks for the channel catalogue.
+    func codexTasks(limit: Int = 25, cursor: String? = nil) async throws -> CodexTasksResponse {
         let bounded = max(1, min(limit, 100))
-        let data = try await get("/codex/tasks?limit=\(bounded)")
-        return try JSONDecoder().decode(CodexTasksResponse.self, from: data).tasks
+        var components = URLComponents()
+        components.path = "/codex/tasks"
+        components.queryItems = [URLQueryItem(name: "limit", value: "\(bounded)")]
+        if let cursor = cursor?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !cursor.isEmpty {
+            components.queryItems?.append(URLQueryItem(name: "cursor", value: cursor))
+        }
+        let path = components.string ?? "/codex/tasks?limit=\(bounded)"
+        let data = try await get(path)
+        return try JSONDecoder().decode(CodexTasksResponse.self, from: data)
+    }
+
+    /// Creates an empty task in one exact project working directory.
+    ///
+    /// Deliberately omits model, approval, and sandbox overrides so Codex uses
+    /// the user's configured defaults on the Mac.
+    func codexCreateTask(creationId: UUID, cwd: String) async throws -> CodexTaskSummary {
+        struct Request: Encodable {
+            let creationId: UUID
+            let cwd: String
+        }
+
+        let data = try await post(
+            "/codex/tasks",
+            body: Request(creationId: creationId, cwd: cwd)
+        )
+        return try JSONDecoder().decode(CodexCreateTaskResponse.self, from: data).task
     }
 
     /// Confirms Codex Desktop still owns this exact task.
@@ -349,6 +374,27 @@ actor BridgeClient {
                 text: text,
                 mode: mode
             )
+        )
+        return try JSONDecoder().decode(CodexTurnJobResponse.self, from: data).job
+    }
+
+    /// Atomically creates a fresh task and starts its first turn on the Mac.
+    ///
+    /// The Mac keeps one Codex app-server alive across both operations so the
+    /// new thread has a rollout before any later process attempts to resume it.
+    func codexStartFreshTurn(
+        submissionId: UUID,
+        cwd: String,
+        text: String
+    ) async throws -> CodexTurnJob {
+        struct Request: Encodable {
+            let submissionId: UUID
+            let cwd: String
+            let text: String
+        }
+        let data = try await post(
+            "/codex/task-turns",
+            body: Request(submissionId: submissionId, cwd: cwd, text: text)
         )
         return try JSONDecoder().decode(CodexTurnJobResponse.self, from: data).job
     }
@@ -1027,6 +1073,11 @@ struct CompanionTriggerRequest: Codable {
 
 struct CodexTasksResponse: Codable {
     let tasks: [CodexTaskSummary]
+    let nextCursor: String?
+}
+
+struct CodexCreateTaskResponse: Codable {
+    let task: CodexTaskSummary
 }
 
 /// The subset of a task the Mac re-confirms at validation time. Ownership is
@@ -1076,6 +1127,7 @@ struct CodexTurnJob: Codable, Equatable, Sendable {
     let code: String?
     let hint: String?
     let retryable: Bool?
+    let task: CodexTaskSummary?
 }
 
 struct CodexTurnJobResponse: Codable {

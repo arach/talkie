@@ -20,6 +20,8 @@ const QUEUE_MUTATION_LOCK_TIMEOUT_MS = 10_000;
 const TURN_TIMEOUT_MS = 30 * 60_000;
 const QUEUED_TURN_TIMEOUT_MS = 60 * 60_000;
 const APP_SERVER_REQUEST_TIMEOUT_MS = 30_000;
+const CODEX_THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const CODEX_THREAD_DEEP_LINK_HOST = 'threads';
 
 const CODEX_EXECUTABLE_CANDIDATES = [
   process.env.TALKIE_CODEX_EXECUTABLE,
@@ -34,6 +36,33 @@ function codexHome() {
   return process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
 }
 
+/**
+ * Ask Codex Desktop to ingest a newly-created task through its supported URL
+ * scheme. App-server thread/start creates the rollout, while this handoff lets
+ * the desktop app associate that rollout with its saved project for the cwd.
+ * Discovery must remain best-effort: task delivery still succeeds when the
+ * desktop app is unavailable.
+ */
+function revealTaskInCodexDesktop(threadId) {
+  if (!CODEX_THREAD_ID_PATTERN.test(threadId)) return false;
+  if (process.env.TALKIE_CODEX_DISABLE_DESKTOP_REVEAL === '1') return false;
+  if (process.platform !== 'darwin' && !process.env.TALKIE_CODEX_OPEN_EXECUTABLE) return false;
+
+  const openExecutable = process.env.TALKIE_CODEX_OPEN_EXECUTABLE || '/usr/bin/open';
+  const deepLink = new URL(`codex://${CODEX_THREAD_DEEP_LINK_HOST}/${threadId}`);
+  try {
+    const child = spawn(openExecutable, ['-g', deepLink.href], {
+      detached: true,
+      stdio: 'ignore',
+    });
+    child.on('error', () => {});
+    child.unref();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function writeResult(result) {
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
@@ -44,47 +73,43 @@ function fail(message, code = 'bridge-failed') {
   throw error;
 }
 
-function listTasks(limit) {
-  const database = path.join(codexHome(), 'state_5.sqlite');
-  if (!fs.existsSync(database)) {
-    fail('Codex task catalog is unavailable.', 'catalog-unavailable');
-  }
-  const boundedLimit = Math.max(1, Math.min(Number(limit) || 50, 100));
-  const query = `
-    SELECT
-      state.id AS id,
-      COALESCE(
-        NULLIF(SUBSTR(REPLACE(state.name, CHAR(10), ' '), 1, 120), ''),
-        NULLIF(SUBSTR(REPLACE(state.title, CHAR(10), ' '), 1, 120), ''),
-        NULLIF(SUBSTR(REPLACE(state.first_user_message, CHAR(10), ' '), 1, 96), ''),
-        NULLIF(SUBSTR(REPLACE(state.preview, CHAR(10), ' '), 1, 96), ''),
-        'Untitled task'
-      ) AS title,
-      SUBSTR(REPLACE(COALESCE(state.preview, ''), CHAR(10), ' '), 1, 280) AS preview,
-      state.cwd AS cwd,
-      state.git_branch AS gitBranch,
-      state.git_origin_url AS gitOriginURL,
-      CASE WHEN state.updated_at_ms > 0 THEN state.updated_at_ms / 1000.0 ELSE state.updated_at END AS updatedAt
-    FROM threads AS state
-    WHERE
-      state.archived = 0
-      AND COALESCE(state.preview, '') <> ''
-      AND COALESCE(state.agent_role, '') <> 'subagent'
-      AND COALESCE(state.thread_source, 'user') IN ('', 'user')
-      AND COALESCE(state.first_user_message, '') NOT LIKE '<codex_delegation>%'
-      AND COALESCE(state.first_user_message, '') NOT LIKE '<realtime_delegation>%'
-      AND COALESCE(state.first_user_message, '') NOT LIKE '[Base]%'
-    ORDER BY state.recency_at_ms DESC, state.updated_at_ms DESC
-    LIMIT ${boundedLimit};
-  `;
-  const output = execFileSync('/usr/bin/sqlite3', ['-readonly', '-json', database, query], {
-    encoding: 'utf8',
-    maxBuffer: 8 * 1024 * 1024,
-  });
-  return JSON.parse(output || '[]').map((task) => ({
-    ...task,
-    project: projectName(task.gitOriginURL, task.cwd),
-  }));
+function taskSummary(thread, fallbackCwd = '') {
+  const cwd = typeof thread?.cwd === 'string' && thread.cwd.trim()
+    ? thread.cwd
+    : fallbackCwd;
+  const gitBranch = typeof thread?.gitInfo?.branch === 'string'
+    ? thread.gitInfo.branch
+    : null;
+  const gitOriginURL = typeof thread?.gitInfo?.originUrl === 'string'
+    ? thread.gitInfo.originUrl
+    : null;
+  const updatedAt = Number(thread?.updatedAt ?? thread?.createdAt ?? Date.now() / 1000);
+  const preview = typeof thread?.preview === 'string' ? thread.preview : '';
+  const title = typeof thread?.name === 'string' && thread.name.trim()
+    ? thread.name.trim()
+    : preview.trim()
+      ? preview.replace(/\s+/g, ' ').slice(0, 120)
+      : 'New task';
+  return {
+    id: thread.id,
+    title,
+    preview: preview.replace(/\s+/g, ' ').slice(0, 280),
+    cwd,
+    project: projectName(gitOriginURL, cwd),
+    gitBranch,
+    gitOriginURL,
+    updatedAt: Number.isFinite(updatedAt) ? updatedAt : 0,
+  };
+}
+
+function isVisibleTask(thread) {
+  if (!thread || typeof thread.id !== 'string' || !thread.id.trim()) return false;
+  if (thread.ephemeral === true || thread.parentThreadId) return false;
+  if (typeof thread.agentRole === 'string' && thread.agentRole.trim()) return false;
+  const preview = typeof thread.preview === 'string' ? thread.preview.trim() : '';
+  return !preview.startsWith('<codex_delegation>')
+    && !preview.startsWith('<realtime_delegation>')
+    && !preview.startsWith('[Base]');
 }
 
 /** A stable, human project label. Git origin wins over generated worktree names. */
@@ -395,6 +420,8 @@ async function reconcileExistingSubmission(
   knownDelivery,
   onAccepted,
   blockingError,
+  threadTurns,
+  terminalTurn,
 ) {
   // Codex Desktop currently assigns a fresh client_id when it promotes a
   // queued follow-up into a turn. For a durable queued receipt, the exact text
@@ -422,6 +449,10 @@ async function reconcileExistingSubmission(
   if (match.status === 'failed') {
     fail(match.response || 'The existing Codex turn failed.', 'turn-failed');
   }
+  const resumedTurn = Array.isArray(threadTurns)
+    ? threadTurns.find((turn) => turn?.id === match.turnId)
+    : null;
+  throwIfTurnTerminated(() => resumedTurn);
   const response = match.status === 'completed'
     ? match.response
     : await waitForTurn(
@@ -429,6 +460,7 @@ async function reconcileExistingSubmission(
         match.scanStart,
         match.turnId,
         blockingError,
+        terminalTurn ? () => terminalTurn(match.turnId) : undefined,
       );
   if (!response) fail('Codex completed without a final answer.', 'empty-response');
   return {
@@ -470,6 +502,20 @@ function taskRolloutPath(threadId) {
   }).trim();
   if (!rolloutPath) fail('The selected Codex task no longer exists.', 'stale-thread');
   return assertRolloutPath(rolloutPath, threadId);
+}
+
+async function waitForTaskRolloutPath(threadId, blockingError) {
+  const deadline = Date.now() + APP_SERVER_REQUEST_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    throwIfBlocked(blockingError);
+    try {
+      return taskRolloutPath(threadId);
+    } catch (error) {
+      if (error?.code !== 'stale-thread') throw error;
+    }
+    await sleep(100);
+  }
+  fail('Codex accepted the first turn but did not materialize its task.', 'task-materialization-timeout');
 }
 
 /**
@@ -837,6 +883,7 @@ class AppServerClient {
     this.nextRequestId = 1;
     this.closing = false;
     this.blockingError = null;
+    this.terminalTurns = new Map();
   }
 
   async connect() {
@@ -882,6 +929,39 @@ class AppServerClient {
       fail('Codex app-server returned the wrong task.', 'task-mismatch');
     }
     return { ...result, thread };
+  }
+
+  async startThread(cwd) {
+    const result = await this.request('thread/start', { cwd });
+    const thread = result?.thread;
+    if (!thread || typeof thread.id !== 'string' || !thread.id.trim()) {
+      fail('Codex app-server returned an unreadable task.', 'protocol-mismatch');
+    }
+    return thread;
+  }
+
+  async listThreads(limit, cursor) {
+    const result = await this.request('thread/list', {
+      limit,
+      sortKey: 'recency_at',
+      sortDirection: 'desc',
+      sourceKinds: ['cli', 'vscode', 'appServer'],
+      ...(cursor ? { cursor } : {}),
+    });
+    if (!Array.isArray(result?.data)) {
+      fail('Codex app-server returned an unreadable task catalogue.', 'protocol-mismatch');
+    }
+    if (
+      result.nextCursor !== null
+      && result.nextCursor !== undefined
+      && (typeof result.nextCursor !== 'string' || !result.nextCursor)
+    ) {
+      fail('Codex app-server returned an unreadable task cursor.', 'protocol-mismatch');
+    }
+    return {
+      data: result.data,
+      nextCursor: result.nextCursor ?? null,
+    };
   }
 
   async startTurn(threadId, text, clientUserMessageId) {
@@ -949,6 +1029,16 @@ class AppServerClient {
         ));
         continue;
       }
+      if (message.id === undefined && message.method === 'turn/completed') {
+        const turn = message.params?.turn;
+        if (
+          typeof turn?.id === 'string'
+          && ['completed', 'interrupted', 'failed'].includes(turn.status)
+        ) {
+          this.terminalTurns.set(turn.id, turn);
+        }
+        continue;
+      }
       if (message.id === undefined || message.method) {
         // Notifications are observed through the private transcript below. A
         // server-initiated approval request must never be approved by Talkie.
@@ -995,6 +1085,10 @@ class AppServerClient {
     return this.blockingError;
   }
 
+  terminalTurn(turnId) {
+    return this.terminalTurns.get(turnId) || null;
+  }
+
   close() {
     this.closing = true;
     this.rejectAll(new Error('Codex app-server connection closed.'));
@@ -1020,14 +1114,23 @@ function throwIfBlocked(blockingError) {
   if (error) throw error;
 }
 
-async function waitForTurn(rolloutPath, offset, turnId, blockingError) {
+function throwIfTurnTerminated(terminalTurn) {
+  const turn = terminalTurn?.();
+  if (turn?.status === 'interrupted') {
+    fail('The Codex turn was interrupted before it completed.', 'turn-interrupted');
+  }
+  if (turn?.status === 'failed') {
+    fail(turn.error?.message || 'The Codex turn failed.', 'turn-failed');
+  }
+}
+
+async function waitForTurn(rolloutPath, offset, turnId, blockingError, terminalTurn) {
   const descriptor = fs.openSync(rolloutPath, 'r');
   let position = offset;
   let pending = '';
   const deadline = Date.now() + TURN_TIMEOUT_MS;
   try {
     while (Date.now() < deadline) {
-      throwIfBlocked(blockingError);
       const size = fs.fstatSync(descriptor).size;
       if (size > position) {
         const chunk = Buffer.allocUnsafe(Math.min(size - position, 1024 * 1024));
@@ -1055,6 +1158,12 @@ async function waitForTurn(rolloutPath, offset, turnId, blockingError) {
           }
         }
       }
+      // The rollout remains authoritative for a successful final response, but
+      // interrupted/failed app-server turns do not always append a matching
+      // terminal rollout event. Observe the protocol notification after first
+      // draining the file so a simultaneously-written answer wins.
+      throwIfBlocked(blockingError);
+      throwIfTurnTerminated(terminalTurn);
       await sleep(150);
     }
   } finally {
@@ -1166,6 +1275,89 @@ async function withAppServer(threadId, action) {
   } finally {
     client.close();
   }
+}
+
+async function withFreshAppServer(action) {
+  const client = new AppServerClient();
+  try {
+    await client.connect();
+    return await action(client);
+  } finally {
+    client.close();
+  }
+}
+
+async function createTask(cwd) {
+  return withFreshAppServer(async (client) => {
+    const thread = await client.startThread(cwd);
+    revealTaskInCodexDesktop(thread.id);
+    return taskSummary(thread, cwd);
+  });
+}
+
+async function createAndSubmitTask(cwd, text, clientUserMessageId, onAccepted) {
+  return withFreshAppServer(async (client) => {
+    const thread = await client.startThread(cwd);
+    revealTaskInCodexDesktop(thread.id);
+    const task = taskSummary(thread, cwd);
+    // Publish the durable task identity before starting its first turn. If the
+    // app-server connection drops in the narrow gap between thread/start and
+    // turn/start, the caller can resume this task with the same user-message
+    // id instead of creating a second empty task.
+    onAccepted?.({
+      ok: true,
+      phase: 'created',
+      threadId: thread.id,
+      task,
+    });
+    const turnId = await client.startTurn(thread.id, text, clientUserMessageId);
+    onAccepted?.({
+      ...acceptedDisposition(thread.id, 'started-turn', 'steer', turnId),
+      task,
+    });
+    const rolloutPath = await waitForTaskRolloutPath(
+      thread.id,
+      () => client.pendingBlockingError(),
+    );
+    const response = await waitForTurn(
+      rolloutPath,
+      0,
+      turnId,
+      () => client.pendingBlockingError(),
+      () => client.terminalTurn(turnId),
+    );
+    return {
+      ok: true,
+      task,
+      threadId: thread.id,
+      turnId,
+      delivery: 'started-turn',
+      requestedDelivery: 'steer',
+      response,
+    };
+  });
+}
+
+async function listTaskPage(limit, cursor) {
+  const boundedLimit = Math.max(1, Math.min(Number(limit) || 25, 100));
+  return withFreshAppServer(async (client) => {
+    let pageCursor = typeof cursor === 'string' && cursor ? cursor : undefined;
+    const seenCursors = new Set();
+    while (true) {
+      if (pageCursor) {
+        if (seenCursors.has(pageCursor)) {
+          fail('Codex app-server repeated a task cursor.', 'protocol-mismatch');
+        }
+        seenCursors.add(pageCursor);
+      }
+      const page = await client.listThreads(boundedLimit, pageCursor);
+      const tasks = page.data.filter(isVisibleTask).map((thread) => taskSummary(thread));
+      if (tasks.length > 0 || page.nextCursor === null) {
+        return { tasks, nextCursor: page.nextCursor };
+      }
+      pageCursor = page.nextCursor;
+    }
+  });
 }
 
 function shouldUseAppServerFallback(error) {
@@ -1373,6 +1565,8 @@ async function runAppServerCommand(
       knownDelivery,
       onAccepted,
       () => client.pendingBlockingError(),
+      thread.turns,
+      (turnId) => client.terminalTurn(turnId),
     );
     if (reconciled) return reconciled;
     let offset = fs.statSync(rolloutPath).size;
@@ -1414,6 +1608,7 @@ async function runAppServerCommand(
         queued.offset,
         queued.turnId,
         () => client.pendingBlockingError(),
+        () => client.terminalTurn(queued.turnId),
       );
       return {
         ok: true,
@@ -1458,6 +1653,7 @@ async function runAppServerCommand(
       offset,
       turnId,
       () => client.pendingBlockingError(),
+      () => client.terminalTurn(turnId),
     );
     return {
       ok: true,
@@ -1473,7 +1669,25 @@ async function runAppServerCommand(
 async function main() {
   const [command, argument, rawClientUserMessageId, rawKnownDelivery] = process.argv.slice(2);
   if (command === 'list') {
-    writeResult({ ok: true, tasks: listTasks(argument) });
+    const page = await listTaskPage(argument, rawClientUserMessageId);
+    writeResult({ ok: true, ...page });
+    return;
+  }
+  if (command === 'create' && argument) {
+    writeResult({ ok: true, task: await createTask(argument) });
+    return;
+  }
+  if (command === 'create-submit' && argument) {
+    const text = (await readStdin()).trim();
+    if (!text) fail('The transcript is empty.', 'empty-transcript');
+    const clientUserMessageId = normalizeClientUserMessageId(rawClientUserMessageId);
+    const result = await createAndSubmitTask(
+      argument,
+      text,
+      clientUserMessageId,
+      (accepted) => writeResult(accepted),
+    );
+    writeResult(result);
     return;
   }
   if (command === 'activity' && argument) {
@@ -1514,7 +1728,7 @@ async function main() {
     return;
   }
   fail(
-    'Usage: codex-desktop-bridge.cjs list [limit] | activity|validate <task-id> | submit|steer|queue <task-id> [submission-id]',
+    'Usage: codex-desktop-bridge.cjs list [limit] [cursor] | create <cwd> | activity|validate <task-id> | submit|steer|queue <task-id> [submission-id]',
     'usage',
   );
 }
@@ -1532,7 +1746,10 @@ if (require.main === module) {
 
 module.exports = {
   appendQueuedFollowUp,
-  listTasks,
+  createTask,
+  createAndSubmitTask,
+  isVisibleTask,
+  listTaskPage,
   makeQueuedFollowUp,
   projectName,
   readQueuedFollowUps,

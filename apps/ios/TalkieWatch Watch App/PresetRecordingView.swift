@@ -295,39 +295,39 @@ struct PresetRecordingView: View {
     private func stopAndSend() {
         WKInterfaceDevice.current().play(.stop)
         lastSentDuration = recorder.recordingDuration
-        guard let audioURL = recorder.stopRecording() else {
-            isRecording = false
-            onComplete()
-            return
-        }
+        isRecording = false
 
-        transition(to: .captured)
-        WKInterfaceDevice.current().play(.click)
+        Task { @MainActor in
+            guard let audioURL = await recorder.stopRecording() else {
+                onComplete()
+                return
+            }
 
-        sessionManager.sendAudio(
-            fileURL: audioURL,
-            duration: lastSentDuration,
-            preset: forcesAI ? preset : nil,
-            autoRoute: !forcesAI
-        )
+            transition(to: .captured)
+            WKInterfaceDevice.current().play(.click)
 
-        // Capture the memoId so we can observe the right entry.
-        currentMemoId = sessionManager.recentMemos.first?.id
+            sessionManager.sendAudio(
+                fileURL: audioURL,
+                duration: lastSentDuration,
+                preset: forcesAI ? preset : nil,
+                autoRoute: !forcesAI
+            )
 
-        // Phone not reachable? Jump straight to QUEUED and dismiss — no
-        // hanging. The audio is already queued for background transfer
-        // by sendAudio() in this case.
-        if !sessionManager.isReachable {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            // Capture the memoId so we can observe the right entry.
+            currentMemoId = sessionManager.recentMemos.first?.id
+
+            // Phone not reachable? Jump straight to QUEUED and dismiss — no
+            // hanging. The audio is already queued for background transfer.
+            if !sessionManager.isReachable {
+                try? await Task.sleep(for: .milliseconds(450))
                 transition(to: .queued)
                 scheduleDismiss(after: 1.4)
+                return
             }
-            return
-        }
 
-        // Reachable — proceed through sending after a beat so CAPTURED
-        // has a moment to register.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            // Reachable — proceed through sending after a beat so CAPTURED
+            // has a moment to register.
+            try? await Task.sleep(for: .milliseconds(450))
             if phase == .captured {
                 transition(to: .sending)
             }
