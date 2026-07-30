@@ -69,7 +69,7 @@ is_under_root() {
 prune_candidate() {
     local info_plist="$1"
     local root="$2"
-    local candidate workspace modified age size_kib
+    local candidate workspace modified age size_kib lsof_output lsof_status
 
     candidate="${info_plist%/info.plist}"
     is_under_root "$candidate" "$root" || return 0
@@ -78,12 +78,27 @@ prune_candidate() {
     workspace="$(plutil -extract WorkspacePath raw -o - "$info_plist" 2>/dev/null || true)"
     is_talkie_workspace "$workspace" || return 0
 
-    modified="$(stat -f '%m' "$info_plist" 2>/dev/null || echo "$now")"
+    if ! modified="$(
+        find "$candidate" -type f -exec stat -f '%m' {} + 2>/dev/null \
+            | sort -nr \
+            | sed -n '1p'
+    )"; then
+        echo "skip age check failure: $candidate" >&2
+        return
+    fi
+    modified="${modified:-$now}"
     age=$((now - modified))
     (( age >= max_age_seconds )) || return 0
 
-    if lsof +D "$candidate" >/dev/null 2>&1; then
+    if lsof_output="$(lsof +D "$candidate" 2>&1)"; then
         echo "skip open: $candidate"
+        return
+    else
+        lsof_status=$?
+    fi
+    if (( lsof_status != 1 )) || [[ -n "$lsof_output" ]]; then
+        echo "skip open-file check failure: $candidate" >&2
+        [[ -z "$lsof_output" ]] || echo "$lsof_output" >&2
         return
     fi
 

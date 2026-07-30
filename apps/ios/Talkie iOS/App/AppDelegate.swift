@@ -431,18 +431,22 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             }
         }
 
-        // Check if this is a CloudKit notification
+        // Persist any Watch handoff and schedule its durable resume before
+        // releasing the finite background-fetch window. Transcription and
+        // bridge delivery continue best-effort without holding this callback.
+        let fetchResult: UIBackgroundFetchResult
         if let ckNotification = CKNotification(fromRemoteNotificationDictionary: userInfo as! [String: NSObject]) {
             handleCloudKitNotification(ckNotification)
-            Task { @MainActor in
-                await WatchCodexDispatchCoordinator.shared.resumePendingDispatches()
-                completionHandler(.newData)
-            }
+            fetchResult = .newData
         } else {
-            Task { @MainActor in
-                await WatchCodexDispatchCoordinator.shared.resumePendingDispatches()
-                completionHandler(.noData)
-            }
+            fetchResult = .noData
+        }
+
+        Task { @MainActor in
+            let coordinator = WatchCodexDispatchCoordinator.shared
+            let hasPendingDispatches = coordinator.preparePendingDispatchesForBackground()
+            completionHandler(hasPendingDispatches ? .newData : fetchResult)
+            await coordinator.resumePendingDispatches()
         }
     }
 

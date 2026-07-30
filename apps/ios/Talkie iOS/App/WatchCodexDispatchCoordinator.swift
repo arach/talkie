@@ -302,6 +302,18 @@ final class WatchCodexDispatchCoordinator {
         resumeTask = nil
     }
 
+    /// Commits any synchronous WatchConnectivity handoff and schedules a
+    /// later resume before a background-fetch callback is completed. The
+    /// caller can then release iOS promptly while best-effort processing
+    /// continues from the same durable inbox.
+    @discardableResult
+    func preparePendingDispatchesForBackground() -> Bool {
+        importIncomingDispatches()
+        guard !pending.isEmpty else { return false }
+        scheduleBackgroundResume()
+        return true
+    }
+
     /// Atomically promotes every synchronous WCSession handoff into the durable
     /// state-machine inbox. The manifest is removed only after the inbox save,
     /// making a crash on either side of the transition safe and idempotent.

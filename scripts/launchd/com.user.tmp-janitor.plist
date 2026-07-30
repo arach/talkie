@@ -8,7 +8,7 @@
     <array>
         <string>/bin/zsh</string>
         <string>-lc</string>
-        <string>"$HOME/bin/tmp-janitor.sh" --delete</string>
+        <string>mkdir -p "$HOME/Library/Logs/Talkie" &amp;&amp; "$HOME/bin/tmp-janitor.sh" --delete &gt;&gt; "$HOME/Library/Logs/Talkie/tmp-janitor.log" 2&gt;&amp;1</string>
     </array>
     <key>StartCalendarInterval</key>
     <dict>

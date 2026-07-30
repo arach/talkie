@@ -640,6 +640,12 @@ sign_app_bundle() {
         local provisioning_profile=""
 
         bundle_id=$(get_bundle_id "$app_path")
+        if grep -Eq '\$\((AppIdentifierPrefix|TeamIdentifierPrefix)\)' "$entitlements" \
+            && [ -z "$development_team" ]; then
+            echo -e "${RED}failed${NC}"
+            echo "  TALKIE_DEVELOPMENT_TEAM or TALKIE_TEAM_ID is required to resolve $entitlements"
+            return 1
+        fi
         resolved_entitlements=$(mktemp "${TMPDIR:-/tmp}/talkie-entitlements.XXXXXX")
         sed \
             -e "s|\$(AppIdentifierPrefix)|${development_team}.|g" \
