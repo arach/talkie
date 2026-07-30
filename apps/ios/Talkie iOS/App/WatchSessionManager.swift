@@ -381,7 +381,8 @@ extension WatchSessionManager: WCSessionDelegate {
             // gets CPU time during this delivery.
             if metadata["intent"] as? String == "codex" {
                 let incomingStore = WatchCodexIncomingDispatchStore(
-                    directoryURL: WatchCodexDispatchCoordinator.incomingStoreURL
+                    directoryURL: WatchCodexDispatchCoordinator.incomingStoreURL,
+                    onStaged: WatchCodexDispatchCoordinator.scheduleBackgroundResume
                 )
                 _ = try incomingStore.stage(audioURL: destURL, metadata: metadata)
             }

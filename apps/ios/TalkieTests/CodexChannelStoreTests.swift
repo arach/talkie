@@ -291,9 +291,11 @@ final class CodexChannelStoreTests: XCTestCase {
         try FileManager.default.createDirectory(at: audioDirectory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
 
+        var scheduledResumeCount = 0
         let store = WatchCodexIncomingDispatchStore(
             directoryURL: incomingDirectory,
-            audioDirectoryURL: audioDirectory
+            audioDirectoryURL: audioDirectory,
+            onStaged: { scheduledResumeCount += 1 }
         )
         let requestID = UUID()
         let firstAudio = audioDirectory.appending(path: "first.m4a")
@@ -313,6 +315,7 @@ final class CodexChannelStoreTests: XCTestCase {
         XCTAssertEqual(staged.action, .continueTask)
         XCTAssertEqual(staged.audioFilename, "first.m4a")
         XCTAssertEqual(try store.load(), [staged])
+        XCTAssertEqual(scheduledResumeCount, 1)
 
         let duplicateAudio = audioDirectory.appending(path: "duplicate.m4a")
         try Data("duplicate".utf8).write(to: duplicateAudio)
@@ -322,6 +325,7 @@ final class CodexChannelStoreTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: duplicateAudio.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: firstAudio.path))
         XCTAssertEqual(try store.load(), [staged])
+        XCTAssertEqual(scheduledResumeCount, 2)
 
         try store.remove(staged)
         XCTAssertEqual(try store.load(), [])
