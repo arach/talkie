@@ -75,6 +75,7 @@ apply_local_xcconfig_default TALKIE_CODE_SIGNING_ALLOWED
 apply_local_xcconfig_default TALKIE_CODE_SIGNING_REQUIRED
 apply_local_xcconfig_default TALKIE_CODE_SIGN_IDENTITY
 apply_local_xcconfig_default TALKIE_APP_IDENTIFIER
+apply_local_xcconfig_default TALKIE_CLOUDKIT_CONTAINER
 
 # Colors
 RED='\033[0;31m'
@@ -580,11 +581,41 @@ dequarantine_app() {
     echo -e "${GREEN}done${NC}"
 }
 
+find_mac_development_profile() {
+    local bundle_id=$1
+    local expected_name="Mac Team Provisioning Profile: $bundle_id"
+    local profile_dir
+    local profile
+    local profile_name
+
+    for profile_dir in \
+        "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles" \
+        "$HOME/Library/MobileDevice/Provisioning Profiles"; do
+        [ -d "$profile_dir" ] || continue
+
+        for profile in "$profile_dir"/*.provisionprofile; do
+            [ -f "$profile" ] || continue
+            profile_name=$(
+                security cms -D -i "$profile" 2>/dev/null \
+                    | plutil -extract Name raw -o - - 2>/dev/null \
+                    || true
+            )
+            if [ "$profile_name" = "$expected_name" ]; then
+                printf '%s\n' "$profile"
+                return 0
+            fi
+        done
+    done
+
+    return 1
+}
+
 sign_app_bundle() {
     local app=$1
     local app_path=$2
     local identity=$3
     local entitlements
+    local resolved_entitlements=""
     local codesign_args
 
     [ -n "$identity" ] || return 0
@@ -601,9 +632,49 @@ sign_app_bundle() {
         codesign_args+=(--options runtime)
     fi
 
+    if [ -f "$entitlements" ]; then
+        local development_team="${TALKIE_DEVELOPMENT_TEAM:-${TALKIE_TEAM_ID:-}}"
+        local bundle_id
+        local app_identifier="${TALKIE_APP_IDENTIFIER:-to.talkie.app}"
+        local cloudkit_container="${TALKIE_CLOUDKIT_CONTAINER:-iCloud.to.talkie}"
+        local provisioning_profile=""
+
+        bundle_id=$(get_bundle_id "$app_path")
+        resolved_entitlements=$(mktemp "${TMPDIR:-/tmp}/talkie-entitlements.XXXXXX")
+        sed \
+            -e "s|\$(AppIdentifierPrefix)|${development_team}.|g" \
+            -e "s|\$(TeamIdentifierPrefix)|${development_team}.|g" \
+            -e "s|\$(PRODUCT_BUNDLE_IDENTIFIER)|${bundle_id}|g" \
+            -e "s|\$(TALKIE_APP_IDENTIFIER)|${app_identifier}|g" \
+            -e "s|\$(TALKIE_CLOUDKIT_CONTAINER)|${cloudkit_container}|g" \
+            "$entitlements" > "$resolved_entitlements"
+
+        if grep -q '\$(' "$resolved_entitlements"; then
+            echo -e "${RED}failed${NC}"
+            echo "  Unresolved build setting remains in $entitlements"
+            rm -f "$resolved_entitlements"
+            return 1
+        fi
+
+        if grep -q 'com.apple.developer.icloud' "$resolved_entitlements"; then
+            provisioning_profile=$(find_mac_development_profile "$bundle_id" || true)
+            if [ -z "$provisioning_profile" ]; then
+                echo -e "${RED}failed${NC}"
+                echo "  No macOS development provisioning profile found for $bundle_id"
+                rm -f "$resolved_entitlements"
+                return 1
+            fi
+            install -m 644 "$provisioning_profile" "$app_path/Contents/embedded.provisionprofile"
+        fi
+    fi
+
     echo -n "  Code signing bundle... "
-    if [ -f "$entitlements" ] && ! grep -q '\$(' "$entitlements"; then
-        codesign "${codesign_args[@]}" --entitlements "$entitlements" "$app_path" >/dev/null
+    if [ -n "$resolved_entitlements" ]; then
+        if ! codesign "${codesign_args[@]}" --entitlements "$resolved_entitlements" "$app_path" >/dev/null; then
+            rm -f "$resolved_entitlements"
+            return 1
+        fi
+        rm -f "$resolved_entitlements"
     else
         codesign "${codesign_args[@]}" "$app_path" >/dev/null
     fi
