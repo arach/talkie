@@ -168,8 +168,10 @@ cd apps/macos
 ./run.sh Talkie --no-launch
 ```
 
-Reserve fresh per-run DerivedData builds under `~/Library/Caches/codex-builds/`
-for final verification or suspicious cache states.
+Use the stable, scheme-specific DerivedData caches under
+`~/Library/Caches/codex-builds/` for routine and final verification. When a
+suspicious cache state requires an isolated build, use a purpose-specific path
+with a mandatory `rm -rf` EXIT trap; do not accumulate per-run caches.
 
 ### Phase 1: Measure
 

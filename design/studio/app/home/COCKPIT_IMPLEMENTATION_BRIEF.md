@@ -96,10 +96,13 @@ Please run a narrow build check if practical:
 
 ```bash
 mkdir -p "$HOME/Library/Caches/codex-builds"
-DERIVED_DATA_DIR="$(mktemp -d "$HOME/Library/Caches/codex-builds/deriveddata.XXXXXXXX")"
+DERIVED_DATA_DIR="${TALKIE_IOS_DERIVED_DATA_DIR:-$HOME/Library/Caches/codex-builds/talkie-ios-talkie}"
 xcodebuild -project "apps/ios/Talkie-iOS.xcodeproj" -scheme Talkie -destination 'platform=iOS Simulator,name=iPhone 16' -derivedDataPath "$DERIVED_DATA_DIR" build
-rm -rf "$DERIVED_DATA_DIR"
 ```
+
+Reuse this stable cache. If an isolated cache is required for diagnosis, set a
+purpose-specific override and remove it directly with `rm -rf` via an EXIT trap;
+never move DerivedData to Trash.
 
 If the full build is slow or fails for unrelated existing reasons, report the exact blocker and at least do a Swift syntax-oriented review of the changed file.
 
