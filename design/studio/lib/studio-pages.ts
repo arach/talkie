@@ -629,19 +629,6 @@ export const STUDIO_PAGES: StudioPage[] = [
     blurb: "Alternate composition — one display, one lane scale, one keyboard.",
   },
   {
-    href: "/ios-codex-status-document",
-    label: "Deck · Task Dossier",
-    bucket: "surfaces",
-    platform: "iphone",
-    family: "deck",
-    status: "concept",
-    swift: [
-      "apps/ios/Talkie iOS/Codex/CodexCommandDeckSurface.swift",
-      "apps/ios/Talkie iOS/Bridge/BridgeClient.swift",
-    ],
-    blurb: "Three server-rendered task-status treatments sharing one inspectable dossier information architecture.",
-  },
-  {
     href: "/ios-memo-connected",
     label: "Memo · Connected",
     bucket: "surfaces",
