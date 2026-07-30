@@ -16,7 +16,6 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const {
   appendQueuedFollowUp,
-  listTasks,
   makeQueuedFollowUp,
   readQueuedFollowUps,
   readTurnActivity,
@@ -30,7 +29,6 @@ const {
     taskId: string,
     message: Record<string, unknown>,
   ) => Record<string, Array<Record<string, unknown>>>;
-  listTasks: (limit: number) => Array<Record<string, unknown>>;
   makeQueuedFollowUp: (text: string, state: Record<string, unknown>) => Record<string, any>;
   readQueuedFollowUps: () => Record<string, Array<Record<string, unknown>>>;
   readTurnActivity: (rolloutPath: string) => Record<string, unknown>;
@@ -186,6 +184,190 @@ rl.on('line', (line) => {
     expect(JSON.parse(readFileSync(requestLog, "utf8"))).toMatchObject({
       threadId,
       clientUserMessageId: submissionId,
+    });
+  });
+
+  test("ends a fresh submission when app-server reports an interrupted turn", async () => {
+    fixtureHome = mkdtempSync(path.join(tmpdir(), "talkie-codex-app-server-interrupted-"));
+    const threadId = "019fae56-598a-70b0-83dd-539cda1c7712";
+    const submissionId = "019fae56-598a-70b0-83dd-539cda1c7713";
+    const sessions = path.join(fixtureHome, "sessions", "2026", "07", "29");
+    mkdirSync(sessions, { recursive: true });
+    const rollout = path.join(sessions, `rollout-${threadId}.jsonl`);
+    writeFileSync(rollout, "");
+    const database = new Database(path.join(fixtureHome, "state_5.sqlite"));
+    database.exec("CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT NOT NULL)");
+    database.query("INSERT INTO threads (id, rollout_path) VALUES (?, ?)").run(threadId, rollout);
+    database.close();
+
+    const executable = path.join(fixtureHome, "fake-codex.cjs");
+    writeFileSync(executable, `#!/usr/bin/env node
+const fs = require('node:fs');
+const readline = require('node:readline');
+const rl = readline.createInterface({ input: process.stdin });
+const send = (value) => process.stdout.write(JSON.stringify(value) + '\\n');
+rl.on('line', (line) => {
+  const message = JSON.parse(line);
+  if (message.id === undefined) return;
+  if (message.method === 'initialize') return send({ id: message.id, result: {} });
+  if (message.method === 'thread/start') return send({ id: message.id, result: { thread: {
+    id: process.env.FAKE_CODEX_THREAD_ID,
+    cwd: message.params.cwd,
+    preview: '',
+    createdAt: 123,
+  } } });
+  if (message.method === 'turn/start') {
+    send({ id: message.id, result: { turn: { id: 'interrupted-turn' } } });
+    fs.appendFileSync(process.env.FAKE_CODEX_ROLLOUT,
+      JSON.stringify({ type: 'event_msg', payload: { type: 'task_started', turn_id: 'interrupted-turn' } }) + '\\n' +
+      JSON.stringify({ type: 'event_msg', payload: { type: 'user_message', message: message.params.input[0].text, client_id: message.params.clientUserMessageId } }) + '\\n');
+    setTimeout(() => send({
+      method: 'turn/completed',
+      params: {
+        threadId: process.env.FAKE_CODEX_THREAD_ID,
+        turn: { id: 'interrupted-turn', status: 'interrupted', error: null },
+      },
+    }), 20);
+  }
+});
+`);
+    chmodSync(executable, 0o755);
+
+    const bridge = Bun.spawn(
+      [
+        process.execPath,
+        path.join(import.meta.dir, "codex-desktop-bridge.cjs"),
+        "create-submit",
+        fixtureHome,
+        submissionId,
+      ],
+      {
+        stdin: new TextEncoder().encode("Start, then interrupt this task"),
+        stdout: "pipe",
+        stderr: "pipe",
+        env: {
+          ...process.env,
+          CODEX_HOME: fixtureHome,
+          TALKIE_CODEX_EXECUTABLE: executable,
+          TALKIE_CODEX_DISABLE_DESKTOP_REVEAL: "1",
+          FAKE_CODEX_THREAD_ID: threadId,
+          FAKE_CODEX_ROLLOUT: rollout,
+        },
+      },
+    );
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(bridge.stdout).text(),
+      new Response(bridge.stderr).text(),
+      bridge.exited,
+    ]);
+
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(1);
+    const envelopes = stdout.trim().split("\n").map((line) => JSON.parse(line));
+    expect(envelopes[0]).toMatchObject({ ok: true, phase: "created", threadId });
+    expect(envelopes[1]).toMatchObject({
+      ok: true,
+      phase: "accepted",
+      threadId,
+      turnId: "interrupted-turn",
+    });
+    expect(envelopes.at(-1)).toEqual({
+      ok: false,
+      code: "turn-interrupted",
+      error: "The Codex turn was interrupted before it completed.",
+    });
+  });
+
+  test("recovers an already interrupted durable submission without replaying it", async () => {
+    fixtureHome = mkdtempSync(path.join(tmpdir(), "talkie-codex-app-server-recover-interrupted-"));
+    const threadId = "019fae56-598a-70b0-83dd-539cda1c7714";
+    const submissionId = "019fae56-598a-70b0-83dd-539cda1c7715";
+    const sessions = path.join(fixtureHome, "sessions", "2026", "07", "29");
+    mkdirSync(sessions, { recursive: true });
+    const rollout = path.join(sessions, `rollout-${threadId}.jsonl`);
+    const requestLog = path.join(fixtureHome, "requests.log");
+    writeFileSync(
+      rollout,
+      [
+        { type: "event_msg", payload: { type: "task_started", turn_id: "interrupted-turn" } },
+        {
+          type: "event_msg",
+          payload: {
+            type: "user_message",
+            message: "Recover this interrupted task",
+            client_id: submissionId,
+          },
+        },
+      ].map((record) => JSON.stringify(record)).join("\n") + "\n",
+    );
+
+    const executable = path.join(fixtureHome, "fake-codex.cjs");
+    writeFileSync(executable, `#!/usr/bin/env node
+const fs = require('node:fs');
+const readline = require('node:readline');
+const rl = readline.createInterface({ input: process.stdin });
+const send = (value) => process.stdout.write(JSON.stringify(value) + '\\n');
+rl.on('line', (line) => {
+  const message = JSON.parse(line);
+  if (message.id === undefined) return;
+  if (message.method === 'initialize') return send({ id: message.id, result: {} });
+  if (message.method === 'thread/resume') return send({
+    id: message.id,
+    result: { thread: {
+      id: message.params.threadId,
+      path: process.env.FAKE_CODEX_ROLLOUT,
+      status: { type: 'idle' },
+      turns: [{ id: 'interrupted-turn', status: 'interrupted', error: null }],
+    } },
+  });
+  fs.appendFileSync(process.env.FAKE_CODEX_REQUEST_LOG, message.method + '\\n');
+  send({ id: message.id, error: { message: 'unexpected replay' } });
+});
+`);
+    chmodSync(executable, 0o755);
+
+    const bridge = Bun.spawn(
+      [
+        process.execPath,
+        path.join(import.meta.dir, "codex-desktop-bridge.cjs"),
+        "submit",
+        threadId,
+        submissionId,
+        "started-turn",
+      ],
+      {
+        stdin: new TextEncoder().encode("Recover this interrupted task"),
+        stdout: "pipe",
+        stderr: "pipe",
+        env: {
+          ...process.env,
+          CODEX_HOME: fixtureHome,
+          TALKIE_CODEX_EXECUTABLE: executable,
+          FAKE_CODEX_ROLLOUT: rollout,
+          FAKE_CODEX_REQUEST_LOG: requestLog,
+        },
+      },
+    );
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(bridge.stdout).text(),
+      new Response(bridge.stderr).text(),
+      bridge.exited,
+    ]);
+
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(1);
+    expect(existsSync(requestLog)).toBe(false);
+    const envelopes = stdout.trim().split("\n").map((line) => JSON.parse(line));
+    expect(envelopes[0]).toMatchObject({
+      ok: true,
+      phase: "accepted",
+      threadId,
+      turnId: "interrupted-turn",
+    });
+    expect(envelopes.at(-1)).toEqual({
+      ok: false,
+      code: "turn-interrupted",
+      error: "The Codex turn was interrupted before it completed.",
     });
   });
 
@@ -367,74 +549,274 @@ rl.on('line', (line) => {
   });
 });
 
-describe.serial("Codex task catalog", () => {
-  test("returns recognizable user task identity and hides internal tasks", () => {
-    fixtureHome = mkdtempSync(path.join(tmpdir(), "talkie-codex-catalog-"));
-    mkdirSync(fixtureHome, { recursive: true });
-    process.env.CODEX_HOME = fixtureHome;
-
-    const database = new Database(path.join(fixtureHome, "state_5.sqlite"), { create: true });
-    database.exec(`
-      CREATE TABLE threads (
-        id TEXT PRIMARY KEY,
-        archived INTEGER NOT NULL,
-        name TEXT,
-        title TEXT NOT NULL,
-        first_user_message TEXT NOT NULL,
-        preview TEXT NOT NULL,
-        cwd TEXT NOT NULL,
-        git_branch TEXT,
-        git_origin_url TEXT,
-        agent_role TEXT,
-        thread_source TEXT,
-        recency_at_ms INTEGER NOT NULL,
-        updated_at_ms INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        rollout_path TEXT NOT NULL DEFAULT ''
-      );
-    `);
-    const insert = database.prepare(`
-      INSERT INTO threads (
-        id, archived, name, title, first_user_message, preview, cwd,
-        git_branch, git_origin_url, agent_role, thread_source,
-        recency_at_ms, updated_at_ms, updated_at
-      ) VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    insert.run(
-      "user-task", "Add steer and queue support", "fallback title", "original request",
-      "original request", "/Users/arach/.codex/worktrees/1234/talkie", "codex/deck",
-      "https://github.com/arach/talkie.git", null, "user", 3000, 3000, 3,
-    );
-    insert.run(
-      "subagent-task", "Background critique", "Background critique", "delegated work",
-      "delegated work", "/Users/arach/dev/talkie", "codex/deck",
-      "https://github.com/arach/talkie.git", "subagent", "subagent", 2000, 2000, 2,
-    );
-    insert.run(
-      "empty-task", null, "Untitled", "", "", "/Users/arach/dev/talkie", null,
-      null, null, "user", 1000, 1000, 1,
-    );
-    insert.run(
-      "managed-agent", null, "[Base]\nYou are a managed agent", "[Base]\nYou are a managed agent",
-      "[Base]\nYou are a managed agent", "/Users/arach/.buzz", null, null, null, null,
-      500, 500, 1,
-    );
+describe.serial("Codex task creation and pagination", () => {
+  test("creates the task and starts its first turn in one app-server lifetime", async () => {
+    fixtureHome = mkdtempSync(path.join(tmpdir(), "talkie-codex-create-submit-"));
+    const threadId = "019fae56-598a-70b0-83dd-539cda1c7710";
+    const submissionId = "019fae56-598a-70b0-83dd-539cda1c7711";
+    const sessions = path.join(fixtureHome, "sessions", "2026", "07", "29");
+    mkdirSync(sessions, { recursive: true });
+    const rollout = path.join(sessions, `rollout-${threadId}.jsonl`);
+    const requestLog = path.join(fixtureHome, "requests.json");
+    const openLog = path.join(fixtureHome, "open.json");
+    writeFileSync(rollout, "");
+    const database = new Database(path.join(fixtureHome, "state_5.sqlite"));
+    database.exec("CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT NOT NULL)");
+    database.query("INSERT INTO threads (id, rollout_path) VALUES (?, ?)").run(threadId, rollout);
     database.close();
 
-    expect(listTasks(25)).toEqual([
+    const executable = path.join(fixtureHome, "fake-codex.cjs");
+    writeFileSync(executable, `#!/usr/bin/env node
+const fs = require('node:fs');
+const readline = require('node:readline');
+const rl = readline.createInterface({ input: process.stdin });
+const requests = [];
+const send = (value) => process.stdout.write(JSON.stringify(value) + '\\n');
+rl.on('line', (line) => {
+  const message = JSON.parse(line);
+  if (message.id === undefined) return;
+  if (message.method === 'initialize') return send({ id: message.id, result: {} });
+  requests.push({ method: message.method, params: message.params });
+  fs.writeFileSync(process.env.FAKE_CODEX_REQUEST_LOG, JSON.stringify(requests));
+  if (message.method === 'thread/start') return send({ id: message.id, result: { thread: {
+    id: process.env.FAKE_CODEX_THREAD_ID,
+    cwd: message.params.cwd,
+    preview: '',
+    createdAt: 123,
+  } } });
+  if (message.method === 'turn/start') {
+    send({ id: message.id, result: { turn: { id: 'first-turn' } } });
+    fs.appendFileSync(process.env.FAKE_CODEX_ROLLOUT,
+      JSON.stringify({ type: 'event_msg', payload: { type: 'task_started', turn_id: 'first-turn' } }) + '\\n' +
+      JSON.stringify({ type: 'event_msg', payload: { type: 'user_message', message: message.params.input[0].text, client_id: message.params.clientUserMessageId } }) + '\\n' +
+      JSON.stringify({ type: 'event_msg', payload: { type: 'task_complete', turn_id: 'first-turn', last_agent_message: 'Fresh task completed' } }) + '\\n');
+  }
+});
+`);
+    chmodSync(executable, 0o755);
+
+    const openExecutable = path.join(fixtureHome, "fake-open.cjs");
+    writeFileSync(openExecutable, `#!/usr/bin/env node
+const fs = require('node:fs');
+fs.writeFileSync(process.env.FAKE_CODEX_OPEN_LOG, JSON.stringify(process.argv.slice(2)));
+`);
+    chmodSync(openExecutable, 0o755);
+
+    const bridge = Bun.spawn(
+      [
+        process.execPath,
+        path.join(import.meta.dir, "codex-desktop-bridge.cjs"),
+        "create-submit",
+        fixtureHome,
+        submissionId,
+      ],
       {
-        id: "user-task",
-        title: "Add steer and queue support",
-        preview: "original request",
-        cwd: "/Users/arach/.codex/worktrees/1234/talkie",
-        gitBranch: "codex/deck",
-        gitOriginURL: "https://github.com/arach/talkie.git",
-        updatedAt: 3,
-        project: "talkie",
+        stdin: new TextEncoder().encode("Start this fresh task"),
+        stdout: "pipe",
+        stderr: "pipe",
+        env: {
+          ...process.env,
+          CODEX_HOME: fixtureHome,
+          TALKIE_CODEX_EXECUTABLE: executable,
+          FAKE_CODEX_THREAD_ID: threadId,
+          FAKE_CODEX_ROLLOUT: rollout,
+          FAKE_CODEX_REQUEST_LOG: requestLog,
+          FAKE_CODEX_OPEN_LOG: openLog,
+          TALKIE_CODEX_OPEN_EXECUTABLE: openExecutable,
+        },
       },
+    );
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(bridge.stdout).text(),
+      new Response(bridge.stderr).text(),
+      bridge.exited,
+    ]);
+
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    const envelopes = stdout.trim().split("\n").map((line) => JSON.parse(line));
+    expect(envelopes[0]).toMatchObject({
+      ok: true,
+      phase: "created",
+      threadId,
+      task: { id: threadId, cwd: fixtureHome },
+    });
+    expect(envelopes[1]).toMatchObject({
+      ok: true,
+      phase: "accepted",
+      threadId,
+      turnId: "first-turn",
+      delivery: "started-turn",
+      task: { id: threadId, cwd: fixtureHome },
+    });
+    expect(envelopes.at(-1)).toMatchObject({
+      ok: true,
+      threadId,
+      turnId: "first-turn",
+      delivery: "started-turn",
+      response: "Fresh task completed",
+    });
+    expect(JSON.parse(readFileSync(requestLog, "utf8"))).toEqual([
+      { method: "thread/start", params: { cwd: fixtureHome } },
+      {
+        method: "turn/start",
+        params: {
+          threadId,
+          input: [{ type: "text", text: "Start this fresh task" }],
+          clientUserMessageId: submissionId,
+        },
+      },
+    ]);
+    for (let attempt = 0; attempt < 50 && !existsSync(openLog); attempt += 1) {
+      await Bun.sleep(10);
+    }
+    expect(JSON.parse(readFileSync(openLog, "utf8"))).toEqual([
+      "-g",
+      `codex://threads/${threadId}`,
     ]);
   });
 
+  test("creates a task with cwd and no Codex configuration overrides", async () => {
+    fixtureHome = mkdtempSync(path.join(tmpdir(), "talkie-codex-create-"));
+    const requestLog = path.join(fixtureHome, "request.json");
+    const executable = path.join(fixtureHome, "fake-codex.cjs");
+    writeFileSync(executable, `#!/usr/bin/env node
+const fs = require('node:fs');
+const readline = require('node:readline');
+const rl = readline.createInterface({ input: process.stdin });
+const send = (value) => process.stdout.write(JSON.stringify(value) + '\\n');
+rl.on('line', (line) => {
+  const message = JSON.parse(line);
+  if (message.id === undefined) return;
+  if (message.method === 'initialize') return send({ id: message.id, result: {} });
+  if (message.method === 'thread/start') {
+    fs.writeFileSync(process.env.FAKE_CODEX_REQUEST_LOG, JSON.stringify(message.params));
+    return send({ id: message.id, result: { thread: {
+      id: 'created-task',
+      cwd: message.params.cwd,
+      preview: '',
+      createdAt: 123,
+      gitInfo: { branch: 'master', originUrl: 'https://github.com/arach/talkie.git' },
+    } } });
+  }
+});
+`);
+    chmodSync(executable, 0o755);
+
+    const bridge = Bun.spawn(
+      [process.execPath, path.join(import.meta.dir, "codex-desktop-bridge.cjs"), "create", fixtureHome],
+      {
+        stdout: "pipe",
+        stderr: "pipe",
+        env: {
+          ...process.env,
+          CODEX_HOME: fixtureHome,
+          TALKIE_CODEX_EXECUTABLE: executable,
+          FAKE_CODEX_REQUEST_LOG: requestLog,
+        },
+      },
+    );
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(bridge.stdout).text(),
+      new Response(bridge.stderr).text(),
+      bridge.exited,
+    ]);
+
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(readFileSync(requestLog, "utf8"))).toEqual({ cwd: fixtureHome });
+    expect(JSON.parse(stdout.trim())).toEqual({
+      ok: true,
+      task: {
+        id: "created-task",
+        title: "New task",
+        preview: "",
+        cwd: fixtureHome,
+        project: "talkie",
+        gitBranch: "master",
+        gitOriginURL: "https://github.com/arach/talkie.git",
+        updatedAt: 123,
+      },
+    });
+  });
+
+  test("passes opaque cursors and skips internal-only pages without losing the next page", async () => {
+    fixtureHome = mkdtempSync(path.join(tmpdir(), "talkie-codex-list-"));
+    const requestLog = path.join(fixtureHome, "requests.jsonl");
+    const executable = path.join(fixtureHome, "fake-codex.cjs");
+    writeFileSync(executable, `#!/usr/bin/env node
+const fs = require('node:fs');
+const readline = require('node:readline');
+const rl = readline.createInterface({ input: process.stdin });
+const send = (value) => process.stdout.write(JSON.stringify(value) + '\\n');
+rl.on('line', (line) => {
+  const message = JSON.parse(line);
+  if (message.id === undefined) return;
+  if (message.method === 'initialize') return send({ id: message.id, result: {} });
+  if (message.method !== 'thread/list') return;
+  fs.appendFileSync(process.env.FAKE_CODEX_REQUEST_LOG, JSON.stringify(message.params) + '\\n');
+  if (!message.params.cursor) return send({ id: message.id, result: {
+    data: [{ id: 'delegated', preview: '<codex_delegation>internal</codex_delegation>', cwd: '/tmp' }],
+    nextCursor: 'opaque-page-2',
+  } });
+  return send({ id: message.id, result: {
+    data: [{
+      id: 'user-task', name: 'Ship it', preview: 'Finish the feature',
+      cwd: '/Users/arach/dev/talkie', updatedAt: 456,
+      gitInfo: { branch: 'master', originUrl: 'https://github.com/arach/talkie.git' },
+    }],
+    nextCursor: 'opaque-page-3',
+  } });
+});
+`);
+    chmodSync(executable, 0o755);
+
+    const bridge = Bun.spawn(
+      [process.execPath, path.join(import.meta.dir, "codex-desktop-bridge.cjs"), "list", "2"],
+      {
+        stdout: "pipe",
+        stderr: "pipe",
+        env: {
+          ...process.env,
+          CODEX_HOME: fixtureHome,
+          TALKIE_CODEX_EXECUTABLE: executable,
+          FAKE_CODEX_REQUEST_LOG: requestLog,
+        },
+      },
+    );
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(bridge.stdout).text(),
+      new Response(bridge.stderr).text(),
+      bridge.exited,
+    ]);
+
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    const requests = readFileSync(requestLog, "utf8").trim().split("\n").map(JSON.parse);
+    expect(requests).toEqual([
+      {
+        limit: 2,
+        sortKey: "recency_at",
+        sortDirection: "desc",
+        sourceKinds: ["cli", "vscode", "appServer"],
+      },
+      {
+        limit: 2,
+        sortKey: "recency_at",
+        sortDirection: "desc",
+        sourceKinds: ["cli", "vscode", "appServer"],
+        cursor: "opaque-page-2",
+      },
+    ]);
+    expect(JSON.parse(stdout.trim())).toMatchObject({
+      ok: true,
+      tasks: [{ id: "user-task", title: "Ship it", project: "talkie" }],
+      nextCursor: "opaque-page-3",
+    });
+  });
+});
+
+describe.serial("Codex task catalog", () => {
   test("returns only public commentary and technical completion signals", () => {
     fixtureHome = mkdtempSync(path.join(tmpdir(), "talkie-codex-activity-"));
     const taskId = "019fa94d-8b11-7030-a252-5debffd976ae";

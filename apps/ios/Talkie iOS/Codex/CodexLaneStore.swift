@@ -27,10 +27,15 @@ final class CodexLaneStore: ObservableObject {
         static func activeLane(for hostID: String) -> String {
             "codex.lanes.active.v2.\(hostID)"
         }
+
+        static func selectedChannel(for hostID: String) -> String {
+            "codex.channels.selected.v1.\(hostID)"
+        }
     }
 
     /// Cadence of the catalog refresh while the mapper is on screen.
     private static let catalogRefreshInterval: TimeInterval = 15
+    static let createdTaskVisibilityGracePeriod: TimeInterval = 120
 
     private static let historyLimit = 20
     private static let liveActivityLimit = 6
@@ -39,6 +44,7 @@ final class CodexLaneStore: ObservableObject {
 
     @Published private(set) var lanes: [Int: CodexLane] = [:]
     @Published private(set) var activeLaneNumber: Int?
+    @Published private(set) var selectedChannel: CodexTaskSummary?
 
     // MARK: - Voice loop
 
@@ -55,7 +61,11 @@ final class CodexLaneStore: ObservableObject {
 
     @Published private(set) var catalog: [CodexTaskSummary] = []
     @Published private(set) var isLoadingCatalog = false
+    @Published private(set) var isLoadingNextCatalogPage = false
+    @Published private(set) var isCreatingTask = false
+    @Published private(set) var canCreateChannel = false
     @Published private(set) var catalogFailure: CodexLaneFailure?
+    @Published private(set) var creationFailure: CodexLaneFailure?
     @Published var searchQuery: String = ""
 
     private let defaults: UserDefaults
@@ -68,15 +78,20 @@ final class CodexLaneStore: ObservableObject {
     private var notificationNarratedJobIDs: Set<String> = []
     private var queuedActivityIDs: Set<UUID> = []
     private var loadedHostID: String?
+    private var nextCatalogCursor: String?
+    private var unpinnedInFlightRequestCount = 0
+    private var recentlyCreatedTaskExpirations: [String: Date] = [:]
 
     init(
         defaults: UserDefaults = .standard,
-        bridge: BridgeManager? = nil
+        bridge: BridgeManager? = nil,
+        hostIDOverride: String? = nil
     ) {
         self.defaults = defaults
         let resolvedBridge = bridge ?? .shared
         self.bridge = resolvedBridge
-        self.loadedHostID = resolvedBridge.activePairedMacID
+        self.loadedHostID = hostIDOverride ?? resolvedBridge.activePairedMacID
+        self.canCreateChannel = resolvedBridge.activePairedMacID?.isEmpty == false
         loadPersistedLanes()
     }
 
@@ -90,8 +105,14 @@ final class CodexLaneStore: ObservableObject {
         activeLaneNumber.flatMap { lanes[$0] }
     }
 
+    /// The exact dispatch destination. A channel can be selected without being
+    /// pinned to one of the six lanes.
+    var selectedTask: CodexTaskSummary? {
+        selectedChannel ?? activeLane?.task
+    }
+
     var isTurnInFlight: Bool {
-        inFlightRequestCounts.values.contains { $0 > 0 }
+        unpinnedInFlightRequestCount > 0 || inFlightRequestCounts.values.contains { $0 > 0 }
     }
 
     var activeLaneIsInFlight: Bool {
@@ -100,6 +121,25 @@ final class CodexLaneStore: ObservableObject {
 
     var activeLaneMessageMode: CodexMessageMode {
         activeLane?.preferredMessageMode ?? .steer
+    }
+
+    var selectedDestinationIsInFlight: Bool {
+        if let activeLaneNumber { return isTurnInFlight(on: activeLaneNumber) }
+        return unpinnedInFlightRequestCount > 0
+    }
+
+    var selectedMessageMode: CodexMessageMode {
+        activeLane?.preferredMessageMode ?? .steer
+    }
+
+    var canLoadMoreCatalog: Bool { nextCatalogCursor != nil }
+
+    var projects: [CodexProjectSummary] {
+        Self.deriveProjects(
+            hostID: loadedHostID,
+            lanes: sortedLanes,
+            catalog: catalog
+        )
     }
 
     func lane(_ number: Int) -> CodexLane? { lanes[number] }
@@ -124,6 +164,10 @@ final class CodexLaneStore: ObservableObject {
         history.first { $0.laneNumber == number }
     }
 
+    func latestTurn(forTaskID taskID: String) -> CodexTurnRecord? {
+        history.first { $0.taskID == taskID }
+    }
+
     var filteredCatalog: [CodexTaskSummary] {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return catalog }
@@ -144,21 +188,28 @@ final class CodexLaneStore: ObservableObject {
         guard nextHostID != loadedHostID else { return }
 
         loadedHostID = nextHostID
+        canCreateChannel = nextHostID?.isEmpty == false
         lanes = [:]
         activeLaneNumber = nil
+        selectedChannel = nil
         catalog = []
+        nextCatalogCursor = nil
         catalogFailure = nil
+        creationFailure = nil
         searchQuery = ""
         liveActivitiesByLane = [:]
         inFlightRequestCounts = [:]
         queuedMessageCounts = [:]
         queuedActivityIDs = []
+        unpinnedInFlightRequestCount = 0
+        recentlyCreatedTaskExpirations = [:]
         lastTurn = nil
         history = []
         failure = nil
         phase = .idle
         narrationState = .idle
         loadPersistedLanes()
+        WatchSessionManager.shared.publishCurrentCodexSnapshot()
     }
 
     // MARK: - Catalog
@@ -189,14 +240,176 @@ final class CodexLaneStore: ObservableObject {
         defer { isLoadingCatalog = false }
 
         do {
-            let tasks = try await bridge.codexRecentTasks(limit: 25)
-            catalog = tasks
+            let page = try await bridge.codexRecentTasks(limit: 25)
+            let liveTaskIDs = Set(page.tasks.map(\.id))
+            liveTaskIDs.forEach { recentlyCreatedTaskExpirations[$0] = nil }
+            recentlyCreatedTaskExpirations = recentlyCreatedTaskExpirations.filter {
+                $0.value > .now
+            }
+            let locallyCreatedTasks = catalog.filter {
+                recentlyCreatedTaskExpirations[$0.id] != nil
+            }
+            catalog = Self.mergingCatalog(locallyCreatedTasks, with: page.tasks)
+            refreshTaskReferences(with: catalog)
+            nextCatalogCursor = page.nextCursor
             catalogFailure = nil
+            WatchSessionManager.shared.publishCurrentCodexSnapshot()
         } catch {
             // Keep whatever we last showed — a stale list the user can read
             // beats an empty one — but say the refresh failed.
             catalogFailure = Self.describe(error)
             AppLogger.ai.warning("Codex catalog refresh failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Loads the page after the current catalogue and appends without allowing
+    /// the same exact task to appear twice.
+    func loadNextCatalogPage() async {
+        guard !isLoadingCatalog,
+              !isLoadingNextCatalogPage,
+              let cursor = nextCatalogCursor else { return }
+
+        isLoadingNextCatalogPage = true
+        defer { isLoadingNextCatalogPage = false }
+
+        do {
+            let page = try await bridge.codexRecentTasks(limit: 25, cursor: cursor)
+            catalog = Self.mergingCatalog(catalog, with: page.tasks)
+            refreshTaskReferences(with: catalog)
+            nextCatalogCursor = page.nextCursor
+            catalogFailure = nil
+            WatchSessionManager.shared.publishCurrentCodexSnapshot()
+        } catch {
+            catalogFailure = Self.describe(error)
+            AppLogger.ai.warning("Codex catalog page failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Called by a row's appearance. Only the true final loaded row advances
+    /// the cursor, preventing filtered results from draining every page.
+    func loadNextCatalogPageIfNeeded(after task: CodexTaskSummary) async {
+        guard searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              catalog.last?.id == task.id else { return }
+        await loadNextCatalogPage()
+    }
+
+    /// Creates and selects a channel without assigning it to a lane. The bridge request intentionally
+    /// carries no model field, so Codex uses the Mac's configured default.
+    @discardableResult
+    func createTask(
+        in project: CodexProjectSummary,
+        creationID: UUID
+    ) async -> CodexTaskSummary? {
+        guard !isCreatingTask else { return nil }
+        creationFailure = nil
+        guard project.hostID == loadedHostID else {
+            creationFailure = CodexLaneFailure(
+                message: "That project belongs to another Mac.",
+                hint: "Reconnect to the Mac that owns it and try again."
+            )
+            return nil
+        }
+
+        isCreatingTask = true
+        defer { isCreatingTask = false }
+
+        do {
+            let task = try await bridge.codexCreateTask(
+                creationId: creationID,
+                cwd: project.cwd
+            )
+            retainRecentlyCreatedTask(task)
+            catalog = Self.mergingCatalog([task], with: catalog)
+            selectChannel(task)
+            creationFailure = nil
+            return task
+        } catch {
+            creationFailure = Self.describe(error)
+            AppLogger.ai.warning("Codex task creation failed: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    func clearCreationFailure() {
+        creationFailure = nil
+    }
+
+    static func mergingCatalog(
+        _ existing: [CodexTaskSummary],
+        with incoming: [CodexTaskSummary]
+    ) -> [CodexTaskSummary] {
+        var merged: [CodexTaskSummary] = []
+        var indexByTaskID: [String: Int] = [:]
+
+        for task in existing + incoming {
+            if let index = indexByTaskID[task.id] {
+                // Keep the established row position, but let a refreshed
+                // server snapshot replace the creation-time "New task"
+                // placeholder once Codex has derived its real title.
+                if task.updatedAt >= merged[index].updatedAt {
+                    merged[index] = task
+                }
+            } else {
+                indexByTaskID[task.id] = merged.count
+                merged.append(task)
+            }
+        }
+
+        return merged
+    }
+
+    /// Replaces creation-time placeholders held by the selection and lane bank
+    /// once Codex publishes the task's real title and metadata in the catalog.
+    /// Task identity and the user's lane settings remain unchanged.
+    func refreshTaskReferences(with refreshedCatalog: [CodexTaskSummary]) {
+        let refreshedByID = Dictionary(uniqueKeysWithValues: refreshedCatalog.map { ($0.id, $0) })
+
+        if let selectedChannel,
+           let refreshed = refreshedByID[selectedChannel.id],
+           refreshed.updatedAt >= selectedChannel.updatedAt,
+           refreshed != selectedChannel {
+            self.selectedChannel = refreshed
+            persistSelectedChannel()
+        }
+
+        var refreshedLanes = lanes
+        var lanesChanged = false
+        for (number, lane) in lanes {
+            guard let refreshed = refreshedByID[lane.task.id],
+                  refreshed.updatedAt >= lane.task.updatedAt,
+                  refreshed != lane.task else { continue }
+            var updatedLane = lane
+            updatedLane.task = refreshed
+            refreshedLanes[number] = updatedLane
+            lanesChanged = true
+        }
+        if lanesChanged {
+            lanes = refreshedLanes
+            persistLanes()
+        }
+    }
+
+    static func deriveProjects(
+        hostID: String?,
+        lanes: [CodexLane],
+        catalog: [CodexTaskSummary]
+    ) -> [CodexProjectSummary] {
+        guard let hostID else { return [] }
+
+        let assignedPaths = Set(lanes.map(\.task.canonicalWorkingDirectory))
+        let orderedTasks = lanes.map(\.task) + catalog
+        var seen = Set<String>()
+
+        return orderedTasks.compactMap { task in
+            let cwd = task.canonicalWorkingDirectory
+            guard seen.insert(cwd).inserted else { return nil }
+            return CodexProjectSummary(
+                hostID: hostID,
+                cwd: cwd,
+                name: task.projectName,
+                updatedAt: task.updatedAt,
+                isAssignedToLane: assignedPaths.contains(cwd)
+            )
         }
     }
 
@@ -206,6 +419,12 @@ final class CodexLaneStore: ObservableObject {
     func assign(_ task: CodexTaskSummary, to number: Int) {
         guard CodexLane.range.contains(number) else { return }
 
+        let previousAssignments = lanes.values.filter { $0.task.id == task.id }
+        let wasActiveAssignment = previousAssignments.contains { $0.number == activeLaneNumber }
+        for lane in previousAssignments where lane.number != number {
+            lanes[lane.number] = nil
+        }
+
         let existingLane = lanes[number]
         lanes[number] = CodexLane(
             number: number,
@@ -214,18 +433,30 @@ final class CodexLaneStore: ObservableObject {
             voiceOverride: existingLane?.voiceOverride
         )
 
+        if wasActiveAssignment {
+            activeLaneNumber = number
+            persistActiveLane()
+        }
+
         persistLanes()
+        WatchSessionManager.shared.publishCurrentCodexSnapshot()
     }
 
     func clearLane(_ number: Int) {
         guard lanes[number] != nil else { return }
+        let clearedTaskID = lanes[number]?.task.id
         lanes[number] = nil
 
         if activeLaneNumber == number {
             activeLaneNumber = nil
             persistActiveLane()
+            if selectedChannel?.id != clearedTaskID {
+                selectedChannel = catalog.first { $0.id == clearedTaskID }
+            }
+            persistSelectedChannel()
         }
         persistLanes()
+        WatchSessionManager.shared.publishCurrentCodexSnapshot()
     }
 
     func setVoiceOverride(_ override: CodexLaneVoiceOverride?, for number: Int) {
@@ -239,12 +470,42 @@ final class CodexLaneStore: ObservableObject {
     /// while the user moves between tasks and across app launches.
     func setMessageMode(_ mode: CodexMessageMode, for number: Int) {
         guard mode == .queue || mode == .steer, var lane = lanes[number] else { return }
+        let previousMode = lane.preferredMessageMode
         lane.messageMode = mode
         lanes[number] = lane
         persistLanes()
+        AppLogger.ai.info(
+            "Codex delivery mode changed lane=\(number) task=\(lane.task.id) "
+                + "from=\(previousMode.rawValue) to=\(mode.rawValue)"
+        )
     }
 
     // MARK: - Activation
+
+    /// Selects an exact task without assigning or replacing any numbered lane.
+    func selectChannel(_ task: CodexTaskSummary) {
+        selectedChannel = task
+        activeLaneNumber = lanes.values.first(where: { $0.task.id == task.id })?.number
+        persistSelectedChannel()
+        persistActiveLane()
+        failure = nil
+        phase = .idle
+        WatchSessionManager.shared.publishCurrentCodexSnapshot()
+    }
+
+    /// Returns the instrument to an intentionally unarmed state without
+    /// changing any lane mappings. A future lane tap or mapper selection can
+    /// choose the next exact destination again.
+    func clearSelection() {
+        guard !phase.isCapturing else { return }
+        selectedChannel = nil
+        activeLaneNumber = nil
+        persistSelectedChannel()
+        persistActiveLane()
+        failure = nil
+        phase = .idle
+        WatchSessionManager.shared.publishCurrentCodexSnapshot()
+    }
 
     /// Selects the exact task that receives the next message.
     @discardableResult
@@ -258,9 +519,12 @@ final class CodexLaneStore: ObservableObject {
         }
 
         activeLaneNumber = number
+        selectedChannel = lanes[number]?.task
         persistActiveLane()
+        persistSelectedChannel()
         failure = nil
         phase = .idle
+        WatchSessionManager.shared.publishCurrentCodexSnapshot()
         return true
     }
 
@@ -369,6 +633,18 @@ final class CodexLaneStore: ObservableObject {
         replayNarration(record)
     }
 
+    func narrateLatestResponse(forTaskID taskID: String) {
+        guard let record = latestTurn(forTaskID: taskID) else {
+            failure = CodexLaneFailure(
+                message: "There is no response to narrate for this channel yet.",
+                hint: "Send an instruction to this Codex task first."
+            )
+            return
+        }
+
+        replayNarration(record)
+    }
+
     private func replayNarration(_ record: CodexTurnRecord) {
         var record = record
 
@@ -389,10 +665,10 @@ final class CodexLaneStore: ObservableObject {
     }
 
     private func startCapture() {
-        guard let number = activeLaneNumber, lanes[number] != nil else {
+        guard selectedTask != nil else {
             failure = CodexLaneFailure(
-                message: "No lane is active.",
-                hint: "Pick a lane in the lid first."
+                message: "No Codex channel is selected.",
+                hint: "Open the channel catalogue and choose an exact task."
             )
             return
         }
@@ -448,28 +724,276 @@ final class CodexLaneStore: ObservableObject {
             return
         }
 
-        guard let number = activeLaneNumber, let lane = lanes[number] else {
+        guard let task = selectedTask else {
             let described = CodexLaneFailure(
-                message: "No lane is active.",
-                hint: "Pick a lane in the lid first."
+                message: "No Codex channel is selected.",
+                hint: "Open the channel catalogue and choose an exact task."
             )
             failure = described
             phase = .failed(described.message)
             return
         }
 
-        // Delivery is a lane setting, not a transient inference from this
-        // phone's request count. The host makes either preference safe when
-        // idle: steer falls back to a new turn and queue starts immediately.
-        // Keeping the explicit mode also honors work started on the Mac, which
-        // this store cannot reliably infer from local state alone.
-        let mode = lane.preferredMessageMode
-        await deliver(
-            instruction: text,
-            to: lane,
-            laneNumber: number,
-            mode: mode
+        if let number = activeLaneNumber,
+           let lane = lanes[number],
+           lane.task.id == task.id {
+            // Delivery is a lane setting, not a transient inference from this
+            // phone's request count. The host makes either preference safe when
+            // idle: steer falls back to a new turn and queue starts immediately.
+            AppLogger.ai.info(
+                "Codex dispatch resolved task=\(task.id) lane=\(number) "
+                    + "mode=\(lane.preferredMessageMode.rawValue)"
+            )
+            await deliver(
+                instruction: text,
+                to: lane,
+                laneNumber: number,
+                mode: lane.preferredMessageMode
+            )
+        } else {
+            AppLogger.ai.info(
+                "Codex dispatch resolved task=\(task.id) lane=none mode=steer"
+            )
+            await deliverToUnpinnedChannel(instruction: text, task: task)
+        }
+    }
+
+    /// Creates a fresh task for a Watch-originated instruction, using the
+    /// selected task only as a project anchor.
+    ///
+    /// This method never consults `activeLaneNumber` and never submits into the
+    /// anchor task. A stale host or missing anchor fails before task creation,
+    /// preventing an accidental fallback to whichever lane is active on iPhone.
+    func dispatchFromWatch(
+        instruction: String,
+        taskID: String,
+        projectDirectory: String?,
+        expectedHostID: String?,
+        submissionID: UUID = UUID()
+    ) async throws -> CodexTurnJob {
+        let text = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { throw CodexDispatchError.emptyInstruction }
+        guard let hostID = loadedHostID else { throw CodexDispatchError.noActiveHost }
+        if let expectedHostID, expectedHostID != hostID {
+            throw CodexDispatchError.hostMismatch
+        }
+        let projectAnchor = availableTask(id: taskID)
+        let workingDirectory = try Self.resolveWatchProjectDirectory(
+            requestedDirectory: projectDirectory,
+            projectAnchor: projectAnchor
         )
+
+        // The Watch request ID is the durable key for the combined operation.
+        // The Mac creates the task and starts its first turn in one app-server
+        // lifetime, avoiding an unmaterialized thread with no rollout.
+        let receipt = try await bridge.codexStartFreshTurn(
+            submissionId: submissionID,
+            cwd: workingDirectory,
+            text: text
+        )
+        guard let task = receipt.task else {
+            throw CodexDispatchError.unavailableTask
+        }
+        retainRecentlyCreatedTask(task)
+        catalog = Self.mergingCatalog([task], with: catalog)
+        WatchSessionManager.shared.publishCurrentCodexSnapshot()
+
+        AppLogger.ai.info(
+            "Watch dispatch created task=\(task.id) project=\(task.canonicalWorkingDirectory) "
+                + "anchor=\(taskID)"
+        )
+
+        return receipt
+    }
+
+    /// Continues one exact task selected on Watch without changing the iPhone
+    /// deck selection. Steer is the voice-friendly default: it adjusts an
+    /// active turn and starts a normal turn when the task is idle.
+    func dispatchFromWatchToTask(
+        instruction: String,
+        taskID: String,
+        taskTitle: String?,
+        projectDirectory: String?,
+        expectedHostID: String?,
+        submissionID: UUID = UUID()
+    ) async throws -> CodexTurnJob {
+        let text = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { throw CodexDispatchError.emptyInstruction }
+        guard let hostID = loadedHostID else { throw CodexDispatchError.noActiveHost }
+        if let expectedHostID, expectedHostID != hostID {
+            throw CodexDispatchError.hostMismatch
+        }
+
+        let localTask = availableTask(id: taskID)
+        _ = try Self.resolveWatchProjectDirectory(
+            requestedDirectory: projectDirectory,
+            projectAnchor: localTask
+        )
+        let resolvedTitle = taskTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let dispatchTitle: String
+        if let resolvedTitle, !resolvedTitle.isEmpty {
+            dispatchTitle = resolvedTitle
+        } else {
+            dispatchTitle = localTask?.title ?? "Codex task"
+        }
+        let receipt = try await bridge.codexStartTurn(
+            submissionId: submissionID,
+            taskId: taskID,
+            taskTitle: dispatchTitle,
+            text: text,
+            mode: .steer
+        )
+        AppLogger.ai.info(
+            "Watch dispatch continued task=\(taskID) mode=steer "
+                + "phoneSelection=\(selectedTask?.id ?? "none")"
+        )
+        return receipt
+    }
+
+    private func retainRecentlyCreatedTask(_ task: CodexTaskSummary) {
+        recentlyCreatedTaskExpirations[task.id] = .now.addingTimeInterval(
+            Self.createdTaskVisibilityGracePeriod
+        )
+    }
+
+    /// Resolves the project independently of UI/catalog hydration. The Watch
+    /// receives this canonical directory from the phone's durable snapshot and
+    /// returns it with the recording. When the anchor is locally available, it
+    /// must still agree so stale snapshots cannot silently cross projects.
+    static func resolveWatchProjectDirectory(
+        requestedDirectory: String?,
+        projectAnchor: CodexTaskSummary?
+    ) throws -> String {
+        if let requestedDirectory {
+            let trimmed = requestedDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard trimmed.hasPrefix("/") else { throw CodexDispatchError.invalidProject }
+            let canonical = URL(fileURLWithPath: trimmed).standardizedFileURL.path
+            if let projectAnchor,
+               projectAnchor.canonicalWorkingDirectory != canonical {
+                throw CodexDispatchError.projectMismatch
+            }
+            return canonical
+        }
+
+        guard let projectAnchor else { throw CodexDispatchError.unavailableTask }
+        return projectAnchor.canonicalWorkingDirectory
+    }
+
+    private func availableTask(id taskID: String) -> CodexTaskSummary? {
+        if selectedChannel?.id == taskID { return selectedChannel }
+        if let task = catalog.first(where: { $0.id == taskID }) { return task }
+        return lanes.values.first(where: { $0.task.id == taskID })?.task
+    }
+
+    private func deliverToUnpinnedChannel(
+        instruction: String,
+        task: CodexTaskSummary
+    ) async {
+        let submissionID = UUID()
+        unpinnedInFlightRequestCount += 1
+        phase = .submitting
+        failure = nil
+
+        let receipt: CodexTurnJob
+        do {
+            receipt = try await bridge.codexStartTurn(
+                submissionId: submissionID,
+                taskId: task.id,
+                taskTitle: task.title,
+                text: instruction,
+                mode: .steer
+            )
+        } catch {
+            unpinnedInFlightRequestCount = max(0, unpinnedInFlightRequestCount - 1)
+            let described = Self.describe(error)
+            failure = described
+            phase = .failed(described.message)
+            AppLogger.ai.warning("Codex submit failed channel=\(task.id): \(described.combined)")
+            return
+        }
+
+        guard let job = await waitForUnpinnedTurnJob(receipt) else {
+            unpinnedInFlightRequestCount = max(0, unpinnedInFlightRequestCount - 1)
+            phase = .failed("Timed out waiting for the Mac-owned turn.")
+            return
+        }
+        unpinnedInFlightRequestCount = max(0, unpinnedInFlightRequestCount - 1)
+
+        if job.status == "failed" || job.status == "blocked" || job.status == "unknown" {
+            let message = job.error
+                ?? (job.status == "blocked" ? "Codex needs attention on the Mac." : "The Codex turn failed on the Mac.")
+            failure = CodexLaneFailure(message: message, hint: job.hint)
+            phase = .failed(message)
+            return
+        }
+
+        guard let deliveryValue = job.delivery,
+              let delivery = CodexTurnDelivery(rawValue: deliveryValue) else {
+            let message = "Codex reported an incomplete delivery receipt."
+            failure = CodexLaneFailure(
+                message: message,
+                hint: "Update Talkie so it understands this version of Codex Desktop."
+            )
+            phase = .failed(message)
+            return
+        }
+
+        guard let response = job.response?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !response.isEmpty else {
+            if delivery == .steeredActiveTurn {
+                phase = isTurnInFlight ? .submitting : .idle
+            } else {
+                let message = "Codex completed without a readable response."
+                failure = CodexLaneFailure(message: message, hint: "Open the task on your Mac to inspect the turn.")
+                phase = .failed(message)
+            }
+            return
+        }
+
+        var record = CodexTurnRecord(
+            laneNumber: nil,
+            taskID: task.id,
+            taskTitle: task.title,
+            instruction: instruction,
+            response: response,
+            delivery: delivery
+        )
+        if UIApplication.shared.applicationState == .active,
+           !notificationNarratedJobIDs.contains(job.id) {
+            record = await narrate(record)
+        } else {
+            record.narrationSuppressed = true
+            let route = AIResponseSpeechRoute(
+                rawValue: TalkieAppSettings.shared.aiVoiceOutputRoute
+            ) ?? .phone
+            narrationState = .suppressed(laneNumber: nil, route: route)
+            phase = isTurnInFlight ? .submitting : .idle
+        }
+        remember(record)
+    }
+
+    private func waitForUnpinnedTurnJob(_ receipt: CodexTurnJob) async -> CodexTurnJob? {
+        var job = receipt
+        let deadline = Date().addingTimeInterval(62 * 60)
+        while Date() < deadline, !Task.isCancelled {
+            if job.status == "completed" || job.status == "failed"
+                || job.status == "blocked" || job.status == "unknown" {
+                return job
+            }
+
+            try? await Task.sleep(for: .milliseconds(700))
+            do {
+                job = try await bridge.codexTurnStatus(jobId: job.id)
+            } catch {
+                guard Self.shouldRetryTurnStatus(after: error) else {
+                    let described = Self.describe(error)
+                    failure = described
+                    return nil
+                }
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
+        return nil
     }
 
     private func deliver(
@@ -518,7 +1042,8 @@ final class CodexLaneStore: ObservableObject {
         updateQueuedDisposition(activityID, on: laneNumber, from: receipt)
         AppLogger.ai.info(
             "Codex activity accepted lane=\(laneNumber) id=\(activityID) job=\(receipt.id) "
-                + "status=\(receipt.status)"
+                + "status=\(receipt.status) mode=\(receipt.mode.rawValue) "
+                + "delivery=\(receipt.delivery ?? "pending")"
         )
 
         let job = await waitForTurnJob(receipt, activityID: activityID, laneNumber: laneNumber)
@@ -667,7 +1192,8 @@ final class CodexLaneStore: ObservableObject {
                         error: described.combined,
                         code: "turn-receipt-unavailable",
                         hint: described.hint,
-                        retryable: false
+                        retryable: false,
+                        task: job.task
                     )
                 }
                 // Leaving the foreground may suspend network work. Keep the
@@ -932,6 +1458,7 @@ final class CodexLaneStore: ObservableObject {
 
         let lanesKey = Keys.lanes(for: loadedHostID)
         let activeLaneKey = Keys.activeLane(for: loadedHostID)
+        let selectedChannelKey = Keys.selectedChannel(for: loadedHostID)
 
         migrateLegacyLanesIfNeeded(to: loadedHostID)
 
@@ -950,6 +1477,16 @@ final class CodexLaneStore: ObservableObject {
         if lanes[storedActive] != nil {
             activeLaneNumber = storedActive
         }
+
+        if let data = defaults.data(forKey: selectedChannelKey),
+           let storedChannel = try? JSONDecoder().decode(CodexTaskSummary.self, from: data) {
+            selectedChannel = storedChannel
+            if lanes[activeLaneNumber ?? 0]?.task.id != storedChannel.id {
+                activeLaneNumber = lanes.values.first(where: { $0.task.id == storedChannel.id })?.number
+            }
+        } else {
+            selectedChannel = activeLane?.task
+        }
     }
 
     private func persistLanes() {
@@ -964,6 +1501,17 @@ final class CodexLaneStore: ObservableObject {
         let key = Keys.activeLane(for: loadedHostID)
         if let activeLaneNumber {
             defaults.set(activeLaneNumber, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
+    private func persistSelectedChannel() {
+        guard let loadedHostID else { return }
+        let key = Keys.selectedChannel(for: loadedHostID)
+        if let selectedChannel,
+           let data = try? JSONEncoder().encode(selectedChannel) {
+            defaults.set(data, forKey: key)
         } else {
             defaults.removeObject(forKey: key)
         }

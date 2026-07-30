@@ -25,6 +25,7 @@ struct CodexCommandDeckSurface: View {
     @State private var voicePlayback = WalkieFX.shared
     @Namespace private var outputRouteThumbNamespace
     @State private var showingMapper = false
+    @State private var showingNewTask = false
     @State private var showingHistory = false
     @State private var selectedResponseTurn: CodexTurnRecord?
     @State private var showingStatus = false
@@ -33,8 +34,15 @@ struct CodexCommandDeckSurface: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            CodexCommandConsole(onShowMapper: openMapper)
+            CodexCommandConsole(
+                onShowMapper: openMapper,
+                onCreateNewTask: openNewTask
+            )
                 .frame(height: 316)
+                .animation(
+                    .spring(response: 0.32, dampingFraction: 0.74),
+                    value: store.selectedTask?.id
+                )
 
             keybed
                 .layoutPriority(60)
@@ -52,6 +60,13 @@ struct CodexCommandDeckSurface: View {
         .animation(.easeInOut(duration: 0.2), value: voicePlayback.isVoicePlaybackActive)
         .sheet(isPresented: $showingMapper) {
             CodexLaneMapperView()
+        }
+        .sheet(isPresented: $showingNewTask, onDismiss: {
+            showingNewTask = false
+        }) {
+            CodexNewTaskView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showingHistory) {
             CodexTurnHistorySheet()
@@ -206,7 +221,13 @@ struct CodexCommandDeckSurface: View {
             .frame(height: 58)
 
             GridRow {
-                openSocket(index: 13)
+                actionKey(
+                    index: 13,
+                    label: "New Task",
+                    icon: "square.badge.plus",
+                    isEnabled: store.canCreateChannel && !store.isCreatingTask,
+                    action: openNewTask
+                )
                 captureKey
                     .gridCellColumns(2)
                 openSocket(index: 16)
@@ -246,7 +267,11 @@ struct CodexCommandDeckSurface: View {
                     .minimumScaleFactor(0.65)
                 Spacer(minLength: 0)
             }
-            .foregroundStyle(isEnabled ? utilityInk : utilityInkFaint.opacity(0.42))
+            .foregroundStyle(
+                isEnabled
+                    ? utilityInk
+                    : utilityInkFaint.opacity(0.42)
+            )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal, 5)
             .padding(.vertical, 8)
@@ -302,7 +327,7 @@ struct CodexCommandDeckSurface: View {
             }
         )
         .disabled(!canCapture)
-        .opacity(store.activeLaneNumber == nil ? 0.48 : 1)
+        .opacity(store.selectedTask == nil ? 0.48 : 1)
         .accessibilityLabel(captureTitle)
         .accessibilityHint(captureAccessibilityHint)
         .accessibilityAction { store.handleCaptureControl() }
@@ -310,7 +335,7 @@ struct CodexCommandDeckSurface: View {
     }
 
     private var canCapture: Bool {
-        store.activeLaneNumber != nil
+        store.selectedTask != nil
             && (!store.phase.isBusy
                 || store.phase.isCapturing
                 || store.phase == .speaking
@@ -320,13 +345,13 @@ struct CodexCommandDeckSurface: View {
     private var captureTitle: String {
         switch store.phase {
         case .listening:
-            return store.activeLaneIsInFlight
-                ? "RELEASE TO \(store.activeLaneMessageMode.label.uppercased())"
+            return store.selectedDestinationIsInFlight
+                ? "RELEASE TO \(store.selectedMessageMode.label.uppercased())"
                 : "RELEASE TO SEND"
         case .speaking: return "INTERRUPT + TALK"
         case .preparingSpeech: return "VOICE INBOUND"
-        case .submitting where store.activeLaneIsInFlight:
-            return "HOLD TO \(store.activeLaneMessageMode.label.uppercased())"
+        case .submitting where store.selectedDestinationIsInFlight:
+            return "HOLD TO \(store.selectedMessageMode.label.uppercased())"
         default: return "HOLD TO TALK"
         }
     }
@@ -338,8 +363,8 @@ struct CodexCommandDeckSurface: View {
         case .preparingSpeech:
             let destination = store.narrationState.route?.displayName.uppercased() ?? "VOICE"
             return "\(destination) AUDIO IS PREPARING"
-        case .submitting where store.activeLaneIsInFlight:
-            if store.activeLaneMessageMode == .queue {
+        case .submitting where store.selectedDestinationIsInFlight:
+            if store.selectedMessageMode == .queue {
                 let queued = store.activeLaneNumber.map(store.queuedMessageCount(for:)) ?? 0
                 let suffix = queued > 0
                     ? " · \(queued) WAITING"
@@ -355,17 +380,17 @@ struct CodexCommandDeckSurface: View {
         switch store.phase {
         case .listening: return "arrow.up"
         case .speaking: return "waveform"
-        case .submitting where store.activeLaneIsInFlight: return "mic"
+        case .submitting where store.selectedDestinationIsInFlight: return "mic"
         case .transcribing, .submitting, .preparingSpeech: return "ellipsis"
         case .idle, .failed: return "mic"
         }
     }
 
     private var captureAccessibilityHint: String {
-        guard store.activeLaneIsInFlight else {
-            return "Sends speech to the active Codex task"
+        guard store.selectedDestinationIsInFlight else {
+            return "Sends speech to the selected Codex task"
         }
-        switch store.activeLaneMessageMode {
+        switch store.selectedMessageMode {
         case .queue:
             return "Queues the message to run after the current Codex turn"
         case .steer:
@@ -658,8 +683,8 @@ struct CodexCommandDeckSurface: View {
     }
 
     private var activeLaneTurn: CodexTurnRecord? {
-        guard let laneNumber = store.activeLaneNumber else { return nil }
-        return store.latestTurn(for: laneNumber)
+        guard let taskID = store.selectedTask?.id else { return nil }
+        return store.latestTurn(forTaskID: taskID)
     }
 
     private func outputRouteIcon(for route: AIResponseSpeechRoute) -> String {
@@ -721,8 +746,8 @@ struct CodexCommandDeckSurface: View {
     }
 
     private func replayActiveLaneResponse() {
-        guard let laneNumber = store.activeLaneNumber else { return }
-        store.narrateLatestResponse(for: laneNumber)
+        guard let taskID = store.selectedTask?.id else { return }
+        store.narrateLatestResponse(forTaskID: taskID)
     }
 
     private func adjacentLaneNumber(direction: Int) -> Int? {
@@ -739,14 +764,14 @@ struct CodexCommandDeckSurface: View {
         switch store.phase {
         case .listening: return "LISTENING"
         case .transcribing: return "TRANSCRIBING"
-        case .submitting: return store.activeLaneMessageMode == .queue ? "QUEUED" : "SENDING"
+        case .submitting: return store.selectedMessageMode == .queue ? "QUEUED" : "SENDING"
         case .preparingSpeech: return "VOICE INBOUND"
         case .speaking: return "SPEAKING"
         case .failed: return "ERROR"
         case .idle:
             guard let number = store.activeLaneNumber,
                   let activity = store.activity(for: number) else {
-                return store.activeLaneNumber == nil ? "NO LANE" : "READY"
+                return store.selectedTask == nil ? "NO TASK" : "READY"
             }
             switch activity.state {
             case .working(let mode): return mode == .queue ? "QUEUED" : "WORKING"
@@ -782,6 +807,11 @@ struct CodexCommandDeckSurface: View {
 
     private func openMapper() {
         showingMapper = true
+    }
+
+    private func openNewTask() {
+        guard store.canCreateChannel, !store.isCreatingTask else { return }
+        showingNewTask = true
     }
 
 }
@@ -912,6 +942,7 @@ private struct VoicePlaybackWaveform: View {
 
 private struct CodexCommandConsole: View {
     let onShowMapper: () -> Void
+    let onCreateNewTask: () -> Void
 
     @ObservedObject private var store = CodexLaneStore.shared
     @ObservedObject private var theme = ThemeManager.shared
@@ -1131,18 +1162,65 @@ private struct CodexCommandConsole: View {
     private var taskIdentity: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Text(store.activeLane?.task.title ?? "Choose a lane")
+                Text(store.selectedTask?.title ?? "Choose a channel")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(theme.chrome.panelInk)
                     .lineLimit(1)
+
+                if store.selectedTask != nil && store.activeLaneNumber == nil {
+                    Button(action: onShowMapper) {
+                        Text("NO LANE")
+                            .font(.system(size: 7, weight: .bold, design: .monospaced))
+                            .tracking(0.8)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule().fill(theme.chrome.panelInk.opacity(0.08))
+                            )
+                            .overlay {
+                                Capsule().stroke(
+                                    theme.chrome.panelInk.opacity(0.18),
+                                    lineWidth: theme.chrome.hairlineWidth
+                                )
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(theme.chrome.panelInkFaint)
+                    .accessibilityLabel("Channel without a lane")
+                    .accessibilityHint("Opens the lane mapper")
+                }
 
                 Spacer(minLength: 6)
 
                 if let lane = store.activeLane {
                     laneModeSelector(lane)
                 }
+
+                if store.selectedTask != nil {
+                    Button(action: store.clearSelection) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                            .frame(width: 34, height: 34)
+                            .background(
+                                Circle().fill(theme.chrome.panelInk.opacity(0.06))
+                            )
+                            .overlay {
+                                Circle().stroke(
+                                    theme.chrome.panelInk.opacity(0.14),
+                                    lineWidth: theme.chrome.hairlineWidth
+                                )
+                            }
+                            .contentShape(.circle)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(theme.chrome.panelInkFaint)
+                    .disabled(store.phase.isCapturing)
+                    .accessibilityIdentifier("codex-clear-task-selection")
+                    .accessibilityLabel("Deselect Codex task")
+                    .accessibilityHint("Returns the deck to no task selected")
+                }
             }
-            if let task = store.activeLane?.task {
+            if let task = store.selectedTask {
                 HStack(spacing: 6) {
                     Label(task.projectName, systemImage: "folder")
                     if let branch = task.branchName {
@@ -1161,7 +1239,7 @@ private struct CodexCommandConsole: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
             } else {
-                Text("Tap an empty lane above to map an exact Codex task.")
+                Text("Use NEW to create a task, or open Mapper to choose an existing channel.")
                     .font(.system(size: 9, weight: .regular, design: .monospaced))
                     .foregroundStyle(theme.chrome.panelInkFaint)
                     .lineLimit(2)
@@ -1175,7 +1253,7 @@ private struct CodexCommandConsole: View {
                 .fill(theme.chrome.panelInk.opacity(0.08))
                 .frame(height: theme.chrome.hairlineWidth)
 
-            Text(store.activeLane == nil ? "MAP A LANE TO BEGIN" : "HOLD TALK TO SPEAK INTO THIS LANE")
+            Text(store.selectedTask == nil ? "CREATE OR CHOOSE A CHANNEL TO BEGIN" : "HOLD TALK TO SPEAK INTO THIS TASK")
                 .font(.system(size: 7, weight: .medium, design: .monospaced))
                 .tracking(1.1)
                 .foregroundStyle(theme.chrome.panelInkFaint.opacity(0.58))
@@ -1195,7 +1273,7 @@ private struct CodexCommandConsole: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(theme.chrome.panelEdge.opacity(0.78), lineWidth: theme.chrome.hairlineWidth)
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel(taskIdentityAccessibilityLabel)
     }
 
@@ -1216,13 +1294,20 @@ private struct CodexCommandConsole: View {
                 conversationLine(label: "CODEX", text: turn.response, lineLimit: 2)
             }
             .padding(.top, 2)
-        } else if store.activeLane != nil {
+        } else if let taskID = store.selectedTask?.id,
+                  let turn = store.latestTurn(forTaskID: taskID) {
+            VStack(alignment: .leading, spacing: 4) {
+                conversationLine(label: "YOU", text: turn.instruction, lineLimit: 1)
+                conversationLine(label: "CODEX", text: turn.response, lineLimit: 2)
+            }
+            .padding(.top, 2)
+        } else if store.selectedTask != nil {
             Text("Hold the 14–15 key to talk directly to this task.")
                 .font(.system(size: 10, weight: .regular))
                 .foregroundStyle(theme.chrome.panelInkFaint)
                 .lineLimit(2)
         } else {
-            Text("Pick a lane above, or open Mapper to choose an exact task.")
+            Text("Use NEW to create a task, pick a lane above, or open Mapper.")
                 .font(.system(size: 10, weight: .regular))
                 .foregroundStyle(theme.chrome.panelInkFaint)
                 .lineLimit(2)
@@ -1425,7 +1510,7 @@ private struct CodexCommandConsole: View {
 
         guard let number = store.activeLaneNumber,
               let activity = store.activity(for: number) else {
-            return store.activeLaneNumber == nil ? "NO LANE" : "READY"
+            return store.selectedTask == nil ? "NO TASK" : "READY"
         }
         switch activity.state {
         case .working(let mode):
@@ -1469,7 +1554,7 @@ private struct CodexCommandConsole: View {
         }
         switch store.phase {
         case .failed: return Color(red: 0.92, green: 0.42, blue: 0.30)
-        case .idle: return store.activeLaneNumber == nil
+        case .idle: return store.selectedTask == nil
             ? theme.chrome.panelInkFaint
             : theme.chrome.panelAccent
         default: return theme.chrome.panelAccent
@@ -1509,6 +1594,15 @@ private struct CodexCommandConsole: View {
                         .background(laneKeySurface(isActive: false))
                 }
                 .buttonStyle(.plain)
+
+                Button(action: onCreateNewTask) {
+                    Label("New", systemImage: "square.badge.plus")
+                        .font(.caption.bold())
+                        .frame(minWidth: 64, minHeight: 44)
+                        .background(laneKeySurface(isActive: false))
+                }
+                .buttonStyle(.plain)
+                .disabled(!store.canCreateChannel)
             }
             .padding(6)
         }
@@ -1522,16 +1616,16 @@ private struct CodexCommandConsole: View {
 
     private var accessibilityTaskIdentity: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(store.activeLane.map { "Lane \($0.number), \($0.task.projectName)" } ?? "No active task")
+            Text(destinationAccessibilityHeading)
                 .font(.caption.bold())
                 .foregroundStyle(theme.chrome.panelAccent)
 
-            Text(store.activeLane?.task.title ?? "Choose a lane")
+            Text(store.selectedTask?.title ?? "Choose a channel")
                 .font(.body.weight(.semibold))
                 .foregroundStyle(theme.chrome.panelInk)
                 .lineLimit(2)
 
-            Text(store.activeLaneIsInFlight ? "Turn active. Delivery mode is set with the lane control above." : "Hold key 14–15 to talk directly to this task.")
+            Text(store.selectedDestinationIsInFlight ? "Turn active. Delivery mode is set for this destination." : "Hold key 14–15 to talk directly to this task.")
                 .font(.caption)
                 .foregroundStyle(theme.chrome.panelInkFaint)
                 .lineLimit(2)
@@ -1548,10 +1642,19 @@ private struct CodexCommandConsole: View {
     }
 
     private var taskIdentityAccessibilityLabel: String {
-        guard let lane = store.activeLane else {
-            return "No active Codex task. Choose a lane or open the mapper."
+        guard let task = store.selectedTask else {
+            return "No active Codex task. Choose a lane or open the channel catalogue."
         }
-        return "Lane \(lane.number), \(lane.task.projectName), \(lane.task.title), \(consoleStatusLabel)"
+        let destination = store.activeLaneNumber.map { "Lane \($0)" } ?? "Channel without a lane"
+        return "\(destination), \(task.projectName), \(task.title), \(consoleStatusLabel)"
+    }
+
+    private var destinationAccessibilityHeading: String {
+        guard let task = store.selectedTask else { return "No active task" }
+        if let laneNumber = store.activeLaneNumber {
+            return "Lane \(laneNumber), \(task.projectName)"
+        }
+        return "No lane, \(task.projectName)"
     }
 }
 
@@ -1731,7 +1834,7 @@ private struct CodexTurnHistorySheet: View {
                 List(store.history) { turn in
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
-                            Text("LANE \(turn.laneNumber)")
+                            Text(turn.laneNumber.map { "LANE \($0)" } ?? "UNPINNED")
                             Spacer()
                             Text(turn.delivery.label.uppercased())
                         }

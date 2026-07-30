@@ -9,7 +9,7 @@
 import Foundation
 
 /// A single captured item from the share sheet or other import sources.
-public struct Capture: Codable, Identifiable, Hashable {
+public struct Capture: Codable, Identifiable, Hashable, Sendable {
     public let id: UUID
     public let sourceType: String          // "url", "text", "photo"
     public let text: String                // OCR'd or extracted text

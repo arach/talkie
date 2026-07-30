@@ -100,17 +100,47 @@ xcodebuild -scheme Talkie -destination 'platform=macOS' test
 
 When running `xcodebuild` from Codex, do not place DerivedData under `/tmp` or `/private/tmp` and do not use ad hoc paths such as `/private/tmp/talkie-*`.
 
-Use a per-run DerivedData directory under the user cache area instead:
+Use a stable, reusable DerivedData directory for each project/scheme under the
+user cache area. Keep the environment override so specialized workflows can
+select a different stable cache without editing commands:
 
 ```bash
 mkdir -p "$HOME/Library/Caches/codex-builds"
-DERIVED_DATA_DIR="$(mktemp -d "$HOME/Library/Caches/codex-builds/deriveddata.XXXXXXXX")"
+DERIVED_DATA_DIR="${TALKIE_IOS_DERIVED_DATA_DIR:-$HOME/Library/Caches/codex-builds/talkie-ios-talkie}"
 xcodebuild ... -derivedDataPath "$DERIVED_DATA_DIR"
 ```
 
-Prefer removing that per-run directory before ending the session unless it is intentionally being kept for debugging. If keeping it, mention the path in the final reply.
+Reuse that path across normal builds; do not create a fresh directory for every
+invocation. Serialize builds that target the same cache. If an isolated cache is
+truly required to diagnose cache state or run concurrently, give it a precise
+purpose-specific name and install a mandatory cleanup trap before building:
 
-A weekly `~/bin/tmp-janitor.sh` (launchd: `com.user.tmp-janitor`) cleans up forgotten DerivedData dirs in both `/private/tmp/talkie-*` and `$HOME/Library/Caches/codex-builds/` that are older than 7 days and not open. The janitor uses positive Xcode fingerprinting (info.plist + WorkspacePath match), not name globbing, so it will not touch unrelated tmp artifacts.
+```bash
+DERIVED_DATA_DIR="$HOME/Library/Caches/codex-builds/talkie-ios-isolated"
+trap 'rm -rf -- "$DERIVED_DATA_DIR"' EXIT
+```
+
+Delete disposable build caches with `rm -rf -- "$DERIVED_DATA_DIR"`; never move
+them to Trash because that does not reclaim disk space. Never delete a cache
+while `xcodebuild` or another process is using it.
+
+The repository provides `scripts/tmp-janitor.sh` and the daily launchd job
+`scripts/launchd/com.user.tmp-janitor.plist`. The janitor removes positively
+identified Talkie Xcode DerivedData older than 24 hours from legacy temporary
+locations and `$HOME/Library/Caches/codex-builds/`. It also scans
+`$HOME/.Trash` when macOS privacy permissions allow it, but agents must never
+depend on Trash cleanup. It skips open or inaccessible directories and defaults
+to a dry run when invoked manually.
+
+Install or refresh the safety net with:
+
+```bash
+mkdir -p "$HOME/bin" "$HOME/Library/LaunchAgents"
+install -m 755 scripts/tmp-janitor.sh "$HOME/bin/tmp-janitor.sh"
+install -m 644 scripts/launchd/com.user.tmp-janitor.plist "$HOME/Library/LaunchAgents/com.user.tmp-janitor.plist"
+launchctl bootout "gui/$UID" "$HOME/Library/LaunchAgents/com.user.tmp-janitor.plist" 2>/dev/null || true
+launchctl bootstrap "gui/$UID" "$HOME/Library/LaunchAgents/com.user.tmp-janitor.plist"
+```
 
 ---
 

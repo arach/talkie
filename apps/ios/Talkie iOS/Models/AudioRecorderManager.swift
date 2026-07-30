@@ -450,14 +450,16 @@ class AudioRecorderManager: NSObject, ObservableObject {
             }
 
             // Read actual duration from the audio file (more reliable than timer)
-            let asset = AVURLAsset(url: url)
-            let fileDuration = CMTimeGetSeconds(asset.duration)
-            if fileDuration.isFinite && fileDuration > 0 {
-                let timerDuration = recordingDuration
-                if abs(timerDuration - fileDuration) > 5 {
-                    AppLogger.recording.warning("Duration mismatch — timer: \(timerDuration)s, file: \(fileDuration)s. Using file duration.")
+            if let audioFile = try? AVAudioFile(forReading: url),
+               audioFile.processingFormat.sampleRate > 0 {
+                let fileDuration = Double(audioFile.length) / audioFile.processingFormat.sampleRate
+                if fileDuration.isFinite && fileDuration > 0 {
+                    let timerDuration = recordingDuration
+                    if abs(timerDuration - fileDuration) > 5 {
+                        AppLogger.recording.warning("Duration mismatch — timer: \(timerDuration)s, file: \(fileDuration)s. Using file duration.")
+                    }
+                    recordingDuration = fileDuration
                 }
-                recordingDuration = fileDuration
             }
         }
 

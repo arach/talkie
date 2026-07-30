@@ -51,6 +51,12 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         // Activate Watch connectivity and set up audio handler
         setupWatchAudioHandler()
 
+        // A Watch recording can arrive while the app is suspended. Resume any
+        // phone-side inbox entries left by an earlier background window.
+        Task { @MainActor in
+            await WatchCodexDispatchCoordinator.shared.resumePendingDispatches()
+        }
+
         // One-time: lift the legacy plaintext OpenAI key into the Keychain so it
         // surfaces in AI Keys and resolves like every other provider.
         Task { @MainActor in
@@ -101,8 +107,22 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         manager.activateIfNeeded()
     }
 
+    func applicationDidBecomeActive(_ application: UIApplication) {
+        Task { @MainActor in
+            await WatchCodexDispatchCoordinator.shared.resumePendingDispatches()
+        }
+    }
+
     private func createMemoFromWatchAudio(audioURL: URL, metadata: [String: Any]) async {
         AppLogger.app.info("[Watch] Creating memo from Watch audio: \(audioURL.lastPathComponent)")
+
+        if isWatchCodexRequest(metadata) {
+            await WatchCodexDispatchCoordinator.shared.enqueue(
+                audioURL: audioURL,
+                metadata: metadata
+            )
+            return
+        }
 
         let context = PersistenceController.shared.container.viewContext
         let recordedAt = watchRecordedAt(from: metadata)
@@ -338,6 +358,11 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         return false
     }
 
+    private func isWatchCodexRequest(_ metadata: [String: Any]) -> Bool {
+        guard let intent = metadata["intent"] as? String else { return false }
+        return intent == "codex"
+    }
+
     private enum WatchAIAppDelegateError: LocalizedError {
         case memoMissing
 
@@ -406,12 +431,22 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             }
         }
 
-        // Check if this is a CloudKit notification
+        // Persist any Watch handoff and schedule its durable resume before
+        // releasing the finite background-fetch window. Transcription and
+        // bridge delivery continue best-effort without holding this callback.
+        let fetchResult: UIBackgroundFetchResult
         if let ckNotification = CKNotification(fromRemoteNotificationDictionary: userInfo as! [String: NSObject]) {
             handleCloudKitNotification(ckNotification)
-            completionHandler(.newData)
+            fetchResult = .newData
         } else {
-            completionHandler(.noData)
+            fetchResult = .noData
+        }
+
+        Task { @MainActor in
+            let coordinator = WatchCodexDispatchCoordinator.shared
+            let hasPendingDispatches = coordinator.preparePendingDispatchesForBackground()
+            completionHandler(hasPendingDispatches ? .newData : fetchResult)
+            await coordinator.resumePendingDispatches()
         }
     }
 

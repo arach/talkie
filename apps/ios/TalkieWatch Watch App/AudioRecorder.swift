@@ -17,6 +17,9 @@ final class AudioRecorder: NSObject, ObservableObject {
     private var audioRecorder: AVAudioRecorder?
     private var recordingURL: URL?
     private var timer: Timer?
+    private var stopContinuation: CheckedContinuation<URL?, Never>?
+    private var finalizationTimeoutTask: Task<Void, Never>?
+    private var discardRecordingOnFinish = false
 
     private let fileManager = FileManager.default
 
@@ -36,6 +39,11 @@ final class AudioRecorder: NSObject, ObservableObject {
     }
 
     func startRecording() {
+        guard audioRecorder == nil, stopContinuation == nil else {
+            WatchConsole.info("[Watch] Recording start ignored while the previous file is finalizing")
+            return
+        }
+
         // Generate unique filename
         let filename = "talkie_\(Int(Date().timeIntervalSince1970)).m4a"
         let tempDir = fileManager.temporaryDirectory
@@ -52,9 +60,15 @@ final class AudioRecorder: NSObject, ObservableObject {
         ]
 
         do {
-            audioRecorder = try AVAudioRecorder(url: url, settings: settings)
-            audioRecorder?.isMeteringEnabled = true  // Enable metering
-            audioRecorder?.record()
+            let recorder = try AVAudioRecorder(url: url, settings: settings)
+            recorder.delegate = self
+            recorder.isMeteringEnabled = true  // Enable metering
+            guard recorder.record() else {
+                WatchConsole.info("[Watch] Recording failed to start: AVAudioRecorder rejected the request")
+                recordingURL = nil
+                return
+            }
+            audioRecorder = recorder
             isRecording = true
             recordingDuration = 0
             currentLevel = 0
@@ -76,45 +90,127 @@ final class AudioRecorder: NSObject, ObservableObject {
                 }
             }
 
-            WatchConsole.info("[Watch] Recording started: \(url.lastPathComponent)")
+            let inputRoute = AVAudioSession.sharedInstance().currentRoute.inputs
+                .map { "\($0.portName) [\($0.portType.rawValue)]" }
+                .joined(separator: ", ")
+            WatchConsole.info(
+                "[Watch] Recording started: \(url.lastPathComponent); input: "
+                    + (inputRoute.isEmpty ? "system-selected Watch input" : inputRoute)
+            )
         } catch {
             WatchConsole.info("[Watch] Recording failed to start: \(error)")
         }
     }
 
-    func stopRecording() -> URL? {
+    func stopRecording() async -> URL? {
         timer?.invalidate()
         timer = nil
 
-        audioRecorder?.stop()
         isRecording = false
         currentLevel = 0
 
-        let url = recordingURL
-        audioRecorder = nil
-
-        if let url = url {
-            WatchConsole.info("[Watch] Recording stopped: \(url.lastPathComponent)")
+        guard let recorder = audioRecorder, recordingURL != nil else {
+            return nil
         }
 
-        return url
+        discardRecordingOnFinish = false
+        return await withCheckedContinuation { continuation in
+            stopContinuation = continuation
+            finalizationTimeoutTask?.cancel()
+            finalizationTimeoutTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(3))
+                guard !Task.isCancelled else { return }
+                self?.finishRecording(
+                    recorder,
+                    successfully: false,
+                    reason: "finalization timed out"
+                )
+            }
+            recorder.stop()
+        }
     }
 
     func cancelRecording() {
         timer?.invalidate()
         timer = nil
 
+        discardRecordingOnFinish = true
         audioRecorder?.stop()
         isRecording = false
         currentLevel = 0
+        recordingDuration = 0
+    }
 
-        // Delete the file
-        if let url = recordingURL {
-            try? fileManager.removeItem(at: url)
-        }
+    private func finishRecording(
+        _ recorder: AVAudioRecorder,
+        successfully: Bool,
+        reason: String? = nil
+    ) {
+        guard audioRecorder === recorder else { return }
 
+        finalizationTimeoutTask?.cancel()
+        finalizationTimeoutTask = nil
+
+        let url = recordingURL
+        let shouldDiscard = discardRecordingOnFinish
+        discardRecordingOnFinish = false
         audioRecorder = nil
         recordingURL = nil
-        recordingDuration = 0
+
+        guard let continuation = stopContinuation else {
+            if shouldDiscard, let url {
+                try? fileManager.removeItem(at: url)
+            }
+            return
+        }
+        stopContinuation = nil
+
+        guard successfully, !shouldDiscard, let url else {
+            WatchConsole.info("[Watch] Recording did not finalize: \(reason ?? "recorder reported failure")")
+            if let url { try? fileManager.removeItem(at: url) }
+            continuation.resume(returning: nil)
+            return
+        }
+
+        do {
+            let values = try url.resourceValues(forKeys: [.fileSizeKey])
+            let byteCount = values.fileSize ?? 0
+            guard byteCount > 0 else {
+                throw CocoaError(.fileReadCorruptFile)
+            }
+            _ = try AVAudioFile(forReading: url)
+            WatchConsole.info(
+                "[Watch] Recording finalized and validated: \(url.lastPathComponent) (\(byteCount) bytes)"
+            )
+            continuation.resume(returning: url)
+        } catch {
+            WatchConsole.info("[Watch] Recording validation failed: \(error.localizedDescription)")
+            try? fileManager.removeItem(at: url)
+            continuation.resume(returning: nil)
+        }
+    }
+}
+
+extension AudioRecorder: AVAudioRecorderDelegate {
+    nonisolated func audioRecorderDidFinishRecording(
+        _ recorder: AVAudioRecorder,
+        successfully flag: Bool
+    ) {
+        Task { @MainActor [weak self] in
+            self?.finishRecording(recorder, successfully: flag)
+        }
+    }
+
+    nonisolated func audioRecorderEncodeErrorDidOccur(
+        _ recorder: AVAudioRecorder,
+        error: Error?
+    ) {
+        Task { @MainActor [weak self] in
+            self?.finishRecording(
+                recorder,
+                successfully: false,
+                reason: error?.localizedDescription ?? "encoder error"
+            )
+        }
     }
 }

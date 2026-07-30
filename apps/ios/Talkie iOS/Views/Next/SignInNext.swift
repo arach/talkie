@@ -221,10 +221,15 @@ extension SignInStore: ASAuthorizationControllerDelegate, ASAuthorizationControl
 
     nonisolated func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
         MainActor.assumeIsolated {
-            UIApplication.shared.connectedScenes
+            let windowScenes = UIApplication.shared.connectedScenes
                 .compactMap { $0 as? UIWindowScene }
-                .flatMap(\.windows)
-                .first { $0.isKeyWindow } ?? ASPresentationAnchor()
+            guard let windowScene = windowScenes.first(where: { $0.activationState == .foregroundActive })
+                ?? windowScenes.first else {
+                preconditionFailure("Sign in with Apple requires an active window scene")
+            }
+
+            return windowScene.windows.first(where: \.isKeyWindow)
+                ?? ASPresentationAnchor(windowScene: windowScene)
         }
     }
 }

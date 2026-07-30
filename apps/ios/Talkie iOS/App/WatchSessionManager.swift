@@ -16,6 +16,11 @@ import TalkieMobileKit
 final class WatchSessionManager: NSObject, ObservableObject {
     static let shared = WatchSessionManager()
 
+    private enum Keys {
+        static let codexSnapshotRevision = "watch.codex.snapshot.revision.v1"
+        static let codexSnapshotSignature = "watch.codex.snapshot.signature.v1"
+    }
+
     private let log = Log(.system)
 
     @Published var isWatchReachable = false
@@ -24,8 +29,12 @@ final class WatchSessionManager: NSObject, ObservableObject {
     @Published private(set) var isActivated = false
 
     private var session: WCSession?
+    private var codexSnapshotRevision: Int
+    private var codexSnapshotSignature: String?
 
     private override init() {
+        codexSnapshotRevision = UserDefaults.standard.integer(forKey: Keys.codexSnapshotRevision)
+        codexSnapshotSignature = UserDefaults.standard.string(forKey: Keys.codexSnapshotSignature)
         super.init()
         // Don't activate immediately - wait for explicit activation request
         // This avoids WCSession framework noise when watch app isn't installed
@@ -74,9 +83,177 @@ final class WatchSessionManager: NSObject, ObservableObject {
         }
 
         do {
-            try session.updateApplicationContext(["memoUpdates": [update]])
+            var context = session.applicationContext
+            context["memoUpdates"] = [update]
+            try session.updateApplicationContext(context)
         } catch {
             log.debug("Watch memo update context failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Publishes the bounded Codex channel snapshot used by the Watch picker.
+    /// Application context is the durable last-known value; the immediate
+    /// message keeps an open Watch view responsive.
+    func publishCodexSnapshot(_ snapshot: [String: Any]) {
+        activateIfNeeded()
+
+        guard let session, session.activationState == .activated else {
+            log.debug("Watch Codex snapshot skipped; session is not activated")
+            return
+        }
+
+        var message = snapshot
+        message["type"] = "codexSnapshot"
+
+        if session.isReachable {
+            session.sendMessage(message, replyHandler: nil) { [log] error in
+                log.debug("Watch Codex snapshot send failed: \(error.localizedDescription)")
+            }
+        }
+
+        do {
+            var context = session.applicationContext
+            context["codexSnapshot"] = snapshot
+            try session.updateApplicationContext(context)
+        } catch {
+            log.debug("Watch Codex snapshot context failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Rebuilds the bounded Watch conversation catalogue from the phone's
+    /// authoritative task state. Watch keeps its own selection; the phone's
+    /// selection is only the initial default when Watch has none.
+    func publishCurrentCodexSnapshot() {
+        let bridge = BridgeManager.shared
+        let store = CodexLaneStore.shared
+        let hostID = bridge.activePairedMacID ?? ""
+
+        var seenTaskIDs = Set<String>()
+        var tasks: [CodexTaskSummary] = []
+        if let selected = store.selectedTask,
+           seenTaskIDs.insert(selected.id).inserted {
+            tasks.append(selected)
+        }
+        for lane in store.sortedLanes
+        where seenTaskIDs.insert(lane.task.id).inserted {
+            tasks.append(lane.task)
+        }
+        for task in store.catalog
+        where seenTaskIDs.insert(task.id).inserted {
+            tasks.append(task)
+        }
+
+        let channels: [[String: Any]] = tasks.prefix(20).map { task in
+            let lane = store.sortedLanes.first(where: { $0.task.id == task.id })
+            let status: String
+            if let lane, store.isTurnInFlight(on: lane.number) {
+                status = "running"
+            } else if let lane, store.queuedMessageCount(for: lane.number) > 0 {
+                status = "queued"
+            } else if store.selectedTask?.id == task.id && store.selectedDestinationIsInFlight {
+                status = "running"
+            } else {
+                status = "ready"
+            }
+            return [
+                "taskID": task.id,
+                "title": task.title,
+                "project": task.projectName,
+                "cwd": task.canonicalWorkingDirectory,
+                "status": status,
+                "updatedAt": task.updatedAt,
+            ]
+        }
+
+        let selectedTaskID = store.selectedTask?.id
+        let signature = ([hostID, selectedTaskID ?? ""] + channels.flatMap { channel in
+            [
+                channel["taskID"] as? String ?? "",
+                channel["title"] as? String ?? "",
+                channel["status"] as? String ?? "",
+                channel["cwd"] as? String ?? "",
+            ]
+        }).joined(separator: "\u{1F}")
+        if signature != codexSnapshotSignature {
+            codexSnapshotRevision += 1
+            codexSnapshotSignature = signature
+            UserDefaults.standard.set(codexSnapshotRevision, forKey: Keys.codexSnapshotRevision)
+            UserDefaults.standard.set(signature, forKey: Keys.codexSnapshotSignature)
+        }
+        var snapshot: [String: Any] = [
+            "revision": codexSnapshotRevision,
+            "hostID": hostID,
+            "channels": channels,
+        ]
+        if let selectedTaskID {
+            snapshot["selectedTaskID"] = selectedTaskID
+        }
+        publishCodexSnapshot(snapshot)
+    }
+
+    /// Refreshes projects without depending on the iPhone mapper being on
+    /// screen. WCSession can wake the phone in the background, so the Watch
+    /// should be able to obtain a current project snapshot from that wake alone.
+    private func refreshCurrentCodexSnapshot() async {
+        let store = CodexLaneStore.shared
+        if !store.isLoadingCatalog {
+            await store.refreshCatalog()
+        }
+        // `refreshCatalog()` publishes on success. Publish again here so an
+        // offline refresh still sends the durable last-known project list.
+        publishCurrentCodexSnapshot()
+    }
+
+    /// Sends one state transition for a Watch-originated fresh-task dispatch.
+    func sendCodexDispatchUpdate(
+        requestID: String,
+        hostID: String,
+        taskID: String,
+        status: String,
+        detail: String? = nil
+    ) {
+        activateIfNeeded()
+
+        guard let session, session.activationState == .activated else {
+            log.debug("Watch Codex update skipped; session is not activated")
+            return
+        }
+
+        var update: [String: Any] = [
+            "type": "codexDispatchUpdate",
+            "requestID": requestID,
+            "hostID": hostID,
+            "taskID": taskID,
+            "status": status,
+            "updatedAt": Date().timeIntervalSince1970,
+        ]
+        if let detail, !detail.isEmpty {
+            update["detail"] = String(detail.prefix(240))
+        }
+
+        do {
+            var context = session.applicationContext
+            context["codexDispatchUpdate"] = update
+            try session.updateApplicationContext(context)
+        } catch {
+            log.debug("Watch Codex update context failed: \(error.localizedDescription)")
+        }
+
+        // `sendMessage` is only an immediate optimization. User-info transfer
+        // is the durable path and can reach the Watch after either app suspends.
+        for transfer in session.outstandingUserInfoTransfers
+        where transfer.userInfo["type"] as? String == "codexDispatchUpdate"
+            && transfer.userInfo["requestID"] as? String == requestID {
+            transfer.cancel()
+        }
+        session.transferUserInfo(update)
+
+        guard session.isReachable else {
+            log.debug("Watch Codex update deferred; Watch is not reachable")
+            return
+        }
+        session.sendMessage(update, replyHandler: nil) { [log] error in
+            log.debug("Watch Codex update send failed: \(error.localizedDescription)")
         }
     }
 
@@ -133,6 +310,7 @@ extension WatchSessionManager: WCSessionDelegate {
             // Only log if watch app is actually installed
             if session.isWatchAppInstalled {
                 log.info("⌚ Watch app connected (reachable: \(session.isReachable))")
+                await self.refreshCurrentCodexSnapshot()
             }
         }
     }
@@ -155,6 +333,25 @@ extension WatchSessionManager: WCSessionDelegate {
             if session.isWatchAppInstalled && wasReachable != session.isReachable {
                 log.info("⌚ Watch reachability: \(session.isReachable)")
             }
+            if session.isReachable {
+                await self.refreshCurrentCodexSnapshot()
+            }
+        }
+    }
+
+    nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+        Task { @MainActor in
+            guard let type = message["type"] as? String else { return }
+            switch type {
+            case "codexSelectChannel":
+                self.log.info(
+                    "Ignored legacy Watch Codex selection; Watch navigation is local-only"
+                )
+            case "codexSnapshotRequest":
+                await self.refreshCurrentCodexSnapshot()
+            default:
+                break
+            }
         }
     }
 
@@ -176,6 +373,18 @@ extension WatchSessionManager: WCSessionDelegate {
             let destURL = watchAudioDir.appendingPathComponent(filename)
 
             try fileManager.moveItem(at: sourceURL, to: destURL)
+
+            // WCSession may return the app to suspension as soon as this
+            // delegate callback exits. Persist Codex routing synchronously so
+            // the recording can be promoted into the main inbox on any later
+            // launch/background window, even if the MainActor task below never
+            // gets CPU time during this delivery.
+            if metadata["intent"] as? String == "codex" {
+                let incomingStore = WatchCodexIncomingDispatchStore(
+                    directoryURL: WatchCodexDispatchCoordinator.incomingStoreURL
+                )
+                _ = try incomingStore.stage(audioURL: destURL, metadata: metadata)
+            }
 
             Task { @MainActor in
                 self.log.info("⌚ Received audio from Watch: \(destURL.lastPathComponent)")

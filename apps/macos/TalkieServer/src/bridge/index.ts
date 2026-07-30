@@ -56,9 +56,11 @@ import {
   companionPasteImageRoute,
 } from "./routes/companion";
 import {
+  codexTaskCreateRoute,
   codexTasksRoute,
   codexValidateRoute,
   codexSubmitRoute,
+  codexFreshTurnStartRoute,
   codexTurnStartRoute,
   codexTurnStatusRoute,
 } from "./routes/codex";
@@ -482,7 +484,11 @@ export const bridge = new Elysia({ name: "bridge" })
   .ws("/companion/screen", companionScreenStreamSocket)
 
   // ===== Codex exact-task lanes =====
-  .get("/codex/tasks", ({ query }) => codexTasksRoute(query.limit))
+  .get("/codex/tasks", ({ query }) => codexTasksRoute(query.limit, query.cursor))
+  .post("/codex/tasks", async ({ request }) => {
+    const body = await readJsonBody(request);
+    return codexTaskCreateRoute(body);
+  })
   .post("/codex/validate", async ({ request }) => {
     const body = await readJsonBody(request);
     return codexValidateRoute(body);
@@ -490,6 +496,10 @@ export const bridge = new Elysia({ name: "bridge" })
   .post("/codex/submit", async ({ request }) => {
     const body = await readJsonBody(request);
     return codexSubmitRoute(body);
+  })
+  .post("/codex/task-turns", async ({ request }) => {
+    const body = await readJsonBody(request);
+    return codexFreshTurnStartRoute(body);
   })
   .post("/codex/turns", async ({ request }) => {
     const body = await readJsonBody(request);

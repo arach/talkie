@@ -742,9 +742,9 @@ struct DeckMirrorNext: View {
         let rows = stride(from: 0, to: tiles.count, by: 4).map {
             Array(tiles[$0 ..< min($0 + 4, tiles.count)])
         }
-        return VStack(spacing: 8) {
+        return VStack(spacing: 9) {
             ForEach(Array(rows.enumerated()), id: \.offset) { rowIndex, row in
-                HStack(spacing: 8) {
+                HStack(spacing: 9) {
                     ForEach(Array(row.enumerated()), id: \.element.id) { colIndex, tile in
                         let index = rowIndex * 4 + colIndex
                         Group {
@@ -801,7 +801,7 @@ struct DeckMirrorNext: View {
     /// swaps to the amber armed look (tint + ring + glow); `isEmpty` reads
     /// as a socket (a faint ring on Relief, a dark dimple on Milled).
     private func keycapSurface(active: Bool, activeColor: Color, isEmpty: Bool) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
         let isRelief = treatment == .relief
         return shape
             .fill(
@@ -818,8 +818,8 @@ struct DeckMirrorNext: View {
                     shape.fill(
                         LinearGradient(
                             colors: isRelief
-                                ? [Color.white.opacity(0.22), .clear]
-                                : [Color.white.opacity(0.16), .clear, Color.black.opacity(0.12)],
+                                ? [Color.white.opacity(0.07), .clear, Color.black.opacity(0.05)]
+                                : [Color.white.opacity(0.05), .clear, Color.black.opacity(0.16)],
                             startPoint: .top,
                             endPoint: .bottom
                         )
@@ -845,18 +845,18 @@ struct DeckMirrorNext: View {
             .shadow(
                 color: active
                     ? activeColor.opacity(0.5)
-                    : (isEmpty ? .clear : Color.black.opacity(isRelief ? 0.34 : 0.26)),
-                radius: active ? 9 : (isEmpty ? 0 : (isRelief ? 13 : 7)),
+                    : (isEmpty ? .clear : Color.black.opacity(isRelief ? 0.28 : 0.24)),
+                radius: active ? 9 : (isEmpty ? 0 : (isRelief ? 8 : 6)),
                 x: 0,
-                y: active ? 0 : (isEmpty ? 0 : (isRelief ? 9 : 4))
+                y: active ? 0 : (isEmpty ? 0 : (isRelief ? 5 : 3))
             )
             .shadow(
                 color: active
                     ? .clear
                     : (isEmpty ? .clear : Color.black.opacity(isRelief ? 0.28 : 0.24)),
-                radius: active ? 0 : (isEmpty ? 0 : (isRelief ? 3 : 2)),
+                radius: active ? 0 : (isEmpty ? 0 : 2),
                 x: 0,
-                y: active ? 0 : (isEmpty ? 0 : (isRelief ? 2 : 1))
+                y: active ? 0 : (isEmpty ? 0 : 1)
             )
     }
 
@@ -894,8 +894,10 @@ struct DeckMirrorNext: View {
                             ? activeColor
                             : theme.colors.textPrimary
                     )
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.82)
+                    .frame(minHeight: 32)
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -998,8 +1000,11 @@ struct DeckMirrorNext: View {
                 Text(tileCaption(for: tile))
                     .talkieType(.fieldValue)
                     .foregroundStyle(theme.colors.textPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.70)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.82)
+                    .frame(minHeight: 32)
+                    .padding(.horizontal, 4)
                 Spacer(minLength: 0)
             }
         }
@@ -1621,27 +1626,25 @@ private struct RealtimeBars: View {
             // room so the leftmost / rightmost bars don't kiss the
             // chassis corner radius.
             let padding: CGFloat = 8
-            // 3pt gap between bars gives the strip visible "comb"
-            // character rather than reading as a solid block. Each
-            // bar is a pill (corner radius 1.5pt) so the silhouette
-            // is softer and the tape feels less mechanical.
-            let gap: CGFloat = 3
             let innerWidth = max(0, size.width - padding * 2)
-            let barWidth = max(2, (innerWidth - CGFloat(n - 1) * gap) / CGFloat(n))
+            let slotWidth = innerWidth / CGFloat(n)
+            let barWidth = max(2.5, min(3.25, slotWidth * 0.48))
             let bodyHeight = size.height - railInset * 2 - 4
             let centerY = size.height / 2
 
             for i in 0..<n {
                 let s = CGFloat(samples[i])
-                // Power curve (^0.65) lifts mid-levels so ordinary
-                // speech reads as visibly bouncy — without it, bars
-                // sit flatter than the actual envelope feels. 0.05
-                // floor keeps a faint ridge through silence; the
-                // minimum rendered height of 3pt keeps the silent
-                // strip readable as "tape" rather than "blank line".
-                let shaped = pow(max(0.05, s), 0.65)
-                let h = max(3, bodyHeight * shaped)
-                let x = padding + CGFloat(i) * (barWidth + gap)
+                // Gate the monitor's raised ambient floor, then expand
+                // rather than lift mid-levels. Silence stays needle-thin,
+                // ordinary speech occupies the middle of the tape, and
+                // emphatic peaks can use the full band.
+                let noiseFloor: CGFloat = 0.10
+                let ceiling: CGFloat = 0.90
+                let normalized = min(1, max(0, (s - noiseFloor) / (ceiling - noiseFloor)))
+                let shaped = pow(normalized, 1.15)
+                let minimumHeight: CGFloat = 2
+                let h = minimumHeight + (bodyHeight - minimumHeight) * shaped
+                let x = padding + CGFloat(i) * slotWidth + (slotWidth - barWidth) / 2
                 let rect = CGRect(
                     x: x,
                     y: centerY - h / 2,
@@ -1649,7 +1652,7 @@ private struct RealtimeBars: View {
                     height: h
                 )
                 ctx.fill(
-                    Path(roundedRect: rect, cornerRadius: 1.5),
+                    Path(roundedRect: rect, cornerRadius: barWidth / 2),
                     with: .color(fill)
                 )
             }

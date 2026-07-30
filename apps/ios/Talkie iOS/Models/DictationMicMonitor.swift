@@ -78,7 +78,7 @@ final class DictationMicMonitor: ObservableObject {
             try session.setCategory(
                 .playAndRecord,
                 mode: .measurement,
-                options: [.mixWithOthers, .allowBluetooth, .defaultToSpeaker]
+                options: [.mixWithOthers, .allowBluetoothHFP, .defaultToSpeaker]
             )
             try session.setActive(true, options: [])
 

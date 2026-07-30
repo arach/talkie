@@ -222,7 +222,9 @@ class TranscriptionService {
             guard let memo = try? context.existingObject(with: memoObjectID) as? VoiceMemo else { return }
             memo.isTranscribing = true
             try? context.save()
-            VoiceMemoStore.publishChange(context: context)
+            Task { @MainActor in
+                VoiceMemoStore.publishChange(context: context)
+            }
             AppLogger.transcription.info("Starting transcription for: \(filename)")
         }
 
@@ -275,7 +277,9 @@ class TranscriptionService {
 
                 do {
                     try context.save()
-                    VoiceMemoStore.publishChange(context: context)
+                    Task { @MainActor in
+                        VoiceMemoStore.publishChange(context: context)
+                    }
                     AppLogger.persistence.info("Transcription saved successfully to Core Data")
                 } catch {
                     AppLogger.persistence.error("Failed to save transcription: \(error.localizedDescription)")
@@ -291,7 +295,9 @@ class TranscriptionService {
 
             do {
                 try context.save()
-                VoiceMemoStore.publishChange(context: context)
+                Task { @MainActor in
+                    VoiceMemoStore.publishChange(context: context)
+                }
             } catch {
                 AppLogger.persistence.error("Failed to clear transcription state: \(error.localizedDescription)")
             }

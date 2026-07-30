@@ -39,9 +39,11 @@ Implemented in `apps/ios/Talkie iOS/Bridge/BridgeManager.swift`:
 2. Pairing and credential-refresh pairing apply `client.setEncryptionRequired(existingPinned)` before their initial `connect()`.
 3. Approved encrypted pairings pin the resolved/upserted Mac ID.
 
-Verified with a per-run DerivedData directory under `~/Library/Caches/codex-builds/`:
+Verified with the stable Talkie iOS DerivedData cache under
+`~/Library/Caches/codex-builds/`:
 
 ```bash
+DERIVED_DATA_DIR="${TALKIE_IOS_DERIVED_DATA_DIR:-$HOME/Library/Caches/codex-builds/talkie-ios-talkie}"
 xcodebuild -project apps/ios/Talkie-iOS.xcodeproj -scheme Talkie \
   -destination "platform=iOS Simulator,name=iPhone 17e" \
   -derivedDataPath "$DERIVED_DATA_DIR" build

@@ -990,13 +990,25 @@ final class BridgeManager {
         }
     }
 
-    /// Recent Codex Desktop tasks, for mapping onto lanes.
-    func codexRecentTasks(limit: Int = 25) async throws -> [CodexTaskSummary] {
+    /// One cursor page of Codex Desktop tasks for the channel catalogue.
+    func codexRecentTasks(
+        limit: Int = 25,
+        cursor: String? = nil
+    ) async throws -> CodexTasksResponse {
         try await requireConnectedBridge()
-        let tasks = try await client.codexTasks(limit: limit)
+        let page = try await client.codexTasks(limit: limit, cursor: cursor)
         lastSuccessfulContactAt = .now
         updateActiveMacContactDate(.now)
-        return tasks
+        return page
+    }
+
+    /// Creates a Codex task without overriding the user's model or execution policy.
+    func codexCreateTask(creationId: UUID, cwd: String) async throws -> CodexTaskSummary {
+        try await requireConnectedBridge()
+        let task = try await client.codexCreateTask(creationId: creationId, cwd: cwd)
+        lastSuccessfulContactAt = .now
+        updateActiveMacContactDate(.now)
+        return task
     }
 
     /// Confirms Codex Desktop still owns this exact task. Throwing means the
@@ -1036,6 +1048,22 @@ final class BridgeManager {
             taskTitle: taskTitle,
             text: text,
             mode: mode
+        )
+        lastSuccessfulContactAt = .now
+        updateActiveMacContactDate(.now)
+        return job
+    }
+
+    func codexStartFreshTurn(
+        submissionId: UUID,
+        cwd: String,
+        text: String
+    ) async throws -> CodexTurnJob {
+        try await requireConnectedBridge()
+        let job = try await client.codexStartFreshTurn(
+            submissionId: submissionId,
+            cwd: cwd,
+            text: text
         )
         lastSuccessfulContactAt = .now
         updateActiveMacContactDate(.now)

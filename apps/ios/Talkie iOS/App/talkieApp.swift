@@ -251,6 +251,7 @@ struct talkieApp: App {
                 if let controller = persistenceController {
                     try controller.container.viewContext.save()
                 }
+                await WatchCodexDispatchCoordinator.shared.resumePendingDispatches()
             } catch {
                 AppLogger.app.error("Background refresh failed: \(error.localizedDescription)")
             }

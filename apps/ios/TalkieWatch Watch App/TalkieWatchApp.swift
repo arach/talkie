@@ -70,41 +70,53 @@ struct TalkieWatchApp: App {
 // MARK: - Main Watch View
 
 struct MainWatchView: View {
+    private enum PrimaryPage: Hashable {
+        case capture
+        case codex
+    }
+
     @EnvironmentObject var sessionManager: WatchSessionManager
     @EnvironmentObject var deepLinkHandler: DeepLinkHandler
     @State private var selectedPreset: WatchPreset?
     @State private var isRecording = false
+    @State private var primaryPage: PrimaryPage = .capture
 
     var body: some View {
-        Group {
-            if isRecording, let preset = selectedPreset {
-                // Recording with preset
-                PresetRecordingView(
-                    preset: preset,
-                    isRecording: $isRecording,
-                    onComplete: {
-                        selectedPreset = nil
-                    }
-                )
-            } else {
-                // Main navigation
-                TabView {
-                    // Preset picker (like Timer)
-                    PresetPickerView(
-                        selectedPreset: $selectedPreset,
-                        isRecording: $isRecording
+        NavigationStack {
+            Group {
+                if isRecording, let preset = selectedPreset {
+                    PresetRecordingView(
+                        preset: preset,
+                        isRecording: $isRecording,
+                        onComplete: {
+                            selectedPreset = nil
+                        }
                     )
-                    .tag(0)
+                } else {
+                    TabView(selection: $primaryPage) {
+                        PresetPickerView(
+                            selectedPreset: $selectedPreset,
+                            isRecording: $isRecording
+                        )
+                        .tag(PrimaryPage.capture)
 
-                    // Recent memos
-                    RecentMemosView()
-                        .tag(1)
-
-                    // About / diagnostics
-                    AboutView()
-                        .tag(2)
+                        CodexWatchView(isActive: primaryPage == .codex)
+                            .tag(PrimaryPage.codex)
+                    }
+                    .tabViewStyle(.page(indexDisplayMode: .never))
                 }
-                .tabViewStyle(.verticalPage)
+            }
+            .toolbar {
+                if !isRecording {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        NavigationLink {
+                            WatchMoreView()
+                        } label: {
+                            Image(systemName: "ellipsis")
+                        }
+                        .accessibilityLabel("More Talkie screens")
+                    }
+                }
             }
         }
         .onAppear {
@@ -120,8 +132,28 @@ struct MainWatchView: View {
     private func checkPendingDeepLink() {
         if let preset = deepLinkHandler.consumePendingPreset() {
             // Start recording immediately with this preset
+            primaryPage = .capture
             selectedPreset = preset
             isRecording = true
         }
+    }
+}
+
+private struct WatchMoreView: View {
+    var body: some View {
+        List {
+            NavigationLink {
+                RecentMemosView()
+            } label: {
+                Label("Recent", systemImage: "clock.arrow.circlepath")
+            }
+
+            NavigationLink {
+                AboutView()
+            } label: {
+                Label("About", systemImage: "info.circle")
+            }
+        }
+        .navigationTitle("Talkie")
     }
 }
