@@ -2,7 +2,7 @@
 //  ThemeManager.swift
 //  Talkie iOS
 //
-//  Manages app themes with 5 configurable options
+//  Manages the app's configurable visual themes.
 //
 
 import SwiftUI
@@ -45,6 +45,7 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
 
 enum AppTheme: String, CaseIterable, Identifiable {
     case scope = "scope"
+    case porcelain = "porcelain"
     case mineral = "mineral"
     case midnight = "midnight"
     case tactical = "tactical"
@@ -58,6 +59,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .scope: return "Scope"
+        case .porcelain: return "Porcelain"
         case .mineral: return "Mineral"
         case .midnight: return "Linear"
         case .tactical: return "Tactical"
@@ -71,6 +73,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
     var description: String {
         switch self {
         case .scope: return "Paper chassis with brass instrument chrome"
+        case .porcelain: return "Cool porcelain chassis with cobalt instrument signal"
         case .mineral: return "Blue-gray alloy with copper signal chrome"
         case .midnight: return "Linear-style · flat indigo dark, clean"
         case .tactical: return "High contrast, sharp edges"
@@ -200,7 +203,28 @@ private let cachedScopeColors = ThemeColors(
     // tone the theme depends on. Dark side stays at 7D6E5E (4.06:1).
     textTertiary: Color(hex: "8A7E6C", darkHex: "968876"),
     accent: Color(hex: "B5823A", darkHex: "E89A3C"),
-    success: Color(hex: "6F7D3E", darkHex: "9CB35A")
+    // Scope is intentionally a one-signal instrument: completion and active
+    // state stay brass instead of introducing an unrelated olive green.
+    success: Color(hex: "B5823A", darkHex: "E89A3C")
+)
+
+// Porcelain: a cooler light-forward instrument palette. The chassis is a
+// soft blue-white rather than cream, the recessed console is deep navy, and
+// cobalt is the sole live/active/completion signal. Dark mode keeps the same
+// blue family so switching appearance does not change the theme's identity.
+private let cachedPorcelainColors = ThemeColors(
+    tableHeaderBackground: Color(hex: "E7ECF2", darkHex: "172235"),
+    tableCellBackground: Color(hex: "F5F7FA", darkHex: "101A2A"),
+    tableDivider: Color(hex: "18162330", darkHex: "2EECF2FA"),
+    tableBorder: Color(hex: "2B162330", darkHex: "47ECF2FA"),
+    background: Color(hex: "EEF2F6", darkHex: "0B1320"),
+    cardBackground: Color(hex: "FAFBFD", darkHex: "121E30"),
+    searchBackground: Color(hex: "E5EAF0", darkHex: "17243A"),
+    textPrimary: Color(hex: "162330", darkHex: "F2F6FC"),
+    textSecondary: Color(hex: "42566B", darkHex: "BBC8D8"),
+    textTertiary: Color(hex: "5B6F84", darkHex: "91A4BA"),
+    accent: Color(hex: "2F63D8", darkHex: "78A6FF"),
+    success: Color(hex: "2F63D8", darkHex: "78A6FF")
 )
 
 // Mineral: softly anodized blue-gray alloy with deep teal ink and a restrained
@@ -289,6 +313,7 @@ extension AppTheme {
     var colors: ThemeColors {
         switch self {
         case .scope: return cachedScopeColors
+        case .porcelain: return cachedPorcelainColors
         case .mineral: return cachedMineralColors
         case .midnight: return cachedMidnightColors
         case .tactical: return cachedTacticalColors

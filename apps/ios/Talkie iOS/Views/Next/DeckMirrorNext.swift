@@ -231,7 +231,8 @@ struct DeckMirrorNext: View {
         }
         .padding(.leading, 20)
         .padding(.trailing, 8)
-        .padding(.top, 4)
+        // Compress header so Codex cockpit claims vertical space.
+        .padding(.top, 2)
         .padding(.bottom, 0)
     }
 
@@ -664,7 +665,7 @@ struct DeckMirrorNext: View {
             return Color(red: 0.85, green: 0.46, blue: 0.34)
         }
         if bridgeManager.status == .connected {
-            return Color(red: 0.36, green: 0.74, blue: 0.50)
+            return theme.chrome.panelAccent
         }
         if bridgeManager.status == .connecting {
             return theme.currentTheme.chrome.accent
@@ -1106,7 +1107,7 @@ struct DeckMirrorNext: View {
         case .pending, .running:
             return theme.currentTheme.chrome.accent
         case .succeeded:
-            return Color(red: 0.36, green: 0.74, blue: 0.50)
+            return theme.chrome.accent
         case .failed:
             return Color(red: 0.85, green: 0.46, blue: 0.34)
         }
@@ -1366,7 +1367,7 @@ private struct DeckCockpitSurface: View {
     private func triggerEchoColor(for result: DeckMirrorStore.TriggerResult) -> Color {
         switch result.outcome {
         case .pending, .running: return accent
-        case .succeeded: return Color(red: 0.36, green: 0.74, blue: 0.50)
+        case .succeeded: return accent
         case .failed: return Color(red: 0.85, green: 0.46, blue: 0.34)
         }
     }
@@ -2201,7 +2202,7 @@ private struct DeckPairedMacSwitcherSheet: View {
             HStack(spacing: 12) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(isConnected ? Color(red: 0.36, green: 0.74, blue: 0.50).opacity(0.14) : theme.currentTheme.chrome.edgeFaint.opacity(0.35))
+                        .fill(isConnected ? theme.chrome.accentTint : theme.currentTheme.chrome.edgeFaint.opacity(0.35))
 
                     if isSwitching {
                         ProgressView()
@@ -2224,7 +2225,7 @@ private struct DeckPairedMacSwitcherSheet: View {
                         if isActive {
                             Text(isConnected ? "LIVE" : "ACTIVE")
                                 .talkieType(.chipLabel)
-                                .foregroundStyle(isConnected ? Color(red: 0.36, green: 0.74, blue: 0.50) : theme.currentTheme.chrome.accent)
+                                .foregroundStyle(theme.currentTheme.chrome.accent)
                         }
                     }
 
@@ -2243,7 +2244,7 @@ private struct DeckPairedMacSwitcherSheet: View {
                 } else if isActive {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(isConnected ? Color(red: 0.36, green: 0.74, blue: 0.50) : theme.currentTheme.chrome.accent)
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
                 } else {
                     Image(systemName: "arrow.left.arrow.right")
                         .font(.system(size: 13, weight: .medium))
@@ -2392,7 +2393,7 @@ private struct DeckAppSwitcherSheet: View {
                 } else if isActive {
                     Text("ACTIVE")
                         .talkieType(.chipLabel)
-                        .foregroundStyle(Color(red: 0.36, green: 0.74, blue: 0.50))
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
                 } else {
                     Text("OPEN")
                         .talkieType(.chipLabel)
