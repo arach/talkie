@@ -3,6 +3,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { getFormatOptions, output } from "../format";
+import { BRIDGE_PORTS } from "../ports";
 
 const APP_NAME = "Talkie.app";
 const APP_PATH = `/Applications/${APP_NAME}`;
@@ -15,7 +16,7 @@ const DEV_AGENT_PATH = join(
   "Talkie",
   "TalkieAgent.app"
 );
-const BRIDGE_PORT = 8765;
+const BRIDGE_PORT = BRIDGE_PORTS.gateway;
 const LOCAL_AUTH_TOKEN_FILE = join(
   homedir(),
   "Library",

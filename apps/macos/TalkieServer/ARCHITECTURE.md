@@ -100,7 +100,7 @@ bun run src/server.ts --nearby --allow-lan --require-approval
 ```
 
 **Ports:**
-- `8765` - Production (Tailscale)
+- `19825` - Production/nearby gateway
 - `8767` - Local development
 - `/tmp/talkie-server.sock` - Unix socket (enabled in local mode)
 
@@ -123,7 +123,7 @@ Each module is self-contained and could theoretically run standalone:
 
 ```typescript
 // If you ever needed separate processes
-bridge.listen(8765);
+bridge.listen(19825);
 gateway.listen(8766);
 ```
 
@@ -212,7 +212,7 @@ The HTTP inference routes are preserved. The WebSocket endpoint is additive.
 
 ## Future Considerations
 
-1. **Gateway Protocol endpoint** - Add `ws://localhost:8765/gateway` to the Gateway module
+1. **Gateway Protocol endpoint** - Add `ws://localhost:19825/gateway` to the Gateway module
 2. **Unix socket as primary IPC** - Swift calls through socket, HTTP for debugging
 3. **More providers** - Google, Groq, local models
 4. **Streaming inference** - Via Gateway Protocol WebSocket

@@ -388,7 +388,11 @@ struct ServerSettingsContent: View {
                     VStack(alignment: .leading, spacing: Spacing.xxs) {
                         Text(bridgeManager.bridgeStatus == .running ? "Server Running" : "Server \(bridgeManager.bridgeStatus.rawValue)")
                             .font(Theme.current.fontSMMedium)
-                        Text(bridgeManager.bridgeStatus == .running ? "Port 8765 • Modules loaded" : "Server is not running")
+                        Text(
+                            bridgeManager.bridgeStatus == .running
+                                ? "Port \(TalkieNetworkPorts.gateway) • Modules loaded"
+                                : "Server is not running"
+                        )
                             .font(Theme.current.fontXS)
                             .foregroundColor(Theme.current.foregroundSecondary)
                     }

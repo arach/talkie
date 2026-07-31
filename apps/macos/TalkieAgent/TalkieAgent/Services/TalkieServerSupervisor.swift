@@ -50,7 +50,7 @@ final class TalkieAgentServerSupervisor {
     static let shared = TalkieAgentServerSupervisor()
 
     private let log = Log(.system)
-    private let port = 8765
+    private let port = TalkieNetworkPorts.gateway
 
     // Process
     private var process: Process?
@@ -133,6 +133,12 @@ final class TalkieAgentServerSupervisor {
             await installDependencies(bunPath: bunPath, sourcePath: sourcePath)
         }
 
+        // A bridge adopted by an earlier Agent run has no Process handle and
+        // can survive that app's termination. During the port migration, stop
+        // only a positively identified TalkieServer still holding the legacy
+        // gateway port so the old listener does not remain exposed.
+        await stopOwnedLegacyGateway(sourcePath: sourcePath)
+
         switch await probeServerHealth(timeout: 2) {
         case .ready:
             log.info("TalkieAgentServerSupervisor: found existing healthy bridge, adopting it")
@@ -149,7 +155,11 @@ final class TalkieAgentServerSupervisor {
 
         // The supervised bridge is reachable on local LAN. Agent startup must
         // never launch or revive optional network providers.
-        let args = ["run", "src/server.ts", "--nearby", "--allow-lan", "--require-approval"]
+        let args = [
+            "run", "src/server.ts",
+            "--nearby", "--allow-lan", "--require-approval",
+            "--port", "\(port)"
+        ]
         let instanceID = UUID().uuidString
         // Spawn
         let proc = Process()
@@ -420,6 +430,97 @@ final class TalkieAgentServerSupervisor {
     }
 
     // MARK: - Process Helpers
+
+    private func stopOwnedLegacyGateway(sourcePath: String) async {
+        let legacyPort = TalkieNetworkPorts.legacyGateway
+        guard legacyPort != port else { return }
+
+        let processIDs = await listenerProcessIDs(on: legacyPort)
+        for processID in processIDs {
+            guard await isOwnedTalkieServerProcess(processID, sourcePath: sourcePath) else {
+                log.warning("Legacy gateway port \(legacyPort) is occupied by an unrelated process; leaving it untouched")
+                continue
+            }
+
+            log.info("Stopping migrated TalkieServer on legacy gateway port \(legacyPort): PID \(processID)")
+            kill(processID, SIGTERM)
+
+            for _ in 0..<20 {
+                try? await Task.sleep(for: .milliseconds(100))
+                if kill(processID, 0) != 0 { break }
+            }
+
+            if kill(processID, 0) == 0 {
+                log.warning("Legacy TalkieServer did not exit gracefully; sending SIGKILL to PID \(processID)")
+                kill(processID, SIGKILL)
+            }
+        }
+    }
+
+    private func listenerProcessIDs(on port: Int) async -> [pid_t] {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+        proc.arguments = ["-nP", "-t", "-iTCP:\(port)", "-sTCP:LISTEN"]
+        let pipe = Pipe()
+        proc.standardOutput = pipe
+        proc.standardError = Pipe()
+
+        do {
+            _ = try await Self.runProcess(proc)
+            let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            return output
+                .components(separatedBy: .newlines)
+                .compactMap { pid_t($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+        } catch {
+            log.warning("Could not inspect legacy gateway port \(port): \(error)")
+            return []
+        }
+    }
+
+    private func isOwnedTalkieServerProcess(_ processID: pid_t, sourcePath: String) async -> Bool {
+        let ps = Process()
+        ps.executableURL = URL(fileURLWithPath: "/bin/ps")
+        ps.arguments = ["-p", "\(processID)", "-o", "command="]
+        let commandPipe = Pipe()
+        ps.standardOutput = commandPipe
+        ps.standardError = Pipe()
+
+        let cwd = Process()
+        cwd.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+        cwd.arguments = ["-a", "-p", "\(processID)", "-d", "cwd", "-Fn"]
+        let cwdPipe = Pipe()
+        cwd.standardOutput = cwdPipe
+        cwd.standardError = Pipe()
+
+        do {
+            async let psStatus = Self.runProcess(ps)
+            async let cwdStatus = Self.runProcess(cwd)
+            guard try await psStatus == 0, try await cwdStatus == 0 else { return false }
+
+            let command = String(
+                data: commandPipe.fileHandleForReading.readDataToEndOfFile(),
+                encoding: .utf8
+            ) ?? ""
+            let cwdOutput = String(
+                data: cwdPipe.fileHandleForReading.readDataToEndOfFile(),
+                encoding: .utf8
+            ) ?? ""
+            let processWorkingDirectory = cwdOutput
+                .components(separatedBy: .newlines)
+                .first(where: { $0.hasPrefix("n") })
+                .map { String($0.dropFirst()) }
+
+            let expectedDirectory = URL(fileURLWithPath: sourcePath).standardizedFileURL.path
+            let actualDirectory = processWorkingDirectory
+                .map { URL(fileURLWithPath: $0).standardizedFileURL.path }
+            let isBunServer = command.localizedCaseInsensitiveContains("bun")
+                && command.contains("run src/server.ts")
+
+            return isBunServer && actualDirectory == expectedDirectory
+        } catch {
+            return false
+        }
+    }
 
     private func handleProcessTermination(_ terminatedProcess: Process) async {
         let code = terminatedProcess.terminationStatus

@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, chmodSync }
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { getFormatOptions, output } from "../format";
+import { BRIDGE_PORTS } from "../ports";
 
 const RESET = "\x1b[0m";
 const BOLD = "\x1b[1m";
@@ -12,7 +13,7 @@ const YELLOW = "\x1b[33m";
 const CYAN = "\x1b[36m";
 
 const HOME = homedir();
-const BRIDGE_PORT = 8765;
+const BRIDGE_PORT = BRIDGE_PORTS.gateway;
 const LOCAL_AUTH_TOKEN_FILE = join(
   HOME,
   "Library",

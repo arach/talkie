@@ -24,7 +24,7 @@ TalkieServer currently provides **HTTP routes** for inference. The WebSocket Gat
 
 | Endpoint | Protocol | Description |
 |----------|----------|-------------|
-| `ws://localhost:8765/gateway` | Gateway Protocol v1 | WebSocket endpoint implementing the spec |
+| `ws://localhost:19825/gateway` | Gateway Protocol v1 | WebSocket endpoint implementing the spec |
 
 The HTTP routes and WebSocket endpoint will coexist. Existing Swift code that uses HTTP continues to work. New capabilities (streaming inference, real-time transcription) will use the WebSocket protocol.
 
@@ -148,11 +148,11 @@ TalkieServer/
 ## Running
 
 ```bash
-# Development (local mode, no Tailscale, port 8765)
+# Development (local mode, no Tailscale, port 19825)
 cd apps/macos/TalkieServer
 bun run src/server.ts --local
 
-# Production (requires Tailscale, port 8765)
+# Production (nearby bridge, port 19825)
 bun run src/server.ts
 
 # With Unix socket for Swift IPC
@@ -163,7 +163,7 @@ bun run src/server.ts --local --unix
 
 | Mode | Port | Binding |
 |------|------|---------|
-| Default | 8765 | `127.0.0.1` (localhost only) |
+| Default | 19825 | `127.0.0.1` (localhost only) |
 | Unix socket | `/tmp/talkie-server.sock` | local only |
 
 Custom port: `bun run src/server.ts --local --port 9000`

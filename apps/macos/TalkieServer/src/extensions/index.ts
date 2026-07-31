@@ -282,7 +282,7 @@ function statusRoute(): {
 
 /**
  * The extensions WS auth token (and connection status) is for LOCAL UI display
- * only — the Mac app fetches it from http://localhost:8765. The whole
+ * only — the Mac app fetches it from the local Talkie gateway. The whole
  * /extensions prefix is exempt from HMAC auth (the WS does its own token
  * handshake), so without this gate a LAN attacker (NEARBY mode binds 0.0.0.0)
  * could lift the token and drive the extension WS (clipboard read, LLM calls).

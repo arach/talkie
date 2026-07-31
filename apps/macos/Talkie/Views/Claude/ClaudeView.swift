@@ -762,7 +762,7 @@ struct ClaudeView: View {
         isLoading = true
         Task {
             do {
-                let url = URL(string: "http://localhost:8765/sessions")!
+                let url = TalkieNetworkEndpoints.gateway(path: "/sessions")
                 let (data, _) = try await URLSession.shared.data(from: url)
                 let response = try JSONDecoder().decode(SessionsResponse.self, from: data)
                 sessions = response.sessions
@@ -777,7 +777,10 @@ struct ClaudeView: View {
         // Load messages
         Task {
             do {
-                let url = URL(string: "http://localhost:8765/sessions/\(session.id)/messages?limit=100")!
+                let url = TalkieNetworkEndpoints.gateway(
+                    path: "/sessions/\(session.id)/messages",
+                    queryItems: [URLQueryItem(name: "limit", value: "100")]
+                )
                 let (data, _) = try await URLSession.shared.data(from: url)
                 let response = try JSONDecoder().decode(MessagesResponse.self, from: data)
                 messages = response.messages
@@ -790,7 +793,7 @@ struct ClaudeView: View {
         // Load metadata
         Task {
             do {
-                let url = URL(string: "http://localhost:8765/sessions/\(session.id)/metadata")!
+                let url = TalkieNetworkEndpoints.gateway(path: "/sessions/\(session.id)/metadata")
                 let (data, _) = try await URLSession.shared.data(from: url)
                 metadata = try JSONDecoder().decode(SessionMetadata.self, from: data)
             } catch {

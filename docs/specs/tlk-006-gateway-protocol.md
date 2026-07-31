@@ -21,7 +21,7 @@ Talkie connects to a server on a port. This spec defines what goes over the wire
 | Property | Value |
 |----------|-------|
 | Transport | WebSocket (`ws://` or `wss://`) |
-| Endpoint | User-configured (e.g., `ws://localhost:8765/gateway`) |
+| Endpoint | User-configured (e.g., `ws://localhost:19825/gateway`) |
 | Encoding | JSON text frames for messages, binary frames for audio data |
 
 The endpoint URL is configured by the user in Talkie's settings. There is no discovery mechanism — you point it at a port and it connects.

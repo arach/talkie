@@ -7,7 +7,7 @@
  * GET  /windows/:id/content      - AX text content (future)
  * GET  /windows/captures         - Batch: all screenshots + AX
  *
- * Flow: Bridge (8765) → TalkieAgent (8767), with Talkie.app fallback for older agents
+ * Flow: Gateway (19825) → TalkieAgent (8767), with Talkie.app fallback for older agents
  */
 
 import { log } from "../../log";

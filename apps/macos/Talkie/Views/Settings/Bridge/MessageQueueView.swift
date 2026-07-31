@@ -169,7 +169,7 @@ struct MessageQueueView: View {
         isLoadingSessions = true
         Task {
             do {
-                let url = URL(string: "http://localhost:8765/sessions")!
+                let url = TalkieNetworkEndpoints.gateway(path: "/sessions")
                 let (data, _) = try await URLSession.shared.data(from: url)
                 let response = try JSONDecoder().decode(BridgeSessionsResponse.self, from: data)
                 sessions = response.sessions
