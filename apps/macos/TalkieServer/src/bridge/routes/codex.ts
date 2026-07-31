@@ -542,8 +542,8 @@ async function runFreshCodexTurn(
       onEnvelope: (candidate) => {
         if (
           candidate.ok
-          && (candidate.phase === "created"
-            || (candidate.phase === "accepted" && isCodexTurnDelivery(candidate.delivery)))
+          && candidate.phase === "accepted"
+          && isCodexTurnDelivery(candidate.delivery)
           && candidate.task
           && isCodexTaskSummary(candidate.task)
         ) {
@@ -724,13 +724,6 @@ export class CodexTurnJobManager {
             job.taskTitle = disposition.task.title;
             job.task = disposition.task;
             job.updatedAt = new Date().toISOString();
-            if (disposition.phase === "created") {
-              this.persist();
-              log.info(
-                `[codex] atomic fresh-task job ${job.id} created task=${job.taskId}`,
-              );
-              return;
-            }
             if (!isCodexTurnDelivery(disposition.delivery)) {
               throw new CodexBridgeError(
                 "Codex app-server accepted an unknown turn delivery.",

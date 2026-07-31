@@ -45,6 +45,7 @@ final class CodexLaneStore: ObservableObject {
     @Published private(set) var lanes: [Int: CodexLane] = [:]
     @Published private(set) var activeLaneNumber: Int?
     @Published private(set) var selectedChannel: CodexTaskSummary?
+    @Published private(set) var newTaskProject: CodexProjectSummary?
 
     // MARK: - Voice loop
 
@@ -55,6 +56,10 @@ final class CodexLaneStore: ObservableObject {
     @Published private(set) var lastTurn: CodexTurnRecord?
     @Published private(set) var history: [CodexTurnRecord] = []
     @Published private(set) var liveActivitiesByLane: [Int: [CodexLaneActivity]] = [:]
+    /// Live activity for exact tasks that are not mounted to a numbered lane.
+    /// Pending new-task activity uses a submission-scoped key until the Mac
+    /// returns the real task identity, then moves to that task's key.
+    @Published private(set) var liveActivitiesByDirectKey: [String: [CodexLaneActivity]] = [:]
     @Published private(set) var inFlightRequestCounts: [Int: Int] = [:]
     @Published private(set) var queuedMessageCounts: [Int: Int] = [:]
 
@@ -71,6 +76,7 @@ final class CodexLaneStore: ObservableObject {
 
     private let defaults: UserDefaults
     private let bridge: BridgeManager
+    private let pendingTurnStore: CodexPendingTurn.Store
     private lazy var dictation: InlineDictationController = makeDictationController()
     private var catalogRefreshTask: Task<Void, Never>?
     private var catalogViewers = 0
@@ -82,18 +88,38 @@ final class CodexLaneStore: ObservableObject {
     private var nextCatalogCursor: String?
     private var unpinnedInFlightRequestCount = 0
     private var recentlyCreatedTaskExpirations: [String: Date] = [:]
+    private var newTaskSubmissionID: UUID?
+    private var pendingTurns: [CodexPendingTurn]
+    private var pendingTurnTasks: [UUID: Task<Void, Never>] = [:]
 
     init(
         defaults: UserDefaults = .standard,
         bridge: BridgeManager? = nil,
-        hostIDOverride: String? = nil
+        hostIDOverride: String? = nil,
+        pendingTurnStore: CodexPendingTurn.Store? = nil
     ) {
         self.defaults = defaults
         let resolvedBridge = bridge ?? .shared
         self.bridge = resolvedBridge
+        self.pendingTurnStore = pendingTurnStore ?? CodexPendingTurn.Store(
+            url: Self.pendingTurnStoreURL
+        )
         self.loadedHostID = hostIDOverride ?? resolvedBridge.activePairedMacID
         self.canCreateChannel = resolvedBridge.activePairedMacID?.isEmpty == false
+        do {
+            self.pendingTurns = try self.pendingTurnStore.load()
+        } catch {
+            self.pendingTurns = []
+            AppLogger.ai.warning(
+                "iPhone Codex receipt inbox is unreadable: \(error.localizedDescription)"
+            )
+        }
         loadPersistedLanes()
+        if !self.pendingTurns.isEmpty {
+            AppLogger.ai.info(
+                "iPhone Codex receipt inbox restored count=\(self.pendingTurns.count)"
+            )
+        }
     }
 
     // MARK: - Derived state
@@ -110,6 +136,13 @@ final class CodexLaneStore: ObservableObject {
     /// pinned to one of the six lanes.
     var selectedTask: CodexTaskSummary? {
         selectedChannel ?? activeLane?.task
+    }
+
+    /// A real task or an explicit NEW action can receive the next transcript.
+    /// NEW remains project-scoped until the host atomically creates the Codex
+    /// thread and accepts its first turn.
+    var hasDispatchDestination: Bool {
+        selectedTask != nil || newTaskProject != nil
     }
 
     var isTurnInFlight: Bool {
@@ -153,6 +186,37 @@ final class CodexLaneStore: ObservableObject {
         liveActivitiesByLane[number] ?? []
     }
 
+    var selectedDirectActivities: [CodexLaneActivity] {
+        guard activeLaneNumber == nil,
+              let key = selectedDirectActivityKey else { return [] }
+        return liveActivitiesByDirectKey[key] ?? []
+    }
+
+    var selectedActivity: CodexLaneActivity? {
+        if let activeLaneNumber {
+            return activity(for: activeLaneNumber)
+        }
+        return selectedDirectActivities.last
+    }
+
+    private var selectedDirectActivityKey: String? {
+        if let selectedChannel {
+            return Self.directActivityKey(taskID: selectedChannel.id)
+        }
+        if let newTaskSubmissionID {
+            return Self.pendingDirectActivityKey(submissionID: newTaskSubmissionID)
+        }
+        return nil
+    }
+
+    private static func directActivityKey(taskID: String) -> String {
+        "task:\(taskID)"
+    }
+
+    private static func pendingDirectActivityKey(submissionID: UUID) -> String {
+        "new:\(submissionID.uuidString.lowercased())"
+    }
+
     func isTurnInFlight(on number: Int) -> Bool {
         inFlightRequestCounts[number, default: 0] > 0
     }
@@ -188,17 +252,24 @@ final class CodexLaneStore: ObservableObject {
         let nextHostID = bridge.activePairedMacID
         guard nextHostID != loadedHostID else { return }
 
+        for task in pendingTurnTasks.values {
+            task.cancel()
+        }
+        pendingTurnTasks = [:]
         loadedHostID = nextHostID
         canCreateChannel = nextHostID?.isEmpty == false
         lanes = [:]
         activeLaneNumber = nil
         selectedChannel = nil
+        newTaskProject = nil
+        newTaskSubmissionID = nil
         catalog = []
         nextCatalogCursor = nil
         catalogFailure = nil
         creationFailure = nil
         searchQuery = ""
         liveActivitiesByLane = [:]
+        liveActivitiesByDirectKey = [:]
         inFlightRequestCounts = [:]
         queuedMessageCounts = [:]
         queuedActivityIDs = []
@@ -211,6 +282,9 @@ final class CodexLaneStore: ObservableObject {
         narrationState = .idle
         loadPersistedLanes()
         WatchSessionManager.shared.publishCurrentCodexSnapshot()
+        Task { @MainActor [weak self] in
+            await self?.resumePendingTurns()
+        }
     }
 
     // MARK: - Catalog
@@ -294,8 +368,39 @@ final class CodexLaneStore: ObservableObject {
         await loadNextCatalogPage()
     }
 
-    /// Creates and selects a channel without assigning it to a lane. The bridge request intentionally
-    /// carries no model field, so Codex uses the Mac's configured default.
+    /// Enters the deck's explicit NEW mode without creating an empty Codex
+    /// thread. The first transcript carries this action to the host, where
+    /// thread creation and turn submission happen in one app-server lifetime.
+    @discardableResult
+    func enterNewTaskMode(
+        in project: CodexProjectSummary,
+        submissionID: UUID
+    ) -> Bool {
+        creationFailure = nil
+        guard project.hostID == loadedHostID else {
+            creationFailure = CodexLaneFailure(
+                message: "That project belongs to another Mac.",
+                hint: "Reconnect to the Mac that owns it and try again."
+            )
+            return false
+        }
+
+        selectedChannel = nil
+        activeLaneNumber = nil
+        newTaskProject = project
+        newTaskSubmissionID = submissionID
+        persistSelectedChannel()
+        persistActiveLane()
+        failure = nil
+        phase = .idle
+        WatchSessionManager.shared.publishCurrentCodexSnapshot()
+        return true
+    }
+
+    /// Compatibility path for the existing deck while durable turn receipts
+    /// ship independently. The deck switches to `enterNewTaskMode` in the
+    /// follow-up experience PR, where task creation and the first turn become
+    /// one atomic host operation.
     @discardableResult
     func createTask(
         in project: CodexProjectSummary,
@@ -485,6 +590,8 @@ final class CodexLaneStore: ObservableObject {
 
     /// Selects an exact task without assigning or replacing any numbered lane.
     func selectChannel(_ task: CodexTaskSummary) {
+        newTaskProject = nil
+        newTaskSubmissionID = nil
         selectedChannel = task
         activeLaneNumber = lanes.values.first(where: { $0.task.id == task.id })?.number
         persistSelectedChannel()
@@ -499,6 +606,8 @@ final class CodexLaneStore: ObservableObject {
     /// choose the next exact destination again.
     func clearSelection() {
         guard !phase.isCapturing else { return }
+        newTaskProject = nil
+        newTaskSubmissionID = nil
         selectedChannel = nil
         activeLaneNumber = nil
         persistSelectedChannel()
@@ -519,6 +628,8 @@ final class CodexLaneStore: ObservableObject {
             return false
         }
 
+        newTaskProject = nil
+        newTaskSubmissionID = nil
         activeLaneNumber = number
         selectedChannel = lanes[number]?.task
         persistActiveLane()
@@ -587,11 +698,12 @@ final class CodexLaneStore: ObservableObject {
     }
 
     func cancelCapture() {
-        guard phase.isCapturing else { return }
+        guard isPushToTalkHeld || phase.isCapturing else { return }
         isPushToTalkHeld = false
         captureLevel = 0
         dictation.cancel()
         phase = isTurnInFlight ? .submitting : .idle
+        AppLogger.ai.info("Codex capture cancelled")
     }
 
     /// Stops narration immediately. Safe to call when nothing is playing.
@@ -667,10 +779,10 @@ final class CodexLaneStore: ObservableObject {
     }
 
     private func startCapture() {
-        guard selectedTask != nil else {
+        guard hasDispatchDestination else {
             failure = CodexLaneFailure(
                 message: "No Codex channel is selected.",
-                hint: "Open the channel catalogue and choose an exact task."
+                hint: "Choose NEW or select an exact task."
             )
             return
         }
@@ -733,10 +845,23 @@ final class CodexLaneStore: ObservableObject {
             return
         }
 
+        if let project = newTaskProject,
+           let submissionID = newTaskSubmissionID {
+            AppLogger.ai.info(
+                "Codex dispatch resolved action=new project=\(project.cwd) lane=none"
+            )
+            await deliverToNewTask(
+                instruction: text,
+                project: project,
+                submissionID: submissionID
+            )
+            return
+        }
+
         guard let task = selectedTask else {
             let described = CodexLaneFailure(
                 message: "No Codex channel is selected.",
-                hint: "Open the channel catalogue and choose an exact task."
+                hint: "Choose NEW or select an exact task."
             )
             failure = described
             phase = .failed(described.message)
@@ -894,45 +1019,325 @@ final class CodexLaneStore: ObservableObject {
         return lanes.values.first(where: { $0.task.id == taskID })?.task
     }
 
+    /// Restarts every Mac-owned receipt saved by an earlier iPhone process.
+    /// Starting is intentionally non-blocking: several independent Codex jobs
+    /// must be able to finish without one long turn hiding later replies.
+    func resumePendingTurns() async {
+        let resumable = pendingTurns.filter { record in
+            record.hostID == nil || record.hostID == bridge.activePairedMacID
+        }
+        guard !resumable.isEmpty else { return }
+
+        AppLogger.ai.info(
+            "iPhone Codex receipt resume count=\(resumable.count) "
+                + "host=\(bridge.activePairedMacID ?? "none")"
+        )
+        for record in resumable {
+            _ = startPendingTurnTask(id: record.id)
+        }
+    }
+
+    private func startPendingTurnTask(id: UUID) -> Task<Void, Never> {
+        if let existing = pendingTurnTasks[id] { return existing }
+
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.processPendingTurn(id: id)
+            self.pendingTurnTasks[id] = nil
+        }
+        pendingTurnTasks[id] = task
+        return task
+    }
+
+    private func processPendingTurn(id: UUID) async {
+        guard let record = pendingTurn(id: id) else { return }
+        guard record.hostID == nil || record.hostID == bridge.activePairedMacID else {
+            AppLogger.ai.info(
+                "iPhone Codex receipt deferred id=\(id) job=\(record.job.id) reason=host-mismatch"
+            )
+            return
+        }
+
+        if let laneNumber = record.laneNumber,
+           lanes[laneNumber]?.task.id == record.task.id {
+            if !isCurrentActivity(id, on: laneNumber) {
+                appendActivity(
+                    CodexLaneActivity(
+                        id: id,
+                        instruction: record.instruction,
+                        state: .working(record.job.mode)
+                    ),
+                    on: laneNumber
+                )
+            }
+            beginSubmission(on: laneNumber)
+            updateActivity(id, on: laneNumber, from: record.job)
+            await finishLaneTurn(
+                record.job,
+                instruction: record.instruction,
+                task: record.task,
+                activityID: id,
+                laneNumber: laneNumber
+            )
+            return
+        }
+
+        let activityKey = Self.directActivityKey(taskID: record.task.id)
+        if liveActivitiesByDirectKey[activityKey]?.contains(where: { $0.id == id }) != true {
+            appendDirectActivity(
+                CodexLaneActivity(
+                    id: id,
+                    instruction: record.instruction,
+                    state: .working(record.job.mode)
+                ),
+                for: activityKey
+            )
+        }
+        unpinnedInFlightRequestCount += 1
+        updateDirectActivity(id, for: activityKey, from: record.job)
+        await finishUnpinnedTurn(
+            record.job,
+            instruction: record.instruction,
+            task: record.task,
+            activityID: id,
+            activityKey: activityKey
+        )
+    }
+
+    private func savePendingTurn(
+        id: UUID,
+        instruction: String,
+        task: CodexTaskSummary,
+        laneNumber: Int?,
+        job: CodexTurnJob
+    ) {
+        let now = Date()
+        let record = CodexPendingTurn(
+            id: id,
+            hostID: loadedHostID ?? bridge.activePairedMacID,
+            task: task,
+            instruction: instruction,
+            laneNumber: laneNumber,
+            createdAt: now,
+            updatedAt: now,
+            job: job
+        )
+        pendingTurns.removeAll { $0.id == id }
+        pendingTurns.append(record)
+        persistPendingTurns()
+        AppLogger.ai.info(
+            "iPhone Codex receipt persisted id=\(id) job=\(job.id) task=\(task.id)"
+        )
+    }
+
+    private func updatePendingTurn(id: UUID, job: CodexTurnJob) {
+        guard let index = pendingTurns.firstIndex(where: { $0.id == id }),
+              pendingTurns[index].job != job else { return }
+        pendingTurns[index].job = job
+        pendingTurns[index].updatedAt = .now
+        persistPendingTurns()
+    }
+
+    private func pendingTurn(id: UUID) -> CodexPendingTurn? {
+        pendingTurns.first { $0.id == id }
+    }
+
+    private func removePendingTurn(id: UUID) {
+        pendingTurns.removeAll { $0.id == id }
+        persistPendingTurns()
+        AppLogger.ai.info("iPhone Codex receipt consumed id=\(id)")
+    }
+
+    private func persistPendingTurns() {
+        do {
+            try pendingTurnStore.save(pendingTurns)
+        } catch {
+            AppLogger.ai.error(
+                "iPhone Codex receipt inbox could not be saved: \(error.localizedDescription)"
+            )
+        }
+    }
+
     private func deliverToUnpinnedChannel(
         instruction: String,
         task: CodexTaskSummary
     ) async {
         let submissionID = UUID()
+        let activityKey = Self.directActivityKey(taskID: task.id)
         unpinnedInFlightRequestCount += 1
         phase = .submitting
         failure = nil
+        appendDirectActivity(
+            CodexLaneActivity(
+                id: submissionID,
+                instruction: instruction,
+                state: .working(.steer)
+            ),
+            for: activityKey
+        )
 
         let receipt: CodexTurnJob
         do {
-            receipt = try await bridge.codexStartTurn(
-                submissionId: submissionID,
-                taskId: task.id,
-                taskTitle: task.title,
-                text: instruction,
-                mode: .steer
+            receipt = try await startTurnWithRetry(
+                submissionID: submissionID,
+                onRetry: { [weak self] retryCount in
+                    self?.mutateDirectActivity(submissionID, for: activityKey) {
+                        $0.retryCount = retryCount
+                    }
+                },
+                operation: {
+                    try await bridge.codexStartTurn(
+                        submissionId: submissionID,
+                        taskId: task.id,
+                        taskTitle: task.title,
+                        text: instruction,
+                        mode: .steer
+                    )
+                }
             )
         } catch {
             unpinnedInFlightRequestCount = max(0, unpinnedInFlightRequestCount - 1)
             let described = Self.describe(error)
             failure = described
+            failDirectActivity(submissionID, for: activityKey, message: described.combined)
             phase = .failed(described.message)
             AppLogger.ai.warning("Codex submit failed channel=\(task.id): \(described.combined)")
             return
         }
 
-        guard let job = await waitForUnpinnedTurnJob(receipt) else {
+        updateDirectActivity(submissionID, for: activityKey, from: receipt)
+        savePendingTurn(
+            id: submissionID,
+            instruction: instruction,
+            task: task,
+            laneNumber: nil,
+            job: receipt
+        )
+        unpinnedInFlightRequestCount = max(0, unpinnedInFlightRequestCount - 1)
+        await startPendingTurnTask(id: submissionID).value
+    }
+
+    private func deliverToNewTask(
+        instruction: String,
+        project: CodexProjectSummary,
+        submissionID: UUID
+    ) async {
+        let activityKey = Self.pendingDirectActivityKey(submissionID: submissionID)
+        unpinnedInFlightRequestCount += 1
+        phase = .submitting
+        failure = nil
+        appendDirectActivity(
+            CodexLaneActivity(
+                id: submissionID,
+                instruction: instruction,
+                state: .working(.steer)
+            ),
+            for: activityKey
+        )
+
+        let receipt: CodexTurnJob
+        do {
+            receipt = try await startTurnWithRetry(
+                submissionID: submissionID,
+                onRetry: { [weak self] retryCount in
+                    self?.mutateDirectActivity(submissionID, for: activityKey) {
+                        $0.retryCount = retryCount
+                    }
+                },
+                operation: {
+                    try await bridge.codexStartFreshTurn(
+                        submissionId: submissionID,
+                        cwd: project.cwd,
+                        text: instruction
+                    )
+                }
+            )
+        } catch {
             unpinnedInFlightRequestCount = max(0, unpinnedInFlightRequestCount - 1)
+            let described = Self.describe(error)
+            failure = described
+            failDirectActivity(submissionID, for: activityKey, message: described.combined)
+            phase = .failed(described.message)
+            AppLogger.ai.warning(
+                "Codex new-task submit failed project=\(project.cwd): \(described.combined)"
+            )
+            return
+        }
+
+        guard let task = receipt.task else {
+            unpinnedInFlightRequestCount = max(0, unpinnedInFlightRequestCount - 1)
+            let message = "Codex accepted the new turn without returning its task."
+            failure = CodexLaneFailure(
+                message: message,
+                hint: "Update Talkie on the Mac and try NEW again."
+            )
+            failDirectActivity(submissionID, for: activityKey, message: message)
+            phase = .failed(message)
+            return
+        }
+
+        let taskActivityKey = Self.directActivityKey(taskID: task.id)
+        moveDirectActivities(from: activityKey, to: taskActivityKey)
+        updateDirectActivity(submissionID, for: taskActivityKey, from: receipt)
+        retainRecentlyCreatedTask(task)
+        catalog = Self.mergingCatalog([task], with: catalog)
+        selectChannel(task)
+        phase = .submitting
+        AppLogger.ai.info(
+            "Codex new-task dispatch accepted task=\(task.id) project=\(project.cwd)"
+        )
+
+        savePendingTurn(
+            id: submissionID,
+            instruction: instruction,
+            task: task,
+            laneNumber: nil,
+            job: receipt
+        )
+        unpinnedInFlightRequestCount = max(0, unpinnedInFlightRequestCount - 1)
+        await startPendingTurnTask(id: submissionID).value
+    }
+
+    private func finishUnpinnedTurn(
+        _ receipt: CodexTurnJob,
+        instruction: String,
+        task: CodexTaskSummary,
+        activityID: UUID,
+        activityKey: String
+    ) async {
+
+        guard let job = await waitForUnpinnedTurnJob(
+            receipt,
+            activityID: activityID,
+            activityKey: activityKey
+        ) else {
+            unpinnedInFlightRequestCount = max(0, unpinnedInFlightRequestCount - 1)
+            failDirectActivity(
+                activityID,
+                for: activityKey,
+                message: "Timed out waiting for the Mac-owned turn."
+            )
             phase = .failed("Timed out waiting for the Mac-owned turn.")
             return
         }
         unpinnedInFlightRequestCount = max(0, unpinnedInFlightRequestCount - 1)
+        updatePendingTurn(id: activityID, job: job)
 
         if job.status == "failed" || job.status == "blocked" || job.status == "unknown" {
+            guard UIApplication.shared.applicationState == .active else {
+                AppLogger.ai.info(
+                    "iPhone Codex terminal receipt retained id=\(activityID) job=\(job.id) "
+                        + "status=\(job.status) reason=app-inactive"
+                )
+                phase = isTurnInFlight ? .submitting : .idle
+                return
+            }
             let message = job.error
                 ?? (job.status == "blocked" ? "Codex needs attention on the Mac." : "The Codex turn failed on the Mac.")
             failure = CodexLaneFailure(message: message, hint: job.hint)
+            failDirectActivity(activityID, for: activityKey, message: message)
             phase = .failed(message)
+            removePendingTurn(id: activityID)
             return
         }
 
@@ -943,22 +1348,34 @@ final class CodexLaneStore: ObservableObject {
                 message: message,
                 hint: "Update Talkie so it understands this version of Codex Desktop."
             )
+            failDirectActivity(activityID, for: activityKey, message: message)
             phase = .failed(message)
+            removePendingTurn(id: activityID)
             return
         }
 
         guard let response = job.response?.trimmingCharacters(in: .whitespacesAndNewlines),
               !response.isEmpty else {
             if delivery == .steeredActiveTurn {
+                acceptDirectActivity(activityID, for: activityKey, delivery: delivery)
                 phase = isTurnInFlight ? .submitting : .idle
+                removePendingTurn(id: activityID)
             } else {
                 let message = "Codex completed without a readable response."
                 failure = CodexLaneFailure(message: message, hint: "Open the task on your Mac to inspect the turn.")
+                failDirectActivity(activityID, for: activityKey, message: message)
                 phase = .failed(message)
+                removePendingTurn(id: activityID)
             }
             return
         }
 
+        receiveDirectActivity(
+            activityID,
+            for: activityKey,
+            response: response,
+            delivery: delivery
+        )
         var record = CodexTurnRecord(
             laneNumber: nil,
             taskID: task.id,
@@ -967,8 +1384,10 @@ final class CodexLaneStore: ObservableObject {
             response: response,
             delivery: delivery
         )
-        if UIApplication.shared.applicationState == .active,
-           !notificationNarratedJobIDs.contains(job.id) {
+        // If the terminal receipt can run, narration gets its own background
+        // execution window below. Tying speech to foreground state meant a
+        // reply received just after the screen locked was silently withheld.
+        if !notificationNarratedJobIDs.contains(job.id) {
             record = await narrate(record)
         } else {
             record.narrationSuppressed = true
@@ -979,12 +1398,27 @@ final class CodexLaneStore: ObservableObject {
             phase = isTurnInFlight ? .submitting : .idle
         }
         remember(record)
+        removePendingTurn(id: activityID)
     }
 
-    private func waitForUnpinnedTurnJob(_ receipt: CodexTurnJob) async -> CodexTurnJob? {
+    private func waitForUnpinnedTurnJob(
+        _ receipt: CodexTurnJob,
+        activityID: UUID,
+        activityKey: String
+    ) async -> CodexTurnJob? {
         var job = receipt
+        var loggedStatus: String?
         let deadline = Date().addingTimeInterval(62 * 60)
         while Date() < deadline, !Task.isCancelled {
+            updateDirectActivity(activityID, for: activityKey, from: job)
+            updatePendingTurn(id: activityID, job: job)
+            if job.status != loggedStatus {
+                loggedStatus = job.status
+                AppLogger.ai.info(
+                    "Codex direct activity status id=\(activityID) "
+                        + "job=\(job.id) status=\(job.status) updates=\(job.updates?.count ?? 0)"
+                )
+            }
             if job.status == "completed" || job.status == "failed"
                 || job.status == "blocked" || job.status == "unknown" {
                 return job
@@ -996,8 +1430,32 @@ final class CodexLaneStore: ObservableObject {
             } catch {
                 guard Self.shouldRetryTurnStatus(after: error) else {
                     let described = Self.describe(error)
-                    failure = described
-                    return nil
+                    AppLogger.ai.warning(
+                        "Codex direct receipt became terminal id=\(activityID) "
+                            + "job=\(job.id): \(described.combined)"
+                    )
+                    return CodexTurnJob(
+                        id: job.id,
+                        submissionId: job.submissionId,
+                        taskId: job.taskId,
+                        taskTitle: job.taskTitle,
+                        status: "failed",
+                        mode: job.mode,
+                        createdAt: job.createdAt,
+                        updatedAt: job.updatedAt,
+                        turnId: job.turnId,
+                        delivery: job.delivery,
+                        response: job.response,
+                        updates: job.updates,
+                        error: described.combined,
+                        code: "turn-receipt-unavailable",
+                        hint: described.hint,
+                        retryable: false,
+                        task: job.task
+                    )
+                }
+                mutateDirectActivity(activityID, for: activityKey) {
+                    $0.retryCount += 1
                 }
                 try? await Task.sleep(for: .seconds(2))
             }
@@ -1027,12 +1485,22 @@ final class CodexLaneStore: ObservableObject {
 
         let receipt: CodexTurnJob
         do {
-            receipt = try await bridge.codexStartTurn(
-                submissionId: activityID,
-                taskId: lane.task.id,
-                taskTitle: lane.task.title,
-                text: instruction,
-                mode: mode
+            receipt = try await startTurnWithRetry(
+                submissionID: activityID,
+                onRetry: { [weak self] retryCount in
+                    self?.mutateActivity(activityID, on: laneNumber) {
+                        $0.retryCount = retryCount
+                    }
+                },
+                operation: {
+                    try await bridge.codexStartTurn(
+                        submissionId: activityID,
+                        taskId: lane.task.id,
+                        taskTitle: lane.task.title,
+                        text: instruction,
+                        mode: mode
+                    )
+                }
             )
         } catch {
             finishSubmission(activityID, on: laneNumber)
@@ -1045,15 +1513,31 @@ final class CodexLaneStore: ObservableObject {
             return
         }
 
-        mutateActivity(activityID, on: laneNumber) { activity in
-            activity.jobID = receipt.id
-        }
-        updateQueuedDisposition(activityID, on: laneNumber, from: receipt)
+        updateActivity(activityID, on: laneNumber, from: receipt)
         AppLogger.ai.info(
             "Codex activity accepted lane=\(laneNumber) id=\(activityID) job=\(receipt.id) "
                 + "status=\(receipt.status) mode=\(receipt.mode.rawValue) "
                 + "delivery=\(receipt.delivery ?? "pending")"
         )
+
+        savePendingTurn(
+            id: activityID,
+            instruction: instruction,
+            task: lane.task,
+            laneNumber: laneNumber,
+            job: receipt
+        )
+        finishSubmission(activityID, on: laneNumber)
+        await startPendingTurnTask(id: activityID).value
+    }
+
+    private func finishLaneTurn(
+        _ receipt: CodexTurnJob,
+        instruction: String,
+        task: CodexTaskSummary,
+        activityID: UUID,
+        laneNumber: Int
+    ) async {
 
         let job = await waitForTurnJob(receipt, activityID: activityID, laneNumber: laneNumber)
         guard let job else {
@@ -1063,14 +1547,23 @@ final class CodexLaneStore: ObservableObject {
             return
         }
 
+        finishSubmission(activityID, on: laneNumber)
+        updatePendingTurn(id: activityID, job: job)
         if job.status == "failed" || job.status == "blocked" || job.status == "unknown" {
-            finishSubmission(activityID, on: laneNumber)
-            guard isCurrentActivity(activityID, on: laneNumber) else { return }
+            guard UIApplication.shared.applicationState == .active else {
+                AppLogger.ai.info(
+                    "iPhone Codex terminal receipt retained id=\(activityID) job=\(job.id) "
+                        + "status=\(job.status) reason=app-inactive"
+                )
+                phase = isTurnInFlight ? .submitting : .idle
+                return
+            }
             let message = job.error
                 ?? (job.status == "blocked" ? "Codex needs attention on the Mac." : "The Codex turn failed on the Mac.")
             failure = CodexLaneFailure(message: message, hint: job.hint)
             failActivity(activityID, on: laneNumber, message: message)
             phase = .failed(message)
+            removePendingTurn(id: activityID)
             if job.code == "stale-thread" {
                 clearLane(laneNumber)
             }
@@ -1079,8 +1572,6 @@ final class CodexLaneStore: ObservableObject {
 
         guard let deliveryValue = job.delivery,
               let delivery = CodexTurnDelivery(rawValue: deliveryValue) else {
-            finishSubmission(activityID, on: laneNumber)
-            guard isCurrentActivity(activityID, on: laneNumber) else { return }
             let message = "Codex reported an incomplete delivery receipt."
             failure = CodexLaneFailure(
                 message: message,
@@ -1088,10 +1579,9 @@ final class CodexLaneStore: ObservableObject {
             )
             failActivity(activityID, on: laneNumber, message: message)
             phase = .failed(message)
+            removePendingTurn(id: activityID)
             return
         }
-
-        finishSubmission(activityID, on: laneNumber)
 
         AppLogger.ai.info(
             "Codex response received lane=\(laneNumber) delivery=\(deliveryValue) "
@@ -1103,7 +1593,6 @@ final class CodexLaneStore: ObservableObject {
         guard let responseText = job.response?.trimmingCharacters(in: .whitespacesAndNewlines),
               !responseText.isEmpty else {
             guard delivery == .steeredActiveTurn else {
-                guard isCurrentActivity(activityID, on: laneNumber) else { return }
                 let message = "Codex completed without a readable response."
                 failure = CodexLaneFailure(
                     message: message,
@@ -1111,12 +1600,14 @@ final class CodexLaneStore: ObservableObject {
                 )
                 failActivity(activityID, on: laneNumber, message: message)
                 phase = .failed(message)
+                removePendingTurn(id: activityID)
                 return
             }
             acceptActivity(activityID, on: laneNumber, delivery: delivery)
             if isCurrentActivity(activityID, on: laneNumber) {
                 phase = isTurnInFlight ? .submitting : .idle
             }
+            removePendingTurn(id: activityID)
             return
         }
 
@@ -1129,8 +1620,8 @@ final class CodexLaneStore: ObservableObject {
 
         var record = CodexTurnRecord(
             laneNumber: laneNumber,
-            taskID: lane.task.id,
-            taskTitle: lane.task.title,
+            taskID: task.id,
+            taskTitle: task.title,
             instruction: instruction,
             response: responseText,
             delivery: delivery
@@ -1139,8 +1630,10 @@ final class CodexLaneStore: ObservableObject {
         // The turn already succeeded. Everything below is presentation, and it
         // records the response before narration is attempted so the text stays
         // readable no matter what speech does.
-        if UIApplication.shared.applicationState == .active,
-           !notificationNarratedJobIDs.contains(job.id) {
+        // A locked screen must not turn a successful receipt into a silent
+        // one. `narrate` owns the short background window needed to synthesize
+        // and schedule playback.
+        if !notificationNarratedJobIDs.contains(job.id) {
             record = await narrate(record)
         } else {
             record.narrationSuppressed = true
@@ -1151,6 +1644,7 @@ final class CodexLaneStore: ObservableObject {
             phase = isTurnInFlight ? .submitting : .idle
         }
         remember(record)
+        removePendingTurn(id: activityID)
     }
 
     private func waitForTurnJob(
@@ -1163,6 +1657,7 @@ final class CodexLaneStore: ObservableObject {
         let deadline = Date().addingTimeInterval(62 * 60)
         while Date() < deadline, !Task.isCancelled {
             updateActivity(activityID, on: laneNumber, from: job)
+            updatePendingTurn(id: activityID, job: job)
             if job.status != loggedStatus {
                 loggedStatus = job.status
                 AppLogger.ai.info(
@@ -1207,6 +1702,9 @@ final class CodexLaneStore: ObservableObject {
                 }
                 // Leaving the foreground may suspend network work. Keep the
                 // Mac-owned receipt alive for genuinely transient failures.
+                mutateActivity(activityID, on: laneNumber) {
+                    $0.retryCount += 1
+                }
                 try? await Task.sleep(for: .seconds(2))
             }
         }
@@ -1232,6 +1730,38 @@ final class CodexLaneStore: ObservableObject {
         }
     }
 
+    /// Retries transport-level uncertainty with the same submission identity.
+    /// The Mac de-duplicates that identity, so a lost HTTP response can never
+    /// turn one spoken instruction into duplicate Codex turns.
+    private func startTurnWithRetry(
+        submissionID: UUID,
+        onRetry: (Int) -> Void,
+        operation: () async throws -> CodexTurnJob
+    ) async throws -> CodexTurnJob {
+        let maximumAttempts = 4
+        var attempt = 1
+
+        while true {
+            do {
+                return try await operation()
+            } catch {
+                guard attempt < maximumAttempts,
+                      Self.shouldRetryTurnStatus(after: error) else {
+                    throw error
+                }
+
+                onRetry(attempt)
+                AppLogger.ai.warning(
+                    "Codex dispatch transport retry submission=\(submissionID) "
+                        + "attempt=\(attempt + 1)/\(maximumAttempts)"
+                )
+                let delay = min(4_000, 500 * (1 << (attempt - 1)))
+                try? await Task.sleep(for: .milliseconds(delay))
+                attempt += 1
+            }
+        }
+    }
+
     private func updateActivity(
         _ id: UUID,
         on laneNumber: Int,
@@ -1240,7 +1770,15 @@ final class CodexLaneStore: ObservableObject {
         updateQueuedDisposition(id, on: laneNumber, from: job)
         mutateActivity(id, on: laneNumber) { activity in
             activity.jobID = job.id
+            activity.retryCount = 0
             activity.updates = job.updates ?? []
+            if let deliveryValue = job.delivery,
+               let delivery = CodexTurnDelivery(rawValue: deliveryValue),
+               job.status != "failed",
+               job.status != "blocked",
+               job.status != "unknown" {
+                activity.state = .accepted(delivery)
+            }
         }
     }
 
@@ -1336,6 +1874,87 @@ final class CodexLaneStore: ObservableObject {
         liveActivitiesByLane[laneNumber] = activities
     }
 
+    private func appendDirectActivity(
+        _ activity: CodexLaneActivity,
+        for key: String
+    ) {
+        var activities = liveActivitiesByDirectKey[key] ?? []
+        activities.append(activity)
+        if activities.count > Self.liveActivityLimit {
+            activities.removeFirst(activities.count - Self.liveActivityLimit)
+        }
+        liveActivitiesByDirectKey[key] = activities
+    }
+
+    private func mutateDirectActivity(
+        _ id: UUID,
+        for key: String,
+        mutation: (inout CodexLaneActivity) -> Void
+    ) {
+        guard var activities = liveActivitiesByDirectKey[key],
+              let index = activities.firstIndex(where: { $0.id == id }) else { return }
+        mutation(&activities[index])
+        liveActivitiesByDirectKey[key] = activities
+    }
+
+    private func moveDirectActivities(from sourceKey: String, to destinationKey: String) {
+        guard sourceKey != destinationKey,
+              let pending = liveActivitiesByDirectKey.removeValue(forKey: sourceKey) else { return }
+        let existing = liveActivitiesByDirectKey[destinationKey] ?? []
+        liveActivitiesByDirectKey[destinationKey] = Array(
+            (existing + pending)
+                .sorted { $0.sentAt < $1.sentAt }
+                .suffix(Self.liveActivityLimit)
+        )
+    }
+
+    private func updateDirectActivity(
+        _ id: UUID,
+        for key: String,
+        from job: CodexTurnJob
+    ) {
+        mutateDirectActivity(id, for: key) { activity in
+            activity.jobID = job.id
+            activity.retryCount = 0
+            activity.updates = job.updates ?? []
+            if let deliveryValue = job.delivery,
+               let delivery = CodexTurnDelivery(rawValue: deliveryValue),
+               job.status != "failed",
+               job.status != "blocked",
+               job.status != "unknown" {
+                activity.state = .accepted(delivery)
+            }
+        }
+    }
+
+    private func acceptDirectActivity(
+        _ id: UUID,
+        for key: String,
+        delivery: CodexTurnDelivery
+    ) {
+        mutateDirectActivity(id, for: key) {
+            $0.state = .accepted(delivery)
+        }
+    }
+
+    private func receiveDirectActivity(
+        _ id: UUID,
+        for key: String,
+        response: String,
+        delivery: CodexTurnDelivery
+    ) {
+        mutateDirectActivity(id, for: key) {
+            $0.response = response
+            $0.state = .receiving(delivery)
+        }
+    }
+
+    private func failDirectActivity(_ id: UUID, for key: String, message: String) {
+        mutateDirectActivity(id, for: key) {
+            $0.state = .failed(message)
+        }
+    }
+
     // MARK: - Narration
 
     /// Speaks the response through the app's existing output route and returns
@@ -1343,6 +1962,21 @@ final class CodexLaneStore: ObservableObject {
     /// narration problem is an annotation on a successful turn.
     private func narrate(_ record: CodexTurnRecord) async -> CodexTurnRecord {
         var record = record
+
+        // The response often lands seconds after dictation has ended and the
+        // user has locked the phone. Keep the process alive long enough to
+        // synthesize and schedule spoken-audio playback; the app's audio
+        // background mode owns playback after this method returns.
+        let backgroundTaskID = UIApplication.shared.beginBackgroundTask(
+            withName: "Codex response narration"
+        ) {
+            AppLogger.ai.warning("Codex narration background window expired")
+        }
+        defer {
+            if backgroundTaskID != .invalid {
+                UIApplication.shared.endBackgroundTask(backgroundTaskID)
+            }
+        }
 
         let route = AIResponseSpeechRoute(
             rawValue: TalkieAppSettings.shared.aiVoiceOutputRoute
@@ -1461,6 +2095,12 @@ final class CodexLaneStore: ObservableObject {
     }
 
     // MARK: - Persistence
+
+    private static var pendingTurnStoreURL: URL {
+        URL.applicationSupportDirectory
+            .appending(path: "Codex", directoryHint: .isDirectory)
+            .appending(path: "pending-phone-turns.json")
+    }
 
     private func loadPersistedLanes() {
         guard let loadedHostID else { return }

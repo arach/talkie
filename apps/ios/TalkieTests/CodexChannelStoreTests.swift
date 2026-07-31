@@ -42,6 +42,51 @@ final class CodexChannelStoreTests: XCTestCase {
         XCTAssertEqual(store.lane(3)?.task, assigned)
     }
 
+    func testEnteringNewTaskModeKeepsLaneBindingsAndDefersTaskIdentity() throws {
+        let defaults = try XCTUnwrap(
+            UserDefaults(suiteName: "CodexChannelStoreTests.\(UUID().uuidString)")
+        )
+        let store = CodexLaneStore(defaults: defaults, hostIDOverride: "test-host")
+        let assigned = task(id: "assigned", cwd: "/projects/talkie", updatedAt: 20)
+        let project = CodexProjectSummary(
+            hostID: "test-host",
+            cwd: "/projects/openscout",
+            name: "openscout",
+            updatedAt: 30,
+            isAssignedToLane: false
+        )
+
+        store.assign(assigned, to: 3)
+        let originalLanes = store.lanes
+
+        XCTAssertTrue(store.enterNewTaskMode(in: project, submissionID: UUID()))
+        XCTAssertEqual(store.lanes, originalLanes)
+        XCTAssertNil(store.selectedTask)
+        XCTAssertEqual(store.newTaskProject, project)
+        XCTAssertTrue(store.hasDispatchDestination)
+    }
+
+    func testSelectingExistingTaskLeavesNewTaskMode() throws {
+        let defaults = try XCTUnwrap(
+            UserDefaults(suiteName: "CodexChannelStoreTests.\(UUID().uuidString)")
+        )
+        let store = CodexLaneStore(defaults: defaults, hostIDOverride: "test-host")
+        let existing = task(id: "existing", cwd: "/projects/talkie", updatedAt: 20)
+        let project = CodexProjectSummary(
+            hostID: "test-host",
+            cwd: "/projects/openscout",
+            name: "openscout",
+            updatedAt: 30,
+            isAssignedToLane: false
+        )
+
+        XCTAssertTrue(store.enterNewTaskMode(in: project, submissionID: UUID()))
+        store.selectChannel(existing)
+
+        XCTAssertNil(store.newTaskProject)
+        XCTAssertEqual(store.selectedTask, existing)
+    }
+
     func testClearingSelectionRemainsUnarmedAfterReload() throws {
         let defaults = try XCTUnwrap(
             UserDefaults(suiteName: "CodexChannelStoreTests.\(UUID().uuidString)")
@@ -283,6 +328,54 @@ final class CodexChannelStoreTests: XCTestCase {
         XCTAssertEqual(try store.load(), [dispatch])
     }
 
+    func testPhoneTurnInboxRestoresMacReceiptAfterColdRestart() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "CodexPendingTurnStoreTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = CodexPendingTurn.Store(
+            url: directory.appending(path: "pending-phone-turns.json")
+        )
+        let submissionID = UUID()
+        let task = task(id: "task-1", cwd: "/projects/talkie", updatedAt: 20)
+        let receipt = CodexTurnJob(
+            id: "job-1",
+            submissionId: submissionID.uuidString,
+            taskId: task.id,
+            taskTitle: task.title,
+            status: "running",
+            mode: .queue,
+            createdAt: "2026-07-30T23:00:00.000Z",
+            updatedAt: "2026-07-30T23:00:01.000Z",
+            turnId: "turn-1",
+            delivery: CodexTurnDelivery.queuedTurn.rawValue,
+            response: nil,
+            updates: nil,
+            error: nil,
+            code: nil,
+            hint: nil,
+            retryable: nil,
+            task: task
+        )
+        let pending = CodexPendingTurn(
+            id: submissionID,
+            hostID: "mac-1",
+            task: task,
+            instruction: "Keep going.",
+            laneNumber: 2,
+            createdAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 200),
+            job: receipt
+        )
+
+        try store.save([pending])
+        let restored = try CodexPendingTurn.Store(url: store.url).load()
+
+        XCTAssertEqual(restored, [pending])
+        XCTAssertEqual(restored.first?.job.id, "job-1")
+        XCTAssertEqual(restored.first?.job.status, "running")
+        XCTAssertEqual(restored.first?.laneNumber, 2)
+    }
+
     func testWatchIncomingHandoffPersistsBeforeMainActorAndDeduplicates() throws {
         let root = FileManager.default.temporaryDirectory
             .appending(path: "WatchCodexIncomingDispatchStoreTests-\(UUID().uuidString)")
@@ -291,9 +384,11 @@ final class CodexChannelStoreTests: XCTestCase {
         try FileManager.default.createDirectory(at: audioDirectory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
 
+        var scheduledResumeCount = 0
         let store = WatchCodexIncomingDispatchStore(
             directoryURL: incomingDirectory,
-            audioDirectoryURL: audioDirectory
+            audioDirectoryURL: audioDirectory,
+            onStaged: { scheduledResumeCount += 1 }
         )
         let requestID = UUID()
         let firstAudio = audioDirectory.appending(path: "first.m4a")
@@ -313,6 +408,7 @@ final class CodexChannelStoreTests: XCTestCase {
         XCTAssertEqual(staged.action, .continueTask)
         XCTAssertEqual(staged.audioFilename, "first.m4a")
         XCTAssertEqual(try store.load(), [staged])
+        XCTAssertEqual(scheduledResumeCount, 1)
 
         let duplicateAudio = audioDirectory.appending(path: "duplicate.m4a")
         try Data("duplicate".utf8).write(to: duplicateAudio)
@@ -322,6 +418,7 @@ final class CodexChannelStoreTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: duplicateAudio.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: firstAudio.path))
         XCTAssertEqual(try store.load(), [staged])
+        XCTAssertEqual(scheduledResumeCount, 2)
 
         try store.remove(staged)
         XCTAssertEqual(try store.load(), [])
