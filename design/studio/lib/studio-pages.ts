@@ -607,6 +607,16 @@ export const STUDIO_PAGES: StudioPage[] = [
     blurb: "Unify the floating control-strip keys into one recessed instrument — 3 depth variants (inset / routed / sunk).",
   },
   {
+    href: "/ios-deck-detent-hub",
+    label: "Deck · Detent Hub",
+    bucket: "surfaces",
+    platform: "iphone",
+    family: "deck",
+    status: "concept",
+    swift: ["apps/ios/Talkie iOS/Codex/CodexCommandDeckSurface.swift"],
+    blurb: "Two refinements of Grok A — a three-stop response selector paired with a circular LED status instrument.",
+  },
+  {
     href: "/ios-deck-codex",
     label: "Deck · Codex Lanes",
     bucket: "surfaces",
