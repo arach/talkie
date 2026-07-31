@@ -23,7 +23,6 @@ struct CodexCommandDeckSurface: View {
     @ObservedObject private var theme = ThemeManager.shared
     @State private var appSettings = TalkieAppSettings.shared
     @State private var voicePlayback = WalkieFX.shared
-    @Namespace private var outputRouteThumbNamespace
     @State private var showingMapper = false
     @State private var showingNewTask = false
     @State private var showingHistory = false
@@ -31,6 +30,7 @@ struct CodexCommandDeckSurface: View {
     @State private var showingStatus = false
     @State private var copiedResponse = false
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 6) {
@@ -402,66 +402,29 @@ struct CodexCommandDeckSurface: View {
 
     private func audioKey(index: Int) -> some View {
         Button(action: cycleOutputRoute) {
-            VStack(spacing: 3) {
-                Spacer(minLength: 0)
-                outputRouteSelector
-                Spacer(minLength: 0)
-            }
+            outputRouteDial
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.horizontal, 4)
-            .padding(.vertical, 5)
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .background(keycapSurface(active: false, isEmpty: false))
             .overlay(alignment: .topLeading) { keyIndexLabel(index: index) }
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Response output, \(outputRoute.displayName)")
         .accessibilityHint("Cycles between iPhone, Watch, and silent output")
-        .animation(.spring(response: 0.32, dampingFraction: 0.74), value: outputRoute.rawValue)
+        .animation(
+            reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.74),
+            value: outputRoute.rawValue
+        )
         .sensoryFeedback(.selection, trigger: outputRoute.rawValue)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(minWidth: 44, minHeight: 44)
     }
 
     private func statusReadoutKey(index: Int) -> some View {
         Button(action: { showingStatus = true }) {
-            VStack(alignment: .leading, spacing: 5) {
-                Spacer(minLength: 0)
-
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(deckMeterIsActive || deckMeterIsFailure ? deckPhaseColor : utilityInkFaint.opacity(0.44))
-                        .frame(width: 4, height: 4)
-
-                    Text(deckMeterLabel)
-                        .foregroundStyle(deckMeterIsActive || deckMeterIsFailure ? deckPhaseColor : utilityInkFaint)
-
-                    Spacer(minLength: 2)
-
-                    Text(deckStatusLabel)
-                        .foregroundStyle(utilityInk)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.64)
-                }
-                .font(.system(size: 6.5, weight: .semibold, design: .monospaced))
-                .tracking(0.45)
-                .padding(.horizontal, 6)
-                .frame(maxWidth: .infinity, minHeight: 22)
-                .background(statusDisplaySurface)
-
-                HStack(spacing: 4) {
-                    Image(systemName: "terminal")
-                        .font(.system(size: 7, weight: .medium))
-                    Text("STATUS")
-                        .font(.system(size: 7.5, weight: .semibold, design: .monospaced))
-                        .tracking(0.8)
-                }
-                .foregroundStyle(utilityInkFaint.opacity(0.82))
-
-                Spacer(minLength: 0)
-            }
+            statusInstrument
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.horizontal, 7)
-            .padding(.top, 13)
-            .padding(.bottom, 6)
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .background(keycapSurface(active: false, isEmpty: false))
             .overlay(alignment: .topLeading) { keyIndexLabel(index: index) }
         }
@@ -469,77 +432,216 @@ struct CodexCommandDeckSurface: View {
         .accessibilityLabel("Codex status, \(deckStatusLabel)")
         .accessibilityHint("Opens Codex connection and delivery status")
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(minWidth: 44, minHeight: 44)
     }
 
-    private var statusDisplaySurface: some View {
+    private var statusLEDWindowSurface: some View {
         let shape = RoundedRectangle(cornerRadius: 5, style: .continuous)
         return shape
-            .fill(
-                colorScheme == .dark
-                    ? Color.black.opacity(0.34)
-                    : Color(red: 0.23, green: 0.20, blue: 0.16).opacity(0.075)
-            )
+            .fill(theme.chrome.panel.opacity(colorScheme == .dark ? 0.96 : 0.90))
             .overlay {
-                shape.strokeBorder(utilityInkFaint.opacity(0.18), lineWidth: 0.6)
+                shape.strokeBorder(theme.chrome.panelEdge.opacity(0.72), lineWidth: 0.6)
             }
-            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.20 : 0.04), radius: 1, y: 1)
+            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.28 : 0.10), radius: 2, y: 1)
     }
 
-    private var outputRouteSelector: some View {
-        VStack(spacing: 4) {
-            HStack {
-                Text("OUT")
-                    .font(.system(size: 6.5, weight: .bold, design: .monospaced))
-                    .tracking(0.9)
-                    .foregroundStyle(utilityInkFaint.opacity(0.66))
-                Spacer(minLength: 2)
-                Text(outputRoute.shortLabel.uppercased())
-                    .font(.system(size: 6.5, weight: .bold, design: .monospaced))
-                    .tracking(0.9)
-                    .foregroundStyle(theme.chrome.accent)
+    private var outputRouteDial: some View {
+        ZStack {
+            instrumentDialSurface(isSignaled: true, signalColor: theme.chrome.accent)
+
+            ForEach(outputRouteOrder, id: \.rawValue) { route in
+                outputRouteDialDetent(route)
             }
-            .padding(.horizontal, 2)
+
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [theme.chrome.accent, theme.chrome.accent.opacity(0.72)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: 18, height: 2)
+                .offset(x: 9)
+                .rotationEffect(outputRouteDialAngle)
+                .offset(y: -0.8)
+                .shadow(color: theme.chrome.accentGlow.opacity(0.42), radius: 2, y: 1)
 
             ZStack {
-                Capsule()
-                    .fill(utilityInk.opacity(0.05))
-                Capsule()
-                    .stroke(utilityInkFaint.opacity(0.14), lineWidth: 0.6)
-
-                HStack(spacing: 0) {
-                    ForEach(outputRouteOrder, id: \.rawValue) { route in
-                        outputRouteDetent(route)
-                    }
-                }
-                .padding(.horizontal, 4)
+                Circle()
+                    .fill(theme.chrome.panel)
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [Color.white.opacity(0.18), .clear],
+                            center: UnitPoint(x: 0.36, y: 0.28),
+                            startRadius: 0,
+                            endRadius: 12
+                        )
+                    )
+                Circle()
+                    .stroke(theme.chrome.panelEdge.opacity(0.78), lineWidth: 0.7)
+                Circle()
+                    .fill(theme.chrome.panelInkFaint.opacity(0.58))
+                    .frame(width: 3.5, height: 3.5)
             }
-            .frame(height: 30)
+            .frame(width: 23, height: 23)
+            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.42 : 0.24), radius: 3, y: 2)
         }
+        .frame(width: 52, height: 52)
     }
 
-    private func outputRouteDetent(_ route: AIResponseSpeechRoute) -> some View {
+    private func outputRouteDialDetent(_ route: AIResponseSpeechRoute) -> some View {
         let isActive = route == outputRoute
         return ZStack {
-            if isActive {
-                Circle()
-                    .fill(theme.chrome.accent.opacity(0.16))
-                    .overlay {
-                        Circle()
-                            .stroke(theme.chrome.accent.opacity(0.55), lineWidth: 0.8)
-                    }
-                    .shadow(color: theme.chrome.accent.opacity(0.30), radius: 2, y: 1)
-                    .matchedGeometryEffect(id: "outputRouteThumb", in: outputRouteThumbNamespace)
-            }
+            Circle()
+                .fill(isActive ? theme.chrome.accentTint : Color.clear)
+                .overlay {
+                    Circle().stroke(
+                        isActive ? theme.chrome.accent.opacity(0.62) : utilityInkFaint.opacity(0.10),
+                        lineWidth: 0.7
+                    )
+                }
             Image(systemName: outputRouteIcon(for: route))
-                .font(.system(size: 11, weight: isActive ? .semibold : .medium))
-                .foregroundStyle(isActive ? theme.chrome.accent : utilityInkFaint.opacity(0.50))
+                .font(.system(size: 6.5, weight: isActive ? .bold : .medium))
+                .foregroundStyle(isActive ? theme.chrome.accent : utilityInkFaint.opacity(0.46))
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: 24)
+        .frame(width: 12, height: 12)
+        .offset(outputRouteDialOffset(for: route))
     }
 
     private var outputRouteOrder: [AIResponseSpeechRoute] {
         [.phone, .watch, .silent]
+    }
+
+    private var outputRouteDialAngle: Angle {
+        switch outputRoute {
+        case .phone: return .degrees(0)
+        case .watch: return .degrees(-90)
+        case .silent: return .degrees(180)
+        }
+    }
+
+    private func outputRouteDialOffset(for route: AIResponseSpeechRoute) -> CGSize {
+        switch route {
+        case .phone: return CGSize(width: 18, height: -1)
+        case .watch: return CGSize(width: 0, height: -18)
+        case .silent: return CGSize(width: -18, height: -1)
+        }
+    }
+
+    @ViewBuilder
+    private var statusInstrument: some View {
+        if statusInstrumentIsAnimated && !reduceMotion {
+            TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { context in
+                statusInstrumentFace(phase: context.date.timeIntervalSinceReferenceDate * 5.2)
+            }
+        } else {
+            statusInstrumentFace(phase: 0)
+        }
+    }
+
+    private func statusInstrumentFace(phase: Double) -> some View {
+        ZStack {
+            instrumentDialSurface(
+                isSignaled: deckMeterIsActive || deckMeterIsFailure,
+                signalColor: deckPhaseColor
+            )
+
+            VStack(spacing: 2) {
+                Text(statusInstrumentLabel)
+                    .font(.system(size: 7.5, weight: .bold, design: .monospaced))
+                    .tracking(0.7)
+                    .foregroundStyle(statusInstrumentSignalColor)
+                    .lineLimit(1)
+
+                HStack(alignment: .center, spacing: 2) {
+                    ForEach(0..<5, id: \.self) { bar in
+                        Capsule()
+                            .fill(statusInstrumentSignalColor)
+                            .frame(width: 2, height: statusInstrumentBarHeight(bar, phase: phase))
+                    }
+                }
+                .frame(height: 8)
+            }
+            .frame(width: 37, height: 24)
+            .background(statusLEDWindowSurface)
+            .shadow(
+                color: statusInstrumentSignalColor.opacity(statusInstrumentIsAnimated ? 0.30 : 0.10),
+                radius: statusInstrumentIsAnimated ? 3 : 1,
+                y: 1
+            )
+        }
+        .frame(width: 52, height: 52)
+    }
+
+    private var statusInstrumentLabel: String {
+        switch deckStatusLabel {
+        case "READY": return "RDY"
+        case "NO TASK": return "OFF"
+        default: return deckMeterLabel
+        }
+    }
+
+    private var statusInstrumentSignalColor: Color {
+        deckMeterIsActive || deckMeterIsFailure
+            ? deckPhaseColor
+            : theme.chrome.panelInkFaint.opacity(0.58)
+    }
+
+    private var statusInstrumentIsAnimated: Bool {
+        store.phase == .listening
+            || store.phase == .speaking
+            || voicePlayback.isVoicePlaybackActive
+    }
+
+    private func statusInstrumentBarHeight(_ index: Int, phase: Double) -> CGFloat {
+        guard statusInstrumentIsAnimated else {
+            return [3, 5, 7, 5, 3][index]
+        }
+
+        if store.phase == .listening {
+            let level = min(max(CGFloat(store.captureLevel), 0), 1).squareRoot()
+            let ripple = CGFloat(0.55 + 0.45 * sin(phase + Double(index) * 0.92))
+            return 2 + (6 * max(0.18, level) * ripple)
+        }
+
+        let playbackWave = CGFloat(0.5 + 0.5 * sin(phase + Double(index) * 1.18))
+        return 2 + (6 * playbackWave)
+    }
+
+    private func instrumentDialSurface(isSignaled: Bool, signalColor: Color) -> some View {
+        let shape = Circle()
+        let raisedShadow = colorScheme == .dark ? Color.black.opacity(0.34) : Color.black.opacity(0.13)
+        return shape
+            .fill(utilityFace)
+            .overlay {
+                shape.fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(colorScheme == .dark ? 0.08 : 0.28), .clear, Color.black.opacity(0.05)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+            }
+            .overlay {
+                shape.strokeBorder(
+                    isSignaled ? signalColor.opacity(0.72) : utilityInkFaint.opacity(0.14),
+                    lineWidth: isSignaled ? 1 : theme.chrome.hairlineWidth
+                )
+            }
+            .overlay {
+                Circle()
+                    .strokeBorder(utilityInk.opacity(0.06), lineWidth: 5)
+                    .padding(3)
+            }
+            .compositingGroup()
+            .shadow(color: raisedShadow, radius: 5, y: 3)
+            .shadow(
+                color: isSignaled ? signalColor.opacity(0.14) : .clear,
+                radius: 4,
+                y: 2
+            )
     }
 
     private func laneStepKey(index: Int, direction: Int) -> some View {
@@ -798,7 +900,7 @@ struct CodexCommandDeckSurface: View {
     private var deckMeterIsFailure: Bool { deckStatusLabel == "ERROR" }
 
     private var deckMeterIsActive: Bool {
-        !["READY", "NO LANE", "ERROR"].contains(deckStatusLabel)
+        !["READY", "NO TASK", "ERROR"].contains(deckStatusLabel)
     }
 
     private var deckPhaseColor: Color {

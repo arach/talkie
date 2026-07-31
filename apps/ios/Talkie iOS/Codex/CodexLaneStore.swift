@@ -49,6 +49,7 @@ final class CodexLaneStore: ObservableObject {
     // MARK: - Voice loop
 
     @Published private(set) var phase: CodexLanePhase = .idle
+    @Published private(set) var captureLevel: Float = 0
     @Published private(set) var narrationState: CodexNarrationState = .idle
     @Published private(set) var failure: CodexLaneFailure?
     @Published private(set) var lastTurn: CodexTurnRecord?
@@ -588,6 +589,7 @@ final class CodexLaneStore: ObservableObject {
     func cancelCapture() {
         guard phase.isCapturing else { return }
         isPushToTalkHeld = false
+        captureLevel = 0
         dictation.cancel()
         phase = isTurnInFlight ? .submitting : .idle
     }
@@ -687,12 +689,14 @@ final class CodexLaneStore: ObservableObject {
             case .recording:
                 self.phase = .listening
             case .transcribing:
+                self.captureLevel = 0
                 // Only reflect this while we own the flow; the controller also
                 // reports `.transcribing` during its permission preflight.
                 if self.phase == .listening || self.phase == .idle {
                     self.phase = .transcribing
                 }
             case .idle:
+                self.captureLevel = 0
                 // The submit path takes over from here; only reset when the
                 // capture ended without producing anything.
                 if self.phase == .transcribing || self.phase == .listening {
@@ -708,8 +712,13 @@ final class CodexLaneStore: ObservableObject {
 
         controller.onError = { [weak self] message in
             guard let self else { return }
+            self.captureLevel = 0
             self.failure = CodexLaneFailure(message: message, hint: nil)
             self.phase = .failed(message)
+        }
+
+        controller.onAudioLevel = { [weak self] level in
+            self?.captureLevel = level
         }
 
         return controller
