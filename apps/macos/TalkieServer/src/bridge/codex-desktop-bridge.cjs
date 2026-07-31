@@ -519,9 +519,10 @@ async function waitForTaskRolloutPath(threadId, blockingError) {
 }
 
 /**
- * Reads only user-visible progress from the active turn. Commentary is the
- * same assistant text Codex Desktop presents during work; reasoning records
- * are deliberately ignored and never cross the bridge.
+ * Reads only user-visible progress from the rollout. Commentary and final
+ * answers are the same assistant text Codex Desktop presents; technical tool
+ * completions describe observable work. Reasoning records are deliberately
+ * ignored and never cross the bridge.
  */
 function readTurnActivity(rolloutPath) {
   const size = fs.statSync(rolloutPath).size;
@@ -538,76 +539,132 @@ function readTurnActivity(rolloutPath) {
   }
   if (start > 0) text = text.slice(text.indexOf('\n') + 1);
 
-  let turnId = null;
-  let updates = [];
-  let ordinal = 0;
+  const activeTurns = new Map();
+  const activeOrder = [];
+  const history = [];
+
+  const activeTurn = (turnId) => activeTurns.get(turnId || activeOrder.at(-1));
+  const publicUserMessage = (record) => {
+    const payload = record?.type === 'response_item' ? record.payload : null;
+    if (payload?.type !== 'message' || payload.role !== 'user' || !Array.isArray(payload.content)) {
+      return '';
+    }
+    const raw = payload.content
+      .filter((item) => item?.type === 'input_text')
+      .map((item) => String(item.text || ''))
+      .join('\n')
+      .trim();
+    if (!raw) return '';
+
+    const realtimeInput = raw.match(/<realtime_delegation>[\s\S]*?<input>([\s\S]*?)<\/input>[\s\S]*?<\/realtime_delegation>/i)?.[1]?.trim();
+    if (realtimeInput) return realtimeInput;
+
+    if (/^<(recommended_plugins|environment_context|realtime_conversation|codex_delegation|app-context)\b/i.test(raw)) {
+      return '';
+    }
+    return raw;
+  };
+  const appendUpdate = (turn, record, kind, message, fallback) => {
+    if (!turn || !message) return;
+    turn.ordinal += 1;
+    turn.updates.push({
+      id: `${record.timestamp || fallback}-${turn.ordinal}`,
+      kind,
+      text: message,
+      timestamp: record.timestamp || null,
+    });
+  };
+  const finishTurn = (record, payload) => {
+    const turn = activeTurn(payload.turn_id);
+    if (!turn) return;
+    const status = payload.type === 'task_complete'
+      ? 'completed'
+      : payload.type === 'task_failed'
+        ? 'failed'
+        : 'aborted';
+    const response = String(payload.last_agent_message || turn.response || '').trim();
+    const error = status === 'completed'
+      ? ''
+      : String(payload.error?.message || payload.error || payload.message || '').trim();
+    history.push({
+      id: turn.id,
+      status,
+      startedAt: turn.startedAt,
+      completedAt: record.timestamp || null,
+      ...(Number.isFinite(payload.duration_ms) && { durationMs: payload.duration_ms }),
+      instructions: turn.instructions.slice(-4),
+      updates: turn.updates.slice(-12),
+      ...(response && { response }),
+      ...(error && { error }),
+    });
+    activeTurns.delete(turn.id);
+    const orderIndex = activeOrder.lastIndexOf(turn.id);
+    if (orderIndex >= 0) activeOrder.splice(orderIndex, 1);
+  };
+
   for (const line of text.split('\n')) {
     if (!line) continue;
     let record;
     try { record = JSON.parse(line); } catch { continue; }
     const payload = record?.type === 'event_msg' ? record.payload : null;
     if (payload?.type === 'task_started' && typeof payload.turn_id === 'string') {
-      turnId = payload.turn_id;
-      updates = [];
-      ordinal = 0;
+      activeTurns.set(payload.turn_id, {
+        id: payload.turn_id,
+        startedAt: record.timestamp || null,
+        instructions: [],
+        updates: [],
+        response: '',
+        ordinal: 0,
+      });
+      activeOrder.push(payload.turn_id);
       continue;
     }
-    if (!turnId || !payload) continue;
+    const instruction = publicUserMessage(record);
+    if (instruction) {
+      const turn = activeTurn();
+      if (turn) turn.instructions.push(instruction);
+      continue;
+    }
+    if (!payload) continue;
 
     if (payload.type === 'agent_message' && payload.phase === 'commentary') {
       const message = String(payload.message || '').trim();
-      if (message) {
-        ordinal += 1;
-        updates.push({
-          id: `${record.timestamp || 'progress'}-${ordinal}`,
-          kind: 'commentary',
-          text: message,
-          timestamp: record.timestamp || null,
-        });
-      }
+      appendUpdate(activeTurn(payload.turn_id), record, 'commentary', message, 'progress');
       continue;
     }
 
-    if (payload.turn_id === turnId && payload.type === 'patch_apply_end' && payload.success) {
-      ordinal += 1;
-      updates.push({
-        id: `${record.timestamp || 'patch'}-${ordinal}`,
-        kind: 'tool',
-        text: 'PATCH APPLIED',
-        timestamp: record.timestamp || null,
-      });
+    if (payload.type === 'agent_message' && payload.phase === 'final_answer') {
+      const turn = activeTurn(payload.turn_id);
+      if (turn) turn.response = String(payload.message || '').trim();
       continue;
     }
 
-    if (payload.turn_id === turnId && payload.type === 'mcp_tool_call_end') {
+    if (payload.type === 'patch_apply_end' && payload.success) {
+      appendUpdate(activeTurn(payload.turn_id), record, 'tool', 'PATCH APPLIED', 'patch');
+      continue;
+    }
+
+    if (payload.type === 'mcp_tool_call_end') {
       const tool = String(payload.invocation?.tool || payload.invocation?.server || 'TOOL')
         .replaceAll('_', ' ')
         .trim()
         .toUpperCase();
-      ordinal += 1;
-      updates.push({
-        id: `${record.timestamp || 'tool'}-${ordinal}`,
-        kind: 'tool',
-        text: `${tool} COMPLETE`,
-        timestamp: record.timestamp || null,
-      });
+      appendUpdate(activeTurn(payload.turn_id), record, 'tool', `${tool} COMPLETE`, 'tool');
       continue;
     }
 
-    if (
-      ['task_complete', 'task_failed', 'turn_aborted'].includes(payload.type) &&
-      payload.turn_id === turnId
-    ) {
-      turnId = null;
-      updates = [];
+    if (['task_complete', 'task_failed', 'turn_aborted'].includes(payload.type)) {
+      finishTurn(record, payload);
     }
   }
 
+  const current = activeTurn();
   return {
     ok: true,
-    active: Boolean(turnId),
-    turnId,
-    updates: updates.slice(-4),
+    active: Boolean(current),
+    turnId: current?.id || null,
+    updates: current?.updates.slice(-4) || [],
+    history: history.slice(-20).reverse(),
   };
 }
 

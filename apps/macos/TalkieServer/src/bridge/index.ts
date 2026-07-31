@@ -61,6 +61,8 @@ import {
   codexValidateRoute,
   codexSubmitRoute,
   codexFreshTurnStartRoute,
+  codexTaskHistoryRoute,
+  codexStatusDocumentRoute,
   codexTurnStartRoute,
   codexTurnStatusRoute,
 } from "./routes/codex";
@@ -505,6 +507,16 @@ export const bridge = new Elysia({ name: "bridge" })
     const body = await readJsonBody(request);
     return codexTurnStartRoute(body);
   })
+  .get("/codex/tasks/:id/history", ({ params }) => codexTaskHistoryRoute(params.id))
+  .get(
+    "/codex/tasks/:id/status-document",
+    ({ params, query }) =>
+      codexStatusDocumentRoute(
+        params.id,
+        typeof query.jobId === "string" ? query.jobId : undefined,
+      ),
+    { query: t.Object({ jobId: t.Optional(t.String()) }) },
+  )
   .get("/codex/turns/:id", ({ params }) => codexTurnStatusRoute(params.id))
 
   // ===== Terminal =====

@@ -12,6 +12,7 @@
  */
 
 import path from "node:path";
+import { hostname } from "node:os";
 import {
   chmodSync,
   existsSync,
@@ -27,6 +28,11 @@ import { log } from "../../log";
 import { CODEX_TASK_CREATIONS_FILE, CODEX_TURN_JOBS_FILE } from "../../paths";
 import { talkieServerFetch } from "../talkie-local-client";
 import { badRequest } from "./responses";
+import {
+  inspectCodexRepository,
+  renderCodexStatusDocument,
+  type CodexStatusHistoryTurn,
+} from "./codex-status-document";
 
 /** Where the vendored Codex Desktop adapter lives (sibling of this routes dir). */
 const BRIDGE_SCRIPT = path.join(import.meta.dir, "..", "codex-desktop-bridge.cjs");
@@ -77,6 +83,7 @@ export interface BridgeEnvelope {
   };
   active?: boolean;
   updates?: CodexProgressUpdate[];
+  history?: CodexStatusHistoryTurn[];
   error?: string;
   code?: string;
 }
@@ -855,6 +862,24 @@ export class CodexTurnJobManager {
     }
   }
 
+  async snapshotForTask(
+    taskId: string,
+    preferredJobId?: string,
+  ): Promise<CodexTurnJobSnapshot | undefined> {
+    const preferred = preferredJobId ? this.jobs.get(preferredJobId) : undefined;
+    if (preferred?.job.taskId === taskId) return this.snapshot(preferred.job.id);
+
+    const candidates = [...this.jobs.values()]
+      .map((stored) => stored.job)
+      .filter((job) => job.taskId === taskId)
+      .sort((left, right) => {
+        const active = (status: CodexTurnJobStatus) => status === "running" || status === "queued" || status === "blocked";
+        if (active(left.status) !== active(right.status)) return active(left.status) ? -1 : 1;
+        return Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
+      });
+    return candidates[0] ? this.snapshot(candidates[0].id) : undefined;
+  }
+
   private prune() {
     const cutoff = Date.now() - 24 * 60 * 60 * 1_000;
     for (const [id, stored] of this.jobs) {
@@ -1089,6 +1114,18 @@ function isCodexTaskSummary(value: unknown): value is CodexTaskSummary {
     && typeof task.updatedAt === "number" && Number.isFinite(task.updatedAt);
 }
 
+async function validatedCodexTask(taskId: string): Promise<CodexTaskSummary> {
+  const envelope = await runBridge(["validate", taskId], { timeoutMs: SNAPSHOT_TIMEOUT_MS });
+  if (!envelope.ok || !envelope.task) throw envelopeError(envelope);
+  if (!isCodexTaskSummary(envelope.task)) {
+    throw new CodexBridgeError("Codex app-server returned an unreadable task.", "protocol-mismatch");
+  }
+  if (envelope.task.id !== taskId) {
+    throw new CodexBridgeError("Codex Desktop returned a different task.", "task-mismatch");
+  }
+  return envelope.task;
+}
+
 async function readCodexActivity(taskId: string): Promise<BridgeEnvelope> {
   const envelope = await runBridge(["activity", taskId], { timeoutMs: SNAPSHOT_TIMEOUT_MS });
   if (!envelope.ok) throw envelopeError(envelope);
@@ -1226,16 +1263,7 @@ export async function codexValidateRoute(body: unknown): Promise<Response> {
   }
 
   try {
-    const envelope = await runBridge(["validate", taskId.trim()], { timeoutMs: SNAPSHOT_TIMEOUT_MS });
-    if (!envelope.ok || !envelope.task) throw envelopeError(envelope);
-
-    // Defense in depth: the adapter already rejects a mismatched task, but this
-    // route must never relabel a different task as the requested one.
-    if (envelope.task.id !== taskId.trim()) {
-      throw new CodexBridgeError("Codex Desktop returned a different task.", "task-mismatch");
-    }
-
-    return Response.json({ task: envelope.task });
+    return Response.json({ task: await validatedCodexTask(taskId.trim()) });
   } catch (error) {
     return bridgeFailureResponse(error);
   }
@@ -1356,4 +1384,61 @@ export async function codexTurnStatusRoute(jobId: string): Promise<Response> {
     );
   }
   return Response.json({ job });
+}
+
+/** GET /codex/tasks/:id/history — bounded public turn history for one exact task. */
+export async function codexTaskHistoryRoute(taskIdValue: string): Promise<Response> {
+  const taskId = taskIdValue.trim();
+  if (!taskId) return badRequest("task id is required");
+  try {
+    const [task, activity] = await Promise.all([
+      validatedCodexTask(taskId),
+      readCodexActivity(taskId),
+    ]);
+    return Response.json({
+      task,
+      turns: activity.history ?? [],
+    }, {
+      headers: { "Cache-Control": "no-store" },
+    });
+  } catch (error) {
+    return bridgeFailureResponse(error);
+  }
+}
+
+/** GET /codex/tasks/:id/status-document — trusted, read-only technical status surface. */
+export async function codexStatusDocumentRoute(
+  taskIdValue: string,
+  jobIdValue?: string | null,
+): Promise<Response> {
+  const taskId = taskIdValue.trim();
+  if (!taskId) return badRequest("task id is required");
+  try {
+    const task = await validatedCodexTask(taskId);
+    const [repository, turn, activity] = await Promise.all([
+      inspectCodexRepository(task.cwd),
+      turnJobs.snapshotForTask(task.id, jobIdValue?.trim() || undefined),
+      readCodexActivity(task.id).catch((error) => {
+        log.debug(`[codex] status history unavailable for ${task.id}: ${error}`);
+        return undefined;
+      }),
+    ]);
+    const document = renderCodexStatusDocument({
+      task,
+      repository,
+      ...(turn && { turn }),
+      ...(activity?.history && { history: activity.history }),
+      host: hostname(),
+    });
+    return new Response(document, {
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  } catch (error) {
+    return bridgeFailureResponse(error);
+  }
 }
