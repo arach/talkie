@@ -21,7 +21,7 @@ export interface TalkieFetchTransportOptions {
   timeoutMs?: number;
 }
 
-const defaultBridgeURL = "http://127.0.0.1:8765";
+const defaultBridgeURL = "http://127.0.0.1:19825";
 
 export function createFetchTransport(options: TalkieFetchTransportOptions = {}): TalkieTransport {
   const fetchImpl = options.fetch ?? globalThis.fetch;

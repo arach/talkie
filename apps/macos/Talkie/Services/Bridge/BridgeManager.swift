@@ -296,7 +296,7 @@ final class BridgeManager {
     private static let bridgeDataPath = "\(FileManager.default.homeDirectoryForCurrentUser.path)/Library/Application Support/Talkie/Bridge"
     private var devicesFile: String { "\(Self.bridgeDataPath)/.config/devices.json" }
     private var localAuthTokenFile: String { "\(Self.bridgeDataPath)/.config/.local-auth-token" }
-    private let port = 8765
+    private let port = TalkieNetworkPorts.gateway
 
     // Known Tailscale CLI locations (in priority order)
     private let defaultTailscalePaths = [
@@ -803,7 +803,7 @@ final class BridgeManager {
     }
 
     private func checkBridgeStatus() async {
-        // Direct health is the source of truth for whether the bridge on 8765 is usable.
+        // Direct health is the source of truth for whether the configured gateway is usable.
         // A healthy, pairable bridge may have been launched by an earlier agent instance,
         // and that should be treated as good news rather than an ownership conflict.
         if await refreshDirectBridgeHealth() {

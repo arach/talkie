@@ -27,7 +27,7 @@ iOS device (remote)
       │ HTTPS over Tailscale
       ▼
 ┌────────────────────────────────────────────┐
-│ TalkieAgentServer (bun, :8765)             │  supervised by Agent
+│ TalkieAgentServer (bun, :19825)            │  supervised by Agent
 │                                            │
 │  ├─ Bridge module — pairing, sessions,     │
 │  │    window match, smart message routing, │
@@ -51,7 +51,7 @@ iOS device (remote)
 
 BridgeManager (Talkie.app)
     ├── XPC → Agent (control TalkieAgentServer process)
-    └── HTTP → TalkieAgentServer :8765 (pairing, devices, status)
+    └── HTTP → TalkieAgentServer :19825 (pairing, devices, status)
 ```
 
 ## Data flow: reusable iPhone inference
@@ -92,7 +92,7 @@ TalkieAgentServer's lifecycle is nested under Agent's supervisor, not a direct h
 
 | Port | Listener | Purpose |
 |---|---|---|
-| 8765 | TalkieAgentServer (bun) | External-facing (Tailscale + localhost) |
+| 19825 | TalkieAgentServer (bun) | External-facing (nearby LAN + localhost) |
 | 8766 | TalkieHTTP (Swift, in Talkie.app) | Localhost only — bun → Swift door |
 | Mach | `to.talkie.agent.dev` | XPC to TalkieAgent |
 | Mach | `to.talkie.app.sync.dev` | XPC to TalkieSync |

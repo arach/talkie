@@ -564,7 +564,7 @@ final class VoiceEditorState {
     }
 
     // MARK: - Extension API Broadcasting (Legacy v1 format)
-    // Note: Extension server moved to TalkieServer (port 8765)
+    // Note: Extension server moved to the Talkie gateway.
     // These methods are kept as no-ops for call site compatibility
 
     private func broadcastState() {

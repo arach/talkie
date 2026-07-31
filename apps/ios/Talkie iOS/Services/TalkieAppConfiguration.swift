@@ -177,10 +177,17 @@ struct TalkieAppConfiguration: Codable {
             followComputerShortcutMode = try container.decodeIfPresent(Bool.self, forKey: .followComputerShortcutMode) ?? false
             activePairedMacID = try container.decodeIfPresent(String.self, forKey: .activePairedMacID) ?? ""
             pairedMacs = try container.decodeIfPresent([PairedMac].self, forKey: .pairedMacs) ?? []
+            for index in pairedMacs.indices {
+                pairedMacs[index].port = TalkieNetworkPorts.migratedGatewayPort(
+                    pairedMacs[index].port
+                )
+            }
 
             if pairedMacs.isEmpty {
                 let hostname = try container.decodeIfPresent(String.self, forKey: .hostname) ?? ""
-                let port = try container.decodeIfPresent(Int.self, forKey: .port) ?? 0
+                let port = TalkieNetworkPorts.migratedGatewayPort(
+                    try container.decodeIfPresent(Int.self, forKey: .port) ?? 0
+                )
                 let pairedMacName = try container.decodeIfPresent(String.self, forKey: .pairedMacName) ?? ""
                 let serverPublicKey = try container.decodeIfPresent(String.self, forKey: .serverPublicKey) ?? ""
                 let privateKey = try container.decodeIfPresent(String.self, forKey: .privateKey) ?? ""

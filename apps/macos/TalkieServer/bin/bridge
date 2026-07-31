@@ -5,7 +5,7 @@
 # Usage:
 #   bridge install     - Install launchd services and DNS entries
 #   bridge uninstall   - Remove launchd services
-#   bridge start       - Start production bridge (port 8765)
+#   bridge start       - Start production bridge (port 19825 by default)
 #   bridge stop        - Stop production bridge
 #   bridge dev         - Start dev bridge (port 8767, --local mode)
 #   bridge dev:stop    - Stop dev bridge
@@ -23,6 +23,7 @@ BRIDGE_DIR="$(dirname "$SCRIPT_DIR")"
 LAUNCHD_DIR="$BRIDGE_DIR/launchd"
 LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
 LOG_DIR="$HOME/Library/Logs/TalkieBridge"
+PROD_PORT="${TALKIE_GATEWAY_PORT:-19825}"
 
 PROD_PLIST="to.talkie.bridge.plist"
 DEV_PLIST="to.talkie.bridge-dev.plist"
@@ -127,7 +128,7 @@ install_plists() {
     remove_legacy_services
 
     # Generate plists with correct paths for this machine
-    generate_plist "$PROD_LABEL" "" "$LAUNCH_AGENTS/$PROD_PLIST" "bridge.log"
+    generate_plist "$PROD_LABEL" "--port $PROD_PORT" "$LAUNCH_AGENTS/$PROD_PLIST" "bridge.log"
     generate_plist "$DEV_LABEL" "--local --port 8767" "$LAUNCH_AGENTS/$DEV_PLIST" "bridge-dev.log"
     chmod 644 "$LAUNCH_AGENTS/$PROD_PLIST" "$LAUNCH_AGENTS/$DEV_PLIST"
 
@@ -214,7 +215,7 @@ uninstall_plists() {
 
 start_prod() {
     ensure_log_dir
-    log_info "Starting production bridge (port 8765)..."
+    log_info "Starting production bridge (port $PROD_PORT)..."
 
     remove_legacy_services
 
@@ -228,7 +229,7 @@ start_prod() {
 
     sleep 1
     local health_url
-    if health_url="$(healthy_url_for_port 8765)"; then
+    if health_url="$(healthy_url_for_port "$PROD_PORT")"; then
         log_success "Production bridge running at ${health_url%/health}"
     else
         log_warn "Started but health check failed - check logs: bridge logs"
@@ -275,14 +276,14 @@ show_status() {
     echo "==================="
     echo ""
 
-    # apps/ios/Production (8765)
+    # iPhone/production gateway
     local health_url
-    if health_url="$(healthy_url_for_port 8765)"; then
+    if health_url="$(healthy_url_for_port "$PROD_PORT")"; then
         local health=$(curl -s "$health_url" 2>/dev/null)
-        echo -e "${GREEN}●${NC} :8765 apps/ios/Tailscale"
+        echo -e "${GREEN}●${NC} :$PROD_PORT apps/ios/Tailscale"
         echo "$health" | jq -r '"    Version: \(.version)  Host: \(.hostname)"' 2>/dev/null || echo "    Running"
     else
-        echo -e "${RED}○${NC} :8765 apps/ios/Tailscale - not running"
+        echo -e "${RED}○${NC} :$PROD_PORT apps/ios/Tailscale - not running"
     fi
 
     echo ""
@@ -370,7 +371,7 @@ add_dns() {
     log_success "DNS entry added: dev.usetalkie.com → 127.0.0.1"
     echo ""
     echo "  Ports:"
-    echo "    :8765 - apps/ios/Tailscale"
+    echo "    :$PROD_PORT - apps/ios/Tailscale"
     echo "    :8766 - Talkie macOS app"
     echo "    :8767 - localhost dev"
 }
@@ -399,7 +400,7 @@ show_help() {
     echo "Usage: bridge <command>"
     echo ""
     echo "Services:                          dev.usetalkie.com"
-    echo "  start        Production bridge   :8765 (Tailscale)"
+    echo "  start        Production bridge   :$PROD_PORT (Tailscale)"
     echo "  stop         Stop production"
     echo "  dev          Dev bridge          :8767 (local mode)"
     echo "  dev:stop     Stop dev"

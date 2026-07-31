@@ -795,7 +795,7 @@ private struct BridgeServerSection: View {
         switch status {
         case .stopped: return "Bridge is not running"
         case .starting: return "Starting bridge server..."
-        case .running: return "Listening on port 8765"
+        case .running: return "Listening on port \(TalkieNetworkPorts.gateway)"
         case .error: return "Bridge encountered an error"
         }
     }

@@ -184,13 +184,13 @@ struct DraftsScreen: View {
         isTextFieldFocused = true
     }
 
-    /// Badge showing extension API info (via TalkieServer on port 8765)
+    /// Badge showing extension API info via the Talkie gateway.
     @ViewBuilder
     private var extensionLinkBadge: some View {
         Menu {
             Text("Extension API via TalkieServer")
                 .font(.caption)
-            Text("ws://localhost:8765/extensions")
+            Text(TalkieNetworkEndpoints.gatewayWebSocket(path: "/extensions").absoluteString)
                 .font(.caption)
                 .foregroundColor(.secondary)
 
@@ -204,7 +204,10 @@ struct DraftsScreen: View {
 
             Button {
                 NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString("http://localhost:8765/extensions/status", forType: .string)
+                NSPasteboard.general.setString(
+                    TalkieNetworkEndpoints.gateway(path: "/extensions/status").absoluteString,
+                    forType: .string
+                )
             } label: {
                 Label("Copy Status URL", systemImage: "link")
             }
@@ -231,7 +234,7 @@ struct DraftsScreen: View {
     private func fetchAndCopyExtensionToken() {
         Task {
             do {
-                let url = URL(string: "http://localhost:8765/extensions/token")!
+                let url = TalkieNetworkEndpoints.gateway(path: "/extensions/token")
                 let (data, _) = try await URLSession.shared.data(from: url)
                 if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                    let token = json["token"] as? String {

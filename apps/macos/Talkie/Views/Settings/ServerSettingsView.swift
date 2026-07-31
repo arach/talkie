@@ -336,7 +336,7 @@ private struct ServerProcessSection: View {
         switch status {
         case .stopped: return "Server is not running"
         case .starting: return "Starting server..."
-        case .running: return "Port 8765 • Modules loaded"
+        case .running: return "Port \(TalkieNetworkPorts.gateway) • Modules loaded"
         case .error: return errorMessage ?? "Server encountered an error"
         }
     }

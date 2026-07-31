@@ -347,7 +347,7 @@ final class StartupCoordinator {
                 scheduleWorkflowControlPlaneIfNeeded()
             }
 
-            // Extension Server is now handled by TalkieServer (port 8765, /extensions WebSocket)
+            // Extension Server is now handled by TalkieServer's /extensions WebSocket.
             // See apps/macos/TalkieServer/src/extensions/
 
             // Ask malloc to return free pages after startup bursts.

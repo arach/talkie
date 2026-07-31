@@ -435,7 +435,7 @@ private struct HomeBridgeDebugCardView: View {
     }
 
     private var bridgeEndpoint: String {
-        let port = bridgeManager.qrData?.port ?? 8765
+        let port = bridgeManager.qrData?.port ?? TalkieNetworkPorts.gateway
         return "\(bridgeHost):\(port)"
     }
 
@@ -493,7 +493,9 @@ private struct HomeBridgeDebugCardView: View {
             developerStatusRow(
                 icon: "point.3.connected.trianglepath.dotted",
                 title: "Bridge",
-                value: bridgeManager.bridgeStatus == .running ? "localhost:8765" : bridgeManager.bridgeStatus.rawValue,
+                value: bridgeManager.bridgeStatus == .running
+                    ? TalkieNetworkEndpoints.gatewayDisplayAddress
+                    : bridgeManager.bridgeStatus.rawValue,
                 color: bridgeColor
             )
 
@@ -597,9 +599,7 @@ private struct HomeBridgeDebugCardView: View {
     }
 
     private func openBridgeHealth() {
-        if let url = URL(string: "http://localhost:8765/health") {
-            NSWorkspace.shared.open(url)
-        }
+        NSWorkspace.shared.open(TalkieNetworkEndpoints.gateway(path: "/health"))
     }
 }
 

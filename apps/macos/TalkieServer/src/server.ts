@@ -23,7 +23,7 @@
  * RUNNING:
  *   bun run src/server.ts --local        # Dev mode, port 8767
  *   bun run src/server.ts --nearby --allow-lan
- *                                       # Nearby bridge, port 8765 (LAN/Bonjour)
+ *                                       # Nearby bridge, port 19825 (LAN/Bonjour)
  *   bun run src/server.ts --local       # Also exposes /tmp/talkie-server.sock
  *
  * See ARCHITECTURE.md for full documentation.
@@ -52,6 +52,7 @@ import { decryptRequestBody, encryptResponse } from "./bridge/transport-encrypti
 import { startBonjourAdvertisement } from "./bonjour";
 import { log, clearLog } from "./log";
 import { PID_FILE, LOCAL_AUTH_TOKEN_FILE, ensureDirectories } from "./paths";
+import { resolveGatewayPort } from "./network";
 
 // ===== CLI Args =====
 
@@ -69,13 +70,8 @@ const UNIX_SOCKET = UNIX_SOCKET_OVERRIDE || (LOCAL_MODE || args.includes("--unix
   ? "/tmp/talkie-server.sock"
   : undefined);
 
-// Port configuration (8765 for both local and production - macOS app expects this)
-const DEFAULT_PORT = 8765;
-const portArgIndex = args.findIndex((a) => a === "--port" || a === "-p");
-const PORT =
-  portArgIndex !== -1 && args[portArgIndex + 1]
-    ? parseInt(args[portArgIndex + 1], 10)
-    : DEFAULT_PORT;
+// CLI override, then TALKIE_GATEWAY_PORT, then the Talkie-owned default.
+const PORT = resolveGatewayPort(args);
 const ADMIN_SHUTDOWN_PATH = "/admin/shutdown";
 const HANDOFF_TIMEOUT_MS = 5000;
 const HANDOFF_POLL_INTERVAL_MS = 100;

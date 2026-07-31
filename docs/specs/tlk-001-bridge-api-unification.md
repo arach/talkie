@@ -16,7 +16,7 @@ Move the `TalkieObject` model and read-only queries into `TalkieKit`. Make the A
 | Agent BridgeServer | `apps/macos/TalkieAgent/.../BridgeServer.swift` | HTTP :8767 | 5 routes (health, windows, screenshots) |
 | Agent UnifiedDatabase | `apps/macos/TalkieAgent/.../UnifiedDatabase.swift` | — | Has `LiveRecording` parallel struct, raw GRDB |
 | TalkieServer (Swift) | `apps/macos/Talkie/Services/TalkieServer.swift` | HTTP :8766 | In main app process, bridges Agent XPC |
-| TalkieServer (TS) | `apps/macos/TalkieServer/src/server.ts` | HTTP :8765 | Cloud gateway only |
+| TalkieServer (TS) | `apps/macos/TalkieServer/src/server.ts` | HTTP :19825 | Cloud gateway only |
 | CLI | `packages/npm/cli/src/` | Direct SQLite + WebSocket | Duplicates query logic, fictional WS ports |
 | Engine/Sync/Inference | XPC services | XPC only | No network ports |
 

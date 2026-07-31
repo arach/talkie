@@ -15,7 +15,7 @@ class OpenAIProvider: LLMProvider {
     let name = "OpenAI"
 
     // Gateway URL for GPT-5.x models
-    private let gatewayURL = "http://localhost:8765/inference"
+    private let gatewayURL = TalkieNetworkEndpoints.gateway(path: "/inference")
 
     // Gateway auth token file path
     private var gatewayTokenPath: String {
@@ -356,16 +356,12 @@ class OpenAIProvider: LLMProvider {
         model: String,
         options: GenerationOptions
     ) async throws -> String {
-        guard let url = URL(string: gatewayURL) else {
-            throw LLMError.configurationError("Invalid gateway URL")
-        }
-
         // Read auth token from file
         guard let authToken = readGatewayToken() else {
             throw LLMError.configurationError("Gateway auth token not found. Is TalkieServer running?")
         }
 
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: gatewayURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")

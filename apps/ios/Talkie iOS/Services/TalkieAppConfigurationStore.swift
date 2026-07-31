@@ -183,7 +183,7 @@ final class TalkieAppConfigurationStore {
         {
             let migratedBridge = TalkieAppConfiguration.Bridge.PairedMac(
                 hostname: legacyBridgeHostname,
-                port: legacyBridgePort,
+                port: TalkieNetworkPorts.migratedGatewayPort(legacyBridgePort),
                 pairedMacName: legacyPairedMacName,
                 serverPublicKey: legacyBridgeServerPublicKey,
                 privateKey: legacyBridgePrivateKey

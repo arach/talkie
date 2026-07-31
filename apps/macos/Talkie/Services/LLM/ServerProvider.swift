@@ -29,8 +29,8 @@ class ServerProvider: LLMProvider {
             .appendingPathComponent(".local-auth-token")
     }
 
-    init(port: Int = 8765, timeout: TimeInterval = 60.0) {
-        self.serverURL = URL(string: "http://localhost:\(port)")!
+    init(port: Int = TalkieNetworkPorts.gateway, timeout: TimeInterval = 60.0) {
+        self.serverURL = TalkieNetworkEndpoints.loopbackHTTP(port: port)
         self.timeout = timeout
     }
 
