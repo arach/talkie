@@ -376,7 +376,7 @@ describe("CodexTurnJobManager", () => {
     expect((await manager.snapshot(first.id))?.status).toBe("completed");
   });
 
-  test("resumes a retryable fresh task from its persisted task boundary", async () => {
+  test("retries fresh creation when app-server fails before accepting the first turn", async () => {
     const projectDirectory = mkdtempSync(path.join(tmpdir(), "talkie-codex-fresh-retry-"));
     let freshInvocations = 0;
     let resumedInvocations = 0;
@@ -398,28 +398,35 @@ describe("CodexTurnJobManager", () => {
       undefined,
       async (cwd, _text, _submissionId, onDisposition) => {
         freshInvocations += 1;
+        if (freshInvocations === 1) {
+          throw new CodexBridgeError("Codex app-server disconnected.", "app-server-unavailable");
+        }
         const task = taskSummary("task-created-before-failure", cwd);
-        onDisposition({ ok: true, phase: "created", task });
-        throw new CodexBridgeError("Codex app-server disconnected.", "app-server-unavailable");
+        onDisposition({
+          ok: true,
+          phase: "accepted",
+          task,
+          delivery: "started-turn",
+          turnId: "turn-after-retry",
+        });
+        return { ...completed("started-turn", "Recovered without a duplicate task"), task };
       },
     );
 
-    const first = await manager.startFresh(submission1, projectDirectory, "keep this task");
-    expect(first.taskId).toBe("task-created-before-failure");
-    await Bun.sleep(0);
-    await Bun.sleep(0);
-    expect((await manager.snapshot(first.id))?.retryable).toBe(true);
+    await expect(
+      manager.startFresh(submission1, projectDirectory, "keep this task"),
+    ).rejects.toMatchObject({ code: "app-server-unavailable" });
 
     const resumed = await manager.startFresh(submission1, projectDirectory, "keep this task");
-    expect(resumed.taskId).toBe(first.taskId);
+    expect(resumed.taskId).toBe("task-created-before-failure");
     await Bun.sleep(0);
     await Bun.sleep(0);
 
-    const completedJob = await manager.snapshot(first.id);
+    const completedJob = await manager.snapshot(resumed.id);
     expect(completedJob?.status).toBe("completed");
     expect(completedJob?.response).toBe("Recovered without a duplicate task");
-    expect(freshInvocations).toBe(1);
-    expect(resumedInvocations).toBe(1);
+    expect(freshInvocations).toBe(2);
+    expect(resumedInvocations).toBe(0);
   });
 
   test("restores an accepted fresh task after restart without creating another task", async () => {

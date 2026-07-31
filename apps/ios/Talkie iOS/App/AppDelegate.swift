@@ -55,6 +55,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         // phone-side inbox entries left by an earlier background window.
         Task { @MainActor in
             await WatchCodexDispatchCoordinator.shared.resumePendingDispatches()
+            await CodexLaneStore.shared.resumePendingTurns()
         }
 
         // One-time: lift the legacy plaintext OpenAI key into the Keychain so it
@@ -110,6 +111,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     func applicationDidBecomeActive(_ application: UIApplication) {
         Task { @MainActor in
             await WatchCodexDispatchCoordinator.shared.resumePendingDispatches()
+            await CodexLaneStore.shared.resumePendingTurns()
         }
     }
 
@@ -627,7 +629,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     }
 
     // Bump this version when changing subscription configuration to force recreation
-    private static let pushSubscriptionVersion = 4
+    private static let pushSubscriptionVersion = 5
 
     private func setupPushNotificationSubscription(database: CKDatabase, subscriptionID: String, zoneID: CKRecordZone.ID) {
         let versionKey = "reportPushSubscriptionVersion"
@@ -688,7 +690,9 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         notificationInfo.category = Self.agentReportCategoryID
         notificationInfo.shouldSendContentAvailable = true // Also trigger background fetch
         notificationInfo.shouldBadge = false
-        notificationInfo.desiredKeys = ["title", "body", "detail", "sessionId", "source", "kind"]
+        // CloudKit permits at most three desired keys. The title and body are
+        // supplied through localization arguments, and notification actions
+        // fetch the full record by ID, so no additional fields are required.
 
         subscription.notificationInfo = notificationInfo
         subscription.zoneID = zoneID
@@ -715,12 +719,19 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             return
         }
 
-        // Show notifications even when app is in foreground (for workflow completions)
-        completionHandler([.banner, .sound])
+        // The deck owns foreground completion state. Wake any durable Codex
+        // receipts so the existing lane/activity UI updates organically, and
+        // leave banners and sounds to iOS when Talkie is not in the foreground.
+        if notification.request.content.categoryIdentifier == Self.agentReportCategoryID {
+            Task { @MainActor in
+                await CodexLaneStore.shared.resumePendingTurns()
+            }
+        }
+        completionHandler([])
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
-        AppLogger.app.info("[Push] User tapped notification")
+        AppLogger.app.info("[Push] User tapped notification action: \(response.actionIdentifier)")
 
         let userInfo = response.notification.request.content.userInfo
 
@@ -751,7 +762,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                        record.recordType == Self.reportNotificationRecordType {
                         let sessionId = record["sessionId"] as? String ?? "unknown"
                         AppLogger.app.info("[Push] Opened report notification for session: \(sessionId)")
-                        if response.actionIdentifier == Self.hearAgentReportActionID {
+                        if response.actionIdentifier == Self.hearAgentReportActionID
+                            || response.actionIdentifier == UNNotificationDefaultActionIdentifier {
                             let spokenResponse = (record["detail"] as? String)
                                 ?? (record["body"] as? String)
                                 ?? "The Codex response is ready."

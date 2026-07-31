@@ -9,6 +9,7 @@
 
 import BackgroundTasks
 import Foundation
+import TalkieMobileKit
 import UIKit
 
 enum WatchCodexDispatchAction: String, Codable, Equatable {
@@ -71,14 +72,17 @@ struct WatchCodexIncomingDispatch: Codable, Identifiable, Equatable {
 struct WatchCodexIncomingDispatchStore {
     let directoryURL: URL
     let audioDirectoryURL: URL
+    private let onStaged: () -> Void
 
     init(
         directoryURL: URL,
         audioDirectoryURL: URL = URL.documentsDirectory
-            .appending(path: "WatchAudio", directoryHint: .isDirectory)
+            .appending(path: "WatchAudio", directoryHint: .isDirectory),
+        onStaged: @escaping () -> Void = {}
     ) {
         self.directoryURL = directoryURL
         self.audioDirectoryURL = audioDirectoryURL
+        self.onStaged = onStaged
     }
 
     func stage(audioURL: URL, metadata: [String: Any]) throws -> WatchCodexIncomingDispatch {
@@ -100,6 +104,7 @@ struct WatchCodexIncomingDispatchStore {
             if existing.audioFilename != audioURL.lastPathComponent {
                 try? FileManager.default.removeItem(at: audioURL)
             }
+            onStaged()
             return existing
         }
 
@@ -117,6 +122,7 @@ struct WatchCodexIncomingDispatchStore {
             to: manifestURL,
             options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
         )
+        onStaged()
         return incoming
     }
 
@@ -310,7 +316,7 @@ final class WatchCodexDispatchCoordinator {
     func preparePendingDispatchesForBackground() -> Bool {
         importIncomingDispatches()
         guard !pending.isEmpty else { return false }
-        scheduleBackgroundResume()
+        Self.scheduleBackgroundResume()
         return true
     }
 
@@ -419,7 +425,7 @@ final class WatchCodexDispatchCoordinator {
         }
 
         if !pending.isEmpty {
-            scheduleBackgroundResume()
+            Self.scheduleBackgroundResume()
         }
     }
 
@@ -565,11 +571,29 @@ final class WatchCodexDispatchCoordinator {
     ) async -> Bool {
         switch job.status {
         case "completed":
+            let response = job.response?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let detail = if let response, !response.isEmpty {
+                response
+            } else {
+                "Instruction delivered."
+            }
             sendUpdate(
                 for: record,
                 status: "completed",
-                detail: job.response ?? "Instruction delivered."
+                detail: detail
             )
+            if let response, !response.isEmpty {
+                let speech = await AIResponseSpeechRouter.shared.speak(
+                    response,
+                    memoId: record.id.uuidString,
+                    preview: response
+                )
+                AppLogger.ai.info(
+                    "Watch Codex narration route=\(speech.route.rawValue) "
+                        + "didSpeak=\(speech.didSpeak) failure=\(speech.failure ?? "none")"
+                )
+            }
             AppLogger.ai.info(
                 "Watch Codex dispatch completed action="
                     + "\((record.action ?? .continueTask).rawValue) anchor=\(record.anchorTaskID) "
@@ -670,13 +694,18 @@ final class WatchCodexDispatchCoordinator {
         }
     }
 
-    private func scheduleBackgroundResume() {
-        let request = BGAppRefreshTaskRequest(identifier: talkieApp.refreshTaskIdentifier)
+    nonisolated static func scheduleBackgroundResume() {
+        let request = BGAppRefreshTaskRequest(
+            identifier: TalkieMobileRuntimeIdentifiers.refreshTaskIdentifier
+        )
         request.earliestBeginDate = Date(timeIntervalSinceNow: 60)
         do {
             try BGTaskScheduler.shared.submit(request)
         } catch {
-            AppLogger.ai.debug("Watch Codex background resume was not scheduled: \(error.localizedDescription)")
+            TalkieLogger.debug(
+                .system,
+                "Watch Codex background resume was not scheduled: \(error.localizedDescription)"
+            )
         }
     }
 
