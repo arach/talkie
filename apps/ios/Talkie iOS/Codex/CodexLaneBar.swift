@@ -141,7 +141,7 @@ struct CodexLaneBar: View {
     private var captureTint: Color {
         switch store.phase {
         case .listening: return .red
-        case .speaking: return theme.colors.success
+        case .speaking: return theme.chrome.accent
         case .failed: return .orange
         default: return theme.colors.accent
         }

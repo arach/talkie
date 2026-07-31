@@ -397,45 +397,6 @@ final class CodexLaneStore: ObservableObject {
         return true
     }
 
-    /// Compatibility path for the existing deck while durable turn receipts
-    /// ship independently. The deck switches to `enterNewTaskMode` in the
-    /// follow-up experience PR, where task creation and the first turn become
-    /// one atomic host operation.
-    @discardableResult
-    func createTask(
-        in project: CodexProjectSummary,
-        creationID: UUID
-    ) async -> CodexTaskSummary? {
-        guard !isCreatingTask else { return nil }
-        creationFailure = nil
-        guard project.hostID == loadedHostID else {
-            creationFailure = CodexLaneFailure(
-                message: "That project belongs to another Mac.",
-                hint: "Reconnect to the Mac that owns it and try again."
-            )
-            return nil
-        }
-
-        isCreatingTask = true
-        defer { isCreatingTask = false }
-
-        do {
-            let task = try await bridge.codexCreateTask(
-                creationId: creationID,
-                cwd: project.cwd
-            )
-            retainRecentlyCreatedTask(task)
-            catalog = Self.mergingCatalog([task], with: catalog)
-            selectChannel(task)
-            creationFailure = nil
-            return task
-        } catch {
-            creationFailure = Self.describe(error)
-            AppLogger.ai.warning("Codex task creation failed: \(error.localizedDescription)")
-            return nil
-        }
-    }
-
     func clearCreationFailure() {
         creationFailure = nil
     }

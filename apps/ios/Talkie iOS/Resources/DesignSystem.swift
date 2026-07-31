@@ -488,6 +488,38 @@ private let scopeChrome = ChromeTokens(
     hairlineWidth: 0.5
 )
 
+// Porcelain — cool paper, navy recessed instrumentation, and one cobalt
+// signal. Edges are firmer than Scope so the blue-white cards remain legible
+// without relying on heavy shadows or a second highlight color.
+private let porcelainChrome: ChromeTokens = {
+    let signal = Color(hex: "2F63D8", darkHex: "78A6FF")
+    let ink = Color(hex: "162330", darkHex: "F2F6FC")
+    return ChromeTokens(
+        accent: signal,
+        accentTint: signal.opacity(0.09),
+        accentGlow: signal.opacity(0.18),
+        accentStrong: signal.opacity(0.38),
+        action: ink.opacity(0.66),
+        actionTint: ink.opacity(0.055),
+        panel: Color(hex: "142238", darkHex: "08111F"),
+        panelAlt: Color(hex: "1D304B", darkHex: "101D30"),
+        panelInk: Color(hex: "F3F7FC"),
+        panelInkFaint: Color(hex: "9DAFC4"),
+        panelAccent: Color(hex: "78A6FF"),
+        panelEdge: Color(hex: "78A6FF").opacity(0.24),
+        trace: Color(hex: "27466B", darkHex: "78A6FF"),
+        traceFaint: Color(hex: "27466B", darkHex: "78A6FF").opacity(0.10),
+        edgeStrong: ink.opacity(0.24),
+        edge: ink.opacity(0.15),
+        edgeFaint: ink.opacity(0.09),
+        edgeSubtle: ink.opacity(0.045),
+        glowRadius: 3,
+        chromeCorner: 7,
+        eyebrowLeader: "·",
+        hairlineWidth: 0.75
+    )
+}()
+
 // Mineral — cool anodized alloy, teal structural ink, and a single copper
 // signal. Panels remain recessed and dark enough to behave like readouts, but
 // edges and actions stay tonal so the theme never returns to hard black/white.
@@ -715,6 +747,7 @@ extension AppTheme {
     var chrome: ChromeTokens {
         switch self {
         case .scope:    return scopeChrome
+        case .porcelain: return porcelainChrome
         case .mineral:  return mineralChrome
         case .midnight: return midnightChrome
         case .tactical: return tacticalChrome

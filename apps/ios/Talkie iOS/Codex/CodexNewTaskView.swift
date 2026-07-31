@@ -4,7 +4,7 @@
 //
 //  THESIS: New-task creation is a short signal path, not a configuration form.
 //  OWN WORLD: Talkie's paper-and-instrument Command Deck, with one lit trace.
-//  STORY: Choose the project, create the task, then land ready to talk.
+//  STORY: Choose the project, enter NEW mode, then land ready to talk.
 //  FIRST VIEWPORT: The path, the reason for the choice, and lane projects fit before scrolling.
 //  FORM: Flat native rows, quiet metadata, one bottom action, and no lane mutation.
 //
@@ -149,12 +149,12 @@ struct CodexNewTaskView: View {
         stage = .task
 
         Task {
-            guard let task = await store.createTask(in: project, creationID: creationID) else {
+            guard store.enterNewTaskMode(in: project, submissionID: creationID) else {
                 stage = .project
                 return
             }
 
-            createdTaskID = task.id
+            createdTaskID = creationID.uuidString
             stage = .talk
             try? await Task.sleep(for: reduceMotion ? .milliseconds(260) : .milliseconds(680))
             dismiss()
@@ -220,8 +220,8 @@ private enum CodexTaskCreationStage: Int, CaseIterable {
     var progressDescription: String {
         switch self {
         case .project: "Choose a project. Task and talk are next."
-        case .task: "Project chosen. Creating the task."
-        case .talk: "Task created. Ready to talk."
+        case .task: "Project chosen. Preparing new task mode."
+        case .talk: "New task mode ready. Hold to talk."
         }
     }
 }
@@ -727,7 +727,7 @@ private struct CodexTaskCreateDock: View {
             .tint(theme.colors.accent)
             .disabled(stage != .project)
             .accessibilityLabel(buttonAccessibilityLabel)
-            .accessibilityHint("Creates and selects a new Codex task. Your lanes stay unchanged.")
+            .accessibilityHint("Selects new task mode. Codex creates the task with your first message.")
         }
         .padding(.horizontal, 18)
         .padding(.top, 8)
@@ -739,7 +739,7 @@ private struct CodexTaskCreateDock: View {
     private var buttonTitle: String {
         switch stage {
         case .project: "Create Task in \(project.name)"
-        case .task: "Creating in \(project.name)…"
+        case .task: "Preparing \(project.name)…"
         case .talk: "Ready to talk"
         }
     }
@@ -747,8 +747,8 @@ private struct CodexTaskCreateDock: View {
     private var buttonAccessibilityLabel: String {
         switch stage {
         case .project: "Create task in \(project.name)"
-        case .task: "Creating task in \(project.name)"
-        case .talk: "Task ready to talk"
+        case .task: "Preparing new task mode in \(project.name)"
+        case .talk: "New task mode ready to talk"
         }
     }
 }
