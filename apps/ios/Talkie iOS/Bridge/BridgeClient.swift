@@ -405,6 +405,30 @@ actor BridgeClient {
         return try JSONDecoder().decode(CodexTurnJobResponse.self, from: data).job
     }
 
+    /// Fetches bounded public history for one exact Codex task from the Mac.
+    func codexTaskHistory(taskId: String) async throws -> CodexChannelHistory {
+        var components = URLComponents()
+        components.path = "/codex/tasks/\(taskId)/history"
+        guard let path = components.string else { throw BridgeError.invalidResponse }
+        let data = try await get(path)
+        return try JSONDecoder().decode(CodexChannelHistory.self, from: data)
+    }
+
+    /// Fetches the host-rendered, read-only technical status document for one exact task.
+    func codexStatusDocument(taskId: String, jobId: String? = nil) async throws -> String {
+        var components = URLComponents()
+        components.path = "/codex/tasks/\(taskId)/status-document"
+        if let jobId = jobId?.trimmingCharacters(in: .whitespacesAndNewlines), !jobId.isEmpty {
+            components.queryItems = [URLQueryItem(name: "jobId", value: jobId)]
+        }
+        guard let path = components.string else { throw BridgeError.invalidResponse }
+        let data = try await get(path)
+        guard let document = String(data: data, encoding: .utf8) else {
+            throw BridgeError.invalidResponse
+        }
+        return document
+    }
+
     func companionActivateApp(
         processIdentifier: Int32,
         bundleIdentifier: String?

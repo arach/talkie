@@ -1078,6 +1078,23 @@ final class BridgeManager {
         return job
     }
 
+    func codexTaskHistory(taskId: String) async throws -> CodexChannelHistory {
+        try await requireConnectedBridge()
+        let history = try await client.codexTaskHistory(taskId: taskId)
+        lastSuccessfulContactAt = .now
+        updateActiveMacContactDate(.now)
+        return history
+    }
+
+    /// Loads the sealed HTML dossier rendered by the paired Mac.
+    func codexStatusDocument(taskId: String, jobId: String? = nil) async throws -> String {
+        try await requireConnectedBridge()
+        let document = try await client.codexStatusDocument(taskId: taskId, jobId: jobId)
+        lastSuccessfulContactAt = .now
+        updateActiveMacContactDate(.now)
+        return document
+    }
+
     func activateCompanionApp(_ app: CompanionAppSwitcherApp) async throws -> CompanionTriggerResponse {
         guard isPaired else {
             throw BridgeError.notConfigured

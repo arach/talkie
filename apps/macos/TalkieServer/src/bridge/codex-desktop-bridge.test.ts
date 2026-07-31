@@ -826,10 +826,16 @@ describe.serial("Codex task catalog", () => {
     const rollout = path.join(sessions, `rollout-${taskId}.jsonl`);
     writeFileSync(rollout, [
       { type: "event_msg", timestamp: "2026-07-28T10:00:00Z", payload: { type: "task_started", turn_id: "turn-1" } },
+      { type: "response_item", timestamp: "2026-07-28T10:00:00Z", payload: { type: "message", role: "user", content: [{ type: "input_text", text: "Please fix the host signal." }] } },
+      { type: "response_item", timestamp: "2026-07-28T10:00:00Z", payload: { type: "message", role: "user", content: [{ type: "input_text", text: "<environment_context>private metadata</environment_context>" }] } },
       { type: "response_item", payload: { type: "reasoning", summary: "private" } },
       { type: "event_msg", timestamp: "2026-07-28T10:00:01Z", payload: { type: "agent_reasoning", text: "private" } },
       { type: "event_msg", timestamp: "2026-07-28T10:00:02Z", payload: { type: "agent_message", phase: "commentary", message: "Tracing the host signal." } },
       { type: "event_msg", timestamp: "2026-07-28T10:00:03Z", payload: { type: "patch_apply_end", turn_id: "turn-1", success: true } },
+      { type: "event_msg", timestamp: "2026-07-28T10:00:04Z", payload: { type: "agent_message", phase: "final_answer", message: "The host signal is fixed." } },
+      { type: "event_msg", timestamp: "2026-07-28T10:00:05Z", payload: { type: "task_complete", turn_id: "turn-1", last_agent_message: "The host signal is fixed.", duration_ms: 5_000 } },
+      { type: "event_msg", timestamp: "2026-07-28T10:01:00Z", payload: { type: "task_started", turn_id: "turn-2" } },
+      { type: "event_msg", timestamp: "2026-07-28T10:01:01Z", payload: { type: "agent_message", phase: "commentary", message: "Verifying the phone." } },
     ].map(JSON.stringify).join("\n") + "\n");
 
     const database = new Database(path.join(fixtureHome, "state_5.sqlite"), { create: true });
@@ -841,22 +847,43 @@ describe.serial("Codex task catalog", () => {
     expect(readTurnActivity(rollout)).toEqual({
       ok: true,
       active: true,
-      turnId: "turn-1",
+      turnId: "turn-2",
       updates: [
         {
-          id: "2026-07-28T10:00:02Z-1",
+          id: "2026-07-28T10:01:01Z-1",
           kind: "commentary",
-          text: "Tracing the host signal.",
-          timestamp: "2026-07-28T10:00:02Z",
+          text: "Verifying the phone.",
+          timestamp: "2026-07-28T10:01:01Z",
         },
+      ],
+      history: [
         {
-          id: "2026-07-28T10:00:03Z-2",
-          kind: "tool",
-          text: "PATCH APPLIED",
-          timestamp: "2026-07-28T10:00:03Z",
+          id: "turn-1",
+          status: "completed",
+          startedAt: "2026-07-28T10:00:00Z",
+          completedAt: "2026-07-28T10:00:05Z",
+          durationMs: 5_000,
+          instructions: ["Please fix the host signal."],
+          updates: [
+            {
+              id: "2026-07-28T10:00:02Z-1",
+              kind: "commentary",
+              text: "Tracing the host signal.",
+              timestamp: "2026-07-28T10:00:02Z",
+            },
+            {
+              id: "2026-07-28T10:00:03Z-2",
+              kind: "tool",
+              text: "PATCH APPLIED",
+              timestamp: "2026-07-28T10:00:03Z",
+            },
+          ],
+          response: "The host signal is fixed.",
         },
       ],
     });
+    expect(JSON.stringify(readTurnActivity(rollout))).not.toContain("private");
+    expect(JSON.stringify(readTurnActivity(rollout))).not.toContain("environment_context");
   });
 });
 
