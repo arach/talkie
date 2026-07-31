@@ -24,6 +24,7 @@ final class InlineDictationController: NSObject {
     var onStateChange: ((State) -> Void)?
     var onTranscript: ((String) -> Void)?
     var onError: ((String) -> Void)?
+    var onAudioLevel: ((Float) -> Void)?
 
     private var state: State = .idle {
         didSet {
@@ -40,6 +41,7 @@ final class InlineDictationController: NSObject {
     private var recordingURL: URL?
     private var activeStartToken: UUID?
     private var activeTranscriptionToken: UUID?
+    private var meteringTask: Task<Void, Never>?
 
     func start() async {
         guard state == .idle else { return }
@@ -65,6 +67,7 @@ final class InlineDictationController: NSObject {
 
             let outputURL = makeRecordingURL()
             let recorder = try AVAudioRecorder(url: outputURL, settings: recorderSettings)
+            recorder.isMeteringEnabled = true
             recorder.prepareToRecord()
 
             guard recorder.record() else {
@@ -84,8 +87,10 @@ final class InlineDictationController: NSObject {
             self.recorder = recorder
             self.recordingURL = outputURL
             state = .recording
+            startMetering()
         } catch {
             activeStartToken = nil
+            stopMetering()
             cleanupRecording(discardFile: true)
             state = .idle
             onError?(error.localizedDescription)
@@ -101,6 +106,7 @@ final class InlineDictationController: NSObject {
         }
 
         let recordedDuration = recorder.currentTime
+        stopMetering()
         recorder.stop()
         self.recorder = nil
 
@@ -151,11 +157,42 @@ final class InlineDictationController: NSObject {
     func cancel() {
         activeStartToken = nil
         activeTranscriptionToken = nil
+        stopMetering()
         recorder?.stop()
         recorder = nil
         deactivateAudioSession()
         cleanupRecording(discardFile: true)
         state = .idle
+    }
+
+    private func startMetering() {
+        meteringTask?.cancel()
+        meteringTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                guard let self,
+                      self.state == .recording,
+                      let recorder = self.recorder else { return }
+
+                recorder.updateMeters()
+                self.onAudioLevel?(
+                    Self.normalizedAudioLevel(from: recorder.averagePower(forChannel: 0))
+                )
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+        }
+    }
+
+    private func stopMetering() {
+        meteringTask?.cancel()
+        meteringTask = nil
+        onAudioLevel?(0)
+    }
+
+    private static func normalizedAudioLevel(from decibels: Float) -> Float {
+        let silenceFloor: Float = -48
+        guard decibels.isFinite else { return 0 }
+        let linearLevel = min(max((decibels - silenceFloor) / -silenceFloor, 0), 1)
+        return pow(linearLevel, 1.6)
     }
 
     private var recorderSettings: [String: Any] {
