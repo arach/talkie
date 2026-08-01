@@ -39,6 +39,7 @@ struct DeckMirrorNext: View {
     @State private var showingCodexDeck = true
     @State private var showingDeckSurfacePicker = false
     @State private var showingPairedMacSwitcher = false
+    @State private var showingScreenPreview = false
     @State private var switchingPairedMacID: String?
     @State private var isTrackpadInteracting = false
     @State private var trackpadErrorMessage: String?
@@ -194,6 +195,9 @@ struct DeckMirrorNext: View {
                     showingCodexDeck = false
                 }
             )
+        }
+        .fullScreenCover(isPresented: $showingScreenPreview) {
+            CompanionScreenPreviewView()
         }
     }
 
@@ -937,6 +941,7 @@ struct DeckMirrorNext: View {
     @ViewBuilder
     private func tileView(_ tile: DeckTile, index: Int) -> some View {
         let isImageShareTile = tile.slotID == "mac-paste-image"
+        let isScreenPreviewTile = tile.slotID == "mac-windows"
         let isFiring = deck.firingSlotID == tile.slotID
         let isEmpty = tile.slotID == nil
         let triggerResult = triggerResult(for: tile)
@@ -958,6 +963,20 @@ struct DeckMirrorNext: View {
             .disabled(deck.firingSlotID != nil)
             .accessibilityLabel("Share image to Mac")
             .accessibilityHint("Choose a photo or screenshot to send to the Mac")
+        } else if isScreenPreviewTile, !isEmpty {
+            Button(action: { showingScreenPreview = true }) {
+                tileSurface(
+                    tile,
+                    index: index,
+                    isEmpty: false,
+                    isActive: false,
+                    activeColor: theme.currentTheme.chrome.accent
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(deck.firingSlotID != nil)
+            .accessibilityLabel("Preview Mac screen")
+            .accessibilityHint("Shows the current main display from the paired Mac")
         } else {
             Button(action: {
                 guard let slot = tile.slotID else { return }

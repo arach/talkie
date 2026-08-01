@@ -386,7 +386,7 @@ private enum DeckLegacyDisplayInfo {
         case "talkie-agent": return Display(label: "Pi", icon: "circle.grid.cross", hint: nil)
         case "talkie-ssh": return Display(label: "Shell", icon: "terminal", hint: nil)
         case "mac-sessions": return Display(label: "Workflow", icon: "wand.and.stars", hint: "Mac")
-        case "mac-windows": return Display(label: "Desktop", icon: "display", hint: "Mac")
+        case "mac-windows": return Display(label: "Preview", icon: "display", hint: "Mac")
         case "talkie-keyboard": return Display(label: "Screen", icon: "record.circle", hint: nil)
         case "talkie-memos": return Display(label: "Memos", icon: "waveform", hint: nil)
         case "talkie-command": return Display(label: "Command", icon: "command", hint: nil)

@@ -249,30 +249,17 @@ enum AgentRoutes {
             await dispatchDictationToggle(shortcutId: shortcutId, connection: connection, context: context)
 
         case "mac-windows":
-            guard let appDelegate = await MainActor.run(body: {
-                AppDelegate.current
-            }) else {
-                BridgeResponse.sendError(
-                    connection,
-                    code: .serviceUnavailable,
-                    message: "TalkieAgent capture owner is not ready",
-                    context: context
-                )
-                return
-            }
+            log.info("Companion mac-windows legacy trigger acknowledged without opening capture UI")
             BridgeResponse.sendJSON(
                 connection,
                 data: CompanionTriggerResponse(
                     ok: true,
                     handledShortcutId: shortcutId,
-                    message: "Screenshot flow started",
+                    message: "Screen preview opens on the companion device",
                     error: nil
                 ),
                 context: context
             )
-            Task { @MainActor in
-                await appDelegate.handleCompanionScreenshotShortcut()
-            }
 
         case "talkie-keyboard":
             guard let appDelegate = await MainActor.run(body: {

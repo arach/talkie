@@ -8,12 +8,15 @@
 
 import Foundation
 import Observation
+import TalkieMobileKit
 import UIKit
 
 @MainActor
 @Observable
 final class CompanionScreenStream {
     static let shared = CompanionScreenStream()
+
+    private let log = Log(.system)
 
     var latestFrame: UIImage?
     var latestFrameAt: Date?
@@ -33,7 +36,12 @@ final class CompanionScreenStream {
     private init() {}
 
     func start(fps: Int = 2, maxDimension: Int = 1400, quality: Double = 0.6) {
-        guard receiveTask == nil else { return }
+        guard receiveTask == nil else {
+            log.debug("Screen preview start ignored because a stream is already active")
+            return
+        }
+
+        log.info("Starting companion screen preview at \(fps) fps, max dimension \(maxDimension)")
 
         latestFrame = nil
         latestFrameAt = nil
@@ -48,6 +56,7 @@ final class CompanionScreenStream {
     }
 
     func stop() {
+        log.info("Stopping companion screen preview after \(frameCount) frames")
         receiveTask?.cancel()
         receiveTask = nil
 
@@ -72,6 +81,7 @@ final class CompanionScreenStream {
             }
 
             guard bridgeManager.status == .connected else {
+                log.warning("Screen preview could not connect to the paired Mac")
                 throw BridgeError.connectionFailed
             }
 
@@ -81,6 +91,7 @@ final class CompanionScreenStream {
                 quality: quality
             )
             streamEncrypted = await bridgeManager.client.streamsAreEncrypted
+            log.info("Opening companion screen stream; encrypted=\(streamEncrypted)")
 
             let task = URLSession.shared.webSocketTask(with: request)
             webSocketTask = task
@@ -92,9 +103,11 @@ final class CompanionScreenStream {
                 await handle(message)
             }
         } catch is CancellationError {
+            log.debug("Companion screen preview cancelled")
             return
         } catch {
             if !Task.isCancelled {
+                log.error("Companion screen preview failed: \(error.localizedDescription)")
                 errorMessage = error.localizedDescription
             }
         }
@@ -133,6 +146,7 @@ final class CompanionScreenStream {
             appliedFPS = envelope.fps ?? appliedFPS
             isConnecting = false
             isStreaming = true
+            log.info("Companion screen stream ready at \(appliedFPS) fps")
 
         case "screen:config:applied":
             appliedFPS = envelope.fps ?? appliedFPS
@@ -147,6 +161,9 @@ final class CompanionScreenStream {
             latestFrame = image
             latestFrameAt = envelope.capturedAt.flatMap(Self.iso8601Formatter.date(from:))
             frameCount += 1
+            if frameCount == 1 {
+                log.info("Received first companion screen frame: \(image.size.width)x\(image.size.height)")
+            }
             isConnecting = false
             isStreaming = true
             errorMessage = nil
@@ -154,6 +171,7 @@ final class CompanionScreenStream {
         case "screen:error":
             errorMessage = envelope.error ?? "Screen preview unavailable"
             isConnecting = false
+            log.warning("Companion screen stream reported: \(errorMessage ?? "unknown error")")
 
         default:
             break
