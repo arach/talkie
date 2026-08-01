@@ -20,6 +20,8 @@ final class WalkieFX {
     private(set) var voicePlaybackProgress: Double = 0
     private(set) var voicePlaybackDuration: TimeInterval = 0
     private(set) var voiceWaveform: [Double] = []
+    private(set) var voicePlaybackTranscript: String = ""
+    private(set) var voicePlaybackTitle: String?
 
     private let sampleRate: Double = 44100
     private let engine = AVAudioEngine()
@@ -103,8 +105,16 @@ final class WalkieFX {
     /// duration while this player owns progress, pause, resume, and completion.
     /// Falls back to plain `AudioPlayerManager` playback if anything fails.
     @discardableResult
-    func playVoiceAudio(data: Data, playbackRate: Float = 1.0) async -> TimeInterval {
+    func playVoiceAudio(
+        data: Data,
+        playbackRate: Float = 1.0,
+        transcript: String = "",
+        title: String? = nil
+    ) async -> TimeInterval {
         voiceVarispeed.rate = playbackRate > 0 ? playbackRate : 1.0
+        voicePlaybackTranscript = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        voicePlaybackTitle = normalizedTitle?.isEmpty == false ? normalizedTitle : nil
         AppLogger.ai.info("WalkieFX voice requested bytes=\(data.count) rate=\(voiceVarispeed.rate)")
 
         guard ensureRunning() else {
@@ -385,6 +395,8 @@ final class WalkieFX {
         voicePlaybackDuration = 0
         voicePlaybackElapsed = 0
         voicePlaybackStartedAt = nil
+        voicePlaybackTranscript = ""
+        voicePlaybackTitle = nil
         isUsingFallbackVoicePlayback = false
         voicePlayer.stop()
         player.stop()
@@ -446,6 +458,8 @@ final class WalkieFX {
         voicePlaybackDuration = 0
         voicePlaybackElapsed = 0
         voicePlaybackStartedAt = nil
+        voicePlaybackTranscript = ""
+        voicePlaybackTitle = nil
         voicePlayer.stop()
         fallbackPlayer.stopPlayback()
         clearVoicePlaybackFile()
