@@ -248,6 +248,83 @@ enum AgentRoutes {
         case "talkie-dictate":
             await dispatchDictationToggle(shortcutId: shortcutId, connection: connection, context: context)
 
+        case "mac-windows":
+            guard let appDelegate = await MainActor.run(body: {
+                AppDelegate.current
+            }) else {
+                BridgeResponse.sendError(
+                    connection,
+                    code: .serviceUnavailable,
+                    message: "TalkieAgent capture owner is not ready",
+                    context: context
+                )
+                return
+            }
+            BridgeResponse.sendJSON(
+                connection,
+                data: CompanionTriggerResponse(
+                    ok: true,
+                    handledShortcutId: shortcutId,
+                    message: "Screenshot flow started",
+                    error: nil
+                ),
+                context: context
+            )
+            Task { @MainActor in
+                await appDelegate.handleCompanionScreenshotShortcut()
+            }
+
+        case "talkie-keyboard":
+            guard let appDelegate = await MainActor.run(body: {
+                AppDelegate.current
+            }) else {
+                BridgeResponse.sendError(
+                    connection,
+                    code: .serviceUnavailable,
+                    message: "TalkieAgent capture owner is not ready",
+                    context: context
+                )
+                return
+            }
+            BridgeResponse.sendJSON(
+                connection,
+                data: CompanionTriggerResponse(
+                    ok: true,
+                    handledShortcutId: shortcutId,
+                    message: "Screen recording flow started",
+                    error: nil
+                ),
+                context: context
+            )
+            Task { @MainActor in
+                await appDelegate.handleCompanionScreenRecordingShortcut()
+            }
+
+        case "talkie-recent":
+            let scheme = TalkieEnvironment.current.talkieURLScheme
+            guard let url = URL(string: "\(scheme)://agent/recent") else {
+                BridgeResponse.sendError(
+                    connection,
+                    code: .internalError,
+                    message: "Could not create the Talkie Recent URL",
+                    context: context
+                )
+                return
+            }
+            _ = await MainActor.run {
+                TalkieAppOpener.open(url)
+            }
+            BridgeResponse.sendJSON(
+                connection,
+                data: CompanionTriggerResponse(
+                    ok: true,
+                    handledShortcutId: shortcutId,
+                    message: "Recent activity opened",
+                    error: nil
+                ),
+                context: context
+            )
+
         default:
             BridgeResponse.sendError(
                 connection,
