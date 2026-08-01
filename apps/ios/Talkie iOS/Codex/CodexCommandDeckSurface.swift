@@ -29,6 +29,9 @@ struct CodexCommandDeckSurface: View {
     @State private var showingNewTask = false
     @State private var showingHistory = false
     @State private var showingReadoutHistory = false
+    @State private var showingPlaybackTranscript = false
+    @State private var playbackTranscriptTitle: String?
+    @State private var playbackTranscriptText = ""
     @State private var selectedResponseTurn: CodexTurnRecord?
     @State private var showingTaskDetails = false
     @State private var copiedResponse = false
@@ -90,6 +93,14 @@ struct CodexCommandDeckSurface: View {
         .sheet(isPresented: $showingReadoutHistory) {
             CodexReadoutHistorySheet()
         }
+        .sheet(isPresented: $showingPlaybackTranscript) {
+            VoicePlaybackTranscriptSheet(
+                title: playbackTranscriptTitle,
+                transcript: playbackTranscriptText
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
         .sheet(item: $selectedResponseTurn) { turn in
             CodexResponseSheet(turn: turn)
         }
@@ -137,6 +148,23 @@ struct CodexCommandDeckSurface: View {
                 )
             }
 
+            Button(action: showPlaybackTranscript) {
+                VStack(spacing: 2) {
+                    Image(systemName: "text.alignleft")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("TEXT")
+                        .font(.system(size: 7, weight: .bold, design: .monospaced))
+                        .tracking(0.7)
+                }
+                .frame(width: 44, height: 44)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(theme.chrome.accent)
+            .disabled(voicePlayback.voicePlaybackTranscript.isEmpty)
+            .accessibilityLabel("Show playback transcript")
+            .accessibilityHint("Shows the full text currently being narrated")
+
             Button(action: store.interruptNarration) {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .semibold))
@@ -176,6 +204,15 @@ struct CodexCommandDeckSurface: View {
     private func skipVoicePlayback(by interval: TimeInterval) {
         voicePlayback.skipVoicePlayback(by: interval)
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
+    private func showPlaybackTranscript() {
+        let transcript = voicePlayback.voicePlaybackTranscript
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !transcript.isEmpty else { return }
+        playbackTranscriptTitle = voicePlayback.voicePlaybackTitle
+        playbackTranscriptText = transcript
+        showingPlaybackTranscript = true
     }
 
     private var keybed: some View {

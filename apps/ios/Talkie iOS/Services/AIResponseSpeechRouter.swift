@@ -60,7 +60,9 @@ final class AIResponseSpeechRouter {
 
                 let speechDuration = await WalkieFX.shared.playVoiceAudio(
                     data: audioData,
-                    playbackRate: playbackRate
+                    playbackRate: playbackRate,
+                    transcript: text,
+                    title: preview
                 )
 
                 AppLogger.ai.info("AI speech phone scheduled duration=\(speechDuration)")
