@@ -142,6 +142,45 @@ launchctl bootout "gui/$UID" "$HOME/Library/LaunchAgents/com.user.tmp-janitor.pl
 launchctl bootstrap "gui/$UID" "$HOME/Library/LaunchAgents/com.user.tmp-janitor.plist"
 ```
 
+### Disk hygiene: investigate, then act
+
+Agents drive builds and tests on this machine, so agents own the forensic trail.
+Caution about deleting other projects' work is correct. Skipping investigation is
+not.
+
+When asked to free disk (or after a large parallel test run):
+
+1. **Investigate** — inventory sizes, mtimes, and ownership signals before deleting.
+2. **Classify** each candidate: this-project / other-project / unknown / in-use.
+3. **Act** only on strong evidence. Leave unknowns alone and list them.
+4. **Delete with `rm -rf`**, never `mv` to Trash (Trash does not free space until emptied).
+
+**High-signal locations**
+
+| Path | What it is | Typical owner signal |
+|------|------------|----------------------|
+| `~/Library/Developer/XCTestDevices/` | Parallel-test simulator clones (often multi‑GB each) | Installed app bundle IDs (`to.talkie.app`, UITests runner), parent sim name, mtime vs recent `xcodebuild test` |
+| `~/Library/Caches/codex-builds/` | Stable/purpose DerivedData for agent builds | Directory name (`talkie-ios-talkie`, purpose-specific); only drop caches you finished and nothing is using |
+| `~/.codex/worktrees/` | Codex worktrees | `git remote` / branch; only remove finished Talkie worktrees you can prove abandoned |
+| `~/Library/Developer/Xcode/DerivedData/` | Xcode default DerivedData | Prefer thinning finished project folders; do not mass-wipe active builds |
+| `~/Library/Developer/Xcode/iOS DeviceSupport/` | On-device debug symbols | Keep unless explicitly told to prune old devices |
+
+**XCTestDevices (common failure mode)**
+
+Talkie test schemes set `parallelizable = YES`. Parallel `xcodebuild test` clones
+the destination sim into `XCTestDevices` and often leaves the clones behind.
+Clones are not labeled with a session id; attribute them by installed apps,
+destination name (e.g. iPhone 17 Pro), and timing. Prefer
+`-parallel-testing-enabled NO` for one-off agent test runs when parallel speed
+is not required. After tests finish, prune leftover clones you can attribute to
+Talkie and that are not in use.
+
+**Do not**
+
+- Delete another project's worktrees, builds, or clearly other-owned clones.
+- Touch physical DeviceSupport unless the operator asked.
+- Treat "unclear session ownership" as a reason to skip the investigation table.
+
 ---
 
 ## Video Clip Context
