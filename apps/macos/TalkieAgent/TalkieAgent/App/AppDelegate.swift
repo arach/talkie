@@ -12,6 +12,8 @@ private let log = Log(.system)
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate, NSPopoverDelegate, @preconcurrency UNUserNotificationCenterDelegate {
+    private(set) static weak var current: AppDelegate?
+
     private var statusItem: NSStatusItem!
     private var agentStatusMenu: NSMenu?
     private var agentMenuPopover: NSPopover?
@@ -203,6 +205,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        Self.current = self
         guard claimLaunchOwnership() else { return }
 
         // Register brand fonts bundled in TalkieKit so JetBrains Mono resolves
@@ -2155,6 +2158,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
            previousApp.bundleIdentifier != Bundle.main.bundleIdentifier {
             previousApp.activate()
         }
+    }
+
+    func handleCompanionScreenshotShortcut() async {
+        await handleAgentCaptureChord(initialMode: .screenshot)
+    }
+
+    func handleCompanionScreenRecordingShortcut() async {
+        await handleAgentCaptureChord(initialMode: .video)
     }
 
     private func handleAgentDirectScreenshot(mode: String) async {
