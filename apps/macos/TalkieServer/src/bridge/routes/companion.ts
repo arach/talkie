@@ -682,7 +682,7 @@ function displayInfoForSlot(slotID: string): { label: string; icon: string; hint
     case "talkie-agent": return { label: "Pi", icon: "circle.grid.cross" };
     case "talkie-ssh": return { label: "Shell", icon: "terminal" };
     case "mac-sessions": return { label: "Workflow", icon: "wand.and.stars", hint: "Mac" };
-    case "mac-windows": return { label: "Desktop", icon: "display", hint: "Mac" };
+    case "mac-windows": return { label: "Preview", icon: "display", hint: "Mac" };
     case "talkie-keyboard": return { label: "Screen", icon: "record.circle" };
     case "talkie-memos": return { label: "Memos", icon: "waveform" };
     case "talkie-command": return { label: "Command", icon: "command" };
