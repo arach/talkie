@@ -9,9 +9,9 @@ type StatusMode = "rdy" | "mic" | "run" | "play" | "err";
 type Variant = "needle" | "carriage";
 
 const OUTPUTS: { key: OutputMode; label: string }[] = [
-  { key: "phone", label: "Phone" },
-  { key: "watch", label: "Watch" },
   { key: "silent", label: "Silent" },
+  { key: "watch", label: "Watch" },
+  { key: "phone", label: "Phone" },
 ];
 
 const STATUSES: { key: StatusMode; label: string }[] = [
@@ -31,17 +31,17 @@ const VARIANTS: {
 }[] = [
   {
     key: "needle",
-    name: "A1 · Needle Ports",
-    thesis: "A quieter, more exact version of Grok A. The needle makes contact with one enlarged port; the other stops remain visible but recede.",
-    selector: "Long needle · three icon ports · selected port carries the brass",
-    status: "Single LED capsule · code plus five stepped level bars",
+    name: "B1 · Twin Core",
+    thesis: "One smoked-glass core gives both keys a shared center of gravity. The route moves into the center at a useful size; the crown keeps all three destinations visible.",
+    selector: "Active route in the glass core · three etched crown stops · fine cobalt needle",
+    status: "Matching glass core · large code · restrained five-step signal",
   },
   {
     key: "carriage",
-    name: "A2 · Detent Carriage",
-    thesis: "The pointer ends in a small carriage that cups the selected output. More of the limited 60pt face is spent on destination, less on knob.",
-    selector: "Forked carriage · open detent rail · smaller fixed hub",
-    status: "Split LED lens · code held left · motion isolated right",
+    name: "B2 · Crown Rail",
+    thesis: "The same paired cores, with a more expressive selector rail and a slightly larger status eye. It feels more like a precision instrument without adding another layer of chrome.",
+    selector: "Open crown rail · illuminated terminal · route repeated in the core",
+    status: "Expanded status eye · code above · live trace below",
   },
 ];
 
@@ -52,21 +52,21 @@ const OUTPUT_ANGLE: Record<OutputMode, number> = {
 };
 
 export function DetentHubStudy() {
-  const [output, setOutput] = useState<OutputMode>("phone");
+  const [output, setOutput] = useState<OutputMode>("watch");
   const [status, setStatus] = useState<StatusMode>("mic");
 
   return (
-    <div className={styles.study} data-theme="scope">
+    <div className={styles.study}>
       <header className={styles.brief}>
         <p className={styles.lede}>
-          Two permutations of <strong>Grok A · Detent Hub</strong>. Both keep
-          one round 60pt instrument seated inside the shared keytop, three
-          discrete stops, and one moving indicator. The comparison changes
-          where visual weight lands—not the interaction model or the Scope
-          palette.
+          A higher-fidelity pass on <strong>Grok A · Detent Hub</strong>. The
+          first attempt made the mechanism visible; this pass makes the pair
+          feel authored. One shared glass core, quieter crown geometry, and a
+          porcelain-blue material stack replace the nested circles and tiny
+          status capsule.
         </p>
         <div className={styles.invariants} aria-label="Study invariants">
-          <Metric value="60pt" label="instrument" />
+          <Metric value="64pt" label="seated core" />
           <Metric value="3" label="detents" />
           <Metric value="44pt" label="minimum target" />
           <Metric value="0" label="green states" />
@@ -111,8 +111,8 @@ export function DetentHubStudy() {
             <h2>Judge the instruments at the size that matters.</h2>
           </div>
           <p>
-            The enlarged views explain the mechanism. This strip decides
-            whether it survives beside ordinary keys.
+            The enlarged views explain the material. This strip decides
+            whether route and status stay legible beside ordinary keys.
           </p>
         </div>
 
@@ -124,7 +124,7 @@ export function DetentHubStudy() {
                 <OutputDial
                   variant={variant.key}
                   output={output}
-                  size={60}
+                  size={64}
                   onCycle={() => setOutput(nextOutput(output))}
                 />
               </DeckKey>
@@ -134,7 +134,7 @@ export function DetentHubStudy() {
                 <StatusDial
                   variant={variant.key}
                   status={status}
-                  size={60}
+                  size={64}
                   onCycle={() => setStatus(nextStatus(status))}
                 />
               </DeckKey>
@@ -146,13 +146,14 @@ export function DetentHubStudy() {
       <footer className={styles.readout}>
         <div>
           <span className={styles.sectionKicker}>Read</span>
-          <strong>A2 carriage + A1 capsule</strong>
+          <strong>B1 Twin Core</strong>
         </div>
         <p>
-          The carriage makes the selected destination fastest to parse. The
-          simpler capsule keeps status from becoming a second selector. Seat
-          both inside the shared keytop; that synthesis is the strongest next
-          Swift pass.
+          The route belongs in the center, not only at the rim. Matching dark
+          cores make 01 and 04 read as one premium instrument family, while the
+          quiet porcelain seat keeps them inside the deck rather than floating
+          above it. B2 is the expressive alternate; B1 is the cleaner Swift
+          target.
         </p>
       </footer>
     </div>
@@ -177,7 +178,7 @@ function VariantPanel({
       <div className={styles.variantHeader}>
         <div>
           <span className={styles.variantName}>{variant.name}</span>
-          <h2>{variant.key === "needle" ? "Contact, then light." : "Carry the selection."}</h2>
+          <h2>{variant.key === "needle" ? "One pair. Two signals." : "Let the crown breathe."}</h2>
         </div>
         <span className={styles.variantCode}>GROK A / {variant.key === "needle" ? "01" : "02"}</span>
       </div>
@@ -189,7 +190,7 @@ function VariantPanel({
           <OutputDial
             variant={variant.key}
             output={output}
-            size={148}
+            size={156}
             onCycle={onCycleOutput}
           />
           <StateCaption value={output.toUpperCase()} detail={outputDetail(output)} />
@@ -201,7 +202,7 @@ function VariantPanel({
           <StatusDial
             variant={variant.key}
             status={status}
-            size={148}
+            size={156}
             onCycle={onCycleStatus}
           />
           <StateCaption value={status.toUpperCase()} detail={statusDetail(status)} />
@@ -254,7 +255,6 @@ function OutputDial({
       onClick={onCycle}
       aria-label={`${output} response output. Tap to select the next output.`}
     >
-      <span className={styles.instrumentIndex}>01</span>
       <span className={styles.detentTrack} aria-hidden />
       {OUTPUTS.map((item) => (
         <span
@@ -270,7 +270,9 @@ function OutputDial({
         {variant === "carriage" ? <span className={styles.carriageShoe} /> : null}
       </span>
       <span className={styles.hub} aria-hidden>
-        <span />
+        <span className={`${styles.hubIcon} ${styles[`hubIcon_${output}`]}`}>
+          <OutputIcon mode={output} />
+        </span>
       </span>
     </button>
   );
@@ -300,7 +302,6 @@ function StatusDial({
       onClick={onCycle}
       aria-label={`${status} status. Tap to show the next status.`}
     >
-      <span className={styles.instrumentIndex}>04</span>
       <span className={styles.statusBezel} aria-hidden>
         <span className={styles.statusCode}>{status.toUpperCase()}</span>
         {variant === "needle" ? (

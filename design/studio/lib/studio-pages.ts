@@ -639,6 +639,16 @@ export const STUDIO_PAGES: StudioPage[] = [
     blurb: "Alternate composition — one display, one lane scale, one keyboard.",
   },
   {
+    href: "/ios-deck-futures",
+    label: "Deck · Futures",
+    bucket: "surfaces",
+    platform: "iphone",
+    family: "deck",
+    status: "concept",
+    swift: ["apps/ios/Talkie iOS/Codex/CodexCommandDeckSurface.swift"],
+    blurb: "Kimi × Grok × Opus review board — 10 deck improvements, 5 voice-first iOS ideas, and 5 iPad deck directions.",
+  },
+  {
     href: "/ios-memo-connected",
     label: "Memo · Connected",
     bucket: "surfaces",

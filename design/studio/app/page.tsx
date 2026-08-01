@@ -247,6 +247,14 @@ const STUDIES: Study[] = [
       "TTS playback surface — instrument-style transport, voice / rate / pitch controls, source picker, multi-item queue. Idle / playing / queue states. Audio-output counterpart to Camera.",
   },
   {
+    slug: "ios-deck-futures",
+    name: "Deck Futures",
+    kind: "Review board",
+    platform: "iOS",
+    blurb:
+      "Kimi × Grok × Opus synthesis — 10 ranked improvements to the existing deck, 5 voice-first Talkie ideas, and 5 spatial directions for an iPad-native command deck.",
+  },
+  {
     slug: "architecture",
     name: "Architecture",
     kind: "Site map",
