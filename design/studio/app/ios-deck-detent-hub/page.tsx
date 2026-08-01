@@ -6,7 +6,7 @@ export default function IOSDeckDetentHubStudy() {
     <StudioPage
       eyebrow="Command Deck · instrument study"
       title="iOS · Detent Hub"
-      help="Grok A refinement · two 60pt permutations for keys 01 + 04"
+      help="Twin-core refinement · two resolved 64pt treatments for keys 01 + 04"
     >
       <DetentHubStudy />
     </StudioPage>
