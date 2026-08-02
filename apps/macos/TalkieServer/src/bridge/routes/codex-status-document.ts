@@ -31,6 +31,10 @@ export interface CodexStatusTurn {
   error?: string;
   code?: string;
   hint?: string;
+  approval?: {
+    title: string;
+    detail: string;
+  };
 }
 
 export interface CodexStatusHistoryTurn {
@@ -287,6 +291,9 @@ export function renderCodexStatusDocument(input: {
   const failure = turn?.error
     ? `<section class="failure"><div class="section-title"><span>ATTENTION</span><span>${escapeHTML(turn.code ?? "ERROR")}</span></div><p>${escapeHTML(turn.error)}</p>${turn.hint ? `<small>${escapeHTML(turn.hint)}</small>` : ""}</section>`
     : "";
+  const approval = turn?.approval
+    ? `<section><div class="section-title"><span>REMOTE APPROVAL</span><span>WAITING</span></div><div class="response"><strong>${escapeHTML(turn.approval.title)}</strong><br>${escapeHTML(turn.approval.detail)}<br><small>Use the Talkie controls above to approve or decline.</small></div></section>`
+    : "";
   const historyDocument = history.length > 0
     ? history.map(renderHistoryTurn).join("")
     : `<p class="quiet">No completed turns are available yet.</p>`;
@@ -297,7 +304,7 @@ export function renderCodexStatusDocument(input: {
 </style></head><body>
 <header class="mast"><div class="eyebrow"><span>CODEX / TASK STATUS</span><span>${escapeHTML(turn?.status?.toUpperCase() ?? "READY")}</span></div><h1>${escapeHTML(task.title)}</h1><p>${escapeHTML(task.project)} · ${escapeHTML(task.cwd)}</p></header>
 <div class="ribbon">${row("HOST", input.host)}${row("TASK", task.id)}${row("BRANCH", repository.branch, "hot")}${row("HEAD", `${repository.head} · ${repository.subject}`)}${row("WORKTREE", repository.clean ? "CLEAN" : `${repository.files.length} FILES · +${repository.additions} −${repository.deletions}`, repository.clean ? "good" : "hot")}${row("DELIVERY", turn?.delivery ?? turn?.status ?? "IDLE", turn?.error ? "" : "good")}${row("MODE", turn?.mode ?? "—")}${row("UPSTREAM", repository.upstream ? `${repository.upstream} · ↑${repository.ahead ?? 0} ↓${repository.behind ?? 0}` : repository.origin ?? "—")}</div>
-${failure}<section><div class="section-title"><span>LIVE ACTIVITY</span><span>${updates.length} PUBLIC UPDATES</span></div><ul class="activity">${activity}</ul></section>${response}
+${approval}${failure}<section><div class="section-title"><span>LIVE ACTIVITY</span><span>${updates.length} PUBLIC UPDATES</span></div><ul class="activity">${activity}</ul></section>${response}
 <section><div class="section-title"><span>WORK HISTORY</span><span>${history.length} RECENT TURNS</span></div><p class="history-intro">Public agent notes, completed actions, and delivered responses. Private reasoning is never included.</p>${historyDocument}</section>
 <section><div class="section-title"><span>CHANGED FILES</span><span>${repository.files.length}</span></div><ul class="files">${files}</ul></section>
 <footer>READ ONLY · HOST RENDERED ${escapeHTML(renderedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))}<br>${escapeHTML(repository.root)}</footer>

@@ -15,15 +15,18 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const {
+  desktopSteerFailureCode,
   appendQueuedFollowUp,
   makeQueuedFollowUp,
   readQueuedFollowUps,
   readTurnActivity,
+  remoteApprovalResponse,
   resolveDesktopTurnState,
   taskRolloutPath,
   withQueuedFollowUpMutationLock,
   waitForQueuedTurn,
 } = require("./codex-desktop-bridge.cjs") as {
+  desktopSteerFailureCode: (error: unknown) => string;
   appendQueuedFollowUp: (
     queued: Record<string, Array<Record<string, unknown>>>,
     taskId: string,
@@ -32,6 +35,11 @@ const {
   makeQueuedFollowUp: (text: string, state: Record<string, unknown>) => Record<string, any>;
   readQueuedFollowUps: () => Record<string, Array<Record<string, unknown>>>;
   readTurnActivity: (rolloutPath: string) => Record<string, unknown>;
+  remoteApprovalResponse: (
+    method: string,
+    params: Record<string, any>,
+    decision: "approve" | "decline",
+  ) => Record<string, unknown>;
   resolveDesktopTurnState: (
     rolloutPath: string,
     snapshotRuntimeStatus?: string,
@@ -49,6 +57,36 @@ const {
     clientUserMessageId?: string,
   ) => Promise<{ turnId: string; response: string }>;
 };
+
+test("an ended Desktop steer is a recoverable inactive-turn race", () => {
+  expect(desktopSteerFailureCode(
+    "Cannot steer conversation because its active turn already ended",
+  )).toBe("turn-not-active");
+  expect(desktopSteerFailureCode("socket disconnected")).toBe("turn-steer-failed");
+});
+
+test("remote approval responses preserve Codex decision contracts", () => {
+  expect(remoteApprovalResponse(
+    "item/commandExecution/requestApproval",
+    {},
+    "approve",
+  )).toEqual({ result: { decision: "accept" } });
+  expect(remoteApprovalResponse(
+    "item/fileChange/requestApproval",
+    {},
+    "decline",
+  )).toEqual({ result: { decision: "decline" } });
+  expect(remoteApprovalResponse(
+    "item/permissions/requestApproval",
+    { permissions: { network: { enabled: true }, fileSystem: null } },
+    "approve",
+  )).toEqual({
+    result: {
+      permissions: { network: { enabled: true } },
+      scope: "turn",
+    },
+  });
+});
 
 const originalCodexHome = process.env.CODEX_HOME;
 const originalCodexExecutable = process.env.TALKIE_CODEX_EXECUTABLE;

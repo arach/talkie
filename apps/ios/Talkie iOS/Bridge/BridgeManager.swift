@@ -1078,6 +1078,22 @@ final class BridgeManager {
         return job
     }
 
+    func codexResolveApproval(
+        jobId: String,
+        approvalId: String,
+        decision: CodexApprovalDecision
+    ) async throws -> CodexTurnJob {
+        try await requireConnectedBridge()
+        let job = try await client.codexResolveApproval(
+            jobId: jobId,
+            approvalId: approvalId,
+            decision: decision
+        )
+        lastSuccessfulContactAt = .now
+        updateActiveMacContactDate(.now)
+        return job
+    }
+
     func codexTaskHistory(taskId: String) async throws -> CodexChannelHistory {
         try await requireConnectedBridge()
         let history = try await client.codexTaskHistory(taskId: taskId)

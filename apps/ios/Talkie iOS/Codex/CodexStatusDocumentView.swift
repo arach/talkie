@@ -11,6 +11,9 @@ struct CodexStatusDocumentView: View {
     @State private var document: String?
     @State private var isLoading = false
     @State private var loadFailure: String?
+    @State private var turnJob: CodexTurnJob?
+    @State private var approvalFailure: String?
+    @State private var submittedApprovalID: String?
     @Environment(\.colorScheme) private var colorScheme
 
     private var requestIdentity: String { "\(taskID):\(jobID ?? "latest")" }
@@ -20,6 +23,9 @@ struct CodexStatusDocumentView: View {
             theme.colors.background.ignoresSafeArea()
             if let document {
                 VStack(spacing: 0) {
+                    if let approval = turnJob?.approval {
+                        approvalCard(approval)
+                    }
                     if let loadFailure {
                         connectionBanner(loadFailure)
                     }
@@ -38,6 +44,7 @@ struct CodexStatusDocumentView: View {
         }
         .task(id: requestIdentity) {
             await loadStatus(resetDocument: true)
+            await monitorTurn()
         }
     }
 
@@ -146,6 +153,64 @@ struct CodexStatusDocumentView: View {
         .background(failureColor.opacity(0.08))
     }
 
+    private func approvalCard(_ approval: CodexApprovalRequest) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.shield")
+                Text("REMOTE APPROVAL")
+                Spacer()
+                Text("CODEX IS WAITING")
+            }
+            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+            .foregroundStyle(theme.chrome.accent)
+
+            Text(approval.title)
+                .font(.headline)
+                .foregroundStyle(theme.colors.textPrimary)
+
+            Text(approval.detail)
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(theme.colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let approvalFailure {
+                Text(approvalFailure)
+                    .font(.caption)
+                    .foregroundStyle(failureColor)
+            }
+
+            if submittedApprovalID == approval.id {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Sending decision to the active Codex turn…")
+                }
+                .font(.caption)
+                .foregroundStyle(theme.colors.textSecondary)
+            } else {
+                HStack(spacing: 10) {
+                    Button("Approve once", systemImage: "checkmark") {
+                        Task { await resolve(approval, decision: .approve) }
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    Button("Decline", systemImage: "xmark") {
+                        Task { await resolve(approval, decision: .decline) }
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(theme.colors.cardBackground)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(theme.chrome.edge)
+                .frame(height: 0.5)
+        }
+    }
+
     private var failureColor: Color {
         Color(red: 0.92, green: 0.42, blue: 0.30)
     }
@@ -162,6 +227,50 @@ struct CodexStatusDocumentView: View {
             )
         } catch {
             loadFailure = error.localizedDescription
+        }
+    }
+
+    private func monitorTurn() async {
+        guard let jobID else { return }
+        while !Task.isCancelled {
+            do {
+                let latest = try await BridgeManager.shared.codexTurnStatus(jobId: jobID)
+                let priorApprovalID = turnJob?.approval?.id
+                turnJob = latest
+                if latest.approval?.id != priorApprovalID {
+                    approvalFailure = nil
+                }
+                if latest.approval == nil {
+                    submittedApprovalID = nil
+                }
+                if latest.status == "completed" || latest.status == "failed"
+                    || latest.status == "blocked" || latest.status == "unknown" {
+                    await loadStatus(resetDocument: false)
+                    return
+                }
+            } catch {
+                if turnJob == nil { approvalFailure = error.localizedDescription }
+            }
+            try? await Task.sleep(for: .milliseconds(700))
+        }
+    }
+
+    private func resolve(
+        _ approval: CodexApprovalRequest,
+        decision: CodexApprovalDecision
+    ) async {
+        guard let jobID else { return }
+        approvalFailure = nil
+        submittedApprovalID = approval.id
+        do {
+            turnJob = try await BridgeManager.shared.codexResolveApproval(
+                jobId: jobID,
+                approvalId: approval.id,
+                decision: decision
+            )
+        } catch {
+            submittedApprovalID = nil
+            approvalFailure = error.localizedDescription
         }
     }
 }

@@ -1412,7 +1412,8 @@ final class CodexLaneStore: ObservableObject {
                         code: "turn-receipt-unavailable",
                         hint: described.hint,
                         retryable: false,
-                        task: job.task
+                        task: job.task,
+                        approval: nil
                     )
                 }
                 mutateDirectActivity(activityID, for: activityKey) {
@@ -1658,7 +1659,8 @@ final class CodexLaneStore: ObservableObject {
                         code: "turn-receipt-unavailable",
                         hint: described.hint,
                         retryable: false,
-                        task: job.task
+                        task: job.task,
+                        approval: nil
                     )
                 }
                 // Leaving the foreground may suspend network work. Keep the
