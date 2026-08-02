@@ -329,6 +329,59 @@ describe("CodexTaskCreationManager", () => {
 });
 
 describe("CodexTurnJobManager", () => {
+  test("keeps a live approval pending until the phone resolves it", async () => {
+    let finishTurn: (() => void) | undefined;
+    const turnGate = new Promise<void>((resolve) => { finishTurn = resolve; });
+    const recorded: Array<{ jobId: string; approvalId: string; decision: string }> = [];
+    const manager = new CodexTurnJobManager(
+      new CodexTaskMessageCoordinator(async () => {
+        await turnGate;
+        return completed("started-turn", "Finished after approval");
+      }),
+      async () => ({ ok: true }),
+      async () => {},
+      undefined,
+      undefined,
+      (jobId, approvalId, decision) => recorded.push({ jobId, approvalId, decision }),
+    );
+    const receipt = manager.start(submission1, "task-1", "Command Deck", "do it", "steer");
+    await Promise.resolve();
+
+    manager.observeBridgeEvent(receipt.id, {
+      ok: true,
+      phase: "approval-required",
+      approval: {
+        id: "019fae56-598a-70b0-83dd-539cda1c7799",
+        method: "item/commandExecution/requestApproval",
+        title: "Run command",
+        detail: "Run the test command",
+        requestedAt: "2026-08-02T17:00:00.000Z",
+      },
+    });
+
+    const pending = await manager.snapshot(receipt.id);
+    expect(pending?.status).toBe("awaiting-approval");
+    expect(pending?.approval?.title).toBe("Run command");
+
+    manager.resolveApproval(receipt.id, pending!.approval!.id, "approve");
+    expect(recorded).toEqual([{
+      jobId: receipt.id,
+      approvalId: pending!.approval!.id,
+      decision: "approve",
+    }]);
+
+    manager.observeBridgeEvent(receipt.id, {
+      ok: true,
+      phase: "approval-resolved",
+      approval: { ...pending!.approval!, decision: "approve" },
+    });
+    expect((await manager.snapshot(receipt.id))?.status).toBe("running");
+    expect((await manager.snapshot(receipt.id))?.approval).toBeUndefined();
+
+    finishTurn?.();
+    await Bun.sleep(0);
+  });
+
   test("atomically starts a fresh task, returns its accepted identity, and deduplicates retries", async () => {
     let invocations = 0;
     let finishTurn: (() => void) | undefined;

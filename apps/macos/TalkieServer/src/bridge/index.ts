@@ -26,6 +26,7 @@ import { healthRoute } from "./routes/health";
 import { pathsRoute, sessionsRoute, sessionMessagesRoute } from "./routes/sessions";
 import { sessionMetadataRoute, sessionEntryRoute } from "./routes/metadata";
 import {
+  codexApprovalDecisionRoute,
   pairRoute,
   pairInfoRoute,
   pairPendingRoute,
@@ -518,6 +519,10 @@ export const bridge = new Elysia({ name: "bridge" })
     { query: t.Object({ jobId: t.Optional(t.String()) }) },
   )
   .get("/codex/turns/:id", ({ params }) => codexTurnStatusRoute(params.id))
+  .post("/codex/turns/:id/approval", async ({ params, request }) => {
+    const body = await readJsonBody(request);
+    return codexApprovalDecisionRoute(params.id, body);
+  })
 
   // ===== Terminal =====
   .post("/terminal/access", () => terminalAccessRoute())

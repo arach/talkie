@@ -354,7 +354,8 @@ final class CodexChannelStoreTests: XCTestCase {
             code: nil,
             hint: nil,
             retryable: nil,
-            task: task
+            task: task,
+            approval: nil
         )
         let pending = CodexPendingTurn(
             id: submissionID,

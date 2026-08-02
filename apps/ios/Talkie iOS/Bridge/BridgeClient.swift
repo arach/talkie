@@ -405,6 +405,23 @@ actor BridgeClient {
         return try JSONDecoder().decode(CodexTurnJobResponse.self, from: data).job
     }
 
+    /// Answers one approval request while its originating Codex connection is still alive.
+    func codexResolveApproval(
+        jobId: String,
+        approvalId: String,
+        decision: CodexApprovalDecision
+    ) async throws -> CodexTurnJob {
+        struct Request: Encodable {
+            let approvalId: String
+            let decision: CodexApprovalDecision
+        }
+        let data = try await post(
+            "/codex/turns/\(jobId)/approval",
+            body: Request(approvalId: approvalId, decision: decision)
+        )
+        return try JSONDecoder().decode(CodexTurnJobResponse.self, from: data).job
+    }
+
     /// Fetches bounded public history for one exact Codex task from the Mac.
     func codexTaskHistory(taskId: String) async throws -> CodexChannelHistory {
         var components = URLComponents()
@@ -1134,6 +1151,19 @@ struct CodexProgressUpdate: Codable, Equatable, Sendable, Identifiable {
     let timestamp: String?
 }
 
+enum CodexApprovalDecision: String, Codable, Sendable {
+    case approve
+    case decline
+}
+
+struct CodexApprovalRequest: Codable, Equatable, Sendable, Identifiable {
+    let id: String
+    let method: String
+    let title: String
+    let detail: String
+    let requestedAt: String
+}
+
 struct CodexTurnJob: Codable, Equatable, Sendable {
     let id: String
     let submissionId: String
@@ -1152,6 +1182,7 @@ struct CodexTurnJob: Codable, Equatable, Sendable {
     let hint: String?
     let retryable: Bool?
     let task: CodexTaskSummary?
+    let approval: CodexApprovalRequest?
 }
 
 struct CodexTurnJobResponse: Codable {
