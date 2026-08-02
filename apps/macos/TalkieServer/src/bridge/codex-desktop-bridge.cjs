@@ -154,7 +154,7 @@ function remoteApprovalResponse(method, params, decision) {
       result: {
         decision: approved
           ? 'approved'
-          : { denied: { rejection: 'Declined from Talkie remote.' } },
+          : 'denied',
       },
     };
   }

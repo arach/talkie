@@ -86,6 +86,11 @@ test("remote approval responses preserve Codex decision contracts", () => {
       scope: "turn",
     },
   });
+  expect(remoteApprovalResponse(
+    "execCommandApproval",
+    {},
+    "decline",
+  )).toEqual({ result: { decision: "denied" } });
 });
 
 const originalCodexHome = process.env.CODEX_HOME;
