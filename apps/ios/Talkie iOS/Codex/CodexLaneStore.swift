@@ -138,6 +138,13 @@ final class CodexLaneStore: ObservableObject {
         selectedChannel ?? activeLane?.task
     }
 
+    /// A recent task opened for a quick interaction without changing the six
+    /// persistent lane assignments. Temporary destinations intentionally
+    /// expire when explicitly closed or when the app is relaunched.
+    var isTemporaryTaskSelected: Bool {
+        selectedChannel != nil && activeLaneNumber == nil && newTaskProject == nil
+    }
+
     /// A real task or an explicit NEW action can receive the next transcript.
     /// NEW remains project-scoped until the host atomically creates the Codex
     /// thread and accepts its first turn.
@@ -1412,7 +1419,8 @@ final class CodexLaneStore: ObservableObject {
                         code: "turn-receipt-unavailable",
                         hint: described.hint,
                         retryable: false,
-                        task: job.task
+                        task: job.task,
+                        approval: nil
                     )
                 }
                 mutateDirectActivity(activityID, for: activityKey) {
@@ -1658,7 +1666,8 @@ final class CodexLaneStore: ObservableObject {
                         code: "turn-receipt-unavailable",
                         hint: described.hint,
                         retryable: false,
-                        task: job.task
+                        task: job.task,
+                        approval: nil
                     )
                 }
                 // Leaving the foreground may suspend network work. Keep the
@@ -2081,21 +2090,22 @@ final class CodexLaneStore: ObservableObject {
             )
         }
 
-        // Restore the selected destination so the deck opens where the user
-        // left it. The submit itself is the live availability check.
+        // Restore only a pinned destination. A recent task opened outside the
+        // lane bank is deliberately temporary and must not re-arm itself on a
+        // later launch.
         let storedActive = defaults.integer(forKey: activeLaneKey)
         if lanes[storedActive] != nil {
             activeLaneNumber = storedActive
         }
 
         if let data = defaults.data(forKey: selectedChannelKey),
-           let storedChannel = try? JSONDecoder().decode(CodexTaskSummary.self, from: data) {
-            selectedChannel = storedChannel
-            if lanes[activeLaneNumber ?? 0]?.task.id != storedChannel.id {
-                activeLaneNumber = lanes.values.first(where: { $0.task.id == storedChannel.id })?.number
-            }
+           let storedChannel = try? JSONDecoder().decode(CodexTaskSummary.self, from: data),
+           let storedLane = lanes.values.first(where: { $0.task.id == storedChannel.id }) {
+            selectedChannel = storedLane.task
+            activeLaneNumber = storedLane.number
         } else {
             selectedChannel = activeLane?.task
+            defaults.removeObject(forKey: selectedChannelKey)
         }
     }
 
@@ -2119,7 +2129,9 @@ final class CodexLaneStore: ObservableObject {
     private func persistSelectedChannel() {
         guard let loadedHostID else { return }
         let key = Keys.selectedChannel(for: loadedHostID)
-        if let selectedChannel,
+        if let activeLaneNumber,
+           let selectedChannel,
+           lanes[activeLaneNumber]?.task.id == selectedChannel.id,
            let data = try? JSONEncoder().encode(selectedChannel) {
             defaults.set(data, forKey: key)
         } else {

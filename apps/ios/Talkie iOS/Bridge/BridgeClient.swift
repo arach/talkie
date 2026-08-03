@@ -405,6 +405,23 @@ actor BridgeClient {
         return try JSONDecoder().decode(CodexTurnJobResponse.self, from: data).job
     }
 
+    /// Answers one approval request while its originating Codex connection is still alive.
+    func codexResolveApproval(
+        jobId: String,
+        approvalId: String,
+        decision: CodexApprovalDecision
+    ) async throws -> CodexTurnJob {
+        struct Request: Encodable {
+            let approvalId: String
+            let decision: CodexApprovalDecision
+        }
+        let data = try await post(
+            "/codex/turns/\(jobId)/approval",
+            body: Request(approvalId: approvalId, decision: decision)
+        )
+        return try JSONDecoder().decode(CodexTurnJobResponse.self, from: data).job
+    }
+
     /// Fetches bounded public history for one exact Codex task from the Mac.
     func codexTaskHistory(taskId: String) async throws -> CodexChannelHistory {
         var components = URLComponents()
@@ -446,17 +463,25 @@ actor BridgeClient {
         return try JSONDecoder().decode(CompanionTriggerResponse.self, from: data)
     }
 
-    func companionTrackpad(event: TrackpadEvent, dx: Double = 0, dy: Double = 0) async throws {
+    func companionTrackpad(
+        event: TrackpadEvent,
+        dx: Double = 0,
+        dy: Double = 0
+    ) async throws -> CompanionTrackpadResponse {
         struct TrackpadRequest: Encodable {
             let event: String
             let dx: Double
             let dy: Double
         }
-        _ = try await post("/companion/trackpad", body: TrackpadRequest(event: event.rawValue, dx: dx, dy: dy))
+        let data = try await post(
+            "/companion/trackpad",
+            body: TrackpadRequest(event: event.rawValue, dx: dx, dy: dy)
+        )
+        return try JSONDecoder().decode(CompanionTrackpadResponse.self, from: data)
     }
 
     enum TrackpadEvent: String {
-        case move, click, rightClick, scroll, mouseDown, mouseUp, drag
+        case position, move, click, rightClick, scroll, mouseDown, mouseUp, drag
     }
 
     func companionPasteImage(
@@ -1093,6 +1118,12 @@ struct CompanionTriggerRequest: Codable {
     let shortcutId: String
 }
 
+struct CompanionTrackpadResponse: Codable, Equatable {
+    let ok: Bool
+    let x: Double?
+    let y: Double?
+}
+
 // MARK: - Codex lane payloads
 
 struct CodexTasksResponse: Codable {
@@ -1134,6 +1165,19 @@ struct CodexProgressUpdate: Codable, Equatable, Sendable, Identifiable {
     let timestamp: String?
 }
 
+enum CodexApprovalDecision: String, Codable, Sendable {
+    case approve
+    case decline
+}
+
+struct CodexApprovalRequest: Codable, Equatable, Sendable, Identifiable {
+    let id: String
+    let method: String
+    let title: String
+    let detail: String
+    let requestedAt: String
+}
+
 struct CodexTurnJob: Codable, Equatable, Sendable {
     let id: String
     let submissionId: String
@@ -1152,6 +1196,7 @@ struct CodexTurnJob: Codable, Equatable, Sendable {
     let hint: String?
     let retryable: Bool?
     let task: CodexTaskSummary?
+    let approval: CodexApprovalRequest?
 }
 
 struct CodexTurnJobResponse: Codable {

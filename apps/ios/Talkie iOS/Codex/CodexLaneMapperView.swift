@@ -215,7 +215,7 @@ struct CodexLaneMapperView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("\(task.title), \(task.projectName)")
-            .accessibilityHint("Selects this channel")
+            .accessibilityHint(taskSelectionHint(boundLane: boundLane))
             .accessibilityAddTraits(store.selectedTask?.id == task.id ? .isSelected : [])
 
             Divider().overlay(theme.colors.tableDivider)
@@ -235,7 +235,7 @@ struct CodexLaneMapperView: View {
                 Spacer(minLength: 6)
 
                 if store.selectedTask?.id == task.id {
-                    Text("Current")
+                    Text(store.isTemporaryTaskSelected ? "Temporary" : "Current")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(theme.colors.accent)
                 }
@@ -278,6 +278,13 @@ struct CodexLaneMapperView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func taskSelectionHint(boundLane: Int?) -> String {
+        if let boundLane {
+            return "Opens this task in lane \(boundLane)"
+        }
+        return "Opens this task temporarily without changing lanes"
     }
 
     private func assignmentButton(

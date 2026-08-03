@@ -116,7 +116,7 @@ struct BridgeDetailNext: View {
 
             Spacer()
 
-            Button(action: { AppShellRouter.shared.openConnectionCenter() }) {
+            Button(action: { AppShellRouter.shared.goBack() }) {
                 Text("CLOSE")
                     .talkieType(.chipLabel)
                     .foregroundStyle(theme.colors.textTertiary)

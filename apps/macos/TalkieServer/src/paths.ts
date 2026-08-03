@@ -30,6 +30,7 @@ export const LOCAL_AUTH_TOKEN_FILE = `${CONFIG_DIR}/.local-auth-token`;
 export const SECURITY_EVENTS_FILE = `${CONFIG_DIR}/security-events.json`;
 export const CODEX_TURN_JOBS_FILE = `${CONFIG_DIR}/.codex-turn-jobs.json`;
 export const CODEX_TASK_CREATIONS_FILE = `${CONFIG_DIR}/.codex-task-creations.json`;
+export const CODEX_APPROVAL_DECISIONS_DIR = `${CONFIG_DIR}/.codex-approval-decisions`;
 
 // Ensure directories exist
 export async function ensureDirectories(): Promise<void> {
@@ -40,6 +41,7 @@ export async function ensureDirectories(): Promise<void> {
   await mkdir(HYPER_SCAN_TRANSIENT_DIR, { recursive: true, mode: 0o700 });
   await mkdir(KEYS_DIR, { recursive: true, mode: 0o700 });
   await mkdir(CONFIG_DIR, { recursive: true, mode: 0o700 });
+  await mkdir(CODEX_APPROVAL_DECISIONS_DIR, { recursive: true, mode: 0o700 });
   await Promise.all([
     chmod(BRIDGE_DATA_DIR, 0o700),
     chmod(MEMO_ATTACHMENTS_DIR, 0o700),
@@ -47,5 +49,6 @@ export async function ensureDirectories(): Promise<void> {
     chmod(HYPER_SCAN_TRANSIENT_DIR, 0o700),
     chmod(KEYS_DIR, 0o700),
     chmod(CONFIG_DIR, 0o700),
+    chmod(CODEX_APPROVAL_DECISIONS_DIR, 0o700),
   ]);
 }

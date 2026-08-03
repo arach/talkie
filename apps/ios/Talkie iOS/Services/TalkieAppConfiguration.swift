@@ -16,7 +16,7 @@ struct TalkieAppConfiguration: Codable {
     }
 
     struct Appearance: Codable {
-        var theme: String = "scope"
+        var theme: String = AppTheme.productDefault.rawValue
         var mode: String = "system"
         var density: String = "standard"
         var accentIntensity: String = "theme"
@@ -36,7 +36,7 @@ struct TalkieAppConfiguration: Codable {
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            theme = try container.decodeIfPresent(String.self, forKey: .theme) ?? "scope"
+            theme = try container.decodeIfPresent(String.self, forKey: .theme) ?? AppTheme.productDefault.rawValue
             mode = try container.decodeIfPresent(String.self, forKey: .mode) ?? "system"
             density = try container.decodeIfPresent(String.self, forKey: .density) ?? "standard"
             accentIntensity = try container.decodeIfPresent(String.self, forKey: .accentIntensity) ?? "theme"
@@ -239,6 +239,34 @@ struct TalkieAppConfiguration: Codable {
         var playbackRate: Double? = nil
         /// "phone", "watch", or "silent" for spoken AI command responses.
         var aiVoiceOutputRoute = "phone"
+        /// Whether the Watch taps the wrist when an Ask AI answer is ready.
+        var watchReadyHapticEnabled = true
+
+        private enum CodingKeys: String, CodingKey {
+            case mode
+            case provider
+            case voice
+            case apiKey
+            case playbackRate
+            case aiVoiceOutputRoute
+            case watchReadyHapticEnabled
+        }
+
+        init() {}
+
+        // Lenient like the other sections: a config written before a key existed
+        // must keep the rest of the user's voice settings rather than reverting
+        // the whole section to defaults.
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            mode = try container.decodeIfPresent(String.self, forKey: .mode) ?? "bridge"
+            provider = try container.decodeIfPresent(String.self, forKey: .provider) ?? "local"
+            voice = try container.decodeIfPresent(String.self, forKey: .voice) ?? ""
+            apiKey = try container.decodeIfPresent(String.self, forKey: .apiKey) ?? ""
+            playbackRate = try container.decodeIfPresent(Double.self, forKey: .playbackRate)
+            aiVoiceOutputRoute = try container.decodeIfPresent(String.self, forKey: .aiVoiceOutputRoute) ?? "phone"
+            watchReadyHapticEnabled = try container.decodeIfPresent(Bool.self, forKey: .watchReadyHapticEnabled) ?? true
+        }
     }
 
     struct Compose: Codable {

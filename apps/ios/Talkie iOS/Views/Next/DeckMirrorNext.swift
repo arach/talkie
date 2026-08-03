@@ -40,9 +40,15 @@ struct DeckMirrorNext: View {
     @State private var showingDeckSurfacePicker = false
     @State private var showingPairedMacSwitcher = false
     @State private var showingScreenPreview = false
+    @State private var showingAppSwitcher = false
+    @State private var activatingAppID: String?
+    @State private var appSwitcherErrorMessage: String?
     @State private var switchingPairedMacID: String?
     @State private var isTrackpadInteracting = false
     @State private var trackpadErrorMessage: String?
+    @State private var cursorPosition: CGPoint?
+    @State private var cursorRequestSequence = 0
+    @State private var cursorResponseSequence = 0
 
     /// The active material skin (Milled / Relief). Persisted so it can be
     /// flipped from settings later; tap the wordmark to cycle it in-app.
@@ -199,6 +205,16 @@ struct DeckMirrorNext: View {
         .fullScreenCover(isPresented: $showingScreenPreview) {
             CompanionScreenPreviewView()
         }
+        .sheet(isPresented: $showingAppSwitcher) {
+            DeckAppSwitcherSheet(
+                apps: deck.appSwitcherApps,
+                activeAppID: deck.appSwitcherApps.first(where: \.isFrontmost)?.id,
+                activatingAppID: activatingAppID,
+                errorMessage: appSwitcherErrorMessage,
+                onRefresh: refreshAppSwitcher,
+                onActivate: activateApp
+            )
+        }
     }
 
     // MARK: - Header
@@ -295,7 +311,7 @@ struct DeckMirrorNext: View {
                                 : "desktopcomputer"
                         )
                     }
-                    .disabled(switchingPairedMacID != nil || codexLanes.isTurnInFlight)
+                    .disabled(switchingPairedMacID != nil)
                 }
 
                 Divider()
@@ -315,11 +331,7 @@ struct DeckMirrorNext: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Host, \(activeHostTitle)")
-        .accessibilityHint(
-            codexLanes.isTurnInFlight
-                ? "Wait for the active Codex turn before changing Macs"
-                : "Choose which Mac this deck controls"
-        )
+        .accessibilityHint("Choose which Mac this deck controls. Running turns remain with their original Mac")
     }
 
     private func headerSelectorLabel(
@@ -628,6 +640,7 @@ struct DeckMirrorNext: View {
             liveTranscript: transcriptForCard,
             lastTriggerResult: echoSuppress ? nil : deck.lastTriggerResult,
             onIdentityTap: openPairedMacSwitcher,
+            cursorPosition: cursorPosition,
             onTrackpadEvent: sendTrackpadEvent,
             onTrackpadInteractionChanged: { isTrackpadInteracting = $0 },
             onCommand: runDeckCommand
@@ -698,13 +711,45 @@ struct DeckMirrorNext: View {
         deck.fire(slotID: command.id)
     }
 
+    private func refreshAppSwitcher() {
+        appSwitcherErrorMessage = nil
+        Task { await bridgeManager.refreshCompanionState() }
+    }
+
+    private func activateApp(_ app: CompanionAppSwitcherApp) {
+        guard activatingAppID == nil else { return }
+        activatingAppID = app.id
+        appSwitcherErrorMessage = nil
+
+        Task {
+            defer { activatingAppID = nil }
+            do {
+                let response = try await bridgeManager.activateCompanionApp(app)
+                if response.ok == false {
+                    appSwitcherErrorMessage = response.error ?? response.message ?? "The Mac did not activate that app."
+                }
+            } catch {
+                appSwitcherErrorMessage = error.localizedDescription
+            }
+        }
+    }
+
     private func sendTrackpadEvent(_ event: BridgeClient.TrackpadEvent, _ dx: Double, _ dy: Double) {
         trackpadErrorMessage = nil
+        cursorRequestSequence += 1
+        let requestSequence = cursorRequestSequence
         Task {
             do {
-                try await bridgeManager.sendCompanionTrackpad(event: event, dx: dx, dy: dy)
+                let response = try await bridgeManager.sendCompanionTrackpad(event: event, dx: dx, dy: dy)
+                guard requestSequence >= cursorResponseSequence else { return }
+                cursorResponseSequence = requestSequence
+                if let x = response.x, let y = response.y {
+                    cursorPosition = CGPoint(x: CGFloat(x), y: CGFloat(y))
+                }
             } catch {
-                trackpadErrorMessage = error.localizedDescription
+                if event != .position {
+                    trackpadErrorMessage = error.localizedDescription
+                }
             }
         }
     }
@@ -942,6 +987,7 @@ struct DeckMirrorNext: View {
     private func tileView(_ tile: DeckTile, index: Int) -> some View {
         let isImageShareTile = tile.slotID == "mac-paste-image"
         let isScreenPreviewTile = tile.slotID == "mac-windows"
+        let isAppListTile = tile.slotID == "deck-app-list"
         let isFiring = deck.firingSlotID == tile.slotID
         let isEmpty = tile.slotID == nil
         let triggerResult = triggerResult(for: tile)
@@ -977,6 +1023,23 @@ struct DeckMirrorNext: View {
             .disabled(deck.firingSlotID != nil)
             .accessibilityLabel("Preview Mac screen")
             .accessibilityHint("Shows the current main display from the paired Mac")
+        } else if isAppListTile, !isEmpty {
+            Button {
+                showingAppSwitcher = true
+                refreshAppSwitcher()
+            } label: {
+                tileSurface(
+                    tile,
+                    index: index,
+                    isEmpty: false,
+                    isActive: false,
+                    activeColor: theme.currentTheme.chrome.accent
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(deck.firingSlotID != nil)
+            .accessibilityLabel("Running Mac apps")
+            .accessibilityHint("Shows the current applications on the paired Mac")
         } else {
             Button(action: {
                 guard let slot = tile.slotID else { return }
@@ -1071,13 +1134,24 @@ struct DeckMirrorNext: View {
     }
 
     private func selectPairedMac(_ mac: BridgeManager.PairedMac) {
-        guard switchingPairedMacID == nil else { return }
-        guard !codexLanes.isTurnInFlight else { return }
+        guard switchingPairedMacID == nil else {
+            AppLogger.ai.info(
+                "Codex host switch ignored target=\(mac.id) reason=switch-already-running"
+            )
+            return
+        }
         guard bridgeManager.activePairedMacID != mac.id else {
+            AppLogger.ai.info(
+                "Codex host switch ignored target=\(mac.id) reason=already-active"
+            )
             showingPairedMacSwitcher = false
             return
         }
 
+        AppLogger.ai.info(
+            "Codex host switch requested from=\(bridgeManager.activePairedMacID ?? "none") "
+                + "to=\(mac.id) turnsInFlight=\(codexLanes.isTurnInFlight)"
+        )
         switchingPairedMacID = mac.id
         selectedSpaceID = nil
 
@@ -1085,6 +1159,10 @@ struct DeckMirrorNext: View {
             await bridgeManager.activatePairedMac(id: mac.id)
             codexLanes.reloadForActiveHost()
             await bridgeManager.refreshCompanionState()
+            AppLogger.ai.info(
+                "Codex host switch finished active=\(bridgeManager.activePairedMacID ?? "none") "
+                    + "status=\(bridgeManager.status.rawValue)"
+            )
             switchingPairedMacID = nil
             showingPairedMacSwitcher = false
         }
@@ -1207,6 +1285,7 @@ private struct DeckCockpitSurface: View {
     let liveTranscript: String?
     let lastTriggerResult: DeckMirrorStore.TriggerResult?
     let onIdentityTap: () -> Void
+    let cursorPosition: CGPoint?
     let onTrackpadEvent: (BridgeClient.TrackpadEvent, Double, Double) -> Void
     let onTrackpadInteractionChanged: (Bool) -> Void
     let onCommand: (DeckCommand) -> Void
@@ -1227,6 +1306,7 @@ private struct DeckCockpitSurface: View {
             // even after the result settles, so the box has clean
             // breathing room.
             isDictating: isDictating || hasDictationResult,
+            cursorPosition: cursorPosition,
             onEvent: onTrackpadEvent,
             onInteractionChanged: onTrackpadInteractionChanged
         )
@@ -1426,6 +1506,7 @@ private struct DeckInstrumentTrackpad: View {
     let accent: Color
     let isLive: Bool
     var isDictating: Bool = false
+    let cursorPosition: CGPoint?
     let onEvent: (BridgeClient.TrackpadEvent, Double, Double) -> Void
     let onInteractionChanged: (Bool) -> Void
 
@@ -1462,6 +1543,9 @@ private struct DeckInstrumentTrackpad: View {
                     Text(isDragging ? "DRAGGING" : "TRACKPAD")
                         .talkieType(.channelLabelTiny)
                         .foregroundStyle(trackpadInk.opacity(isTouching ? 0.62 : 0.28))
+
+                    cursorReadout
+                        .padding(.top, 2)
                 }
             }
         }
@@ -1474,6 +1558,9 @@ private struct DeckInstrumentTrackpad: View {
         .gesture(trackpadDragGesture)
         .simultaneousGesture(TapGesture(count: 1).onEnded { onEvent(.click, 0, 0) })
         .simultaneousGesture(TapGesture(count: 2).onEnded { onEvent(.rightClick, 0, 0) })
+        .onAppear {
+            onEvent(.position, 0, 0)
+        }
         .onDisappear {
             dragActivationTask?.cancel()
             dragActivationTask = nil
@@ -1487,6 +1574,31 @@ private struct DeckInstrumentTrackpad: View {
 
     private var trackpadInk: Color {
         isTouching ? accent : theme.chrome.panelInk
+    }
+
+    private var cursorReadout: some View {
+        HStack(spacing: 7) {
+            Text("X \(formattedCursorCoordinate(cursorPosition?.x))")
+            Rectangle()
+                .fill(trackpadInk.opacity(isTouching ? 0.28 : 0.14))
+                .frame(width: theme.currentTheme.chrome.hairlineWidth, height: 8)
+            Text("Y \(formattedCursorCoordinate(cursorPosition?.y))")
+        }
+        .font(.system(size: 11, weight: .medium, design: .monospaced))
+        .monospacedDigit()
+        .foregroundStyle(trackpadInk.opacity(isTouching ? 0.54 : 0.24))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(cursorAccessibilityLabel)
+    }
+
+    private var cursorAccessibilityLabel: String {
+        guard let cursorPosition else { return "Pointer position unavailable" }
+        return "Pointer X \(Int(cursorPosition.x.rounded())), Y \(Int(cursorPosition.y.rounded()))"
+    }
+
+    private func formattedCursorCoordinate(_ value: CGFloat?) -> String {
+        guard let value else { return "—" }
+        return String(Int(value.rounded()))
     }
 
     private var trackpadDragGesture: some Gesture {

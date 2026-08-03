@@ -22,6 +22,7 @@
     "setup": "./bin/bridge install && ./bin/bridge start"
   },
   "dependencies": {
+    "@openscout/agent-sessions": "file:../../../../openscout/packages/agent-sessions",
     "@talkie/workflow-core": "workspace:*",
     "@anthropic-ai/claude-code": "^2.0.76",
     "@anthropic-ai/sdk": "^0.71.2",

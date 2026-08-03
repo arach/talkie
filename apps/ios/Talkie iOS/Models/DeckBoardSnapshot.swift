@@ -94,6 +94,9 @@ final class DeckMirrorStore: ObservableObject {
     /// and `signalLevel` so the cockpit can distinguish the recording
     /// window from the "Mac is transcribing" tail and show a timer.
     @Published private(set) var lastRuntimeState: CompanionShortcutRuntimeState?
+    /// Current, host-reported application switcher entries. This is runtime
+    /// state rather than board configuration so the Apps key stays truthful.
+    @Published private(set) var appSwitcherApps: [CompanionAppSwitcherApp] = []
 
     private var triggerResultResetTask: Task<Void, Never>?
     private var lastRecentResultKey: String?
@@ -108,6 +111,7 @@ final class DeckMirrorStore: ObservableObject {
 
     func apply(companionState: CompanionStateResponse?) {
         set(board: companionState?.resolvedCommandDeck)
+        appSwitcherApps = companionState?.appSwitcherApps ?? []
 
         if let runtimeState = companionState?.shortcutStates?.first {
             lastRuntimeState = runtimeState

@@ -15,15 +15,19 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const {
+  desktopSteerFailureCode,
   appendQueuedFollowUp,
   makeQueuedFollowUp,
   readQueuedFollowUps,
   readTurnActivity,
+  remoteApprovalResponse,
   resolveDesktopTurnState,
+  taskSummary,
   taskRolloutPath,
   withQueuedFollowUpMutationLock,
   waitForQueuedTurn,
 } = require("./codex-desktop-bridge.cjs") as {
+  desktopSteerFailureCode: (error: unknown) => string;
   appendQueuedFollowUp: (
     queued: Record<string, Array<Record<string, unknown>>>,
     taskId: string,
@@ -32,6 +36,11 @@ const {
   makeQueuedFollowUp: (text: string, state: Record<string, unknown>) => Record<string, any>;
   readQueuedFollowUps: () => Record<string, Array<Record<string, unknown>>>;
   readTurnActivity: (rolloutPath: string) => Record<string, unknown>;
+  remoteApprovalResponse: (
+    method: string,
+    params: Record<string, any>,
+    decision: "approve" | "decline",
+  ) => Record<string, unknown>;
   resolveDesktopTurnState: (
     rolloutPath: string,
     snapshotRuntimeStatus?: string,
@@ -39,6 +48,10 @@ const {
     activeTurnId: string | null;
     decision: { snapshotRuntimeStatus: string; rolloutActiveTurnId: string | null };
   };
+  taskSummary: (
+    thread: Record<string, unknown>,
+    fallbackCwd?: string,
+  ) => Record<string, unknown>;
   taskRolloutPath: (taskId: string) => string;
   withQueuedFollowUpMutationLock: <T>(taskId: string, action: () => Promise<T>) => Promise<T>;
   waitForQueuedTurn: (
@@ -49,6 +62,53 @@ const {
     clientUserMessageId?: string,
   ) => Promise<{ turnId: string; response: string }>;
 };
+
+test("an ended Desktop steer is a recoverable inactive-turn race", () => {
+  expect(desktopSteerFailureCode(
+    "Cannot steer conversation because its active turn already ended",
+  )).toBe("turn-not-active");
+  expect(desktopSteerFailureCode("socket disconnected")).toBe("turn-steer-failed");
+});
+
+test("remote approval responses preserve Codex decision contracts", () => {
+  expect(remoteApprovalResponse(
+    "item/commandExecution/requestApproval",
+    {},
+    "approve",
+  )).toEqual({ result: { decision: "accept" } });
+  expect(remoteApprovalResponse(
+    "item/fileChange/requestApproval",
+    {},
+    "decline",
+  )).toEqual({ result: { decision: "decline" } });
+  expect(remoteApprovalResponse(
+    "item/permissions/requestApproval",
+    { permissions: { network: { enabled: true }, fileSystem: null } },
+    "approve",
+  )).toEqual({
+    result: {
+      permissions: { network: { enabled: true } },
+      scope: "turn",
+    },
+  });
+});
+
+test("task validation summary keeps the complete catalog contract", () => {
+  expect(taskSummary({
+    id: "019fa5d3-1cc5-7fc1-a422-c9c3945a94d4",
+    name: "Add steer and queue support",
+    cwd: "/Users/arach/dev/talkie",
+  })).toEqual({
+    id: "019fa5d3-1cc5-7fc1-a422-c9c3945a94d4",
+    title: "Add steer and queue support",
+    preview: "",
+    cwd: "/Users/arach/dev/talkie",
+    project: "talkie",
+    gitBranch: null,
+    gitOriginURL: null,
+    updatedAt: expect.any(Number),
+  });
+});
 
 const originalCodexHome = process.env.CODEX_HOME;
 const originalCodexExecutable = process.env.TALKIE_CODEX_EXECUTABLE;
@@ -264,8 +324,7 @@ rl.on('line', (line) => {
     expect(stderr).toBe("");
     expect(exitCode).toBe(1);
     const envelopes = stdout.trim().split("\n").map((line) => JSON.parse(line));
-    expect(envelopes[0]).toMatchObject({ ok: true, phase: "created", threadId });
-    expect(envelopes[1]).toMatchObject({
+    expect(envelopes[0]).toMatchObject({
       ok: true,
       phase: "accepted",
       threadId,
@@ -637,12 +696,6 @@ fs.writeFileSync(process.env.FAKE_CODEX_OPEN_LOG, JSON.stringify(process.argv.sl
     const envelopes = stdout.trim().split("\n").map((line) => JSON.parse(line));
     expect(envelopes[0]).toMatchObject({
       ok: true,
-      phase: "created",
-      threadId,
-      task: { id: threadId, cwd: fixtureHome },
-    });
-    expect(envelopes[1]).toMatchObject({
-      ok: true,
       phase: "accepted",
       threadId,
       turnId: "first-turn",
@@ -662,7 +715,7 @@ fs.writeFileSync(process.env.FAKE_CODEX_OPEN_LOG, JSON.stringify(process.argv.sl
         method: "turn/start",
         params: {
           threadId,
-          input: [{ type: "text", text: "Start this fresh task" }],
+          input: [{ type: "text", text: "Start this fresh task", text_elements: [] }],
           clientUserMessageId: submissionId,
         },
       },

@@ -38,7 +38,6 @@ struct CodexCommandDeckSurface: View {
     @State private var isCaptureGestureActive = false
     @State private var captureDragTranslation: CGSize = .zero
     @State private var isCaptureCancelArmed = false
-    @State private var outputRouteDialRotation: Double?
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -330,111 +329,122 @@ struct CodexCommandDeckSurface: View {
         isActive: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
-            Group {
-                if isIconMinimalDeck {
-                    ZStack {
-                        Image(systemName: icon)
-                            .font(.system(size: 15, weight: .medium))
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 6)
-                } else {
-                    VStack(spacing: 6) {
-                        Spacer(minLength: 0)
+        ZStack {
+            keycapSurface(active: isActive, isEmpty: false)
+                .allowsHitTesting(false)
+
+            Button(action: action) {
+                Group {
+                    if isIconMinimalDeck {
                         ZStack {
-                            Circle()
-                                .fill(utilityInk.opacity(isEnabled ? 0.055 : 0.025))
-                            Circle()
-                                .stroke(utilityInkFaint.opacity(isEnabled ? 0.14 : 0.06), lineWidth: 0.6)
                             Image(systemName: icon)
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(size: 15, weight: .medium))
                         }
-                        .frame(width: 25, height: 25)
-                        Text(label.uppercased())
-                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                            .tracking(1.1)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.65)
-                        Spacer(minLength: 0)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 6)
+                    } else {
+                        VStack(spacing: 6) {
+                            Spacer(minLength: 0)
+                            ZStack {
+                                Circle()
+                                    .fill(utilityInk.opacity(isEnabled ? 0.055 : 0.04))
+                                Circle()
+                                    .stroke(utilityInk.opacity(isEnabled ? 0.14 : 0.10), lineWidth: 0.6)
+                                Image(systemName: icon)
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .frame(width: 25, height: 25)
+                            Text(label.uppercased())
+                                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                                .tracking(1.1)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.65)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 8)
                     }
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 8)
                 }
+                .foregroundStyle(
+                    isEnabled
+                        ? utilityInk
+                        : disabledControlInk
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(RoundedRectangle(cornerRadius: keyCornerRadius, style: .continuous))
+                .overlay(alignment: .topLeading) { keyIndexLabel(index: index) }
             }
-            .foregroundStyle(
-                isEnabled
-                    ? utilityInk
-                    : utilityInkFaint.opacity(0.42)
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .contentShape(RoundedRectangle(cornerRadius: keyCornerRadius, style: .continuous))
-            .background(keycapSurface(active: isActive, isEmpty: false))
-            .overlay(alignment: .topLeading) { keyIndexLabel(index: index) }
+            .buttonStyle(.plain)
+            .disabled(!isEnabled)
+            .accessibilityLabel(label)
+            .accessibilityAddTraits(isActive ? .isSelected : [])
         }
-        .buttonStyle(.plain)
-        .disabled(!isEnabled)
-        .accessibilityLabel(label)
-        .accessibilityAddTraits(isActive ? .isSelected : [])
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .frame(minWidth: 44, minHeight: 44)
     }
 
     private var captureKey: some View {
-        Button(action: {}) {
-            Group {
-                if isIconMinimalDeck {
-                    VStack(spacing: 3) {
-                        Spacer(minLength: 0)
-                        Image(systemName: captureIcon)
-                            .font(.system(size: 16, weight: .semibold))
-                        Text(captureTitle)
-                            .font(.system(size: 8, weight: .bold, design: .monospaced))
-                            .tracking(0.8)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.6)
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 6)
-                } else {
-                    VStack(spacing: 0) {
-                        Spacer(minLength: 0)
+        ZStack {
+            talkKeySurface
+                .allowsHitTesting(false)
 
-                        HStack(spacing: 7) {
+            Button(action: {}) {
+                Group {
+                    if isIconMinimalDeck {
+                        VStack(spacing: 3) {
+                            Spacer(minLength: 0)
                             Image(systemName: captureIcon)
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.system(size: 16, weight: .semibold))
                             Text(captureTitle)
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                .tracking(1.2)
+                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                .tracking(0.8)
                                 .lineLimit(1)
-                                .minimumScaleFactor(0.72)
+                                .minimumScaleFactor(0.6)
+                            Spacer(minLength: 0)
                         }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 6)
+                    } else {
+                        VStack(spacing: 0) {
+                            Spacer(minLength: 0)
 
-                        Spacer(minLength: 0)
+                            HStack(spacing: 7) {
+                                Image(systemName: captureIcon)
+                                    .font(.system(size: 12, weight: .semibold))
+                                Text(captureTitle)
+                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                    .tracking(1.2)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.72)
+                            }
+
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 8)
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 8)
                 }
+                .foregroundStyle(
+                    store.hasDispatchDestination
+                        ? captureAccent
+                        : disabledControlInk
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .offset(x: captureContentOffset)
+                .contentShape(RoundedRectangle(cornerRadius: keyCornerRadius, style: .continuous))
+                .overlay(alignment: .topLeading) { keyIndexLabel(index: 14) }
+                .overlay(alignment: .topTrailing) { trailingKeyIndexLabel(index: 15) }
             }
-            .foregroundStyle(captureAccent)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .offset(x: captureContentOffset)
-            .contentShape(RoundedRectangle(cornerRadius: keyCornerRadius, style: .continuous))
-            .background(talkKeySurface)
-            .overlay(alignment: .topLeading) { keyIndexLabel(index: 14) }
-            .overlay(alignment: .topTrailing) { trailingKeyIndexLabel(index: 15) }
+            .buttonStyle(.plain)
+            .highPriorityGesture(captureGesture)
+            .disabled(!canCapture)
+            .accessibilityLabel(captureAccessibilityLabel)
+            .accessibilityHint(captureAccessibilityHint)
+            .accessibilityAction { store.handleCaptureControl() }
         }
-        .buttonStyle(.plain)
         .scaleEffect(isCaptureGestureActive ? 0.985 : 1)
         .animation(.easeOut(duration: 0.10), value: isCaptureGestureActive)
-        .highPriorityGesture(captureGesture)
-        .disabled(!canCapture)
-        .opacity(store.hasDispatchDestination ? 1 : 0.48)
-        .accessibilityLabel(captureAccessibilityLabel)
-        .accessibilityHint(captureAccessibilityHint)
-        .accessibilityAction { store.handleCaptureControl() }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .frame(minWidth: 44, minHeight: 44)
     }
@@ -527,6 +537,8 @@ struct CodexCommandDeckSurface: View {
 
                 if !isCaptureGestureActive {
                     isCaptureGestureActive = true
+                    Haptics.confirm.fire()
+                    Haptics.prepare(.transition)
                     store.beginPushToTalk()
                 }
 
@@ -538,9 +550,9 @@ struct CodexCommandDeckSurface: View {
                 guard shouldArmCancel != isCaptureCancelArmed else { return }
                 isCaptureCancelArmed = shouldArmCancel
                 if shouldArmCancel {
-                    UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: 0.68)
+                    Haptics.stop.fire()
                 } else {
-                    UISelectionFeedbackGenerator().selectionChanged()
+                    Haptics.toggle.fire()
                 }
             }
             .onEnded { _ in
@@ -550,6 +562,7 @@ struct CodexCommandDeckSurface: View {
                 if shouldCancel {
                     store.cancelCapture()
                 } else {
+                    Haptics.transition.fire()
                     store.endPushToTalk()
                 }
             }
@@ -569,7 +582,15 @@ struct CodexCommandDeckSurface: View {
 
     private func audioKey(index: Int) -> some View {
         Button(action: cycleOutputRoute) {
-            outputRouteDial
+            VStack(spacing: 1) {
+                outputRouteSelectorPlate
+                    .frame(height: 44, alignment: .bottom)
+
+                Text("OUTPUT")
+                    .font(.system(size: 7.5, weight: .semibold, design: .monospaced))
+                    .tracking(0.7)
+                    .foregroundStyle(utilityInk)
+            }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .contentShape(RoundedRectangle(cornerRadius: keyCornerRadius, style: .continuous))
                 .background(keycapSurface(active: false, isEmpty: false))
@@ -581,43 +602,17 @@ struct CodexCommandDeckSurface: View {
         .sensoryFeedback(.selection, trigger: outputRoute.rawValue)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .frame(minWidth: 44, minHeight: 44)
-        .onAppear {
-            if outputRouteDialRotation == nil {
-                outputRouteDialRotation = outputRouteDialCanonicalAngle(for: outputRoute)
-            }
-        }
-        .onChange(of: outputRoute.rawValue) { oldValue, newValue in
-            guard
-                let oldRoute = AIResponseSpeechRoute(rawValue: oldValue),
-                let newRoute = AIResponseSpeechRoute(rawValue: newValue),
-                oldRoute != newRoute
-            else { return }
-
-            let currentRotation = outputRouteDialRotation
-                ?? outputRouteDialCanonicalAngle(for: oldRoute)
-            let updatedRotation = currentRotation
-                + outputRouteDialRotationDelta(from: oldRoute, to: newRoute)
-
-            if reduceMotion {
-                outputRouteDialRotation = updatedRotation
-            } else {
-                withAnimation(.spring(response: 0.32, dampingFraction: 0.74)) {
-                    outputRouteDialRotation = updatedRotation
-                }
-            }
-        }
     }
 
     private func statusReadoutKey(index: Int) -> some View {
         Button(action: { showingTaskDetails = true }) {
-            VStack(spacing: -1) {
+            VStack(spacing: 1) {
                 statusInstrument
-                    .scaleEffect(0.82)
-                    .frame(height: 45)
+                    .frame(height: 44, alignment: .bottom)
 
-                Text("DETAILS")
-                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                    .tracking(0.9)
+                Text("DETAILS ›")
+                    .font(.system(size: 7.5, weight: .semibold, design: .monospaced))
+                    .tracking(0.7)
                     .foregroundStyle(utilityInk)
             }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -632,244 +627,167 @@ struct CodexCommandDeckSurface: View {
         .frame(minWidth: 44, minHeight: 44)
     }
 
-    private var statusLEDWindowSurface: some View {
-        let shape = RoundedRectangle(cornerRadius: max(3, keyCornerRadius * 0.4), style: .continuous)
-        return shape
-            .fill(theme.chrome.panel.opacity(colorScheme == .dark ? 0.96 : 0.90))
-            .overlay {
-                shape.strokeBorder(theme.chrome.panelEdge.opacity(0.72), lineWidth: 0.6)
-            }
-            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.28 : 0.10), radius: 2, y: 1)
-    }
-
-    private var outputRouteDial: some View {
-        ZStack {
-            instrumentDialSurface(isSignaled: true, signalColor: theme.chrome.accent)
-
+    private var outputRouteSelectorPlate: some View {
+        VStack(spacing: 0) {
             ForEach(outputRouteOrder, id: \.rawValue) { route in
-                outputRouteDialDetent(route)
+                outputRoutePosition(route)
             }
-
-            Capsule()
-                .fill(
-                    LinearGradient(
-                        colors: [theme.chrome.accent, theme.chrome.accent.opacity(0.72)],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .frame(width: 18, height: 2)
-                .offset(x: 9)
-                .rotationEffect(
-                    .degrees(
-                        outputRouteDialRotation
-                            ?? outputRouteDialCanonicalAngle(for: outputRoute)
-                    )
-                )
-                .offset(y: -0.8)
-                .shadow(color: theme.chrome.accentGlow.opacity(0.42), radius: 2, y: 1)
-
-            ZStack {
-                Circle()
-                    .fill(theme.chrome.panel)
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [Color.white.opacity(0.18), .clear],
-                            center: UnitPoint(x: 0.36, y: 0.28),
-                            startRadius: 0,
-                            endRadius: 12
-                        )
-                    )
-                Circle()
-                    .stroke(theme.chrome.panelEdge.opacity(0.78), lineWidth: 0.7)
-                Text(outputRouteDialCode(for: outputRoute))
-                    .font(.system(size: 7, weight: .bold, design: .monospaced))
-                    .tracking(0.2)
-                    .foregroundStyle(theme.chrome.accent)
-                    .contentTransition(.opacity)
-            }
-            .frame(width: 23, height: 23)
-            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.42 : 0.24), radius: 3, y: 2)
         }
-        .frame(width: 52, height: 52)
+        .padding(.vertical, 2)
+        .padding(.horizontal, 4)
+        .frame(width: 56, height: 36)
+        .background(deckLEDPlateSurface(signalColor: theme.chrome.accent, isSignaled: true))
+        .animation(
+            reduceMotion ? nil : .easeOut(duration: 0.15),
+            value: outputRoute.rawValue
+        )
+        .accessibilityHidden(true)
     }
 
-    private func outputRouteDialDetent(_ route: AIResponseSpeechRoute) -> some View {
+    private func outputRoutePosition(_ route: AIResponseSpeechRoute) -> some View {
         let isActive = route == outputRoute
-        return ZStack {
+        return HStack(spacing: 4) {
             Circle()
-                .fill(isActive ? theme.chrome.accentTint : Color.clear)
+                .fill(isActive ? theme.chrome.accent : .clear)
                 .overlay {
-                    Circle().stroke(
-                        isActive ? theme.chrome.accent.opacity(0.62) : utilityInkFaint.opacity(0.10),
-                        lineWidth: 0.7
-                    )
+                    Circle()
+                        .strokeBorder(
+                            isActive ? theme.chrome.accent : utilityInkFaint.opacity(0.42),
+                            lineWidth: 0.7
+                        )
                 }
-            Image(systemName: outputRouteIcon(for: route))
-                .font(.system(size: isActive ? 7.5 : 6.5, weight: isActive ? .bold : .medium))
-                .foregroundStyle(isActive ? theme.chrome.accent : utilityInkFaint.opacity(0.46))
+                .frame(width: isActive ? 4 : 3.5, height: isActive ? 4 : 3.5)
+                .shadow(
+                    color: isActive ? theme.chrome.accentGlow.opacity(0.40) : .clear,
+                    radius: 1.5
+                )
+
+            Text(route.displayName.uppercased())
+                .font(.system(size: 7, weight: isActive ? .bold : .medium, design: .monospaced))
+                .tracking(0.25)
+                .foregroundStyle(isActive ? theme.chrome.accent : utilityInkFaint.opacity(0.58))
+                .lineLimit(1)
+
+            Spacer(minLength: 0)
         }
-        .frame(width: isActive ? 14 : 12, height: isActive ? 14 : 12)
-        .offset(outputRouteDialOffset(for: route))
+        .padding(.horizontal, 3)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background {
+            RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                .fill(isActive ? theme.chrome.accent.opacity(0.10) : .clear)
+        }
     }
 
     private var outputRouteOrder: [AIResponseSpeechRoute] {
         [.silent, .watch, .phone]
     }
 
-    private func outputRouteDialCanonicalAngle(for route: AIResponseSpeechRoute) -> Double {
-        switch route {
-        case .silent: return 180
-        case .watch: return 270
-        case .phone: return 360
-        }
-    }
-
-    private func outputRouteDialRotationDelta(
-        from oldRoute: AIResponseSpeechRoute,
-        to newRoute: AIResponseSpeechRoute
-    ) -> Double {
-        switch (oldRoute, newRoute) {
-        case (.silent, .watch), (.watch, .phone): return 90
-        case (.phone, .silent): return 180
-        case (.watch, .silent), (.phone, .watch): return -90
-        case (.silent, .phone): return -180
-        default: return 0
-        }
-    }
-
-    private func outputRouteDialCode(for route: AIResponseSpeechRoute) -> String {
-        switch route {
-        case .silent: return "S"
-        case .watch: return "W"
-        case .phone: return "P"
-        }
-    }
-
-    private func outputRouteDialOffset(for route: AIResponseSpeechRoute) -> CGSize {
-        switch route {
-        case .phone: return CGSize(width: 18, height: -1)
-        case .watch: return CGSize(width: 0, height: -18)
-        case .silent: return CGSize(width: -18, height: -1)
-        }
-    }
-
-    @ViewBuilder
     private var statusInstrument: some View {
-        if statusInstrumentIsAnimated && !reduceMotion {
-            TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { context in
-                statusInstrumentFace(
-                    phase: context.date.timeIntervalSinceReferenceDate * 5.2
-                )
-            }
-        } else {
-            statusInstrumentFace(phase: 0)
-        }
-    }
-
-    private func statusInstrumentFace(phase: Double) -> some View {
-        ZStack {
-            instrumentDialSurface(
-                isSignaled: deckMeterIsActive || deckMeterIsFailure,
-                signalColor: deckPhaseColor
-            )
-
-            VStack(spacing: 2) {
+        HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: 1) {
                 Text(statusInstrumentLabel)
-                    .font(.system(size: 7.5, weight: .bold, design: .monospaced))
-                    .tracking(0.7)
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .tracking(0.8)
                     .foregroundStyle(statusInstrumentSignalColor)
                     .lineLimit(1)
+                    .contentTransition(.opacity)
 
-                HStack(alignment: .center, spacing: 2) {
-                    ForEach(0..<5, id: \.self) { bar in
-                        Capsule()
-                            .fill(statusInstrumentSignalColor)
-                            .frame(width: 2, height: statusInstrumentBarHeight(bar, phase: phase))
-                    }
-                }
-                .frame(height: 8)
+                Text(deckStatusLabel)
+                    .font(.system(size: 6.5, weight: .medium, design: .monospaced))
+                    .tracking(0.15)
+                    .foregroundStyle(utilityInkFaint.opacity(0.66))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+                    .contentTransition(.opacity)
             }
-            .frame(width: 37, height: 24)
-            .background(statusLEDWindowSurface)
-            .shadow(
-                color: statusInstrumentSignalColor.opacity(statusInstrumentIsAnimated ? 0.30 : 0.10),
-                radius: statusInstrumentIsAnimated ? 3 : 1,
-                y: 1
-            )
+
+            Spacer(minLength: 0)
+
+            Circle()
+                .fill(statusInstrumentSignalColor)
+                .frame(width: 4.5, height: 4.5)
+                .shadow(
+                    color: statusInstrumentSignalColor.opacity(deckMeterIsActive ? 0.38 : 0.12),
+                    radius: deckMeterIsActive ? 2 : 1
+                )
         }
-        .frame(width: 52, height: 52)
+        .padding(.horizontal, 7)
+        .frame(width: 56, height: 36)
+        .background(
+            deckLEDPlateSurface(
+                signalColor: statusInstrumentSignalColor,
+                isSignaled: deckMeterIsActive || deckMeterIsFailure
+            )
+        )
+        .animation(
+            reduceMotion ? nil : .easeOut(duration: 0.12),
+            value: deckStatusLabel
+        )
+        .accessibilityHidden(true)
     }
 
     private var statusInstrumentLabel: String {
         switch deckStatusLabel {
         case "READY": return "RDY"
-        case "NO TASK": return "OFF"
-        default: return deckMeterLabel
+        case "NO TASK": return "—"
+        case "QUEUED": return "QUE"
+        case "RECEIVED", "RESPONSE", "VOICE INBOUND", "SPEAKING": return "RX"
+        case "ERROR": return "ERR"
+        default: return "RUN"
         }
     }
 
     private var statusInstrumentSignalColor: Color {
-        deckMeterIsActive || deckMeterIsFailure
-            ? deckPhaseColor
-            : theme.chrome.panelInkFaint.opacity(0.58)
-    }
-
-    private var statusInstrumentIsAnimated: Bool {
-        store.phase == .listening
-            || store.phase == .speaking
-            || voicePlayback.isVoicePlaybackActive
-    }
-
-    private func statusInstrumentBarHeight(_ index: Int, phase: Double) -> CGFloat {
-        guard statusInstrumentIsAnimated else {
-            return [3, 5, 7, 5, 3][index]
+        if deckMeterIsFailure {
+            return deckFailureColor
         }
-
-        if store.phase == .listening {
-            let level = min(max(CGFloat(store.captureLevel), 0), 1).squareRoot()
-            let ripple = CGFloat(0.55 + 0.45 * sin(phase + Double(index) * 0.92))
-            return 2 + (6 * max(0.18, level) * ripple)
+        if deckStatusLabel == "NO TASK" {
+            return theme.chrome.panelInkFaint.opacity(0.42)
         }
-
-        let playbackWave = CGFloat(0.5 + 0.5 * sin(phase + Double(index) * 1.18))
-        return 2 + (6 * playbackWave)
+        if deckStatusLabel == "READY" {
+            return theme.chrome.accent.opacity(0.62)
+        }
+        return theme.chrome.accent
     }
 
-    private func instrumentDialSurface(isSignaled: Bool, signalColor: Color) -> some View {
-        let shape = Circle()
-        let raisedShadow = colorScheme == .dark ? Color.black.opacity(0.34) : Color.black.opacity(0.13)
+    private func deckLEDPlateSurface(signalColor: Color, isSignaled: Bool) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 5, style: .continuous)
         return shape
-            .fill(utilityFace)
+            .fill(
+                LinearGradient(
+                    colors: [theme.chrome.panelAlt, theme.chrome.panel],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
             .overlay {
                 if !isIconMinimalDeck {
-                    shape.fill(
-                        LinearGradient(
-                            colors: [Color.white.opacity(colorScheme == .dark ? 0.08 : 0.28), .clear, Color.black.opacity(0.05)],
-                            startPoint: .top,
-                            endPoint: .bottom
+                    shape
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.white.opacity(colorScheme == .dark ? 0.035 : 0.16), .clear],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
                         )
-                    )
                 }
             }
             .overlay {
                 shape.strokeBorder(
-                    isSignaled ? signalColor.opacity(0.72) : utilityInkFaint.opacity(0.14),
-                    lineWidth: isSignaled ? 1 : theme.chrome.hairlineWidth
+                    theme.chrome.panelEdge.opacity(isSignaled ? 0.62 : 0.44),
+                    lineWidth: 0.55
                 )
             }
-            .overlay {
-                Circle()
-                    .strokeBorder(utilityInk.opacity(0.06), lineWidth: 5)
-                    .padding(3)
-            }
             .compositingGroup()
-            .shadow(color: isIconMinimalDeck ? .clear : raisedShadow, radius: 5, y: 3)
             .shadow(
-                color: isSignaled ? signalColor.opacity(0.14) : .clear,
-                radius: 4,
-                y: 2
+                color: isIconMinimalDeck ? .clear : Color.black.opacity(colorScheme == .dark ? 0.28 : 0.10),
+                radius: 2,
+                y: 1
+            )
+            .shadow(
+                color: isSignaled ? signalColor.opacity(0.06) : .clear,
+                radius: 2,
+                y: 1
             )
     }
 
@@ -878,54 +796,58 @@ struct CodexCommandDeckSurface: View {
         let lane = number.flatMap(store.lane)
         let isEnabled = number != nil && !store.phase.isCapturing
 
-        return Button {
-            guard let number else { return }
-            guard lane != nil else {
-                openMapper()
-                return
-            }
-            Task { await store.activate(number) }
-        } label: {
-            Group {
-                if isIconMinimalDeck {
-                    Image(systemName: direction < 0 ? "chevron.left" : "chevron.right")
-                        .font(.system(size: 14, weight: .semibold))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        return ZStack {
+            keycapSurface(active: false, isEmpty: false)
+                .allowsHitTesting(false)
+
+            Button {
+                guard let number else { return }
+                guard lane != nil else {
+                    openMapper()
+                    return
+                }
+                Task { await store.activate(number) }
+            } label: {
+                Group {
+                    if isIconMinimalDeck {
+                        Image(systemName: direction < 0 ? "chevron.left" : "chevron.right")
+                            .font(.system(size: 14, weight: .semibold))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 6)
+                    } else {
+                        VStack(spacing: 5) {
+                            Spacer(minLength: 0)
+                            ZStack {
+                                Circle()
+                                    .fill(utilityInk.opacity(isEnabled ? 0.055 : 0.04))
+                                Circle()
+                                    .stroke(utilityInk.opacity(isEnabled ? 0.14 : 0.10), lineWidth: 0.6)
+                                Image(systemName: direction < 0 ? "chevron.left" : "chevron.right")
+                                    .font(.system(size: 11, weight: .semibold))
+                            }
+                            .frame(width: 23, height: 23)
+
+                            Text(number.map { "LANE \($0 < 10 ? "0\($0)" : "\($0)")" } ?? "LANE")
+                                .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                                .tracking(0.8)
+                                .lineLimit(1)
+                            Spacer(minLength: 0)
+                        }
                         .padding(.horizontal, 4)
                         .padding(.vertical, 6)
-                } else {
-                    VStack(spacing: 5) {
-                        Spacer(minLength: 0)
-                        ZStack {
-                            Circle()
-                                .fill(utilityInk.opacity(isEnabled ? 0.055 : 0.025))
-                            Circle()
-                                .stroke(utilityInkFaint.opacity(isEnabled ? 0.14 : 0.06), lineWidth: 0.6)
-                            Image(systemName: direction < 0 ? "chevron.left" : "chevron.right")
-                                .font(.system(size: 11, weight: .semibold))
-                        }
-                        .frame(width: 23, height: 23)
-
-                        Text(number.map { "LANE \($0 < 10 ? "0\($0)" : "\($0)")" } ?? "LANE")
-                            .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                            .tracking(0.8)
-                            .lineLimit(1)
-                        Spacer(minLength: 0)
                     }
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 6)
                 }
+                .foregroundStyle(isEnabled ? utilityInk : disabledControlInk)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(RoundedRectangle(cornerRadius: keyCornerRadius, style: .continuous))
+                .overlay(alignment: .topLeading) { keyIndexLabel(index: index) }
             }
-            .foregroundStyle(isEnabled ? utilityInk : utilityInkFaint.opacity(0.42))
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .contentShape(RoundedRectangle(cornerRadius: keyCornerRadius, style: .continuous))
-            .background(keycapSurface(active: false, isEmpty: false))
-            .overlay(alignment: .topLeading) { keyIndexLabel(index: index) }
+            .buttonStyle(.plain)
+            .disabled(!isEnabled)
+            .accessibilityLabel(direction < 0 ? "Previous lane" : "Next lane")
+            .accessibilityHint(lane == nil ? "Opens the mapper for this empty lane" : "Selects lane \(number ?? 0)")
         }
-        .buttonStyle(.plain)
-        .disabled(!isEnabled)
-        .accessibilityLabel(direction < 0 ? "Previous lane" : "Next lane")
-        .accessibilityHint(lane == nil ? "Opens the mapper for this empty lane" : "Selects lane \(number ?? 0)")
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .frame(minWidth: 44, minHeight: 44)
     }
@@ -1036,14 +958,6 @@ struct CodexCommandDeckSurface: View {
         return store.latestTurn(forTaskID: taskID)
     }
 
-    private func outputRouteIcon(for route: AIResponseSpeechRoute) -> String {
-        switch route {
-        case .silent: return "speaker.slash"
-        case .phone: return "iphone"
-        case .watch: return "applewatch"
-        }
-    }
-
     private var utilityFace: Color {
         // Raised key face from the active theme card, not a fixed cream brown.
         theme.colors.cardBackground
@@ -1059,6 +973,10 @@ struct CodexCommandDeckSurface: View {
 
     private var utilityInkFaint: Color {
         theme.colors.textTertiary
+    }
+
+    private var disabledControlInk: Color {
+        utilityInk.opacity(0.68)
     }
 
     private func cycleOutputRoute() {
@@ -1120,24 +1038,10 @@ struct CodexCommandDeckSurface: View {
         }
     }
 
-    private var deckMeterLabel: String {
-        switch deckStatusLabel {
-        case "LISTENING": return "MIC"
-        case "TRANSCRIBING", "SENDING": return "TX"
-        case "RECEIVED": return "ACK"
-        case "WORKING", "STEERED", "QUEUED", "RECONNECTING": return "RUN"
-        case "RESPONSE": return "RX"
-        case "VOICE INBOUND": return "VOX"
-        case "SPEAKING": return "PLAY"
-        case "ERROR": return "ERR"
-        default: return "—"
-        }
-    }
-
     private var deckMeterIsFailure: Bool { deckStatusLabel == "ERROR" }
 
     private var deckMeterIsActive: Bool {
-        !["READY", "NO LANE", "ERROR"].contains(deckStatusLabel)
+        !["READY", "NO TASK", "NO LANE", "ERROR"].contains(deckStatusLabel)
     }
 
     private var deckPhaseColor: Color {
@@ -1308,7 +1212,11 @@ private struct CodexCommandConsole: View {
     private var lanePicker: some View {
         HStack(spacing: 0) {
             ForEach(Array(CodexLane.range), id: \.self) { number in
-                lanePickerButton(number)
+                if store.isTemporaryTaskSelected && number == CodexLane.range.upperBound {
+                    temporaryTaskButton
+                } else {
+                    lanePickerButton(number)
+                }
 
                 if number != CodexLane.range.upperBound {
                     Rectangle()
@@ -1336,8 +1244,40 @@ private struct CodexCommandConsole: View {
         }
         .frame(height: 44)
         .contentShape(Rectangle())
-        .sensoryFeedback(.selection, trigger: store.activeLaneNumber)
+        .sensoryFeedback(.selection, trigger: store.selectedTask?.id)
         .accessibilityLabel("Codex lanes")
+    }
+
+    private var temporaryTaskButton: some View {
+        let isEnabled = !store.phase.isCapturing
+
+        return Button(action: store.clearSelection) {
+            ZStack(alignment: .top) {
+                Capsule()
+                    .fill(theme.chrome.panelAccent)
+                    .frame(width: 22, height: 2)
+                    .talkieAccentGlow(radius: 3)
+
+                VStack(spacing: 1) {
+                    Image(systemName: "desktopcomputer")
+                        .font(.system(size: 8, weight: .semibold))
+
+                    Text("TEMP")
+                        .font(.system(size: 5.5, weight: .bold, design: .monospaced))
+                        .tracking(0.4)
+                }
+                .foregroundStyle(theme.chrome.panelAccent)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: 44, maxHeight: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .accessibilityLabel("Temporary Codex task selected")
+        .accessibilityHint("Closes the temporary task and restores Lane 6")
+        .accessibilityAddTraits(.isSelected)
     }
 
     private func lanePickerButton(_ number: Int) -> some View {
@@ -1392,7 +1332,7 @@ private struct CodexCommandConsole: View {
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
-        .opacity(isEnabled || isActive ? 1 : 0.56)
+        .opacity(isEnabled || isActive ? 1 : 0.76)
         .accessibilityLabel(lanePickerAccessibilityLabel(number: number, lane: lane, isActive: isActive))
         .accessibilityHint(lane == nil ? "Opens the task mapper" : "Selects this exact Codex task")
         .accessibilityAddTraits(isActive ? .isSelected : [])
@@ -1540,27 +1480,23 @@ private struct CodexCommandConsole: View {
                     .foregroundStyle(theme.chrome.panelInk)
                     .lineLimit(1)
 
-                if store.hasDispatchDestination && store.activeLaneNumber == nil {
-                    Button(action: onShowMapper) {
-                        Text("NO LANE")
-                            .font(.system(size: 7, weight: .bold, design: .monospaced))
-                            .tracking(0.8)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 4)
-                            .background(
-                                Capsule().fill(theme.chrome.panelInk.opacity(0.08))
+                if store.isTemporaryTaskSelected {
+                    Label("TEMP", systemImage: "desktopcomputer")
+                        .font(.system(size: 7, weight: .bold, design: .monospaced))
+                        .tracking(0.8)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule().fill(theme.chrome.panelInk.opacity(0.08))
+                        )
+                        .overlay {
+                            Capsule().stroke(
+                                theme.chrome.panelInk.opacity(0.18),
+                                lineWidth: theme.chrome.hairlineWidth
                             )
-                            .overlay {
-                                Capsule().stroke(
-                                    theme.chrome.panelInk.opacity(0.18),
-                                    lineWidth: theme.chrome.hairlineWidth
-                                )
-                            }
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(theme.chrome.panelInkFaint)
-                    .accessibilityLabel("Channel without a lane")
-                    .accessibilityHint("Opens the lane mapper")
+                        }
+                        .foregroundStyle(theme.chrome.panelInkFaint)
+                        .accessibilityLabel("Temporary task")
                 }
 
                 Spacer(minLength: 6)
@@ -2160,7 +2096,7 @@ private struct CodexCommandConsole: View {
         guard let task = store.selectedTask else {
             return "No active Codex task. Choose a lane or open the channel catalogue."
         }
-        let destination = store.activeLaneNumber.map { "Lane \($0)" } ?? "Channel without a lane"
+        let destination = store.activeLaneNumber.map { "Lane \($0)" } ?? "Temporary task"
         return "\(destination), \(task.projectName), \(task.title), \(consoleStatusLabel)"
     }
 
@@ -2172,7 +2108,7 @@ private struct CodexCommandConsole: View {
         if let laneNumber = store.activeLaneNumber {
             return "Lane \(laneNumber), \(task.projectName)"
         }
-        return "No lane, \(task.projectName)"
+        return "Temporary task, \(task.projectName)"
     }
 
     private var destinationTitle: String {

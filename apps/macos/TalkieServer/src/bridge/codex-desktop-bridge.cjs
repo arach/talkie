@@ -20,6 +20,7 @@ const QUEUE_MUTATION_LOCK_TIMEOUT_MS = 10_000;
 const TURN_TIMEOUT_MS = 30 * 60_000;
 const QUEUED_TURN_TIMEOUT_MS = 60 * 60_000;
 const APP_SERVER_REQUEST_TIMEOUT_MS = 30_000;
+const REMOTE_APPROVAL_TIMEOUT_MS = 10 * 60_000;
 const CODEX_THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CODEX_THREAD_DEEP_LINK_HOST = 'threads';
 
@@ -71,6 +72,158 @@ function fail(message, code = 'bridge-failed') {
   const error = new Error(message);
   error.code = code;
   throw error;
+}
+
+function desktopSteerFailureCode(error) {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return /active turn already ended|no active turn|turn (?:is|was) not active/i.test(message)
+    ? 'turn-not-active'
+    : 'turn-steer-failed';
+}
+
+const REMOTE_APPROVAL_METHODS = new Set([
+  'item/commandExecution/requestApproval',
+  'item/fileChange/requestApproval',
+  'item/permissions/requestApproval',
+  'applyPatchApproval',
+  'execCommandApproval',
+]);
+
+function approvalDetail(method, params) {
+  if (typeof params?.reason === 'string' && params.reason.trim()) return params.reason.trim();
+  if (method === 'item/commandExecution/requestApproval' && typeof params?.command === 'string') {
+    return params.command.trim();
+  }
+  if (method === 'execCommandApproval' && Array.isArray(params?.command)) {
+    return params.command.map(String).join(' ');
+  }
+  if (method === 'item/fileChange/requestApproval' && typeof params?.grantRoot === 'string') {
+    return `Allow changes under ${params.grantRoot}`;
+  }
+  if (method === 'applyPatchApproval' && params?.fileChanges && typeof params.fileChanges === 'object') {
+    const count = Object.keys(params.fileChanges).length;
+    return `${count} file ${count === 1 ? 'change' : 'changes'}`;
+  }
+  if (method === 'item/permissions/requestApproval') {
+    const permissions = [];
+    const fileSystem = params?.permissions?.fileSystem;
+    const network = params?.permissions?.network;
+    if (fileSystem) permissions.push('additional file access');
+    if (network?.enabled) permissions.push('network access');
+    return permissions.length > 0 ? `Allow ${permissions.join(' and ')}` : 'Allow additional access';
+  }
+  return 'Review this Codex action';
+}
+
+function approvalTitle(method) {
+  switch (method) {
+    case 'item/commandExecution/requestApproval':
+    case 'execCommandApproval':
+      return 'Run command';
+    case 'item/fileChange/requestApproval':
+    case 'applyPatchApproval':
+      return 'Apply file changes';
+    case 'item/permissions/requestApproval':
+      return 'Extend access';
+    default:
+      return 'Approve Codex action';
+  }
+}
+
+function remoteApprovalResponse(method, params, decision) {
+  const approved = decision === 'approve';
+  if (method === 'item/commandExecution/requestApproval' || method === 'item/fileChange/requestApproval') {
+    return { result: { decision: approved ? 'accept' : 'decline' } };
+  }
+  if (method === 'item/permissions/requestApproval') {
+    const requested = params?.permissions || {};
+    return {
+      result: {
+        permissions: approved
+          ? {
+              ...(requested.network && { network: requested.network }),
+              ...(requested.fileSystem && { fileSystem: requested.fileSystem }),
+            }
+          : {},
+        scope: 'turn',
+      },
+    };
+  }
+  if (method === 'applyPatchApproval' || method === 'execCommandApproval') {
+    return {
+      result: {
+        decision: approved
+          ? 'approved'
+          : { denied: { rejection: 'Declined from Talkie remote.' } },
+      },
+    };
+  }
+  return {
+    error: {
+      code: -32601,
+      message: `Talkie does not support the Codex server request ${method}.`,
+    },
+  };
+}
+
+function unsupportedServerRequestError(method, params) {
+  if (method === 'item/tool/requestUserInput' || method === 'mcpServer/elicitation/request') {
+    return Object.assign(
+      new Error('Codex asked the operator a question that this version of Talkie cannot answer remotely.'),
+      { code: 'operator-input-required' },
+    );
+  }
+  if (method === 'item/tool/call') {
+    const tool = typeof params?.tool === 'string' ? params.tool : 'a client-owned tool';
+    return Object.assign(
+      new Error(`This turn needs ${tool}, which must currently run in Codex Desktop.`),
+      { code: 'desktop-tool-required' },
+    );
+  }
+  return Object.assign(
+    new Error(`Codex requested unsupported client action ${method}.`),
+    { code: 'client-request-unsupported' },
+  );
+}
+
+function approvalDecisionPath(submissionId, approvalId) {
+  const directory = process.env.TALKIE_CODEX_APPROVAL_DIR;
+  if (!directory || !CODEX_THREAD_ID_PATTERN.test(submissionId) || !CODEX_THREAD_ID_PATTERN.test(approvalId)) {
+    fail('Talkie remote approval is unavailable for this turn.', 'approval-channel-unavailable');
+  }
+  return path.join(directory, `${submissionId}.${approvalId}.json`);
+}
+
+async function waitForRemoteApproval(submissionId, method, params) {
+  const approval = {
+    id: randomUUID(),
+    method,
+    title: approvalTitle(method),
+    detail: approvalDetail(method, params),
+    requestedAt: new Date().toISOString(),
+  };
+  const decisionPath = approvalDecisionPath(submissionId, approval.id);
+  writeResult({ ok: true, phase: 'approval-required', approval });
+  const deadline = Date.now() + REMOTE_APPROVAL_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    try {
+      const payload = JSON.parse(fs.readFileSync(decisionPath, 'utf8'));
+      fs.rmSync(decisionPath, { force: true });
+      if (payload?.decision !== 'approve' && payload?.decision !== 'decline') {
+        fail('Talkie returned an invalid approval decision.', 'approval-decision-invalid');
+      }
+      writeResult({
+        ok: true,
+        phase: 'approval-resolved',
+        approval: { ...approval, decision: payload.decision },
+      });
+      return remoteApprovalResponse(method, params, payload.decision);
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  fail('The remote approval request expired before the operator responded.', 'approval-timeout');
 }
 
 function taskSummary(thread, fallbackCwd = '') {
@@ -791,7 +944,8 @@ class DesktopIPCClient {
       timeoutMs: 30_000,
     });
     if (response.resultType !== 'success') {
-      fail(`Codex Desktop could not steer the active turn: ${response.error || 'unknown error'}`, 'turn-steer-failed');
+      const message = `Codex Desktop could not steer the active turn: ${response.error || 'unknown error'}`;
+      fail(message, desktopSteerFailureCode(message));
     }
   }
 
@@ -932,51 +1086,37 @@ class DesktopIPCClient {
 }
 
 class AppServerClient {
-  constructor() {
-    this.process = null;
-    this.stdoutBuffer = '';
+  constructor(submissionId) {
+    this.submissionId = submissionId;
+    this.connection = null;
+    this.startThreadWithFirstTurnRequest = null;
+    this.eventLoop = null;
     this.stderr = '';
-    this.pending = new Map();
-    this.nextRequestId = 1;
-    this.closing = false;
     this.blockingError = null;
     this.terminalTurns = new Map();
   }
 
   async connect() {
-    const executable = codexExecutable();
-    this.process = spawn(executable, ['app-server', '--listen', 'stdio://'], {
-      stdio: ['pipe', 'pipe', 'pipe'],
+    const {
+      openCodexAppServerConnection,
+      startThreadWithFirstTurn,
+    } = await import('@openscout/agent-sessions/codex-app-server');
+    this.startThreadWithFirstTurnRequest = startThreadWithFirstTurn;
+    this.connection = await openCodexAppServerConnection({
+      executable: codexExecutable(),
+      launchArgs: ['--listen', 'stdio://'],
       env: process.env,
-    });
-    this.process.stdout.setEncoding('utf8');
-    this.process.stderr.setEncoding('utf8');
-    this.process.stdout.on('data', (chunk) => this.onData(chunk));
-    this.process.stderr.on('data', (chunk) => {
-      this.stderr = `${this.stderr}${chunk}`.slice(-32 * 1024);
-    });
-    this.process.on('error', (error) => this.rejectAll(error));
-    this.process.on('close', (code) => {
-      if (!this.closing) {
-        const detail = this.stderr.trim();
-        this.rejectAll(Object.assign(
-          new Error(detail || `Codex app-server exited with status ${code}.`),
-          { code: 'app-server-unavailable' },
-        ));
-      }
-    });
-    await new Promise((resolve, reject) => {
-      this.process.once('spawn', resolve);
-      this.process.once('error', reject);
-    });
-    await this.request('initialize', {
+      requestTimeoutMs: APP_SERVER_REQUEST_TIMEOUT_MS,
       clientInfo: {
         name: 'talkie_command_deck',
         title: 'Talkie Command Deck',
         version: '1.0.0',
       },
+      onStderr: (chunk) => {
+        this.stderr = `${this.stderr}${chunk}`.slice(-32 * 1024);
+      },
     });
-    this.notify('initialized', {});
+    this.eventLoop = this.consumeEvents();
   }
 
   async resume(threadId) {
@@ -995,6 +1135,31 @@ class AppServerClient {
       fail('Codex app-server returned an unreadable task.', 'protocol-mismatch');
     }
     return thread;
+  }
+
+  async startThreadWithFirstTurn(cwd, text, clientUserMessageId) {
+    if (!this.connection || !this.startThreadWithFirstTurnRequest) {
+      fail('Codex app-server is not connected.', 'app-server-unavailable');
+    }
+    let result;
+    try {
+      result = await this.startThreadWithFirstTurnRequest(this.connection, {
+        thread: { cwd },
+        input: text,
+        turn: { clientUserMessageId },
+      });
+    } catch (error) {
+      throw this.mapRequestError(error, 'thread/start');
+    }
+    const thread = result?.thread?.thread;
+    const turnId = result?.turn?.turn?.id;
+    if (!thread || typeof thread.id !== 'string' || !thread.id.trim()) {
+      fail('Codex app-server returned an unreadable task.', 'protocol-mismatch');
+    }
+    if (typeof turnId !== 'string' || !turnId) {
+      fail('Codex app-server returned an unreadable turn response.', 'protocol-mismatch');
+    }
+    return { thread, turnId };
   }
 
   async listThreads(limit, cursor) {
@@ -1047,47 +1212,21 @@ class AppServerClient {
     return expectedTurnId;
   }
 
-  request(method, params, timeoutMs = APP_SERVER_REQUEST_TIMEOUT_MS) {
-    const id = this.nextRequestId++;
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(id);
-        reject(Object.assign(new Error(`Timed out waiting for ${method}.`), { code: 'desktop-timeout' }));
-      }, timeoutMs);
-      this.pending.set(id, { resolve, reject, timer, method });
-      this.send({ method, id, params });
-    });
-  }
-
-  notify(method, params) {
-    this.send({ method, params });
-  }
-
-  send(message) {
-    if (!this.process?.stdin?.writable) {
+  async request(method, params, timeoutMs = APP_SERVER_REQUEST_TIMEOUT_MS) {
+    if (!this.connection) {
       fail('Codex app-server is not connected.', 'app-server-unavailable');
     }
-    this.process.stdin.write(`${JSON.stringify(message)}\n`);
+    try {
+      return await this.connection.request(method, params, { timeoutMs });
+    } catch (error) {
+      throw this.mapRequestError(error, method);
+    }
   }
 
-  onData(chunk) {
-    this.stdoutBuffer += chunk;
-    const lines = this.stdoutBuffer.split('\n');
-    this.stdoutBuffer = lines.pop() || '';
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      let message;
-      try {
-        message = JSON.parse(line);
-      } catch {
-        this.rejectAll(Object.assign(
-          new Error('Codex app-server returned unreadable output.'),
-          { code: 'protocol-mismatch' },
-        ));
-        continue;
-      }
-      if (message.id === undefined && message.method === 'turn/completed') {
-        const turn = message.params?.turn;
+  async consumeEvents() {
+    for await (const event of this.connection.events()) {
+      if (event.type === 'notification' && event.notification.method === 'turn/completed') {
+        const turn = event.notification.params?.turn;
         if (
           typeof turn?.id === 'string'
           && ['completed', 'interrupted', 'failed'].includes(turn.status)
@@ -1096,46 +1235,82 @@ class AppServerClient {
         }
         continue;
       }
-      if (message.id === undefined || message.method) {
-        // Notifications are observed through the private transcript below. A
-        // server-initiated approval request must never be approved by Talkie.
-        if (message.id !== undefined && message.method) {
-          this.blockingError = Object.assign(
-            new Error('This Codex turn needs approval in Codex Desktop.'),
-            { code: 'approval-required' },
-          );
-          this.rejectAll(this.blockingError);
+      if (event.type === 'request') {
+        const { id, method, params } = event.request;
+        if (REMOTE_APPROVAL_METHODS.has(method) && this.submissionId) {
+          void waitForRemoteApproval(this.submissionId, method, params)
+            .then((response) => this.connection.respond(id, response))
+            .catch((error) => {
+              this.blockingError = Object.assign(
+                error instanceof Error ? error : new Error(String(error)),
+                { code: error?.code || 'approval-channel-unavailable' },
+              );
+              this.connection.respond(id, {
+                error: {
+                  code: -32000,
+                  message: this.blockingError.message,
+                  data: { code: this.blockingError.code },
+                },
+              });
+            });
+          continue;
         }
+        this.blockingError = unsupportedServerRequestError(method, params);
+        this.connection.respond(id, {
+          error: {
+            code: -32601,
+            message: this.blockingError.message,
+            data: { code: this.blockingError.code },
+          },
+        });
         continue;
       }
-      const waiter = this.pending.get(message.id);
-      if (!waiter) continue;
-      clearTimeout(waiter.timer);
-      this.pending.delete(message.id);
-      if (message.error) {
-        const messageText = message.error.message || `Codex app-server rejected ${waiter.method}.`;
-        const serverCode = String(message.error.code || message.error.data?.code || '');
-        const missingThread = waiter.method === 'thread/resume' && (
-          /thread.*(?:not[ -]?found|does not exist|unknown)/i.test(messageText) ||
-          /(?:not[ -]?found|does not exist|unknown).*thread/i.test(messageText) ||
-          /thread.*not[ -]?found/i.test(serverCode)
+      if (event.type === 'protocol-error') {
+        this.blockingError = Object.assign(event.error, { code: 'protocol-mismatch' });
+        continue;
+      }
+      if (event.type === 'exit' && !event.exit.expected) {
+        const detail = this.stderr.trim();
+        this.blockingError = Object.assign(
+          new Error(detail || `Codex app-server exited with status ${event.exit.code}.`),
+          { code: 'app-server-unavailable' },
         );
-        waiter.reject(Object.assign(
-          new Error(messageText),
-          { code: missingThread ? 'stale-thread' : 'app-server-request-failed' },
-        ));
-      } else {
-        waiter.resolve(message.result);
       }
     }
   }
 
-  rejectAll(error) {
-    for (const waiter of this.pending.values()) {
-      clearTimeout(waiter.timer);
-      waiter.reject(error);
+  mapRequestError(error, method) {
+    if (error?.name === 'CodexAppServerRequestTimeoutError') {
+      return Object.assign(error, { code: 'desktop-timeout' });
     }
-    this.pending.clear();
+    if (error?.name === 'CodexAppServerProtocolError') {
+      return Object.assign(error, { code: 'protocol-mismatch' });
+    }
+    if (
+      error?.name === 'CodexAppServerClosedError'
+      || error?.name === 'CodexAppServerProcessExitError'
+    ) {
+      return Object.assign(error, { code: 'app-server-unavailable' });
+    }
+    if (error?.name === 'CodexAppServerRpcError') {
+      const messageText = error.message || `Codex app-server rejected ${method}.`;
+      const nativeError = error.nativeError;
+      const serverCode = String(nativeError?.code || nativeError?.data?.code || '');
+      const missingThread = method === 'thread/resume' && (
+        /no rollout found for thread(?: id)?/i.test(messageText)
+        || /thread.*(?:not[ -]?found|does not exist|unknown)/i.test(messageText)
+        || /(?:not[ -]?found|does not exist|unknown).*thread/i.test(messageText)
+        || /thread.*not[ -]?found/i.test(serverCode)
+      );
+      return Object.assign(error, {
+        code: missingThread ? 'stale-thread' : 'app-server-request-failed',
+        nativeError,
+      });
+    }
+    return Object.assign(
+      error instanceof Error ? error : new Error(String(error)),
+      { code: error?.code || 'app-server-unavailable' },
+    );
   }
 
   pendingBlockingError() {
@@ -1146,13 +1321,9 @@ class AppServerClient {
     return this.terminalTurns.get(turnId) || null;
   }
 
-  close() {
-    this.closing = true;
-    this.rejectAll(new Error('Codex app-server connection closed.'));
-    this.process?.stdin?.end();
-    const process = this.process;
-    const forceClose = setTimeout(() => process?.kill('SIGKILL'), 1_000);
-    forceClose.unref?.();
+  async close() {
+    await this.connection?.close();
+    await this.eventLoop;
   }
 }
 
@@ -1323,24 +1494,24 @@ async function withClient(threadId, action) {
   }
 }
 
-async function withAppServer(threadId, action) {
-  const client = new AppServerClient();
+async function withAppServer(threadId, submissionId, action) {
+  const client = new AppServerClient(submissionId);
   try {
     await client.connect();
     const resumed = await client.resume(threadId);
     return await action(client, resumed);
   } finally {
-    client.close();
+    await client.close();
   }
 }
 
-async function withFreshAppServer(action) {
-  const client = new AppServerClient();
+async function withFreshAppServer(action, submissionId) {
+  const client = new AppServerClient(submissionId);
   try {
     await client.connect();
     return await action(client);
   } finally {
-    client.close();
+    await client.close();
   }
 }
 
@@ -1354,20 +1525,16 @@ async function createTask(cwd) {
 
 async function createAndSubmitTask(cwd, text, clientUserMessageId, onAccepted) {
   return withFreshAppServer(async (client) => {
-    const thread = await client.startThread(cwd);
+    const { thread, turnId } = await client.startThreadWithFirstTurn(
+      cwd,
+      text,
+      clientUserMessageId,
+    );
     revealTaskInCodexDesktop(thread.id);
     const task = taskSummary(thread, cwd);
-    // Publish the durable task identity before starting its first turn. If the
-    // app-server connection drops in the narrow gap between thread/start and
-    // turn/start, the caller can resume this task with the same user-message
-    // id instead of creating a second empty task.
-    onAccepted?.({
-      ok: true,
-      phase: 'created',
-      threadId: thread.id,
-      task,
-    });
-    const turnId = await client.startTurn(thread.id, text, clientUserMessageId);
+    // A new task is not externally resumable until its first turn has been
+    // accepted. Keep thread/start and turn/start on this connection and only
+    // publish the task identity after both native requests succeed.
     onAccepted?.({
       ...acceptedDisposition(thread.id, 'started-turn', 'steer', turnId),
       task,
@@ -1392,7 +1559,7 @@ async function createAndSubmitTask(cwd, text, clientUserMessageId, onAccepted) {
       requestedDelivery: 'steer',
       response,
     };
-  });
+  }, clientUserMessageId);
 }
 
 async function listTaskPage(limit, cursor) {
@@ -1453,7 +1620,17 @@ async function runDesktopCommand(
     if (command === 'validate') {
       return {
         ok: true,
-        task: { id: state.id, title: state.title || 'Untitled task', cwd: state.cwd || '' },
+        // Keep validate's task contract identical to list/create. The status
+        // document consumes the full summary even when Desktop's private
+        // follower snapshot only exposes the task's identity, title, and cwd.
+        task: taskSummary({
+          id: state.id,
+          name: state.title,
+          preview: state.preview,
+          cwd: state.cwd,
+          gitInfo: state.gitInfo,
+          updatedAt: state.updatedAt,
+        }),
       };
     }
     const reconciled = await reconcileExistingSubmission(
@@ -1600,17 +1777,16 @@ async function runAppServerCommand(
   knownDelivery,
   onAccepted,
 ) {
-  return withAppServer(threadId, async (client, resumed) => {
+  return withAppServer(threadId, clientUserMessageId, async (client, resumed) => {
     const thread = resumed.thread;
     const rolloutPath = assertRolloutPath(thread.path, threadId);
     if (command === 'validate') {
       return {
         ok: true,
-        task: {
-          id: thread.id,
-          title: thread.name || thread.preview || 'Untitled task',
-          cwd: thread.cwd || resumed.cwd || '',
-        },
+        // App-server validation must return the same complete summary shape as
+        // thread/list. Returning only id/title/cwd made otherwise valid status
+        // requests fail the bridge protocol check.
+        task: taskSummary(thread, resumed.cwd || ''),
       };
     }
     const reconciled = await reconcileExistingSubmission(
@@ -1802,16 +1978,20 @@ if (require.main === module) {
 }
 
 module.exports = {
+  approvalDetail,
   appendQueuedFollowUp,
   createTask,
   createAndSubmitTask,
+  desktopSteerFailureCode,
   isVisibleTask,
   listTaskPage,
   makeQueuedFollowUp,
   projectName,
   readQueuedFollowUps,
   readTurnActivity,
+  remoteApprovalResponse,
   resolveDesktopTurnState,
+  taskSummary,
   taskRolloutPath,
   withQueuedFollowUpMutationLock,
   waitForQueuedTurn,

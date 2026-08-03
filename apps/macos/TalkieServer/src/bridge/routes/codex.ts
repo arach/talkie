@@ -25,7 +25,11 @@ import {
   writeFileSync,
 } from "node:fs";
 import { log } from "../../log";
-import { CODEX_TASK_CREATIONS_FILE, CODEX_TURN_JOBS_FILE } from "../../paths";
+import {
+  CODEX_APPROVAL_DECISIONS_DIR,
+  CODEX_TASK_CREATIONS_FILE,
+  CODEX_TURN_JOBS_FILE,
+} from "../../paths";
 import { talkieServerFetch } from "../talkie-local-client";
 import { badRequest } from "./responses";
 import {
@@ -46,6 +50,7 @@ const TALKIESERVER_PORT = 8766;
 const TALKIESERVER_BASE_URL = `http://127.0.0.1:${TALKIESERVER_PORT}`;
 const AGENT_REPORT_PATH = "/notifications/agent-report";
 const AGENT_REPORT_URL = new URL(AGENT_REPORT_PATH, TALKIESERVER_BASE_URL).toString();
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export interface CodexTaskSummary {
   id: string;
@@ -69,7 +74,7 @@ function isCodexTurnDelivery(value: unknown): value is CodexTurnDelivery {
 
 export interface BridgeEnvelope {
   ok: boolean;
-  phase?: "accepted";
+  phase?: "accepted" | "approval-required" | "approval-resolved";
   tasks?: CodexTaskSummary[];
   task?: Partial<CodexTaskSummary> & { id: string };
   nextCursor?: string | null;
@@ -84,8 +89,19 @@ export interface BridgeEnvelope {
   active?: boolean;
   updates?: CodexProgressUpdate[];
   history?: CodexStatusHistoryTurn[];
+  approval?: CodexApprovalRequest & { decision?: CodexApprovalDecision };
   error?: string;
   code?: string;
+}
+
+export type CodexApprovalDecision = "approve" | "decline";
+
+export interface CodexApprovalRequest {
+  id: string;
+  method: string;
+  title: string;
+  detail: string;
+  requestedAt: string;
 }
 
 export interface CodexTaskCreation {
@@ -131,7 +147,12 @@ const RECOVERY_HINTS: Record<string, string> = {
   "app-server-request-failed": "Open this task in Codex Desktop and retry from the deck.",
   "task-materialization-timeout": "Codex did not finish creating the task. Retry the Watch instruction.",
   "turn-interrupted": "The task and prompt reached Codex, but the turn was interrupted before it answered. Open the task to inspect it, then speak again.",
-  "approval-required": "Open this task in Codex Desktop to review the approval request.",
+  "approval-required": "Retry this action to receive the approval request in Talkie.",
+  "approval-channel-unavailable": "Retry the turn after updating Talkie on the Mac.",
+  "approval-timeout": "Retry the action and answer its approval request from Talkie.",
+  "desktop-tool-required": "Open this task in Codex Desktop to run the requested desktop-only tool.",
+  "operator-input-required": "Open this task in Codex Desktop to answer the agent's question.",
+  "client-request-unsupported": "Update Talkie or open this task in Codex Desktop.",
   "stale-thread": "This lane no longer points to a Codex task. Re-map it.",
   "submission-conflict": "Create a new Talkie submission before sending different text.",
   "invalid-submission-id": "Update Talkie and retry this instruction.",
@@ -148,14 +169,14 @@ const RECOVERY_HINTS: Record<string, string> = {
 
 function parseSubmissionId(value: unknown): string {
   if (value === undefined || value === null) return crypto.randomUUID();
-  if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+  if (typeof value !== "string" || !UUID_PATTERN.test(value)) {
     throw new CodexBridgeError("submissionId must be a UUID.", "invalid-submission-id");
   }
   return value.toLowerCase();
 }
 
 function parseCreationId(value: unknown): string {
-  if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+  if (typeof value !== "string" || !UUID_PATTERN.test(value)) {
     throw new CodexBridgeError("creationId must be a UUID.", "invalid-creation-id");
   }
   return value.toLowerCase();
@@ -211,6 +232,10 @@ async function runBridge(
     stdin: options.stdin === undefined ? "ignore" : new TextEncoder().encode(options.stdin),
     stdout: "pipe",
     stderr: "pipe",
+    env: {
+      ...process.env,
+      TALKIE_CODEX_APPROVAL_DIR: CODEX_APPROVAL_DECISIONS_DIR,
+    },
   });
 
   const timer = setTimeout(() => proc.kill(), options.timeoutMs);
@@ -528,6 +553,9 @@ async function runCodexCommand(
         if (candidate.ok && candidate.phase === "accepted" && isCodexTurnDelivery(candidate.delivery)) {
           onDisposition?.(candidate);
         }
+        if (candidate.ok && candidate.approval && candidate.phase?.startsWith("approval-")) {
+          turnJobs.observeBridgeEvent(submissionId, candidate);
+        }
       },
     },
   );
@@ -547,6 +575,9 @@ async function runFreshCodexTurn(
       stdin: text,
       timeoutMs: TURN_TIMEOUT_MS,
       onEnvelope: (candidate) => {
+        if (candidate.ok && candidate.approval && candidate.phase?.startsWith("approval-")) {
+          turnJobs.observeBridgeEvent(submissionId, candidate);
+        }
         if (
           candidate.ok
           && candidate.phase === "accepted"
@@ -568,6 +599,7 @@ const messageCoordinator = new CodexTaskMessageCoordinator(runCodexCommand);
 export type CodexTurnJobStatus =
   | "queued"
   | "running"
+  | "awaiting-approval"
   | "blocked"
   | "completed"
   | "failed"
@@ -591,12 +623,47 @@ export interface CodexTurnJobSnapshot {
   hint?: string;
   retryable?: boolean;
   task?: CodexTaskSummary;
+  approval?: CodexApprovalRequest;
 }
 
 interface StoredCodexTurnJob {
   job: CodexTurnJobSnapshot;
   text: string;
   freshCwd?: string;
+}
+
+function writeApprovalDecision(
+  jobId: string,
+  approvalId: string,
+  decision: CodexApprovalDecision,
+): void {
+  if (!UUID_PATTERN.test(jobId) || !UUID_PATTERN.test(approvalId)) {
+    throw new CodexBridgeError("The approval identifier is invalid.", "approval-not-pending");
+  }
+  mkdirSync(CODEX_APPROVAL_DECISIONS_DIR, { recursive: true, mode: 0o700 });
+  chmodSync(CODEX_APPROVAL_DECISIONS_DIR, 0o700);
+  const destination = path.join(CODEX_APPROVAL_DECISIONS_DIR, `${jobId}.${approvalId}.json`);
+  if (existsSync(destination)) {
+    const existing = JSON.parse(readFileSync(destination, "utf8")) as { decision?: unknown };
+    if (existing.decision === decision) return;
+    throw new CodexBridgeError(
+      "A different decision was already recorded for this approval.",
+      "approval-conflict",
+    );
+  }
+  const temporary = `${destination}.${process.pid}.${crypto.randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporary, JSON.stringify({ decision }), { encoding: "utf8", mode: 0o600 });
+    renameSync(temporary, destination);
+    chmodSync(destination, 0o600);
+  } catch (error) {
+    try {
+      unlinkSync(temporary);
+    } catch {
+      // The temp path may already have been atomically renamed.
+    }
+    throw error;
+  }
 }
 
 type CodexActivityReader = (taskId: string) => Promise<BridgeEnvelope>;
@@ -618,6 +685,11 @@ export class CodexTurnJobManager {
     private readonly notifyCompletion: CodexCompletionNotifier,
     private readonly storagePath?: string,
     private readonly runFreshTurn?: CodexFreshTurnRunner,
+    private readonly recordApprovalDecision: (
+      jobId: string,
+      approvalId: string,
+      decision: CodexApprovalDecision,
+    ) => void = writeApprovalDecision,
   ) {
     const restoredPendingJobIDs = this.restore();
     if (restoredPendingJobIDs.length > 0) {
@@ -663,6 +735,54 @@ export class CodexTurnJobManager {
       `[codex] async job ${job.id} created task=${taskId} mode=${mode} chars=${text.length}`,
     );
     this.launch(stored);
+    return { ...job };
+  }
+
+  observeBridgeEvent(jobId: string, envelope: BridgeEnvelope): void {
+    const stored = this.jobs.get(jobId);
+    if (!stored || !envelope.approval) return;
+    const { job } = stored;
+    if (envelope.phase === "approval-required") {
+      job.status = "awaiting-approval";
+      job.approval = {
+        id: envelope.approval.id,
+        method: envelope.approval.method,
+        title: envelope.approval.title,
+        detail: envelope.approval.detail,
+        requestedAt: envelope.approval.requestedAt,
+      };
+      job.updatedAt = new Date().toISOString();
+      job.error = undefined;
+      job.code = undefined;
+      job.hint = undefined;
+      this.persist();
+      log.info(`[codex] async job ${job.id} is awaiting remote approval ${job.approval.id}`);
+      return;
+    }
+    if (envelope.phase === "approval-resolved" && job.approval?.id === envelope.approval.id) {
+      job.status = "running";
+      job.approval = undefined;
+      job.updatedAt = new Date().toISOString();
+      this.persist();
+      log.info(`[codex] async job ${job.id} remote approval ${envelope.approval.id} resolved`);
+    }
+  }
+
+  resolveApproval(
+    jobId: string,
+    approvalId: string,
+    decision: CodexApprovalDecision,
+  ): CodexTurnJobSnapshot {
+    const stored = this.jobs.get(jobId);
+    if (!stored) {
+      throw new CodexBridgeError("This Codex turn receipt is no longer available.", "turn-job-not-found");
+    }
+    const { job } = stored;
+    if (job.status !== "awaiting-approval" || job.approval?.id !== approvalId) {
+      throw new CodexBridgeError("This Codex approval is no longer pending.", "approval-not-pending");
+    }
+    this.recordApprovalDecision(job.id, approvalId, decision);
+    log.info(`[codex] recorded remote ${decision} decision for job ${job.id} approval ${approvalId}`);
     return { ...job };
   }
 
@@ -815,6 +935,7 @@ export class CodexTurnJobManager {
       job.code = undefined;
       job.hint = undefined;
       job.retryable = undefined;
+      job.approval = undefined;
       this.persist();
       const decisionDetail = envelope.decision
         ? ` decision=${JSON.stringify(envelope.decision)}`
@@ -834,6 +955,7 @@ export class CodexTurnJobManager {
       job.code = code;
       job.hint = RECOVERY_HINTS[code];
       job.retryable = UNAVAILABLE_CODES.has(code);
+      job.approval = undefined;
       this.persist();
       log.warn(`[codex] async job ${job.id} failed: ${job.code}: ${job.error}`);
     }).finally(() => {
@@ -873,7 +995,10 @@ export class CodexTurnJobManager {
       .map((stored) => stored.job)
       .filter((job) => job.taskId === taskId)
       .sort((left, right) => {
-        const active = (status: CodexTurnJobStatus) => status === "running" || status === "queued" || status === "blocked";
+        const active = (status: CodexTurnJobStatus) => status === "running"
+          || status === "queued"
+          || status === "awaiting-approval"
+          || status === "blocked";
         if (active(left.status) !== active(right.status)) return active(left.status) ? -1 : 1;
         return Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
       });
@@ -946,6 +1071,7 @@ export class CodexTurnJobManager {
   private restore(): string[] {
     if (!this.storagePath || !existsSync(this.storagePath)) return [];
     const pendingJobIDs: string[] = [];
+    let changed = false;
     try {
       const decoded = JSON.parse(readFileSync(this.storagePath, "utf8")) as {
         version?: unknown;
@@ -964,10 +1090,19 @@ export class CodexTurnJobManager {
           typeof stored.text !== "string"
         ) continue;
         this.jobs.set(stored.job.id, stored);
-        if (stored.job.status === "queued" || stored.job.status === "running") {
+        if (stored.job.status === "awaiting-approval") {
+          stored.job.status = "failed";
+          stored.job.updatedAt = new Date().toISOString();
+          stored.job.error = "The approval expired when the Talkie bridge restarted.";
+          stored.job.code = "approval-channel-unavailable";
+          stored.job.hint = RECOVERY_HINTS["approval-channel-unavailable"];
+          stored.job.approval = undefined;
+          changed = true;
+        } else if (stored.job.status === "queued" || stored.job.status === "running") {
           pendingJobIDs.push(stored.job.id);
         }
       }
+      if (changed) this.persist();
     } catch (error) {
       log.warn(`[codex] durable receipt store is unreadable: ${error}`);
     }
@@ -1195,15 +1330,27 @@ function bridgeFailureResponse(error: unknown): Response {
   log.warn(`[codex] ${code}: ${message}`);
 
   const body = JSON.stringify({ error: message, code, ...(hint && { hint }) });
-  const status = code === "submission-conflict" || code === "creation-conflict"
-    ? 409
-    : code === "stale-thread"
-      ? 410
-      : code === "invalid-submission-id" || code === "invalid-creation-id" || code === "invalid-project-directory"
-        ? 400
-        : UNAVAILABLE_CODES.has(code)
-          ? 503
-          : 502;
+  let status = 502;
+  if (
+    code === "submission-conflict"
+    || code === "creation-conflict"
+    || code === "approval-conflict"
+    || code === "approval-not-pending"
+  ) {
+    status = 409;
+  } else if (code === "turn-job-not-found") {
+    status = 404;
+  } else if (code === "stale-thread") {
+    status = 410;
+  } else if (
+    code === "invalid-submission-id"
+    || code === "invalid-creation-id"
+    || code === "invalid-project-directory"
+  ) {
+    status = 400;
+  } else if (UNAVAILABLE_CODES.has(code)) {
+    status = 503;
+  }
   return new Response(body, { status, headers: { "Content-Type": "application/json" } });
 }
 
@@ -1384,6 +1531,25 @@ export async function codexTurnStatusRoute(jobId: string): Promise<Response> {
     );
   }
   return Response.json({ job });
+}
+
+/** POST /codex/turns/:id/approval — answer one still-live app-server approval. */
+export async function codexApprovalDecisionRoute(jobIdValue: string, body: unknown): Promise<Response> {
+  const jobId = jobIdValue.trim();
+  const payload = body as { approvalId?: unknown; decision?: unknown };
+  const approvalId = typeof payload?.approvalId === "string" ? payload.approvalId.trim() : "";
+  const decision = payload?.decision;
+  if (!jobId) return badRequest("job id is required");
+  if (!approvalId) return badRequest("approvalId is required");
+  if (decision !== "approve" && decision !== "decline") {
+    return badRequest("decision must be approve or decline");
+  }
+  try {
+    const job = turnJobs.resolveApproval(jobId, approvalId, decision);
+    return Response.json({ job }, { status: 202 });
+  } catch (error) {
+    return bridgeFailureResponse(error);
+  }
 }
 
 /** GET /codex/tasks/:id/history — bounded public turn history for one exact task. */

@@ -595,6 +595,16 @@ struct SettingsNext: View {
                     hint: "Where short replies speak"
                 )
             }
+            toggleRow(
+                "Watch tap",
+                isOn: Binding(
+                    get: { appSettings.watchReadyHapticEnabled },
+                    set: { appSettings.watchReadyHapticEnabled = $0 }
+                ),
+                valueOn: "On",
+                valueOff: "Off",
+                hint: "Tap the wrist when a reply is ready"
+            )
             navRow("Manage AI keys") { AppShellRouter.shared.openAICredentials() }
         }
     }
@@ -721,6 +731,7 @@ struct SettingsNext: View {
 
     private var connectPanel: some View {
         VStack(alignment: .leading, spacing: 0) {
+            navRow("Connection Manager") { AppShellRouter.shared.openConnectionCenter() }
             field(
                 "iCloud sync",
                 appSettings.iCloudSyncEnabled ? "On" : "Off",
@@ -753,7 +764,6 @@ struct SettingsNext: View {
             navRow("SSH Terminal") { AppShellRouter.shared.openTerminal() }
             #endif
             navRow("Command Deck remote") { AppShellRouter.shared.openDeck() }
-            navRow("View connections detail") { AppShellRouter.shared.openConnectionCenter() }
             navRow("Workspaces") { AppShellRouter.shared.openWorkspaces() }
             navRow("Resolve sync conflicts") { AppShellRouter.shared.openSyncConflicts() }
             if isNativelySignedIn {
@@ -773,9 +783,13 @@ struct SettingsNext: View {
     private var bridgeInlineAction: InlineFieldAction? {
         guard bridgeManager.isPaired else { return nil }
         switch bridgeManager.status {
-        case .disconnected, .error:
+        case .disconnected:
             return InlineFieldAction(label: "RECONNECT") {
                 Task { await bridgeManager.connect() }
+            }
+        case .error:
+            return InlineFieldAction(label: "MANAGE") {
+                AppShellRouter.shared.openConnectionCenter()
             }
         case .connecting, .connected:
             return nil
@@ -1256,6 +1270,12 @@ struct SettingsNext: View {
     }
 
     private var bridgeStatusHint: String {
+        if bridgeManager.status == .error,
+           let errorMessage = bridgeManager.errorMessage,
+           !errorMessage.isEmpty {
+            return errorMessage
+        }
+
         var parts: [String] = []
         if let hostname = bridgeManager.pairedHostname { parts.append(hostname) }
         if let port = bridgeManager.pairedPort { parts.append(String(port)) }

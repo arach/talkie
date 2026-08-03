@@ -572,6 +572,7 @@ final class AppShellRouter: ObservableObject {
     /// collide with the keyboard's bottom row.
     @Published var isEditorKeyboardUp: Bool = false
     @Published var transitionDirection: TransitionDirection = .forward
+    private var navigationHistory: [Surface] = []
 
     private init() {
         let args = ProcessInfo.processInfo.arguments
@@ -634,6 +635,9 @@ final class AppShellRouter: ObservableObject {
     /// Home is the root. Routing TO home is a pop (backward);
     /// routing to anything else is a push (forward).
     private func push(_ next: Surface) {
+        if surface != next {
+            navigationHistory.append(surface)
+        }
         transitionDirection = .forward
         activeComposeStore = nil
         surface = next
@@ -642,7 +646,14 @@ final class AppShellRouter: ObservableObject {
     func openHome() {
         transitionDirection = .backward
         activeComposeStore = nil
+        navigationHistory.removeAll()
         surface = .home
+    }
+
+    func goBack() {
+        transitionDirection = .backward
+        activeComposeStore = nil
+        surface = navigationHistory.popLast() ?? .home
     }
 
     func openCompose(documentID: String) {

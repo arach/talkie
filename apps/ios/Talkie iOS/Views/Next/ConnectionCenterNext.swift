@@ -2,22 +2,8 @@
 //  ConnectionCenterNext.swift
 //  Talkie iOS
 //
-//  Faithful port of ConnectionCenterView (apps/ios/Talkie iOS/
-//  Views/ConnectionCenterView.swift, 350 lines). Donor structure:
-//
-//  - Hero: `point.3.connected.trianglepath.dotted` icon, "Connection
-//    Center" title, "Talkie works offline by default…" sub-copy.
-//  - Body: three rows in sortOrder — Local / iCloud / Mac Bridge.
-//    Each row: source icon (with status dot in bottom-right), title,
-//    status display text, action chip on the right when connectable
-//    (Set Up / Sign In / Enable / Manage).
-//  - Footer: "Each connection is optional and additive." + "Your
-//    memos are always stored locally first."
-//
-//  Status enum mirrors ConnectionRowStatus: active / connected /
-//  syncing(count) / notSetUp / notSignedIn / notAvailable /
-//  disabled / error(msg). Each maps to a status color (green /
-//  gray / orange / red).
+//  Connection health and repair surface for local storage, iCloud,
+//  saved Mac bridges, nearby endpoint changes, and Command Deck.
 //
 
 import Combine
@@ -99,7 +85,8 @@ final class ConnectionCenterStore: ObservableObject {
             iCloudSyncEnabled: appSettings.iCloudSyncEnabled,
             bridgeIsPaired: bridgeManager.isPaired,
             bridgeStatus: bridgeManager.status,
-            bridgePairingNeedsRefresh: bridgeManager.pairingNeedsRefresh
+            bridgePairingNeedsRefresh: bridgeManager.pairingNeedsRefresh,
+            bridgeErrorMessage: bridgeManager.errorMessage
         )
     }
 
@@ -127,6 +114,7 @@ final class ConnectionCenterStore: ObservableObject {
             _ = bridgeManager.isPaired
             _ = bridgeManager.status
             _ = bridgeManager.pairingNeedsRefresh
+            _ = bridgeManager.errorMessage
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 self?.rebuildRows()
@@ -144,7 +132,8 @@ final class ConnectionCenterStore: ObservableObject {
                     iCloudSyncEnabled: appSettings.iCloudSyncEnabled,
                     bridgeIsPaired: bridgeManager.isPaired,
                     bridgeStatus: bridgeManager.status,
-                    bridgePairingNeedsRefresh: bridgeManager.pairingNeedsRefresh
+                    bridgePairingNeedsRefresh: bridgeManager.pairingNeedsRefresh,
+                    bridgeErrorMessage: bridgeManager.errorMessage
                 ))
             }
         )
@@ -168,7 +157,8 @@ final class ConnectionCenterStore: ObservableObject {
         iCloudSyncEnabled: Bool,
         bridgeIsPaired: Bool,
         bridgeStatus: BridgeManager.ConnectionStatus,
-        bridgePairingNeedsRefresh: Bool
+        bridgePairingNeedsRefresh: Bool,
+        bridgeErrorMessage: String?
     ) -> Row.Status {
         switch kind {
         case .local:
@@ -195,7 +185,7 @@ final class ConnectionCenterStore: ObservableObject {
             case .connecting:
                 return .syncing(count: 0)
             case .disconnected, .error:
-                return .error("Disconnected")
+                return .error(bridgeErrorMessage ?? "Disconnected")
             }
         }
     }
@@ -232,28 +222,35 @@ struct ConnectionCenterNext: View {
     @ObservedObject private var deck = DeckMirrorStore.shared
     @ObservedObject private var reachability = NetworkReachability.shared
     @State private var bridgeManager = BridgeManager.shared
+    @State private var nearbyBrowser = NearbyMacBrowser.shared
     @StateObject private var store = ConnectionCenterStore()
+    @State private var editingMac: BridgeManager.PairedMac?
+    @State private var macPendingRemoval: BridgeManager.PairedMac?
+    @State private var isRefreshing = false
 
     var body: some View {
         VStack(spacing: 0) {
             header
 
             ScrollView {
-                VStack(spacing: 18) {
-                    heroSection
-                        .padding(.top, 8)
+                VStack(spacing: 20) {
+                    introSection
+                        .padding(.top, 4)
 
                     if connectionNetworkStatus != .ok {
-                        NetworkStatusBanner(status: connectionNetworkStatus, onRetry: openBridgeDetail)
+                        NetworkStatusBanner(status: connectionNetworkStatus, onRetry: refreshConnections)
                             .padding(.horizontal, 12)
                     }
 
                     VStack(spacing: 8) {
-                        ForEach(store.rows) { row in
+                        ForEach(store.rows.filter { $0.kind != .macBridge }) { row in
                             ConnectionRowNext(row: row, onAction: { handleAction(row.kind) })
                         }
                     }
                     .padding(.horizontal, 12)
+
+                    savedMacsSection
+                        .padding(.horizontal, 12)
 
                     deckRemoteCard
                         .padding(.horizontal, 12)
@@ -265,6 +262,33 @@ struct ConnectionCenterNext: View {
                 .padding(.vertical, 12)
             }
             .scrollIndicators(.hidden)
+        }
+        .task {
+            nearbyBrowser.start()
+        }
+        .onDisappear {
+            nearbyBrowser.stop()
+        }
+        .sheet(item: $editingMac) { mac in
+            BridgeEndpointEditor(mac: mac) { hostname, port in
+                try await bridgeManager.updatePairedMacEndpoint(
+                    id: mac.id,
+                    hostname: hostname,
+                    port: port
+                )
+            }
+        }
+        .alert(
+            "Remove Mac connection?",
+            isPresented: removalConfirmation,
+            presenting: macPendingRemoval
+        ) { mac in
+            Button("Cancel", role: .cancel) { }
+            Button("Remove", role: .destructive) {
+                bridgeManager.removePairedMac(id: mac.id)
+            }
+        } message: { mac in
+            Text("This removes the saved connection to \(displayName(for: mac)) from this device. You can pair it again later.")
         }
     }
 
@@ -405,15 +429,283 @@ struct ConnectionCenterNext: View {
         }
     }
 
+    // MARK: - Saved Macs
+
+    private var savedMacsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Mac Bridges")
+                        .talkieType(.listTitle)
+                        .foregroundStyle(theme.colors.textPrimary)
+                    Text(bridgeManager.pairedMacs.isEmpty
+                         ? "No saved Mac connections"
+                         : "Choose, repair, or remove a saved Mac")
+                        .talkieType(.fieldLabel)
+                        .foregroundStyle(theme.colors.textSecondary)
+                }
+
+                Spacer(minLength: 8)
+
+                Button(action: refreshConnections) {
+                    Label(isRefreshing ? "Refreshing" : "Refresh", systemImage: "arrow.clockwise")
+                        .talkieType(.fieldLabel)
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+                        .frame(minHeight: 44)
+                }
+                .buttonStyle(.plain)
+                .disabled(isRefreshing)
+            }
+
+            if bridgeManager.pairedMacs.isEmpty {
+                Button(action: openBridgeDetail) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "desktopcomputer.and.arrow.down")
+                            .font(.system(size: 20, weight: .regular))
+                            .foregroundStyle(theme.currentTheme.chrome.accent)
+                            .frame(width: 32, height: 32)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Pair a Mac")
+                                .talkieType(.listTitle)
+                                .foregroundStyle(theme.colors.textPrimary)
+                            Text(nearbyBrowser.isBrowsing ? "Searching nearby · QR pairing available" : "Nearby and QR pairing")
+                                .talkieType(.fieldLabel)
+                                .foregroundStyle(theme.colors.textSecondary)
+                        }
+
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(theme.currentTheme.chrome.accent)
+                    }
+                    .padding(12)
+                    .background(connectionCardBackground(border: theme.currentTheme.chrome.edgeFaint))
+                }
+                .buttonStyle(.plain)
+            } else {
+                ForEach(bridgeManager.pairedMacs) { mac in
+                    savedMacRow(mac)
+                }
+
+                Button(action: openBridgeDetail) {
+                    Label("Pair another Mac or view diagnostics", systemImage: "plus.circle")
+                        .talkieType(.fieldLabel)
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func savedMacRow(_ mac: BridgeManager.PairedMac) -> some View {
+        let isActive = bridgeManager.activePairedMacID == mac.id
+        let nearbyUpdate = nearbyEndpointUpdate(for: mac)
+
+        return VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Button {
+                    if isActive {
+                        openBridgeDetail()
+                    } else {
+                        Task { await bridgeManager.activatePairedMac(id: mac.id) }
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        ZStack(alignment: .bottomTrailing) {
+                            Image(systemName: "desktopcomputer")
+                                .font(.system(size: 20))
+                                .foregroundStyle(isActive ? activeMacColor : theme.colors.textTertiary)
+                                .frame(width: 32, height: 32)
+                            Circle()
+                                .fill(isActive ? activeMacColor : theme.colors.textTertiary)
+                                .frame(width: 8, height: 8)
+                                .overlay(Circle().strokeBorder(theme.colors.cardBackground, lineWidth: 1.5))
+                                .offset(x: 2, y: 2)
+                        }
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(displayName(for: mac))
+                                .talkieType(.listTitle)
+                                .foregroundStyle(theme.colors.textPrimary)
+                                .lineLimit(1)
+                            Text(savedMacStatus(mac, isActive: isActive))
+                                .talkieType(.fieldLabel)
+                                .foregroundStyle(theme.colors.textSecondary)
+                                .lineLimit(2)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                Spacer(minLength: 8)
+
+                if isActive {
+                    Text("ACTIVE")
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(activeMacColor)
+                }
+
+                Menu {
+                    if !isActive {
+                        Button("Use This Mac", systemImage: "checkmark.circle") {
+                            Task { await bridgeManager.activatePairedMac(id: mac.id) }
+                        }
+                    } else if bridgeManager.status != .connecting {
+                        Button("Test Connection", systemImage: "arrow.clockwise") {
+                            Task { await bridgeManager.retry() }
+                        }
+                    }
+
+                    Button("Edit Host and Port", systemImage: "slider.horizontal.3") {
+                        editingMac = mac
+                    }
+                    Button("View Diagnostics", systemImage: "stethoscope") {
+                        if isActive {
+                            openBridgeDetail()
+                        } else {
+                            Task {
+                                await bridgeManager.activatePairedMac(id: mac.id)
+                                openBridgeDetail()
+                            }
+                        }
+                    }
+                    Divider()
+                    Button("Remove Connection", systemImage: "trash", role: .destructive) {
+                        macPendingRemoval = mac
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.system(size: 18))
+                        .foregroundStyle(theme.colors.textSecondary)
+                        .frame(width: 44, height: 44)
+                }
+            }
+            .padding(.leading, 12)
+            .padding(.trailing, 4)
+            .padding(.vertical, 8)
+
+            if let nearbyUpdate {
+                Button {
+                    Task {
+                        try? await bridgeManager.updatePairedMacEndpoint(
+                            id: mac.id,
+                            hostname: nearbyUpdate.connectionHost,
+                            port: nearbyUpdate.port
+                        )
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "antenna.radiowaves.left.and.right")
+                        Text("Nearby Mac now uses \(nearbyUpdate.connectionHost):\(nearbyUpdate.port)")
+                            .lineLimit(2)
+                        Spacer(minLength: 4)
+                        Text("UPDATE")
+                            .talkieType(.channelLabelTiny)
+                    }
+                    .talkieType(.fieldLabel)
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .overlay(alignment: .top) {
+                        Rectangle()
+                            .fill(theme.currentTheme.chrome.edgeFaint)
+                            .frame(height: theme.currentTheme.chrome.hairlineWidth)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .background(connectionCardBackground(border: isActive ? activeMacColor.opacity(0.32) : theme.currentTheme.chrome.edgeFaint))
+    }
+
+    private func connectionCardBackground(border: Color) -> some View {
+        RoundedRectangle(cornerRadius: 10)
+            .fill(theme.colors.cardBackground)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(border, lineWidth: theme.currentTheme.chrome.hairlineWidth)
+            )
+    }
+
+    private var activeMacColor: Color {
+        switch bridgeManager.status {
+        case .connected: return .green
+        case .connecting: return theme.currentTheme.chrome.accent
+        case .disconnected: return .orange
+        case .error: return .red
+        }
+    }
+
+    private func savedMacStatus(_ mac: BridgeManager.PairedMac, isActive: Bool) -> String {
+        let endpoint = "\(mac.hostname):\(mac.port)"
+        guard isActive else { return "Saved · \(endpoint)" }
+
+        switch bridgeManager.status {
+        case .connected:
+            return "Connected · \(endpoint)"
+        case .connecting:
+            return "Testing \(endpoint)"
+        case .disconnected:
+            return "Disconnected · \(endpoint)"
+        case .error:
+            return bridgeManager.errorMessage ?? "Couldn’t reach \(endpoint)"
+        }
+    }
+
+    private func displayName(for mac: BridgeManager.PairedMac) -> String {
+        let name = mac.pairedMacName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? mac.hostname : name
+    }
+
+    private func nearbyEndpointUpdate(for mac: BridgeManager.PairedMac) -> NearbyMacBrowser.NearbyMac? {
+        let storedHost = normalizedLookup(mac.hostname)
+        let storedName = normalizedLookup(mac.pairedMacName)
+
+        return nearbyBrowser.macs.first { nearby in
+            let sameMac = normalizedLookup(nearby.connectionHost) == storedHost ||
+                (!storedName.isEmpty && normalizedLookup(nearby.name) == storedName)
+            return sameMac && (nearby.connectionHost != mac.hostname || nearby.port != mac.port)
+        }
+    }
+
+    private func normalizedLookup(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+            .lowercased()
+    }
+
+    private var removalConfirmation: Binding<Bool> {
+        Binding(
+            get: { macPendingRemoval != nil },
+            set: { if !$0 { macPendingRemoval = nil } }
+        )
+    }
+
+    private func refreshConnections() {
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        nearbyBrowser.refresh()
+        Task {
+            if bridgeManager.isPaired {
+                await bridgeManager.retry()
+            }
+            isRefreshing = false
+        }
+    }
+
     // MARK: - Header
 
     private var header: some View {
         HStack {
-            Button(action: { AppShellRouter.shared.openHome() }) {
+            Button(action: { AppShellRouter.shared.goBack() }) {
                 HStack(spacing: 2) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14))
-                    Text("Done")
+                    Text("Back")
                         .talkieType(.preview)
                 }
                 .foregroundStyle(theme.colors.textSecondary)
@@ -422,7 +714,7 @@ struct ConnectionCenterNext: View {
 
             Spacer()
 
-            Text("Connections")
+            Text("Connection Manager")
                 .talkieType(.headlineSecondary)
                 .foregroundStyle(theme.colors.textPrimary)
 
@@ -440,25 +732,27 @@ struct ConnectionCenterNext: View {
         )
     }
 
-    // MARK: - Hero (matches donor's headerSection)
+    // MARK: - Introduction
 
-    private var heroSection: some View {
-        VStack(spacing: 10) {
+    private var introSection: some View {
+        HStack(alignment: .top, spacing: 12) {
             Image(systemName: "point.3.connected.trianglepath.dotted")
-                .font(.system(size: 40, weight: .light))
+                .font(.system(size: 24, weight: .light))
                 .foregroundStyle(theme.currentTheme.chrome.accent)
+                .frame(width: 32, height: 32)
 
-            Text("Connection Center")
-                .talkieType(.headlineSecondary)
-                .foregroundStyle(theme.colors.textPrimary)
-
-            Text("Talkie works offline by default. Add connections to sync and access your memos across devices.")
-                .talkieType(.preview)
-                .foregroundStyle(theme.colors.textSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Review and repair connections")
+                    .talkieType(.listTitle)
+                    .foregroundStyle(theme.colors.textPrimary)
+                Text("Refresh status, update a Mac host or port, switch the active bridge, or remove connections you no longer use.")
+                    .talkieType(.preview)
+                    .foregroundStyle(theme.colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
     }
 
     // MARK: - Footer (matches donor)
@@ -497,6 +791,104 @@ struct ConnectionCenterNext: View {
             }
         case .macBridge:
             openBridgeDetail()
+        }
+    }
+}
+
+// MARK: - Endpoint editor
+
+private struct BridgeEndpointEditor: View {
+    let mac: BridgeManager.PairedMac
+    let onSave: (String, Int) async throws -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var hostname: String
+    @State private var portText: String
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+
+    init(
+        mac: BridgeManager.PairedMac,
+        onSave: @escaping (String, Int) async throws -> Void
+    ) {
+        self.mac = mac
+        self.onSave = onSave
+        _hostname = State(initialValue: mac.hostname)
+        _portText = State(initialValue: String(mac.port))
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Hostname or IP address", text: $hostname)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .accessibilityLabel("Mac hostname or IP address")
+
+                    TextField("Port", text: $portText)
+                        .keyboardType(.numberPad)
+                        .accessibilityLabel("Mac bridge port")
+                } header: {
+                    Text(displayName)
+                } footer: {
+                    Text("Talkie keeps the existing device identity and encryption keys. Saving immediately tests the endpoint when this is the active Mac.")
+                }
+
+                if let errorMessage {
+                    Section {
+                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+            .navigationTitle("Edit Connection")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .disabled(isSaving)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isSaving ? "Testing…" : "Save") {
+                        save()
+                    }
+                    .disabled(!isValid || isSaving)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+
+    private var displayName: String {
+        let name = mac.pairedMacName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? "Saved Mac" : name
+    }
+
+    private var parsedPort: Int? {
+        Int(portText.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    private var isValid: Bool {
+        let host = hostname.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !host.isEmpty, !host.contains(where: { $0.isWhitespace }) else { return false }
+        guard let parsedPort else { return false }
+        return (1...65_535).contains(parsedPort)
+    }
+
+    private func save() {
+        guard let parsedPort, isValid else { return }
+        isSaving = true
+        errorMessage = nil
+
+        Task {
+            do {
+                try await onSave(hostname, parsedPort)
+                dismiss()
+            } catch {
+                errorMessage = error.localizedDescription
+                isSaving = false
+            }
         }
     }
 }

@@ -817,7 +817,7 @@ enum SettingsAudience: String, CaseIterable, Codable {
 // rawValues are migrated in init(from:) so existing user settings
 // don't wipe on load.
 enum ThemePreset: String, CaseIterable, Codable {
-    case scope = "scope"            // Cream-paper canvas, brass amber chrome — the direction
+    case scope = "scope"            // Porcelain canvas, navy bays, cobalt signal — the direction
     case talkiePro = "talkiePro"    // Pro dark — default fallback for dark-mode users
     case light = "light"            // Clean light mode — neutral surfaces
 
@@ -845,7 +845,7 @@ enum ThemePreset: String, CaseIterable, Codable {
 
     var displayName: String {
         switch self {
-        case .scope: return "Scope"
+        case .scope: return "Porcelain"
         case .talkiePro: return "Pro"
         case .light: return "Light"
         }
@@ -853,7 +853,7 @@ enum ThemePreset: String, CaseIterable, Codable {
 
     var description: String {
         switch self {
-        case .scope: return "Cream-paper canvas with brass amber chrome — instrument panel"
+        case .scope: return "Cool porcelain canvas with navy bays and cobalt signal"
         case .talkiePro: return "Professional dark theme with balanced contrast"
         case .light: return "Clean light mode with neutral surfaces"
         }
@@ -885,7 +885,7 @@ enum ThemePreset: String, CaseIterable, Codable {
 
     var appearanceMode: AppearanceMode {
         switch self {
-        case .scope: return .light          // Cream-phosphor — forced light
+        case .scope: return .light          // Porcelain chassis — forced light
         case .talkiePro: return .dark
         case .light: return .light
         }
@@ -911,7 +911,7 @@ enum ThemePreset: String, CaseIterable, Codable {
 
     var accentColor: AccentColorOption {
         switch self {
-        case .scope: return .orange         // Closest stock match for amber/brass
+        case .scope: return .blue
         case .talkiePro: return .blue
         case .light: return .orange         // Warm amber accent
         }
@@ -1162,7 +1162,7 @@ final class SettingsManager {
         currentTheme == .light
     }
 
-    /// Check if scope (cream-phosphor) theme is active
+    /// Check if the Scope instrument theme is active.
     var isScopeTheme: Bool {
         currentTheme == .scope
     }
