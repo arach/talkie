@@ -314,7 +314,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 
             AppLogger.ai.info("[Watch] AI answered with \(response.providerName) \(response.modelId)")
         } catch {
-            let failureMessage = "AI unavailable: \(error.localizedDescription)"
+            let failureMessage = Self.wearableFailureMessage(for: error)
 
             if let memo = try? context.existingObject(with: memoObjectID) as? VoiceMemo {
                 memo.isTranscribing = false
@@ -408,6 +408,30 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             case .memoMissing:
                 return "Could not find the saved Watch memo."
             }
+        }
+    }
+
+    /// What a failed ask says on the wrist, the pill, and the lock screen.
+    ///
+    /// `localizedDescription` is written for a developer reading a log: it is
+    /// unbounded, often a decoder complaint, and it lands verbatim at 13pt on a
+    /// 40mm watch. These three surfaces get a short closed set instead, and the
+    /// underlying error stays where it is useful — in `AppLogger`.
+    private static func wearableFailureMessage(for error: Error) -> String {
+        if error is WatchAIAppDelegateError { return "Memo not found" }
+
+        let nsError = error as NSError
+        guard nsError.domain == NSURLErrorDomain else { return "AI unavailable" }
+
+        switch nsError.code {
+        case NSURLErrorNotConnectedToInternet, NSURLErrorDataNotAllowed:
+            return "No connection"
+        case NSURLErrorTimedOut:
+            return "Timed out"
+        case NSURLErrorCannotConnectToHost, NSURLErrorCannotFindHost, NSURLErrorNetworkConnectionLost:
+            return "Can't reach AI"
+        default:
+            return "AI unavailable"
         }
     }
 

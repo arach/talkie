@@ -65,6 +65,16 @@ extension WatchAnswerDelivery {
         case .silent: return "NOT SPOKEN"
         }
     }
+
+    /// VoiceOver reads ALLCAPS mono tokens letter by letter, so what is spoken
+    /// is deliberately not the string that is drawn.
+    var spokenLabel: String {
+        switch self {
+        case .watchAudio: return "Spoken on this watch"
+        case .phoneAudio: return "Spoken on iPhone"
+        case .silent: return "Not spoken aloud"
+        }
+    }
 }
 
 // MARK: - Asks page
@@ -86,8 +96,8 @@ struct AsksWatchView: View {
                 } else {
                     ScrollView {
                         VStack(spacing: 5) {
-                            if let active = sessionManager.activeAsk {
-                                InFlightAskPanel(ask: active)
+                            ForEach(inFlightAsks) { ask in
+                                InFlightAskPanel(ask: ask)
                             }
 
                             ForEach(settledAsks) { ask in
@@ -115,11 +125,19 @@ struct AsksWatchView: View {
         }
     }
 
-    /// Everything the phone has finished with. The in-flight ask is lifted out
-    /// into its own panel above, so it must not also appear in the list.
+    /// Asks the phone still owes an outcome on. Partitioned on `isInFlight`
+    /// rather than on identity with `activeAsk`, which is only ever the *first*
+    /// one: a second ask spoken before the first settled used to fall through to
+    /// the settled list and draw as a static row, reading as finished when it
+    /// was not.
+    private var inFlightAsks: [WatchMemo] {
+        sessionManager.asks.filter(\.isInFlight)
+    }
+
+    /// Everything the phone has finished with. In-flight asks are lifted out
+    /// into panels above, so they must not also appear in the list.
     private var settledAsks: [WatchMemo] {
-        let activeId = sessionManager.activeAsk?.id
-        return sessionManager.asks.filter { $0.id != activeId }
+        sessionManager.asks.filter { !$0.isInFlight }
     }
 
     private var header: some View {
@@ -157,7 +175,7 @@ struct AsksWatchView: View {
                 .tracking(1.2)
                 .foregroundStyle(chrome.panelInkFaint)
 
-            Text("Swipe right and hold Ask AI")
+            Text("Swipe right, tap Ask AI")
                 .font(.system(size: 10, weight: .regular))
                 .foregroundStyle(chrome.panelInkFaint.opacity(0.75))
                 .multilineTextAlignment(.center)
@@ -177,18 +195,37 @@ private struct InFlightAskPanel: View {
     let ask: WatchMemo
 
     var body: some View {
+        // The phone cannot report that it has stopped reporting, so the only
+        // way the wrist ever notices is by re-reading the clock on its own.
+        // Half the tolerance keeps the worst-case lag to ~45s.
+        TimelineView(.periodic(from: .now, by: WatchMemo.silenceTolerance / 2)) { context in
+            panel(stalled: ask.isStalled(asOf: context.date))
+        }
+    }
+
+    private func panel(stalled: Bool) -> some View {
         let chrome = WatchTheme.current
         let phase = ask.resolvedPhase
+        // Orange is already "waiting on the link" everywhere else on this page,
+        // and a silent phone is the same category of problem.
+        let tint = stalled ? Color.orange : phase.color(chrome: chrome)
 
         return WatchInstrumentPanel {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 5) {
-                    BrailleSpinner(size: 11, color: phase.color(chrome: chrome))
+                    if stalled {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(tint)
+                            .frame(width: 11, height: 11)
+                    } else {
+                        BrailleSpinner(size: 11, color: tint)
+                    }
 
-                    Text(phase.label)
+                    Text(stalled ? "NO RESPONSE" : phase.label)
                         .font(.system(size: 8, weight: .semibold, design: .monospaced))
                         .tracking(0.7)
-                        .foregroundStyle(chrome.panelInk)
+                        .foregroundStyle(stalled ? tint : chrome.panelInk)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
 
@@ -200,6 +237,12 @@ private struct InFlightAskPanel: View {
                         .lineLimit(1)
                 }
 
+                if stalled {
+                    Text("Check iPhone")
+                        .font(.system(size: 10, weight: .regular))
+                        .foregroundStyle(chrome.panelInkFaint)
+                }
+
                 // Once the phone has transcribed, the preview holds the question
                 // itself — the most reassuring thing to show while the answer is
                 // still outstanding.
@@ -207,7 +250,7 @@ private struct InFlightAskPanel: View {
                     Text(question)
                         .font(.system(size: 11, weight: .regular))
                         .foregroundStyle(chrome.panelInk.opacity(0.85))
-                        .lineLimit(3)
+                        .lineLimit(stalled ? 2 : 3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -240,8 +283,20 @@ private struct SettledAskRow: View {
                     Image(systemName: delivery.glyph)
                         .font(.system(size: 8, weight: .medium))
                         .foregroundStyle(chrome.panelInkFaint)
-                        .accessibilityLabel(delivery.label)
+                        .accessibilityLabel(delivery.spokenLabel)
                 }
+            }
+
+            // The question leads. This page answers "what did I ask", and
+            // scanning it for that is the only reason to open it — a list of
+            // answers with the questions overwritten is unreadable.
+            if let question = ask.askQuestion, !question.isEmpty {
+                Text(question)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(chrome.panelInk)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Text(rowText)
@@ -251,7 +306,9 @@ private struct SettledAskRow: View {
                         ? Color.red.opacity(0.9)
                         : chrome.panelInk.opacity(0.85)
                 )
-                .lineLimit(2)
+                // The question above already carries the row; the outcome under
+                // it is a confirmation, not the content.
+                .lineLimit(ask.askQuestion == nil ? 2 : 1)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -314,6 +371,18 @@ private struct AskDetailView: View {
                             .foregroundStyle(chrome.panelInkFaint)
                     }
 
+                    // What was asked, above what came back. On a failure this is
+                    // the only surviving record of the ask, since the preview
+                    // slot has been taken over by the failure reason.
+                    if let question = ask.askQuestion, !question.isEmpty {
+                        Text(question)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(chrome.panelInk)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        WatchDivider()
+                    }
+
                     if text.isEmpty {
                         Text(phase == .failed ? "The phone could not answer this ask." : "No text arrived with this ask.")
                             .font(.system(size: 12, weight: .regular))
@@ -327,7 +396,10 @@ private struct AskDetailView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
-                    if WatchAskPreview.isTruncated(text) {
+                    // Only an answer can be continued on the phone. A long
+                    // question, or a wordy failure, used to trip this and point
+                    // the wearer at an answer that does not exist.
+                    if phase == .answered, WatchAskPreview.isTruncated(text) {
                         WatchDivider()
 
                         Text("FULL ANSWER ON IPHONE")
@@ -357,7 +429,7 @@ private struct AskDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(.horizontal, 2)
+        .padding(.horizontal, 10)
         .background(WatchInstrumentBackground())
         .navigationTitle("Ask")
     }
@@ -383,25 +455,30 @@ struct AskStrip: View {
     let onOpen: () -> Void
 
     var body: some View {
-        Group {
-            if let state {
-                Button {
-                    WKInterfaceDevice.current().play(.click)
-                    onOpen()
-                } label: {
-                    label(state)
-                        .frame(height: Self.stripHeight)
-                        // Padded out to a 44pt target, then pulled back so the
-                        // face's layout still only spends `stripHeight` on it.
-                        .padding(.vertical, (44 - Self.stripHeight) / 2)
-                        .contentShape(.rect)
+        // Same reason as the Asks page: a phone that has gone quiet announces
+        // itself only by the clock advancing, so the strip has to re-read it.
+        TimelineView(.periodic(from: .now, by: WatchMemo.silenceTolerance / 2)) { context in
+            Group {
+                if let state = state(asOf: context.date) {
+                    Button {
+                        WKInterfaceDevice.current().play(.click)
+                        onOpen()
+                    } label: {
+                        label(state)
+                            .frame(height: Self.stripHeight)
+                            // Padded out to a 44pt target, then pulled back so the
+                            // face's layout still only spends `stripHeight` on it.
+                            .padding(.vertical, (44 - Self.stripHeight) / 2)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.vertical, -(44 - Self.stripHeight) / 2)
+                    .accessibilityLabel("\(state.spokenText). Open asks.")
+                } else {
+                    Color.clear
                 }
-                .buttonStyle(.plain)
-                .padding(.vertical, -(44 - Self.stripHeight) / 2)
-                .accessibilityLabel("\(state.text). Open asks.")
-            } else {
-                Color.clear
             }
+            .frame(height: Self.stripHeight)
         }
         .frame(height: Self.stripHeight)
     }
@@ -420,15 +497,22 @@ struct AskStrip: View {
             Text(state.text)
                 .font(.system(size: 9, weight: .semibold, design: .monospaced))
                 .tracking(0.9)
-                .foregroundStyle(capture.material.inkFaint)
+                .foregroundStyle(state.inkColor(capture: capture))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
     }
 
-    private var state: StripState? {
+    private func state(asOf now: Date) -> StripState? {
         if let active = sessionManager.activeAsk {
-            return .inFlight(active.resolvedPhase)
+            if active.isStalled(asOf: now) { return .stalled }
+            switch active.resolvedPhase {
+            // The wrist has not handed this off yet — a materially different
+            // situation from the phone working on it, and one the wearer can
+            // actually do something about.
+            case .queued, .sending: return .waiting(active.resolvedPhase)
+            default: return .inFlight(active.resolvedPhase)
+            }
         }
         if let unseen = sessionManager.unseenAsk {
             return unseen.resolvedPhase == .failed ? .failed : .ready
@@ -437,15 +521,29 @@ struct AskStrip: View {
     }
 
     private enum StripState {
+        case waiting(WatchAskPhase)
         case inFlight(WatchAskPhase)
+        case stalled
         case ready
         case failed
 
         var text: String {
             switch self {
-            case .inFlight(let phase): return phase.label
+            case .waiting(let phase), .inFlight(let phase): return phase.label
+            case .stalled: return "NO RESPONSE"
             case .ready: return "ANSWER READY"
             case .failed: return "ASK FAILED"
+            }
+        }
+
+        /// Spoken, not displayed: VoiceOver spells out ALLCAPS mono tokens.
+        var spokenText: String {
+            switch self {
+            case .waiting: return "Ask waiting to send"
+            case .inFlight: return "Ask in progress"
+            case .stalled: return "No response from iPhone"
+            case .ready: return "Answer ready"
+            case .failed: return "Ask failed"
             }
         }
 
@@ -457,8 +555,18 @@ struct AskStrip: View {
         func color(capture: WatchCaptureStyle) -> Color {
             switch self {
             case .inFlight: return capture.trace
+            case .waiting, .stalled: return .orange
             case .ready: return .green
             case .failed: return .red
+            }
+        }
+
+        /// The dot alone is a 5pt speck. On the face you actually look at, an
+        /// outcome worth reacting to has to carry its color in the text too.
+        func inkColor(capture: WatchCaptureStyle) -> Color {
+            switch self {
+            case .waiting, .inFlight: return capture.material.inkFaint
+            case .stalled, .ready, .failed: return color(capture: capture)
             }
         }
     }
