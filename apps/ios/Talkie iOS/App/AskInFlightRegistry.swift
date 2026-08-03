@@ -81,10 +81,25 @@ final class AskInFlightRegistry: ObservableObject {
             )
         }
 
+        // The lock-screen half of the same story. Driven from here rather
+        // than from `sendMemoUpdate` directly so the banner and the pill
+        // are fed by one funnel and cannot disagree about an ask.
+        AskLiveActivityController.shared.record(memoId: memoId, phase: phase, text: text)
+
         scheduleDecayIfNeeded(memoId: memoId, phase: phase)
     }
 
+    /// The wearer swatted the pill away. That is a statement about the ask,
+    /// not about this surface, so the lock-screen banner goes with it.
     func dismiss(_ memoId: String) {
+        retire(memoId)
+        AskLiveActivityController.shared.end(memoId)
+    }
+
+    /// The pill's own linger elapsed. The banner keeps its separate, longer
+    /// linger — an answer you never looked at on the lock screen should not
+    /// vanish because a surface you were not looking at timed out.
+    private func retire(_ memoId: String) {
         decayTasks.removeValue(forKey: memoId)?.cancel()
         entries.removeAll { $0.id == memoId }
     }
@@ -100,7 +115,7 @@ final class AskInFlightRegistry: ObservableObject {
             // Only retire it if it is still the answer we scheduled against; a
             // later update on the same memo owns its own timing.
             guard self.entries.first(where: { $0.id == memoId })?.phase == .answered else { return }
-            self.dismiss(memoId)
+            self.retire(memoId)
         }
     }
 }
