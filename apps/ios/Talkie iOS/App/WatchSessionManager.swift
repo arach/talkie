@@ -58,37 +58,180 @@ final class WatchSessionManager: NSObject, ObservableObject {
     /// Called when audio is received from Watch
     var onAudioReceived: ((URL, [String: Any]) -> Void)?
 
-    func sendMemoUpdate(memoId: String, status: String, preview: String? = nil) {
+    /// Who narrates the finished answer, and therefore who owns the arrival cue
+    /// on the wrist.
+    ///
+    /// The Watch owns that cue in every case except one: when the answer audio
+    /// is about to play on the Watch itself, the playback click already is the
+    /// cue and a second haptic would double up.
+    enum AnswerDelivery: String {
+        case watchAudio
+        case phoneAudio
+        case silent
+    }
+
+    /// Where an ask has actually got to, named explicitly rather than inferred
+    /// from the preview text.
+    ///
+    /// `status` alone cannot carry this: `thinking` covers both transcribing the
+    /// question and waiting on the answer, and the two were previously told apart
+    /// only by the prose in `preview` ("Listening..." / "Answering..."). That put
+    /// presentation in the data and made the preview budget do two jobs. Every
+    /// surface that renders progress reads this field instead.
+    ///
+    /// Declared once per target with the raw values as the contract, the same
+    /// cross-target pattern `status` and `delivery` already use.
+    enum AskPhase: String {
+        case queued
+        case sending
+        case received
+        case transcribing
+        case answering
+        case answered
+        case failed
+    }
+
+    /// Application context is a single last-known dictionary shared by every
+    /// memo, so the array is capped. Ten matches the Watch's own recent-memo
+    /// window: a memo that could not be displayed there does not need to be
+    /// carried here either.
+    ///
+    /// This must stay at or below the Watch's signalled-memo ledger cap (40, see
+    /// TLK-036). Context replays on every activation, so a memo still carried
+    /// here but already evicted from that ledger would be announced twice. The
+    /// two constants cannot share a definition — the Watch folder belongs to a
+    /// different target — so the relationship is held by this comment.
+    private static let maxContextMemoUpdates = 10
+
+    /// How much answer text rides on the wrist. Everything past this is dropped,
+    /// and the Watch reads a preview that lands exactly on this length as
+    /// "there is more of this on the phone" — so the two must agree. Same
+    /// cross-target caveat as above: the Watch declares its own mirror of this
+    /// number (`WatchAskPreview.characterBudget`) and the relationship is held
+    /// by this comment.
+    static let previewCharacterBudget = 240
+
+    func sendMemoUpdate(
+        memoId: String,
+        status: String,
+        preview: String? = nil,
+        delivery: AnswerDelivery? = nil,
+        phase: AskPhase? = nil
+    ) {
+        // Fed before the reachability guard on purpose: the phone's own view of
+        // an ask must not depend on whether the Watch link happens to be up.
+        if let phase {
+            AskInFlightRegistry.shared.record(memoId: memoId, phase: phase, text: preview)
+        }
+
         activateIfNeeded()
 
         guard let session, session.activationState == .activated else {
-            log.debug("Watch memo update skipped; session is not activated")
+            // Not debug: this drops all three carriers, so a receipt emitted
+            // during a cold start is lost outright rather than deferred.
+            log.warning("Watch memo update dropped; session is not activated", detail: "memo=\(memoId) status=\(status)")
             return
         }
 
         var update: [String: Any] = [
             "type": "memoUpdate",
             "memoId": memoId,
-            "status": status
+            "status": status,
+            "updatedAt": Date().timeIntervalSince1970,
+            // Carried on the update itself rather than synced as separate Watch
+            // state, so the wrist always applies the preference as it stood at
+            // the moment the answer completed and there is no second channel to
+            // keep coherent.
+            "readyHaptic": TalkieAppSettings.shared.watchReadyHapticEnabled
         ]
 
         if let preview {
-            update["preview"] = String(preview.prefix(240))
+            update["preview"] = String(preview.prefix(Self.previewCharacterBudget))
         }
-
-        if session.isReachable {
-            session.sendMessage(update, replyHandler: nil) { [log] error in
-                log.debug("Watch memo update send failed: \(error.localizedDescription)")
-            }
+        if let delivery {
+            update["delivery"] = delivery.rawValue
+        }
+        if let phase {
+            update["phase"] = phase.rawValue
         }
 
         do {
             var context = session.applicationContext
-            context["memoUpdates"] = [update]
+            context["memoUpdates"] = Self.mergedMemoUpdates(
+                existing: context["memoUpdates"] as? [[String: Any]] ?? [],
+                update: update,
+                memoId: memoId
+            )
             try session.updateApplicationContext(context)
         } catch {
             log.debug("Watch memo update context failed: \(error.localizedDescription)")
         }
+
+        // `sendMessage` is only an immediate optimization. User-info transfer is
+        // the durable path and can reach the Watch after either app suspends,
+        // which is exactly the window an Ask AI answer lands in.
+        for transfer in session.outstandingUserInfoTransfers
+        where transfer.userInfo["type"] as? String == "memoUpdate"
+            && transfer.userInfo["memoId"] as? String == memoId {
+            transfer.cancel()
+        }
+        session.transferUserInfo(update)
+
+        guard session.isReachable else {
+            log.debug("Watch memo update deferred; Watch is not reachable")
+            return
+        }
+        session.sendMessage(update, replyHandler: nil) { [log] error in
+            log.debug("Watch memo update send failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Merges one memo's update into the shared context array: last write wins
+    /// for that memo, every other memo is left intact. Replacing the whole array
+    /// with a single element—as this once did—let a later `thinking` update for
+    /// one ask erase a terminal `answered` for another.
+    private static func mergedMemoUpdates(
+        existing: [[String: Any]],
+        update: [String: Any],
+        memoId: String
+    ) -> [[String: Any]] {
+        var merged = existing.filter { $0["memoId"] as? String != memoId }
+        merged.append(update)
+        return Array(merged.suffix(maxContextMemoUpdates))
+    }
+
+    /// Publishes the phone's selected visual theme as durable last-known Watch
+    /// state. App Groups do not cross the device boundary, so appearance uses
+    /// the same WatchConnectivity context path as other companion state.
+    func publishAppearanceTheme(_ rawValue: String) {
+        activateIfNeeded()
+
+        guard let session, session.activationState == .activated else {
+            log.debug("Watch appearance skipped; session is not activated")
+            return
+        }
+
+        do {
+            var context = session.applicationContext
+            context["appearanceTheme"] = rawValue
+            try session.updateApplicationContext(context)
+        } catch {
+            log.debug("Watch appearance context failed: \(error.localizedDescription)")
+        }
+
+        guard session.isReachable else { return }
+        session.sendMessage(
+            ["type": "appearanceTheme", "theme": rawValue],
+            replyHandler: nil
+        ) { [log] error in
+            log.debug("Watch appearance send failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func publishCurrentAppearanceTheme() {
+        publishAppearanceTheme(
+            TalkieAppConfigurationStore.shared.configuration.appearance.theme
+        )
     }
 
     /// Publishes the bounded Codex channel snapshot used by the Watch picker.
@@ -281,7 +424,7 @@ final class WatchSessionManager: NSObject, ObservableObject {
                 "memoId": memoId
             ]
             if let preview {
-                metadata["preview"] = String(preview.prefix(240))
+                metadata["preview"] = String(preview.prefix(Self.previewCharacterBudget))
             }
 
             session.transferFile(fileURL, metadata: metadata)
@@ -310,6 +453,7 @@ extension WatchSessionManager: WCSessionDelegate {
             // Only log if watch app is actually installed
             if session.isWatchAppInstalled {
                 log.info("⌚ Watch app connected (reachable: \(session.isReachable))")
+                self.publishCurrentAppearanceTheme()
                 await self.refreshCurrentCodexSnapshot()
             }
         }
@@ -334,6 +478,7 @@ extension WatchSessionManager: WCSessionDelegate {
                 log.info("⌚ Watch reachability: \(session.isReachable)")
             }
             if session.isReachable {
+                self.publishCurrentAppearanceTheme()
                 await self.refreshCurrentCodexSnapshot()
             }
         }
@@ -343,6 +488,8 @@ extension WatchSessionManager: WCSessionDelegate {
         Task { @MainActor in
             guard let type = message["type"] as? String else { return }
             switch type {
+            case "appearanceThemeRequest":
+                self.publishCurrentAppearanceTheme()
             case "codexSelectChannel":
                 self.log.info(
                     "Ignored legacy Watch Codex selection; Watch navigation is local-only"

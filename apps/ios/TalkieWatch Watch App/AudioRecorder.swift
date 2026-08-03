@@ -11,6 +11,7 @@ import AVFoundation
 @MainActor
 final class AudioRecorder: NSObject, ObservableObject {
     @Published var isRecording = false
+    @Published var isPaused = false
     @Published var recordingDuration: TimeInterval = 0
     @Published var currentLevel: Float = 0  // 0.0 to 1.0 for visualization
 
@@ -70,6 +71,7 @@ final class AudioRecorder: NSObject, ObservableObject {
             }
             audioRecorder = recorder
             isRecording = true
+            isPaused = false
             recordingDuration = 0
             currentLevel = 0
 
@@ -79,6 +81,11 @@ final class AudioRecorder: NSObject, ObservableObject {
                     guard let self = self, let recorder = self.audioRecorder else { return }
 
                     self.recordingDuration = recorder.currentTime
+
+                    guard !self.isPaused else {
+                        self.currentLevel = 0
+                        return
+                    }
 
                     // Update audio level
                     recorder.updateMeters()
@@ -102,11 +109,35 @@ final class AudioRecorder: NSObject, ObservableObject {
         }
     }
 
+    /// Pause or resume the current file without ending the capture session.
+    /// `isRecording` stays true while paused because the recording still owns
+    /// the active file and can be finished and sent normally.
+    @discardableResult
+    func togglePause() -> Bool {
+        guard let recorder = audioRecorder else { return false }
+
+        if isPaused {
+            guard recorder.record() else {
+                WatchConsole.info("[Watch] Recording failed to resume")
+                return false
+            }
+            isPaused = false
+        } else {
+            guard recorder.isRecording else { return false }
+            recorder.pause()
+            isPaused = true
+            currentLevel = 0
+        }
+
+        return true
+    }
+
     func stopRecording() async -> URL? {
         timer?.invalidate()
         timer = nil
 
         isRecording = false
+        isPaused = false
         currentLevel = 0
 
         guard let recorder = audioRecorder, recordingURL != nil else {
@@ -137,6 +168,7 @@ final class AudioRecorder: NSObject, ObservableObject {
         discardRecordingOnFinish = true
         audioRecorder?.stop()
         isRecording = false
+        isPaused = false
         currentLevel = 0
         recordingDuration = 0
     }
@@ -156,6 +188,7 @@ final class AudioRecorder: NSObject, ObservableObject {
         discardRecordingOnFinish = false
         audioRecorder = nil
         recordingURL = nil
+        isPaused = false
 
         guard let continuation = stopContinuation else {
             if shouldDiscard, let url {

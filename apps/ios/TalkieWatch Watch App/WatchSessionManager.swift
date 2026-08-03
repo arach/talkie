@@ -20,6 +20,17 @@ struct WatchMemo: Identifiable, Codable {
     var transcriptionPreview: String?
     var presetId: String?
     var presetName: String?
+    /// Where the ask actually got to. Sent explicitly by the phone rather than
+    /// inferred from `transcriptionPreview`, which used to be the only way to
+    /// tell transcribing apart from answering.
+    var phase: WatchAskPhase?
+    /// Who narrated the finished answer. Rendered as provenance on the Asks
+    /// surface; absent for memos that never carried an answer.
+    var delivery: WatchAnswerDelivery?
+    /// When the ask reached a terminal phase, which is what "have I seen this
+    /// yet" is measured against. `timestamp` cannot serve: it records when the
+    /// memo was captured, which is always before the wearer could have looked.
+    var settledAt: Date?
 
     enum MemoStatus: String, Codable {
         case sending
@@ -39,7 +50,106 @@ struct WatchMemo: Identifiable, Codable {
         self.transcriptionPreview = nil
         self.presetId = nil
         self.presetName = nil
+        self.phase = nil
+        self.delivery = nil
+        self.settledAt = nil
     }
+
+    /// Ask AI captures are the only ones the Asks surface lists. The preset is
+    /// the discriminator because `sendAudio` attaches one only on the AI route.
+    var isAsk: Bool { presetId == WatchPreset.ai.id }
+
+    /// True while the phone still owes an outcome. Drives both the in-flight
+    /// panel on the Asks page and the live state of the capture-face strip.
+    var isInFlight: Bool {
+        switch status {
+        case .sending, .sent, .received, .thinking:
+            return true
+        case .transcribed, .answered, .failed:
+            return false
+        }
+    }
+
+    /// The phase to render. Falls back to a status-derived value so a memo that
+    /// predates the `phase` field, or an update from an older phone build, still
+    /// reads correctly rather than showing nothing.
+    var resolvedPhase: WatchAskPhase {
+        if let phase { return phase }
+        switch status {
+        case .sending: return .sending
+        case .sent: return .sending
+        case .received: return .received
+        case .thinking: return .transcribing
+        case .transcribed: return .transcribing
+        case .answered: return .answered
+        case .failed: return .failed
+        }
+    }
+}
+
+/// Where an ask has got to, in the vocabulary shared by the capture-face strip,
+/// the Asks page, and the phone's activity pill.
+///
+/// Declared once per target with the raw values as the contract — the Watch
+/// folder cannot share a type with the phone target — matching the pattern
+/// already used by `status` and `delivery`.
+enum WatchAskPhase: String, Codable {
+    case queued
+    case sending
+    case received
+    case transcribing
+    case answering
+    case answered
+    case failed
+
+    /// Uppercase mono label. Short enough to sit in the 24pt capture strip
+    /// without truncating on the smallest supported watch.
+    var label: String {
+        switch self {
+        case .queued: return "QUEUED"
+        case .sending: return "SENDING"
+        case .received: return "RECEIVED"
+        case .transcribing: return "TRANSCRIBING"
+        case .answering: return "ANSWERING"
+        case .answered: return "ANSWER READY"
+        case .failed: return "ASK FAILED"
+        }
+    }
+
+    var isTerminal: Bool {
+        self == .answered || self == .failed
+    }
+}
+
+/// Who narrates a finished answer, and therefore who owns the arrival cue on
+/// the wrist. Sent by the phone on the terminal transition.
+///
+/// An absent or unrecognized value means the Watch owns the cue. A missed
+/// answer is the failure worth avoiding, so the default fails toward signalling.
+enum WatchAnswerDelivery: String, Codable {
+    case watchAudio
+    case phoneAudio
+    case silent
+}
+
+/// Which memos have already been announced on the wrist, and which are still
+/// owed an announcement by audio that has not arrived yet.
+///
+/// This has to be durable. `didReceiveApplicationContext` replays the phone's
+/// last-known context on every activation, so a purely in-memory record would
+/// re-announce the same answer every time the Watch app launches.
+private struct WatchSignalLedger: Codable {
+    /// An answer whose audio the phone promised but has not delivered yet. The
+    /// wearer's preference is captured with the promise so the fallback honours
+    /// what was true when the answer completed, not whatever is current when a
+    /// suspended Watch finally wakes.
+    struct PendingAnswer: Codable {
+        let promisedAt: Date
+        let readyHapticEnabled: Bool
+    }
+
+    var signaledMemoIDs: [UUID] = []
+    var awaitingWatchAudio: [UUID: PendingAnswer] = [:]
 }
 
 private struct PendingAudioTransfer: Codable, Identifiable {
@@ -60,6 +170,7 @@ final class WatchSessionManager: NSObject, ObservableObject {
     @Published var isReachable = false
     @Published var lastSentStatus: SendStatus = .idle
     @Published var recentMemos: [WatchMemo] = []
+    @Published private(set) var appearanceThemeName = WatchTheme.currentName.rawValue
     @Published private(set) var codexSnapshot: CodexWatchSnapshot?
     @Published private(set) var selectedCodexTaskID: String?
     @Published private(set) var codexDispatchReceipt: CodexWatchDispatchReceipt? {
@@ -68,6 +179,21 @@ final class WatchSessionManager: NSObject, ObservableObject {
 
     private let maxRecentMemos = 10
     private let selectedCodexTaskKey = "watch.codex.selected-task.v1"
+
+    /// The ledger has to outlive the display window. A replayed application
+    /// context can still carry a memo that has aged out of `recentMemos`, and
+    /// that memo must not be announced a second time.
+    ///
+    /// It must also stay at or above the phone's `maxContextMemoUpdates` (10,
+    /// see TLK-036), which is what makes a double announcement impossible: a
+    /// memo can only fall out of this ledger after 40 newer answers, by which
+    /// point it is long gone from the ten-slot context that would replay it.
+    private var maxSignaledMemos: Int { maxRecentMemos * 4 }
+
+    /// How long the Watch waits for audio the phone said it was sending before
+    /// falling back to a plain arrival tap. Long enough to cover an ordinary
+    /// file transfer, short enough that the wearer is not left wondering.
+    private static let watchAudioGrace: TimeInterval = 12
 
     enum SendStatus: Equatable {
         case idle
@@ -79,6 +205,7 @@ final class WatchSessionManager: NSObject, ObservableObject {
     private var session: WCSession?
     private var pendingAudioTransfers: [PendingAudioTransfer] = []
     private var aiAudioPlayer: AVAudioPlayer?
+    private var signalLedger = WatchSignalLedger()
 
     var codexChannels: [CodexWatchChannel] {
         codexSnapshot?.channels ?? []
@@ -89,12 +216,55 @@ final class WatchSessionManager: NSObject, ObservableObject {
         return codexChannels.first { $0.taskID == selectedCodexTaskID }
     }
 
+    // MARK: - Asks
+
+    /// Ask AI captures only, newest first. This is the whole Asks surface: the
+    /// display window is deliberately `maxRecentMemos`, not a separate archive.
+    /// The wrist wants a recent guide, not a transcript store — the phone keeps
+    /// the durable history.
+    var asks: [WatchMemo] {
+        recentMemos.filter(\.isAsk)
+    }
+
+    /// The ask the phone still owes an outcome on. Only ever one is shown: the
+    /// newest, because that is the one the wearer just spoke.
+    var activeAsk: WatchMemo? {
+        asks.first(where: \.isInFlight)
+    }
+
+    /// The newest settled ask the wearer has not opened the Asks page since.
+    /// Drives the resting state of the capture-face strip, so an answer that
+    /// arrived while the wrist was down is still visible when it comes back up.
+    var unseenAsk: WatchMemo? {
+        guard let latest = asks.first(where: { $0.resolvedPhase.isTerminal }) else { return nil }
+        // A memo written by an older build has no `settledAt`; fall back to its
+        // capture time rather than treating it as permanently unseen.
+        guard (latest.settledAt ?? latest.timestamp) > lastAsksVisit else { return nil }
+        return latest
+    }
+
+    /// Marked when the Asks page comes forward. Persisted so the unseen badge
+    /// does not come back from the dead after a relaunch.
+    private(set) var lastAsksVisit: Date = UserDefaults.standard
+        .object(forKey: WatchSessionManager.lastAsksVisitKey) as? Date ?? .distantPast
+
+    private static let lastAsksVisitKey = "watch.asks.last-visit.v1"
+
+    func markAsksSeen() {
+        let now = Date()
+        lastAsksVisit = now
+        UserDefaults.standard.set(now, forKey: Self.lastAsksVisitKey)
+        objectWillChange.send()
+    }
+
     private override init() {
         super.init()
         loadRecentMemos()
+        loadSignalLedger()
         selectedCodexTaskID = UserDefaults.standard.string(forKey: selectedCodexTaskKey)
         loadCodexDispatchReceipt()
         loadPendingAudioTransfers()
+        reconcilePendingAudioWithMemoStatuses()
         reconcilePendingCodexAudioWithReceipt()
 
         if WCSession.isSupported() {
@@ -122,6 +292,60 @@ final class WatchSessionManager: NSObject, ObservableObject {
     private func saveRecentMemos() {
         guard let data = try? JSONEncoder().encode(recentMemos) else { return }
         try? data.write(to: memosFileURL)
+    }
+
+    private var signalLedgerFileURL: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("signaled_memos.json")
+    }
+
+    private func loadSignalLedger() {
+        guard let data = try? Data(contentsOf: signalLedgerFileURL),
+              let ledger = try? JSONDecoder().decode(WatchSignalLedger.self, from: data) else {
+            return
+        }
+        signalLedger = ledger
+    }
+
+    private func saveSignalLedger() {
+        guard let data = try? JSONEncoder().encode(signalLedger) else { return }
+        try? data.write(to: signalLedgerFileURL, options: .atomic)
+    }
+
+    private func hasSignaled(memoID: UUID) -> Bool {
+        signalLedger.signaledMemoIDs.contains(memoID)
+    }
+
+    private func markSignaled(memoID: UUID) {
+        signalLedger.awaitingWatchAudio[memoID] = nil
+        guard !signalLedger.signaledMemoIDs.contains(memoID) else {
+            saveSignalLedger()
+            return
+        }
+        signalLedger.signaledMemoIDs.append(memoID)
+        signalLedger.signaledMemoIDs = Array(signalLedger.signaledMemoIDs.suffix(maxSignaledMemos))
+        saveSignalLedger()
+    }
+
+    private func handleAppearanceTheme(_ rawValue: String) {
+        guard let theme = WatchThemeName(rawValue: rawValue) else {
+            WatchConsole.info("⌚️ [Watch] Ignored unknown appearance theme: \(rawValue)")
+            return
+        }
+        UserDefaults.standard.set(theme.rawValue, forKey: WatchTheme.selectedThemeKey)
+        appearanceThemeName = WatchTheme.currentName.rawValue
+    }
+
+    func setLocalAppearanceTheme(_ theme: WatchThemeName?) {
+        if let theme {
+            UserDefaults.standard.set(theme.rawValue, forKey: WatchTheme.localOverrideKey)
+            WatchConsole.info("⌚️ [Watch] Appearance override: \(theme.rawValue)")
+        } else {
+            UserDefaults.standard.removeObject(forKey: WatchTheme.localOverrideKey)
+            WatchConsole.info("⌚️ [Watch] Appearance follows iPhone")
+        }
+        appearanceThemeName = WatchTheme.currentName.rawValue
+        WKInterfaceDevice.current().play(.click)
     }
 
     private var codexReceiptFileURL: URL {
@@ -324,6 +548,37 @@ final class WatchSessionManager: NSObject, ObservableObject {
         acknowledgePendingCodexAudio(with: codexDispatchReceipt)
     }
 
+    /// Memo status updates are the phone's durable application-level receipt.
+    /// WatchConnectivity may suspend the Watch before `didFinish` arrives, so
+    /// the receipt—not that lower-level callback—owns queue retirement.
+    private func acknowledgePendingAudio(memoID: UUID) {
+        let queueIDs = pendingAudioTransfers
+            .filter { $0.memoID == memoID }
+            .map(\.id)
+
+        for queueID in queueIDs {
+            completePendingAudioTransfer(queueID: queueID)
+            WatchConsole.info(
+                "⌚️ [Watch] Retired acknowledged memo audio \(queueID) memo=\(memoID)"
+            )
+        }
+    }
+
+    private func reconcilePendingAudioWithMemoStatuses() {
+        let acknowledgedMemoIDs = Set(recentMemos.compactMap { memo -> UUID? in
+            switch memo.status {
+            case .received, .thinking, .transcribed, .answered, .failed:
+                memo.id
+            case .sending, .sent:
+                nil
+            }
+        })
+
+        for memoID in acknowledgedMemoIDs {
+            acknowledgePendingAudio(memoID: memoID)
+        }
+    }
+
     /// Send audio file to iPhone for transcription.
     ///
     /// `autoRoute` flags that the phone should classify intent from the
@@ -479,20 +734,155 @@ final class WatchSessionManager: NSObject, ObservableObject {
 
     // MARK: - Memo Updates
 
-    private func updateMemoStatus(_ memoId: UUID, status: WatchMemo.MemoStatus, preview: String? = nil) {
+    private func updateMemoStatus(
+        _ memoId: UUID,
+        status: WatchMemo.MemoStatus,
+        preview: String? = nil,
+        phase: WatchAskPhase? = nil,
+        delivery: WatchAnswerDelivery? = nil
+    ) {
         if let index = recentMemos.firstIndex(where: { $0.id == memoId }) {
             recentMemos[index].status = status
             if let preview = preview {
                 recentMemos[index].transcriptionPreview = preview
             }
+            if let phase {
+                // Stamped once, on the first terminal update. The unseen badge
+                // is answered "since when", and the memo's own timestamp is the
+                // moment it was *recorded* — an ask the wearer watched go out
+                // and then walked away from would never read as unseen.
+                if phase.isTerminal, recentMemos[index].settledAt == nil {
+                    recentMemos[index].settledAt = Date()
+                }
+                recentMemos[index].phase = phase
+            }
+            // Only the terminal update carries delivery. Absent means "not said
+            // yet", not "not spoken", so an earlier value is never cleared.
+            if let delivery {
+                recentMemos[index].delivery = delivery
+            }
             saveRecentMemos()
         }
     }
 
-    func handleMemoUpdate(memoId: String, status: String, preview: String?) {
+    /// The phone sends the identical dictionary over all three carriers — live
+    /// message, durable user info, and replayed application context — so all
+    /// three read it the same way here rather than each picking their own subset
+    /// of the fields.
+    private func applyMemoUpdatePayload(_ payload: [String: Any]) {
+        guard let memoId = payload["memoId"] as? String,
+              let status = payload["status"] as? String else {
+            return
+        }
+        handleMemoUpdate(
+            memoId: memoId,
+            status: status,
+            preview: payload["preview"] as? String,
+            delivery: payload["delivery"] as? String,
+            phase: payload["phase"] as? String,
+            readyHapticEnabled: payload["readyHaptic"] as? Bool ?? true
+        )
+    }
+
+    func handleMemoUpdate(
+        memoId: String,
+        status: String,
+        preview: String?,
+        delivery: String? = nil,
+        phase: String? = nil,
+        readyHapticEnabled: Bool = true
+    ) {
         guard let uuid = UUID(uuidString: memoId),
               let memoStatus = WatchMemo.MemoStatus(rawValue: status) else { return }
-        updateMemoStatus(uuid, status: memoStatus, preview: preview)
+
+        switch memoStatus {
+        case .received, .thinking, .transcribed, .answered, .failed:
+            acknowledgePendingAudio(memoID: uuid)
+        case .sending, .sent:
+            break
+        }
+        let resolvedDelivery = delivery.flatMap(WatchAnswerDelivery.init(rawValue:))
+        updateMemoStatus(
+            uuid,
+            status: memoStatus,
+            preview: preview,
+            phase: phase.flatMap(WatchAskPhase.init(rawValue:)),
+            delivery: resolvedDelivery
+        )
+        signalReadyIfNeeded(
+            memoID: uuid,
+            status: memoStatus,
+            delivery: resolvedDelivery,
+            readyHapticEnabled: readyHapticEnabled
+        )
+    }
+
+    // MARK: - Ready Signal
+
+    /// Every carrier reaches the wrist through this one funnel — live message,
+    /// durable user info, replayed application context, and the answer audio
+    /// itself — so a finished answer is announced exactly once per memo no
+    /// matter how many of them deliver it.
+    ///
+    /// Only a completed answer is announced. A failure is left to visual state
+    /// and history: a tap the wearer has to look at to interpret is a tap that
+    /// interrupts without informing.
+    private func signalReadyIfNeeded(
+        memoID: UUID,
+        status: WatchMemo.MemoStatus,
+        delivery: WatchAnswerDelivery?,
+        readyHapticEnabled: Bool
+    ) {
+        guard status == .answered, !hasSignaled(memoID: memoID) else { return }
+
+        guard delivery != .watchAudio else {
+            // The answer is about to speak here. That playback carries its own
+            // opening click, so defer and let `handleAIAudio` close the ledger.
+            noteAwaitingWatchAudio(memoID: memoID, readyHapticEnabled: readyHapticEnabled)
+            return
+        }
+
+        markSignaled(memoID: memoID)
+        guard readyHapticEnabled else { return }
+        WKInterfaceDevice.current().play(.notification)
+    }
+
+    private func noteAwaitingWatchAudio(memoID: UUID, readyHapticEnabled: Bool) {
+        guard signalLedger.awaitingWatchAudio[memoID] == nil else { return }
+        signalLedger.awaitingWatchAudio[memoID] = WatchSignalLedger.PendingAnswer(
+            promisedAt: Date(),
+            readyHapticEnabled: readyHapticEnabled
+        )
+        saveSignalLedger()
+
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(Self.watchAudioGrace))
+            self?.resolveOverdueWatchAudio()
+        }
+    }
+
+    /// The phone said audio was coming and it never arrived, so the wrist still
+    /// owes the wearer a signal. Measured against the wall clock rather than the
+    /// sleep above, because a suspended Watch app resolves the promise on its
+    /// next wake instead of losing it.
+    private func resolveOverdueWatchAudio() {
+        let now = Date()
+        let overdue = signalLedger.awaitingWatchAudio
+            .filter { now.timeIntervalSince($0.value.promisedAt) >= Self.watchAudioGrace }
+        guard !overdue.isEmpty else { return }
+
+        for (memoID, pending) in overdue {
+            signalLedger.awaitingWatchAudio[memoID] = nil
+            guard !hasSignaled(memoID: memoID) else { continue }
+            markSignaled(memoID: memoID)
+            WatchConsole.info(
+                "⌚️ [Watch] Promised answer audio never arrived; tapping instead memo=\(memoID)"
+            )
+            if pending.readyHapticEnabled {
+                WKInterfaceDevice.current().play(.notification)
+            }
+        }
+        saveSignalLedger()
     }
 
     // MARK: - Codex State
@@ -577,11 +967,20 @@ final class WatchSessionManager: NSObject, ObservableObject {
             try? FileManager.default.removeItem(at: audioURL)
             try FileManager.default.moveItem(at: fileURL, to: audioURL)
 
+            let memoID = (metadata["memoId"] as? String).flatMap(UUID.init(uuidString:))
+            // Read before the update below can change it: the grace fallback may
+            // already have tapped for this memo on this same wake, since audio
+            // routinely lands seconds after activation and there is no way to
+            // see an incoming transfer before it arrives. In that case playback
+            // starting is cue enough and a click here would double up.
+            let alreadySignaled = memoID.map(hasSignaled) ?? false
             if let memoId = metadata["memoId"] as? String {
                 handleMemoUpdate(
                     memoId: memoId,
                     status: "answered",
-                    preview: metadata["preview"] as? String
+                    preview: metadata["preview"] as? String,
+                    delivery: WatchAnswerDelivery.watchAudio.rawValue,
+                    phase: WatchAskPhase.answered.rawValue
                 )
             }
 
@@ -589,6 +988,15 @@ final class WatchSessionManager: NSObject, ObservableObject {
             try AVAudioSession.sharedInstance().setActive(true)
             aiAudioPlayer = try AVAudioPlayer(contentsOf: audioURL)
             aiAudioPlayer?.prepareToPlay()
+            // The click below is this memo's arrival cue, so close the ledger
+            // here. Doing it only once playback is actually set up means a
+            // failure above still falls through to the plain tap.
+            if let memoID {
+                markSignaled(memoID: memoID)
+            }
+            if !alreadySignaled {
+                WKInterfaceDevice.current().play(.click)
+            }
             aiAudioPlayer?.play()
             WatchConsole.info("⌚️ [Watch] 🔊 Playing AI answer on Watch")
         } catch {
@@ -628,7 +1036,15 @@ extension WatchSessionManager: WCSessionDelegate {
                 WatchConsole.info("⌚️ [Watch] =====================================")
                 self.isReachable = session.isReachable
                 if activationState == .activated {
+                    self.resolveOverdueWatchAudio()
                     self.flushPendingAudioTransfers()
+                    if session.isReachable {
+                        session.sendMessage(
+                            ["type": "appearanceThemeRequest"],
+                            replyHandler: nil,
+                            errorHandler: nil
+                        )
+                    }
                 }
             }
         }
@@ -637,7 +1053,15 @@ extension WatchSessionManager: WCSessionDelegate {
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
         Task { @MainActor in
             self.isReachable = session.isReachable
+            self.resolveOverdueWatchAudio()
             self.flushPendingAudioTransfers()
+            if session.isReachable {
+                session.sendMessage(
+                    ["type": "appearanceThemeRequest"],
+                    replyHandler: nil,
+                    errorHandler: nil
+                )
+            }
             let device = WKInterfaceDevice.current()
             WatchConsole.info("⌚️ [Watch] Reachability → \(session.isReachable) | Companion: \(session.isCompanionAppInstalled) | Watch: \(device.name)")
         }
@@ -716,12 +1140,12 @@ extension WatchSessionManager: WCSessionDelegate {
             WatchConsole.info("⌚️ [Watch] 📩 Received message: \(message)")
 
             switch message["type"] as? String {
-            case "memoUpdate":
-                if let memoId = message["memoId"] as? String,
-                   let status = message["status"] as? String {
-                    let preview = message["preview"] as? String
-                    self.handleMemoUpdate(memoId: memoId, status: status, preview: preview)
+            case "appearanceTheme":
+                if let theme = message["theme"] as? String {
+                    self.handleAppearanceTheme(theme)
                 }
+            case "memoUpdate":
+                self.applyMemoUpdatePayload(message)
             case "codexSnapshot":
                 self.handleCodexSnapshot(message)
             case "codexDispatchUpdate":
@@ -747,14 +1171,14 @@ extension WatchSessionManager: WCSessionDelegate {
         Task { @MainActor in
             WatchConsole.info("⌚️ [Watch] 📩 Received application context: \(applicationContext)")
 
+            if let theme = applicationContext["appearanceTheme"] as? String {
+                self.handleAppearanceTheme(theme)
+            }
+
             // Handle bulk memo updates from iPhone
             if let updates = applicationContext["memoUpdates"] as? [[String: Any]] {
                 for update in updates {
-                    if let memoId = update["memoId"] as? String,
-                       let status = update["status"] as? String {
-                        let preview = update["preview"] as? String
-                        self.handleMemoUpdate(memoId: memoId, status: status, preview: preview)
-                    }
+                    self.applyMemoUpdatePayload(update)
                 }
             }
 
@@ -776,14 +1200,7 @@ extension WatchSessionManager: WCSessionDelegate {
             case "codexDispatchUpdate":
                 self.handleCodexDispatchUpdate(userInfo)
             case "memoUpdate":
-                if let memoID = userInfo["memoId"] as? String,
-                   let status = userInfo["status"] as? String {
-                    self.handleMemoUpdate(
-                        memoId: memoID,
-                        status: status,
-                        preview: userInfo["preview"] as? String
-                    )
-                }
+                self.applyMemoUpdatePayload(userInfo)
             default:
                 break
             }

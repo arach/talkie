@@ -145,6 +145,14 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 
             if let existingMemos = try? context.fetch(fetchRequest), !existingMemos.isEmpty {
                 AppLogger.app.info("[Watch] Memo already exists with ID \(existingId), skipping duplicate import")
+                // The Watch may retry after its app was suspended before the
+                // low-level file-transfer callback. Repeat the durable receipt
+                // so that retry can retire its local queue entry.
+                WatchSessionManager.shared.sendMemoUpdate(
+                    memoId: existingId.uuidString,
+                    status: "received",
+                    phase: .received
+                )
                 // Clean up the duplicate audio file
                 try? FileManager.default.removeItem(at: audioURL)
                 return
@@ -195,7 +203,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             WatchSessionManager.shared.sendMemoUpdate(
                 memoId: memoId?.uuidString ?? "",
                 status: "received",
-                preview: isAIRequest ? "Received. Transcribing..." : nil
+                phase: .received
             )
 
             if isAIRequest {
@@ -244,7 +252,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             WatchSessionManager.shared.sendMemoUpdate(
                 memoId: watchMemoIdString,
                 status: "thinking",
-                preview: "Listening..."
+                phase: .transcribing
             )
 
             let transcription = try await transcribeWatchAIQuestion(audioURL: audioURL)
@@ -267,10 +275,13 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             _ = AgentSessionStore.shared.session(forMemoId: memoId, memoTitle: memoTitle)
             AgentSessionStore.shared.addUserTurn(memoId: memoId, content: transcription)
 
+            // The question itself is the most useful thing the wrist can show
+            // while the answer is still outstanding: it confirms what was heard.
             WatchSessionManager.shared.sendMemoUpdate(
                 memoId: watchMemoIdString,
                 status: "thinking",
-                preview: "Answering..."
+                preview: transcription,
+                phase: .answering
             )
 
             let response = try await WatchAIService.shared.answer(
@@ -289,11 +300,16 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                 content: response.answer
             )
 
-            let previewPrefix = response.didSpeak ? "Spoken on \(response.speechRoute.displayName): " : ""
+            // Provenance rides on `delivery` and is rendered as a glyph by the
+            // Watch, so the preview budget goes entirely to the answer. It used
+            // to open with a "Spoken on iPhone: " prefix, which spent characters
+            // on presentation the receiving surface can now derive itself.
             WatchSessionManager.shared.sendMemoUpdate(
                 memoId: watchMemoIdString,
                 status: "answered",
-                preview: "\(previewPrefix)\(response.answer)"
+                preview: response.answer,
+                delivery: Self.answerDelivery(for: response),
+                phase: .answered
             )
 
             AppLogger.ai.info("[Watch] AI answered with \(response.providerName) \(response.modelId)")
@@ -310,8 +326,27 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             WatchSessionManager.shared.sendMemoUpdate(
                 memoId: watchMemoIdString,
                 status: "failed",
-                preview: failureMessage
+                preview: failureMessage,
+                phase: .failed
             )
+        }
+    }
+
+    /// The Watch needs to know whether the answer is about to speak on the wrist
+    /// before it decides how to announce it. A route that was configured but did
+    /// not actually speak is delivered silently, so the wrist still owes the
+    /// wearer a signal.
+    private static func answerDelivery(
+        for response: WatchAIResponse
+    ) -> WatchSessionManager.AnswerDelivery {
+        guard response.didSpeak else { return .silent }
+        switch response.speechRoute {
+        case .watch:
+            return .watchAudio
+        case .phone:
+            return .phoneAudio
+        case .silent:
+            return .silent
         }
     }
 

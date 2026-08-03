@@ -60,6 +60,10 @@ struct ChromeOverlay: View {
                 AppShellRouter.shared.openSettings()
             }
 
+            // Ambient, not summoned: an ask in flight is worth seeing whether or
+            // not the chrome is open, so this sits outside the tray's reveal.
+            AskActivityPill()
+
             if showCreateTray {
                 LiquidGlassTray()
 
@@ -239,6 +243,115 @@ private struct LiquidGlassTray: View {
         .padding(.bottom, 17)
         .scaleEffect(x: chrome.state == .resting ? 0.24 : 1, y: 1, anchor: .center)
         .animation(.spring(response: 0.44, dampingFraction: 0.78), value: chrome.state)
+    }
+}
+
+/// One-line report on an ask spoken from the Watch, sitting just above the
+/// bottom tray. Borrows the tray's material so it reads as part of the same
+/// control band rather than a notification pasted on top of the app.
+///
+/// It is deliberately the only always-on chrome besides the pivot: without it
+/// an ask could transcribe, answer, and fail with nothing on the phone screen
+/// to say so.
+private struct AskActivityPill: View {
+    @ObservedObject private var registry = AskInFlightRegistry.shared
+    @ObservedObject private var theme = ThemeManager.shared
+
+    /// Clears the 48pt bottom corner circles (16pt inset + 48pt) with a small
+    /// gap, so the pill stacks on the control band instead of colliding with it.
+    private static let bottomInset: CGFloat = 72
+
+    var body: some View {
+        Group {
+            if let entry = registry.current {
+                content(entry)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .padding(.horizontal, 20)
+        .padding(.bottom, Self.bottomInset)
+        .animation(.spring(response: 0.36, dampingFraction: 0.82), value: registry.current)
+    }
+
+    private func content(_ entry: AskInFlightRegistry.Entry) -> some View {
+        let chrome = theme.currentTheme.chrome
+        let tint = tint(for: entry.phase)
+
+        return Button {
+            AppShellRouter.shared.openMemoDetail(memoID: entry.id)
+        } label: {
+            HStack(spacing: 8) {
+                if entry.phase.isSettled {
+                    Circle()
+                        .fill(tint)
+                        .frame(width: 6, height: 6)
+                } else {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .controlSize(.mini)
+                        .tint(tint)
+                }
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(entry.phase.pillLabel)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(tint)
+
+                    if let text = entry.text, !text.isEmpty {
+                        Text(text)
+                            .font(.system(size: 11))
+                            .foregroundStyle(theme.colors.textSecondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                // Only failures need dismissing by hand; an answer retires
+                // itself, and an ask still in flight has nothing to dismiss.
+                if entry.phase == .failed {
+                    Button {
+                        registry.dismiss(entry.id)
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(theme.colors.textSecondary)
+                            .frame(width: 28, height: 28)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Dismiss failed ask")
+                }
+            }
+            .padding(.leading, 12)
+            .padding(.trailing, entry.phase == .failed ? 2 : 12)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                ZStack {
+                    Capsule()
+                        .fill(theme.colors.cardBackground.opacity(0.70))
+                        .background(.ultraThinMaterial, in: Capsule())
+                    Capsule()
+                        .strokeBorder(chrome.edgeFaint, lineWidth: chrome.hairlineWidth)
+                }
+            )
+            .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(entry.phase.pillLabel). Open this ask.")
+    }
+
+    /// Same semantics the Watch uses: theme accent while working, green for a
+    /// finished answer, red for a failure.
+    private func tint(for phase: WatchSessionManager.AskPhase) -> Color {
+        switch phase {
+        case .answered: return .green
+        case .failed: return .red
+        default: return theme.currentTheme.chrome.accent
+        }
     }
 }
 

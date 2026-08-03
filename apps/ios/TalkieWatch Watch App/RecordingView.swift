@@ -177,38 +177,77 @@ struct RecordingView: View {
 
 struct ParticlesView: View {
     let level: Float
+    var color: Color = .red
+    var centerQuietZone: CGFloat = 0
+    var particleScale: CGFloat = 1
+    var isPaused = false
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 0.033)) { timeline in
+        TimelineView(
+            .animation(minimumInterval: 0.033, paused: reduceMotion || isPaused)
+        ) { timeline in
             Canvas { context, size in
                 let time = timeline.date.timeIntervalSinceReferenceDate
                 let centerY = size.height / 2
-                let levelCG = CGFloat(level)
+                let levelCG = if reduceMotion {
+                    CGFloat(0.14)
+                } else if isPaused {
+                    CGFloat(0.06)
+                } else {
+                    min(max(CGFloat(level), 0), 1)
+                }
 
-                // Fewer particles for watch performance
-                let baseCount = 15
-                let bonusCount = Int(levelCG * 25)
+                // A stable low-energy field is always present. Voice adds
+                // density and vertical expansion instead of switching the
+                // animation on and off.
+                let baseCount = 30
+                let bonusCount = Int(levelCG * 18)
                 let particleCount = baseCount + bonusCount
 
                 for i in 0..<particleCount {
                     let seed = Double(i) * 1.618033988749
+                    let depth = 0.28 + seed.truncatingRemainder(dividingBy: 0.72)
 
-                    // Particle position
-                    let speed = 0.3 + (seed.truncatingRemainder(dividingBy: 1.0)) * 0.5
-                    let xProgress = (time * speed + seed).truncatingRemainder(dividingBy: 1.0)
+                    // Slow parallax drift keeps the field atmospheric. Nearer
+                    // particles move faster and read a little brighter.
+                    let speed = 0.055 + depth * 0.16
+                    let xProgress = (time * speed + seed * 0.37)
+                        .truncatingRemainder(dividingBy: 1.0)
                     let x = CGFloat(xProgress) * size.width
 
-                    // Y oscillation based on level
-                    let baseY = sin(time * 2.5 + seed * 8) * Double(levelCG) * Double(centerY) * 0.7
-                    let y = centerY + CGFloat(baseY)
+                    // Each point owns a lane. The lane drifts slowly, then
+                    // opens further from center as the live level increases.
+                    let lane = sin(seed * 2.71) * 0.42
+                    let drift = sin(time * (0.34 + depth * 0.32) + seed * 7.3) * 0.14
+                    let response = sin(time * (1.1 + depth * 0.8) + seed * 11)
+                        * Double(levelCG) * 0.44
+                    let y = centerY + CGFloat(lane + drift + response) * centerY
 
-                    // Size pulses with level
-                    let baseSize: CGFloat = 2.0
-                    let levelBonus = levelCG * 3
-                    let particleSize = baseSize + levelBonus * CGFloat(0.5 + sin(seed * 4) * 0.5)
+                    let voiceScale = CGFloat(0.35 + sin(seed * 4) * 0.18)
+                    let particleSize = (
+                        0.85 + CGFloat(depth) * 1.45 + levelCG * voiceScale
+                    ) * particleScale
 
-                    // Opacity
-                    let opacity = 0.4 + Double(levelCG) * 0.5 * (0.5 + sin(seed * 3) * 0.5)
+                    // When used behind the elapsed time, form a soft negative
+                    // space rather than covering the numerals with dots.
+                    let distanceFromCenter = abs(x / max(size.width, 1) - 0.5)
+                    let quietFactor: CGFloat = {
+                        guard centerQuietZone > 0 else { return 1 }
+                        let normalized = min(
+                            max((distanceFromCenter - centerQuietZone) / 0.22, 0),
+                            1
+                        )
+                        return 0.16 + normalized * 0.84
+                    }()
+
+                    let shimmer = 0.82 + sin(time * 0.72 + seed * 5) * 0.18
+                    let opacity = (
+                        0.20
+                        + depth * 0.40
+                        + Double(levelCG) * 0.30
+                    ) * Double(quietFactor) * shimmer
 
                     let rect = CGRect(
                         x: x - particleSize / 2,
@@ -216,7 +255,22 @@ struct ParticlesView: View {
                         width: particleSize,
                         height: particleSize
                     )
-                    context.fill(Circle().path(in: rect), with: .color(Color.red.opacity(opacity)))
+
+                    if i.isMultiple(of: 9) {
+                        let haloSize = particleSize * 2.8
+                        let haloRect = CGRect(
+                            x: x - haloSize / 2,
+                            y: y - haloSize / 2,
+                            width: haloSize,
+                            height: haloSize
+                        )
+                        context.fill(
+                            Circle().path(in: haloRect),
+                            with: .color(color.opacity(opacity * 0.10))
+                        )
+                    }
+
+                    context.fill(Circle().path(in: rect), with: .color(color.opacity(opacity)))
                 }
             }
         }
