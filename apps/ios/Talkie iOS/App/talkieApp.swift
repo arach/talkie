@@ -127,6 +127,10 @@ struct talkieApp: App {
             .onReceive(NotificationCenter.default.publisher(for: NSUbiquitousKeyValueStore.didChangeExternallyNotification)) { _ in
                 appSettings.refreshPinnedWorkflowMirror()
             }
+            .task(id: themeManager.currentTheme) {
+                guard !Self.isScreenshotMode else { return }
+                await AppIconThemeSynchronizer.synchronize(with: themeManager.currentTheme)
+            }
             .task {
                 // Load database
                 let loadStart = Date()
