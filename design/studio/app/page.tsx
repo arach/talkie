@@ -247,6 +247,14 @@ const STUDIES: Study[] = [
       "TTS playback surface — instrument-style transport, voice / rate / pitch controls, source picker, multi-item queue. Idle / playing / queue states. Audio-output counterpart to Camera.",
   },
   {
+    slug: "ios-deck-key-material",
+    name: "Deck Key Material",
+    kind: "Material study",
+    platform: "iOS",
+    blurb:
+      "Resting lift (shipping dual shadow → contact / milled / flush) and inactive grammar (ghost fade → socket). Side-by-side Command and Codex beds on Scope chassis.",
+  },
+  {
     slug: "ios-deck-futures",
     name: "Deck Futures",
     kind: "Review board",
