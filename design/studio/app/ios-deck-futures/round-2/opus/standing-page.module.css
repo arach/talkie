@@ -1,0 +1,1046 @@
+/* ──────────────────────────────────────────────────────────────────────
+ * Standing Page — Talkie on a 12.9" iPad, landscape (1366 × 1024 pt).
+ *
+ * PREMISE: one task's latest useful work stands as a single lit porcelain
+ * page on a live brass sill, and the sill is the voice.
+ *
+ * The stage is void, not panels. Exactly three objects exist on it: the
+ * task spine at the left edge, the standing page, and the sill the page
+ * rests on. Marginalia floats on the dark beside the page — annotations
+ * off the sheet, the way a reader writes next to a page rather than on it.
+ *
+ * The sill is both the address plate and the microphone. Voice is not a
+ * control added to the composition; it is the surface the work stands on,
+ * and it is the only light source in the room.
+ * ────────────────────────────────────────────────────────────────────── */
+
+.root {
+  --stage: #131110;
+  --stage-lift: #1a1715;
+  --hair: rgba(233, 224, 205, 0.11);
+  --hair-strong: rgba(233, 224, 205, 0.2);
+
+  --porcelain: #f7f4ed;
+  --porcelain-edge: #e2dccf;
+  --porcelain-recess: #efeade;
+
+  --ink: #1e1c19;
+  --ink-dim: #4a463f;
+  --ink-faint: #6b665d;
+  --ink-rule: rgba(30, 28, 25, 0.13);
+
+  --stage-ink: #a9a399;
+  --stage-ink-strong: #e8e3d8;
+  --stage-ink-faint: #868179;
+
+  --brass: #b8843a;
+  --brass-page: #8a5c1c;
+  --brass-lit: #c99247;
+  --brass-deep: #8e5f24;
+  --brass-engrave: #2e1b04;
+
+  --terra: #b4441c;
+  --terra-stage: #e07a4e;
+
+  --cold-top: #3d3a35;
+  --cold-bottom: #24221f;
+
+  --ui: Inter, -apple-system, "SF Pro Text", sans-serif;
+  --serif: Newsreader, "Iowan Old Style", Georgia, serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+/* ── Studio scaffolding (not part of the iPad surface) ───────────────── */
+
+.scaler {
+  overflow: hidden;
+}
+
+.scalerInner {
+  transform-origin: top left;
+}
+
+.deviceShell {
+  height: 1024px;
+  position: relative;
+  width: 1366px;
+}
+
+/* ── The stage ───────────────────────────────────────────────────────── */
+
+.stage {
+  background: var(--stage);
+  color: var(--stage-ink);
+  font-family: var(--ui);
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+/* The sill lights the page. One warm source, low on the composition. */
+.stageLight {
+  background: radial-gradient(
+    72% 52% at 42% 88%,
+    rgba(201, 146, 71, 0.16) 0%,
+    rgba(201, 146, 71, 0.05) 42%,
+    rgba(201, 146, 71, 0) 74%
+  );
+  inset: 0;
+  opacity: 0.8;
+  pointer-events: none;
+  position: absolute;
+  transition: opacity 420ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.stage[data-online="false"] .stageLight {
+  opacity: 0.14;
+}
+
+.stage[data-listening="true"] .stageLight {
+  opacity: 1;
+}
+
+/* ── 1. The spine ────────────────────────────────────────────────────── */
+
+.spine {
+  border-right: 1px solid var(--hair);
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  left: 0;
+  position: absolute;
+  top: 0;
+  width: 80px;
+}
+
+.spineHead {
+  align-items: center;
+  color: var(--brass);
+  display: flex;
+  height: 88px;
+  justify-content: center;
+  transition: color 320ms ease;
+}
+
+.stage[data-online="false"] .spineHead {
+  color: var(--stage-ink-faint);
+}
+
+.spineTicks {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 40px;
+}
+
+.tick {
+  -webkit-appearance: none;
+  align-items: center;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--stage-ink-faint);
+  cursor: pointer;
+  display: flex;
+  flex: 1;
+  gap: 10px;
+  justify-content: center;
+  padding: 14px 0;
+  position: relative;
+  transition: color 200ms ease;
+}
+
+.tick:hover {
+  color: var(--stage-ink);
+}
+
+.tick:focus-visible {
+  outline: 2px solid var(--brass-lit);
+  outline-offset: -4px;
+}
+
+.tickLabel {
+  font-family: var(--ui);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.015em;
+  line-height: 1;
+  text-orientation: mixed;
+  white-space: nowrap;
+  writing-mode: vertical-rl;
+}
+
+.tick[data-selected="true"] {
+  color: var(--stage-ink-strong);
+}
+
+.tick[data-selected="true"] .tickLabel {
+  font-weight: 600;
+}
+
+/* The selection bar sits flush on the spine's right edge and points at
+ * the page it belongs to. */
+.tickBar {
+  background: var(--brass-lit);
+  border-radius: 2px 0 0 2px;
+  bottom: 14px;
+  position: absolute;
+  right: -1px;
+  top: 14px;
+  width: 3px;
+}
+
+.stage[data-online="false"] .tickBar {
+  background: var(--stage-ink-faint);
+}
+
+/* State marks. Absent by design when the state is not observable. */
+.tickMark {
+  border-radius: 50%;
+  flex: none;
+  height: 6px;
+  width: 6px;
+}
+
+.tickMark[data-state="working"] {
+  background: var(--brass-lit);
+}
+
+.tickMark[data-state="needs-you"] {
+  background: var(--terra-stage);
+  border-radius: 1px;
+  height: 3px;
+  width: 11px;
+}
+
+.tickMark[data-state="idle"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px rgba(233, 224, 205, 0.34);
+}
+
+.tickSpacer {
+  flex: none;
+  height: 6px;
+  width: 6px;
+}
+
+/* ── 2. The standing page ────────────────────────────────────────────── */
+
+.page {
+  background: var(--porcelain);
+  border-radius: 3px;
+  box-shadow:
+    0 1px 0 rgba(255, 250, 240, 0.06),
+    0 30px 64px -26px rgba(0, 0, 0, 0.82),
+    0 8px 20px -12px rgba(0, 0, 0, 0.6);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  height: 818px;
+  left: 128px;
+  overflow: hidden;
+  position: absolute;
+  top: 56px;
+  transition:
+    transform 380ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 380ms cubic-bezier(0.16, 1, 0.3, 1),
+    filter 380ms ease;
+  width: 900px;
+}
+
+/* Speaking to the page lifts it off the sill. */
+.stage[data-listening="true"] .page {
+  box-shadow:
+    0 1px 0 rgba(255, 250, 240, 0.08),
+    0 42px 78px -26px rgba(0, 0, 0, 0.86),
+    0 10px 24px -12px rgba(0, 0, 0, 0.62);
+  transform: translateY(-4px);
+}
+
+/* Offline: the page lies down. Flat shadow, cooled paper, stale content. */
+.stage[data-online="false"] .page {
+  box-shadow:
+    0 6px 16px -10px rgba(0, 0, 0, 0.7),
+    0 1px 0 rgba(255, 250, 240, 0.03);
+  filter: saturate(0.42) brightness(0.9);
+}
+
+.pageBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding: 46px 148px 0 76px;
+}
+
+/* Stale band — states the age of what follows, never dressed as current. */
+.staleBand {
+  align-items: baseline;
+  background: rgba(30, 28, 25, 0.05);
+  border-bottom: 1px solid var(--ink-rule);
+  color: var(--ink-dim);
+  display: flex;
+  flex: none;
+  font-size: 11.5px;
+  gap: 10px;
+  letter-spacing: 0.01em;
+  padding: 13px 76px;
+}
+
+.staleBandKey {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Attention band — the one place terracotta appears on the page. */
+.attention {
+  background: rgba(180, 68, 28, 0.07);
+  border-bottom: 1px solid rgba(180, 68, 28, 0.26);
+  border-top: 3px solid var(--terra);
+  flex: none;
+  padding: 22px 148px 24px 76px;
+}
+
+.attentionLabel {
+  color: var(--terra);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.attentionQuestion {
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.012em;
+  line-height: 1.36;
+  margin: 0;
+  max-width: 30ch;
+}
+
+/* Page head — the task is the page's headline. */
+.pageHead {
+  flex: none;
+}
+
+.title {
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 36px;
+  font-weight: 500;
+  letter-spacing: -0.022em;
+  line-height: 1.06;
+  margin: 0;
+  text-wrap: balance;
+}
+
+.titleMeta {
+  align-items: baseline;
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.stateWord {
+  color: var(--ink-dim);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.005em;
+}
+
+.stateWord[data-state="needs-you"] {
+  color: var(--terra);
+}
+
+.provenance {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: -0.01em;
+}
+
+.headRule {
+  background: var(--brass-page);
+  flex: none;
+  height: 1px;
+  margin: 24px 0 0;
+  opacity: 0.42;
+}
+
+/* The user's own voice, set in italic serif. It is speech, not UI text. */
+.instruction {
+  display: flex;
+  flex: none;
+  gap: 16px;
+  padding: 22px 0 24px;
+}
+
+.instructionTick {
+  background: var(--brass-page);
+  border-radius: 1px;
+  flex: none;
+  height: 26px;
+  margin-top: 5px;
+  width: 2px;
+}
+
+.instructionText {
+  color: var(--ink-dim);
+  font-family: var(--serif);
+  font-size: 17.5px;
+  font-style: italic;
+  line-height: 1.44;
+  margin: 0;
+  max-width: 62ch;
+}
+
+.instructionAt {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  margin-left: auto;
+  padding-top: 8px;
+  white-space: nowrap;
+}
+
+.bodyRule {
+  background: var(--ink-rule);
+  flex: none;
+  height: 1px;
+}
+
+/* The result — the visual hero. Everything above is one third of the page. */
+.result {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding-top: 26px;
+  position: relative;
+}
+
+.resultProse {
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 19px;
+  letter-spacing: -0.003em;
+  line-height: 1.62;
+  margin: 0 0 17px;
+  max-width: 68ch;
+}
+
+.quoted {
+  border-left: 1px solid var(--brass-page);
+  margin: 0 0 19px;
+  padding: 3px 0 3px 15px;
+}
+
+.quotedCaption {
+  color: var(--ink-faint);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  margin-bottom: 7px;
+  text-transform: uppercase;
+}
+
+.quotedLine {
+  color: var(--ink-dim);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+/* Working: the lower page is honestly unfilled. No progress theatre. */
+.working {
+  flex: 1;
+  min-height: 0;
+  padding-top: 26px;
+}
+
+.activityLine {
+  align-items: baseline;
+  display: flex;
+  gap: 12px;
+}
+
+.activityText {
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 21px;
+  letter-spacing: -0.008em;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.activityStarted {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+/* One restrained motion signal: a brass thread crossing the fold. */
+.foldRule {
+  margin-top: 40px;
+  overflow: hidden;
+  position: relative;
+}
+
+.foldRuleBase {
+  background: var(--ink-rule);
+  height: 1px;
+  width: 100%;
+}
+
+.foldRuleTravel {
+  animation: travel 3.4s cubic-bezier(0.6, 0, 0.4, 1) infinite;
+  background: linear-gradient(
+    90deg,
+    rgba(138, 92, 28, 0) 0%,
+    var(--brass-page) 50%,
+    rgba(138, 92, 28, 0) 100%
+  );
+  height: 1px;
+  left: 0;
+  position: absolute;
+  top: 0;
+  width: 150px;
+}
+
+@keyframes travel {
+  0% {
+    transform: translateX(-160px);
+  }
+  100% {
+    transform: translateX(680px);
+  }
+}
+
+.pending {
+  color: var(--ink-faint);
+  font-size: 13px;
+  letter-spacing: 0.005em;
+  padding-top: 18px;
+}
+
+.emptyNote {
+  color: var(--ink-faint);
+  font-family: var(--serif);
+  font-size: 18px;
+  font-style: italic;
+  line-height: 1.5;
+  margin: 0;
+  max-width: 48ch;
+  padding-top: 30px;
+}
+
+/* The fold — technical evidence, revealed only when asked for. */
+.fold {
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(
+    135deg,
+    rgba(30, 28, 25, 0) 0%,
+    rgba(30, 28, 25, 0) 48%,
+    var(--porcelain-recess) 48%,
+    var(--porcelain-edge) 100%
+  );
+  border: 0;
+  bottom: 0;
+  color: var(--ink-faint);
+  cursor: pointer;
+  display: flex;
+  font-family: var(--ui);
+  font-size: 10.5px;
+  font-weight: 600;
+  height: 92px;
+  justify-content: flex-end;
+  letter-spacing: 0.09em;
+  padding: 0 18px 14px 0;
+  position: absolute;
+  right: 0;
+  text-transform: uppercase;
+  transition: color 180ms ease;
+  width: 190px;
+}
+
+.fold:hover {
+  color: var(--brass-page);
+}
+
+.fold:focus-visible {
+  outline: 2px solid var(--brass-page);
+  outline-offset: -3px;
+}
+
+/* Once the corner is turned up there is nothing left to fold, so the
+ * wedge retires and only its label stays. */
+.fold[data-open="true"] {
+  background: none;
+  color: var(--brass-page);
+  height: 58px;
+  width: 150px;
+}
+
+.foldText {
+  align-self: flex-end;
+}
+
+.foldOpen {
+  background: var(--porcelain-recess);
+  border-top: 1px solid var(--ink-rule);
+  flex: none;
+  padding: 16px 176px 18px 76px;
+}
+
+.foldOpenRow {
+  color: var(--ink-dim);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.85;
+}
+
+/* ── 3. Marginalia — annotations on the dark, beside the page ────────── */
+
+.margin {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  left: 1064px;
+  position: absolute;
+  top: 92px;
+  width: 262px;
+}
+
+.marginStamp {
+  color: var(--stage-ink-strong);
+  font-family: var(--mono);
+  font-size: 21px;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.marginTurn {
+  color: var(--stage-ink-faint);
+  font-family: var(--mono);
+  font-size: 11px;
+  margin-top: 8px;
+}
+
+.marginActions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-left: -12px;
+}
+
+.marginAction {
+  -webkit-appearance: none;
+  align-items: center;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--stage-ink);
+  cursor: pointer;
+  display: flex;
+  font-family: var(--ui);
+  font-size: 13px;
+  font-weight: 500;
+  gap: 11px;
+  min-height: 44px;
+  padding: 0 12px;
+  text-align: left;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease;
+  width: 100%;
+}
+
+.marginAction:hover {
+  background: rgba(233, 224, 205, 0.05);
+  color: var(--stage-ink-strong);
+}
+
+.marginAction:focus-visible {
+  outline: 2px solid var(--brass-lit);
+  outline-offset: -2px;
+}
+
+.marginAction:disabled {
+  color: var(--stage-ink-faint);
+  cursor: default;
+  opacity: 0.55;
+}
+
+.marginAction:disabled:hover {
+  background: transparent;
+}
+
+.marginRule {
+  background: var(--hair);
+  height: 1px;
+}
+
+.marginBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.marginKey {
+  color: var(--stage-ink-faint);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.marginValue {
+  align-items: center;
+  color: var(--stage-ink);
+  display: flex;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  gap: 8px;
+  letter-spacing: -0.01em;
+}
+
+.healthDot {
+  background: var(--brass-lit);
+  border-radius: 50%;
+  flex: none;
+  height: 6px;
+  width: 6px;
+}
+
+.stage[data-online="false"] .healthDot {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--terra-stage);
+}
+
+.marginValue[data-alarm="true"] {
+  color: var(--terra-stage);
+}
+
+/* ── 4. The sill — address plate and microphone in one bar ───────────── */
+
+.sill {
+  background: linear-gradient(
+    180deg,
+    var(--brass-lit) 0%,
+    var(--brass) 44%,
+    var(--brass-deep) 100%
+  );
+  border-radius: 3px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 238, 208, 0.5),
+    inset 0 -1px 0 rgba(52, 30, 4, 0.34),
+    0 18px 42px -18px rgba(201, 146, 71, 0.5);
+  display: flex;
+  height: 118px;
+  left: 128px;
+  overflow: hidden;
+  position: absolute;
+  top: 866px;
+  transition:
+    background 380ms ease,
+    box-shadow 380ms ease;
+  width: 900px;
+}
+
+.stage[data-listening="true"] .sill {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 244, 222, 0.68),
+    inset 0 -1px 0 rgba(52, 30, 4, 0.34),
+    0 22px 56px -16px rgba(201, 146, 71, 0.72);
+}
+
+.stage[data-online="false"] .sill {
+  background: linear-gradient(180deg, var(--cold-top) 0%, var(--cold-bottom) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4);
+}
+
+.sill[data-attention="true"] {
+  box-shadow:
+    inset 0 3px 0 var(--terra),
+    inset 0 -1px 0 rgba(52, 30, 4, 0.34),
+    0 18px 42px -18px rgba(201, 146, 71, 0.5);
+}
+
+/* Address plate — the destination is engraved into the same bar you speak
+ * into, which is what makes the destination unambiguous. */
+.plate {
+  align-items: flex-start;
+  border-right: 1px solid rgba(52, 30, 4, 0.24);
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 5px;
+  justify-content: center;
+  padding: 0 26px 0 28px;
+  width: 318px;
+}
+
+.plateTop {
+  align-items: center;
+  color: var(--brass-engrave);
+  display: flex;
+  gap: 9px;
+}
+
+.plateTo {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.plateTask {
+  color: var(--brass-engrave);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  line-height: 1.15;
+  text-shadow: 0 1px 0 rgba(255, 240, 214, 0.3);
+}
+
+.plateMac {
+  color: var(--brass-engrave);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.stage[data-online="false"] .plateTop,
+.stage[data-online="false"] .plateTask,
+.stage[data-online="false"] .plateMac {
+  color: #d9d3c8;
+  text-shadow: none;
+}
+
+.stage[data-online="false"] .plate {
+  border-right-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Voice lane — the press surface. The whole zone is the control. */
+.lane {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--brass-engrave);
+  cursor: pointer;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  justify-content: center;
+  padding: 0 28px;
+  position: relative;
+  text-align: left;
+  touch-action: none;
+  transition: background-color 200ms ease;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.lane:hover {
+  background: rgba(255, 244, 222, 0.14);
+}
+
+.lane:focus-visible {
+  outline: 2px solid var(--brass-engrave);
+  outline-offset: -5px;
+}
+
+.laneTop {
+  align-items: baseline;
+  display: flex;
+  gap: 14px;
+}
+
+.laneLabel {
+  color: var(--brass-engrave);
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  text-shadow: 0 1px 0 rgba(255, 240, 214, 0.26);
+}
+
+.laneNote {
+  color: var(--brass-engrave);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.002em;
+  margin-left: auto;
+  text-align: right;
+}
+
+/* The meniscus — a still hairline that blooms into voice. */
+.meniscus {
+  align-items: flex-end;
+  display: flex;
+  gap: 2px;
+  height: 34px;
+  position: relative;
+}
+
+.meniscusLine {
+  background: rgba(52, 30, 4, 0.42);
+  bottom: 16px;
+  height: 1px;
+  left: 0;
+  position: absolute;
+  right: 0;
+}
+
+.meniscusLine[data-breathing="true"] {
+  animation: breathe 2.6s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.meniscusLine[data-broken="true"] {
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.26) 0 6px,
+    transparent 6px 13px
+  );
+}
+
+.bars {
+  align-items: flex-end;
+  display: flex;
+  gap: 3px;
+  height: 34px;
+  width: 100%;
+}
+
+.bar {
+  animation: bloom 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  background: rgba(52, 30, 4, 0.86);
+  border-radius: 1px;
+  flex: 1;
+  transform-origin: bottom;
+}
+
+@keyframes bloom {
+  from {
+    transform: scaleY(0.04);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+/* Recovery lives on the failure surface, not in a menu. */
+.recovery {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  gap: 10px;
+  padding: 0 24px;
+}
+
+.recoveryText {
+  color: #ded8cc;
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  gap: 4px;
+  margin-right: auto;
+  max-width: 27ch;
+}
+
+.recoveryStrong {
+  color: #f4f0e6;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.recoveryBtn {
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 5px;
+  color: #f4f0e6;
+  cursor: pointer;
+  font-family: var(--ui);
+  font-size: 12.5px;
+  font-weight: 600;
+  min-height: 44px;
+  padding: 0 15px;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease;
+  white-space: nowrap;
+}
+
+.recoveryBtn:hover {
+  background: rgba(255, 255, 255, 0.13);
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
+.recoveryBtn:focus-visible {
+  outline: 2px solid var(--terra-stage);
+  outline-offset: 2px;
+}
+
+.recoveryBtn[data-primary="true"] {
+  background: #f0ece2;
+  border-color: #f0ece2;
+  color: #221f1c;
+}
+
+.recoveryBtn[data-primary="true"]:hover {
+  background: #fff;
+  border-color: #fff;
+}
+
+/* Home indicator. The sill stops above it; nothing sits in the gesture area. */
+.homeBar {
+  background: rgba(233, 224, 205, 0.22);
+  border-radius: 3px;
+  bottom: 12px;
+  height: 5px;
+  left: 50%;
+  position: absolute;
+  transform: translateX(-50%);
+  width: 148px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .foldRuleTravel,
+  .meniscusLine[data-breathing="true"],
+  .bar {
+    animation: none !important;
+  }
+
+  .foldRuleTravel {
+    opacity: 0.55;
+  }
+
+  .page,
+  .sill,
+  .stageLight {
+    transition: none;
+  }
+}

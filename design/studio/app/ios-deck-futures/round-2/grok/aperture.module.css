@@ -1,0 +1,1251 @@
+/* ──────────────────────────────────────────────────────────────────────
+ * The Aperture — Talkie on a 12.9″ iPad, landscape (1366 × 1024).
+ *
+ * PREMISE: one Codex task fills a single framed reading aperture under
+ * hanging task tags. The brass voice sill under the plate is both the
+ * destination address and the hold-to-talk surface. Speaking sends a
+ * rising amber breath into the plate — targeting you can see with the
+ * copy blurred.
+ *
+ * Three objects only: hanging tags (lintel), the plate (work), the sill
+ * (voice + destination). No sidebar. No card grid. No toolbar.
+ * ────────────────────────────────────────────────────────────────────── */
+
+.root {
+  --stage: #121110;
+  --stage-lift: #1a1816;
+  --frame: #1f1c19;
+  --frame-edge: rgba(233, 224, 205, 0.1);
+  --frame-edge-strong: rgba(233, 224, 205, 0.18);
+
+  --porcelain: #f7f4ed;
+  --porcelain-deep: #efeade;
+  --porcelain-edge: #e0dacd;
+
+  --ink: #1e1c19;
+  --ink-dim: #4a463f;
+  --ink-faint: #6b665d;
+  --ink-rule: rgba(30, 28, 25, 0.14);
+  --ink-rule-s: rgba(30, 28, 25, 0.08);
+
+  --stage-ink: #a9a399;
+  --stage-ink-strong: #e8e3d8;
+  --stage-ink-faint: #7a756c;
+
+  --brass: #b8843a;
+  --brass-lit: #d4a04f;
+  --brass-deep: #8a5c1c;
+  --brass-engrave: #2e1b04;
+  --brass-glow: rgba(201, 146, 71, 0.45);
+
+  --terra: #b4441c;
+  --terra-soft: #e07a4e;
+
+  --cold: #6b706e;
+  --cold-deep: #3d4240;
+
+  --ui: Inter, -apple-system, "SF Pro Text", sans-serif;
+  --serif: Newsreader, "Iowan Old Style", Georgia, serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+/* ── Studio scaffolding ──────────────────────────────────────────────── */
+
+.scaler {
+  overflow: hidden;
+  width: 100%;
+}
+
+.scalerInner {
+  transform-origin: top left;
+}
+
+.deviceShell {
+  height: 1024px;
+  position: relative;
+  width: 1366px;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow:
+    0 32px 64px -24px rgba(20, 18, 16, 0.55),
+    0 0 0 1px rgba(20, 18, 16, 0.12);
+}
+
+/* ── The stage ───────────────────────────────────────────────────────── */
+
+.stage {
+  background: var(--stage);
+  color: var(--stage-ink);
+  font-family: var(--ui);
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+  transition: background 420ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.stage[data-online="false"] {
+  background: #0f0f0e;
+}
+
+/* Soft light from the sill — voice lights the room. */
+.stageLight {
+  background: radial-gradient(
+    68% 48% at 50% 92%,
+    rgba(201, 146, 71, 0.18) 0%,
+    rgba(201, 146, 71, 0.05) 40%,
+    rgba(201, 146, 71, 0) 72%
+  );
+  inset: 0;
+  opacity: 0.75;
+  pointer-events: none;
+  position: absolute;
+  transition: opacity 420ms cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 0;
+}
+
+.stage[data-online="false"] .stageLight {
+  opacity: 0.1;
+}
+
+.stage[data-listening="true"] .stageLight {
+  opacity: 1;
+}
+
+/* ── Status bar (system-ish, sparse) ─────────────────────────────────── */
+
+.statusBar {
+  align-items: center;
+  display: flex;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  height: 28px;
+  justify-content: space-between;
+  left: 0;
+  letter-spacing: 0.04em;
+  padding: 0 28px;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: 10px;
+  z-index: 20;
+  color: var(--stage-ink-faint);
+}
+
+.statusBarTime {
+  color: var(--stage-ink-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Lintel: hanging task tags ───────────────────────────────────────── */
+
+.lintel {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  left: 0;
+  padding: 0 48px;
+  position: absolute;
+  right: 0;
+  top: 44px;
+  z-index: 30;
+}
+
+.tag {
+  align-items: stretch;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0;
+  position: relative;
+  width: 168px;
+}
+
+.tagClip {
+  align-self: center;
+  background: linear-gradient(180deg, #6a655c 0%, #3a3732 100%);
+  border-radius: 1px 1px 0 0;
+  height: 10px;
+  width: 14px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+}
+
+.tagBody {
+  background: linear-gradient(180deg, #2a2723 0%, #1f1c19 100%);
+  border: 1px solid var(--frame-edge);
+  border-radius: 0 0 6px 6px;
+  border-top: none;
+  box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.55);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 52px;
+  padding: 10px 12px 12px;
+  text-align: left;
+  transition:
+    background 240ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 240ms,
+    transform 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 280ms;
+}
+
+.tag[data-selected="true"] .tagBody {
+  background: linear-gradient(180deg, #3a332a 0%, #2a241c 100%);
+  border-color: rgba(184, 132, 58, 0.45);
+  box-shadow:
+    0 8px 18px -8px rgba(0, 0, 0, 0.55),
+    inset 0 -2px 0 0 var(--brass);
+  transform: translateY(4px);
+}
+
+.tag[data-selected="true"] .tagClip {
+  background: linear-gradient(180deg, var(--brass-lit) 0%, var(--brass-deep) 100%);
+}
+
+.tagName {
+  color: var(--stage-ink);
+  font-family: var(--ui);
+  font-size: 12px;
+  font-weight: 550;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tag[data-selected="true"] .tagName {
+  color: var(--stage-ink-strong);
+}
+
+.tagMeta {
+  align-items: center;
+  color: var(--stage-ink-faint);
+  display: flex;
+  font-family: var(--mono);
+  font-size: 9px;
+  gap: 6px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.tagDot {
+  border-radius: 50%;
+  flex-shrink: 0;
+  height: 5px;
+  width: 5px;
+}
+
+.tagDot[data-state="working"] {
+  background: var(--brass-lit);
+  box-shadow: 0 0 6px var(--brass-glow);
+}
+
+.tagDot[data-state="needs-you"] {
+  background: var(--terra-soft);
+  box-shadow: 0 0 6px rgba(224, 122, 78, 0.5);
+}
+
+.tagDot[data-state="idle"] {
+  background: rgba(233, 224, 205, 0.28);
+}
+
+.tagDot[data-state="unknown"] {
+  background: transparent;
+  border: 1px solid rgba(233, 224, 205, 0.22);
+}
+
+/* Offline: flatten occupancy marks — unobservable. */
+.stage[data-online="false"] .tagDot {
+  background: transparent;
+  border: 1px solid rgba(233, 224, 205, 0.18);
+  box-shadow: none;
+}
+
+.tag:focus-visible {
+  outline: none;
+}
+
+.tag:focus-visible .tagBody {
+  border-color: var(--brass-lit);
+  box-shadow: 0 0 0 2px rgba(184, 132, 58, 0.35);
+}
+
+/* ── Frame + aperture ────────────────────────────────────────────────── */
+
+.frame {
+  bottom: 148px;
+  left: 56px;
+  position: absolute;
+  right: 56px;
+  top: 118px;
+  z-index: 10;
+}
+
+.frameBezel {
+  background: var(--frame);
+  border: 1px solid var(--frame-edge);
+  border-radius: 18px;
+  box-shadow:
+    0 28px 60px -24px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  height: 100%;
+  padding: 12px;
+  position: relative;
+  transition: border-color 360ms, box-shadow 360ms;
+}
+
+.stage[data-online="false"] .frameBezel {
+  border-color: rgba(233, 224, 205, 0.06);
+  box-shadow: 0 20px 48px -24px rgba(0, 0, 0, 0.8);
+}
+
+.stage[data-listening="true"] .frameBezel {
+  border-color: rgba(184, 132, 58, 0.28);
+  box-shadow:
+    0 28px 60px -24px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(184, 132, 58, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.aperture {
+  background: var(--porcelain);
+  border-radius: 10px;
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  transition:
+    background 360ms cubic-bezier(0.16, 1, 0.3, 1),
+    filter 360ms;
+}
+
+.stage[data-online="false"] .aperture {
+  background: #e8e6e0;
+  filter: saturate(0.72);
+}
+
+/* Rising breath from the sill into the plate — the Talkie voice object. */
+.breath {
+  bottom: 0;
+  height: 0;
+  left: 12%;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  right: 12%;
+  z-index: 5;
+  transition:
+    height 520ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 320ms ease-out;
+  background: linear-gradient(
+    0deg,
+    rgba(184, 132, 58, 0.22) 0%,
+    rgba(184, 132, 58, 0.08) 42%,
+    rgba(184, 132, 58, 0) 100%
+  );
+}
+
+.stage[data-listening="true"] .breath {
+  height: 38%;
+  opacity: 1;
+}
+
+.stage[data-online="false"][data-listening="true"] .breath {
+  background: linear-gradient(
+    0deg,
+    rgba(107, 112, 110, 0.2) 0%,
+    rgba(107, 112, 110, 0.06) 42%,
+    rgba(107, 112, 110, 0) 100%
+  );
+}
+
+.breathWave {
+  bottom: 0;
+  height: 28px;
+  left: 0;
+  opacity: 0;
+  position: absolute;
+  right: 0;
+  transition: opacity 240ms;
+}
+
+.stage[data-listening="true"] .breathWave {
+  opacity: 1;
+}
+
+.breathWaveBar {
+  animation: breathPulse 1.1s ease-in-out infinite;
+  background: var(--brass);
+  border-radius: 1px;
+  bottom: 8px;
+  position: absolute;
+  transform-origin: bottom center;
+  width: 2.5px;
+}
+
+.stage[data-online="false"] .breathWaveBar {
+  background: var(--cold);
+}
+
+@keyframes breathPulse {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+/* ── Plate content ───────────────────────────────────────────────────── */
+
+.plateScroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+  padding: 40px 56px 32px;
+  position: relative;
+  z-index: 2;
+}
+
+/* Working state: activity sits mid-plate, not stuck under the ask. */
+.workingScaffold {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 240px;
+}
+
+.workingBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  max-width: 42ch;
+  padding: 28px 0 48px;
+  gap: 4px;
+}
+
+.workingBody .foldRule {
+  margin-top: 18px;
+  margin-bottom: 14px;
+}
+
+.workingBody .pending {
+  margin-top: 4px;
+}
+
+/* Offline recovery banner — owns the top of the plate. */
+.recovery {
+  background: linear-gradient(180deg, #f3ebe4 0%, #efe6dd 100%);
+  border: 1px solid rgba(180, 68, 28, 0.22);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 22px;
+  padding: 14px 18px 16px;
+}
+
+.recoveryHead {
+  align-items: baseline;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.recoveryTitle {
+  color: var(--terra);
+  font-family: var(--ui);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.recoveryHeard {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.recoveryBody {
+  color: var(--ink-dim);
+  font-family: var(--serif);
+  font-size: 15px;
+  line-height: 1.42;
+  margin: 0;
+  max-width: 68ch;
+}
+
+.recoveryActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.recoveryPrimary,
+.recoveryGhost {
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: var(--ui);
+  font-size: 13px;
+  font-weight: 550;
+  min-height: 40px;
+  padding: 0 16px;
+  transition: background 160ms, border-color 160ms, color 160ms;
+}
+
+.recoveryPrimary {
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  color: var(--porcelain);
+}
+
+.recoveryPrimary:hover {
+  background: #2c2a26;
+}
+
+.recoveryGhost {
+  background: transparent;
+  border: 1px solid var(--ink-rule);
+  color: var(--ink-dim);
+}
+
+.recoveryGhost:hover {
+  border-color: var(--ink-dim);
+  color: var(--ink);
+}
+
+.recoveryNote {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  line-height: 1.5;
+}
+
+.staleNote {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  margin-bottom: 18px;
+  text-transform: uppercase;
+}
+
+/* Attention band when Codex needs the user (answer in Desktop). */
+.attention {
+  background: rgba(180, 68, 28, 0.06);
+  border-left: 2px solid var(--terra);
+  margin: 0 0 24px;
+  padding: 14px 18px 14px 16px;
+}
+
+.attentionLabel {
+  color: var(--terra);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.attentionQuestion {
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 20px;
+  font-style: italic;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.attentionWhere {
+  color: var(--ink-faint);
+  font-family: var(--ui);
+  font-size: 12px;
+  margin-top: 10px;
+}
+
+/* Page head */
+.pageHead {
+  margin-bottom: 6px;
+}
+
+.title {
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 34px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+  margin: 0 0 10px;
+}
+
+.titleMeta {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+
+.stateWord {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.stateWord[data-state="working"] {
+  color: var(--brass-deep);
+}
+
+.stateWord[data-state="needs-you"] {
+  color: var(--terra);
+}
+
+.stateWord[data-state="idle"] {
+  color: var(--ink-faint);
+}
+
+.provenance {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.headRule {
+  background: var(--ink-rule);
+  height: 1px;
+  margin: 18px 0 20px;
+}
+
+/* Instruction (last ask) */
+.instruction {
+  display: grid;
+  gap: 8px 16px;
+  grid-template-columns: 3px 1fr auto;
+  margin-bottom: 22px;
+}
+
+.instructionTick {
+  background: var(--brass);
+  border-radius: 1px;
+  grid-row: 1 / span 2;
+  margin-top: 4px;
+  opacity: 0.7;
+}
+
+.instructionText {
+  color: var(--ink-dim);
+  font-family: var(--serif);
+  font-size: 17px;
+  font-style: italic;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.instructionAt {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.bodyRule {
+  background: var(--ink-rule-s);
+  height: 1px;
+  margin: 0 0 22px;
+}
+
+/* Active work */
+.working {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.activityText {
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.activityStarted {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  margin-top: 12px;
+}
+
+/* Quiet traveling fold — activity, not fake progress. */
+.foldRule {
+  height: 2px;
+  margin: 4px 0 2px;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.foldRuleBase {
+  background: var(--ink-rule-s);
+  height: 1px;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0.5px;
+}
+
+.foldRuleTravel {
+  animation: foldTravel 2.8s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--brass) 40%,
+    var(--brass-lit) 50%,
+    var(--brass) 60%,
+    transparent 100%
+  );
+  height: 2px;
+  left: 0;
+  position: absolute;
+  top: 0;
+  width: 28%;
+}
+
+@keyframes foldTravel {
+  0% {
+    transform: translateX(-20%);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(360%);
+    opacity: 0;
+  }
+}
+
+.pending {
+  color: var(--ink-faint);
+  font-family: var(--ui);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+/* Result */
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.resultProse {
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 18.5px;
+  line-height: 1.52;
+  margin: 0;
+  max-width: 62ch;
+}
+
+.quoted {
+  border-top: 1px solid var(--ink-rule-s);
+  margin-top: 4px;
+  padding-top: 14px;
+}
+
+.quotedCaption {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.quotedLine {
+  color: var(--ink-dim);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  letter-spacing: 0.01em;
+  line-height: 1.65;
+}
+
+.emptyNote {
+  color: var(--ink-faint);
+  font-family: var(--serif);
+  font-size: 17px;
+  font-style: italic;
+  margin: 0;
+}
+
+/* Plate footer: actions + fold detail */
+.plateFoot {
+  align-items: center;
+  border-top: 1px solid var(--ink-rule-s);
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 12px 28px 14px 48px;
+  position: relative;
+  z-index: 2;
+}
+
+.footActions {
+  display: flex;
+  gap: 6px;
+}
+
+.footAction {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--ink-dim);
+  cursor: pointer;
+  display: inline-flex;
+  font-family: var(--ui);
+  font-size: 13px;
+  font-weight: 500;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 12px;
+  transition: background 140ms, border-color 140ms, color 140ms;
+}
+
+.footAction:hover:not(:disabled) {
+  background: rgba(30, 28, 25, 0.04);
+  border-color: var(--ink-rule);
+  color: var(--ink);
+}
+
+.footAction:disabled {
+  color: rgba(30, 28, 25, 0.28);
+  cursor: default;
+}
+
+.footAction svg {
+  flex-shrink: 0;
+  height: 14px;
+  opacity: 0.7;
+  width: 14px;
+}
+
+.fold {
+  align-items: center;
+  background: transparent;
+  border: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+  display: inline-flex;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 550;
+  gap: 6px;
+  letter-spacing: 0.14em;
+  min-height: 40px;
+  padding: 0 10px;
+  text-transform: uppercase;
+  transition: color 140ms;
+}
+
+.fold:hover {
+  color: var(--ink-dim);
+}
+
+.fold[data-open="true"] {
+  color: var(--brass-deep);
+}
+
+.foldOpen {
+  background: var(--porcelain-deep);
+  border-top: 1px solid var(--ink-rule-s);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 48px 14px;
+  position: relative;
+  z-index: 2;
+}
+
+.foldOpenRow {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+}
+
+/* ── Voice sill ──────────────────────────────────────────────────────── */
+
+.sill {
+  align-items: stretch;
+  bottom: 28px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(220px, 280px) 1fr;
+  left: 56px;
+  position: absolute;
+  right: 56px;
+  z-index: 40;
+}
+
+.address {
+  background: linear-gradient(180deg, #2c2822 0%, #1f1c18 100%);
+  border: 1px solid rgba(184, 132, 58, 0.28);
+  border-radius: 14px;
+  box-shadow: 0 10px 24px -14px rgba(0, 0, 0, 0.65);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  justify-content: center;
+  min-height: 88px;
+  padding: 14px 18px;
+  transition:
+    border-color 280ms,
+    box-shadow 280ms,
+    background 280ms;
+}
+
+.stage[data-listening="true"] .address {
+  border-color: rgba(184, 132, 58, 0.55);
+  box-shadow:
+    0 10px 24px -14px rgba(0, 0, 0, 0.65),
+    0 0 24px -6px var(--brass-glow);
+}
+
+.stage[data-online="false"] .address {
+  background: linear-gradient(180deg, #242422 0%, #181816 100%);
+  border-color: rgba(233, 224, 205, 0.12);
+}
+
+.addressEyebrow {
+  align-items: center;
+  color: var(--brass);
+  display: flex;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  gap: 8px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.stage[data-online="false"] .addressEyebrow {
+  color: var(--cold);
+}
+
+.addressTask {
+  color: var(--stage-ink-strong);
+  font-family: var(--ui);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.addressMac {
+  color: var(--stage-ink-faint);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.addressMac[data-alarm="true"] {
+  color: var(--terra-soft);
+}
+
+/* Talk control — large thumb target */
+.talkCluster {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr auto;
+  min-height: 88px;
+}
+
+.talk {
+  align-items: center;
+  background: linear-gradient(180deg, #3a3228 0%, #2a241c 55%, #221e18 100%);
+  border: 1px solid rgba(184, 132, 58, 0.4);
+  border-radius: 14px;
+  box-shadow:
+    0 12px 28px -12px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  color: var(--stage-ink-strong);
+  cursor: pointer;
+  display: grid;
+  gap: 4px 16px;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  min-height: 88px;
+  padding: 14px 22px;
+  text-align: left;
+  transition:
+    background 200ms,
+    border-color 200ms,
+    box-shadow 200ms,
+    transform 160ms;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.talk:hover {
+  border-color: rgba(184, 132, 58, 0.55);
+}
+
+.talk:active,
+.stage[data-listening="true"] .talk {
+  background: linear-gradient(180deg, #4a3d28 0%, #3a2e1c 55%, #2c2418 100%);
+  border-color: var(--brass-lit);
+  box-shadow:
+    0 8px 20px -10px rgba(0, 0, 0, 0.7),
+    0 0 32px -4px var(--brass-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transform: scale(0.992);
+}
+
+.stage[data-online="false"] .talk {
+  background: linear-gradient(180deg, #2a2a28 0%, #1e1e1c 100%);
+  border-color: rgba(233, 224, 205, 0.16);
+}
+
+.stage[data-online="false"][data-listening="true"] .talk {
+  border-color: rgba(170, 175, 172, 0.4);
+  box-shadow:
+    0 8px 20px -10px rgba(0, 0, 0, 0.7),
+    0 0 24px -6px rgba(140, 150, 145, 0.35);
+}
+
+.talk:focus-visible {
+  outline: 2px solid var(--brass-lit);
+  outline-offset: 3px;
+}
+
+.talkDisc {
+  align-items: center;
+  background: radial-gradient(
+    circle at 35% 30%,
+    var(--brass-lit) 0%,
+    var(--brass) 45%,
+    var(--brass-deep) 100%
+  );
+  border-radius: 50%;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  display: flex;
+  grid-row: 1 / span 2;
+  height: 52px;
+  justify-content: center;
+  transition: transform 200ms, box-shadow 200ms;
+  width: 52px;
+}
+
+.stage[data-listening="true"] .talkDisc {
+  box-shadow:
+    0 0 0 4px rgba(184, 132, 58, 0.2),
+    0 2px 12px rgba(184, 132, 58, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transform: scale(1.06);
+}
+
+.stage[data-online="false"] .talkDisc {
+  background: radial-gradient(
+    circle at 35% 30%,
+    #8a8e8c 0%,
+    #6b706e 50%,
+    #4a4e4c 100%
+  );
+}
+
+.talkDisc svg {
+  color: var(--brass-engrave);
+  height: 20px;
+  width: 20px;
+}
+
+.stage[data-online="false"] .talkDisc svg {
+  color: #1a1c1b;
+}
+
+.talkLabel {
+  align-self: end;
+  font-family: var(--ui);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+}
+
+.talkHint {
+  align-self: start;
+  color: var(--stage-ink-faint);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+}
+
+.talkMode {
+  align-items: center;
+  background: linear-gradient(180deg, #2a2723 0%, #1c1a17 100%);
+  border: 1px solid rgba(233, 224, 205, 0.12);
+  border-radius: 14px;
+  color: var(--stage-ink-faint);
+  display: flex;
+  flex-direction: column;
+  font-family: var(--mono);
+  font-size: 10px;
+  gap: 8px;
+  justify-content: center;
+  letter-spacing: 0.14em;
+  min-width: 88px;
+  padding: 12px 10px;
+  text-transform: uppercase;
+}
+
+.talkModeLabel {
+  color: var(--stage-ink-faint);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+}
+
+.talkMode button {
+  background: transparent;
+  border: 1px solid rgba(233, 224, 205, 0.16);
+  border-radius: 8px;
+  color: var(--stage-ink-faint);
+  cursor: pointer;
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  min-height: 36px;
+  min-width: 64px;
+  padding: 0 12px;
+  text-transform: uppercase;
+  transition: border-color 140ms, color 140ms, background 140ms;
+}
+
+.talkMode button[data-on="true"] {
+  background: rgba(184, 132, 58, 0.15);
+  border-color: rgba(184, 132, 58, 0.45);
+  color: var(--brass-lit);
+}
+
+.talkMode button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.stage[data-online="false"] .talkMode {
+  border-color: rgba(233, 224, 205, 0.08);
+}
+
+/* Home indicator */
+.homeBar {
+  background: rgba(233, 224, 205, 0.22);
+  border-radius: 3px;
+  bottom: 8px;
+  height: 5px;
+  left: 50%;
+  pointer-events: none;
+  position: absolute;
+  transform: translateX(-50%);
+  width: 148px;
+  z-index: 50;
+}
+
+/* Sent / kept flash on address */
+.voiceFlash {
+  animation: flashFade 2.2s ease-out forwards;
+  color: var(--brass-lit);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.stage[data-online="false"] .voiceFlash {
+  color: var(--cold);
+}
+
+@keyframes flashFade {
+  0% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Plate enter */
+.plateIn {
+  animation: plateIn 380ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes plateIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .foldRuleTravel,
+  .breathWaveBar,
+  .plateIn,
+  .voiceFlash {
+    animation: none;
+  }
+
+  .breath,
+  .tagBody,
+  .talk,
+  .talkDisc {
+    transition: none;
+  }
+}
