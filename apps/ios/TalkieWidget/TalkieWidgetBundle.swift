@@ -14,5 +14,6 @@ struct TalkieWidgetBundle: WidgetBundle {
         TalkieWidget()
         TalkieWidgetControl()
         TalkieWidgetLiveActivity()
+        AskLiveActivity()
     }
 }
