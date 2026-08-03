@@ -31,6 +31,17 @@ struct WatchMemo: Identifiable, Codable {
     /// yet" is measured against. `timestamp` cannot serve: it records when the
     /// memo was captured, which is always before the wearer could have looked.
     var settledAt: Date?
+    /// The question, kept apart from `transcriptionPreview` because that field
+    /// is a single slot the answer overwrites. Without this the Asks page is a
+    /// list of answers to questions you can no longer see — and a failure, whose
+    /// preview becomes the error, would keep no record of itself at all.
+    var askQuestion: String?
+    /// When the phone last said anything about this ask. Distinct from
+    /// `timestamp` (when it was recorded) and `settledAt` (when it finished):
+    /// this is what "has the phone gone quiet" is measured against, and it is
+    /// the only defence against an in-flight ask spinning forever because the
+    /// terminal update never arrived.
+    var lastUpdatedAt: Date?
 
     enum MemoStatus: String, Codable {
         case sending
@@ -53,6 +64,8 @@ struct WatchMemo: Identifiable, Codable {
         self.phase = nil
         self.delivery = nil
         self.settledAt = nil
+        self.askQuestion = nil
+        self.lastUpdatedAt = nil
     }
 
     /// Ask AI captures are the only ones the Asks surface lists. The preset is
@@ -70,6 +83,23 @@ struct WatchMemo: Identifiable, Codable {
         }
     }
 
+    /// How long the phone may go quiet on an in-flight ask before the wrist
+    /// stops claiming it is still working. Answering can legitimately take a
+    /// while, so this is generous — the point is to eventually say something
+    /// rather than to time the model.
+    static let silenceTolerance: TimeInterval = 90
+
+    /// True when an ask is still nominally in flight but the phone has said
+    /// nothing for `silenceTolerance`. The phone cannot report its own death,
+    /// so a dropped session, a force-quit, or a crashed provider all arrive as
+    /// silence — and silence rendered as a spinner is the same silent failure
+    /// this surface exists to end.
+    func isStalled(asOf now: Date) -> Bool {
+        guard isInFlight else { return false }
+        let lastHeard = lastUpdatedAt ?? timestamp
+        return now.timeIntervalSince(lastHeard) > Self.silenceTolerance
+    }
+
     /// The phase to render. Falls back to a status-derived value so a memo that
     /// predates the `phase` field, or an update from an older phone build, still
     /// reads correctly rather than showing nothing.
@@ -80,7 +110,10 @@ struct WatchMemo: Identifiable, Codable {
         case .sent: return .sending
         case .received: return .received
         case .thinking: return .transcribing
-        case .transcribed: return .transcribing
+        // Transcription finished means the model has the question. Reporting
+        // "TRANSCRIBING" here made the wrist read as stuck on a completed step
+        // whenever the answer was slow.
+        case .transcribed: return .answering
         case .answered: return .answered
         case .failed: return .failed
         }
@@ -743,7 +776,18 @@ final class WatchSessionManager: NSObject, ObservableObject {
     ) {
         if let index = recentMemos.firstIndex(where: { $0.id == memoId }) {
             recentMemos[index].status = status
+            // Any update at all is proof of life, whatever it carries.
+            recentMemos[index].lastUpdatedAt = Date()
             if let preview = preview {
+                // The `.answering` preview *is* the question — the phone sends
+                // it precisely so the wrist can confirm what was heard. Catch it
+                // on the way past into its own slot, because the next preview to
+                // arrive is the answer (or the failure) and overwrites this one.
+                // Derived here rather than added to the wire format: the payload
+                // already carries it, and an older phone build stays compatible.
+                if phase == .answering, recentMemos[index].askQuestion == nil {
+                    recentMemos[index].askQuestion = preview
+                }
                 recentMemos[index].transcriptionPreview = preview
             }
             if let phase {
