@@ -55,6 +55,7 @@ final class AIResponseSpeechRouter {
                 // Walkie bookend: opening kerchunk -> speech -> tail + closing
                 // kerchunk. Synthesized at runtime; failures are silent so the
                 // FX never blocks speech playback.
+                Haptics.cue.fire()
                 WalkieFX.shared.playOpeningClick()
                 try? await Task.sleep(for: .milliseconds(60))
 

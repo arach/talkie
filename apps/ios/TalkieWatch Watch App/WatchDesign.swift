@@ -81,6 +81,124 @@ struct WatchChromeTokens {
     let hairlineWidth: CGFloat    // divider stroke weight
 }
 
+/// The capture face intentionally has only two material families. Theme
+/// personality comes from the signal color, not a full-screen color wash.
+enum WatchCaptureMaterial: Equatable {
+    case lightMineral
+    case blackCeramic
+
+    var field: Color {
+        switch self {
+        case .lightMineral: Color(watchHex: "E8EAEC")
+        case .blackCeramic: Color(watchHex: "050505")
+        }
+    }
+
+    var fieldLift: Color {
+        switch self {
+        case .lightMineral: Color(watchHex: "FAFAF7")
+        case .blackCeramic: Color(watchHex: "171717")
+        }
+    }
+
+    var fieldShade: Color {
+        switch self {
+        case .lightMineral: Color(watchHex: "D4D7D9")
+        case .blackCeramic: Color(watchHex: "000000")
+        }
+    }
+
+    var ink: Color {
+        switch self {
+        case .lightMineral: Color(watchHex: "1A2026")
+        case .blackCeramic: Color(watchHex: "E8E2D9")
+        }
+    }
+
+    var inkFaint: Color {
+        switch self {
+        case .lightMineral: Color(watchHex: "67717A")
+        case .blackCeramic: Color(watchHex: "8B8883")
+        }
+    }
+
+    var keyTop: Color {
+        switch self {
+        case .lightMineral: Color(watchHex: "FDFDF9")
+        case .blackCeramic: Color(watchHex: "1C1C1C")
+        }
+    }
+
+    var keyMiddle: Color {
+        switch self {
+        case .lightMineral: Color(watchHex: "E9EAE5")
+        case .blackCeramic: Color(watchHex: "0D0D0D")
+        }
+    }
+
+    var keyBottom: Color {
+        switch self {
+        case .lightMineral: Color(watchHex: "C5C8C9")
+        case .blackCeramic: Color(watchHex: "020202")
+        }
+    }
+
+    var keyInk: Color {
+        switch self {
+        case .lightMineral: Color(watchHex: "222A31")
+        case .blackCeramic: Color(watchHex: "D9D4CC")
+        }
+    }
+
+    var keyEdge: Color {
+        switch self {
+        case .lightMineral: Color.white.opacity(0.68)
+        case .blackCeramic: Color.white.opacity(0.16)
+        }
+    }
+
+    var secondaryFill: Color {
+        switch self {
+        case .lightMineral: Color.white.opacity(0.30)
+        case .blackCeramic: Color.white.opacity(0.035)
+        }
+    }
+
+    var secondaryEdge: Color {
+        switch self {
+        case .lightMineral: Color.black.opacity(0.13)
+        case .blackCeramic: Color.white.opacity(0.13)
+        }
+    }
+
+    var shadow: Color {
+        switch self {
+        case .lightMineral: Color.black.opacity(0.30)
+        case .blackCeramic: Color.black.opacity(0.78)
+        }
+    }
+}
+
+struct WatchCaptureStyle {
+    let material: WatchCaptureMaterial
+    let trace: Color
+
+    /// A quiet theme-colored reflection in the chassis. This keeps the two
+    /// primary materials intact while preserving the selected Talkie theme's
+    /// signal identity.
+    var atmosphere: Color {
+        trace.opacity(material == .blackCeramic ? 0.085 : 0.035)
+    }
+
+    var keyAccentEdge: Color {
+        trace.opacity(material == .blackCeramic ? 0.18 : 0.10)
+    }
+
+    var secondaryAccentEdge: Color {
+        trace.opacity(material == .blackCeramic ? 0.24 : 0.12)
+    }
+}
+
 // MARK: Per-theme chrome instances (hex values match iOS DesignSystem.swift)
 
 private let watchScopeChrome: WatchChromeTokens = {
@@ -109,6 +227,64 @@ private let watchScopeChrome: WatchChromeTokens = {
         chromeCorner: 3,
         eyebrowLeader: "·",
         hairlineWidth: 0.5       // hairline 0.5pt for watch
+    )
+}()
+
+/// The default Watch treatment: the same deep-navy instrument bay and cobalt
+/// signal used by iOS Porcelain. Unlike Scope, this keeps the small screen to
+/// one interaction color and lets semantic red/green states carry meaning.
+private let watchPorcelainChrome: WatchChromeTokens = {
+    let accent = Color(watchHex: "2F63D8", darkHex: "78A6FF")
+    let ink = Color(watchHex: "162330", darkHex: "F3F7FC")
+    let panelInk = Color(watchHex: "F3F7FC")
+    return WatchChromeTokens(
+        accent: accent,
+        accentTint: accent.opacity(0.10),
+        accentGlow: accent.opacity(0.24),
+        accentStrong: accent.opacity(0.40),
+        panel: Color(watchHex: "0B1320"),
+        panelAlt: Color(watchHex: "142238"),
+        panelInk: panelInk,
+        panelInkFaint: Color(watchHex: "9DAFC4"),
+        panelAccent: accent,
+        panelEdge: accent.opacity(0.18),
+        trace: accent,
+        traceFaint: accent.opacity(0.08),
+        edgeStrong: panelInk.opacity(0.28),
+        edge: panelInk.opacity(0.18),
+        edgeFaint: panelInk.opacity(0.12),
+        edgeSubtle: panelInk.opacity(0.06),
+        glowRadius: 2,
+        chromeCorner: 7,
+        eyebrowLeader: "·",
+        hairlineWidth: 0.5
+    )
+}()
+
+private let watchMineralChrome: WatchChromeTokens = {
+    let accent = Color(watchHex: "9B4E27", darkHex: "DF8955")
+    let ink = Color(watchHex: "18353B", darkHex: "EAF0EC")
+    return WatchChromeTokens(
+        accent: accent,
+        accentTint: accent.opacity(0.10),
+        accentGlow: accent.opacity(0.16),
+        accentStrong: accent.opacity(0.34),
+        panel: Color(watchHex: "1C3034", darkHex: "0F1B1E"),
+        panelAlt: Color(watchHex: "263C40", darkHex: "17272A"),
+        panelInk: Color(watchHex: "EEF1EA"),
+        panelInkFaint: Color(watchHex: "AAB7B2"),
+        panelAccent: Color(watchHex: "D27A46"),
+        panelEdge: Color(watchHex: "D27A46").opacity(0.24),
+        trace: Color(watchHex: "29484E", darkHex: "D67B48"),
+        traceFaint: Color(watchHex: "D67B48").opacity(0.10),
+        edgeStrong: ink.opacity(0.26),
+        edge: ink.opacity(0.17),
+        edgeFaint: ink.opacity(0.10),
+        edgeSubtle: ink.opacity(0.05),
+        glowRadius: 1,
+        chromeCorner: 4,
+        eyebrowLeader: "·",
+        hairlineWidth: 0.75
     )
 }()
 
@@ -193,47 +369,182 @@ private let watchGhostChrome: WatchChromeTokens = {
     )
 }()
 
+private let watchLiftChrome: WatchChromeTokens = {
+    let accent = Color(watchHex: "6366F1")
+    let ink = Color(watchHex: "1A1A1A", darkHex: "FAFAFA")
+    return WatchChromeTokens(
+        accent: accent,
+        accentTint: accent.opacity(0.06),
+        accentGlow: accent.opacity(0.10),
+        accentStrong: accent.opacity(0.32),
+        panel: Color(watchHex: "0F0F23"),
+        panelAlt: Color(watchHex: "16162C"),
+        panelInk: Color(watchHex: "F0F0FA"),
+        panelInkFaint: Color(watchHex: "9CA0C4"),
+        panelAccent: Color(watchHex: "A5B4FC"),
+        panelEdge: Color(watchHex: "A5B4FC").opacity(0.22),
+        trace: ink.opacity(0.45),
+        traceFaint: ink.opacity(0.04),
+        edgeStrong: ink.opacity(0.14),
+        edge: ink.opacity(0.10),
+        edgeFaint: ink.opacity(0.07),
+        edgeSubtle: ink.opacity(0.03),
+        glowRadius: 0,
+        chromeCorner: 8,
+        eyebrowLeader: "·",
+        hairlineWidth: 0.5
+    )
+}()
+
+private let watchGraphiteChrome: WatchChromeTokens = {
+    let ink = Color(watchHex: "EDEDED")
+    return WatchChromeTokens(
+        accent: Color(watchHex: "FAFAFA"),
+        accentTint: Color.white.opacity(0.10),
+        accentGlow: .clear,
+        accentStrong: Color.white.opacity(0.22),
+        panel: Color(watchHex: "0E0E0E"),
+        panelAlt: Color(watchHex: "171717"),
+        panelInk: ink,
+        panelInkFaint: Color(watchHex: "8F8F8F"),
+        panelAccent: Color(watchHex: "FAFAFA"),
+        panelEdge: ink.opacity(0.18),
+        trace: ink.opacity(0.75),
+        traceFaint: ink.opacity(0.10),
+        edgeStrong: ink.opacity(0.30),
+        edge: ink.opacity(0.20),
+        edgeFaint: ink.opacity(0.14),
+        edgeSubtle: ink.opacity(0.08),
+        glowRadius: 0,
+        chromeCorner: 6,
+        eyebrowLeader: "·",
+        hairlineWidth: 1
+    )
+}()
+
+private let watchCarbonChrome: WatchChromeTokens = {
+    let signal = Color(watchHex: "3DE08A")
+    let ink = Color(watchHex: "FAFAFA")
+    return WatchChromeTokens(
+        accent: signal,
+        accentTint: signal.opacity(0.10),
+        accentGlow: signal.opacity(0.22),
+        accentStrong: signal.opacity(0.40),
+        panel: .black,
+        panelAlt: Color(watchHex: "070707"),
+        panelInk: ink,
+        panelInkFaint: Color(watchHex: "8A8A8A"),
+        panelAccent: signal,
+        panelEdge: signal.opacity(0.20),
+        trace: ink.opacity(0.80),
+        traceFaint: ink.opacity(0.10),
+        edgeStrong: Color.white.opacity(0.36),
+        edge: Color.white.opacity(0.26),
+        edgeFaint: Color.white.opacity(0.19),
+        edgeSubtle: Color.white.opacity(0.11),
+        glowRadius: 2,
+        chromeCorner: 1,
+        eyebrowLeader: "›",
+        hairlineWidth: 1
+    )
+}()
+
 // MARK: - Active Theme Resolver
 //
-// The Watch target doesn't have an App Group entitlement yet (TalkieWatch has no
-// .entitlements file — only TalkieWatchWidget does). Until one is set up we
-// always return scope chrome, which is a reasonable default — the watch is
-// rarely customized.
-//
-// If a future change adds the App Group to the Watch target, this resolver
-// can read `selectedTheme` from the shared UserDefaults — see iOS
-// `TalkieAppConfigurationStore` for the key.
+// The phone publishes the selected theme through WatchConnectivity and the
+// Watch persists that last-known value locally. App Groups do not synchronize
+// defaults between separate iPhone and Watch devices.
 
-enum WatchThemeName: String {
+enum WatchThemeName: String, CaseIterable, Identifiable {
     case scope
+    case porcelain
+    case mineral
     case midnight
     case tactical
     case ghost
+    case lift
+    case graphite
+    case carbon
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .scope: return "Scope"
+        case .porcelain: return "Porcelain"
+        case .mineral: return "Mineral"
+        case .midnight: return "Midnight"
+        case .tactical: return "Tactical"
+        case .ghost: return "Ghost"
+        case .lift: return "Lift"
+        case .graphite: return "Graphite"
+        case .carbon: return "Carbon"
+        }
+    }
 
     var chrome: WatchChromeTokens {
         switch self {
         case .scope:    return watchScopeChrome
+        case .porcelain: return watchPorcelainChrome
+        case .mineral:  return watchMineralChrome
         case .midnight: return watchMidnightChrome
         case .tactical: return watchTacticalChrome
         case .ghost:    return watchGhostChrome
+        case .lift:     return watchLiftChrome
+        case .graphite: return watchGraphiteChrome
+        case .carbon:   return watchCarbonChrome
         }
+    }
+
+    var captureStyle: WatchCaptureStyle {
+        let material: WatchCaptureMaterial
+        switch self {
+        case .porcelain, .mineral, .lift:
+            material = .lightMineral
+        case .scope, .midnight, .tactical, .ghost, .graphite, .carbon:
+            material = .blackCeramic
+        }
+
+        return WatchCaptureStyle(material: material, trace: chrome.accent)
     }
 }
 
 enum WatchTheme {
-    /// Shared App Group identifier (matches iOS). Reads of this group will
-    /// silently no-op on the watch until the entitlement is added.
-    static let appGroupIdentifier = "group.to.talkie.app"
+    static let selectedThemeKey = "selectedTheme"
+    static let localOverrideKey = "watch.captureThemeOverride"
 
-    /// Active theme. Reads `selectedTheme` from the shared App Group; falls
-    /// back to scope if the group is unavailable (no entitlement on watch).
-    static var current: WatchChromeTokens {
-        if let defaults = UserDefaults(suiteName: appGroupIdentifier),
-           let raw = defaults.string(forKey: "selectedTheme"),
-           let theme = WatchThemeName(rawValue: raw) {
-            return theme.chrome
+    static var syncedName: WatchThemeName {
+        guard let raw = UserDefaults.standard.string(forKey: selectedThemeKey),
+              let theme = WatchThemeName(rawValue: raw) else {
+            return .porcelain
         }
-        return watchScopeChrome
+        return theme
+    }
+
+    static var localOverrideName: WatchThemeName? {
+        guard let raw = UserDefaults.standard.string(forKey: localOverrideKey) else {
+            return nil
+        }
+        return WatchThemeName(rawValue: raw)
+    }
+
+    static var currentName: WatchThemeName {
+        localOverrideName ?? syncedName
+    }
+
+    static var current: WatchChromeTokens { currentName.chrome }
+
+    static var capture: WatchCaptureStyle { currentName.captureStyle }
+}
+
+private struct WatchThemeNameEnvironmentKey: EnvironmentKey {
+    static let defaultValue = WatchTheme.currentName
+}
+
+extension EnvironmentValues {
+    var watchThemeName: WatchThemeName {
+        get { self[WatchThemeNameEnvironmentKey.self] }
+        set { self[WatchThemeNameEnvironmentKey.self] = newValue }
     }
 }
 

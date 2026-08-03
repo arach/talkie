@@ -32,6 +32,9 @@ enum Haptics {
     /// Rigid knock — a hard boundary or mechanical stop. Reserved; use for
     /// edges (e.g. a tape-head marker crossing the centerline), not routine taps.
     case stop
+    /// Barely-there arrival pulse — emitted on the playback device immediately
+    /// before a spoken reply begins. It should register without demanding attention.
+    case cue
     /// Earned success — first save, sync complete, pairing linked. Sparingly.
     case success
     /// Something went sideways but recoverable.
@@ -58,6 +61,7 @@ enum Haptics {
         case .toggle:                     selection.prepare()
         case .transition:                 impactMedium.prepare()
         case .stop:                       impactRigid.prepare()
+        case .cue:                        impactLight.prepare()
         case .success, .warning, .error:  notification.prepare()
         }
     }
@@ -69,6 +73,7 @@ enum Haptics {
         case .toggle:      selection.selectionChanged()
         case .transition:  impactMedium.impactOccurred()
         case .stop:        impactRigid.impactOccurred()
+        case .cue:         impactLight.impactOccurred(intensity: 0.24)
         case .success:     notification.notificationOccurred(.success)
         case .warning:     notification.notificationOccurred(.warning)
         case .error:       notification.notificationOccurred(.error)
