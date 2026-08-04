@@ -315,6 +315,50 @@ final class WatchSessionManager: NSObject, ObservableObject {
         lastAsksVisit = now
         UserDefaults.standard.set(now, forKey: Self.lastAsksVisitKey)
         objectWillChange.send()
+        publishSharedState()
+        WatchAnswerNotifier.shared.clearDelivered()
+    }
+
+    // MARK: - Shared State
+
+    private let sharedState = WatchSharedStateStore()
+
+    /// Republish what the complication draws.
+    ///
+    /// Called from every path that can move it rather than on a timer: the
+    /// complication extension is a separate process with no view of this
+    /// object, so an unpublished change is simply invisible on the face until
+    /// something else happens to publish. The store itself drops writes that
+    /// change nothing, so calling this liberally is cheap and calling it too
+    /// rarely is the only real failure.
+    private func publishSharedState() {
+        // The newest ask, whatever became of it. An older in-flight one behind
+        // a newer settled one is not worth a second slot on a watch face.
+        let now = Date()
+        let ask = asks.first
+        let isStalled = ask?.isStalled(asOf: now) ?? false
+        // Only worth publishing while there is still a crossing ahead of us.
+        // Once it has settled or already gone quiet, the flip has happened and
+        // a date in the past would just make the complication reschedule itself
+        // for a moment that has been and gone.
+        let staleAt: Date? = ask.flatMap { ask in
+            guard ask.isInFlight, !isStalled else { return nil }
+            return ask.lastHeardAt.addingTimeInterval(WatchMemo.silenceTolerance)
+        }
+        sharedState.publish(
+            WatchSharedState(
+                askID: ask?.id.uuidString,
+                askPhase: ask?.resolvedPhase.rawValue,
+                askIsStalled: isStalled,
+                askStaleAt: staleAt,
+                askIsUnseen: unseenAsk != nil,
+                askChangedAt: ask.map { $0.settledAt ?? $0.lastHeardAt },
+                askQuestion: ask?.askQuestion,
+                lastCaptureAt: recentMemos.first?.timestamp,
+                captureCount: recentMemos.count,
+                isReachable: isReachable
+            )
+        )
     }
 
     private override init() {
@@ -328,6 +372,11 @@ final class WatchSessionManager: NSObject, ObservableObject {
         pruneAnswerAudio()
         reconcilePendingAudioWithMemoStatuses()
         reconcilePendingCodexAudioWithReceipt()
+
+        // The complication survives app launches and reinstalls; the container
+        // does not necessarily agree with what just came off disk. Reconcile
+        // once before anything live arrives.
+        publishSharedState()
 
         if WCSession.isSupported() {
             session = WCSession.default
@@ -356,6 +405,9 @@ final class WatchSessionManager: NSObject, ObservableObject {
     private func saveRecentMemos() {
         guard let data = try? JSONEncoder().encode(recentMemos) else { return }
         try? data.write(to: memosFileURL)
+        // Every change to the memo list passes through here, which makes this
+        // the one place the face cannot fall behind the app.
+        publishSharedState()
     }
 
     private var signalLedgerFileURL: URL {
@@ -921,6 +973,22 @@ final class WatchSessionManager: NSObject, ObservableObject {
         markSignaled(memoID: memoID)
         guard readyHapticEnabled else { return }
         WKInterfaceDevice.current().play(.notification)
+        postAnswerNotification(memoID: memoID)
+    }
+
+    /// Leaves a card behind for an answer the wearer was not present for.
+    ///
+    /// Gated on the same switch as the wrist tap. That setting reads as "do not
+    /// interrupt me when one lands", and a notification is a louder version of
+    /// the same interruption, not a different question.
+    private func postAnswerNotification(memoID: UUID) {
+        guard !isForeground else { return }
+        guard let memo = recentMemos.first(where: { $0.id == memoID }) else { return }
+        WatchAnswerNotifier.shared.post(
+            memoID: memoID,
+            question: memo.askQuestion,
+            answer: memo.transcriptionPreview
+        )
     }
 
     private func noteAwaitingWatchAudio(memoID: UUID, readyHapticEnabled: Bool) {
@@ -956,6 +1024,7 @@ final class WatchSessionManager: NSObject, ObservableObject {
             )
             if pending.readyHapticEnabled {
                 WKInterfaceDevice.current().play(.notification)
+                postAnswerNotification(memoID: memoID)
             }
         }
         saveSignalLedger()
@@ -1067,6 +1136,7 @@ final class WatchSessionManager: NSObject, ObservableObject {
                 if let memoID { markSignaled(memoID: memoID) }
                 if !alreadySignaled, readyHapticEnabled {
                     WKInterfaceDevice.current().play(.notification)
+                    if let memoID { postAnswerNotification(memoID: memoID) }
                 }
                 WatchConsole.info("⌚️ [Watch] 🔈 Answer audio held for a tap; wrist is down")
                 return
@@ -1321,6 +1391,7 @@ extension WatchSessionManager: WCSessionDelegate {
                 WatchConsole.info("⌚️ [Watch] Outstanding transfers: \(session.outstandingFileTransfers.count)")
                 WatchConsole.info("⌚️ [Watch] =====================================")
                 self.isReachable = session.isReachable
+                self.publishSharedState()
                 if activationState == .activated {
                     self.resolveOverdueWatchAudio()
                     self.flushPendingAudioTransfers()
@@ -1339,6 +1410,7 @@ extension WatchSessionManager: WCSessionDelegate {
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
         Task { @MainActor in
             self.isReachable = session.isReachable
+            self.publishSharedState()
             self.resolveOverdueWatchAudio()
             self.flushPendingAudioTransfers()
             if session.isReachable {

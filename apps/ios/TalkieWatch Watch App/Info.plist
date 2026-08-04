@@ -14,5 +14,9 @@
 	<array>
 		<string>audio</string>
 	</array>
+	<!-- Read at runtime rather than hardcoded, so the app and the complication
+	     extension cannot drift onto different containers. -->
+	<key>TalkieAppGroupIdentifier</key>
+	<string>$(TALKIE_IOS_APP_GROUP)</string>
 </dict>
 </plist>

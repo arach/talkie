@@ -25,5 +25,10 @@
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.widgetkit-extension</string>
 	</dict>
+	<!-- Must match the watch app's value. The complication reads the app's
+	     published state out of this container; a mismatch shows as a
+	     permanently empty complication rather than as an error. -->
+	<key>TalkieAppGroupIdentifier</key>
+	<string>$(TALKIE_IOS_APP_GROUP)</string>
 </dict>
 </plist>
