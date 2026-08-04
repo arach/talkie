@@ -456,6 +456,17 @@ private enum HomeCockpitPalette {
     static var screenInk: Color { chrome.panelInk }
     static var screenInkFaint: Color { chrome.panelInkFaint }
     static var phosphor: Color { chrome.panelAccent }
+
+    /// How far a lit readout is allowed to bleed. Themes that declare no halo
+    /// (`glowRadius: 0`) get none here either — a glow is a film over the word,
+    /// and a theme that has argued against films shouldn't sprout one in the
+    /// cockpit.
+    static var glowRadius: CGFloat { chrome.glowRadius }
+
+    /// Gloss, lift and letterform — the same finish the Codex deck reads. The
+    /// cockpit is the densest small type in the app, so it is where the films
+    /// cost the most. See `DeckFinish`.
+    static var finish: DeckFinish { activeTheme.finish }
 }
 
 // MARK: - Command center
@@ -1404,7 +1415,7 @@ private struct HomeActivityScreen: View {
                     HomeActivityRow(event: event, showsDivider: index < events.count - 1)
                 }
             }
-            .background(Color.white.opacity(0.04))
+            .background(HomeCockpitPalette.screenInk.opacity(0.04))
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -1417,17 +1428,19 @@ private struct HomeActivityScreen: View {
         .background {
             ZStack {
                 HomeCockpitPalette.screen
-                LinearGradient(
-                    colors: [Color.white.opacity(0.08), Color.black.opacity(0.20)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                RadialGradient(
-                    colors: [HomeCockpitPalette.phosphor.opacity(0.18), .clear],
-                    center: UnitPoint(x: 0.72, y: 0.36),
-                    startRadius: 0,
-                    endRadius: 140
-                )
+                if HomeCockpitPalette.finish.isGlossy {
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.08), Color.black.opacity(0.20)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    RadialGradient(
+                        colors: [HomeCockpitPalette.phosphor.opacity(0.18), .clear],
+                        center: UnitPoint(x: 0.72, y: 0.36),
+                        startRadius: 0,
+                        endRadius: 140
+                    )
+                }
             }
         }
         .clipShape(shape)
@@ -1469,7 +1482,7 @@ private struct HomeActivityRow: View {
         .overlay(alignment: .bottom) {
             if showsDivider {
                 Rectangle()
-                    .fill(Color.white.opacity(0.08))
+                    .fill(HomeCockpitPalette.screenInk.opacity(0.08))
                     .frame(height: 0.5)
                     .padding(.leading, 52)
             }
@@ -1508,36 +1521,49 @@ private struct CockpitScreen: View {
             }
 
             // The Bay — the toggled 144pt well (Roll ⁄ Gauges).
+            // The cells below read the palette off a static table, which is
+            // invisible to SwiftUI's dependency tracking — their inputs are ints
+            // and bools that a theme change doesn't touch, so their bodies stay
+            // cached and they keep drawing the outgoing theme's phosphor. Keying
+            // the bay on the theme rebuilds the subtree instead.
             CockpitBay(model: model)
+                .id(theme.currentTheme)
         }
         .padding(HomeCockpitMetrics.screenPad)
         .frame(maxWidth: .infinity)
+        // Three films stack here — a top-to-bottom gloss, a phosphor bloom, and a
+        // left-to-right wash — and the whole cockpit's type is read through all
+        // of them. That is what makes the screen read as lit glass, and it is
+        // also why the 8pt legends look hazy. A flat theme keeps the screen
+        // colour and drops the stack.
         .background {
             ZStack {
                 HomeCockpitPalette.screen
-                LinearGradient(
-                    stops: [
-                        .init(color: Color.white.opacity(0.08), location: 0),
-                        .init(color: Color.white.opacity(0.02), location: 0.45),
-                        .init(color: Color.black.opacity(0.24), location: 1),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                RadialGradient(
-                    colors: [HomeCockpitPalette.phosphor.opacity(0.22), .clear],
-                    center: UnitPoint(x: 0.5, y: 0.44),
-                    startRadius: 0,
-                    endRadius: 110
-                )
-                LinearGradient(
-                    colors: [
-                        HomeCockpitPalette.screenAlt.opacity(0.00),
-                        HomeCockpitPalette.screenAlt.opacity(0.45),
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
+                if HomeCockpitPalette.finish.isGlossy {
+                    LinearGradient(
+                        stops: [
+                            .init(color: Color.white.opacity(0.08), location: 0),
+                            .init(color: Color.white.opacity(0.02), location: 0.45),
+                            .init(color: Color.black.opacity(0.24), location: 1),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    RadialGradient(
+                        colors: [HomeCockpitPalette.phosphor.opacity(0.22), .clear],
+                        center: UnitPoint(x: 0.5, y: 0.44),
+                        startRadius: 0,
+                        endRadius: 110
+                    )
+                    LinearGradient(
+                        colors: [
+                            HomeCockpitPalette.screenAlt.opacity(0.00),
+                            HomeCockpitPalette.screenAlt.opacity(0.45),
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                }
             }
         }
         .clipShape(shape)
@@ -1617,9 +1643,11 @@ private struct CockpitBay: View {
         .padding(HomeCockpitMetrics.bayPad)
         .frame(height: HomeCockpitMetrics.bayHeight)
         .frame(maxWidth: .infinity)
-        .background(Color.white.opacity(0.035))
+        // White-on-dark was safe while every plate was dark. Tinting with the
+        // plate's own ink instead keeps the well recessed either way.
+        .background(HomeCockpitPalette.screenInk.opacity(0.035))
         .clipShape(shape)
-        .overlay(shape.strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+        .overlay(shape.strokeBorder(HomeCockpitPalette.screenInk.opacity(0.08), lineWidth: 1))
     }
 
     private func toggle() {
@@ -1657,9 +1685,15 @@ private struct BaySelector: View {
             }
             .padding(1)
             .frame(height: HomeCockpitMetrics.bayLabelHeight)
+            // The track was two literal near-blacks, which was fine for as long
+            // as every theme's plates were dark. It draws `screenInk` and
+            // `phosphor` on itself, and those come from the panel family — so a
+            // theme with a light panel put dark ink on a black track and the
+            // unselected segment measured 1.04:1. Ink and plate now come from
+            // the same place and cannot disagree.
             .background(
                 LinearGradient(
-                    colors: [Color(hex: "050301"), Color(hex: "0B0704")],
+                    colors: [HomeCockpitPalette.screen, HomeCockpitPalette.screenAlt],
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -1687,15 +1721,24 @@ private struct BaySelector: View {
             // alpha walks it into the near-black track (measured 2.1–3.5:1).
             // Selected reads as *coloured*, not merely brighter.
             .foregroundStyle(on ? HomeCockpitPalette.phosphor : HomeCockpitPalette.screenInk)
-            .shadow(color: on ? HomeCockpitPalette.phosphor.opacity(0.55) : .clear, radius: on ? 3 : 0)
+            // Capped at 3 because that is all an 8pt glyph in a 28px chip can
+            // carry before the halo starts reading as the letter.
+            .shadow(
+                color: on ? HomeCockpitPalette.phosphor.opacity(0.55) : .clear,
+                radius: on ? min(HomeCockpitPalette.glowRadius, 3) : 0
+            )
             .padding(.horizontal, 7)
             .frame(maxHeight: .infinity)
-            .background(on ? HomeCockpitPalette.phosphor.opacity(0.16) : Color.clear)
+            // No wash under the lit segment. A phosphor tint behind phosphor ink
+            // walks the plate toward the word — at 0.16 it cost the selected
+            // segment ~2 points of contrast (scope/light measured 3.93:1 with it,
+            // 5.9:1 without) for an affordance the colour, the bezel and the halo
+            // already carry three times over.
             .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
             .overlay {
                 if on {
                     RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .strokeBorder(HomeCockpitPalette.phosphor.opacity(0.4), lineWidth: 0.5)
+                        .strokeBorder(HomeCockpitPalette.phosphor.opacity(0.55), lineWidth: 0.5)
                 }
             }
     }
@@ -2042,7 +2085,7 @@ private struct RollCell: View {
         } else if ghost {
             // A Ghost Cell — a faint outline sketching the grid that will fill in.
             RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.11), lineWidth: 1)
+                .strokeBorder(HomeCockpitPalette.screenInk.opacity(0.11), lineWidth: 1)
         } else if isToday && intensity == 0 {
             // Today, no capture yet — an unlit amber ring marker.
             RoundedRectangle(cornerRadius: 2, style: .continuous)
@@ -2052,18 +2095,20 @@ private struct RollCell: View {
 
     private var fill: Color {
         if ghost { return .clear }  // ghost cells are outlined only
-        if isFuture { return Color.white.opacity(0.03) }
+        if isFuture { return HomeCockpitPalette.screenInk.opacity(0.03) }
         if isToday && intensity > 0 { return HomeCockpitPalette.phosphor }
         if isToday { return .clear }  // ring drawn in the overlay
         if inRun { return HomeCockpitPalette.phosphor.opacity(0.7 + Double(intensity) * 0.1) }
         if intensity > 0 { return activeInk }
-        return Color.white.opacity(0.05)   // empty past day
+        return HomeCockpitPalette.screenInk.opacity(0.05)   // empty past day
     }
 
+    // Cell ink is the plate's own ink, not a literal white — a light plate
+    // needs dark cells for the same reason a dark one needs light ones.
     private var activeInk: Color {
-        if intensity >= 3 { return Color.white.opacity(0.85) }
-        if intensity == 2 { return Color.white.opacity(0.55) }
-        return Color.white.opacity(0.30)
+        if intensity >= 3 { return HomeCockpitPalette.screenInk.opacity(0.85) }
+        if intensity == 2 { return HomeCockpitPalette.screenInk.opacity(0.55) }
+        return HomeCockpitPalette.screenInk.opacity(0.30)
     }
 
     private var glowColor: Color {

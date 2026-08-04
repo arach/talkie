@@ -43,6 +43,10 @@ enum TerminalStripPalette {
     static var glassTop: Color { chrome.panelAlt }
     static var glassBottom: Color { chrome.panel }
     static var glowInk: Color { chrome.panelAccent }
+
+    /// Whether this theme wants the CRT material at all. A flat theme gets the
+    /// glass colour and the word, and nothing in between. See `DeckFinish`.
+    static var finish: DeckFinish { activeTheme.finish }
 }
 
 enum TerminalStripMetrics {
@@ -77,6 +81,7 @@ struct TerminalMessageStrip: View {
         let trailingReserve = docked
             ? TerminalStripMetrics.dockWidth + TerminalStripMetrics.padH
             : TerminalStripMetrics.padH
+        let finish = TerminalStripPalette.finish
 
         // The line rides in an overlay over an empty flexible slot rather than
         // sitting in the layout directly. `fixedSize()` below is what lets a long
@@ -92,12 +97,15 @@ struct TerminalMessageStrip: View {
             .overlay(alignment: .leading) {
                 HStack(spacing: 3) {
                     Text(text)
-                        .font(.system(size: TerminalStripMetrics.font, weight: .medium, design: .monospaced))
+                        .font(finish.font(TerminalStripMetrics.font, .medium))
                         .textCase(.uppercase)
-                        .tracking(TerminalStripMetrics.tracking)
+                        .tracking(finish.tracking(TerminalStripMetrics.tracking))
                         .foregroundStyle(TerminalStripPalette.phosphor)
-                        .shadow(color: TerminalStripPalette.accent.opacity(0.55), radius: 4)
-                        .shadow(color: TerminalStripPalette.glowInk.opacity(0.9), radius: 1)
+                        // Two stacked halos are what makes a phosphor line look
+                        // lit. They are also two films over the word, so a flat
+                        // theme takes neither.
+                        .shadow(color: TerminalStripPalette.accent.opacity(0.55 * finish.lift), radius: 4)
+                        .shadow(color: TerminalStripPalette.glowInk.opacity(0.9 * finish.lift), radius: 1)
                         .lineLimit(1)
                         .fixedSize()
 
@@ -107,7 +115,7 @@ struct TerminalMessageStrip: View {
                     RoundedRectangle(cornerRadius: 1, style: .continuous)
                         .fill(TerminalStripPalette.phosphor)
                         .frame(width: TerminalStripMetrics.font * 0.55, height: TerminalStripMetrics.font * 0.95)
-                        .shadow(color: TerminalStripPalette.accent.opacity(0.8), radius: 3)
+                        .shadow(color: TerminalStripPalette.accent.opacity(0.8 * finish.lift), radius: 3)
                 }
             }
             .mask(
@@ -130,9 +138,13 @@ struct TerminalMessageStrip: View {
             }
             .background(TerminalGlass())
             .clipShape(shape)
+            // Scanlines are the one film here that lands *on* the letterform
+            // rather than around it — a 1-in-3pt dark band cuts every glyph at
+            // 15pt. It is the whole point of a CRT and the whole problem with
+            // reading one, so a flat theme gets none.
             .overlay(
                 ScanlineOverlay()
-                    .fill(Color.black.opacity(TerminalStripMetrics.scanlineOpacity))
+                    .fill(Color.black.opacity(TerminalStripMetrics.scanlineOpacity * finish.lift))
                     .clipShape(shape)
                     .allowsHitTesting(false)
             )
@@ -150,17 +162,21 @@ private struct DockedReadout: View {
     @ObservedObject private var themeManager = ThemeManager.shared
 
     var body: some View {
+        let finish = TerminalStripPalette.finish
         HStack(spacing: 6) {
             Spacer(minLength: 0)
             Text(readout.label)
-                .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                .tracking(1.12) // 0.14em at 8pt
+                .font(finish.font(8, .semibold))
+                .tracking(finish.tracking(1.12)) // 0.14em at 8pt
                 .foregroundStyle(TerminalStripPalette.phosphorDim)
             Text(readout.value)
-                .font(.system(size: 13, weight: .bold, design: .monospaced).monospacedDigit())
-                .tracking(0.52) // 0.04em at 13pt
+                .font(finish.font(13, .bold).monospacedDigit())
+                .tracking(finish.tracking(0.52)) // 0.04em at 13pt
                 .foregroundStyle(readout.hot ? TerminalStripPalette.accent : TerminalStripPalette.phosphorDim)
-                .shadow(color: readout.hot ? TerminalStripPalette.accent.opacity(0.5) : .clear, radius: readout.hot ? 3 : 0)
+                .shadow(
+                    color: readout.hot ? TerminalStripPalette.accent.opacity(0.5 * finish.lift) : .clear,
+                    radius: readout.hot ? 3 : 0
+                )
         }
         .padding(.trailing, TerminalStripMetrics.padH)
         .frame(maxHeight: .infinity)
@@ -195,7 +211,7 @@ struct TerminalGlass: View {
                 endPoint: .bottom
             )
             RadialGradient(
-                colors: [TerminalStripPalette.accent.opacity(0.12), .clear],
+                colors: [TerminalStripPalette.accent.opacity(0.12 * TerminalStripPalette.finish.lift), .clear],
                 center: UnitPoint(x: 0.5, y: 0.42),
                 startRadius: 0,
                 endRadius: 90
