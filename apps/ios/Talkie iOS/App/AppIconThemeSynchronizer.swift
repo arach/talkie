@@ -22,6 +22,7 @@ extension AppTheme {
         case .graphite: "AppIconGraphite"
         case .carbon: "AppIconCarbon"
         case .ember: "AppIconEmber"
+        case .matte: "AppIconMatte"
         }
     }
 }

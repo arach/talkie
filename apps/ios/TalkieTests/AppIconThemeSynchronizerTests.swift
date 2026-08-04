@@ -23,6 +23,7 @@ final class AppIconThemeSynchronizerTests: XCTestCase {
             .graphite: "AppIconGraphite",
             .carbon: "AppIconCarbon",
             .ember: "AppIconEmber",
+            .matte: "AppIconMatte",
         ]
 
         for theme in AppTheme.allCases where theme != .porcelain {

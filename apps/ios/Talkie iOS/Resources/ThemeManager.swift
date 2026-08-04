@@ -54,6 +54,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
     case graphite = "graphite"
     case carbon = "carbon"
     case ember = "ember"
+    case matte = "matte"
 
     /// Product default for new or incomplete appearance configurations.
     /// Keep this centralized so the settings facade and runtime resolver cannot drift.
@@ -73,6 +74,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .graphite: return "Vercel"
         case .carbon: return "Carbon"
         case .ember: return "Ember"
+        case .matte: return "Matte"
         }
     }
 
@@ -88,6 +90,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .graphite: return "Vercel-style · monochrome white-on-black"
         case .carbon: return "True-black terminal · monochrome, one signal"
         case .ember: return "Warm charcoal with a single amber signal"
+        case .matte: return "Ink on paper · no gloss, no lift, one blue"
         }
     }
 }
@@ -379,6 +382,39 @@ private let cachedEmberColors = ThemeColors(
     success: Color(hex: "3F7A55", darkHex: "6FB98A")
 )
 
+// Matte — the control. Ink on paper, and one blue.
+//
+// Every other theme here is a made object: a moulded cap under glass, a plate
+// with a sheen on it, a lamp behind the number. That reads well at 13pt and
+// costs you something at 7pt, because each of those layers is a film across
+// the word and the eye adds the films up before it gets to the letter.
+//
+// Matte takes them all away and keeps only what a page has: a surface colour,
+// a hairline, and the type. The neutrals are true neutrals — no warmth, no
+// blue cast, nothing for the ink to fight — and there is exactly one hue in
+// the whole theme, a blue dark enough to be read as text on white and light
+// enough to be read as text on black. Success is the only exception, and only
+// because "done" and "look here" must not be the same colour.
+//
+// Its partner is `DeckFinish.flat`: this palette is half the treatment, and
+// dropping the gloss, the lift and the mono legend is the other half.
+private let cachedMatteColors = ThemeColors(
+    tableHeaderBackground: Color(hex: "F0F0F0", darkHex: "141414"),
+    tableCellBackground: Color(hex: "FFFFFF", darkHex: "1A1A1A"),
+    // Mode-aware (AARRGGBB): the dark side runs ~2× alpha, since white-on-dark
+    // rules read fainter than black-on-light at the same value.
+    tableDivider: Color(hex: "1F000000", darkHex: "33FFFFFF"),
+    tableBorder: Color(hex: "2E000000", darkHex: "52FFFFFF"),
+    background: Color(hex: "F4F4F4", darkHex: "090909"),
+    cardBackground: Color(hex: "FFFFFF", darkHex: "1A1A1A"),
+    searchBackground: Color(hex: "EBEBEB", darkHex: "1F1F1F"),
+    textPrimary: Color(hex: "0D0D0D", darkHex: "F7F7F7"),
+    textSecondary: Color(hex: "3A3A3A", darkHex: "D2D2D2"),
+    textTertiary: Color(hex: "5F5F5F", darkHex: "9E9E9E"),
+    accent: Color(hex: "1D4ED8", darkHex: "7FB0FF"),
+    success: Color(hex: "15803D", darkHex: "5FD08A")
+)
+
 // MARK: - Theme Color Access (O(1) lookup, no parsing)
 
 extension AppTheme {
@@ -394,6 +430,7 @@ extension AppTheme {
         case .graphite: return cachedGraphiteColors
         case .carbon: return cachedCarbonColors
         case .ember: return cachedEmberColors
+        case .matte: return cachedMatteColors
         }
     }
 

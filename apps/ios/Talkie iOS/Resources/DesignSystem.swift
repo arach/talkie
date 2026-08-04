@@ -804,6 +804,47 @@ private let emberChrome: ChromeTokens = {
     )
 }()
 
+// Matte's chrome — see `cachedMatteColors` for the palette rationale.
+//
+// One thing here is unlike every other theme: the panel tokens are mode-aware.
+// Everywhere else the instrument plates stay dark on a light page, because a
+// dark plate is what makes a lit readout read as lit. Matte has no readouts to
+// light — a plate is just a region of the page — so it follows the page, and a
+// light deck is genuinely light all the way down rather than a pale chassis
+// with black windows cut into it.
+//
+// `glowRadius` is 0 for the same reason `DeckFinish.flat.lift` is 0: a glow is
+// a film over the word, and this theme's whole argument is that there is
+// nothing between you and the word.
+private let matteChrome: ChromeTokens = {
+    let signal = Color(hex: "1D4ED8", darkHex: "7FB0FF")
+    let ink = Color(hex: "0D0D0D", darkHex: "F7F7F7")
+    return ChromeTokens(
+        accent: signal,
+        accentTint: signal.opacity(0.08),
+        accentGlow: signal.opacity(0.18),
+        accentStrong: signal.opacity(0.36),
+        action: ink.opacity(0.78),
+        actionTint: ink.opacity(0.05),
+        panel: Color(hex: "F0F0F0", darkHex: "151515"),
+        panelAlt: Color(hex: "E8E8E8", darkHex: "1C1C1C"),
+        panelInk: Color(hex: "0D0D0D", darkHex: "F7F7F7"),
+        panelInkFaint: Color(hex: "565656", darkHex: "A8A8A8"),
+        panelAccent: signal,
+        panelEdge: signal.opacity(0.30),
+        trace: ink.opacity(0.82),
+        traceFaint: ink.opacity(0.10),
+        edgeStrong: Color(hex: "38000000", darkHex: "5CFFFFFF"),
+        edge:       Color(hex: "26000000", darkHex: "42FFFFFF"),
+        edgeFaint:  Color(hex: "1A000000", darkHex: "30FFFFFF"),
+        edgeSubtle: Color(hex: "0F000000", darkHex: "1CFFFFFF"),
+        glowRadius: 0,
+        chromeCorner: 6,
+        eyebrowLeader: "·",
+        hairlineWidth: 1.0
+    )
+}()
+
 extension AppTheme {
     var chrome: ChromeTokens {
         switch self {
@@ -817,6 +858,7 @@ extension AppTheme {
         case .graphite: return graphiteChrome
         case .carbon:   return carbonChrome
         case .ember:    return emberChrome
+        case .matte:    return matteChrome
         }
     }
 }

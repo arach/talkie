@@ -519,6 +519,37 @@ private let watchEmberChrome: WatchChromeTokens = {
     )
 }()
 
+// Matte on the wrist: the dark half of the phone's palette. The watch is
+// always a black surface, so the mode-awareness that makes Matte unusual on
+// the phone has nothing to do here — what carries over is the absence of
+// warmth and the single blue.
+private let watchMatteChrome: WatchChromeTokens = {
+    let signal = Color(watchHex: "7FB0FF")
+    let ink = Color(watchHex: "F7F7F7")
+    return WatchChromeTokens(
+        accent: signal,
+        accentTint: signal.opacity(0.08),
+        accentGlow: signal.opacity(0.18),
+        accentStrong: signal.opacity(0.36),
+        panel: Color(watchHex: "151515"),
+        panelAlt: Color(watchHex: "1C1C1C"),
+        panelInk: Color(watchHex: "F7F7F7"),
+        panelInkFaint: Color(watchHex: "A8A8A8"),
+        panelAccent: signal,
+        panelEdge: signal.opacity(0.26),
+        trace: ink.opacity(0.82),
+        traceFaint: ink.opacity(0.10),
+        edgeStrong: Color.white.opacity(0.34),
+        edge: Color.white.opacity(0.24),
+        edgeFaint: Color.white.opacity(0.17),
+        edgeSubtle: Color.white.opacity(0.10),
+        glowRadius: 0,
+        chromeCorner: 6,
+        eyebrowLeader: "\u{00B7}",
+        hairlineWidth: 1
+    )
+}()
+
 // MARK: - Active Theme Resolver
 //
 // The phone publishes the selected theme through WatchConnectivity and the
@@ -536,6 +567,7 @@ enum WatchThemeName: String, CaseIterable, Identifiable {
     case graphite
     case carbon
     case ember
+    case matte
 
     var id: String { rawValue }
 
@@ -551,6 +583,7 @@ enum WatchThemeName: String, CaseIterable, Identifiable {
         case .graphite: return "Graphite"
         case .carbon: return "Carbon"
         case .ember: return "Ember"
+        case .matte: return "Matte"
         }
     }
 
@@ -566,6 +599,7 @@ enum WatchThemeName: String, CaseIterable, Identifiable {
         case .graphite: return watchGraphiteChrome
         case .carbon:   return watchCarbonChrome
         case .ember:    return watchEmberChrome
+        case .matte:    return watchMatteChrome
         }
     }
 
@@ -574,7 +608,7 @@ enum WatchThemeName: String, CaseIterable, Identifiable {
         switch self {
         case .porcelain, .mineral, .lift:
             material = .lightMineral
-        case .scope, .midnight, .tactical, .ghost, .graphite, .carbon, .ember:
+        case .scope, .midnight, .tactical, .ghost, .graphite, .carbon, .ember, .matte:
             material = .blackCeramic
         }
 
