@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Generate Talkie's theme-responsive iOS app-icon family.
+"""Generate Talkie's theme-responsive app-icon family.
 
-Porcelain remains the primary icon. Alternate icons keep the same navy field
-and Talkie glyph geometry while changing the glyph color to match each theme.
+Porcelain remains the primary icon across iOS, watchOS, and macOS. iOS also
+gets alternate icons whose signal glyph follows the selected in-app theme.
+The logo geometry and porcelain field stay fixed, so the family remains
+recognizably Talkie while the glyph becomes a truthful theme signal.
 """
 
 from pathlib import Path
@@ -13,9 +15,12 @@ from PIL import Image, ImageDraw, ImageFont
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 FONT = REPOSITORY / "apps/macos/TalkieKit/Sources/TalkieKit/Resources/Fonts/JetBrainsMono-Bold.ttf"
-IOS_PRIMARY_CATALOG = (
-    REPOSITORY / "apps/ios/Talkie iOS/Resources/Assets.xcassets/AppIcon.appiconset"
+PRIMARY_CATALOGS = (
+    REPOSITORY / "apps/ios/Talkie iOS/Resources/Assets.xcassets/AppIcon.appiconset",
+    REPOSITORY / "apps/ios/TalkieWatch Watch App/Assets.xcassets/AppIcon.appiconset",
+    REPOSITORY / "apps/macos/Talkie/Assets.xcassets/AppIcon.appiconset",
 )
+IOS_PRIMARY_CATALOG = PRIMARY_CATALOGS[0]
 
 SIZE = 1024
 RENDER_SCALE = 4
@@ -50,9 +55,7 @@ def font_for_target_height(target_height: int) -> ImageFont.FreeTypeFont:
 
 
 def render_master(glyph: tuple[int, int, int, int]) -> Image.Image:
-    gradient = Image.linear_gradient("L").resize(
-        (CANVAS, CANVAS), Image.Resampling.BICUBIC
-    )
+    gradient = Image.linear_gradient("L").resize((CANVAS, CANVAS), Image.Resampling.BICUBIC)
     top = Image.new("RGB", (CANVAS, CANVAS), FIELD_TOP)
     bottom = Image.new("RGB", (CANVAS, CANVAS), FIELD_BOTTOM)
     image = Image.composite(bottom, top, gradient).convert("RGBA")
@@ -82,7 +85,9 @@ def main() -> None:
     if not FONT.is_file():
         raise SystemExit(f"Icon font not found: {FONT}")
 
-    update_catalog(IOS_PRIMARY_CATALOG, render_master(THEME_GLYPHS["Porcelain"]))
+    porcelain = render_master(THEME_GLYPHS["Porcelain"])
+    for catalog in PRIMARY_CATALOGS:
+        update_catalog(catalog, porcelain)
 
     for theme_name, glyph in THEME_GLYPHS.items():
         if theme_name == "Porcelain":
