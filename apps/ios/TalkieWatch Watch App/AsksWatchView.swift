@@ -98,6 +98,9 @@ struct AsksWatchView: View {
                         VStack(spacing: 5) {
                             ForEach(inFlightAsks) { ask in
                                 InFlightAskPanel(ask: ask)
+                                    .dismissOnLongPress(title: "Dismiss this ask?") {
+                                        sessionManager.dismissCapture(memoID: ask.id)
+                                    }
                             }
 
                             ForEach(settledAsks) { ask in
