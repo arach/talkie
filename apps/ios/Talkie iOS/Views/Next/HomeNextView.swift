@@ -90,12 +90,20 @@ struct HomeNextView: View {
         .scrollIndicators(.hidden)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if isCommandFocused {
-                HomeTalkieKeyboardHost(
-                    controller: commandKeyboard,
-                    visualStyle: theme.currentTheme == .mineral ? .mineralInstrument : .automatic
-                )
-                .frame(maxWidth: .infinity)
-                .frame(height: commandKeyboard.preferredHeight)
+                VStack(spacing: 0) {
+                    // The command bar scrolls with the feed, so it cannot be
+                    // relied on to stay in reach — the way out has to live on
+                    // the slab itself. Until now the only one was an
+                    // undiscoverable swipe down over the keys.
+                    HomeKeyboardDismissRow { commandKeyboard.onCollapse?() }
+
+                    HomeTalkieKeyboardHost(
+                        controller: commandKeyboard,
+                        visualStyle: theme.currentTheme == .mineral ? .mineralInstrument : .automatic
+                    )
+                    .frame(maxWidth: .infinity)
+                    .frame(height: commandKeyboard.preferredHeight)
+                }
                 // The keyboard view paints no background of its own — as a real
                 // `inputView` the system supplies the backdrop. Home hands it to
                 // a `safeAreaInset` instead, so without this the recents list
@@ -499,6 +507,41 @@ private final class HomeCommandKeyboardController {
 /// Home presents the Talkie keyboard as app-owned chrome, just like Compose.
 /// This keeps it visible on iPad even when a hardware keyboard is connected;
 /// UIKit's custom `inputView` presentation is intentionally bypassed.
+/// The visible way out of the keyboard.
+///
+/// Deliberately routed through the same `onCollapse` the swipe-down gesture
+/// fires rather than flipping the focus binding directly: collapsing means
+/// resigning first responder, and having two paths that do it differently is
+/// how the field and the slab end up disagreeing about whether input is live.
+private struct HomeKeyboardDismissRow: View {
+    let onDismiss: () -> Void
+    @ObservedObject private var theme = ThemeManager.shared
+
+    init(onDismiss: @escaping () -> Void) {
+        self.onDismiss = onDismiss
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Spacer(minLength: 0)
+
+            Button(action: onDismiss) {
+                Image(systemName: "keyboard.chevron.compact.down")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(theme.colors.textSecondary)
+                    // Wider than the glyph so the tap target clears the
+                    // 44pt minimum without the icon looking like a button.
+                    .frame(width: 44, height: 30)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Hide keyboard")
+            .accessibilityIdentifier("home.keyboard-dismiss")
+        }
+        .padding(.horizontal, 6)
+    }
+}
+
 private struct HomeTalkieKeyboardHost: UIViewRepresentable {
     let controller: HomeCommandKeyboardController
     let visualStyle: KeyboardVisualStyle
@@ -526,6 +569,25 @@ private struct HomeTalkieKeyboardHost: UIViewRepresentable {
         controller.keyboard = keyboard
         controller.preferredHeight = keyboard.intrinsicContentSize.height
         return keyboard
+    }
+
+    // A keyboard has no opinion about its own width; it takes the one it is
+    // offered. Without this, the representable falls back to Auto Layout's
+    // intrinsic measurement, which is derived from the key pitch rather than the
+    // slot. Saying so here is also the seam that leaves `CompactKeyboardView`
+    // alone — the same view is the system extension's full-bleed layout, where
+    // running edge to edge is correct.
+    func sizeThatFits(
+        _ proposal: ProposedViewSize,
+        uiView: HostedTalkieKeyboardView,
+        context: Context
+    ) -> CGSize? {
+        let fallbackWidth = uiView.window?.bounds.width ?? uiView.bounds.width
+        let proposed = proposal.width.flatMap { $0.isFinite ? $0 : nil }
+        return CGSize(
+            width: proposed ?? fallbackWidth,
+            height: uiView.intrinsicContentSize.height
+        )
     }
 
     func updateUIView(_ keyboard: HostedTalkieKeyboardView, context: Context) {

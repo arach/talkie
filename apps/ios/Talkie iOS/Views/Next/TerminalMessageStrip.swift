@@ -76,52 +76,65 @@ struct TerminalMessageStrip: View {
             ? TerminalStripMetrics.dockWidth + TerminalStripMetrics.padH
             : TerminalStripMetrics.padH
 
-        HStack(spacing: 3) {
-            Text(text)
-                .font(.system(size: TerminalStripMetrics.font, weight: .medium, design: .monospaced))
-                .textCase(.uppercase)
-                .tracking(TerminalStripMetrics.tracking)
-                .foregroundStyle(TerminalStripPalette.phosphor)
-                .shadow(color: TerminalStripPalette.accent.opacity(0.55), radius: 4)
-                .shadow(color: TerminalStripPalette.glowInk.opacity(0.9), radius: 1)
-                .lineLimit(1)
-                .fixedSize()
+        // The line rides in an overlay over an empty flexible slot rather than
+        // sitting in the layout directly. `fixedSize()` below is what lets a long
+        // message run off the clipped edge instead of truncating with an ellipsis
+        // — but a fixed-size child also reports its full intrinsic width to
+        // whatever contains it, and stacks hand that width straight up to their
+        // own parent. Hosted in an overlay the text still draws at full length
+        // while the strip only ever claims the width it was offered, so a long
+        // message can't quietly widen its host (and, through the cockpit, every
+        // screen in the app).
+        Color.clear
+            .frame(maxWidth: .infinity)
+            .overlay(alignment: .leading) {
+                HStack(spacing: 3) {
+                    Text(text)
+                        .font(.system(size: TerminalStripMetrics.font, weight: .medium, design: .monospaced))
+                        .textCase(.uppercase)
+                        .tracking(TerminalStripMetrics.tracking)
+                        .foregroundStyle(TerminalStripPalette.phosphor)
+                        .shadow(color: TerminalStripPalette.accent.opacity(0.55), radius: 4)
+                        .shadow(color: TerminalStripPalette.glowInk.opacity(0.9), radius: 1)
+                        .lineLimit(1)
+                        .fixedSize()
 
-            // Static block cursor — visible when the line fits; when it overflows
-            // the cursor is pushed past the clipped right edge (and faded out).
-            RoundedRectangle(cornerRadius: 1, style: .continuous)
-                .fill(TerminalStripPalette.phosphor)
-                .frame(width: TerminalStripMetrics.font * 0.55, height: TerminalStripMetrics.font * 0.95)
-                .shadow(color: TerminalStripPalette.accent.opacity(0.8), radius: 3)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .mask(
-            LinearGradient(
-                stops: [.init(color: .black, location: 0.74), .init(color: .clear, location: 1.0)],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-        )
-        .padding(.leading, TerminalStripMetrics.padH)
-        .padding(.trailing, trailingReserve)
-        .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .leading)
-        // Dock composited BEFORE the clip so its trailing corners round with the
-        // strip while its left divider edge stays straight.
-        .overlay(alignment: .trailing) {
-            if let dock {
-                DockedReadout(readout: dock)
-                    .frame(width: TerminalStripMetrics.dockWidth)
+                    // Static block cursor — visible when the line fits; when it
+                    // overflows the cursor is pushed past the clipped right edge
+                    // (and faded out).
+                    RoundedRectangle(cornerRadius: 1, style: .continuous)
+                        .fill(TerminalStripPalette.phosphor)
+                        .frame(width: TerminalStripMetrics.font * 0.55, height: TerminalStripMetrics.font * 0.95)
+                        .shadow(color: TerminalStripPalette.accent.opacity(0.8), radius: 3)
+                }
             }
-        }
-        .background(TerminalGlass())
-        .clipShape(shape)
-        .overlay(
-            ScanlineOverlay()
-                .fill(Color.black.opacity(TerminalStripMetrics.scanlineOpacity))
-                .clipShape(shape)
-                .allowsHitTesting(false)
-        )
-        .overlay(shape.strokeBorder(TerminalStripPalette.accent.opacity(TerminalStripMetrics.borderOpacity), lineWidth: 1))
+            .mask(
+                LinearGradient(
+                    stops: [.init(color: .black, location: 0.74), .init(color: .clear, location: 1.0)],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .padding(.leading, TerminalStripMetrics.padH)
+            .padding(.trailing, trailingReserve)
+            .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .leading)
+            // Dock composited BEFORE the clip so its trailing corners round with
+            // the strip while its left divider edge stays straight.
+            .overlay(alignment: .trailing) {
+                if let dock {
+                    DockedReadout(readout: dock)
+                        .frame(width: TerminalStripMetrics.dockWidth)
+                }
+            }
+            .background(TerminalGlass())
+            .clipShape(shape)
+            .overlay(
+                ScanlineOverlay()
+                    .fill(Color.black.opacity(TerminalStripMetrics.scanlineOpacity))
+                    .clipShape(shape)
+                    .allowsHitTesting(false)
+            )
+            .overlay(shape.strokeBorder(TerminalStripPalette.accent.opacity(TerminalStripMetrics.borderOpacity), lineWidth: 1))
     }
 }
 
