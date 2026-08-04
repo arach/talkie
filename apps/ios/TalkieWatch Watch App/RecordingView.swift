@@ -210,32 +210,20 @@ struct ParticlesView: View {
                     let seed = Double(i) * 1.618033988749
                     let depth = 0.28 + seed.truncatingRemainder(dividingBy: 0.72)
 
-                    // Parallax drift that the voice leans on rather than drives.
-                    // The level term is deliberately smaller than the resting
-                    // spread: loud should read as the field picking up, not as
-                    // the dots suddenly sprinting across the strip.
-                    let speed = 0.085 + depth * 0.21 + Double(levelCG) * 0.22
+                    // Slow parallax drift keeps the field atmospheric. Nearer
+                    // particles move faster and read a little brighter.
+                    let speed = 0.055 + depth * 0.16
                     let xProgress = (time * speed + seed * 0.37)
                         .truncatingRemainder(dividingBy: 1.0)
                     let x = CGFloat(xProgress) * size.width
 
-                    // Each point owns a lane. The lane drifts slowly, the
-                    // response opens it away from center with the live level,
-                    // and the kick — squared, so it is silent under a murmur —
-                    // is what makes a loud syllable land as a jump rather than
-                    // a slightly wider wave.
-                    let lane = sin(seed * 2.71) * 0.40
-                    let drift = sin(time * (0.46 + depth * 0.44) + seed * 7.3) * 0.16
-                    let response = sin(time * (1.7 + depth * 1.4) + seed * 11)
-                        * Double(levelCG) * 0.82
-                    let kick = sin(time * (3.6 + depth * 2.2) + seed * 3.1)
-                        * Double(levelCG * levelCG) * 0.30
-
-                    // The terms sum past the strip on peaks. Compressing rather
-                    // than clamping keeps the small motion honest and lets the
-                    // loud end pile up against the edge instead of falling off
-                    // it — nothing ever leaves the field.
-                    let y = centerY + CGFloat(tanh(lane + drift + response + kick)) * centerY
+                    // Each point owns a lane. The lane drifts slowly, then
+                    // opens further from center as the live level increases.
+                    let lane = sin(seed * 2.71) * 0.42
+                    let drift = sin(time * (0.34 + depth * 0.32) + seed * 7.3) * 0.14
+                    let response = sin(time * (1.1 + depth * 0.8) + seed * 11)
+                        * Double(levelCG) * 0.44
+                    let y = centerY + CGFloat(lane + drift + response) * centerY
 
                     let voiceScale = CGFloat(0.35 + sin(seed * 4) * 0.18)
                     let particleSize = (
@@ -254,7 +242,7 @@ struct ParticlesView: View {
                         return 0.16 + normalized * 0.84
                     }()
 
-                    let shimmer = 0.80 + sin(time * 1.15 + seed * 5) * 0.20
+                    let shimmer = 0.82 + sin(time * 0.72 + seed * 5) * 0.18
                     let opacity = (
                         0.20
                         + depth * 0.40

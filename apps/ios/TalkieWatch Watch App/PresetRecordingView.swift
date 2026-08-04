@@ -127,6 +127,11 @@ struct PresetRecordingView: View {
                 .offset(x: discardPush.width, y: discardPush.height)
                 .opacity(1 - discardProgress * 0.72)
             }
+            // Without this the stack only hit-tests where something is drawn,
+            // so the discard swipe answers over the timer and the legend but
+            // dies in the empty space between them — which is most of the face,
+            // and where a thumb actually lands.
+            .contentShape(Rectangle())
             .gesture(discardGesture)
         }
     }
@@ -240,24 +245,47 @@ struct PresetRecordingView: View {
                     .foregroundStyle(accent.opacity(0.88))
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("Ask, recording voice message")
+            .accessibilityLabel(
+                recorder.isPaused
+                    ? "Ask, voice message paused"
+                    : "Ask, recording voice message"
+            )
+            .accessibilityAction(named: "Discard recording") {
+                guard recorder.isPaused else { return }
+                discardCapture()
+            }
 
             RecordingSignalChamber(
                 level: recorder.currentLevel,
                 duration: formatDuration(recorder.recordingDuration),
                 color: accent,
                 material: material,
-                isPaused: false,
+                isPaused: recorder.isPaused,
                 isCompact: isCompact,
                 composition: .signalRail
             )
             .frame(maxHeight: .infinity)
+            .overlay {
+                // Same borrowed band as the memo face: the field is nearly dead
+                // while paused, so the hint lands where there is nothing to
+                // interrupt rather than as chrome the face carries all session.
+                if recorder.isPaused && discardProgress == 0 {
+                    Text("SWIPE AWAY TO DISCARD")
+                        .font(.system(size: 8, weight: .medium, design: .monospaced))
+                        .tracking(0.9)
+                        .foregroundStyle(material.inkFaint.opacity(0.62))
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeOut(duration: 0.22), value: recorder.isPaused)
 
             AIVoiceMessageComposer(
                 duration: formatDuration(recorder.recordingDuration),
                 accent: accent,
                 material: material,
                 isCompact: isCompact,
+                isPaused: recorder.isPaused,
+                onTogglePause: togglePause,
                 action: stopAndSend
             )
         }
@@ -886,25 +914,47 @@ private struct AIVoiceMessageComposer: View {
     let accent: Color
     let material: WatchCaptureMaterial
     let isCompact: Bool
+    let isPaused: Bool
+    let onTogglePause: () -> Void
     let action: () -> Void
 
     var body: some View {
         HStack(spacing: isCompact ? 6 : 8) {
-            Image(systemName: "waveform")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(accent.opacity(0.92))
-                .frame(width: 28, height: 28)
-                .background(
-                    Circle()
-                        .fill(accent.opacity(0.10))
-                )
-                .accessibilityHidden(true)
+            // The badge that used to sit here was decoration. Pause is the one
+            // control the ask face was missing — and it is also the consent the
+            // discard swipe is gated on, so without it that gesture could never
+            // arm here. Taking over the badge's slot rather than adding a
+            // control keeps the bar inside a 40mm's width.
+            Button(action: onTogglePause) {
+                Image(systemName: isPaused ? "play.fill" : "pause")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(isPaused ? accent : material.ink.opacity(0.82))
+                    .frame(width: 28, height: 28)
+                    .background(
+                        Circle()
+                            .fill(accent.opacity(isPaused ? 0.16 : 0.10))
+                            .overlay(
+                                Circle()
+                                    .stroke(
+                                        accent.opacity(isPaused ? 0.76 : 0),
+                                        lineWidth: 0.9
+                                    )
+                            )
+                    )
+                    // Taller than it is wide: the bar has vertical room to give
+                    // and no horizontal room, so the thumb target grows in the
+                    // direction that costs nothing.
+                    .frame(width: 32, height: 44)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(isPaused ? "Resume voice message" : "Pause voice message")
 
             VStack(alignment: .leading, spacing: 0) {
-                Text("VOICE MESSAGE")
+                Text(isPaused ? "PAUSED" : "VOICE MESSAGE")
                     .font(.system(size: 7, weight: .bold, design: .monospaced))
                     .tracking(0.8)
-                    .foregroundStyle(material.inkFaint)
+                    .foregroundStyle(isPaused ? accent.opacity(0.88) : material.inkFaint)
                     .lineLimit(1)
 
                 Text(duration)
