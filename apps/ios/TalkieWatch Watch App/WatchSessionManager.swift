@@ -319,6 +319,65 @@ final class WatchSessionManager: NSObject, ObservableObject {
         WatchAnswerNotifier.shared.clearDelivered()
     }
 
+    // MARK: - Dismissal
+
+    /// Take a capture off the wrist before the phone has finished with it.
+    ///
+    /// What this can honestly undo depends on how far the capture got. Audio
+    /// still sitting in the Watch's own queue is recalled outright — the phone
+    /// never sees it, so there is nothing left behind anywhere. Once the phone
+    /// has acknowledged the capture it owns it: the phone finishes what it
+    /// started and the result lands in its history, and dismissing here only
+    /// stops the wrist reporting on it.
+    ///
+    /// That narrower promise is the whole request. An ask the phone will never
+    /// answer — a dropped session, a force-quit, a provider that died — holds
+    /// the in-flight panel forever, and the wearer needs a way to say so.
+    func dismissCapture(memoID: UUID) {
+        guard let index = recentMemos.firstIndex(where: { $0.id == memoID }) else { return }
+        let memo = recentMemos[index]
+
+        // Silences the arrival tap for an answer that lands after the row is
+        // gone. `signalReadyIfNeeded` fires on the phone's update alone, so
+        // without this a dismissed ask still buzzes the wrist with nothing
+        // behind it to look at.
+        markSignaled(memoID: memoID)
+
+        if memo.isInFlight { recallPendingAudio(memoID: memoID) }
+
+        recentMemos.remove(at: index)
+        if playingAnswerID == memoID { stopAnswerPlayback() }
+        pruneAnswerAudio()
+        saveRecentMemos()
+
+        WatchConsole.info("⌚️ [Watch] Dismissed capture \(memoID) (status: \(memo.status))")
+    }
+
+    /// Cancel audio for this memo that has not left the Watch, and drop it from
+    /// the durable queue so the next flush does not send it anyway.
+    ///
+    /// A transfer already handed to WatchConnectivity may or may not still be
+    /// cancellable — that race belongs to the framework. What matters here is
+    /// that nothing is retried on the wearer's behalf after they said no.
+    private func recallPendingAudio(memoID: UUID) {
+        let queueIDs = pendingAudioTransfers
+            .filter { $0.memoID == memoID }
+            .map(\.id)
+        guard !queueIDs.isEmpty else { return }
+
+        let outstandingKeys = Set(queueIDs.map(\.uuidString))
+        for transfer in session?.outstandingFileTransfers ?? [] {
+            guard let queueID = transfer.file.metadata?["queueID"] as? String,
+                  outstandingKeys.contains(queueID) else { continue }
+            transfer.cancel()
+        }
+
+        for queueID in queueIDs {
+            completePendingAudioTransfer(queueID: queueID)
+            WatchConsole.info("⌚️ [Watch] Recalled queued audio \(queueID) memo=\(memoID)")
+        }
+    }
+
     // MARK: - Shared State
 
     private let sharedState = WatchSharedStateStore()

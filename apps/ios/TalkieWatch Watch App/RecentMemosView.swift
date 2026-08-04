@@ -78,7 +78,11 @@ private struct RecentCaptureRow: View {
             // and not the other is honest — a row that opens an empty page is
             // worse than a row that does not open.
             if memo.isAsk {
-                NavigationLink(value: memo.id) { summary }
+                // Carries its own destination rather than pushing a value onto
+                // the root stack's typed path. This screen sits two plain view
+                // links deep (More → Recent), and from down there the value
+                // push never resolved — the rows were links that did nothing.
+                NavigationLink { AskDetailView(askId: memo.id) } label: { summary }
                     .buttonStyle(.plain)
             } else {
                 summary
@@ -106,6 +110,16 @@ private struct RecentCaptureRow: View {
                         .stroke(chrome.edgeFaint, lineWidth: chrome.hairlineWidth)
                 )
         )
+        // Same gesture as the Asks page, on the same kind of row: anything the
+        // phone still owes an outcome on can be let go of. A settled capture is
+        // left alone — it belongs to the phone's history, and this timeline ages
+        // it out on its own.
+        .dismissOnLongPress(
+            title: memo.isAsk ? "Dismiss this ask?" : "Dismiss this memo?",
+            isEnabled: memo.isInFlight
+        ) {
+            sessionManager.dismissCapture(memoID: memo.id)
+        }
     }
 
     private var summary: some View {
