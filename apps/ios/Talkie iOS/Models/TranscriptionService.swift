@@ -305,22 +305,39 @@ class TranscriptionService {
     }
 }
 
-enum TranscriptionError: Error {
+/// Conforms to `LocalizedError`, not just `Error`, and spells the message as
+/// `errorDescription` — `localizedDescription` is not a protocol requirement, so
+/// declaring it as a plain property here meant every one of these strings was
+/// dead code. Anything holding this as an `Error` existential fell back to
+/// Foundation's placeholder and surfaced "The operation couldn't be completed.
+/// (Talkie_iOS.TranscriptionError error 1.)" — a case ordinal, to the user.
+enum TranscriptionError: LocalizedError {
     case recognizerNotAvailable
     case noResult
     case modelNotAvailable
     case transcriptionFailed(String)
 
-    var localizedDescription: String {
+    var errorDescription: String? {
         switch self {
         case .recognizerNotAvailable:
             return "Speech recognizer is not available"
         case .noResult:
-            return "No transcription result"
+            return "No speech was recognized in this recording"
         case .modelNotAvailable:
             return "Speech model is not available"
         case .transcriptionFailed(let reason):
             return "Transcription failed: \(reason)"
+        }
+    }
+
+    var failureReason: String? {
+        switch self {
+        case .noResult:
+            return "The audio was captured but the recognizer returned no words — usually a silent or near-silent take."
+        case .recognizerNotAvailable, .modelNotAvailable:
+            return "On-device speech recognition isn't ready for the selected locale."
+        case .transcriptionFailed:
+            return nil
         }
     }
 }
@@ -359,6 +376,12 @@ private class SpeechAnalyzerEngine: TranscriptionEngine {
         return fallback
     }
 
+    private func isModelInstalled(for locale: Locale) async -> Bool {
+        await SpeechTranscriber.installedLocales.contains {
+            $0.language.languageCode == locale.language.languageCode
+        }
+    }
+
     func transcribe(audioURL: URL) async throws -> String {
         // Find a supported locale - must use one from supportedLocales, not create manually
         let transcriptionLocale = try await findSupportedLocale(preferring: Locale.current.language.languageCode?.identifier ?? "en")
@@ -367,18 +390,27 @@ private class SpeechAnalyzerEngine: TranscriptionEngine {
         // Create transcriber with transcription preset
         let transcriber = SpeechTranscriber(locale: transcriptionLocale, preset: .transcription)
 
-        // Ensure the model is installed
-        let installedLocales = await SpeechTranscriber.installedLocales
-        let isInstalled = installedLocales.contains {
-            $0.language.languageCode == transcriptionLocale.language.languageCode
-        }
+        // Ensure the model is installed. A missing model has to surface as
+        // `.modelNotAvailable` here — analyzing without one doesn't fail, it
+        // just yields nothing, which then reads downstream as `.noResult` and
+        // sends you hunting for a silent microphone. (Simulators ship with no
+        // GeneralASR assets at all and can't always install them, so this is
+        // the ordinary case there, not an edge case.)
+        let isInstalled = await isModelInstalled(for: transcriptionLocale)
 
         if !isInstalled {
             AppLogger.transcription.info("SpeechAnalyzer: Model not installed for \(transcriptionLocale.identifier), downloading...")
-            if let downloader = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
-                try await downloader.downloadAndInstall()
-                AppLogger.transcription.info("SpeechAnalyzer: Model downloaded successfully")
+            guard let downloader = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) else {
+                AppLogger.transcription.error("SpeechAnalyzer: No installation request available for \(transcriptionLocale.identifier) — speech assets can't be provisioned on this device")
+                throw TranscriptionError.modelNotAvailable
             }
+            try await downloader.downloadAndInstall()
+
+            guard await isModelInstalled(for: transcriptionLocale) else {
+                AppLogger.transcription.error("SpeechAnalyzer: Install reported success but \(transcriptionLocale.identifier) is still not among the installed locales")
+                throw TranscriptionError.modelNotAvailable
+            }
+            AppLogger.transcription.info("SpeechAnalyzer: Model downloaded successfully")
         }
 
         // Create the analyzer with the transcriber module
