@@ -1046,6 +1046,44 @@ struct TalkieSettingsConfiguration: Codable {
         "mac-paste-image",
     ]
 
+    static let defaultSystemShortcutSlots: [String] = [
+        "deck-app-list",
+        "deck-app-previous",
+        "deck-app-next",
+        "app-launch-finder",
+        "deck-window-previous",
+        "deck-window-next",
+        "deck-tab-previous",
+        "deck-tab-next",
+        "deck-space-left",
+        "deck-space-right",
+        "deck-launcher",
+        "deck-quit-app",
+        "deck-mission-control",
+        "deck-show-desktop",
+        "deck-lock-screen",
+        "deck-screenshot",
+    ]
+
+    static let defaultApplicationShortcutSlots: [String] = [
+        "app-launch-finder",
+        "app-launch-raycast",
+        "app-launch-codex",
+        "app-launch-iterm",
+        "app-launch-cursor",
+        "app-launch-xcode",
+        "app-launch-safari",
+        "app-launch-terminal",
+        "app-launch-mail",
+        "app-launch-messages",
+        "app-launch-calendar",
+        "app-launch-notes",
+        "app-launch-music",
+        "app-launch-photos",
+        "app-launch-settings",
+        "app-launch-activity-monitor",
+    ]
+
     static func defaultDeviceShortcutBoard() -> ShortcutBoard {
         ShortcutBoard(
             spaces: [
@@ -1058,16 +1096,16 @@ struct TalkieSettingsConfiguration: Codable {
                 ),
                 .init(
                     id: "workspace",
-                    title: "Workspace",
-                    tiles: Array(0..<16).map { index in
-                        shortcutBoardTile(for: "", fallbackIndex: index, spaceID: "workspace")
+                    title: "System",
+                    tiles: defaultSystemShortcutSlots.enumerated().map { index, slotID in
+                        shortcutBoardTile(for: slotID, fallbackIndex: index, spaceID: "workspace")
                     }
                 ),
                 .init(
                     id: "command",
-                    title: "Command",
-                    tiles: Array(0..<16).map { index in
-                        shortcutBoardTile(for: "", fallbackIndex: index, spaceID: "command")
+                    title: "Apps",
+                    tiles: defaultApplicationShortcutSlots.enumerated().map { index, slotID in
+                        shortcutBoardTile(for: slotID, fallbackIndex: index, spaceID: "command")
                     }
                 )
             ]
@@ -1080,7 +1118,14 @@ struct TalkieSettingsConfiguration: Codable {
             ? Self.defaultLegacyShortcutSlots
             : normalizedBridgeSlots
 
-        guard var board = devices.defaults.shortcutBoard else { return }
+        let hadPersistedBoard = devices.defaults.shortcutBoard != nil
+        var board = devices.defaults.shortcutBoard ?? Self.defaultDeviceShortcutBoard()
+        if !hadPersistedBoard,
+           let talkieIndex = board.spaces.firstIndex(where: { $0.id == "talkie" }) {
+            board.spaces[talkieIndex].tiles = bridge.companionShortcutSlots.enumerated().map { index, slotID in
+                Self.shortcutBoardTile(for: slotID, fallbackIndex: index, spaceID: "talkie")
+            }
+        }
         guard let talkieIndex = board.spaces.firstIndex(where: { $0.id == "talkie" }) ?? board.spaces.indices.first else {
             return
         }
@@ -1097,8 +1142,48 @@ struct TalkieSettingsConfiguration: Codable {
             Self.shortcutBoardTile(for: slotID, fallbackIndex: index, spaceID: spaceID)
         }
 
+        Self.populateStarterSpaceIfEmpty(
+            id: "workspace",
+            title: "System",
+            slots: Self.defaultSystemShortcutSlots,
+            board: &board
+        )
+        Self.populateStarterSpaceIfEmpty(
+            id: "command",
+            title: "Apps",
+            slots: Self.defaultApplicationShortcutSlots,
+            board: &board
+        )
+
         devices.defaults.shortcutBoard = board
         bridge.companionShortcutSlots = targetSlots
+    }
+
+    private static func populateStarterSpaceIfEmpty(
+        id: String,
+        title: String,
+        slots: [String],
+        board: inout ShortcutBoard
+    ) {
+        guard let spaceIndex = board.spaces.firstIndex(where: { $0.id == id }) else {
+            board.spaces.append(
+                .init(
+                    id: id,
+                    title: title,
+                    tiles: slots.enumerated().map { index, slotID in
+                        shortcutBoardTile(for: slotID, fallbackIndex: index, spaceID: id)
+                    }
+                )
+            )
+            return
+        }
+        let currentSlots = board.spaces[spaceIndex].tiles.prefix(16).map(\.resolvedLegacySlotID)
+        guard currentSlots.allSatisfy(\.isEmpty) else { return }
+
+        board.spaces[spaceIndex].title = title
+        board.spaces[spaceIndex].tiles = slots.enumerated().map { index, slotID in
+            shortcutBoardTile(for: slotID, fallbackIndex: index, spaceID: id)
+        }
     }
 
     private static func normalizedLegacyShortcutSlots(_ slots: [String]) -> [String] {
@@ -1115,6 +1200,36 @@ struct TalkieSettingsConfiguration: Codable {
     }
 
     static func shortcutBoardTile(for slotID: String, fallbackIndex: Int, spaceID: String) -> ShortcutBoard.Space.Tile {
+        if let descriptor = systemShortcutDescriptor(for: slotID) {
+            return .init(
+                id: slotID,
+                title: descriptor.title,
+                subtitle: descriptor.subtitle,
+                icon: descriptor.icon,
+                accentColor: descriptor.accentColor,
+                type: "action",
+                legacySlotID: slotID,
+                action: .init(target: "mac", kind: descriptor.kind)
+            )
+        }
+
+        if let descriptor = applicationShortcutDescriptor(for: slotID) {
+            return .init(
+                id: slotID,
+                title: descriptor.title,
+                subtitle: "Open \(descriptor.title) on your Mac.",
+                icon: descriptor.icon,
+                accentColor: descriptor.accentColor,
+                type: "action",
+                legacySlotID: slotID,
+                action: .init(
+                    target: "application",
+                    kind: "launch",
+                    arguments: ["bundleIdentifier": descriptor.bundleIdentifier]
+                )
+            )
+        }
+
         let title: String
         let subtitle: String?
         let icon: String
@@ -1268,6 +1383,53 @@ struct TalkieSettingsConfiguration: Codable {
                 )
                 : nil
         )
+    }
+
+    private static func systemShortcutDescriptor(
+        for slotID: String
+    ) -> (title: String, subtitle: String, icon: String, accentColor: String, kind: String)? {
+        switch slotID {
+        case "deck-app-list": return ("Apps", "Choose from the apps currently running on your Mac.", "square.stack.3d.up", "cyan", "app-list")
+        case "deck-app-previous": return ("Prev App", "Return to the previous application.", "arrow.left.to.line", "blue", "app-previous")
+        case "deck-app-next": return ("Next App", "Move to the next application.", "arrow.right.to.line", "blue", "app-next")
+        case "deck-window-previous": return ("Prev Window", "Focus the previous window in the current app.", "arrow.left.square", "indigo", "window-previous")
+        case "deck-window-next": return ("Next Window", "Focus the next window in the current app.", "arrow.right.square", "indigo", "window-next")
+        case "deck-tab-previous": return ("Prev Tab", "Move to the previous tab.", "rectangle.leadinghalf.inset.filled.arrow.leading", "purple", "tab-previous")
+        case "deck-tab-next": return ("Next Tab", "Move to the next tab.", "rectangle.trailinghalf.inset.filled.arrow.trailing", "purple", "tab-next")
+        case "deck-space-left": return ("Space Left", "Move one desktop to the left.", "rectangle.portrait.and.arrow.left", "teal", "space-left")
+        case "deck-space-right": return ("Space Right", "Move one desktop to the right.", "rectangle.portrait.and.arrow.right", "teal", "space-right")
+        case "deck-launcher": return ("Launcher", "Open Raycast when available, otherwise Spotlight.", "sparkle.magnifyingglass", "orange", "launcher")
+        case "deck-quit-app": return ("Quit", "Quit the frontmost application.", "xmark.app", "red", "quit-app")
+        case "deck-mission-control": return ("Mission", "Open Mission Control.", "rectangle.3.group", "cyan", "mission-control")
+        case "deck-show-desktop": return ("Desktop", "Reveal the desktop.", "macwindow.on.rectangle", "green", "show-desktop")
+        case "deck-lock-screen": return ("Lock", "Lock the Mac screen.", "lock", "yellow", "lock-screen")
+        case "deck-screenshot": return ("Capture", "Open the macOS screen capture controls.", "camera.viewfinder", "pink", "screenshot")
+        default: return nil
+        }
+    }
+
+    private static func applicationShortcutDescriptor(
+        for slotID: String
+    ) -> (title: String, icon: String, accentColor: String, bundleIdentifier: String)? {
+        switch slotID {
+        case "app-launch-finder": return ("Finder", "folder", "blue", "com.apple.finder")
+        case "app-launch-raycast": return ("Raycast", "sparkle.magnifyingglass", "purple", "com.raycast.macos")
+        case "app-launch-codex": return ("Codex", "terminal", "green", "com.openai.codex")
+        case "app-launch-iterm": return ("iTerm", "terminal.fill", "mint", "com.googlecode.iterm2")
+        case "app-launch-cursor": return ("Cursor", "cursorarrow.rays", "indigo", "com.todesktop.230313mzl4w4u92")
+        case "app-launch-xcode": return ("Xcode", "hammer", "blue", "com.apple.dt.Xcode")
+        case "app-launch-safari": return ("Safari", "safari", "blue", "com.apple.Safari")
+        case "app-launch-terminal": return ("Terminal", "apple.terminal", "gray", "com.apple.Terminal")
+        case "app-launch-mail": return ("Mail", "envelope", "blue", "com.apple.mail")
+        case "app-launch-messages": return ("Messages", "message", "green", "com.apple.MobileSMS")
+        case "app-launch-calendar": return ("Calendar", "calendar", "red", "com.apple.iCal")
+        case "app-launch-notes": return ("Notes", "note.text", "yellow", "com.apple.Notes")
+        case "app-launch-music": return ("Music", "music.note", "pink", "com.apple.Music")
+        case "app-launch-photos": return ("Photos", "photo.on.rectangle", "orange", "com.apple.Photos")
+        case "app-launch-settings": return ("Settings", "gearshape", "gray", "com.apple.systempreferences")
+        case "app-launch-activity-monitor": return ("Monitor", "waveform.path.ecg.rectangle", "green", "com.apple.ActivityMonitor")
+        default: return nil
+        }
     }
 
     func resolvedShortcutBoard(

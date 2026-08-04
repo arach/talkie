@@ -163,6 +163,8 @@ enum AgentRoutes {
 
     private struct CompanionTrackpadResponse: Encodable {
         let ok: Bool
+        let x: Double
+        let y: Double
     }
 
     private struct CompanionDeckKeyPress {
@@ -222,6 +224,39 @@ enum AgentRoutes {
         let shortcutId = request.shortcutId.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !shortcutId.isEmpty else {
             BridgeResponse.sendError(connection, code: .badRequest, message: "shortcutId is required", context: context)
+            return
+        }
+
+        if let application = companionApplicationShortcut(for: shortcutId) {
+            let ok = launchCompanionApplication(bundleIdentifier: application.bundleIdentifier)
+            BridgeResponse.sendJSON(
+                connection,
+                data: CompanionTriggerResponse(
+                    ok: ok,
+                    handledShortcutId: ok ? shortcutId : nil,
+                    message: ok ? "Opened \(application.name)" : nil,
+                    error: ok ? nil : "\(application.name) is not installed on this Mac."
+                ),
+                status: ok ? 200 : 404,
+                context: context
+            )
+            return
+        }
+
+        if shortcutId == "deck-launcher",
+           NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.raycast.macos") != nil {
+            let ok = launchCompanionApplication(bundleIdentifier: "com.raycast.macos")
+            BridgeResponse.sendJSON(
+                connection,
+                data: CompanionTriggerResponse(
+                    ok: ok,
+                    handledShortcutId: ok ? shortcutId : nil,
+                    message: ok ? "Raycast opened" : nil,
+                    error: ok ? nil : "Could not open Raycast."
+                ),
+                status: ok ? 200 : 500,
+                context: context
+            )
             return
         }
 
@@ -344,9 +379,66 @@ enum AgentRoutes {
             return CompanionDeckKeyPress(keyCode: 8, modifiers: .maskCommand, message: "Copy sent")
         case "deck-paste":
             return CompanionDeckKeyPress(keyCode: 9, modifiers: .maskCommand, message: "Paste sent")
+        case "deck-space-left":
+            return CompanionDeckKeyPress(keyCode: 123, modifiers: .maskControl, message: "Moved one space left")
+        case "deck-space-right":
+            return CompanionDeckKeyPress(keyCode: 124, modifiers: .maskControl, message: "Moved one space right")
+        case "deck-launcher":
+            return CompanionDeckKeyPress(keyCode: 49, modifiers: .maskCommand, message: "Spotlight opened")
+        case "deck-quit-app":
+            return CompanionDeckKeyPress(keyCode: 12, modifiers: .maskCommand, message: "Quit command sent")
+        case "deck-mission-control":
+            return CompanionDeckKeyPress(keyCode: 126, modifiers: .maskControl, message: "Mission Control opened")
+        case "deck-show-desktop":
+            return CompanionDeckKeyPress(keyCode: 99, modifiers: .maskCommand, message: "Desktop revealed")
+        case "deck-lock-screen":
+            return CompanionDeckKeyPress(keyCode: 12, modifiers: [.maskCommand, .maskControl], message: "Screen locked")
+        case "deck-screenshot":
+            return CompanionDeckKeyPress(keyCode: 23, modifiers: [.maskCommand, .maskShift], message: "Screen capture opened")
         default:
             return nil
         }
+    }
+
+    private static func companionApplicationShortcut(
+        for shortcutId: String
+    ) -> (name: String, bundleIdentifier: String)? {
+        switch shortcutId {
+        case "app-launch-finder": return ("Finder", "com.apple.finder")
+        case "app-launch-raycast": return ("Raycast", "com.raycast.macos")
+        case "app-launch-codex": return ("Codex", "com.openai.codex")
+        case "app-launch-iterm": return ("iTerm", "com.googlecode.iterm2")
+        case "app-launch-cursor": return ("Cursor", "com.todesktop.230313mzl4w4u92")
+        case "app-launch-xcode": return ("Xcode", "com.apple.dt.Xcode")
+        case "app-launch-safari": return ("Safari", "com.apple.Safari")
+        case "app-launch-terminal": return ("Terminal", "com.apple.Terminal")
+        case "app-launch-mail": return ("Mail", "com.apple.mail")
+        case "app-launch-messages": return ("Messages", "com.apple.MobileSMS")
+        case "app-launch-calendar": return ("Calendar", "com.apple.iCal")
+        case "app-launch-notes": return ("Notes", "com.apple.Notes")
+        case "app-launch-music": return ("Music", "com.apple.Music")
+        case "app-launch-photos": return ("Photos", "com.apple.Photos")
+        case "app-launch-settings": return ("System Settings", "com.apple.systempreferences")
+        case "app-launch-activity-monitor": return ("Activity Monitor", "com.apple.ActivityMonitor")
+        default: return nil
+        }
+    }
+
+    private static func launchCompanionApplication(bundleIdentifier: String) -> Bool {
+        if let runningApplication = NSWorkspace.shared.runningApplications.first(where: {
+            $0.bundleIdentifier == bundleIdentifier
+        }) {
+            _ = runningApplication.unhide()
+            return runningApplication.activate(options: [.activateAllWindows])
+        }
+
+        guard let applicationURL = NSWorkspace.shared.urlForApplication(
+            withBundleIdentifier: bundleIdentifier
+        ) else {
+            return false
+        }
+
+        return NSWorkspace.shared.open(applicationURL)
     }
 
     private static func handleCompanionPasteImage(_ connection: NWConnection, body: Data?, context: RequestContext) async {
@@ -502,6 +594,8 @@ enum AgentRoutes {
         let ok: Bool
 
         switch request.event {
+        case "position":
+            ok = true
         case "move":
             ok = performCompanionMouseMove(dx: dx, dy: dy)
         case "click":
@@ -526,7 +620,12 @@ enum AgentRoutes {
             return
         }
 
-        BridgeResponse.sendJSON(connection, data: CompanionTrackpadResponse(ok: ok), context: context)
+        let position = companionMousePosition()
+        BridgeResponse.sendJSON(
+            connection,
+            data: CompanionTrackpadResponse(ok: ok, x: Double(position.x), y: Double(position.y)),
+            context: context
+        )
     }
 
     private static func companionTrackpadDelta(_ value: Double?) -> Double {

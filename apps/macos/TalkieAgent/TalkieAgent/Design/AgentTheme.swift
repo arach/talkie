@@ -43,8 +43,6 @@ enum AgentTheme {
     static let hover = ScopeInk.primary.opacity(0.045)
 
     // Agent signal: a desaturated blue that remains readable at small sizes.
-    // Brass stays available as the shared Talkie brand cue, not as a competing
-    // interaction color inside Agent Home.
     static let accent = opsAdaptive(
         light: Color(red: 72.0/255, green: 104.0/255, blue: 136.0/255),
         dark: Color(red: 130.0/255, green: 169.0/255, blue: 203.0/255)
@@ -97,13 +95,10 @@ enum AgentTheme {
         light: Color.hex("6E737B"),
         dark: ScopeInk.muted
     )
-    static let instrumentAction = opsAdaptive(
-        light: Color.hex("D49236"),
-        dark: accent
-    )
+    static let instrumentAction = accent
     static let instrumentActionSoft = instrumentAction.opacity(0.08)
     static let instrumentActionBorder = opsAdaptive(
-        light: Color.hex("D49236").opacity(0.25),
+        light: accent.opacity(0.25),
         dark: border
     )
 }
