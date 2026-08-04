@@ -114,16 +114,19 @@ public final class CompactKeyboardView: UIView {
                 : UIColor(white: 1.0, alpha: 0.92)
         }
 
+        /// Keycap edge. Carries most of the "these are separate objects"
+        /// work now that the fills sit close to the backdrop — see
+        /// `keyBorderWidth` for why it is drawn on the pixel grid.
         static let keyBorder = UIColor { traits in
             traits.userInterfaceStyle == .dark
-                ? UIColor(white: 1.0, alpha: 0.10)
-                : UIColor(white: 0.0, alpha: 0.08)
+                ? UIColor(white: 1.0, alpha: 0.18)
+                : UIColor(white: 0.0, alpha: 0.14)
         }
 
         static let keyBorderPressed = UIColor { traits in
             traits.userInterfaceStyle == .dark
-                ? UIColor(white: 1.0, alpha: 0.24)
-                : UIColor(white: 0.0, alpha: 0.16)
+                ? UIColor(white: 1.0, alpha: 0.34)
+                : UIColor(white: 0.0, alpha: 0.24)
         }
 
         /// Key text color
@@ -203,8 +206,8 @@ public final class CompactKeyboardView: UIView {
                 keyPressed: UIColor(red: 0.949, green: 0.957, blue: 0.941, alpha: 1),
                 specialKey: UIColor(red: 0.733, green: 0.792, blue: 0.784, alpha: 1),
                 specialKeyActive: UIColor(red: 0.827, green: 0.651, blue: 0.545, alpha: 1),
-                keyBorder: UIColor(red: 0.094, green: 0.196, blue: 0.220, alpha: 0.22),
-                keyBorderPressed: UIColor(red: 0.608, green: 0.306, blue: 0.153, alpha: 0.72),
+                keyBorder: UIColor(red: 0.094, green: 0.196, blue: 0.220, alpha: 0.32),
+                keyBorderPressed: UIColor(red: 0.608, green: 0.306, blue: 0.153, alpha: 0.78),
                 keyText: UIColor(red: 0.086, green: 0.196, blue: 0.220, alpha: 1),
                 selection: UIColor(red: 0.608, green: 0.306, blue: 0.153, alpha: 1),
                 accentText: UIColor(red: 0.937, green: 0.949, blue: 0.929, alpha: 1),
@@ -262,6 +265,16 @@ public final class CompactKeyboardView: UIView {
     private var activeKeyForAccent: KeyButton?
     private var keyRestingShadowOpacity: Float {
         traitCollection.userInterfaceStyle == .dark ? 0.12 : 0.05
+    }
+    /// Keycap border, expressed in device pixels rather than points.
+    ///
+    /// A point-valued hairline lands between pixels on a 3x screen (0.45pt =
+    /// 1.35px) and the compositor resolves that by smearing the edge across two
+    /// rows — the border reads as a soft halo instead of an edge. Two whole
+    /// pixels sit exactly on the grid at any scale, so the keycap gets a hard
+    /// boundary and the keys stop dissolving into the slab.
+    private var keyBorderWidth: CGFloat {
+        2.0 / max(traitCollection.displayScale, 1)
     }
 
     // Layout constants - comfortable spacing for better usability
@@ -324,6 +337,7 @@ public final class CompactKeyboardView: UIView {
         for btn in keyButtons {
             btn.layer.shadowColor = palette.keyShadow.cgColor
             btn.layer.borderColor = palette.keyBorder.cgColor
+            btn.layer.borderWidth = keyBorderWidth
             btn.layer.shadowOpacity = keyRestingShadowOpacity
         }
         accentPopup?.layer.shadowColor = palette.keyShadow.cgColor
@@ -538,7 +552,7 @@ public final class CompactKeyboardView: UIView {
         btn.setTitleColor(palette.keyText, for: .normal)
         btn.backgroundColor = palette.keyBackground
         btn.layer.cornerRadius = 6
-        btn.layer.borderWidth = 0.45
+        btn.layer.borderWidth = keyBorderWidth
         btn.layer.borderColor = palette.keyBorder.cgColor
         btn.layer.shadowColor = palette.keyShadow.cgColor
         btn.layer.shadowOffset = CGSize(width: 0, height: 0.5)
@@ -639,7 +653,7 @@ public final class CompactKeyboardView: UIView {
         btn.titleLabel?.font = .systemFont(ofSize: (isSymbol || isMode) ? 15 : 16, weight: .medium)
         btn.setTitleColor(palette.keyText, for: .normal)
         btn.layer.cornerRadius = 6
-        btn.layer.borderWidth = 0.45
+        btn.layer.borderWidth = keyBorderWidth
         btn.layer.borderColor = palette.keyBorder.cgColor
         btn.layer.shadowColor = palette.keyShadow.cgColor
         btn.layer.shadowOffset = CGSize(width: 0, height: 0.5)

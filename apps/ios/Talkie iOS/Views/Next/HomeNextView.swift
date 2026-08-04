@@ -90,20 +90,19 @@ struct HomeNextView: View {
         .scrollIndicators(.hidden)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if isCommandFocused {
-                VStack(spacing: 0) {
-                    // The command bar scrolls with the feed, so it cannot be
-                    // relied on to stay in reach — the way out has to live on
-                    // the slab itself. Until now the only one was an
-                    // undiscoverable swipe down over the keys.
-                    HomeKeyboardDismissRow { commandKeyboard.onCollapse?() }
-
-                    HomeTalkieKeyboardHost(
-                        controller: commandKeyboard,
-                        visualStyle: theme.currentTheme == .mineral ? .mineralInstrument : .automatic
-                    )
-                    .frame(maxWidth: .infinity)
-                    .frame(height: commandKeyboard.preferredHeight)
-                }
+                HomeTalkieKeyboardHost(
+                    controller: commandKeyboard,
+                    visualStyle: theme.currentTheme == .mineral ? .mineralInstrument : .automatic
+                )
+                .frame(maxWidth: .infinity)
+                .frame(height: commandKeyboard.preferredHeight)
+                // The slab runs to the screen edge; the keys should not. The
+                // shared `CompactKeyboardView` lays out edge to edge because
+                // that is correct for the system keyboard extension, so the
+                // breathing room is added here, on the app's side of the seam,
+                // rather than in a constant both hosts read.
+                .padding(.horizontal, HomeKeyboardSlabMetrics.sideInset)
+                .padding(.top, HomeKeyboardSlabMetrics.topInset)
                 // The keyboard view paints no background of its own — as a real
                 // `inputView` the system supplies the backdrop. Home hands it to
                 // a `safeAreaInset` instead, so without this the recents list
@@ -118,6 +117,16 @@ struct HomeNextView: View {
                     Rectangle()
                         .fill(theme.currentTheme.chrome.edgeFaint)
                         .frame(height: theme.currentTheme.chrome.hairlineWidth)
+                }
+                // The way out rides above the slab on an offset, which draws
+                // but does not measure. Carried as a row in the stack it billed
+                // the feed a full 30pt of visible height for one glyph, and a
+                // `safeAreaInset` charges that to every screenful; as a lifted
+                // chip it costs nothing and shades one trailing corner instead.
+                .overlay(alignment: .topTrailing) {
+                    HomeKeyboardDismissChip { commandKeyboard.onCollapse?() }
+                        .padding(.trailing, HomeKeyboardSlabMetrics.sideInset)
+                        .offset(y: HomeKeyboardSlabMetrics.dismissLift)
                 }
                 // Move only. Fading it in as it travels makes the slab
                 // translucent for the whole flight — the feed shows through the
@@ -504,16 +513,35 @@ private final class HomeCommandKeyboardController {
     @ObservationIgnored var onCollapse: (() -> Void)?
 }
 
-/// Home presents the Talkie keyboard as app-owned chrome, just like Compose.
-/// This keeps it visible on iPad even when a hardware keyboard is connected;
-/// UIKit's custom `inputView` presentation is intentionally bypassed.
+/// Geometry for the keyboard slab as Home hosts it — the app-side inset around
+/// the shared keys, and the lifted dismiss chip.
+private enum HomeKeyboardSlabMetrics {
+    /// Rides on top of `CompactKeyboardView`'s own 3pt gutter, which stays
+    /// small because the system extension it also serves is full-bleed.
+    static let sideInset: CGFloat = 7
+    static let topInset: CGFloat = 6
+
+    /// A 30pt capsule inside a 44pt tap target — the chip is small, the touch
+    /// area is not.
+    static let dismissCapsuleWidth: CGFloat = 52
+    static let dismissCapsuleHeight: CGFloat = 30
+    static let dismissPadV: CGFloat = 7
+    static let dismissTapHeight: CGFloat = dismissCapsuleHeight + dismissPadV * 2
+    /// Clearance between the capsule and the slab's top hairline.
+    static let dismissGap: CGFloat = 6
+    /// Negative — the chip is lifted clear of the slab so it draws over the
+    /// feed rather than pushing it. Derived so the capsule (not its tap
+    /// padding) is what sits `dismissGap` above the edge.
+    static let dismissLift: CGFloat = dismissPadV - dismissTapHeight - dismissGap
+}
+
 /// The visible way out of the keyboard.
 ///
 /// Deliberately routed through the same `onCollapse` the swipe-down gesture
 /// fires rather than flipping the focus binding directly: collapsing means
 /// resigning first responder, and having two paths that do it differently is
 /// how the field and the slab end up disagreeing about whether input is live.
-private struct HomeKeyboardDismissRow: View {
+private struct HomeKeyboardDismissChip: View {
     let onDismiss: () -> Void
     @ObservedObject private var theme = ThemeManager.shared
 
@@ -522,26 +550,46 @@ private struct HomeKeyboardDismissRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            Spacer(minLength: 0)
+        let capsule = Capsule(style: .continuous)
 
-            Button(action: onDismiss) {
-                Image(systemName: "keyboard.chevron.compact.down")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(theme.colors.textSecondary)
-                    // Wider than the glyph so the tap target clears the
-                    // 44pt minimum without the icon looking like a button.
-                    .frame(width: 44, height: 30)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Hide keyboard")
-            .accessibilityIdentifier("home.keyboard-dismiss")
+        Button(action: onDismiss) {
+            Image(systemName: "keyboard.chevron.compact.down")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(theme.colors.textSecondary)
+                .frame(
+                    width: HomeKeyboardSlabMetrics.dismissCapsuleWidth,
+                    height: HomeKeyboardSlabMetrics.dismissCapsuleHeight
+                )
+                // Opaque, and laid over the page ground first: the chip floats
+                // above whatever recents row happens to be under it, so it has
+                // to carry its own backdrop rather than borrow one.
+                .background {
+                    ZStack {
+                        capsule.fill(theme.colors.background)
+                        capsule.fill(theme.colors.cardBackground)
+                    }
+                }
+                .overlay(
+                    capsule.strokeBorder(
+                        theme.currentTheme.chrome.edgeFaint,
+                        lineWidth: theme.currentTheme.chrome.hairlineWidth
+                    )
+                )
+                .shadow(color: .black.opacity(0.18), radius: 5, y: 2)
+                // Outside the capsule, so the tap target clears 44pt without
+                // the chip growing to match.
+                .padding(.vertical, HomeKeyboardSlabMetrics.dismissPadV)
+                .contentShape(Rectangle())
         }
-        .padding(.horizontal, 6)
+        .buttonStyle(.plain)
+        .accessibilityLabel("Hide keyboard")
+        .accessibilityIdentifier("home.keyboard-dismiss")
     }
 }
 
+/// Home presents the Talkie keyboard as app-owned chrome, just like Compose.
+/// This keeps it visible on iPad even when a hardware keyboard is connected;
+/// UIKit's custom `inputView` presentation is intentionally bypassed.
 private struct HomeTalkieKeyboardHost: UIViewRepresentable {
     let controller: HomeCommandKeyboardController
     let visualStyle: KeyboardVisualStyle
