@@ -314,7 +314,7 @@ struct CodexCommandDeckSurface: View {
         switch theme.currentTheme {
         case .carbon: return 4
         case .tactical: return 3
-        case .graphite, .midnight: return 10
+        case .graphite, .midnight, .ember: return 10
         default: return 14
         }
     }

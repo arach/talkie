@@ -53,6 +53,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
     case lift = "lift"
     case graphite = "graphite"
     case carbon = "carbon"
+    case ember = "ember"
 
     /// Product default for new or incomplete appearance configurations.
     /// Keep this centralized so the settings facade and runtime resolver cannot drift.
@@ -71,6 +72,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .lift: return "Lift"
         case .graphite: return "Vercel"
         case .carbon: return "Carbon"
+        case .ember: return "Ember"
         }
     }
 
@@ -85,6 +87,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .lift: return "Pure white surfaces with indigo lift"
         case .graphite: return "Vercel-style · monochrome white-on-black"
         case .carbon: return "True-black terminal · monochrome, one signal"
+        case .ember: return "Warm charcoal with a single amber signal"
         }
     }
 }
@@ -339,6 +342,38 @@ private let cachedCarbonColors = ThemeColors(
     success: Color(hex: "0D874A", darkHex: "3DE08A")
 )
 
+// Ember — black and amber, the sober reading of that pair.
+//
+// Tactical already owns black + hot orange, but it is a cockpit: square
+// corners, FF8800, everything shouting. Ember is the same family played
+// quietly — a warm charcoal rather than a true black (the neutrals carry a
+// few points of red so the amber sits in the same world instead of floating
+// on top of a cold gray), and an amber deep enough to read as text rather
+// than as a warning lamp.
+//
+// Amber is a light hue, which is the whole difficulty: it is comfortable on
+// dark and nearly invisible on white. So the accent is one hue at two
+// lightnesses — D98C2B on the dark side, A3671D on the light — rather than
+// one value forced to serve both. Success stays a muted sage instead of
+// borrowing the amber, because a theme with a single signal colour cannot
+// distinguish "done" from "look here."
+private let cachedEmberColors = ThemeColors(
+    tableHeaderBackground: Color(hex: "E7E3DC", darkHex: "161512"),
+    tableCellBackground: Color(hex: "FFFFFF", darkHex: "1B1A17"),
+    // Mode-aware (AARRGGBB): the dark side runs ~2× alpha, since white-on-dark
+    // rules read fainter than black-on-light at the same value.
+    tableDivider: Color(hex: "1F000000", darkHex: "33FFFFFF"),
+    tableBorder: Color(hex: "2E000000", darkHex: "52FFFFFF"),
+    background: Color(hex: "ECE8E1", darkHex: "0C0B0A"),
+    cardBackground: Color(hex: "FFFFFF", darkHex: "1B1A17"),
+    searchBackground: Color(hex: "E4E0D8", darkHex: "1F1E1A"),
+    textPrimary: Color(hex: "13120F", darkHex: "F4F1EA"),
+    textSecondary: Color(hex: "3C3830", darkHex: "CBC4B6"),
+    textTertiary: Color(hex: "635D52", darkHex: "9C9488"),
+    accent: Color(hex: "A3671D", darkHex: "D98C2B"),
+    success: Color(hex: "3F7A55", darkHex: "6FB98A")
+)
+
 // MARK: - Theme Color Access (O(1) lookup, no parsing)
 
 extension AppTheme {
@@ -353,6 +388,7 @@ extension AppTheme {
         case .lift: return cachedLiftColors
         case .graphite: return cachedGraphiteColors
         case .carbon: return cachedCarbonColors
+        case .ember: return cachedEmberColors
         }
     }
 

@@ -768,6 +768,41 @@ private let carbonChrome: ChromeTokens = {
     )
 }()
 
+// Ember's instrument chrome — see `cachedEmberColors` for the palette rationale.
+//
+// The plates stay dark in both modes, as they do in every theme, so the panel
+// tokens are single-valued and the amber on them is the dark-side amber even
+// when the page around them is light. Corners are soft (4) rather than
+// Tactical's near-square 1: this is the same colour family read calmly.
+private let emberChrome: ChromeTokens = {
+    let signal = Color(hex: "A3671D", darkHex: "D98C2B")
+    let ink = Color(hex: "13120F", darkHex: "F4F1EA")
+    return ChromeTokens(
+        accent: signal,
+        accentTint: signal.opacity(0.10),
+        accentGlow: signal.opacity(0.22),
+        accentStrong: signal.opacity(0.40),
+        action: ink.opacity(0.72),
+        actionTint: ink.opacity(0.06),
+        panel: Color(hex: "17150F", darkHex: "121109"),
+        panelAlt: Color(hex: "211E16", darkHex: "1C1A13"),
+        panelInk: Color(hex: "F6F2E8"),
+        panelInkFaint: Color(hex: "A79E8C"),
+        panelAccent: Color(hex: "E2A046"),
+        panelEdge: Color(hex: "E2A046").opacity(0.30),
+        trace: ink.opacity(0.80),
+        traceFaint: ink.opacity(0.10),
+        edgeStrong: Color(hex: "2E000000", darkHex: "5CFFFFFF"),
+        edge:       Color(hex: "24000000", darkHex: "42FFFFFF"),
+        edgeFaint:  Color(hex: "1A000000", darkHex: "30FFFFFF"),
+        edgeSubtle: Color(hex: "0F000000", darkHex: "1CFFFFFF"),
+        glowRadius: 3,
+        chromeCorner: 4,
+        eyebrowLeader: "·",
+        hairlineWidth: 1.0
+    )
+}()
+
 extension AppTheme {
     var chrome: ChromeTokens {
         switch self {
@@ -780,6 +815,7 @@ extension AppTheme {
         case .lift:     return liftChrome
         case .graphite: return graphiteChrome
         case .carbon:   return carbonChrome
+        case .ember:    return emberChrome
         }
     }
 }
