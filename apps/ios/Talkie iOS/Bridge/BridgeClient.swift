@@ -463,17 +463,25 @@ actor BridgeClient {
         return try JSONDecoder().decode(CompanionTriggerResponse.self, from: data)
     }
 
-    func companionTrackpad(event: TrackpadEvent, dx: Double = 0, dy: Double = 0) async throws {
+    func companionTrackpad(
+        event: TrackpadEvent,
+        dx: Double = 0,
+        dy: Double = 0
+    ) async throws -> CompanionTrackpadResponse {
         struct TrackpadRequest: Encodable {
             let event: String
             let dx: Double
             let dy: Double
         }
-        _ = try await post("/companion/trackpad", body: TrackpadRequest(event: event.rawValue, dx: dx, dy: dy))
+        let data = try await post(
+            "/companion/trackpad",
+            body: TrackpadRequest(event: event.rawValue, dx: dx, dy: dy)
+        )
+        return try JSONDecoder().decode(CompanionTrackpadResponse.self, from: data)
     }
 
     enum TrackpadEvent: String {
-        case move, click, rightClick, scroll, mouseDown, mouseUp, drag
+        case position, move, click, rightClick, scroll, mouseDown, mouseUp, drag
     }
 
     func companionPasteImage(
@@ -1108,6 +1116,12 @@ struct DeviceSetupStateRequest: Codable, Equatable {
 
 struct CompanionTriggerRequest: Codable {
     let shortcutId: String
+}
+
+struct CompanionTrackpadResponse: Codable, Equatable {
+    let ok: Bool
+    let x: Double?
+    let y: Double?
 }
 
 // MARK: - Codex lane payloads

@@ -27,6 +27,23 @@ final class BridgeManager {
         case pendingApproval
     }
 
+    enum EndpointUpdateError: LocalizedError {
+        case invalidHost
+        case invalidPort
+        case unknownMac
+
+        var errorDescription: String? {
+            switch self {
+            case .invalidHost:
+                return "Enter a Mac hostname or IP address."
+            case .invalidPort:
+                return "Enter a port between 1 and 65535."
+            case .unknownMac:
+                return "That saved Mac connection is no longer available."
+            }
+        }
+    }
+
     private struct PairingExecutionResult {
         let privateKeyBase64: String
         let connectionHost: String
@@ -692,7 +709,8 @@ final class BridgeManager {
             retryCount = 0
         } catch {
             status = .error
-            errorMessage = "Could not connect to Mac"
+            errorMessage = connectionErrorMessage(for: error, hostname: hostname, port: port)
+            log.warning("Bridge connection failed for \(hostname):\(port): \(error.localizedDescription)")
             scheduleRetry()
         }
     }
@@ -878,6 +896,51 @@ final class BridgeManager {
 
         let nextIndex = (currentIndex + offset + macs.count) % macs.count
         await activatePairedMac(id: macs[nextIndex].id)
+    }
+
+    /// Updates the routable endpoint for a saved Mac without discarding its
+    /// device identity or encryption pins. This is the normal repair path when
+    /// Bonjour, Tailscale, or a gateway migration changes the host or port.
+    func updatePairedMacEndpoint(
+        id: String,
+        hostname: String,
+        port: Int
+    ) async throws {
+        let normalizedHostname = hostname
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+
+        guard !normalizedHostname.isEmpty,
+              !normalizedHostname.contains(where: { $0.isWhitespace }) else {
+            throw EndpointUpdateError.invalidHost
+        }
+        guard (1...65_535).contains(port) else {
+            throw EndpointUpdateError.invalidPort
+        }
+        guard pairedMacs.contains(where: { $0.id == id }) else {
+            throw EndpointUpdateError.unknownMac
+        }
+
+        let wasActive = activePairedMacID == id
+        if wasActive {
+            disconnect()
+        }
+
+        configurationStore.update { configuration in
+            guard let index = configuration.bridge.pairedMacs.firstIndex(where: { $0.id == id }) else {
+                return
+            }
+            configuration.bridge.pairedMacs[index].hostname = normalizedHostname
+            configuration.bridge.pairedMacs[index].port = port
+        }
+
+        loadPairing()
+        TalkieAppSettings.shared.reloadFromDisk()
+        log.info("Updated saved Mac endpoint to \(normalizedHostname):\(port)")
+
+        guard wasActive else { return }
+        await client.clearAuth()
+        await connect()
     }
 
     func removePairedMac(id: String) {
@@ -1138,7 +1201,7 @@ final class BridgeManager {
         event: BridgeClient.TrackpadEvent,
         dx: Double = 0,
         dy: Double = 0
-    ) async throws {
+    ) async throws -> CompanionTrackpadResponse {
         guard isPaired else {
             throw BridgeError.notConfigured
         }
@@ -1151,9 +1214,10 @@ final class BridgeManager {
             throw BridgeError.connectionFailed
         }
 
-        try await client.companionTrackpad(event: event, dx: dx, dy: dy)
+        let response = try await client.companionTrackpad(event: event, dx: dx, dy: dy)
         lastSuccessfulContactAt = .now
         updateActiveMacContactDate(.now)
+        return response
     }
 
     func sendCompanionImageToMac(
@@ -1929,6 +1993,31 @@ final class BridgeManager {
         }
 
         return error.localizedDescription
+    }
+
+    private func connectionErrorMessage(for error: Error, hostname: String, port: Int) -> String {
+        let endpoint = "\(hostname):\(port)"
+
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .cannotFindHost, .dnsLookupFailed:
+                return "Couldn’t find \(hostname). Review the saved host in Connection Manager."
+            case .cannotConnectToHost, .networkConnectionLost, .timedOut:
+                return "Couldn’t reach \(endpoint). Check that Talkie is running on the Mac and that the saved port is current."
+            case .notConnectedToInternet:
+                return "This device is offline. Reconnect to the local network or Tailscale, then try \(endpoint) again."
+            default:
+                break
+            }
+        }
+
+        if let bridgeError = error as? BridgeError,
+           let description = bridgeError.errorDescription,
+           !description.isEmpty {
+            return "\(description) (\(endpoint))"
+        }
+
+        return "Couldn’t reach \(endpoint). Review the saved host and port in Connection Manager."
     }
 
     private func pairingValidationError(for qrData: QRCodeData) -> String? {

@@ -59,6 +59,14 @@ final class NearbyMacBrowser {
         macs = []
     }
 
+    func refresh() {
+        delegate.stop()
+        macs = []
+        isBrowsing = true
+        errorMessage = nil
+        delegate.start()
+    }
+
     fileprivate func didResolve(
         name: String,
         type: String,

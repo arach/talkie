@@ -1650,6 +1650,27 @@ final class TalkieServer {
     private func performCompanionTrigger(shortcutId: String) async -> CompanionShortcutTriggerResponse {
         log.info("Companion shortcut trigger: \(shortcutId)")
 
+        if let application = companionApplicationShortcut(for: shortcutId) {
+            let succeeded = launchCompanionApplication(bundleIdentifier: application.bundleIdentifier)
+            return CompanionShortcutTriggerResponse(
+                ok: succeeded,
+                handledShortcutId: succeeded ? shortcutId : nil,
+                message: succeeded ? "Opened \(application.name)" : nil,
+                error: succeeded ? nil : "\(application.name) is not installed on this Mac."
+            )
+        }
+
+        if shortcutId == "deck-launcher",
+           NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.raycast.macos") != nil {
+            let succeeded = launchCompanionApplication(bundleIdentifier: "com.raycast.macos")
+            return CompanionShortcutTriggerResponse(
+                ok: succeeded,
+                handledShortcutId: succeeded ? shortcutId : nil,
+                message: succeeded ? "Raycast opened" : nil,
+                error: succeeded ? nil : "Could not open Raycast."
+            )
+        }
+
         let appSwitcherShortcutIDs: Set<String> = ["deck-app-next", "deck-app-previous"]
         if !appSwitcherShortcutIDs.contains(shortcutId) {
             releaseCompanionAppSwitcherIfNeeded(reason: "shortcut=\(shortcutId)")
@@ -2153,6 +2174,54 @@ final class TalkieServer {
                 failureMessage: "Failed to move two spaces right"
             )
 
+        case "deck-launcher":
+            return keyPressResponse(
+                shortcutId: shortcutId,
+                succeeded: performCompanionKeyPress(keyCode: 49, modifiers: .maskCommand),
+                successMessage: "Spotlight opened",
+                failureMessage: "Failed to open Spotlight"
+            )
+
+        case "deck-quit-app":
+            return keyPressResponse(
+                shortcutId: shortcutId,
+                succeeded: performCompanionKeyPress(keyCode: 12, modifiers: .maskCommand),
+                successMessage: "Quit command sent",
+                failureMessage: "Failed to send quit command"
+            )
+
+        case "deck-mission-control":
+            return keyPressResponse(
+                shortcutId: shortcutId,
+                succeeded: performCompanionKeyPress(keyCode: 126, modifiers: .maskControl),
+                successMessage: "Mission Control opened",
+                failureMessage: "Failed to open Mission Control"
+            )
+
+        case "deck-show-desktop":
+            return keyPressResponse(
+                shortcutId: shortcutId,
+                succeeded: performCompanionKeyPress(keyCode: 99, modifiers: .maskCommand),
+                successMessage: "Desktop revealed",
+                failureMessage: "Failed to reveal the desktop"
+            )
+
+        case "deck-lock-screen":
+            return keyPressResponse(
+                shortcutId: shortcutId,
+                succeeded: performCompanionKeyPress(keyCode: 12, modifiers: [.maskCommand, .maskControl]),
+                successMessage: "Screen locked",
+                failureMessage: "Failed to lock the screen"
+            )
+
+        case "deck-screenshot":
+            return keyPressResponse(
+                shortcutId: shortcutId,
+                succeeded: performCompanionKeyPress(keyCode: 23, modifiers: [.maskCommand, .maskShift]),
+                successMessage: "Screen capture opened",
+                failureMessage: "Failed to open screen capture"
+            )
+
         default:
             return CompanionShortcutTriggerResponse(
                 ok: false,
@@ -2341,6 +2410,47 @@ final class TalkieServer {
             message: succeeded ? successMessage : nil,
             error: succeeded ? nil : failureMessage
         )
+    }
+
+    private func companionApplicationShortcut(
+        for shortcutId: String
+    ) -> (name: String, bundleIdentifier: String)? {
+        switch shortcutId {
+        case "app-launch-finder": return ("Finder", "com.apple.finder")
+        case "app-launch-raycast": return ("Raycast", "com.raycast.macos")
+        case "app-launch-codex": return ("Codex", "com.openai.codex")
+        case "app-launch-iterm": return ("iTerm", "com.googlecode.iterm2")
+        case "app-launch-cursor": return ("Cursor", "com.todesktop.230313mzl4w4u92")
+        case "app-launch-xcode": return ("Xcode", "com.apple.dt.Xcode")
+        case "app-launch-safari": return ("Safari", "com.apple.Safari")
+        case "app-launch-terminal": return ("Terminal", "com.apple.Terminal")
+        case "app-launch-mail": return ("Mail", "com.apple.mail")
+        case "app-launch-messages": return ("Messages", "com.apple.MobileSMS")
+        case "app-launch-calendar": return ("Calendar", "com.apple.iCal")
+        case "app-launch-notes": return ("Notes", "com.apple.Notes")
+        case "app-launch-music": return ("Music", "com.apple.Music")
+        case "app-launch-photos": return ("Photos", "com.apple.Photos")
+        case "app-launch-settings": return ("System Settings", "com.apple.systempreferences")
+        case "app-launch-activity-monitor": return ("Activity Monitor", "com.apple.ActivityMonitor")
+        default: return nil
+        }
+    }
+
+    private func launchCompanionApplication(bundleIdentifier: String) -> Bool {
+        if let runningApplication = NSWorkspace.shared.runningApplications.first(where: {
+            $0.bundleIdentifier == bundleIdentifier
+        }) {
+            _ = runningApplication.unhide()
+            return runningApplication.activate(options: [.activateAllWindows])
+        }
+
+        guard let applicationURL = NSWorkspace.shared.urlForApplication(
+            withBundleIdentifier: bundleIdentifier
+        ) else {
+            return false
+        }
+
+        return NSWorkspace.shared.open(applicationURL)
     }
 
     private func installCompanionWorkspaceObserverIfNeeded() {
@@ -2894,9 +3004,15 @@ final class TalkieServer {
     // MARK: - Trackpad handler
 
     private struct TrackpadRequest: Decodable {
-        let event: String          // "move" | "click" | "rightClick" | "scroll" | "mouseDown" | "mouseUp" | "drag"
+        let event: String          // "position" | "move" | "click" | "rightClick" | "scroll" | "mouseDown" | "mouseUp" | "drag"
         let dx: Double?
         let dy: Double?
+    }
+
+    private struct TrackpadResponse: Encodable {
+        let ok: Bool
+        let x: Double
+        let y: Double
     }
 
     private func handleCompanionTrackpad(_ connection: NWConnection, body: Data?) async {
@@ -2908,6 +3024,8 @@ final class TalkieServer {
 
         let ok: Bool
         switch req.event {
+        case "position":
+            ok = true
         case "move":
             ok = performMouseMove(dx: req.dx ?? 0, dy: req.dy ?? 0)
         case "click":
@@ -2927,11 +3045,12 @@ final class TalkieServer {
             return
         }
 
-        let response = ["ok": ok]
+        let position = companionMousePosition()
+        let response = TrackpadResponse(ok: ok, x: Double(position.x), y: Double(position.y))
         if let data = try? JSONEncoder().encode(response) {
             sendResponse(connection, statusCode: 200, body: String(data: data, encoding: .utf8) ?? "{}")
         } else {
-            sendResponse(connection, statusCode: 200, body: "{\"ok\":\(ok)}")
+            sendResponse(connection, statusCode: 500, body: "Could not encode trackpad response")
         }
     }
 

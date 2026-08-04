@@ -357,14 +357,20 @@ export async function companionActivateAppRoute(
 }
 
 export interface CompanionTrackpadRequest {
-  event: "move" | "click" | "rightClick" | "scroll" | "mouseDown" | "mouseUp" | "drag";
+  event: "position" | "move" | "click" | "rightClick" | "scroll" | "mouseDown" | "mouseUp" | "drag";
   dx?: number;
   dy?: number;
 }
 
+export interface CompanionTrackpadResponse {
+  ok: boolean;
+  x?: number;
+  y?: number;
+}
+
 export async function companionTrackpadRoute(
   body: CompanionTrackpadRequest
-): Promise<{ ok: boolean } | Response> {
+): Promise<CompanionTrackpadResponse | Response> {
   if (!body.event) {
     return badRequest("event is required");
   }
@@ -394,7 +400,7 @@ export async function companionTrackpadRoute(
       return proxyError(response.status, "Trackpad event failed", errorText);
     }
 
-    return await response.json() as { ok: boolean };
+    return await response.json() as CompanionTrackpadResponse;
   } catch (error) {
     return serverError("Failed to send trackpad event", String(error));
   }
@@ -402,7 +408,7 @@ export async function companionTrackpadRoute(
 
 async function tryAgentTrackpad(
   body: CompanionTrackpadRequest
-): Promise<{ ok: boolean } | Response | null> {
+): Promise<CompanionTrackpadResponse | Response | null> {
   try {
     const response = await fetch(`${TALKIEAGENT_URL}/v1/agent/companion/trackpad`, {
       method: "POST",
@@ -412,7 +418,7 @@ async function tryAgentTrackpad(
     });
 
     if (response.ok) {
-      return await response.json() as { ok: boolean };
+      return await response.json() as CompanionTrackpadResponse;
     }
 
     if (response.status === 404) {
@@ -691,6 +697,37 @@ function displayInfoForSlot(slotID: string): { label: string; icon: string; hint
     case "talkie-home": return { label: "Home", icon: "house" };
     case "talkie-devices": return { label: "Devices", icon: "ipad.and.iphone" };
     case "mac-paste-image": return { label: "Share", icon: "photo.on.rectangle.angled", hint: "Mac" };
+    case "deck-app-list": return { label: "Apps", icon: "square.stack.3d.up", hint: "Live" };
+    case "deck-app-previous": return { label: "Prev App", icon: "arrow.left.to.line" };
+    case "deck-app-next": return { label: "Next App", icon: "arrow.right.to.line" };
+    case "deck-window-previous": return { label: "Prev Window", icon: "arrow.left.square" };
+    case "deck-window-next": return { label: "Next Window", icon: "arrow.right.square" };
+    case "deck-tab-previous": return { label: "Prev Tab", icon: "rectangle.leadinghalf.inset.filled.arrow.leading" };
+    case "deck-tab-next": return { label: "Next Tab", icon: "rectangle.trailinghalf.inset.filled.arrow.trailing" };
+    case "deck-space-left": return { label: "Space Left", icon: "rectangle.portrait.and.arrow.left" };
+    case "deck-space-right": return { label: "Space Right", icon: "rectangle.portrait.and.arrow.right" };
+    case "deck-launcher": return { label: "Launcher", icon: "sparkle.magnifyingglass" };
+    case "deck-quit-app": return { label: "Quit", icon: "xmark.app" };
+    case "deck-mission-control": return { label: "Mission", icon: "rectangle.3.group" };
+    case "deck-show-desktop": return { label: "Desktop", icon: "macwindow.on.rectangle" };
+    case "deck-lock-screen": return { label: "Lock", icon: "lock" };
+    case "deck-screenshot": return { label: "Capture", icon: "camera.viewfinder" };
+    case "app-launch-finder": return { label: "Finder", icon: "folder" };
+    case "app-launch-raycast": return { label: "Raycast", icon: "sparkle.magnifyingglass" };
+    case "app-launch-codex": return { label: "Codex", icon: "terminal" };
+    case "app-launch-iterm": return { label: "iTerm", icon: "terminal.fill" };
+    case "app-launch-cursor": return { label: "Cursor", icon: "cursorarrow.rays" };
+    case "app-launch-xcode": return { label: "Xcode", icon: "hammer" };
+    case "app-launch-safari": return { label: "Safari", icon: "safari" };
+    case "app-launch-terminal": return { label: "Terminal", icon: "apple.terminal" };
+    case "app-launch-mail": return { label: "Mail", icon: "envelope" };
+    case "app-launch-messages": return { label: "Messages", icon: "message" };
+    case "app-launch-calendar": return { label: "Calendar", icon: "calendar" };
+    case "app-launch-notes": return { label: "Notes", icon: "note.text" };
+    case "app-launch-music": return { label: "Music", icon: "music.note" };
+    case "app-launch-photos": return { label: "Photos", icon: "photo.on.rectangle" };
+    case "app-launch-settings": return { label: "Settings", icon: "gearshape" };
+    case "app-launch-activity-monitor": return { label: "Monitor", icon: "waveform.path.ecg.rectangle" };
     default: return { label: "—", icon: "square.dashed" };
   }
 }
@@ -914,25 +951,47 @@ function defaultShortcutPages(): CompanionShortcutPage[] {
       ],
     },
     {
-      id: "mac",
-      title: "Mac",
+      id: "workspace",
+      title: "System",
       shortcutSlots: [
-        "mac-windows",
-        "mac-paste-image",
-        "talkie-keyboard",
-        "iterm-dictate",
-        "mac-sessions",
-        "mac-claude",
-        "talkie-agent",
-        "talkie-ssh",
-        "talkie-command",
-        "talkie-search",
-        "talkie-memos",
-        "talkie-recent",
-        "talkie-devices",
-        "talkie-home",
-        "talkie-pending",
-        "",
+        "deck-app-list",
+        "deck-app-previous",
+        "deck-app-next",
+        "app-launch-finder",
+        "deck-window-previous",
+        "deck-window-next",
+        "deck-tab-previous",
+        "deck-tab-next",
+        "deck-space-left",
+        "deck-space-right",
+        "deck-launcher",
+        "deck-quit-app",
+        "deck-mission-control",
+        "deck-show-desktop",
+        "deck-lock-screen",
+        "deck-screenshot",
+      ],
+    },
+    {
+      id: "command",
+      title: "Apps",
+      shortcutSlots: [
+        "app-launch-finder",
+        "app-launch-raycast",
+        "app-launch-codex",
+        "app-launch-iterm",
+        "app-launch-cursor",
+        "app-launch-xcode",
+        "app-launch-safari",
+        "app-launch-terminal",
+        "app-launch-mail",
+        "app-launch-messages",
+        "app-launch-calendar",
+        "app-launch-notes",
+        "app-launch-music",
+        "app-launch-photos",
+        "app-launch-settings",
+        "app-launch-activity-monitor",
       ],
     },
   ];

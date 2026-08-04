@@ -24,6 +24,7 @@ final class CodexChannelStoreTests: XCTestCase {
         XCTAssertEqual(store.lanes, originalLanes)
         XCTAssertNil(store.activeLaneNumber)
         XCTAssertEqual(store.selectedTask, direct)
+        XCTAssertTrue(store.isTemporaryTaskSelected)
     }
 
     func testClearingSelectionDoesNotRemoveLaneBindings() throws {
@@ -103,6 +104,44 @@ final class CodexChannelStoreTests: XCTestCase {
         XCTAssertNil(reloaded.selectedTask)
         XCTAssertNil(reloaded.activeLaneNumber)
         XCTAssertEqual(reloaded.lane(3)?.task, assigned)
+    }
+
+    func testTemporaryChannelSelectionExpiresAcrossReload() throws {
+        let defaults = try XCTUnwrap(
+            UserDefaults(suiteName: "CodexChannelStoreTests.\(UUID().uuidString)")
+        )
+        let assigned = task(id: "assigned", cwd: "/projects/talkie", updatedAt: 20)
+        let temporary = task(id: "temporary", cwd: "/projects/openscout", updatedAt: 30)
+
+        let store = CodexLaneStore(defaults: defaults, hostIDOverride: "test-host")
+        store.assign(assigned, to: 1)
+        store.selectChannel(temporary)
+
+        XCTAssertTrue(store.isTemporaryTaskSelected)
+
+        let reloaded = CodexLaneStore(defaults: defaults, hostIDOverride: "test-host")
+
+        XCTAssertNil(reloaded.selectedTask)
+        XCTAssertNil(reloaded.activeLaneNumber)
+        XCTAssertFalse(reloaded.isTemporaryTaskSelected)
+        XCTAssertEqual(reloaded.lane(1)?.task, assigned)
+    }
+
+    func testPinnedChannelSelectionStillRestoresAcrossReload() throws {
+        let defaults = try XCTUnwrap(
+            UserDefaults(suiteName: "CodexChannelStoreTests.\(UUID().uuidString)")
+        )
+        let assigned = task(id: "assigned", cwd: "/projects/talkie", updatedAt: 20)
+
+        let store = CodexLaneStore(defaults: defaults, hostIDOverride: "test-host")
+        store.assign(assigned, to: 4)
+        store.selectChannel(assigned)
+
+        let reloaded = CodexLaneStore(defaults: defaults, hostIDOverride: "test-host")
+
+        XCTAssertEqual(reloaded.selectedTask, assigned)
+        XCTAssertEqual(reloaded.activeLaneNumber, 4)
+        XCTAssertFalse(reloaded.isTemporaryTaskSelected)
     }
 
     func testCatalogMergePreservesOrderAndDeduplicatesByTaskID() {
