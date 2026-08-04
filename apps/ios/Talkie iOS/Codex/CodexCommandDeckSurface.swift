@@ -439,8 +439,43 @@ struct CodexCommandDeckSurface: View {
             talkKeySurface
                 .allowsHitTesting(false)
 
+            // The lettering sits outside the Button on purpose. `.disabled` makes
+            // the plain style fade its own label by about half, and half of any
+            // ink over this cap lands near 3:1 on a light page — no token can
+            // buy that back, because the ink is already at full page strength.
+            // Drawing the word as a sibling layer keeps the disabled *state*
+            // intact — the button below still refuses taps and still announces
+            // itself dimmed — while the word stays a word. Unavailability shows
+            // up in the key, which goes unlit; see `talkKeySurface`.
+            captureKeyLabel
+                .foregroundStyle(utilityInk)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .offset(x: captureContentOffset)
+                .overlay(alignment: .topLeading) { keyIndexLabel(index: 14) }
+                .overlay(alignment: .topTrailing) { trailingKeyIndexLabel(index: 15) }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+
             Button(action: {}) {
-                Group {
+                Color.clear
+                    .contentShape(RoundedRectangle(cornerRadius: keyCornerRadius, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .highPriorityGesture(captureGesture)
+            .disabled(!canCapture)
+            .accessibilityLabel(captureAccessibilityLabel)
+            .accessibilityHint(captureAccessibilityHint)
+            .accessibilityAction { store.handleCaptureControl() }
+        }
+        .scaleEffect(isCaptureGestureActive ? 0.985 : 1)
+        .animation(.easeOut(duration: 0.10), value: isCaptureGestureActive)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(minWidth: 44, minHeight: 44)
+    }
+
+    @ViewBuilder
+    private var captureKeyLabel: some View {
+        Group {
                     if isIconMinimalDeck {
                         VStack(spacing: 3) {
                             Spacer(minLength: 0)
@@ -482,29 +517,7 @@ struct CodexCommandDeckSurface: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 8)
                     }
-                }
-                .foregroundStyle(
-                    store.hasDispatchDestination
-                        ? captureAccent
-                        : disabledControlInk
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .offset(x: captureContentOffset)
-                .contentShape(RoundedRectangle(cornerRadius: keyCornerRadius, style: .continuous))
-                .overlay(alignment: .topLeading) { keyIndexLabel(index: 14) }
-                .overlay(alignment: .topTrailing) { trailingKeyIndexLabel(index: 15) }
-            }
-            .buttonStyle(.plain)
-            .highPriorityGesture(captureGesture)
-            .disabled(!canCapture)
-            .accessibilityLabel(captureAccessibilityLabel)
-            .accessibilityHint(captureAccessibilityHint)
-            .accessibilityAction { store.handleCaptureControl() }
         }
-        .scaleEffect(isCaptureGestureActive ? 0.985 : 1)
-        .animation(.easeOut(duration: 0.10), value: isCaptureGestureActive)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .frame(minWidth: 44, minHeight: 44)
     }
 
     private var canCapture: Bool {
@@ -828,10 +841,17 @@ struct CodexCommandDeckSurface: View {
             )
             .overlay {
                 if !isIconMinimalDeck {
+                    // One sheen for both modes. The plate is a dark panel on a
+                    // light page and a dark panel on a dark page — the same
+                    // surface either way — so a sheen four times stronger in
+                    // light mode was washing it out and taking about a fifth of
+                    // every label's contrast with it: NONE declares 5.68:1 on
+                    // ghost and arrived at 4.5. Same class of bug as the plate
+                    // ink that branched on colorScheme.
                     shape
                         .fill(
                             LinearGradient(
-                                colors: [Color.white.opacity(colorScheme == .dark ? 0.035 : 0.16), .clear],
+                                colors: [Color.white.opacity(0.035), .clear],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -916,10 +936,20 @@ struct CodexCommandDeckSurface: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    /// Lit when TALK can be pressed, plain when it can't. The accent tint is a
+    /// translucent wash over the deck, so on a pale theme it lifts the face out
+    /// from under the lettering and no ink survives at 4.5:1 — ghost read 3.68.
+    /// Unlighting the key fixes that by removing the wash rather than fighting
+    /// it, and it is the better signal besides: the deck's largest key stays
+    /// dark until you give it somewhere to send a turn, then it comes on.
     private var talkKeySurface: some View {
         let shape = RoundedRectangle(cornerRadius: keyCornerRadius, style: .continuous)
         return shape
-            .fill(captureAccent.opacity(store.phase.isCapturing ? 0.30 : 0.17))
+            .fill(
+                canCapture
+                    ? AnyShapeStyle(captureAccent.opacity(store.phase.isCapturing ? 0.30 : 0.17))
+                    : AnyShapeStyle(utilityFace)
+            )
             .overlay {
                 if !isIconMinimalDeck {
                     shape.fill(
@@ -933,7 +963,9 @@ struct CodexCommandDeckSurface: View {
             }
             .overlay {
                 shape.strokeBorder(
-                    captureAccent.opacity(store.phase.isCapturing ? 0.92 : 0.55),
+                    canCapture
+                        ? captureAccent.opacity(store.phase.isCapturing ? 0.92 : 0.55)
+                        : utilityInkFaint.opacity(0.16),
                     lineWidth: store.phase.isCapturing ? 1.5 : theme.chrome.hairlineWidth + 0.5
                 )
             }
@@ -1006,10 +1038,14 @@ struct CodexCommandDeckSurface: View {
             .allowsHitTesting(false)
     }
 
+    /// TALK spans two cells and the console copy names it that way — "hold the
+    /// 14–15 key". The second numeral is half of that name, so it reads at the
+    /// same strength as the first; at 0.56 alpha it was a smudge you'd never
+    /// match to the instruction.
     private func trailingKeyIndexLabel(index: Int) -> some View {
         Text("\(index)")
             .font(.system(size: 8.5, weight: .medium, design: .monospaced))
-            .foregroundStyle(utilityInkFaint.opacity(0.56))
+            .foregroundStyle(utilityInkFaint)
             .padding(.top, 5)
             .padding(.trailing, 6)
             .allowsHitTesting(false)
@@ -1041,9 +1077,17 @@ struct CodexCommandDeckSurface: View {
         theme.colors.textTertiary
     }
 
+    /// Full page ink, not a fade of it. A disabled button already comes back
+    /// dimmed — the plain style fades its own label — so the 0.68 here was a
+    /// second multiply on top of the first, and the two together put TALK at
+    /// 2.0:1 in every theme. The deck's first-run state is exactly this state:
+    /// nothing mapped, everything unavailable, and the largest key on the board
+    /// unreadable. WCAG exempts an inactive control, but a control you cannot
+    /// read cannot tell you what it would do once you map a lane.
     private var disabledControlInk: Color {
-        utilityInk.opacity(0.68)
+        utilityInk
     }
+
 
     private func cycleOutputRoute() {
         let next: AIResponseSpeechRoute
@@ -1404,16 +1448,18 @@ private struct CodexCommandConsole: View {
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 
+    /// An empty lane is still a live control — tapping it opens the mapper — so
+    /// its numeral has to survive being read. Quiet here is which ink, never how
+    /// much of it: the rail is a dark plate in both modes, so fading the ink
+    /// composites it toward the plate (measured 1.44:1 on graphite/dark). The
+    /// three plate inks already encode the three states — faint for an empty
+    /// slot, full for a mapped one, accent for the one you're steering.
     private var emptyLaneRailColor: Color {
-        colorScheme == .dark
-            ? theme.chrome.panelInkFaint.opacity(0.28)
-            : theme.chrome.panelInk.opacity(0.55)
+        theme.chrome.panelInkFaint
     }
 
     private var mappedLaneRailColor: Color {
-        colorScheme == .dark
-            ? theme.chrome.panelInkFaint.opacity(0.72)
-            : theme.chrome.panelInk.opacity(0.88)
+        theme.chrome.panelInk
     }
 
     private func laneKeySurface(isActive: Bool) -> some View {
@@ -1579,12 +1625,11 @@ private struct CodexCommandConsole: View {
                     compactPath: project.compactPath,
                     branchName: nil
                 )
-            } else {
-                Text("Use NEW to create a task, or open Mapper to choose an existing channel.")
-                    .font(.system(size: 9, weight: .regular, design: .monospaced))
-                    .foregroundStyle(theme.chrome.panelInkFaint)
-                    .lineLimit(2)
             }
+            // With nothing selected this slot has no locator to show, and the
+            // conversation line below already carries the instruction. Two
+            // near-identical sentences stacked on the same empty state read as a
+            // rendering bug, so the slot simply stays empty.
 
             conversationPreview
 

@@ -177,8 +177,11 @@ private let cachedGhostColors = ThemeColors(
     // textTertiary was A0A0A0 / 5A5A5A — both failed WCAG AA at the
     // 3:1 large-text bar (light 2.40:1 / dark 2.68:1). Bumped to land
     // at 3.17:1 (light) and 4.40:1 (dark) while preserving the
-    // secondary > tertiary hierarchy.
-    textTertiary: Color(hex: "696969", darkHex: "909090"),
+    // secondary > tertiary hierarchy. Dark brightened again from 909090: the
+    // deck's key index numerals ride the keycap's top highlight, which lightens
+    // the face under light ink and costs the rendered pair ~13% (5.10 declared
+    // arrived as 4.44). This clears 4.5:1 where it is actually drawn.
+    textTertiary: Color(hex: "696969", darkHex: "9A9A9A"),
     accent: Color(hex: "6063F1", darkHex: "797BF3"),
     success: Color(hex: "10B981")
 )
@@ -198,9 +201,10 @@ private let cachedLiftColors = ThemeColors(
     textSecondary: Color(hex: "525252", darkHex: "A0A0A0"),
     // textTertiary was A0A0A0 / 707070 — light failed AA at 3:1
     // large-text bar (2.63:1). Bumped light to 8A8A8A → 3.45:1.
-    // Dark side stays at 707070 (already passes large-text on
-    // 1A1A1A at 3.10:1).
-    textTertiary: Color(hex: "696969", darkHex: "8A8A8A"),
+    // Dark side raised from 8A8A8A: on the deck's keycaps the top-edge highlight
+    // sits exactly where the index numeral does, and it cost the rendered pair
+    // ~13% — 4.72 declared arrived as 4.10, the worst on the deck.
+    textTertiary: Color(hex: "696969", darkHex: "9A9A9A"),
     accent: Color(hex: "6063F1", darkHex: "797BF3"),
     success: Color(hex: "10B981")
 )
@@ -225,8 +229,9 @@ private let cachedScopeColors = ThemeColors(
     // textTertiary light A39989 failed at 2.69:1 (large-text 3:1), then 8A7E6C
     // held 3.78:1 against the old near-white page. The page now carries tone,
     // so this darkens again to 7E7260 — 4.09:1, i.e. better than it has ever
-    // been, not merely recovered. Dark side stays at 968876.
-    textTertiary: Color(hex: "766B5A", darkHex: "968876"),
+    // been, not merely recovered. Dark side warms up from 968876 for the deck's
+    // keycap numerals, which sit in the cap's top highlight and lost ~13% there.
+    textTertiary: Color(hex: "766B5A", darkHex: "A49581"),
     // Brass deepened on the light side (was B5823A, 3.29:1 on a card — brass
     // is a *mid* tone and cards are near-white, so the page-space accent had
     // nowhere to sit). 976C30 is the same hue and saturation, two steps down
