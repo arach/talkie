@@ -50,6 +50,7 @@ final class DeepLinkHandler: ObservableObject {
 struct TalkieWatchApp: App {
     @StateObject private var sessionManager = WatchSessionManager.shared
     @StateObject private var deepLinkHandler = DeepLinkHandler.shared
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         TalkieLogger.configure(source: .talkieWatch)
@@ -67,6 +68,19 @@ struct TalkieWatchApp: App {
                 .onOpenURL { url in
                     deepLinkHandler.handle(url: url)
                 }
+                // `onChange` never reports the phase the app launched in, and
+                // launching *is* the wrist coming up — the case where speaking
+                // aloud is most obviously wanted.
+                .onAppear {
+                    sessionManager.noteForegroundState(scenePhase == .active)
+                }
+        }
+        // Whether an arriving answer speaks on its own turns on whether anyone
+        // is there to hear it, and the scene phase is the only wrist-up signal
+        // watchOS offers. `.inactive` counts as away: it is what a lowering
+        // wrist reports on its way to `.background`.
+        .onChange(of: scenePhase) { _, phase in
+            sessionManager.noteForegroundState(phase == .active)
         }
     }
 }
@@ -133,7 +147,7 @@ struct MainWatchView: View {
                                     .fill(capture.material.secondaryFill.opacity(0.72))
                                     .overlay {
                                         Circle()
-                                            .stroke(
+                                            .strokeBorder(
                                                 capture.material.secondaryEdge.opacity(0.58),
                                                 lineWidth: 0.5
                                             )

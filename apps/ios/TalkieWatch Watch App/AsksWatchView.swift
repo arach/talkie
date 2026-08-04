@@ -104,7 +104,10 @@ struct AsksWatchView: View {
                                 NavigationLink {
                                     AskDetailView(askId: ask.id)
                                 } label: {
-                                    SettledAskRow(ask: ask)
+                                    SettledAskRow(
+                                        ask: ask,
+                                        hasAudio: sessionManager.hasAnswerAudio(for: ask.id)
+                                    )
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -175,7 +178,7 @@ struct AsksWatchView: View {
                 .tracking(1.2)
                 .foregroundStyle(chrome.panelInkFaint)
 
-            Text("Swipe right, tap Ask AI")
+            Text("Swipe right, tap Ask")
                 .font(.system(size: 10, weight: .regular))
                 .foregroundStyle(chrome.panelInkFaint.opacity(0.75))
                 .multilineTextAlignment(.center)
@@ -263,6 +266,10 @@ private struct InFlightAskPanel: View {
 
 private struct SettledAskRow: View {
     let ask: WatchMemo
+    /// Whether the audio for this answer is still on the wrist. An indicator
+    /// rather than a control: the row is already a navigation link, and a second
+    /// tap target inside one is a coin toss on a 40mm screen.
+    let hasAudio: Bool
 
     var body: some View {
         let chrome = WatchTheme.current
@@ -278,6 +285,13 @@ private struct SettledAskRow: View {
                     .lineLimit(1)
 
                 Spacer(minLength: 0)
+
+                if hasAudio {
+                    Image(systemName: "play.circle.fill")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(chrome.accent)
+                        .accessibilityLabel("Has audio you can play")
+                }
 
                 if let delivery = ask.delivery {
                     Image(systemName: delivery.glyph)
@@ -396,6 +410,14 @@ private struct AskDetailView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
+                    // The capture key offers playback for exactly one ask — the
+                    // newest unseen one — and opening this view is what marks it
+                    // seen. Without a control here, reading an answer destroyed
+                    // the only way to ever hear it.
+                    if sessionManager.hasAnswerAudio(for: askId) {
+                        playButton(chrome: chrome)
+                    }
+
                     // Only an answer can be continued on the phone. A long
                     // question, or a wordy failure, used to trip this and point
                     // the wearer at an answer that does not exist.
@@ -433,6 +455,145 @@ private struct AskDetailView: View {
         .background(WatchInstrumentBackground())
         .navigationTitle("Ask")
     }
+
+    /// Full width, because on this screen it is the only thing to press and
+    /// aiming is done with a fingertip on a moving wrist.
+    private func playButton(chrome: WatchChromeTokens) -> some View {
+        let isPlaying = sessionManager.playingAnswerID == askId
+
+        return Button {
+            sessionManager.toggleAnswerPlayback(memoID: askId)
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: isPlaying ? "stop.fill" : "play.fill")
+                    .font(.system(size: 10, weight: .semibold))
+
+                Text(isPlaying ? "STOP" : "PLAY ANSWER")
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .tracking(0.9)
+            }
+            .foregroundStyle(chrome.accent)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 9)
+            .background(
+                RoundedRectangle(cornerRadius: chrome.chromeCorner + 3, style: .continuous)
+                    .fill(chrome.panelAlt.opacity(0.55))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: chrome.chromeCorner + 3, style: .continuous)
+                            .strokeBorder(
+                                chrome.accent.opacity(0.38),
+                                lineWidth: chrome.hairlineWidth
+                            )
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(isPlaying ? "Stop the answer" : "Play the answer")
+    }
+}
+
+// MARK: - Capture-face ask state
+
+/// What the capture face has to say about asks, resolved once and read by both
+/// surfaces that show it: the status strip under the wordmark and the primary
+/// key itself.
+///
+/// It describes at most one ask, in priority order: one in flight, then a
+/// settled one the wearer has not opened yet. Anything older is the Asks page's
+/// job, not the face's.
+enum WatchAskFace {
+    case waiting(WatchAskPhase)
+    case inFlight(WatchAskPhase)
+    case stalled
+    case ready
+    case failed
+
+    /// How far back the capture face will reach for an ask that never settled.
+    ///
+    /// `recentMemos` is persisted, and nothing on the phone can retroactively
+    /// close out an ask the wrist recorded before it was last killed — so those
+    /// come back from disk still marked in flight, already long past
+    /// `silenceTolerance`, and the face used to open on NO RESPONSE about
+    /// something the wearer very likely settled on the phone hours ago. Past
+    /// this horizon the ask is history rather than news: the Asks page still
+    /// lists it with its real state, which is where a dead ask belongs.
+    static let horizon: TimeInterval = 20 * 60
+
+    @MainActor
+    static func resolve(_ sessionManager: WatchSessionManager, asOf now: Date) -> WatchAskFace? {
+        if let active = sessionManager.activeAsk,
+           now.timeIntervalSince(active.lastHeardAt) <= horizon {
+            if active.isStalled(asOf: now) { return .stalled }
+            switch active.resolvedPhase {
+            // The wrist has not handed this off yet — a materially different
+            // situation from the phone working on it, and one the wearer can
+            // actually do something about.
+            case .queued, .sending: return .waiting(active.resolvedPhase)
+            default: return .inFlight(active.resolvedPhase)
+            }
+        }
+        if let unseen = sessionManager.unseenAsk {
+            return unseen.resolvedPhase == .failed ? .failed : .ready
+        }
+        return nil
+    }
+
+    /// Whether this state is worth the primary key.
+    ///
+    /// `waiting` and `stalled` are deliberately excluded even though they are
+    /// the most visible: both can persist indefinitely — a queued ask until the
+    /// phone comes back, a stalled one forever, since a stalled ask never
+    /// reaches a terminal phase — and either would hold the record key hostage.
+    /// They stay in the strip, where they cost nothing.
+    var takesCaptureKey: Bool {
+        switch self {
+        case .inFlight, .ready, .failed: return true
+        case .waiting, .stalled: return false
+        }
+    }
+
+    var text: String {
+        switch self {
+        case .waiting(let phase), .inFlight(let phase): return phase.label
+        case .stalled: return "NO RESPONSE"
+        case .ready: return "ANSWER READY"
+        case .failed: return "ASK FAILED"
+        }
+    }
+
+    /// Spoken, not displayed: VoiceOver spells out ALLCAPS mono tokens.
+    var spokenText: String {
+        switch self {
+        case .waiting: return "Ask waiting to send"
+        case .inFlight: return "Ask in progress"
+        case .stalled: return "No response from iPhone"
+        case .ready: return "Answer ready"
+        case .failed: return "Ask failed"
+        }
+    }
+
+    var spins: Bool {
+        if case .inFlight = self { return true }
+        return false
+    }
+
+    func color(capture: WatchCaptureStyle) -> Color {
+        switch self {
+        case .inFlight: return capture.trace
+        case .waiting, .stalled: return .orange
+        case .ready: return .green
+        case .failed: return .red
+        }
+    }
+
+    /// The dot alone is a 5pt speck. On the face you actually look at, an
+    /// outcome worth reacting to has to carry its color in the text too.
+    func inkColor(capture: WatchCaptureStyle) -> Color {
+        switch self {
+        case .waiting, .inFlight: return capture.material.inkFaint
+        case .stalled, .ready, .failed: return color(capture: capture)
+        }
+    }
 }
 
 // MARK: - Capture-face strip
@@ -440,50 +601,49 @@ private struct AskDetailView: View {
 /// The one line of ask state the capture face carries. Its height is reserved
 /// unconditionally so the record key never moves; at rest the slot is simply
 /// empty.
-///
-/// It shows at most one thing, in priority order: an ask in flight, then a
-/// settled ask the wearer has not opened yet. Anything older is the Asks page's
-/// job, not the face's.
 struct AskStrip: View {
     @EnvironmentObject private var sessionManager: WatchSessionManager
     @Environment(\.watchThemeName) private var themeName
 
-    /// Matches the wordmark-to-key rhythm: tall enough for a 9pt mono label,
-    /// short enough that reserving it costs the face nothing at rest.
-    private static let stripHeight: CGFloat = 22
+    /// Tall enough for a 9pt mono label, short enough that reserving it costs
+    /// the face little at rest. The capture face solves its own value against
+    /// the watch it is running on.
+    var height: CGFloat = 22
 
     let onOpen: () -> Void
+
+    /// The strip is padded out to a real tap target and then pulled back, so
+    /// the face's layout still only spends `height` on it.
+    private var targetInset: CGFloat { max(0, (44 - height) / 2) }
 
     var body: some View {
         // Same reason as the Asks page: a phone that has gone quiet announces
         // itself only by the clock advancing, so the strip has to re-read it.
         TimelineView(.periodic(from: .now, by: WatchMemo.silenceTolerance / 2)) { context in
             Group {
-                if let state = state(asOf: context.date) {
+                if let state = WatchAskFace.resolve(sessionManager, asOf: context.date) {
                     Button {
                         WKInterfaceDevice.current().play(.click)
                         onOpen()
                     } label: {
                         label(state)
-                            .frame(height: Self.stripHeight)
-                            // Padded out to a 44pt target, then pulled back so the
-                            // face's layout still only spends `stripHeight` on it.
-                            .padding(.vertical, (44 - Self.stripHeight) / 2)
+                            .frame(height: height)
+                            .padding(.vertical, targetInset)
                             .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
-                    .padding(.vertical, -(44 - Self.stripHeight) / 2)
+                    .padding(.vertical, -targetInset)
                     .accessibilityLabel("\(state.spokenText). Open asks.")
                 } else {
                     Color.clear
                 }
             }
-            .frame(height: Self.stripHeight)
+            .frame(height: height)
         }
-        .frame(height: Self.stripHeight)
+        .frame(height: height)
     }
 
-    private func label(_ state: StripState) -> some View {
+    private func label(_ state: WatchAskFace) -> some View {
         let capture = themeName.captureStyle
         return HStack(spacing: 5) {
             if state.spins {
@@ -503,72 +663,216 @@ struct AskStrip: View {
         }
     }
 
-    private func state(asOf now: Date) -> StripState? {
-        if let active = sessionManager.activeAsk {
-            if active.isStalled(asOf: now) { return .stalled }
-            switch active.resolvedPhase {
-            // The wrist has not handed this off yet — a materially different
-            // situation from the phone working on it, and one the wearer can
-            // actually do something about.
-            case .queued, .sending: return .waiting(active.resolvedPhase)
-            default: return .inFlight(active.resolvedPhase)
+}
+
+// MARK: - Capture-face key
+
+/// The primary key while an ask owns the face.
+///
+/// The record key is the right primary action only when nothing else is
+/// happening. With an answer in flight it was the loudest thing on a screen
+/// whose actual subject was an AI conversation — a signal trace over a mic
+/// glyph, which reads as "memo" no matter what the strip above it says.
+///
+/// It borrows the record key's exact chassis and footprint, so what changes is
+/// what the key is *for*, not where anything sits.
+struct AskCaptureKey: View {
+    @EnvironmentObject private var sessionManager: WatchSessionManager
+    @Environment(\.watchThemeName) private var themeName
+
+    let state: WatchAskFace
+    /// Matched to the record key it replaces, so the face's geometry does not
+    /// shift underneath the wearer's thumb when an ask takes the slot.
+    var keyHeight: CGFloat = 64
+    let onOpen: () -> Void
+
+    var body: some View {
+        let capture = themeName.captureStyle
+
+        Button(action: activate) {
+            TalkieKeyChassis(accent: keyAccent(capture: capture), height: keyHeight) {
+                VStack(spacing: 5) {
+                    motif(capture: capture)
+
+                    legendText(capture: capture)
+                }
+                .padding(.horizontal, 8)
             }
         }
-        if let unseen = sessionManager.unseenAsk {
-            return unseen.resolvedPhase == .failed ? .failed : .ready
-        }
-        return nil
+        .buttonStyle(TalkieRecordButtonStyle())
+        .accessibilityLabel(accessibilityText)
     }
 
-    private enum StripState {
-        case waiting(WatchAskPhase)
-        case inFlight(WatchAskPhase)
-        case stalled
-        case ready
-        case failed
+    @ViewBuilder
+    private func motif(capture: WatchCaptureStyle) -> some View {
+        switch state {
+        case .inFlight:
+            // A conversation thinking cadence, not a level meter. Nothing here
+            // is derived from audio, because nothing here is about audio.
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(capture.trace)
 
-        var text: String {
-            switch self {
-            case .waiting(let phase), .inFlight(let phase): return phase.label
-            case .stalled: return "NO RESPONSE"
-            case .ready: return "ANSWER READY"
-            case .failed: return "ASK FAILED"
+                WatchThinkingDots(color: capture.trace)
+            }
+            .frame(height: 22)
+
+        case .ready:
+            Image(systemName: isPlaying ? "stop.fill" : "play.fill")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(capture.trace)
+                .frame(height: 22)
+                .contentTransition(.symbolEffect(.replace))
+                .animation(.easeInOut(duration: 0.16), value: isPlaying)
+
+        case .failed:
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.red.opacity(0.92))
+                .frame(height: 22)
+
+        case .waiting, .stalled:
+            // Never routed here — these states leave the key to recording.
+            EmptyView()
+        }
+    }
+
+    /// Two different kinds of text share this slot, and they are not
+    /// interchangeable. Fixed tokens are mono and tracked out, matching the REC
+    /// legend they replace. The wearer's own question is prose — uppercasing it
+    /// or spacing it out would make the one human sentence on the face the
+    /// hardest thing on it to read.
+    @ViewBuilder
+    private func legendText(capture: WatchCaptureStyle) -> some View {
+        if case .inFlight = state, let question = questionSummary {
+            Text(question)
+                .font(.system(size: 9.5, weight: .medium, design: .rounded))
+                .foregroundStyle(capture.material.keyInk.opacity(0.78))
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
+        } else {
+            Text(token)
+                .font(.system(size: 8.5, weight: .bold, design: .monospaced))
+                .tracking(1.1)
+                .foregroundStyle(capture.material.keyInk.opacity(0.86))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+        }
+    }
+
+    /// The question, once the phone has transcribed it, is the most reassuring
+    /// thing the key can hold: proof of what is actually being answered.
+    private var questionSummary: String? {
+        guard let question = sessionManager.activeAsk?.askQuestion else { return nil }
+        let trimmed = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private var token: String {
+        switch state {
+        case .inFlight:
+            return "THINKING"
+        case .ready:
+            if isPlaying { return "STOP" }
+            return canPlay ? "PLAY ANSWER" : "READ ANSWER"
+        case .failed:
+            return "SEE WHY"
+        case .waiting, .stalled:
+            return ""
+        }
+    }
+
+    private var accessibilityText: String {
+        switch state {
+        case .inFlight:
+            if let questionSummary {
+                return "Answering: \(questionSummary). Open asks."
+            }
+            return "\(state.spokenText). Open asks."
+        case .ready:
+            if isPlaying { return "Stop the answer" }
+            return canPlay ? "Play the answer" : "Answer ready. Read it."
+        case .failed:
+            return "Ask failed. See why."
+        case .waiting, .stalled:
+            return state.spokenText
+        }
+    }
+
+    /// Only the readable answer glows green; work in progress and failure keep
+    /// the key's own accent so the chassis does not flash a verdict mid-flight.
+    private func keyAccent(capture: WatchCaptureStyle) -> Color {
+        switch state {
+        case .ready: return capture.trace
+        case .failed: return Color.red.opacity(0.55)
+        default: return capture.trace
+        }
+    }
+
+    private var readyAsk: WatchMemo? {
+        sessionManager.unseenAsk
+    }
+
+    private var canPlay: Bool {
+        guard let readyAsk else { return false }
+        return sessionManager.hasAnswerAudio(for: readyAsk.id)
+    }
+
+    private var isPlaying: Bool {
+        guard let readyAsk else { return false }
+        return sessionManager.playingAnswerID == readyAsk.id
+    }
+
+    private func activate() {
+        // Playback is the whole point of the ready key: an answer you can hear
+        // without navigating anywhere. Everything else opens the Asks page,
+        // which is where text lives.
+        if case .ready = state, canPlay, let readyAsk {
+            sessionManager.toggleAnswerPlayback(memoID: readyAsk.id)
+            return
+        }
+        WKInterfaceDevice.current().play(.click)
+        onOpen()
+    }
+}
+
+/// Three dots in a conversational cadence. Deliberately not a waveform: the
+/// wrist is waiting on a reply, and every other animation on this face is
+/// already about sound going in.
+struct WatchThinkingDots: View {
+    let color: Color
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var phase = 0
+
+    private static let count = 3
+    private static let cadence: TimeInterval = 0.34
+
+    var body: some View {
+        HStack(spacing: 3.5) {
+            ForEach(0..<Self.count, id: \.self) { index in
+                Circle()
+                    .fill(color)
+                    .frame(width: 4, height: 4)
+                    .opacity(opacity(for: index))
+                    .scaleEffect(index == phase && !reduceMotion ? 1.25 : 1)
             }
         }
-
-        /// Spoken, not displayed: VoiceOver spells out ALLCAPS mono tokens.
-        var spokenText: String {
-            switch self {
-            case .waiting: return "Ask waiting to send"
-            case .inFlight: return "Ask in progress"
-            case .stalled: return "No response from iPhone"
-            case .ready: return "Answer ready"
-            case .failed: return "Ask failed"
-            }
+        .animation(.easeInOut(duration: Self.cadence), value: phase)
+        // A `Timer` here would outlive the view — the key swaps out the moment
+        // the answer lands, and nothing would invalidate it. The publisher is
+        // torn down with the subscription.
+        .onReceive(Timer.publish(every: Self.cadence, on: .main, in: .common).autoconnect()) { _ in
+            guard !reduceMotion else { return }
+            phase = (phase + 1) % Self.count
         }
+    }
 
-        var spins: Bool {
-            if case .inFlight = self { return true }
-            return false
-        }
-
-        func color(capture: WatchCaptureStyle) -> Color {
-            switch self {
-            case .inFlight: return capture.trace
-            case .waiting, .stalled: return .orange
-            case .ready: return .green
-            case .failed: return .red
-            }
-        }
-
-        /// The dot alone is a 5pt speck. On the face you actually look at, an
-        /// outcome worth reacting to has to carry its color in the text too.
-        func inkColor(capture: WatchCaptureStyle) -> Color {
-            switch self {
-            case .waiting, .inFlight: return capture.material.inkFaint
-            case .stalled, .ready, .failed: return color(capture: capture)
-            }
-        }
+    private func opacity(for index: Int) -> Double {
+        guard !reduceMotion else { return 0.62 }
+        return index == phase ? 1 : 0.34
     }
 }
 

@@ -587,7 +587,8 @@ final class WatchCodexDispatchCoordinator {
                 let speech = await AIResponseSpeechRouter.shared.speak(
                     response,
                     memoId: record.id.uuidString,
-                    preview: response
+                    preview: response,
+                    origin: .watch
                 )
                 AppLogger.ai.info(
                     "Watch Codex narration route=\(speech.route.rawValue) "

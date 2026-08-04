@@ -47,14 +47,6 @@ final class AskInFlightRegistry: ObservableObject {
 
     var current: Entry? { entries.first }
 
-    /// Phases that mean "this is an ask", as opposed to an ordinary Watch memo
-    /// passing through the same update funnel. An entry is only ever created by
-    /// one of these; `received` and `queued` are shared with plain dictation and
-    /// would otherwise light the pill for every memo sent from the wrist.
-    private static let askOnlyPhases: Set<WatchSessionManager.AskPhase> = [
-        .transcribing, .answering, .answered, .failed
-    ]
-
     func record(
         memoId: String,
         phase: WatchSessionManager.AskPhase,
@@ -63,7 +55,7 @@ final class AskInFlightRegistry: ObservableObject {
         guard !memoId.isEmpty else { return }
 
         let existingIndex = entries.firstIndex { $0.id == memoId }
-        guard existingIndex != nil || Self.askOnlyPhases.contains(phase) else { return }
+        guard existingIndex != nil || phase.impliesAsk else { return }
 
         if let index = existingIndex {
             entries[index].phase = phase
@@ -136,4 +128,20 @@ extension WatchSessionManager.AskPhase {
     }
 
     var isSettled: Bool { self == .answered || self == .failed }
+
+    /// Whether reaching this phase proves the memo is an ask, as opposed to an
+    /// ordinary Watch dictation passing through the same update funnel.
+    /// `queued`, `sending`, and `received` are shared with plain dictation and
+    /// would otherwise file every memo sent from the wrist as an ask.
+    ///
+    /// Lives on the phase rather than in any one consumer because the in-flight
+    /// pill and the durable ledger must agree on what counts as an ask —
+    /// an ask the pill showed but the ledger never filed would vanish for good
+    /// the moment the pill decayed.
+    var impliesAsk: Bool {
+        switch self {
+        case .transcribing, .answering, .answered, .failed: return true
+        case .queued, .sending, .received: return false
+        }
+    }
 }

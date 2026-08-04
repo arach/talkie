@@ -18,14 +18,15 @@ final class AIResponseSpeechRouter {
         _ text: String,
         provider: ComposeBorrowedProvider? = nil,
         memoId: String? = nil,
-        preview: String? = nil
+        preview: String? = nil,
+        origin: AIResponseOrigin = .phone
     ) async -> AIResponseSpeechResult {
         let settings = TalkieAppSettings.shared
-        let route = AIResponseSpeechRoute(rawValue: settings.aiVoiceOutputRoute) ?? .phone
+        let route = route(for: origin, settings: settings)
 
         AppLogger.ai.info(
-            "AI speech start route=\(route.rawValue) provider=\(settings.ttsProvider) "
-                + "mode=\(settings.ttsMode) chars=\(text.count)"
+            "AI speech start origin=\(origin.rawValue) route=\(route.rawValue) "
+                + "provider=\(settings.ttsProvider) mode=\(settings.ttsMode) chars=\(text.count)"
         )
 
         guard route != .silent else {
@@ -102,6 +103,29 @@ final class AIResponseSpeechRouter {
         }
     }
 
+    /// Where the answer comes out, given where the question went in.
+    ///
+    /// `aiVoiceOutputRoute` is a single global, and reading it unconditionally
+    /// meant an ask spoken into the wrist was narrated by a phone in a pocket —
+    /// the one place the person who asked it could not hear. Origin settles that
+    /// on its own: whoever raised a watch to ask is wearing the watch, so there
+    /// is nothing here for a preference to decide.
+    ///
+    /// The mute survives, because it answers a different question. `silent` says
+    /// "do not speak to me," which outranks where.
+    private func route(
+        for origin: AIResponseOrigin,
+        settings: TalkieAppSettings
+    ) -> AIResponseSpeechRoute {
+        let configured = AIResponseSpeechRoute(rawValue: settings.aiVoiceOutputRoute) ?? .phone
+        switch origin {
+        case .phone:
+            return configured
+        case .watch:
+            return configured == .silent ? .silent : .watch
+        }
+    }
+
     private func synthesizeSpeech(
         _ text: String,
         provider: ComposeBorrowedProvider?,
@@ -129,6 +153,13 @@ final class AIResponseSpeechRouter {
         return try await TTSService.synthesizeConfigured(text: text, settings: settings)
     }
 
+}
+
+/// Which device the ask was spoken into. Not a preference — a fact about the
+/// request, and the strongest available evidence about where its answer belongs.
+enum AIResponseOrigin: String, Equatable, Sendable {
+    case phone
+    case watch
 }
 
 enum AIResponseSpeechRoute: String, Equatable, Sendable {

@@ -22,32 +22,73 @@ struct PresetPickerView: View {
             TalkieCaptureBackground()
 
             GeometryReader { proxy in
-                let compact = proxy.size.height < 190
+                let metrics = CaptureFaceMetrics(availableHeight: proxy.size.height)
 
                 VStack(spacing: 0) {
-                    Text("talkie")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundStyle(themeName.captureStyle.material.ink.opacity(0.90))
+                    if metrics.showsWordmark {
+                        Text("talkie")
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(themeName.captureStyle.material.ink.opacity(0.90))
+                            .frame(height: CaptureFaceMetrics.wordmarkHeight)
+
+                        Spacer()
+                            .frame(height: CaptureFaceMetrics.wordmarkGap)
+                    }
 
                     // The slot is always reserved, even when there is nothing to
                     // say. An ask starting or finishing must not shove the record
                     // key down the face — the same reason recording states swap
                     // into a fixed-size puck instead of resizing the button.
-                    AskStrip(onOpen: onOpenAsks)
-                        .padding(.top, compact ? 2 : 3)
+                    AskStrip(height: metrics.stripHeight, onOpen: onOpenAsks)
 
                     Spacer()
-                        .frame(height: compact ? 9 : 12)
+                        .frame(height: metrics.stripGap)
 
-                    RecordButton(kind: .start) { startCapture(forceAI: false) }
+                    // While an ask is being answered, the AI conversation *is*
+                    // the subject of this face — a record key sitting where the
+                    // answer should be reads as "memo" no matter what the strip
+                    // above it says. The key swaps; the pill picks up capture.
+                    //
+                    // Time-driven for the same reason the strip is: an ask the
+                    // phone abandoned mid-flight has to give the key back, and
+                    // nothing publishes when a phone simply goes quiet.
+                    TimelineView(.periodic(from: .now, by: WatchMemo.silenceTolerance / 2)) { context in
+                        let askFace = WatchAskFace.resolve(sessionManager, asOf: context.date)
 
-                    Spacer()
-                        .frame(height: compact ? 10 : 14)
+                        VStack(spacing: 0) {
+                            if let askFace, askFace.takesCaptureKey {
+                                AskCaptureKey(
+                                    state: askFace,
+                                    keyHeight: metrics.keyHeight,
+                                    onOpen: onOpenAsks
+                                )
 
-                    AIPill { startCapture(forceAI: true) }
+                                Spacer()
+                                    .frame(height: metrics.keyGap)
+
+                                AIPill(
+                                    symbol: "mic.fill",
+                                    title: "Record",
+                                    accessibilityText: "Start recording",
+                                    height: metrics.pillHeight
+                                ) {
+                                    startCapture(forceAI: false)
+                                }
+                            } else {
+                                RecordButton(kind: .start, keyHeight: metrics.keyHeight) {
+                                    startCapture(forceAI: false)
+                                }
+
+                                Spacer()
+                                    .frame(height: metrics.keyGap)
+
+                                AIPill(height: metrics.pillHeight) {
+                                    startCapture(forceAI: true)
+                                }
+                            }
+                        }
+                    }
                 }
-                .padding(.top, compact ? 2 : 5)
-                .padding(.bottom, compact ? 3 : 6)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
         }
@@ -57,6 +98,82 @@ struct PresetPickerView: View {
         WKInterfaceDevice.current().play(.click)
         selectedPreset = forceAI ? .ai : .go
         isRecording = true
+    }
+}
+
+// MARK: - Vertical budget
+
+/// The capture face's vertical layout, solved against the space watchOS
+/// actually hands this page.
+///
+/// At their comfortable sizes the wordmark, ask strip, key and pill add up to
+/// more than any watch has: the page gets 150pt on a 46mm and 123pt on a 40mm.
+/// Pinning them meant the stack overflowed and spilled equally out of both ends
+/// — which put the pill's bottom within a few points of the glass on a large
+/// watch and cut it off entirely on a small one. Solving for the key instead
+/// keeps the stack inside its bounds, so the inset watchOS already reserves
+/// below the page dots becomes the face's bottom margin.
+struct CaptureFaceMetrics {
+    /// Set when the wordmark can stay without starving the key. It is the first
+    /// thing given up because it is the only piece carrying no state: the Talkie
+    /// signal is drawn across the key itself, and the time and settings sit in
+    /// the bar directly above it.
+    let showsWordmark: Bool
+    let stripHeight: CGFloat
+    /// Strip to key.
+    let stripGap: CGFloat
+    let keyHeight: CGFloat
+    /// Key to pill.
+    let keyGap: CGFloat
+    let pillHeight: CGFloat
+
+    /// One 12pt rounded line.
+    static let wordmarkHeight: CGFloat = 15
+    /// Wordmark to strip. Deliberately tight — they read as one header block.
+    static let wordmarkGap: CGFloat = 3
+
+    /// Enough for a 9pt monospaced label and its status dot, and no more: the
+    /// slot is reserved whether or not there is an ask to put in it.
+    private static let stripHeight: CGFloat = 18
+    /// The 32pt capsule plus a little target around it. Short of the usual 44,
+    /// which no watch-sized face can afford, but the pill is 96pt wide.
+    private static let pillHeight: CGFloat = 36
+    /// Below this the key stops looking like a key and starts looking like a
+    /// bar, so the wordmark goes before the key crosses it.
+    private static let minimumKeyHeight: CGFloat = 50
+    private static let maximumKeyHeight: CGFloat = 64
+    /// The two gaps together. The key needs visible separation from the strip
+    /// above and the pill below or the three stack into one slab.
+    private static let minimumGaps: CGFloat = 14
+    /// The key takes this much of what is left; the rest becomes the gaps. Held
+    /// constant so the face keeps the same rhythm as it scales rather than
+    /// growing a fat key on large watches and thin air on small ones.
+    private static let keyShare: CGFloat = 0.78
+
+    init(availableHeight: CGFloat) {
+        let fixed = Self.stripHeight + Self.pillHeight
+        let header = Self.wordmarkHeight + Self.wordmarkGap
+
+        // What the key and its two gaps would have to share if the wordmark
+        // stayed. The wordmark is worth keeping only while the key still clears
+        // its floor afterwards.
+        let roomWithWordmark = availableHeight - fixed - header
+        showsWordmark = roomWithWordmark - Self.minimumGaps >= Self.minimumKeyHeight
+
+        let room = showsWordmark ? roomWithWordmark : availableHeight - fixed
+        keyHeight = min(
+            Self.maximumKeyHeight,
+            max(Self.minimumKeyHeight, room * Self.keyShare)
+        )
+
+        // Whatever the key did not take. Split so the key sits nearer the strip
+        // it belongs to than the pill it outranks.
+        let slack = max(Self.minimumGaps, room - keyHeight)
+        stripGap = slack * 0.42
+        keyGap = slack * 0.58
+
+        stripHeight = Self.stripHeight
+        pillHeight = Self.pillHeight
     }
 }
 
@@ -436,13 +553,16 @@ struct RecordButton: View {
     enum Kind { case start, stop }
     let kind: Kind
     var audioLevel: Float = 0
+    /// The capture face solves this against the watch it is on; the recording
+    /// screen, which has the display to itself, keeps the full size.
+    var keyHeight: CGFloat = 64
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             switch kind {
             case .start:
-                TalkieCaptureKey()
+                TalkieCaptureKey(keyHeight: keyHeight)
             case .stop:
                 TalkieStopKey(audioLevel: audioLevel)
             }
@@ -452,7 +572,7 @@ struct RecordButton: View {
     }
 }
 
-private struct TalkieRecordButtonStyle: ButtonStyle {
+struct TalkieRecordButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.975 : 1)
@@ -462,14 +582,30 @@ private struct TalkieRecordButtonStyle: ButtonStyle {
     }
 }
 
-/// A wide light-mineral or black-ceramic recording key. Its horizontal
-/// geometry, elevated edge, and press response keep it from reading as a
-/// miniature device nested inside the Watch.
-private struct TalkieCaptureKey: View {
+/// A wide light-mineral or black-ceramic key. Its horizontal geometry,
+/// elevated edge, and press response keep it from reading as a miniature
+/// device nested inside the Watch.
+///
+/// The chassis is shared rather than copied because more than one thing can
+/// hold the primary slot — recording at rest, an ask in flight, an answer
+/// waiting to be played. Swapping only the face means the key's footprint,
+/// bevel, and hairline never shift underneath the wearer's thumb.
+struct TalkieKeyChassis<Content: View>: View {
     @Environment(\.watchThemeName) private var themeName
+    /// Overrides the theme's hairline when the key's job is not the usual one.
+    /// `nil` keeps the resting accent.
+    var accent: Color?
+    /// Set by the capture face, which has to fit the key between an ask strip
+    /// and a pill inside whatever height the watch gives it.
+    var height: CGFloat = 64
+    @ViewBuilder var content: () -> Content
+
     private let width: CGFloat = 128
-    private let height: CGFloat = 64
     private let cornerRadius: CGFloat = 18
+    /// Gap between the bevel and the accent hairline. Also subtracted from the
+    /// inner radius so the two rings stay concentric instead of the inner one
+    /// bowing away from the corners.
+    private let keyAccentInset: CGFloat = 1.5
 
     var body: some View {
         let capture = themeName.captureStyle
@@ -488,7 +624,44 @@ private struct TalkieCaptureKey: View {
                     )
                 )
                 .shadow(color: material.shadow, radius: 7, y: 5)
+                // The key's edge. Drawn inside the fill so the silhouette stays
+                // exactly `cornerRadius` — a straddling stroke would round off
+                // half a point wider than the shadow it sits in.
+                .overlay {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .strokeBorder(material.keyEdgeRing, lineWidth: WatchEdgeWeight.bevel)
+                }
+                // A theme hairline just inside the bevel, concentric with it.
+                // This is the one place the key carries the signal color at
+                // rest, and it is what makes the key and the AI pill read as
+                // two members of the same set rather than two shapes.
+                .overlay {
+                    RoundedRectangle(cornerRadius: cornerRadius - keyAccentInset, style: .continuous)
+                        .strokeBorder(accent ?? capture.keyAccentEdge, lineWidth: WatchEdgeWeight.hairline)
+                        .padding(keyAccentInset)
+                }
 
+            content()
+        }
+        .frame(width: width, height: height)
+        .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+}
+
+extension TalkieKeyChassis {
+    init(height: CGFloat = 64, @ViewBuilder content: @escaping () -> Content) {
+        self.init(accent: nil, height: height, content: content)
+    }
+}
+
+/// The resting face: the Talkie signal over a record legend.
+private struct TalkieCaptureKey: View {
+    @Environment(\.watchThemeName) private var themeName
+    var keyHeight: CGFloat = 64
+
+    var body: some View {
+        let capture = themeName.captureStyle
+        TalkieKeyChassis(height: keyHeight) {
             VStack(spacing: 4) {
                 TalkieTraceReveal(color: capture.trace)
                     .frame(width: 86, height: 22)
@@ -501,12 +674,10 @@ private struct TalkieCaptureKey: View {
                     Text("REC")
                         .font(.system(size: 8.5, weight: .bold, design: .monospaced))
                         .tracking(1.35)
-                        .foregroundStyle(material.keyInk.opacity(0.86))
+                        .foregroundStyle(capture.material.keyInk.opacity(0.86))
                 }
             }
         }
-        .frame(width: width, height: height)
-        .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 }
 
@@ -645,6 +816,20 @@ private struct TalkieStopKey: View {
 /// to capture while remaining an obvious second action.
 struct AIPill: View {
     @Environment(\.watchThemeName) private var themeName
+    /// The pill is the face's secondary route, and which route that is depends
+    /// on what the key is doing. When an ask takes the key, capture has nowhere
+    /// else to live — so the pill becomes the record affordance rather than
+    /// leaving the wearer with no way to start a memo.
+    var symbol: String = "sparkles"
+    /// "Ask AI" named the machinery rather than the act, and on a face where the
+    /// sparkles already say which route this is, the "AI" was doing no work.
+    /// One verb is also the shape the eventual name slots into without a
+    /// relayout — the assistant doesn't have one yet, and this doesn't invent it.
+    var title: String = "Ask"
+    var accessibilityText: String = "Start AI conversation"
+    /// The tap target. The capsule inside it keeps its size on every watch —
+    /// only the padding around it gives way when the face is short.
+    var height: CGFloat = 44
     let action: () -> Void
 
     var body: some View {
@@ -652,9 +837,9 @@ struct AIPill: View {
         let material = capture.material
         Button(action: action) {
             HStack(spacing: 4) {
-                Image(systemName: "sparkles")
+                Image(systemName: symbol)
                     .font(.system(size: 9, weight: .semibold))
-                Text("Ask AI")
+                Text(title)
                     .font(.system(size: 10, weight: .medium, design: .rounded))
             }
             .foregroundStyle(material.ink.opacity(0.76))
@@ -662,21 +847,26 @@ struct AIPill: View {
             .background(
                 Capsule(style: .continuous)
                     .fill(material.secondaryFill)
+                    // An even ring, not the key's bevel: this control is an
+                    // outline on the chassis, not a key raised off it. Inset
+                    // strokes keep both hairlines crisp — a centered stroke on
+                    // a translucent fill puts half its weight on the field and
+                    // reads a half-point soft.
                     .overlay(
                         Capsule(style: .continuous)
-                            .stroke(material.secondaryEdge, lineWidth: 0.8)
+                            .strokeBorder(material.secondaryEdge, lineWidth: WatchEdgeWeight.outline)
                     )
                     .overlay(
                         Capsule(style: .continuous)
-                            .stroke(capture.secondaryAccentEdge, lineWidth: 0.6)
+                            .strokeBorder(capture.secondaryAccentEdge, lineWidth: WatchEdgeWeight.hairline)
                             .padding(1)
                     )
             )
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .frame(width: 96, height: 44)
-        .accessibilityLabel("Start AI conversation")
+        .frame(width: 96, height: height)
+        .accessibilityLabel(accessibilityText)
     }
 }
 

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The watch app and its complication extension are separate processes,
+	     so a shared container is the only way the watch face can show real
+	     state rather than a hardcoded one. Same group identifier as iOS: the
+	     container itself is per-device, so nothing crosses the pairing here. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>$(TALKIE_IOS_APP_GROUP)</string>
+	</array>
+</dict>
+</plist>

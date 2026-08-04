@@ -120,8 +120,19 @@ final class WatchSessionManager: NSObject, ObservableObject {
     ) {
         // Fed before the reachability guard on purpose: the phone's own view of
         // an ask must not depend on whether the Watch link happens to be up.
+        //
+        // Both the transient surfaces (tray pill, Live Activity) and the durable
+        // ledger hang off this one call, so every account of an ask on this
+        // phone traces back to the same transition.
         if let phase {
             AskInFlightRegistry.shared.record(memoId: memoId, phase: phase, text: preview)
+            AskLedger.shared.record(
+                memoId: memoId,
+                origin: .watch,
+                phase: phase,
+                text: preview,
+                delivery: delivery
+            )
         }
 
         activateIfNeeded()

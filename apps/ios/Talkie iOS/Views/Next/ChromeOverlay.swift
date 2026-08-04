@@ -278,8 +278,12 @@ private struct AskActivityPill: View {
         let chrome = theme.currentTheme.chrome
         let tint = tint(for: entry.phase)
 
+        // Ask AI, not the memo: the ask's durable home is the conversation,
+        // which carries the answer and the phase and offers a route on to the
+        // memo. Landing on the memo instead skipped past the thing the pill
+        // was reporting on.
         return Button {
-            AppShellRouter.shared.openMemoDetail(memoID: entry.id)
+            AppShellRouter.shared.openAskAI()
         } label: {
             HStack(spacing: 8) {
                 if entry.phase.isSettled {

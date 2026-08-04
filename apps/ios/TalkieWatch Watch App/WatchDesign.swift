@@ -81,6 +81,24 @@ struct WatchChromeTokens {
     let hairlineWidth: CGFloat    // divider stroke weight
 }
 
+/// Stroke weights for the capture face's nested edges, as one ladder.
+///
+/// The key and the pill read as members of the same set because their rings
+/// share a scale. Keeping the weights together means "a little thinner" is one
+/// edit rather than four literals drifting apart across two files.
+enum WatchEdgeWeight {
+    /// The bevel that gives a key its silhouette — the heaviest edge on the
+    /// face, and the only one that has to survive against a drop shadow.
+    static let bevel: CGFloat = 0.75
+
+    /// An outline on the chassis rather than a body raised off it: the pill.
+    static let outline: CGFloat = 0.6
+
+    /// The theme hairline. 0.5pt is exactly one pixel at 2x, so this is as thin
+    /// as the watch draws before a line stops being a line and starts being grey.
+    static let hairline: CGFloat = 0.5
+}
+
 /// The capture face intentionally has only two material families. Theme
 /// personality comes from the signal color, not a full-screen color wash.
 enum WatchCaptureMaterial: Equatable {
@@ -150,11 +168,34 @@ enum WatchCaptureMaterial: Equatable {
         }
     }
 
+    /// Top-leading edge of a raised key — the side the chassis light falls on.
+    /// Light mineral gets a soft dark contour instead of a highlight: the key
+    /// top is already near-white, so there is nothing left to light.
     var keyEdge: Color {
         switch self {
-        case .lightMineral: Color.white.opacity(0.68)
-        case .blackCeramic: Color.white.opacity(0.16)
+        case .lightMineral: Color.black.opacity(0.10)
+        case .blackCeramic: Color.white.opacity(0.20)
         }
+    }
+
+    /// Bottom-trailing edge. On both materials the key bottom and the field
+    /// sit within a few values of each other, so without a distinct lower edge
+    /// the key's silhouette dissolves into the chassis it rests on.
+    var keyEdgeLow: Color {
+        switch self {
+        case .lightMineral: Color.black.opacity(0.26)
+        case .blackCeramic: Color.white.opacity(0.05)
+        }
+    }
+
+    /// The key's bevel as one stroke style, lit on the same diagonal as the
+    /// key fill and the chassis gradient beneath it.
+    var keyEdgeRing: LinearGradient {
+        LinearGradient(
+            colors: [keyEdge, keyEdgeLow],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 
     var secondaryFill: Color {

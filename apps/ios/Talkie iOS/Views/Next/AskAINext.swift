@@ -15,6 +15,7 @@ struct AskAINext: View {
     @ObservedObject private var theme = ThemeManager.shared
     @StateObject private var session = AskAISession()
     @StateObject private var dictation = AskDictationController()
+    @ObservedObject private var askLedger = AskLedger.shared
     @ObservedObject private var reachability = NetworkReachability.shared
     @ObservedObject private var credentials = AICredentialStore.shared
     @State private var bridgeManager = BridgeManager.shared
@@ -140,31 +141,116 @@ struct AskAINext: View {
 
     @ViewBuilder
     private var conversationArea: some View {
-        if session.turns.isEmpty {
+        let rows = streamRows
+
+        if rows.isEmpty {
             idleState
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(session.turns) { turn in
-                            AskAITurnRow(turn: turn)
-                                .id(turn.id)
+                        ForEach(rows) { row in
+                            AskAITurnRow(row: row)
+                                .id(row.id)
                         }
                     }
                     .padding(.bottom, 12)
                 }
                 .scrollIndicators(.hidden)
                 .scrollDismissesKeyboard(.interactively)
-                .onChange(of: session.turns.count) { _, _ in
-                    scrollToLatest(proxy)
+                .onChange(of: rows.count) { _, _ in
+                    scrollToLatest(proxy, id: rows.last?.id)
                 }
                 .onChange(of: session.lastTurnID) { _, _ in
-                    scrollToLatest(proxy)
+                    scrollToLatest(proxy, id: rows.last?.id)
+                }
+                // An ask spoken into the wrist while this surface is already
+                // open has to land here live, not on the next appearance.
+                .onChange(of: askLedger.records) { _, _ in
+                    scrollToLatest(proxy, id: rows.last?.id)
                 }
             }
         }
     }
+
+    /// The merged conversation: everything typed or dictated here, plus every
+    /// ask spoken into the Watch, in the order it happened.
+    ///
+    /// The two keep separate stores on purpose. A Watch ask is a discrete
+    /// one-shot tied to a memo, and folding a long wrist history into
+    /// `AskAISession.turns` would quietly make all of it context for the next
+    /// typed follow-up. They are merged for reading, not for prompting.
+    private var streamRows: [AskStreamRow] {
+        var rows = session.turns.map { turn in
+            AskStreamRow(
+                id: turn.id.uuidString,
+                turn: turn,
+                origin: .phone,
+                isFailure: false,
+                memoId: nil,
+                sortDate: turn.createdAt
+            )
+        }
+        for record in askLedger.records {
+            rows.append(contentsOf: Self.rows(for: record))
+        }
+        return rows.sorted { $0.sortDate < $1.sortDate }
+    }
+
+    /// A Watch ask expands into the same user/talkie pair a typed exchange
+    /// produces, so one row renderer serves both origins — including the
+    /// thinking beat, which a typed turn already had.
+    private static func rows(for record: AskRecord) -> [AskStreamRow] {
+        var rows: [AskStreamRow] = []
+
+        // The question only reaches the phone once transcription finishes, so
+        // an ask caught earlier than that legitimately has no user row yet.
+        if let question = record.question, !question.isEmpty {
+            rows.append(
+                AskStreamRow(
+                    id: "\(record.id)#ask",
+                    turn: AskAITurn(
+                        code: watchTurnCode,
+                        speaker: .user,
+                        body: question,
+                        createdAt: record.createdAt
+                    ),
+                    origin: .watch,
+                    isFailure: false,
+                    memoId: record.id,
+                    sortDate: record.createdAt
+                )
+            )
+        }
+
+        // An answer, a failure message, or — while the phone is still working
+        // on it — the phase itself, which is the only honest thing to say.
+        rows.append(
+            AskStreamRow(
+                id: "\(record.id)#answer",
+                turn: AskAITurn(
+                    code: watchTurnCode,
+                    speaker: .talkie,
+                    body: record.answer ?? record.phase.pillLabel,
+                    createdAt: record.updatedAt,
+                    model: record.delivery?.turnLabel,
+                    isThinking: !record.isSettled
+                ),
+                origin: .watch,
+                isFailure: record.didFail,
+                memoId: record.id,
+                sortDate: record.updatedAt
+            )
+        )
+
+        return rows
+    }
+
+    /// Watch turns carry their origin in the slot a typed turn uses for its
+    /// sequence code. Numbering them alongside `T01…` would mean renumbering
+    /// the whole history every time the ledger trims its oldest record.
+    private static let watchTurnCode = "WATCH"
 
     private var idleState: some View {
         VStack(spacing: 18) {
@@ -473,10 +559,33 @@ struct AskAINext: View {
         AppShellRouter.shared.openConnectionCenter()
     }
 
-    private func scrollToLatest(_ proxy: ScrollViewProxy) {
-        guard let id = session.lastTurnID else { return }
+    private func scrollToLatest(_ proxy: ScrollViewProxy, id: String?) {
+        guard let id else { return }
         withAnimation(.easeOut(duration: 0.22)) {
             proxy.scrollTo(id, anchor: .bottom)
+        }
+    }
+}
+
+/// One rendered line of the Ask AI conversation, whatever produced it.
+private struct AskStreamRow: Identifiable {
+    let id: String
+    let turn: AskAITurn
+    let origin: AskOrigin
+    let isFailure: Bool
+    /// Set on Watch rows, which have a memo behind them holding the audio.
+    let memoId: String?
+    let sortDate: Date
+}
+
+extension WatchSessionManager.AnswerDelivery {
+    /// How the answer was narrated, for the turn's meta line. `silent` says
+    /// nothing — an answer nobody spoke has nothing to report.
+    var turnLabel: String? {
+        switch self {
+        case .watchAudio: return "spoken on watch"
+        case .phoneAudio: return "spoken here"
+        case .silent: return nil
         }
     }
 }
@@ -543,31 +652,31 @@ struct AskAITurn: Identifiable, Codable, Equatable {
 }
 
 private struct AskAITurnRow: View {
-    let turn: AskAITurn
+    let row: AskStreamRow
 
     @ObservedObject private var theme = ThemeManager.shared
+
+    private var turn: AskAITurn { row.turn }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(alignment: .center, spacing: 8) {
                 Text(turn.code)
                     .talkieType(.channelLabelTiny)
-                    .foregroundStyle(turn.speaker == .talkie ? theme.currentTheme.chrome.accent : theme.colors.textTertiary)
+                    .foregroundStyle(codeTint)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 4)
                     .background(
                         Capsule()
                             .strokeBorder(
-                                turn.speaker == .talkie
-                                    ? theme.currentTheme.chrome.accent.opacity(0.75)
-                                    : theme.currentTheme.chrome.edgeFaint,
+                                codeTint.opacity(turn.speaker == .talkie ? 0.75 : 0.45),
                                 lineWidth: theme.currentTheme.chrome.hairlineWidth
                             )
                     )
 
-                Text("· \(turn.speaker.label)")
+                Text("· \(row.isFailure ? "FAILED" : turn.speaker.label)")
                     .talkieType(.channelLabelSmall)
-                    .foregroundStyle(theme.colors.textTertiary)
+                    .foregroundStyle(row.isFailure ? Color.red.opacity(0.85) : theme.colors.textTertiary)
 
                 Spacer(minLength: 8)
 
@@ -589,7 +698,7 @@ private struct AskAITurnRow: View {
             } else {
                 Text(turn.body)
                     .talkieType(.preview)
-                    .foregroundStyle(theme.colors.textPrimary)
+                    .foregroundStyle(row.isFailure ? Color.red.opacity(0.85) : theme.colors.textPrimary)
                     .lineSpacing(3)
                     .textSelection(.enabled)
 
@@ -611,42 +720,94 @@ private struct AskAITurnRow: View {
     /// affordance row that lets the user act on a TALKIE turn without
     /// leaving the surface. Each chip routes through AppShellRouter
     /// so the surface itself stays paint-only.
+    ///
+    /// A failed ask gets none of them: there is no answer to keep, read, or
+    /// refine, and offering the row anyway would dress a failure up as a result.
+    /// It gets the one action a failure does own — clearing itself away, which
+    /// takes the question with it since both rows come from a single record.
+    @ViewBuilder
     private var nextActionRow: some View {
-        HStack(spacing: 6) {
-            nextActionChip(systemImage: "tray.and.arrow.down", label: "Save as memo") {
-                AppShellRouter.shared.saveAsMemo(text: turn.body)
+        if row.isFailure {
+            if let memoId = row.memoId {
+                HStack(spacing: 6) {
+                    nextActionChip(
+                        systemImage: "xmark.circle",
+                        label: "Dismiss",
+                        tint: .red.opacity(0.85)
+                    ) {
+                        AskLedger.shared.remove(memoId)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.top, 4)
             }
-            nextActionChip(systemImage: "play.circle", label: "Listen") {
-                AppShellRouter.shared.openReadAloud(source: ReadAloudSource(
-                    title: "Ask AI · \(turn.code)",
-                    text: turn.body,
-                    meta: "ASK AI · \(turn.model ?? turn.providerName ?? "TALKIE")",
-                    sourceURL: nil
-                ))
+        } else {
+            HStack(spacing: 6) {
+                // A Watch answer is already the summary of a memo that exists;
+                // saving it again would just make a second copy of it.
+                if row.memoId == nil {
+                    nextActionChip(systemImage: "tray.and.arrow.down", label: "Save as memo") {
+                        AppShellRouter.shared.saveAsMemo(text: turn.body)
+                    }
+                }
+                nextActionChip(systemImage: "play.circle", label: "Listen") {
+                    AppShellRouter.shared.openReadAloud(source: ReadAloudSource(
+                        title: "Ask AI · \(turn.code)",
+                        text: turn.body,
+                        meta: "ASK AI · \(turn.model ?? turn.providerName ?? "TALKIE")",
+                        sourceURL: nil
+                    ))
+                }
+                nextActionChip(systemImage: "pencil.line", label: "Refine") {
+                    AppShellRouter.shared.openComposeSeeded(text: turn.body)
+                }
+                // The memo behind a Watch ask holds the original audio — the
+                // one thing this surface cannot show.
+                if let memoId = row.memoId {
+                    nextActionChip(systemImage: "waveform", label: "Open memo") {
+                        AppShellRouter.shared.openMemoDetail(memoID: memoId)
+                    }
+                }
+                Spacer(minLength: 0)
             }
-            nextActionChip(systemImage: "pencil.line", label: "Refine") {
-                AppShellRouter.shared.openComposeSeeded(text: turn.body)
-            }
-            Spacer(minLength: 0)
+            .padding(.top, 4)
         }
-        .padding(.top, 4)
     }
 
-    private func nextActionChip(systemImage: String, label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    /// Watch turns are tinted with the accent on both sides of the exchange —
+    /// the capsule reads `WATCH` rather than a sequence code, and the tint is
+    /// what makes an ask from the wrist scannable in a mixed conversation.
+    private var codeTint: Color {
+        if row.isFailure { return .red.opacity(0.85) }
+        if turn.speaker == .talkie || row.origin == .watch {
+            return theme.currentTheme.chrome.accent
+        }
+        return theme.colors.textTertiary
+    }
+
+    /// `tint` defaults to the accent because every chip that acts on a real
+    /// answer belongs to the same family. A destructive chip passes its own.
+    private func nextActionChip(
+        systemImage: String,
+        label: String,
+        tint: Color? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
+        let chipTint = tint ?? theme.currentTheme.chrome.accent
+        return Button(action: action) {
             HStack(spacing: 5) {
                 Image(systemName: systemImage)
                     .font(.system(size: 11, weight: .medium))
                 Text(label)
                     .talkieType(.chipLabel)
             }
-            .foregroundStyle(theme.currentTheme.chrome.accent)
+            .foregroundStyle(chipTint)
             .padding(.horizontal, 9)
             .padding(.vertical, 5)
             .background(
                 Capsule()
                     .strokeBorder(
-                        theme.currentTheme.chrome.accent.opacity(0.6),
+                        chipTint.opacity(0.6),
                         lineWidth: theme.currentTheme.chrome.hairlineWidth
                     )
             )

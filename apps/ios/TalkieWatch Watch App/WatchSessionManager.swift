@@ -89,6 +89,10 @@ struct WatchMemo: Identifiable, Codable {
     /// rather than to time the model.
     static let silenceTolerance: TimeInterval = 90
 
+    /// When the phone was last heard from about this memo, falling back to the
+    /// capture time for one that has never been updated.
+    var lastHeardAt: Date { lastUpdatedAt ?? timestamp }
+
     /// True when an ask is still nominally in flight but the phone has said
     /// nothing for `silenceTolerance`. The phone cannot report its own death,
     /// so a dropped session, a force-quit, or a crashed provider all arrive as
@@ -96,8 +100,7 @@ struct WatchMemo: Identifiable, Codable {
     /// this surface exists to end.
     func isStalled(asOf now: Date) -> Bool {
         guard isInFlight else { return false }
-        let lastHeard = lastUpdatedAt ?? timestamp
-        return now.timeIntervalSince(lastHeard) > Self.silenceTolerance
+        return now.timeIntervalSince(lastHeardAt) > Self.silenceTolerance
     }
 
     /// The phase to render. Falls back to a status-derived value so a memo that
@@ -209,6 +212,23 @@ final class WatchSessionManager: NSObject, ObservableObject {
     @Published private(set) var codexDispatchReceipt: CodexWatchDispatchReceipt? {
         didSet { saveCodexDispatchReceipt() }
     }
+    /// Narrated answers still on the wrist, keyed by memo. Published so the
+    /// capture face can offer replay only where there is something to replay —
+    /// an answer spoken on the phone leaves nothing here, and a play button that
+    /// does nothing is worse than none.
+    @Published private(set) var answerAudio: [UUID: URL] = [:]
+    /// The answer currently speaking, if any. Drives the play/stop face of the
+    /// capture key.
+    @Published private(set) var playingAnswerID: UUID?
+
+    /// Whether the app is frontmost, which on this device means the wrist is up
+    /// and the screen is lit. watchOS exposes no wrist-raise API; the scene
+    /// phase is the closest honest proxy, since lowering a wrist backgrounds
+    /// the app within a couple of seconds.
+    private var isForeground = false
+    /// When the wrist last went down. `nil` until the app has been foregrounded
+    /// at least once this launch.
+    private var lastForegroundAt: Date?
 
     private let maxRecentMemos = 10
     private let selectedCodexTaskKey = "watch.codex.selected-task.v1"
@@ -227,6 +247,13 @@ final class WatchSessionManager: NSObject, ObservableObject {
     /// falling back to a plain arrival tap. Long enough to cover an ordinary
     /// file transfer, short enough that the wearer is not left wondering.
     private static let watchAudioGrace: TimeInterval = 12
+
+    /// How long after the wrist goes down an arriving answer may still speak on
+    /// its own. Inside this window the wearer is plainly still in the exchange
+    /// they started — asked, dropped the wrist, waiting — and hearing the answer
+    /// is the whole point. Past it they have moved on, and a voice out of a
+    /// sleeping watch is a startle, not a service.
+    private static let autoPlayWindow: TimeInterval = 90
 
     enum SendStatus: Equatable {
         case idle
@@ -297,6 +324,8 @@ final class WatchSessionManager: NSObject, ObservableObject {
         selectedCodexTaskID = UserDefaults.standard.string(forKey: selectedCodexTaskKey)
         loadCodexDispatchReceipt()
         loadPendingAudioTransfers()
+        loadAnswerAudio()
+        pruneAnswerAudio()
         reconcilePendingAudioWithMemoStatuses()
         reconcilePendingCodexAudioWithReceipt()
 
@@ -305,6 +334,8 @@ final class WatchSessionManager: NSObject, ObservableObject {
             session?.delegate = self
             session?.activate()
         }
+
+        observeAudioInterruptions()
     }
 
     // MARK: - Persistence
@@ -707,6 +738,7 @@ final class WatchSessionManager: NSObject, ObservableObject {
 
         if recentMemos.count > maxRecentMemos {
             recentMemos = Array(recentMemos.prefix(maxRecentMemos))
+            pruneAnswerAudio()
         }
         saveRecentMemos()
 
@@ -1005,19 +1037,19 @@ final class WatchSessionManager: NSObject, ObservableObject {
 
     private func handleAIAudio(fileURL: URL, metadata: [String: Any]) {
         do {
-            let audioURL = FileManager.default.temporaryDirectory
-                .appending(path: "talkie-ai-answer-\(UUID().uuidString)")
-                .appendingPathExtension("mp3")
-            try? FileManager.default.removeItem(at: audioURL)
-            try FileManager.default.moveItem(at: fileURL, to: audioURL)
-
             let memoID = (metadata["memoId"] as? String).flatMap(UUID.init(uuidString:))
+            let audioURL = try storeAnswerAudio(from: fileURL, memoID: memoID)
+
             // Read before the update below can change it: the grace fallback may
             // already have tapped for this memo on this same wake, since audio
             // routinely lands seconds after activation and there is no way to
             // see an incoming transfer before it arrives. In that case playback
             // starting is cue enough and a click here would double up.
             let alreadySignaled = memoID.map(hasSignaled) ?? false
+            // Read before `markSignaled` clears it: the promise carries the
+            // haptic preference that was true when the answer completed.
+            let readyHapticEnabled = memoID
+                .flatMap { signalLedger.awaitingWatchAudio[$0]?.readyHapticEnabled } ?? true
             if let memoId = metadata["memoId"] as? String {
                 handleMemoUpdate(
                     memoId: memoId,
@@ -1028,10 +1060,19 @@ final class WatchSessionManager: NSObject, ObservableObject {
                 )
             }
 
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
-            try AVAudioSession.sharedInstance().setActive(true)
-            aiAudioPlayer = try AVAudioPlayer(contentsOf: audioURL)
-            aiAudioPlayer?.prepareToPlay()
+            guard shouldAutoPlayAnswer else {
+                // Nobody is looking. The audio stays on the wrist and the key
+                // switches to PLAY ANSWER; all that is owed now is the tap that
+                // says an answer arrived.
+                if let memoID { markSignaled(memoID: memoID) }
+                if !alreadySignaled, readyHapticEnabled {
+                    WKInterfaceDevice.current().play(.notification)
+                }
+                WatchConsole.info("⌚️ [Watch] 🔈 Answer audio held for a tap; wrist is down")
+                return
+            }
+
+            try startAnswerPlayback(url: audioURL, memoID: memoID)
             // The click below is this memo's arrival cue, so close the ledger
             // here. Doing it only once playback is actually set up means a
             // failure above still falls through to the plain tap.
@@ -1041,10 +1082,211 @@ final class WatchSessionManager: NSObject, ObservableObject {
             if !alreadySignaled {
                 WKInterfaceDevice.current().play(.click)
             }
-            aiAudioPlayer?.play()
             WatchConsole.info("⌚️ [Watch] 🔊 Playing AI answer on Watch")
         } catch {
             WatchConsole.info("⌚️ [Watch] ❌ AI audio playback failed: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Answer audio
+
+    /// Answers the phone narrated here, kept so the wearer can hear one again.
+    ///
+    /// Before this the file went to `temporaryDirectory` under a fresh UUID and
+    /// was forgotten the moment playback ended, which made "play it again" not
+    /// merely absent from the UI but impossible to build.
+    private var answerAudioDirectory: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("AnswerAudio", isDirectory: true)
+    }
+
+    private func loadAnswerAudio() {
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: answerAudioDirectory,
+            includingPropertiesForKeys: nil
+        ) else { return }
+
+        answerAudio = files.reduce(into: [:]) { map, file in
+            guard let id = UUID(uuidString: file.deletingPathExtension().lastPathComponent) else {
+                return
+            }
+            map[id] = file
+        }
+    }
+
+    /// Named for the memo so a relaunch can rebuild the index by listing the
+    /// directory — the association has to survive the process, since the answer
+    /// that most wants replaying is the one that arrived while the wrist was down.
+    private func storeAnswerAudio(from fileURL: URL, memoID: UUID?) throws -> URL {
+        let fileManager = FileManager.default
+        try fileManager.createDirectory(at: answerAudioDirectory, withIntermediateDirectories: true)
+
+        let destination = answerAudioDirectory
+            .appendingPathComponent((memoID ?? UUID()).uuidString)
+            .appendingPathExtension("mp3")
+        try? fileManager.removeItem(at: destination)
+        try fileManager.moveItem(at: fileURL, to: destination)
+
+        if let memoID {
+            answerAudio[memoID] = destination
+        }
+        return destination
+    }
+
+    /// Audio outlives nothing: once a memo has aged out of the display window
+    /// there is no surface left that could offer to play it.
+    private func pruneAnswerAudio() {
+        let live = Set(recentMemos.map(\.id))
+        for (memoID, url) in answerAudio where !live.contains(memoID) {
+            if playingAnswerID == memoID { stopAnswerPlayback() }
+            try? FileManager.default.removeItem(at: url)
+            answerAudio[memoID] = nil
+        }
+    }
+
+    func hasAnswerAudio(for memoID: UUID) -> Bool {
+        answerAudio[memoID] != nil
+    }
+
+    // MARK: - Attention
+
+    /// Called by the scene so the manager knows whether anyone is looking.
+    func noteForegroundState(_ active: Bool) {
+        // Stamped on the way *out*: while the app is frontmost the timestamp is
+        // irrelevant, and taking it here means the window is measured from the
+        // moment attention was actually lost.
+        if isForeground, !active { lastForegroundAt = Date() }
+        isForeground = active
+        if active { reconcileAnswerPlayback() }
+    }
+
+    /// Straighten out playback state after time away.
+    ///
+    /// A player can stop without any of this app's code running: a suspension,
+    /// an audio route that disappears, a session lost to something louder. None
+    /// of those go through `stopAnswerPlayback`, so what is left behind is a
+    /// `playingAnswerID` for audio that is not playing — the key reads STOP, and
+    /// the one tap that ought to restart the answer instead appears to do
+    /// nothing. Clearing it here restores the offer, which is the honest state:
+    /// the answer was not heard, and it is still on the wrist.
+    private func reconcileAnswerPlayback() {
+        guard playingAnswerID != nil, aiAudioPlayer?.isPlaying != true else { return }
+        WatchConsole.info("⌚️ [Watch] 🔈 Answer stopped while away; offering it again")
+        stopAnswerPlayback()
+    }
+
+    /// Phone calls and Siri take the audio session away mid-answer.
+    ///
+    /// Nothing resumes automatically on `.ended`: an answer that starts talking
+    /// again by itself after a call is a surprise, and the wearer has a PLAY
+    /// ANSWER waiting the moment they look. All this does is make sure the UI
+    /// agrees that the answer stopped.
+    private func observeAudioInterruptions() {
+        NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { note in
+            let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
+            guard let raw, AVAudioSession.InterruptionType(rawValue: raw) == .began else { return }
+            Task { @MainActor [weak self] in
+                guard let self, self.playingAnswerID != nil else { return }
+                WatchConsole.info("⌚️ [Watch] 🔈 Answer interrupted; it stays available to replay")
+                self.stopAnswerPlayback()
+            }
+        }
+    }
+
+    /// Whether an answer landing right now should speak for itself.
+    ///
+    /// The audio is kept either way — this decides only whether it plays
+    /// unprompted or waits behind the key's PLAY ANSWER. Declining is not a
+    /// failure state: an answer held for a deliberate tap is the mode most
+    /// people want, because it puts them in charge of when their watch talks.
+    private var shouldAutoPlayAnswer: Bool {
+        if isForeground { return true }
+        guard let lastForegroundAt else { return false }
+        return Date().timeIntervalSince(lastForegroundAt) <= Self.autoPlayWindow
+    }
+
+    /// Replay from the wrist. A second tap on a playing answer stops it, which
+    /// is the only way off a long answer on a device with no scrubber.
+    func toggleAnswerPlayback(memoID: UUID) {
+        guard playingAnswerID != memoID else {
+            stopAnswerPlayback()
+            return
+        }
+        guard let url = answerAudio[memoID] else { return }
+
+        do {
+            try startAnswerPlayback(url: url, memoID: memoID)
+            answerPlaybackWasRequested = true
+            WKInterfaceDevice.current().play(.click)
+        } catch {
+            WatchConsole.info("⌚️ [Watch] ❌ Answer replay failed: \(error.localizedDescription)")
+            WKInterfaceDevice.current().play(.failure)
+        }
+    }
+
+    func stopAnswerPlayback() {
+        aiAudioPlayer?.stop()
+        aiAudioPlayer = nil
+        playingAnswerID = nil
+        answerPlaybackWasRequested = false
+        releaseAudioSession()
+    }
+
+    /// Hand the audio session back once there is nothing left to say.
+    ///
+    /// The app declares the `audio` background mode so an answer survives a
+    /// lowered wrist; the other half of that bargain is letting go the moment
+    /// the answer ends, so a finished playback does not quietly hold the watch
+    /// awake or keep other audio ducked.
+    private func releaseAudioSession() {
+        try? AVAudioSession.sharedInstance().setActive(
+            false,
+            options: .notifyOthersOnDeactivation
+        )
+    }
+
+    /// Whether the playback now running was asked for, as opposed to the
+    /// narration that auto-plays the moment an answer lands. Only a deliberate
+    /// tap is evidence the wearer was actually listening.
+    private var answerPlaybackWasRequested = false
+
+    private func startAnswerPlayback(url: URL, memoID: UUID?) throws {
+        answerPlaybackWasRequested = false
+        try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
+        try AVAudioSession.sharedInstance().setActive(true)
+
+        let player = try AVAudioPlayer(contentsOf: url)
+        player.delegate = self
+        player.prepareToPlay()
+        aiAudioPlayer = player
+        playingAnswerID = memoID
+        player.play()
+    }
+}
+
+// MARK: - AVAudioPlayerDelegate
+
+extension WatchSessionManager: AVAudioPlayerDelegate {
+    /// Only the memo whose playback ended is cleared. A replay started while an
+    /// earlier player was still winding down would otherwise be switched off by
+    /// its predecessor's callback.
+    nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        Task { @MainActor [weak self] in
+            guard let self, self.aiAudioPlayer === player else { return }
+            self.aiAudioPlayer = nil
+            self.playingAnswerID = nil
+            // Hearing a replay to the end is a stronger claim to having seen the
+            // answer than opening a list is. Without this the capture key would
+            // hold "PLAY ANSWER" indefinitely for an answer already listened to.
+            // Stopping early does not count — an interrupted answer stays on the
+            // key so it can be restarted.
+            if flag, self.answerPlaybackWasRequested { self.markAsksSeen() }
+            self.answerPlaybackWasRequested = false
+            self.releaseAudioSession()
         }
     }
 }

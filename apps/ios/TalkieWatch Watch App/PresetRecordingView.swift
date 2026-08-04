@@ -35,6 +35,12 @@ struct PresetRecordingView: View {
     @State private var lastSentDuration: TimeInterval = 0
     @State private var currentMemoId: UUID?
     @State private var phaseDeadline: Task<Void, Never>?
+    /// How far the paused face has been pushed toward the discard, in points
+    /// along whichever of the two allowed directions is winning.
+    @State private var discardPush: CGSize = .zero
+    /// Set once per drag, so crossing the threshold ticks rather than buzzes
+    /// continuously while the finger hovers on the line.
+    @State private var discardArmed = false
 
     enum Phase: Equatable {
         case recording
@@ -95,20 +101,124 @@ struct PresetRecordingView: View {
             let capture = themeName.captureStyle
             let material = capture.material
 
-            if forcesAI {
-                aiVoiceMessageFace(
-                    isCompact: compact,
-                    accent: capture.trace,
-                    material: material
-                )
-            } else {
-                memoRecordingFace(
-                    isCompact: compact,
-                    accent: capture.trace,
-                    material: material
-                )
+            ZStack {
+                // Uncovered as the face is pushed aside, so the gesture explains
+                // itself while it is happening instead of after it has taken
+                // the recording.
+                discardLegend(material: material)
+                    .opacity(discardProgress)
+                    .scaleEffect(0.92 + discardProgress * 0.08)
+
+                Group {
+                    if forcesAI {
+                        aiVoiceMessageFace(
+                            isCompact: compact,
+                            accent: capture.trace,
+                            material: material
+                        )
+                    } else {
+                        memoRecordingFace(
+                            isCompact: compact,
+                            accent: capture.trace,
+                            material: material
+                        )
+                    }
+                }
+                .offset(x: discardPush.width, y: discardPush.height)
+                .opacity(1 - discardProgress * 0.72)
             }
+            .gesture(discardGesture)
         }
+    }
+
+    // MARK: - Discard by gesture
+
+    /// The push needed to commit, in points. Short enough to be one flick of a
+    /// thumb, long enough that a wrist knocked against a doorway does not clear
+    /// a recording — which is also why the whole gesture is gated on paused.
+    private static let discardDistance: CGFloat = 56
+
+    private var discardProgress: Double {
+        let travelled = max(-discardPush.width, discardPush.height)
+        return min(max(Double(travelled / Self.discardDistance), 0), 1)
+    }
+
+    private var discardGesture: some Gesture {
+        DragGesture(minimumDistance: 14)
+            .onChanged { value in
+                // Pause is the consent. While the memo is still running the
+                // face does not move at all, so there is nothing to discover
+                // by accident mid-sentence.
+                guard phase == .recording, recorder.isPaused else { return }
+
+                // Left and down only. A push up or right is not a discard, so
+                // it reads as the face refusing to move rather than as a
+                // gesture that half-worked.
+                let left = min(0, value.translation.width)
+                let down = max(0, value.translation.height)
+                let push = CGSize(
+                    width: rubberBanded(left),
+                    height: rubberBanded(down)
+                )
+                discardPush = abs(left) >= down
+                    ? CGSize(width: push.width, height: 0)
+                    : CGSize(width: 0, height: push.height)
+
+                let armed = discardProgress >= 1
+                if armed != discardArmed {
+                    discardArmed = armed
+                    WKInterfaceDevice.current().play(.click)
+                }
+            }
+            .onEnded { _ in
+                guard phase == .recording, recorder.isPaused, discardArmed else {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.7)) {
+                        discardPush = .zero
+                    }
+                    discardArmed = false
+                    return
+                }
+                discardCapture()
+            }
+    }
+
+    /// Past the commit distance the face keeps following the finger, but at a
+    /// third of the rate — the drag stops feeling like it can go further, which
+    /// is the cue that the threshold has already been met.
+    private func rubberBanded(_ travel: CGFloat) -> CGFloat {
+        let magnitude = abs(travel)
+        guard magnitude > Self.discardDistance else { return travel }
+        let excess = magnitude - Self.discardDistance
+        let eased = Self.discardDistance + excess / 3
+        return travel < 0 ? -eased : eased
+    }
+
+    private func discardLegend(material: WatchCaptureMaterial) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: "trash")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(material.ink.opacity(0.86))
+
+            Text(discardArmed ? "RELEASE TO DISCARD" : "KEEP GOING")
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .tracking(1.1)
+                .foregroundStyle(material.inkFaint)
+        }
+        .animation(.easeOut(duration: 0.14), value: discardArmed)
+        .accessibilityHidden(true)
+    }
+
+    private func discardCapture() {
+        WatchConsole.info(
+            "[WatchCapture] discarded by gesture duration=\(recorder.recordingDuration)"
+        )
+        WKInterfaceDevice.current().play(.failure)
+        recorder.cancelRecording()
+        phaseDeadline?.cancel()
+        discardArmed = false
+        discardPush = .zero
+        isRecording = false
+        onComplete()
     }
 
     private func aiVoiceMessageFace(
@@ -124,13 +234,13 @@ struct PresetRecordingView: View {
 
                 Spacer(minLength: 10)
 
-                Label("ASK AI", systemImage: "sparkles")
+                Label("ASK", systemImage: "sparkles")
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
                     .tracking(1.0)
                     .foregroundStyle(accent.opacity(0.88))
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("Ask AI, recording voice message")
+            .accessibilityLabel("Ask, recording voice message")
 
             RecordingSignalChamber(
                 level: recorder.currentLevel,
@@ -189,6 +299,12 @@ struct PresetRecordingView: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel(recorder.isPaused ? "Recording paused" : "Recording memo")
+            // The swipe is invisible to VoiceOver, so the same escape hatch is
+            // published as a rotor action under the same paused-only rule.
+            .accessibilityAction(named: "Discard recording") {
+                guard recorder.isPaused else { return }
+                discardCapture()
+            }
 
             RecordingSignalChamber(
                 level: recorder.currentLevel,
@@ -205,6 +321,20 @@ struct PresetRecordingView: View {
                     : composition.chamberHeight(isCompact: isCompact)
             )
             .frame(maxHeight: composition == .signalRail ? .infinity : nil)
+            .overlay {
+                // The field is nearly dead while paused, so this borrows a band
+                // that is already quiet rather than adding chrome. A gesture
+                // nobody knows about is not a feature, and pause is exactly the
+                // moment the question "can I take that back" comes up.
+                if recorder.isPaused && discardProgress == 0 {
+                    Text("SWIPE AWAY TO DISCARD")
+                        .font(.system(size: 8, weight: .medium, design: .monospaced))
+                        .tracking(0.9)
+                        .foregroundStyle(material.inkFaint.opacity(0.62))
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeOut(duration: 0.22), value: recorder.isPaused)
 
             if composition != .signalRail {
                 Spacer(minLength: isCompact ? 0 : 2)
