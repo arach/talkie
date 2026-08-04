@@ -442,10 +442,7 @@ private struct DeckComplication: View {
 // active chrome vocabulary so Mineral reads as copper on blue-gray alloy while
 // Tactical, Scope, and the monochrome themes retain their own identities.
 private enum HomeCockpitPalette {
-    private static var activeTheme: AppTheme {
-        let raw = TalkieAppConfigurationStore.shared.configuration.appearance.theme
-        return AppTheme(rawValue: raw) ?? .scope
-    }
+    private static var activeTheme: AppTheme { ActiveTheme.current }
 
     private static var chrome: ChromeTokens { activeTheme.chrome }
 
@@ -675,7 +672,11 @@ private struct HomeCommandBar: View {
                         Text(mode.label)
                             .talkieType(.channelLabelTiny)
                     }
-                    .foregroundStyle(mode == .ask ? HomeCockpitPalette.accent : theme.colors.textSecondary)
+                    // The capsule carries the ASK state, not the ink. Accent-on-
+                    // accent-tint is the same hue at two lightnesses and never
+                    // clears 4.5:1 (measured 2.15:1 in tactical/light), so the
+                    // label stays at full page ink and the fill does the signalling.
+                    .foregroundStyle(mode == .ask ? theme.colors.textPrimary : theme.colors.textSecondary)
                     .padding(.horizontal, 9)
                     .frame(height: 30)
                     .background {
@@ -1391,7 +1392,7 @@ private struct HomeActivityScreen: View {
                 Spacer()
                 Text("ACTIVITY")
                     .talkieType(.channelLabelTiny)
-                    .foregroundStyle(HomeCockpitPalette.accent)
+                    .foregroundStyle(HomeCockpitPalette.phosphor)
                 Spacer()
                 Text("9:41")
                     .talkieType(.channelLabelTiny)
@@ -1407,7 +1408,7 @@ private struct HomeActivityScreen: View {
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(HomeCockpitPalette.accent.opacity(0.14), lineWidth: 1)
+                    .strokeBorder(HomeCockpitPalette.phosphor.opacity(0.14), lineWidth: 1)
             }
         }
         .padding(.horizontal, 12)
@@ -1422,7 +1423,7 @@ private struct HomeActivityScreen: View {
                     endPoint: .bottom
                 )
                 RadialGradient(
-                    colors: [HomeCockpitPalette.accent.opacity(0.18), .clear],
+                    colors: [HomeCockpitPalette.phosphor.opacity(0.18), .clear],
                     center: UnitPoint(x: 0.72, y: 0.36),
                     startRadius: 0,
                     endRadius: 140
@@ -1448,9 +1449,9 @@ private struct HomeActivityRow: View {
                 .frame(width: 34, alignment: .leading)
 
             Circle()
-                .fill(HomeCockpitPalette.accent)
+                .fill(HomeCockpitPalette.phosphor)
                 .frame(width: 5, height: 5)
-                .shadow(color: HomeCockpitPalette.accent.opacity(0.65), radius: 3)
+                .shadow(color: HomeCockpitPalette.phosphor.opacity(0.65), radius: 3)
 
             Text(event.title)
                 .talkieType(.preview)
@@ -1460,7 +1461,7 @@ private struct HomeActivityRow: View {
 
             Text(event.kind)
                 .talkieType(.channelLabelTiny)
-                .foregroundStyle(HomeCockpitPalette.accent)
+                .foregroundStyle(HomeCockpitPalette.phosphor)
                 .lineLimit(1)
         }
         .padding(.horizontal, 9)
@@ -1524,7 +1525,7 @@ private struct CockpitScreen: View {
                     endPoint: .bottom
                 )
                 RadialGradient(
-                    colors: [HomeCockpitPalette.accent.opacity(0.22), .clear],
+                    colors: [HomeCockpitPalette.phosphor.opacity(0.22), .clear],
                     center: UnitPoint(x: 0.5, y: 0.44),
                     startRadius: 0,
                     endRadius: 110
@@ -1599,7 +1600,7 @@ private struct CockpitBay: View {
                 Text(readout)
                     .font(.system(size: 8, weight: .semibold, design: .monospaced))
                     .tracking(0.8) // 0.1em at 8pt
-                    .foregroundStyle(readoutHot ? HomeCockpitPalette.accent : HomeCockpitPalette.screenInkFaint)
+                    .foregroundStyle(readoutHot ? HomeCockpitPalette.phosphor : HomeCockpitPalette.screenInkFaint)
                     .accessibilityHidden(true)
             }
             .frame(height: HomeCockpitMetrics.bayLabelHeight)
@@ -1666,7 +1667,7 @@ private struct BaySelector: View {
             .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .strokeBorder(HomeCockpitPalette.accent.opacity(0.22), lineWidth: 1)
+                    .strokeBorder(HomeCockpitPalette.phosphor.opacity(0.22), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -1681,16 +1682,20 @@ private struct BaySelector: View {
         Text(label)
             .font(.system(size: 8, weight: .bold, design: .monospaced))
             .tracking(0.96) // 0.12em at 8pt
-            .foregroundStyle(on ? HomeCockpitPalette.phosphor : HomeCockpitPalette.phosphor.opacity(0.5))
-            .shadow(color: on ? HomeCockpitPalette.accent.opacity(0.55) : .clear, radius: on ? 3 : 0)
+            // The unselected segment is still a live control, so it carries the
+            // plate's neutral ink at full strength — dimming the phosphor with
+            // alpha walks it into the near-black track (measured 2.1–3.5:1).
+            // Selected reads as *coloured*, not merely brighter.
+            .foregroundStyle(on ? HomeCockpitPalette.phosphor : HomeCockpitPalette.screenInk)
+            .shadow(color: on ? HomeCockpitPalette.phosphor.opacity(0.55) : .clear, radius: on ? 3 : 0)
             .padding(.horizontal, 7)
             .frame(maxHeight: .infinity)
-            .background(on ? HomeCockpitPalette.accent.opacity(0.16) : Color.clear)
+            .background(on ? HomeCockpitPalette.phosphor.opacity(0.16) : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
             .overlay {
                 if on {
                     RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .strokeBorder(HomeCockpitPalette.accent.opacity(0.4), lineWidth: 0.5)
+                        .strokeBorder(HomeCockpitPalette.phosphor.opacity(0.4), lineWidth: 0.5)
                 }
             }
     }
@@ -1794,17 +1799,20 @@ private struct MeterLane: View {
     var body: some View {
         let pace = MeterLane.pace(todayLevel: todayLevel, avgLevel: avgLevel, standby: standby)
         HStack(spacing: 9) {
+            // Quiet on the plate is a token choice, never an alpha one: dimming
+            // the phosphor composites it toward the near-black plate (measured
+            // 2.0–3.5:1). The faint plate ink is authored to stay legible there.
             Text(caption)
                 .font(.system(size: 8, weight: .semibold, design: .monospaced))
                 .tracking(0.8) // 0.1em at 8pt
-                .foregroundStyle(HomeCockpitPalette.phosphor.opacity(0.5))
+                .foregroundStyle(HomeCockpitPalette.screenInkFaint)
                 .frame(width: 42, alignment: .leading)
 
             Text(readout)
                 .font(.system(size: 15, weight: .bold, design: .monospaced).monospacedDigit())
                 .tracking(0.3) // 0.02em at 15pt
-                .foregroundStyle(standby ? HomeCockpitPalette.phosphor.opacity(0.5) : HomeCockpitPalette.phosphor)
-                .shadow(color: standby ? .clear : HomeCockpitPalette.accent.opacity(0.55), radius: standby ? 0 : 4)
+                .foregroundStyle(standby ? HomeCockpitPalette.screenInk : HomeCockpitPalette.phosphor)
+                .shadow(color: standby ? .clear : HomeCockpitPalette.phosphor.opacity(0.55), radius: standby ? 0 : 4)
                 .lineLimit(1)
                 .frame(width: 44, alignment: .leading)
 
@@ -1814,7 +1822,7 @@ private struct MeterLane: View {
             Text(pace.text)
                 .font(.system(size: 8, weight: .semibold, design: .monospaced))
                 .tracking(0.48) // 0.06em at 8pt
-                .foregroundStyle(pace.hot ? HomeCockpitPalette.accent : HomeCockpitPalette.phosphor.opacity(0.5))
+                .foregroundStyle(pace.hot ? HomeCockpitPalette.phosphor : HomeCockpitPalette.screenInk)
                 .lineLimit(1)
                 .frame(width: 72, alignment: .trailing)
         }
@@ -1877,15 +1885,15 @@ private struct SegMeter: View {
 
     private func fill(lit: Bool, isAvg: Bool) -> Color {
         if standby { return .clear }
-        if isAvg && !lit { return HomeCockpitPalette.accent.opacity(0.5) }
-        if lit { return HomeCockpitPalette.accent }
+        if isAvg && !lit { return HomeCockpitPalette.phosphor.opacity(0.5) }
+        if lit { return HomeCockpitPalette.phosphor }
         return Color.white.opacity(0.12)
     }
 
     private func glow(i: Int, filled: Int, lit: Bool, isAvg: Bool) -> Color {
         if standby { return .clear }
-        if isAvg { return HomeCockpitPalette.accent.opacity(0.7) }
-        if lit && i == filled - 1 { return HomeCockpitPalette.accent.opacity(0.55) }
+        if isAvg { return HomeCockpitPalette.phosphor.opacity(0.7) }
+        if lit && i == filled - 1 { return HomeCockpitPalette.phosphor.opacity(0.55) }
         return .clear
     }
 }
@@ -1905,21 +1913,21 @@ private struct StrkLane: View {
             Text("STRK")
                 .font(.system(size: 8, weight: .semibold, design: .monospaced))
                 .tracking(0.8) // 0.1em at 8pt
-                .foregroundStyle(HomeCockpitPalette.phosphor.opacity(0.5))
+                .foregroundStyle(HomeCockpitPalette.screenInkFaint)
                 .frame(width: 42, alignment: .leading)
 
             HStack(alignment: .firstTextBaseline, spacing: 5) {
                 Text(standby ? "0" : "\(streak)")
                     .font(.system(size: 17, weight: .bold, design: .monospaced).monospacedDigit())
-                    .foregroundStyle(standby || streak > 0 ? HomeCockpitPalette.accent : HomeCockpitPalette.phosphor.opacity(0.5))
+                    .foregroundStyle(standby || streak > 0 ? HomeCockpitPalette.phosphor : HomeCockpitPalette.screenInk)
                     .shadow(
-                        color: (!standby && streak > 0) ? HomeCockpitPalette.accent.opacity(0.5) : .clear,
+                        color: (!standby && streak > 0) ? HomeCockpitPalette.phosphor.opacity(0.5) : .clear,
                         radius: (!standby && streak > 0) ? 3 : 0
                     )
                 Text(standby ? "DAY 1" : "DAY RUN")
                     .font(.system(size: 7, weight: .semibold, design: .monospaced))
                     .tracking(0.56) // 0.08em at 7pt
-                    .foregroundStyle(HomeCockpitPalette.phosphor.opacity(0.5))
+                    .foregroundStyle(HomeCockpitPalette.screenInkFaint)
             }
             .frame(width: 66, alignment: .leading)
 
@@ -1977,7 +1985,7 @@ private struct Dot: View {
 
     private var fill: Color {
         if standby { return .clear }
-        if isToday { return HomeCockpitPalette.accent }
+        if isToday { return HomeCockpitPalette.phosphor }
         if filled { return Color.white.opacity(0.9) }
         return .clear
     }
@@ -1985,7 +1993,7 @@ private struct Dot: View {
     @ViewBuilder
     private var stroke: some View {
         if standby && isToday {
-            Circle().strokeBorder(HomeCockpitPalette.accent, lineWidth: 1.5) // amber Today Seed
+            Circle().strokeBorder(HomeCockpitPalette.phosphor, lineWidth: 1.5) // amber Today Seed
         } else if standby {
             Circle().strokeBorder(Color.white.opacity(0.11), lineWidth: 1) // Ghost dot
         } else if !filled && !isToday {
@@ -1994,8 +2002,8 @@ private struct Dot: View {
     }
 
     private var glowColor: Color {
-        if standby && isToday { return HomeCockpitPalette.accent.opacity(0.7) }
-        if !standby && isToday { return HomeCockpitPalette.accent.opacity(0.8) }
+        if standby && isToday { return HomeCockpitPalette.phosphor.opacity(0.7) }
+        if !standby && isToday { return HomeCockpitPalette.phosphor.opacity(0.8) }
         return .clear
     }
 
@@ -2030,7 +2038,7 @@ private struct RollCell: View {
         if ghost && isToday {
             // The amber Today Seed — the "you are here" the streak grows from.
             RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .strokeBorder(HomeCockpitPalette.accent, lineWidth: 1.5)
+                .strokeBorder(HomeCockpitPalette.phosphor, lineWidth: 1.5)
         } else if ghost {
             // A Ghost Cell — a faint outline sketching the grid that will fill in.
             RoundedRectangle(cornerRadius: 2, style: .continuous)
@@ -2038,16 +2046,16 @@ private struct RollCell: View {
         } else if isToday && intensity == 0 {
             // Today, no capture yet — an unlit amber ring marker.
             RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .strokeBorder(HomeCockpitPalette.accent, lineWidth: 1)
+                .strokeBorder(HomeCockpitPalette.phosphor, lineWidth: 1)
         }
     }
 
     private var fill: Color {
         if ghost { return .clear }  // ghost cells are outlined only
         if isFuture { return Color.white.opacity(0.03) }
-        if isToday && intensity > 0 { return HomeCockpitPalette.accent }
+        if isToday && intensity > 0 { return HomeCockpitPalette.phosphor }
         if isToday { return .clear }  // ring drawn in the overlay
-        if inRun { return HomeCockpitPalette.accent.opacity(0.7 + Double(intensity) * 0.1) }
+        if inRun { return HomeCockpitPalette.phosphor.opacity(0.7 + Double(intensity) * 0.1) }
         if intensity > 0 { return activeInk }
         return Color.white.opacity(0.05)   // empty past day
     }
@@ -2059,10 +2067,10 @@ private struct RollCell: View {
     }
 
     private var glowColor: Color {
-        if ghost && isToday { return HomeCockpitPalette.accent.opacity(0.7) }
+        if ghost && isToday { return HomeCockpitPalette.phosphor.opacity(0.7) }
         if ghost { return .clear }
-        if isToday && intensity > 0 { return HomeCockpitPalette.accent.opacity(0.85) }
-        if inRun { return HomeCockpitPalette.accent.opacity(0.4) }
+        if isToday && intensity > 0 { return HomeCockpitPalette.phosphor.opacity(0.85) }
+        if inRun { return HomeCockpitPalette.phosphor.opacity(0.4) }
         return .clear
     }
 
