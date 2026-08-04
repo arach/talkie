@@ -28,7 +28,16 @@ extension AppTheme {
 
 @MainActor
 enum AppIconThemeSynchronizer {
+    /// `setAlternateIconName` always pops a system alert the app cannot dismiss
+    /// or suppress, which lands on top of whatever an automated pass is trying
+    /// to photograph. Screenshot and UI-test runs pass this flag to stand the
+    /// synchronizer down; nothing in a shipping launch sets it.
+    private static var isSuppressed: Bool {
+        ProcessInfo.processInfo.arguments.contains("--disableAppIconSync")
+    }
+
     static func synchronize(with theme: AppTheme) async {
+        guard !isSuppressed else { return }
         let application = UIApplication.shared
         guard application.supportsAlternateIcons else { return }
 
