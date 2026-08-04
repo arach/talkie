@@ -101,9 +101,10 @@ struct AsksWatchView: View {
                             }
 
                             ForEach(settledAsks) { ask in
-                                NavigationLink {
-                                    AskDetailView(askId: ask.id)
-                                } label: {
+                                // By value rather than by destination, so a
+                                // notification can push the same page without a
+                                // row on screen to have been tapped.
+                                NavigationLink(value: ask.id) {
                                     SettledAskRow(
                                         ask: ask,
                                         hasAudio: sessionManager.hasAnswerAudio(for: ask.id)
@@ -352,7 +353,9 @@ private struct SettledAskRow: View {
 
 /// A settled ask, opened. Keyed by id rather than passed by value so the view
 /// keeps tracking the memo if a late update lands while it is on screen.
-private struct AskDetailView: View {
+/// Not private: the root `NavigationStack` owns the destination now, so a
+/// notification opened from the watch face lands here directly.
+struct AskDetailView: View {
     @EnvironmentObject private var sessionManager: WatchSessionManager
 
     let askId: UUID

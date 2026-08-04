@@ -20,20 +20,31 @@ final class DeepLinkHandler: ObservableObject {
     func handle(url: URL) {
         WatchConsole.info("⌚️ [Watch] Deep link received: \(url)")
 
-        // URL format: talkie://record/quick or talkie://record/thought
-        guard url.scheme == "talkie",
-              url.host == "record" else {
+        guard url.scheme == "talkie" else { return }
+        // The first path component is always "/", so the payload is at index 1.
+        let payload = url.pathComponents.count > 1 ? url.pathComponents[1] : nil
+
+        switch url.host {
+        // talkie://record/go, talkie://record/ai, talkie://record/thought…
+        case "record":
+            let presetId = payload ?? "quick"
+            WatchConsole.info("⌚️ [Watch] Starting recording with preset: \(presetId)")
+            pendingPresetId = presetId
+            // Haptic feedback
+            WKInterfaceDevice.current().play(.start)
+
+        // talkie://ask/<uuid> — a complication showing a waiting answer. Routed
+        // through the notifier because it already owns "which answer are we
+        // opening, and does it start speaking"; a second parallel mechanism
+        // would only give the two of them a way to disagree.
+        case "ask":
+            guard let payload, let askID = UUID(uuidString: payload) else { return }
+            WatchConsole.info("⌚️ [Watch] Opening ask from deep link: \(askID)")
+            WatchAnswerNotifier.shared.requestOpen(askID: askID, play: false)
+
+        default:
             return
         }
-
-        // Get preset ID from path
-        let presetId = url.pathComponents.count > 1 ? url.pathComponents[1] : "quick"
-        WatchConsole.info("⌚️ [Watch] Starting recording with preset: \(presetId)")
-
-        pendingPresetId = presetId
-
-        // Haptic feedback
-        WKInterfaceDevice.current().play(.start)
     }
 
     func consumePendingPreset() -> WatchPreset? {
@@ -50,10 +61,14 @@ final class DeepLinkHandler: ObservableObject {
 struct TalkieWatchApp: App {
     @StateObject private var sessionManager = WatchSessionManager.shared
     @StateObject private var deepLinkHandler = DeepLinkHandler.shared
+    @StateObject private var answerNotifier = WatchAnswerNotifier.shared
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
         TalkieLogger.configure(source: .talkieWatch)
+        // Before the first scene exists: a notification can cold-start the app,
+        // and the delegate has to be in place to catch which one it was.
+        WatchAnswerNotifier.shared.configure()
     }
 
     var body: some Scene {
@@ -61,6 +76,7 @@ struct TalkieWatchApp: App {
             MainWatchView()
                 .environmentObject(sessionManager)
                 .environmentObject(deepLinkHandler)
+                .environmentObject(answerNotifier)
                 .environment(
                     \.watchThemeName,
                     WatchThemeName(rawValue: sessionManager.appearanceThemeName) ?? .porcelain
@@ -73,6 +89,7 @@ struct TalkieWatchApp: App {
                 // aloud is most obviously wanted.
                 .onAppear {
                     sessionManager.noteForegroundState(scenePhase == .active)
+                    answerNotifier.requestAuthorizationIfNeeded()
                 }
         }
         // Whether an arriving answer speaks on its own turns on whether anyone
@@ -99,13 +116,17 @@ struct MainWatchView: View {
 
     @EnvironmentObject var sessionManager: WatchSessionManager
     @EnvironmentObject var deepLinkHandler: DeepLinkHandler
+    @EnvironmentObject var answerNotifier: WatchAnswerNotifier
     @Environment(\.watchThemeName) private var themeName
     @State private var selectedPreset: WatchPreset?
     @State private var isRecording = false
     @State private var primaryPage: PrimaryPage = .capture
+    /// Asks pushed from outside the Asks page — today that means a notification
+    /// the wearer opened from the watch face.
+    @State private var askPath: [UUID] = []
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $askPath) {
             Group {
                 if isRecording, let preset = selectedPreset {
                     PresetRecordingView(
@@ -134,6 +155,9 @@ struct MainWatchView: View {
                     // discoverable enough without one.
                     .tabViewStyle(.page(indexDisplayMode: .automatic))
                 }
+            }
+            .navigationDestination(for: UUID.self) { askID in
+                AskDetailView(askId: askID)
             }
             .toolbar {
                 if !isRecording {
@@ -168,10 +192,16 @@ struct MainWatchView: View {
         }
         .onAppear {
             checkPendingDeepLink()
+            checkPendingAnswer()
         }
         .onChange(of: deepLinkHandler.pendingPresetId) { _, newValue in
             if newValue != nil {
                 checkPendingDeepLink()
+            }
+        }
+        .onChange(of: answerNotifier.pendingAskID) { _, newValue in
+            if newValue != nil {
+                checkPendingAnswer()
             }
         }
     }
@@ -182,6 +212,25 @@ struct MainWatchView: View {
             primaryPage = .capture
             selectedPreset = preset
             isRecording = true
+        }
+    }
+
+    /// Opens the ask a notification was tapped for.
+    ///
+    /// The Asks page is selected underneath rather than left on capture, so
+    /// backing out of the answer lands where the rest of them are instead of
+    /// somewhere the wearer never chose to be.
+    private func checkPendingAnswer() {
+        // A notification arriving mid-recording is not a reason to throw away
+        // what is being recorded. Left unconsumed, so it is still honoured once
+        // the recording finishes and this view comes back.
+        guard !isRecording else { return }
+        guard let pending = answerNotifier.consumePendingAsk() else { return }
+
+        primaryPage = .asks
+        askPath = [pending.askID]
+        if pending.play {
+            sessionManager.toggleAnswerPlayback(memoID: pending.askID)
         }
     }
 }
