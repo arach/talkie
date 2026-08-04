@@ -39,6 +39,15 @@ struct SettingsNext: View {
     @State private var active: InspectorTab
     @State private var showingLogViewer = false
 
+    /// Where replies spoke before they were silenced. `aiVoiceOutputRoute` is a
+    /// single global holding both "should this speak" and "speak where", so
+    /// switching it to "silent" is the only way to turn speech off — and it
+    /// overwrites the destination on the way. Parking the destination here means
+    /// turning speech back on restores the wearer's choice instead of quietly
+    /// moving the voice back to the phone.
+    @AppStorage("settings.aiVoiceOutputRoute.lastSpoken")
+    private var lastSpokenVoiceRoute = "phone"
+
     enum InspectorTab: String, CaseIterable, Identifiable {
         case voice = "VOICE"
         case look = "LOOK"
@@ -578,7 +587,21 @@ struct SettingsNext: View {
                 "Speak replies",
                 isOn: Binding(
                     get: { appSettings.aiVoiceOutputRoute != "silent" },
-                    set: { appSettings.aiVoiceOutputRoute = $0 ? "phone" : "silent" }
+                    set: { isOn in
+                        if isOn {
+                            // A stored value that is no longer an offered
+                            // destination would leave the toggle stuck off, so
+                            // it falls back to the first real choice.
+                            let choices = Self.aiVoiceOutputChoices.map(\.id)
+                            appSettings.aiVoiceOutputRoute = choices
+                                .contains(lastSpokenVoiceRoute)
+                                ? lastSpokenVoiceRoute
+                                : (choices.first ?? "phone")
+                        } else {
+                            lastSpokenVoiceRoute = appSettings.aiVoiceOutputRoute
+                            appSettings.aiVoiceOutputRoute = "silent"
+                        }
+                    }
                 ),
                 valueOn: aiVoiceRouteLabel,
                 valueOff: "Silent",
