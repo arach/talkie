@@ -34,7 +34,8 @@ final class WatchAIService {
                     result.responseText,
                     provider: provider,
                     memoId: memoId,
-                    preview: result.responseText
+                    preview: result.responseText,
+                    origin: .watch
                 )
                 return WatchAIResponse(
                     answer: result.responseText,
@@ -54,7 +55,8 @@ final class WatchAIService {
             let speech = await AIResponseSpeechRouter.shared.speak(
                 answer,
                 memoId: memoId,
-                preview: answer
+                preview: answer,
+                origin: .watch
             )
             return WatchAIResponse(
                 answer: answer,

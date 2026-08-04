@@ -27,7 +27,7 @@ struct CodexWatchView: View {
 
     var body: some View {
         ZStack {
-            PaperBackground()
+            WatchInstrumentBackground()
 
             if let channel = sessionManager.selectedCodexChannel {
                 channelSurface(channel)
@@ -96,7 +96,7 @@ struct CodexWatchView: View {
         VStack(spacing: 6) {
             codexHeader
 
-            BracketedScopeSlot(annotation: "codex task") {
+            WatchInstrumentPanel(annotation: "codex task") {
                 HStack(spacing: 2) {
                     channelButton(systemImage: "chevron.left", offset: -1)
 

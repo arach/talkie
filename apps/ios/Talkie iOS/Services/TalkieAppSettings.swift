@@ -17,7 +17,7 @@ final class TalkieAppSettings {
     private let store = TalkieAppConfigurationStore.shared
     private var isApplyingConfiguration = false
 
-    var theme: AppTheme = .scope { didSet { persistIfNeeded() } }
+    var theme: AppTheme = .productDefault { didSet { persistIfNeeded() } }
     var appearanceMode: AppearanceMode = .system { didSet { persistIfNeeded() } }
     var appearanceDensity = "standard" { didSet { persistIfNeeded() } }
     var appearanceAccentIntensity = "theme" { didSet { persistIfNeeded() } }
@@ -53,6 +53,10 @@ final class TalkieAppSettings {
     var ttsApiKey = "" { didSet { persistIfNeeded() } }
     var ttsPlaybackRate = 1.0 { didSet { persistIfNeeded() } }
     var aiVoiceOutputRoute = "phone" { didSet { persistIfNeeded() } }
+    /// Whether the Watch taps the wrist when an Ask AI answer is ready. Default
+    /// on: the answer arriving is the whole point of asking from the wrist, and
+    /// without a cue a muted or pocketed Watch never tells the wearer.
+    var watchReadyHapticEnabled = true { didSet { persistIfNeeded() } }
 
     var composeRevisionPath = "direct" { didSet { persistIfNeeded() } }
     var composeDirectProviderId = "openai" { didSet { persistIfNeeded() } }
@@ -84,7 +88,7 @@ final class TalkieAppSettings {
     private func apply(_ configuration: TalkieAppConfiguration) {
         isApplyingConfiguration = true
 
-        theme = AppTheme(rawValue: configuration.appearance.theme) ?? .scope
+        theme = AppTheme(rawValue: configuration.appearance.theme) ?? .productDefault
         appearanceMode = AppearanceMode(rawValue: configuration.appearance.mode) ?? .system
         appearanceDensity = configuration.appearance.density
         appearanceAccentIntensity = configuration.appearance.accentIntensity
@@ -120,6 +124,7 @@ final class TalkieAppSettings {
         ttsApiKey = configuration.tts.apiKey
         ttsPlaybackRate = configuration.tts.playbackRate ?? 1.0
         aiVoiceOutputRoute = configuration.tts.aiVoiceOutputRoute
+        watchReadyHapticEnabled = configuration.tts.watchReadyHapticEnabled
         composeRevisionPath = configuration.compose.revisionPath
         composeDirectProviderId = configuration.compose.directProviderId
         composeDirectModelId = configuration.compose.directModelId
@@ -180,6 +185,7 @@ final class TalkieAppSettings {
             configuration.tts.apiKey = ttsApiKey
             configuration.tts.playbackRate = ttsPlaybackRate
             configuration.tts.aiVoiceOutputRoute = aiVoiceOutputRoute
+            configuration.tts.watchReadyHapticEnabled = watchReadyHapticEnabled
             configuration.compose.revisionPath = composeRevisionPath
             configuration.compose.directProviderId = composeDirectProviderId
             configuration.compose.directModelId = composeDirectModelId
@@ -208,6 +214,7 @@ final class TalkieAppSettings {
         defaults.set(configuration.appearance.accentIntensity, forKey: "appearance.accentIntensity")
         defaults.set(configuration.appearance.wordmarkStyle, forKey: "appearance.wordmarkStyle")
         defaults.set(configuration.appearance.reduceMotionEnabled, forKey: "appearance.reduceMotion")
+        groupDefaults?.set(configuration.appearance.theme, forKey: "selectedTheme")
         groupDefaults?.set(configuration.appearance.mode, forKey: "appearanceMode")
 
         defaults.set(configuration.recording.tagLocationEnabled, forKey: "recording.tagLocation")
@@ -255,6 +262,7 @@ final class TalkieAppSettings {
         defaults.set(configuration.ssh.renderer, forKey: "sshTerminal.renderer")
         defaults.set(configuration.tts.playbackRate ?? 1.0, forKey: "tts.playbackRate")
         defaults.set(configuration.tts.aiVoiceOutputRoute, forKey: "tts.aiVoiceOutputRoute")
+        defaults.set(configuration.tts.watchReadyHapticEnabled, forKey: "tts.watchReadyHapticEnabled")
         defaults.set(configuration.hyperScan.retainCaptures, forKey: "hyperScan.retainCaptures")
 
         if let savedHostsData = try? encoder.encode(configuration.ssh.savedHosts) {

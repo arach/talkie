@@ -2,12 +2,11 @@
 //  PresetRecordingView.swift
 //  TalkieWatch
 //
-//  Capture-in-motion. Same instrument vocabulary as the idle picker —
-//  channel header on top, rectangular scope slot, big ultra-light
-//  monospaced timer, clean round button at the bottom — but the slot
-//  goes live with audio level, the button becomes STOP, and after the
-//  user stops we walk through a visible confirmation sequence so the
-//  recording feels safely landed instead of "did anything happen?"
+//  Capture-in-motion. The quiet branded composition stays fixed while the
+//  recording becomes a distinct live composition: REC state, the original
+//  particle language, a centered elapsed-time readout, and a balanced
+//  pause–stop rail in the lower reach zone. Transfer and outcome return to the
+//  quiet branded face.
 //
 //  Sequence after stop:
 //    • CAPTURED         — local capture finalized (brief, ~0.5s)
@@ -25,6 +24,7 @@ import WatchKit
 
 struct PresetRecordingView: View {
     @EnvironmentObject var sessionManager: WatchSessionManager
+    @Environment(\.watchThemeName) private var themeName
     let preset: WatchPreset
     @Binding var isRecording: Bool
     var onComplete: () -> Void
@@ -35,6 +35,12 @@ struct PresetRecordingView: View {
     @State private var lastSentDuration: TimeInterval = 0
     @State private var currentMemoId: UUID?
     @State private var phaseDeadline: Task<Void, Never>?
+    /// How far the paused face has been pushed toward the discard, in points
+    /// along whichever of the two allowed directions is winning.
+    @State private var discardPush: CGSize = .zero
+    /// Set once per drag, so crossing the threshold ticks rather than buzzes
+    /// continuously while the finger hovers on the line.
+    @State private var discardArmed = false
 
     enum Phase: Equatable {
         case recording
@@ -58,37 +64,28 @@ struct PresetRecordingView: View {
 
     var body: some View {
         ZStack {
-            PaperBackground()
+            TalkieCaptureBackground()
 
-            VStack(spacing: 0) {
-                VStack(spacing: 14) {
-                    InstrumentHeader(elapsed: displayedDuration, isLive: phase == .recording)
-
-                    BracketedScopeSlot {
-                        scopeContent
-                    }
-                    .frame(height: 78)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        if phase == .recording { stopAndSend() }
-                    }
-                }
-                .padding(.leading, 10)
-                .padding(.trailing, 18)
-                .padding(.top, 16)
-
-                Spacer(minLength: 0)
-
-                VStack(spacing: 4) {
+            if phase == .recording {
+                liveRecordingFace
+            } else {
+                TalkieCaptureLayout {
+                    crossbarReadout
+                } primary: {
                     buttonSlot
-
-                    statusLine
+                } caption: {
+                    EmptyView()
+                } secondary: {
+                    EmptyView()
                 }
-                .padding(.horizontal, 10)
-                .padding(.bottom, 12)
             }
         }
-        .onAppear { recorder.startRecording() }
+        .onAppear {
+            WatchConsole.info(
+                "[WatchCapture] opened intent=\(preset.intent ?? "auto") reachable=\(sessionManager.isReachable)"
+            )
+            recorder.startRecording()
+        }
         .onChange(of: sessionManager.lastSentStatus) { _, newStatus in
             handleSendStatusChange(newStatus)
         }
@@ -98,20 +95,319 @@ struct PresetRecordingView: View {
         .onDisappear { phaseDeadline?.cancel() }
     }
 
-    // MARK: - Scope slot content (phase-aware)
+    private var liveRecordingFace: some View {
+        GeometryReader { proxy in
+            let compact = proxy.size.height < 190
+            let capture = themeName.captureStyle
+            let material = capture.material
+
+            ZStack {
+                // Uncovered as the face is pushed aside, so the gesture explains
+                // itself while it is happening instead of after it has taken
+                // the recording.
+                discardLegend(material: material)
+                    .opacity(discardProgress)
+                    .scaleEffect(0.92 + discardProgress * 0.08)
+
+                Group {
+                    if forcesAI {
+                        aiVoiceMessageFace(
+                            isCompact: compact,
+                            accent: capture.trace,
+                            material: material
+                        )
+                    } else {
+                        memoRecordingFace(
+                            isCompact: compact,
+                            accent: capture.trace,
+                            material: material
+                        )
+                    }
+                }
+                .offset(x: discardPush.width, y: discardPush.height)
+                .opacity(1 - discardProgress * 0.72)
+            }
+            .gesture(discardGesture)
+        }
+    }
+
+    // MARK: - Discard by gesture
+
+    /// The push needed to commit, in points. Short enough to be one flick of a
+    /// thumb, long enough that a wrist knocked against a doorway does not clear
+    /// a recording — which is also why the whole gesture is gated on paused.
+    private static let discardDistance: CGFloat = 56
+
+    private var discardProgress: Double {
+        let travelled = max(-discardPush.width, discardPush.height)
+        return min(max(Double(travelled / Self.discardDistance), 0), 1)
+    }
+
+    private var discardGesture: some Gesture {
+        DragGesture(minimumDistance: 14)
+            .onChanged { value in
+                // Pause is the consent. While the memo is still running the
+                // face does not move at all, so there is nothing to discover
+                // by accident mid-sentence.
+                guard phase == .recording, recorder.isPaused else { return }
+
+                // Left and down only. A push up or right is not a discard, so
+                // it reads as the face refusing to move rather than as a
+                // gesture that half-worked.
+                let left = min(0, value.translation.width)
+                let down = max(0, value.translation.height)
+                let push = CGSize(
+                    width: rubberBanded(left),
+                    height: rubberBanded(down)
+                )
+                discardPush = abs(left) >= down
+                    ? CGSize(width: push.width, height: 0)
+                    : CGSize(width: 0, height: push.height)
+
+                let armed = discardProgress >= 1
+                if armed != discardArmed {
+                    discardArmed = armed
+                    WKInterfaceDevice.current().play(.click)
+                }
+            }
+            .onEnded { _ in
+                guard phase == .recording, recorder.isPaused, discardArmed else {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.7)) {
+                        discardPush = .zero
+                    }
+                    discardArmed = false
+                    return
+                }
+                discardCapture()
+            }
+    }
+
+    /// Past the commit distance the face keeps following the finger, but at a
+    /// third of the rate — the drag stops feeling like it can go further, which
+    /// is the cue that the threshold has already been met.
+    private func rubberBanded(_ travel: CGFloat) -> CGFloat {
+        let magnitude = abs(travel)
+        guard magnitude > Self.discardDistance else { return travel }
+        let excess = magnitude - Self.discardDistance
+        let eased = Self.discardDistance + excess / 3
+        return travel < 0 ? -eased : eased
+    }
+
+    private func discardLegend(material: WatchCaptureMaterial) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: "trash")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(material.ink.opacity(0.86))
+
+            Text(discardArmed ? "RELEASE TO DISCARD" : "KEEP GOING")
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .tracking(1.1)
+                .foregroundStyle(material.inkFaint)
+        }
+        .animation(.easeOut(duration: 0.14), value: discardArmed)
+        .accessibilityHidden(true)
+    }
+
+    private func discardCapture() {
+        WatchConsole.info(
+            "[WatchCapture] discarded by gesture duration=\(recorder.recordingDuration)"
+        )
+        WKInterfaceDevice.current().play(.failure)
+        recorder.cancelRecording()
+        phaseDeadline?.cancel()
+        discardArmed = false
+        discardPush = .zero
+        isRecording = false
+        onComplete()
+    }
+
+    private func aiVoiceMessageFace(
+        isCompact: Bool,
+        accent: Color,
+        material: WatchCaptureMaterial
+    ) -> some View {
+        VStack(spacing: isCompact ? 4 : 7) {
+            HStack(alignment: .center) {
+                Text("talkie")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(material.ink.opacity(0.90))
+
+                Spacer(minLength: 10)
+
+                Label("ASK", systemImage: "sparkles")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .tracking(1.0)
+                    .foregroundStyle(accent.opacity(0.88))
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Ask, recording voice message")
+
+            RecordingSignalChamber(
+                level: recorder.currentLevel,
+                duration: formatDuration(recorder.recordingDuration),
+                color: accent,
+                material: material,
+                isPaused: false,
+                isCompact: isCompact,
+                composition: .signalRail
+            )
+            .frame(maxHeight: .infinity)
+
+            AIVoiceMessageComposer(
+                duration: formatDuration(recorder.recordingDuration),
+                accent: accent,
+                material: material,
+                isCompact: isCompact,
+                action: stopAndSend
+            )
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, isCompact ? 2 : 5)
+        .padding(.bottom, isCompact ? 4 : 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func memoRecordingFace(
+        isCompact: Bool,
+        accent: Color,
+        material: WatchCaptureMaterial
+    ) -> some View {
+        let composition = RecordingFaceComposition.active
+
+        return VStack(spacing: isCompact ? 3 : 5) {
+            HStack(alignment: .center) {
+                Text("talkie")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(material.ink.opacity(0.90))
+
+                Spacer(minLength: 10)
+
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(recorder.isPaused ? accent : Color.red)
+                        .frame(width: 5, height: 5)
+                        .shadow(
+                            color: (recorder.isPaused ? accent : Color.red).opacity(0.42),
+                            radius: 2
+                        )
+
+                    Text(recorder.isPaused ? "PAUSED" : "REC")
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .tracking(1.3)
+                        .foregroundStyle(material.inkFaint)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(recorder.isPaused ? "Recording paused" : "Recording memo")
+            // The swipe is invisible to VoiceOver, so the same escape hatch is
+            // published as a rotor action under the same paused-only rule.
+            .accessibilityAction(named: "Discard recording") {
+                guard recorder.isPaused else { return }
+                discardCapture()
+            }
+
+            RecordingSignalChamber(
+                level: recorder.currentLevel,
+                duration: formatDuration(recorder.recordingDuration),
+                color: accent,
+                material: material,
+                isPaused: recorder.isPaused,
+                isCompact: isCompact,
+                composition: composition
+            )
+            .frame(
+                height: composition == .signalRail
+                    ? nil
+                    : composition.chamberHeight(isCompact: isCompact)
+            )
+            .frame(maxHeight: composition == .signalRail ? .infinity : nil)
+            .overlay {
+                // The field is nearly dead while paused, so this borrows a band
+                // that is already quiet rather than adding chrome. A gesture
+                // nobody knows about is not a feature, and pause is exactly the
+                // moment the question "can I take that back" comes up.
+                if recorder.isPaused && discardProgress == 0 {
+                    Text("SWIPE AWAY TO DISCARD")
+                        .font(.system(size: 8, weight: .medium, design: .monospaced))
+                        .tracking(0.9)
+                        .foregroundStyle(material.inkFaint.opacity(0.62))
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeOut(duration: 0.22), value: recorder.isPaused)
+
+            if composition != .signalRail {
+                Spacer(minLength: isCompact ? 0 : 2)
+            }
+
+            if composition == .signalRail {
+                RecordingElapsedTime(
+                    duration: formatDuration(recorder.recordingDuration),
+                    color: accent.opacity(0.92),
+                    material: material,
+                    font: .system(
+                        size: isCompact ? 16 : 18,
+                        weight: .medium,
+                        design: .monospaced
+                    ),
+                    tracking: 0,
+                    revealProgress: 1
+                )
+                .frame(width: isCompact ? 66 : 72, height: isCompact ? 20 : 23)
+                .accessibilityHidden(true)
+
+                HStack(spacing: 0) {
+                    PauseResumeButton(
+                        isPaused: recorder.isPaused,
+                        color: accent,
+                        material: material,
+                        action: togglePause
+                    )
+                    .frame(width: 46, height: 46)
+
+                    Spacer(minLength: isCompact ? 16 : 22)
+
+                    RecordButton(
+                        kind: .stop,
+                        audioLevel: recorder.currentLevel,
+                        action: stopAndSend
+                    )
+                    .scaleEffect(composition.stopScale(isCompact: isCompact))
+                    .frame(width: 46, height: 46)
+                }
+                .padding(.horizontal, 7)
+            } else {
+                RecordButton(
+                    kind: .stop,
+                    audioLevel: recorder.currentLevel,
+                    action: stopAndSend
+                )
+                .scaleEffect(composition.stopScale(isCompact: isCompact))
+            }
+        }
+        .padding(.horizontal, 15)
+        .padding(.top, isCompact ? 2 : 5)
+        .padding(.bottom, isCompact ? 3 : 7)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Crossbar readout
 
     @ViewBuilder
-    private var scopeContent: some View {
-        switch phase {
-        case .recording:
-            ScopeWaveform(audioLevel: recorder.currentLevel, isLive: true, treatment: .line)
-
-        case .captured, .sending, .received, .transcribing:
-            // Frozen low trace; status line carries the active info.
-            ScopeWaveform(audioLevel: 0.20, isLive: false, treatment: .line)
-
-        case .routed, .queued, .failed:
-            EmptyView()
+    private var crossbarReadout: some View {
+        let material = themeName.captureStyle.material
+        if phase == .recording {
+            Text(formatDuration(recorder.recordingDuration))
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(material.ink)
+        } else {
+            Text(statusLabel)
+                .font(.system(size: 9, weight: .bold, design: .rounded))
+                .foregroundStyle(material.inkFaint)
+                .lineLimit(2)
+                .minimumScaleFactor(0.72)
+                .multilineTextAlignment(.center)
         }
     }
 
@@ -121,7 +417,7 @@ struct PresetRecordingView: View {
     private var buttonSlot: some View {
         switch phase {
         case .recording:
-            RecordButton(kind: .stop, action: stopAndSend)
+            RecordButton(kind: .stop, audioLevel: recorder.currentLevel, action: stopAndSend)
         case .captured, .sending, .received, .transcribing:
             // Replace the button with a small status puck so the layout
             // doesn't jump but the affordance is clearly "in flight".
@@ -135,58 +431,17 @@ struct PresetRecordingView: View {
         }
     }
 
-    // MARK: - Status line (under the button)
-
-    private var statusLine: some View {
-        let chrome = WatchTheme.current
-        return HStack(spacing: 5) {
-            // Phase glyph
-            Circle()
-                .fill(statusColor)
-                .frame(width: 4, height: 4)
-                .shadow(color: statusColor.opacity(0.55), radius: 2)
-
-            Text(statusLabel)
-                .font(.system(size: 9, weight: .medium, design: .monospaced))
-                .tracking(1.2)
-                .foregroundColor(chrome.panelInkFaint)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
     private var statusLabel: String {
         switch phase {
-        case .recording:                       return forcesAI ? "REC · ASK AI" : "REC · AUTO-ROUTE"
-        case .captured:                        return "CAPTURED"
-        case .sending:                         return "SENDING…"
-        case .received:                        return "PHONE RECEIVED"
-        case .transcribing:                    return "TRANSCRIBING…"
-        case .routed:                          return routeResult == .askAI ? "ASKED AI" : "SAVED TO PHONE"
-        case .queued:                          return "QUEUED · WILL SEND"
-        case .failed(let msg):                 return "FAILED · \(msg.uppercased())"
+        case .recording:                       return formatDuration(recorder.recordingDuration)
+        case .captured:                        return forcesAI ? "Message ready" : "Captured"
+        case .sending:                         return forcesAI ? "Sending message" : "Sending"
+        case .received:                        return forcesAI ? "Message sent" : "Sent"
+        case .transcribing:                    return forcesAI ? "AI is working" : "Working"
+        case .routed:                          return routeResult == .askAI ? "Asked AI" : "Saved"
+        case .queued:                          return forcesAI ? "Message queued" : "Queued"
+        case .failed:                          return "Not sent"
         }
-    }
-
-    private var statusColor: Color {
-        let chrome = WatchTheme.current
-        switch phase {
-        case .recording:                       return .red
-        case .captured, .received, .routed:    return .green
-        case .sending, .transcribing:          return chrome.accent
-        case .queued:                          return .orange
-        case .failed:                          return .red
-        }
-    }
-
-    private var timerColor: Color {
-        let chrome = WatchTheme.current
-        return phase == .recording ? chrome.panelInk : chrome.panelInkFaint
-    }
-
-    private var displayedDuration: TimeInterval {
-        phase == .recording ? recorder.recordingDuration : lastSentDuration
     }
 
     // MARK: - Memo status observation
@@ -198,15 +453,19 @@ struct PresetRecordingView: View {
 
     private func handleMemoStatusChange(_ status: WatchMemo.MemoStatus?) {
         guard let status else { return }
+        WatchConsole.info(
+            "[WatchCapture] memo status=\(status.rawValue) memo=\(currentMemoId?.uuidString ?? "none") phase=\(String(describing: phase))"
+        )
         switch status {
         case .received:
             if phase == .sending || phase == .captured {
                 transition(to: .received)
-                schedulePhaseTimeout(seconds: 6, fallback: .routed)
+                scheduleDismiss(after: 1.6)
             }
         case .thinking:
             if phase != .routed {
                 transition(to: .transcribing)
+                scheduleDismiss(after: 2.2)
             }
         case .transcribed:
             routeResult = .memo
@@ -225,19 +484,20 @@ struct PresetRecordingView: View {
     }
 
     private func handleSendStatusChange(_ status: WatchSessionManager.SendStatus) {
+        WatchConsole.info(
+            "[WatchCapture] transfer status=\(String(describing: status)) phase=\(String(describing: phase))"
+        )
         switch status {
         case .sending:
             if phase == .captured {
-                transition(to: .sending)
+                beginSendingPhase()
             }
         case .sent:
-            // .sent here means watch-side handed off the file. If the
-            // phone is reachable we expect a memo-status update soon
-            // (received → transcribed/answered). Show received as a
-            // best-guess, give it a few seconds, then fall through.
+            // The WatchConnectivity file handoff completed. Processing may
+            // continue on the phone, but the Watch surface can close cleanly.
             if phase == .sending || phase == .captured {
                 transition(to: .received)
-                schedulePhaseTimeout(seconds: 4, fallback: .routed)
+                scheduleDismiss(after: 1.6)
             }
         case .failed(let msg):
             transition(to: .failed(msg))
@@ -251,7 +511,18 @@ struct PresetRecordingView: View {
 
     private func transition(to next: Phase) {
         guard phase != next else { return }
+        WatchConsole.info(
+            "[WatchCapture] phase \(String(describing: phase)) -> \(String(describing: next))"
+        )
         withAnimation(.easeOut(duration: 0.20)) { phase = next }
+    }
+
+    private func beginSendingPhase() {
+        transition(to: .sending)
+        // `transferFile` is durable but its completion callback is not a UI
+        // guarantee. Fall back to the honest queued state rather than leaving
+        // a permanent spinner when WatchConnectivity suspends either app.
+        schedulePhaseTimeout(seconds: 8, fallback: .queued)
     }
 
     /// Schedule a fallback if we don't hear back from the phone within
@@ -259,24 +530,24 @@ struct PresetRecordingView: View {
     /// update gets dropped or the phone is slow to respond.
     private func schedulePhaseTimeout(seconds: Double, fallback: Phase) {
         phaseDeadline?.cancel()
+        let expectedPhase = phase
+        WatchConsole.info(
+            "[WatchCapture] deadline phase=\(String(describing: expectedPhase)) seconds=\(seconds) fallback=\(String(describing: fallback))"
+        )
         phaseDeadline = Task { @MainActor in
             try? await Task.sleep(for: .seconds(seconds))
             guard !Task.isCancelled else { return }
-            // Only fall through if we haven't progressed past the
-            // current phase already.
-            let alreadyTerminal: Bool = {
-                switch phase {
-                case .routed, .failed: return true
-                default:               return false
-                }
-            }()
-            if !alreadyTerminal {
-                if case .routed = fallback {
-                    routeResult = forcesAI ? .askAI : .unknown
-                }
-                transition(to: fallback)
-                scheduleDismiss(after: 1.4)
+            guard phase == expectedPhase else {
+                WatchConsole.info(
+                    "[WatchCapture] ignored stale deadline expected=\(String(describing: expectedPhase)) actual=\(String(describing: phase))"
+                )
+                return
             }
+            WatchConsole.info(
+                "[WatchCapture] deadline fired phase=\(String(describing: phase)) fallback=\(String(describing: fallback))"
+            )
+            transition(to: fallback)
+            scheduleDismiss(after: 1.4)
         }
     }
 
@@ -295,10 +566,13 @@ struct PresetRecordingView: View {
     private func stopAndSend() {
         WKInterfaceDevice.current().play(.stop)
         lastSentDuration = recorder.recordingDuration
-        isRecording = false
+        WatchConsole.info(
+            "[WatchCapture] stop requested duration=\(lastSentDuration) intent=\(preset.intent ?? "auto")"
+        )
 
         Task { @MainActor in
             guard let audioURL = await recorder.stopRecording() else {
+                isRecording = false
                 onComplete()
                 return
             }
@@ -315,6 +589,9 @@ struct PresetRecordingView: View {
 
             // Capture the memoId so we can observe the right entry.
             currentMemoId = sessionManager.recentMemos.first?.id
+            WatchConsole.info(
+                "[WatchCapture] queued memo=\(currentMemoId?.uuidString ?? "none") reachable=\(sessionManager.isReachable)"
+            )
 
             // Phone not reachable? Jump straight to QUEUED and dismiss — no
             // hanging. The audio is already queued for background transfer.
@@ -329,15 +606,345 @@ struct PresetRecordingView: View {
             // has a moment to register.
             try? await Task.sleep(for: .milliseconds(450))
             if phase == .captured {
-                transition(to: .sending)
+                beginSendingPhase()
             }
         }
+    }
+
+    private func togglePause() {
+        guard recorder.togglePause() else { return }
+        WKInterfaceDevice.current().play(.click)
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {
         let minutes = Int(duration) / 60
         let seconds = Int(duration) % 60
-        return String(format: "%d:%02d", minutes, seconds)
+        let secondsText = seconds < 10 ? "0\(seconds)" : "\(seconds)"
+        return "\(minutes):\(secondsText)"
+    }
+}
+
+/// Three bounded recording studies, all within the same Talkie material world.
+/// The release build uses the signal-rail hierarchy. Debug builds can render
+/// the alternatives by setting `watch.recordingFaceStudy` in UserDefaults.
+private enum RecordingFaceComposition: String {
+    case chronograph
+    case signalRail
+    case constellation
+
+    static var active: RecordingFaceComposition {
+        #if DEBUG
+        if let rawValue = UserDefaults.standard.string(forKey: "watch.recordingFaceStudy"),
+           let composition = RecordingFaceComposition(rawValue: rawValue) {
+            return composition
+        }
+        #endif
+        return .signalRail
+    }
+
+    func chamberHeight(isCompact: Bool) -> CGFloat {
+        switch self {
+        case .chronograph:
+            isCompact ? 63 : 78
+        case .signalRail:
+            isCompact ? 78 : 94
+        case .constellation:
+            isCompact ? 71 : 88
+        }
+    }
+
+    func stopScale(isCompact: Bool) -> CGFloat {
+        switch self {
+        case .chronograph:
+            isCompact ? 0.80 : 0.86
+        case .signalRail:
+            isCompact ? 0.62 : 0.68
+        case .constellation:
+            isCompact ? 0.90 : 0.98
+        }
+    }
+
+    var particleScale: CGFloat {
+        switch self {
+        case .chronograph: 1.00
+        case .signalRail: 1.38
+        case .constellation: 1.82
+        }
+    }
+
+    var quietZone: CGFloat {
+        switch self {
+        case .chronograph: 0.18
+        case .signalRail: 0.12
+        case .constellation: 0.15
+        }
+    }
+}
+
+/// The original Watch recorder felt alive because the particles, elapsed time,
+/// and stop control read as one capture state. In the release composition this
+/// chamber gives the visual treatment its own band. The timer remains centered
+/// and stable while the actions stay together in the lower reach zone.
+private struct RecordingSignalChamber: View {
+    let level: Float
+    let duration: String
+    let color: Color
+    let material: WatchCaptureMaterial
+    let isPaused: Bool
+    let isCompact: Bool
+    let composition: RecordingFaceComposition
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var revealProgress: CGFloat = 0
+
+    var body: some View {
+        Group {
+            if composition == .signalRail {
+                RecordingParticleField(
+                    level: level,
+                    color: color,
+                    quietZone: 0,
+                    particleScale: composition.particleScale,
+                    isPaused: isPaused,
+                    revealProgress: revealProgress
+                )
+                .frame(height: isCompact ? 32 : 42)
+            } else {
+                ZStack {
+                    RecordingParticleField(
+                        level: level,
+                        color: color,
+                        quietZone: composition.quietZone,
+                        particleScale: composition.particleScale,
+                        isPaused: isPaused,
+                        revealProgress: revealProgress
+                    )
+
+                    RecordingElapsedTime(
+                        duration: duration,
+                        color: timerColor,
+                        material: material,
+                        font: timerFont,
+                        tracking: timerTracking,
+                        revealProgress: revealProgress
+                    )
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Elapsed \(duration)")
+        .onAppear(perform: reveal)
+    }
+
+    private var timerFont: Font {
+        switch composition {
+        case .chronograph:
+            .system(size: isCompact ? 25 : 31, weight: .medium, design: .rounded)
+        case .signalRail:
+            .system(size: isCompact ? 19 : 23, weight: .semibold, design: .monospaced)
+        case .constellation:
+            .system(size: isCompact ? 21 : 25, weight: .regular, design: .rounded)
+        }
+    }
+
+    private var timerTracking: CGFloat {
+        switch composition {
+        case .chronograph: -0.7
+        case .signalRail: 0.1
+        case .constellation: -0.35
+        }
+    }
+
+    private var timerColor: Color {
+        switch composition {
+        case .chronograph:
+            material.ink
+        case .signalRail:
+            color.opacity(0.92)
+        case .constellation:
+            material.ink.opacity(0.74)
+        }
+    }
+
+    private func reveal() {
+        if reduceMotion {
+            revealProgress = 1
+        } else {
+            withAnimation(.easeOut(duration: 0.62)) {
+                revealProgress = 1
+            }
+        }
+    }
+}
+
+private struct RecordingParticleField: View {
+    let level: Float
+    let color: Color
+    let quietZone: CGFloat
+    let particleScale: CGFloat
+    let isPaused: Bool
+    let revealProgress: CGFloat
+
+    var body: some View {
+        ParticlesView(
+                level: level,
+                color: color,
+                centerQuietZone: quietZone,
+                particleScale: particleScale,
+                isPaused: isPaused
+            )
+                .scaleEffect(
+                    x: 0.92 + revealProgress * 0.08,
+                    y: 0.76 + revealProgress * 0.24
+                )
+                .opacity(
+                    (0.20 + Double(revealProgress) * 0.80)
+                        * (isPaused ? 0.38 : 1)
+                )
+                .mask {
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: .white, location: 0.08),
+                            .init(color: .white, location: 0.92),
+                            .init(color: .clear, location: 1)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                }
+                .animation(.easeOut(duration: 0.22), value: isPaused)
+                .accessibilityHidden(true)
+    }
+}
+
+private struct RecordingElapsedTime: View {
+    let duration: String
+    let color: Color
+    let material: WatchCaptureMaterial
+    let font: Font
+    let tracking: CGFloat
+    let revealProgress: CGFloat
+
+    var body: some View {
+        Text(duration)
+                .font(font)
+                .tracking(tracking)
+                .monospacedDigit()
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .minimumScaleFactor(0.78)
+                .foregroundStyle(color)
+                .contentTransition(.numericText())
+                .shadow(color: material.field.opacity(0.94), radius: 5)
+                .shadow(color: material.fieldShade.opacity(0.44), radius: 1, y: 1)
+                .blur(radius: (1 - revealProgress) * 2.5)
+                .opacity(0.56 + Double(revealProgress) * 0.44)
+    }
+}
+
+private struct PauseResumeButton: View {
+    let isPaused: Bool
+    let color: Color
+    let material: WatchCaptureMaterial
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(isPaused ? color.opacity(0.10) : material.secondaryFill)
+                    .frame(width: 36, height: 36)
+
+                Circle()
+                    .stroke(color.opacity(isPaused ? 0.76 : 0.48), lineWidth: 0.9)
+                    .frame(width: 36, height: 36)
+
+                Group {
+                    if isPaused {
+                        Image(systemName: "play.fill")
+                    } else {
+                        Image(systemName: "pause")
+                    }
+                }
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(isPaused ? color : material.ink.opacity(0.82))
+            }
+            .frame(width: 46, height: 46)
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(isPaused ? "Resume recording" : "Pause recording")
+    }
+}
+
+/// Ask AI is a voice-message composer, not a memo transport. The live signal
+/// remains useful feedback, while the only completion action is an explicit
+/// message send affordance with a stable, single-line elapsed time.
+private struct AIVoiceMessageComposer: View {
+    let duration: String
+    let accent: Color
+    let material: WatchCaptureMaterial
+    let isCompact: Bool
+    let action: () -> Void
+
+    var body: some View {
+        HStack(spacing: isCompact ? 6 : 8) {
+            Image(systemName: "waveform")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(accent.opacity(0.92))
+                .frame(width: 28, height: 28)
+                .background(
+                    Circle()
+                        .fill(accent.opacity(0.10))
+                )
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 0) {
+                Text("VOICE MESSAGE")
+                    .font(.system(size: 7, weight: .bold, design: .monospaced))
+                    .tracking(0.8)
+                    .foregroundStyle(material.inkFaint)
+                    .lineLimit(1)
+
+                Text(duration)
+                    .font(.system(size: 14, weight: .medium, design: .monospaced))
+                    .monospacedDigit()
+                    .foregroundStyle(material.ink.opacity(0.90))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .contentTransition(.numericText())
+            }
+
+            Spacer(minLength: 2)
+
+            Button(action: action) {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(material.field)
+                    .frame(width: 34, height: 34)
+                    .background(
+                        Circle()
+                            .fill(accent)
+                            .shadow(color: accent.opacity(0.24), radius: 3, y: 2)
+                    )
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Send voice message to AI")
+        }
+        .padding(.leading, 8)
+        .padding(.trailing, 4)
+        .frame(height: isCompact ? 48 : 52)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(material.secondaryFill)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(material.secondaryEdge, lineWidth: 0.8)
+                )
+        )
     }
 }
 
@@ -355,9 +962,13 @@ private struct ProgressPuck: View {
 
             switch phase {
             case .captured:
+                // Accent, not green. Capture succeeding is the expected path,
+                // not a notable outcome, and the puck's own ring is already
+                // accent — a green glyph inside an accent ring read as two
+                // unrelated signals.
                 Image(systemName: "checkmark")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.green)
+                    .foregroundStyle(chrome.accent)
             case .received:
                 Image(systemName: "iphone.gen3.radiowaves.left.and.right")
                     .font(.system(size: 18, weight: .semibold))
@@ -376,11 +987,15 @@ private struct RoutedPuck: View {
 
     var body: some View {
         let chrome = WatchTheme.current
+        let material = WatchTheme.capture.material
         let (glyph, color): (String, Color) = {
             switch result {
             case .askAI:    return ("sparkles", chrome.accent)
-            case .memo:     return ("waveform", .green)
-            case .unknown:  return ("checkmark", chrome.panelInk)
+            // The glyph already separates memo from ask; colour does not need
+            // to, and the theme accent keeps the outcome inside the app's
+            // palette instead of borrowing system green.
+            case .memo:     return ("waveform", chrome.accent)
+            case .unknown:  return ("checkmark", material.ink)
             case .pending:  return ("ellipsis", chrome.accent)
             }
         }()

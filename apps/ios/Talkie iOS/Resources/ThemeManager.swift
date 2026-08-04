@@ -54,6 +54,10 @@ enum AppTheme: String, CaseIterable, Identifiable {
     case graphite = "graphite"
     case carbon = "carbon"
 
+    /// Product default for new or incomplete appearance configurations.
+    /// Keep this centralized so the settings facade and runtime resolver cannot drift.
+    static let productDefault: AppTheme = .porcelain
+
     var id: String { rawValue }
 
     var displayName: String {
@@ -339,6 +343,7 @@ class ThemeManager: ObservableObject {
     @Published var currentTheme: AppTheme {
         didSet {
             appSettings.theme = currentTheme
+            WatchSessionManager.shared.publishAppearanceTheme(currentTheme.rawValue)
         }
     }
 
@@ -354,13 +359,13 @@ class ThemeManager: ObservableObject {
 
     private init() {
         let configuration = TalkieAppConfigurationStore.shared.configuration
-        self.currentTheme = AppTheme(rawValue: configuration.appearance.theme) ?? .scope
+        self.currentTheme = AppTheme(rawValue: configuration.appearance.theme) ?? .productDefault
         self.appearanceMode = AppearanceMode(rawValue: configuration.appearance.mode) ?? .system
     }
 
     func reloadFromDisk() {
         let configuration = TalkieAppConfigurationStore.shared.reload()
-        currentTheme = AppTheme(rawValue: configuration.appearance.theme) ?? .scope
+        currentTheme = AppTheme(rawValue: configuration.appearance.theme) ?? .productDefault
         appearanceMode = AppearanceMode(rawValue: configuration.appearance.mode) ?? .system
     }
 

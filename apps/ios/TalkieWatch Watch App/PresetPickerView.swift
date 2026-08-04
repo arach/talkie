@@ -2,13 +2,9 @@
 //  PresetPickerView.swift
 //  TalkieWatch
 //
-//  Capture surface — idle. Horizontal "instrument slice": a rectangular
-//  scope slot framed by rectangle brackets shows a quiet waveform at
-//  rest, the timer sits below in elegant monospace, and the clean round
-//  record button anchors the bottom in the style used across the iOS
-//  and macOS apps. "ASK AI" lives as a small explicit-AI pill — mostly
-//  implicit (transcript intent extraction wins) but available when the
-//  user knows the answer in advance.
+//  Capture surface — idle. A quiet Talkie wordmark, one wide signal key, and
+//  one subordinate AI route. The primary action reads as a control rather than
+//  a miniature watch face.
 //
 
 import SwiftUI
@@ -16,50 +12,85 @@ import WatchKit
 
 struct PresetPickerView: View {
     @EnvironmentObject var sessionManager: WatchSessionManager
+    @Environment(\.watchThemeName) private var themeName
     @Binding var selectedPreset: WatchPreset?
     @Binding var isRecording: Bool
+    var onOpenAsks: () -> Void = {}
 
     var body: some View {
         ZStack {
-            PaperBackground()
+            TalkieCaptureBackground()
 
-            VStack(spacing: 6) {
-                // Top region — header + scope. Right-shifted padding
-                // keeps the brackets + LINK label clear of the watchOS
-                // TabView indicator dots that ride the right edge.
-                VStack(spacing: 6) {
-                    InstrumentHeader(elapsed: 0, isLive: false)
-                        .padding(.top, 32)
+            GeometryReader { proxy in
+                let metrics = CaptureFaceMetrics(availableHeight: proxy.size.height)
 
-                    Spacer(minLength: 18)
+                VStack(spacing: 0) {
+                    if metrics.showsWordmark {
+                        Text("talkie")
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(themeName.captureStyle.material.ink.opacity(0.90))
+                            .frame(height: CaptureFaceMetrics.wordmarkHeight)
 
-                    BracketedScopeSlot {
-                        // At rest the slot shows the brand ASCII
-                        // wordmark so it reads "Talkie · ready"
-                        // instead of "live recorder already going".
-                        TalkieASCIILogo()
+                        Spacer()
+                            .frame(height: CaptureFaceMetrics.wordmarkGap)
                     }
-                    .frame(maxHeight: 88)
+
+                    // The slot is always reserved, even when there is nothing to
+                    // say. An ask starting or finishing must not shove the record
+                    // key down the face — the same reason recording states swap
+                    // into a fixed-size puck instead of resizing the button.
+                    AskStrip(height: metrics.stripHeight, onOpen: onOpenAsks)
+
+                    Spacer()
+                        .frame(height: metrics.stripGap)
+
+                    // While an ask is being answered, the AI conversation *is*
+                    // the subject of this face — a record key sitting where the
+                    // answer should be reads as "memo" no matter what the strip
+                    // above it says. The key swaps; the pill picks up capture.
+                    //
+                    // Time-driven for the same reason the strip is: an ask the
+                    // phone abandoned mid-flight has to give the key back, and
+                    // nothing publishes when a phone simply goes quiet.
+                    TimelineView(.periodic(from: .now, by: WatchMemo.silenceTolerance / 2)) { context in
+                        let askFace = WatchAskFace.resolve(sessionManager, asOf: context.date)
+
+                        VStack(spacing: 0) {
+                            if let askFace, askFace.takesCaptureKey {
+                                AskCaptureKey(
+                                    state: askFace,
+                                    keyHeight: metrics.keyHeight,
+                                    onOpen: onOpenAsks
+                                )
+
+                                Spacer()
+                                    .frame(height: metrics.keyGap)
+
+                                AIPill(
+                                    symbol: "mic.fill",
+                                    title: "Record",
+                                    accessibilityText: "Start recording",
+                                    height: metrics.pillHeight
+                                ) {
+                                    startCapture(forceAI: false)
+                                }
+                            } else {
+                                RecordButton(kind: .start, keyHeight: metrics.keyHeight) {
+                                    startCapture(forceAI: false)
+                                }
+
+                                Spacer()
+                                    .frame(height: metrics.keyGap)
+
+                                AIPill(height: metrics.pillHeight) {
+                                    startCapture(forceAI: true)
+                                }
+                            }
+                        }
+                    }
                 }
-                .padding(.leading, 10)
-                .padding(.trailing, 18)
-
-                Spacer(minLength: 8)
-
-                // Bottom region — record button + pill stay centered on
-                // the screen with symmetric padding so they don't drift
-                // left under the asymmetric top-region inset. Generous
-                // spacing between them reads as "two separate actions"
-                // not "stacked twins".
-                VStack(spacing: 12) {
-                    RecordButton(kind: .start) { startCapture(forceAI: false) }
-
-                    AIPill { startCapture(forceAI: true) }
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 10)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
-            .padding(.bottom, 10)
         }
     }
 
@@ -70,13 +101,183 @@ struct PresetPickerView: View {
     }
 }
 
+// MARK: - Vertical budget
+
+/// The capture face's vertical layout, solved against the space watchOS
+/// actually hands this page.
+///
+/// At their comfortable sizes the wordmark, ask strip, key and pill add up to
+/// more than any watch has: the page gets 150pt on a 46mm and 123pt on a 40mm.
+/// Pinning them meant the stack overflowed and spilled equally out of both ends
+/// — which put the pill's bottom within a few points of the glass on a large
+/// watch and cut it off entirely on a small one. Solving for the key instead
+/// keeps the stack inside its bounds, so the inset watchOS already reserves
+/// below the page dots becomes the face's bottom margin.
+struct CaptureFaceMetrics {
+    /// Set when the wordmark can stay without starving the key. It is the first
+    /// thing given up because it is the only piece carrying no state: the Talkie
+    /// signal is drawn across the key itself, and the time and settings sit in
+    /// the bar directly above it.
+    let showsWordmark: Bool
+    let stripHeight: CGFloat
+    /// Strip to key.
+    let stripGap: CGFloat
+    let keyHeight: CGFloat
+    /// Key to pill.
+    let keyGap: CGFloat
+    let pillHeight: CGFloat
+
+    /// One 12pt rounded line.
+    static let wordmarkHeight: CGFloat = 15
+    /// Wordmark to strip. Deliberately tight — they read as one header block.
+    static let wordmarkGap: CGFloat = 3
+
+    /// Enough for a 9pt monospaced label and its status dot, and no more: the
+    /// slot is reserved whether or not there is an ask to put in it.
+    private static let stripHeight: CGFloat = 18
+    /// The 32pt capsule plus a little target around it. Short of the usual 44,
+    /// which no watch-sized face can afford, but the pill is 96pt wide.
+    private static let pillHeight: CGFloat = 36
+    /// Below this the key stops looking like a key and starts looking like a
+    /// bar, so the wordmark goes before the key crosses it.
+    private static let minimumKeyHeight: CGFloat = 50
+    private static let maximumKeyHeight: CGFloat = 64
+    /// The two gaps together. The key needs visible separation from the strip
+    /// above and the pill below or the three stack into one slab.
+    private static let minimumGaps: CGFloat = 14
+    /// The key takes this much of what is left; the rest becomes the gaps. Held
+    /// constant so the face keeps the same rhythm as it scales rather than
+    /// growing a fat key on large watches and thin air on small ones.
+    private static let keyShare: CGFloat = 0.78
+
+    init(availableHeight: CGFloat) {
+        let fixed = Self.stripHeight + Self.pillHeight
+        let header = Self.wordmarkHeight + Self.wordmarkGap
+
+        // What the key and its two gaps would have to share if the wordmark
+        // stayed. The wordmark is worth keeping only while the key still clears
+        // its floor afterwards.
+        let roomWithWordmark = availableHeight - fixed - header
+        showsWordmark = roomWithWordmark - Self.minimumGaps >= Self.minimumKeyHeight
+
+        let room = showsWordmark ? roomWithWordmark : availableHeight - fixed
+        keyHeight = min(
+            Self.maximumKeyHeight,
+            max(Self.minimumKeyHeight, room * Self.keyShare)
+        )
+
+        // Whatever the key did not take. Split so the key sits nearer the strip
+        // it belongs to than the pill it outranks.
+        let slack = max(Self.minimumGaps, room - keyHeight)
+        stripGap = slack * 0.42
+        keyGap = slack * 0.58
+
+        stripHeight = Self.stripHeight
+        pillHeight = Self.pillHeight
+    }
+}
+
+// MARK: - Talkie capture face
+
+/// A restrained, brand-first capture composition. The wordmark establishes
+/// identity; one porcelain key carries the primary action; an optional route
+/// stays visibly subordinate. No decorative telemetry appears at rest.
+struct TalkieCaptureLayout<HeaderAccessory: View, Primary: View, Caption: View, Secondary: View>: View {
+    @Environment(\.watchThemeName) private var themeName
+    private let headerAccessory: HeaderAccessory
+    private let primary: Primary
+    private let caption: Caption
+    private let secondary: Secondary
+
+    init(
+        @ViewBuilder headerAccessory: () -> HeaderAccessory,
+        @ViewBuilder primary: () -> Primary,
+        @ViewBuilder caption: () -> Caption,
+        @ViewBuilder secondary: () -> Secondary
+    ) {
+        self.headerAccessory = headerAccessory()
+        self.primary = primary()
+        self.caption = caption()
+        self.secondary = secondary()
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let width = proxy.size.width
+            let height = proxy.size.height
+
+            ZStack {
+                let capture = themeName.captureStyle
+
+                Text("talkie")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(capture.material.ink.opacity(0.90))
+                    .position(x: width * 0.50, y: height * 0.12)
+
+                headerAccessory
+                    .frame(width: width * 0.72, height: 24)
+                    .position(x: width * 0.50, y: height * 0.25)
+
+                primary
+                    .position(x: width * 0.50, y: height * 0.51)
+
+                caption
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(capture.material.inkFaint)
+                    .lineLimit(1)
+                    .position(x: width * 0.50, y: height * 0.75)
+
+                secondary
+                    .position(x: width * 0.50, y: height * 0.86)
+            }
+        }
+    }
+}
+
+/// A sober light-mineral or black-ceramic field with one directional light
+/// source. It remains quiet enough for the key and system time to lead.
+struct TalkieCaptureBackground: View {
+    @Environment(\.watchThemeName) private var themeName
+
+    var body: some View {
+        let capture = themeName.captureStyle
+        let material = capture.material
+        ZStack {
+            material.field
+
+            LinearGradient(
+                colors: [
+                    material.fieldLift.opacity(0.72),
+                    material.field.opacity(0.90),
+                    material.fieldShade
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            RadialGradient(
+                colors: [Color.white.opacity(0.10), .clear],
+                center: UnitPoint(x: 0.30, y: 0.12),
+                startRadius: 0,
+                endRadius: 128
+            )
+
+            RadialGradient(
+                colors: [capture.atmosphere, .clear],
+                center: UnitPoint(x: 0.76, y: 0.70),
+                startRadius: 0,
+                endRadius: 150
+            )
+        }
+        .ignoresSafeArea()
+    }
+}
+
 // MARK: - Shared scope chrome
 
-/// Instrument header — three-column readout that hugs the top edge so
-/// the scope slot can claim most of the screen. Left: monospaced timer
-/// (counts up while live). Center: tiny `talkie` watermark — brand
-/// presence without competing with the trace. Right: link status with
-/// reachability dot.
+/// Instrument header — a compact, truthful two-column readout. The timer and
+/// phone link state sit below the system clock without repeating the product
+/// wordmark or competing with watchOS toolbar chrome.
 struct InstrumentHeader: View {
     let elapsed: TimeInterval
     let isLive: Bool
@@ -89,15 +290,8 @@ struct InstrumentHeader: View {
             Text(formatElapsed(elapsed))
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                 .monospacedDigit()
-                .foregroundColor(isLive ? chrome.panelInk : chrome.panelInkFaint)
+                .foregroundStyle(isLive ? chrome.panelInk : chrome.panelInkFaint)
                 .frame(minWidth: 36, alignment: .leading)
-
-            Spacer(minLength: 0)
-
-            Text("TALKIE")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .tracking(2)
-                .foregroundColor(chrome.panelInkFaint)
 
             Spacer(minLength: 0)
 
@@ -113,7 +307,7 @@ struct InstrumentHeader: View {
                 Text(sessionManager.isReachable ? "LINK" : "WAIT")
                     .font(.system(size: 9, weight: .medium, design: .monospaced))
                     .tracking(1.2)
-                    .foregroundColor(chrome.panelInkFaint)
+                    .foregroundStyle(chrome.panelInkFaint)
             }
             .frame(minWidth: 40, alignment: .trailing)
         }
@@ -122,126 +316,59 @@ struct InstrumentHeader: View {
     private func formatElapsed(_ duration: TimeInterval) -> String {
         let minutes = Int(duration) / 60
         let seconds = Int(duration) % 60
-        return String(format: "%d:%02d", minutes, seconds)
+        let secondsText = seconds < 10 ? "0\(seconds)" : "\(seconds)"
+        return "\(minutes):\(secondsText)"
     }
 }
 
-/// Rectangular scope slot with corner brackets at the four edges of the
-/// inner rectangle. The shape evokes an oscilloscope screen — content
-/// fills the area, brackets nudge slightly outside so the trace reads
-/// "inside" the instrument frame, not crowded against the brackets.
-///
-/// Optional `annotation` prints a small lowercase monospaced caption
-/// tucked at the top-left, like an industrial panel label.
-struct BracketedScopeSlot<Content: View>: View {
+/// Recessed Watch instrument surface shared by capture and Codex. Its depth
+/// comes from a restrained surface ladder and one border, not ornamental
+/// brackets or simulated hardware texture.
+struct WatchInstrumentPanel<Content: View>: View {
     var annotation: String? = nil
     @ViewBuilder var content: () -> Content
 
     var body: some View {
         let chrome = WatchTheme.current
         ZStack {
-            RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .fill(chrome.panelAlt.opacity(0.85))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .stroke(chrome.edgeFaint, lineWidth: chrome.hairlineWidth)
+            RoundedRectangle(cornerRadius: chrome.chromeCorner + 3, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [chrome.panelAlt, chrome.panel],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
                 )
-
-            // Faint mid-line so even an empty trace reads as a scope.
-            Rectangle()
-                .fill(chrome.edgeFaint)
-                .frame(height: 0.4)
+                .overlay(
+                    RoundedRectangle(cornerRadius: chrome.chromeCorner + 3, style: .continuous)
+                        .stroke(chrome.panelEdge, lineWidth: chrome.hairlineWidth)
+                )
 
             content()
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
 
-            ScopeRectBrackets()
-                .stroke(chrome.accent.opacity(0.78), lineWidth: chrome.hairlineWidth + 0.4)
-                .padding(-5)
-                .watchAccentGlow()
-
             if let annotation {
-                BracketAnnotation(text: annotation)
+                PanelAnnotation(text: annotation)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .offset(x: -2, y: -8)
             }
         }
     }
 }
 
-/// Tiny industrial-style label tucked in the top-left of a bracketed
-/// panel. Sits over the bracket line with a small panel-colored gap
-/// behind so the bracket appears to "break" around the caption — same
-/// vocabulary as engineering diagrams or schematic callouts.
-struct BracketAnnotation: View {
+/// Quiet panel label for contexts that need one; omitted on capture where the
+/// ready state already names the action.
+private struct PanelAnnotation: View {
     let text: String
 
     var body: some View {
-        // V5 — stencil-style mark anchored INSIDE the box, top-left,
-        // very faint. Reads like a painted-on equipment label, not a
-        // chrome callout.
         let chrome = WatchTheme.current
-        Text("[ \(text) ]")
+        Text(text.uppercased())
             .font(.system(size: 7, weight: .medium, design: .monospaced))
             .tracking(0.6)
-            .foregroundColor(chrome.panelInkFaint.opacity(0.75))
-            .padding(.leading, 6)
-            .padding(.top, 4)
-    }
-}
-
-/// Rectangle-style brackets at the four corners — they're the four
-/// short L-strokes that frame an instrument readout. Hugs the slot.
-private struct ScopeRectBrackets: Shape {
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        let arm: CGFloat = 6
-        // top-leading
-        p.move(to: CGPoint(x: rect.minX, y: rect.minY + arm))
-        p.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
-        p.addLine(to: CGPoint(x: rect.minX + arm, y: rect.minY))
-        // top-trailing
-        p.move(to: CGPoint(x: rect.maxX - arm, y: rect.minY))
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + arm))
-        // bottom-trailing
-        p.move(to: CGPoint(x: rect.maxX, y: rect.maxY - arm))
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        p.addLine(to: CGPoint(x: rect.maxX - arm, y: rect.maxY))
-        // bottom-leading
-        p.move(to: CGPoint(x: rect.minX + arm, y: rect.maxY))
-        p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-        p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - arm))
-        return p
-    }
-}
-
-/// Block-style ASCII wordmark — mirror of the macOS Terminal Setup
-/// boot logo so the watch reads as part of the same console family.
-/// Sized down (6.5pt monospaced) to fit the 42mm scope slot; uses
-/// theme accent + faint glow so it lights up like an instrument
-/// readout rather than printing flat text.
-struct TalkieASCIILogo: View {
-    private static let lines: String = """
-████████╗ █████╗ ██╗     ██╗  ██╗██╗███████╗
-╚══██╔══╝██╔══██╗██║     ██║ ██╔╝██║██╔════╝
-   ██║   ███████║██║     █████╔╝ ██║█████╗
-   ██║   ██╔══██║██║     ██╔═██╗ ██║██╔══╝
-   ██║   ██║  ██║███████╗██║  ██╗██║███████╗
-   ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚═╝╚══════╝
-"""
-
-    var body: some View {
-        let chrome = WatchTheme.current
-        Text(Self.lines)
-            .font(.system(size: 6.5, weight: .bold, design: .monospaced))
-            .lineSpacing(0)
-            .foregroundColor(chrome.accent)
-            .watchAccentGlow()
-            .minimumScaleFactor(0.55)
-            .lineLimit(6)
-            .fixedSize(horizontal: false, vertical: true)
+            .foregroundStyle(chrome.panelInkFaint.opacity(0.72))
+            .padding(.leading, 10)
+            .padding(.top, 7)
     }
 }
 
@@ -395,115 +522,351 @@ struct ScopeBars: View {
     }
 }
 
-/// Subtle paper-grain background. Quiet enough that it reads as texture
-/// not noise — gives the instrument panel a physical surface to sit on.
-struct PaperBackground: View {
+/// Calm, deterministic instrument background. The low-contrast cobalt lift
+/// provides hierarchy without procedural grain or frame-to-frame noise.
+struct WatchInstrumentBackground: View {
     var body: some View {
         let chrome = WatchTheme.current
         ZStack {
             chrome.panel
-            Canvas { ctx, size in
-                for _ in 0..<140 {
-                    let x = CGFloat.random(in: 0...size.width)
-                    let y = CGFloat.random(in: 0...size.height)
-                    let r = CGFloat.random(in: 0.3...0.7)
-                    let opacity = Double.random(in: 0.02...0.07)
-                    ctx.fill(
-                        Path(ellipseIn: CGRect(x: x, y: y, width: r, height: r)),
-                        with: .color(chrome.panelInk.opacity(opacity))
-                    )
-                }
-            }
-            .blendMode(.overlay)
+
+            LinearGradient(
+                colors: [chrome.panelAlt.opacity(0.70), chrome.panel.opacity(0.20)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            RadialGradient(
+                colors: [chrome.accent.opacity(0.10), .clear],
+                center: .top,
+                startRadius: 0,
+                endRadius: 150
+            )
         }
         .ignoresSafeArea()
     }
 }
 
-/// Variant B — inline pill: red LED + `REC` / `STOP` label live inside
-/// the same bracketed pill. No floating label below; the action and
-/// its identity read as one console toggle.
+/// Primary capture action. The idle key carries Talkie's trace and an explicit
+/// recording legend; semantic red appears only where recording is meant.
 struct RecordButton: View {
     enum Kind { case start, stop }
     let kind: Kind
+    var audioLevel: Float = 0
+    /// The capture face solves this against the watch it is on; the recording
+    /// screen, which has the display to itself, keeps the full size.
+    var keyHeight: CGFloat = 64
     let action: () -> Void
 
     var body: some View {
-        let chrome = WatchTheme.current
         Button(action: action) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(Color.red)
-                    .frame(width: 84, height: 36)
-                    .blur(radius: 10)
-                    .opacity(kind == .stop ? 0.42 : 0.48)
-
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(chrome.panelAlt)
-                    .frame(width: 86, height: 36)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 5, style: .continuous)
-                            .stroke(chrome.edgeFaint, lineWidth: chrome.hairlineWidth)
-                    )
-
-                HStack(spacing: 6) {
-                    switch kind {
-                    case .start:
-                        Circle()
-                            .fill(Color.red)
-                            .frame(width: 12, height: 12)
-                            .shadow(color: Color.red.opacity(0.85), radius: 3)
-                    case .stop:
-                        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                            .fill(Color.red)
-                            .frame(width: 10, height: 10)
-                            .shadow(color: Color.red.opacity(0.85), radius: 3)
-                    }
-
-                    Text(kind == .start ? "REC" : "STOP")
-                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                        .tracking(1.4)
-                        .foregroundColor(chrome.panelInk)
-                }
-
-                ScopeRectBrackets()
-                    .stroke(chrome.accent.opacity(0.78), lineWidth: chrome.hairlineWidth + 0.4)
-                    .frame(width: 92, height: 42)
-                    .watchAccentGlow()
+            switch kind {
+            case .start:
+                TalkieCaptureKey(keyHeight: keyHeight)
+            case .stop:
+                TalkieStopKey(audioLevel: audioLevel)
             }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(kind == .start ? "Capture" : "Stop and send")
+        .buttonStyle(TalkieRecordButtonStyle())
+        .accessibilityLabel(kind == .start ? "Start recording" : "Stop and send")
     }
 }
 
-/// Small explicit-AI pill below the record button. Most captures
-/// auto-route via transcript intent extraction; this pill is for when
-/// the user knows up-front they want an AI conversation.
+struct TalkieRecordButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.975 : 1)
+            .offset(y: configuration.isPressed ? 1.5 : 0)
+            .opacity(configuration.isPressed ? 0.92 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+/// A wide light-mineral or black-ceramic key. Its horizontal geometry,
+/// elevated edge, and press response keep it from reading as a miniature
+/// device nested inside the Watch.
+///
+/// The chassis is shared rather than copied because more than one thing can
+/// hold the primary slot — recording at rest, an ask in flight, an answer
+/// waiting to be played. Swapping only the face means the key's footprint,
+/// bevel, and hairline never shift underneath the wearer's thumb.
+struct TalkieKeyChassis<Content: View>: View {
+    @Environment(\.watchThemeName) private var themeName
+    /// Overrides the theme's hairline when the key's job is not the usual one.
+    /// `nil` keeps the resting accent.
+    var accent: Color?
+    /// Set by the capture face, which has to fit the key between an ask strip
+    /// and a pill inside whatever height the watch gives it.
+    var height: CGFloat = 64
+    @ViewBuilder var content: () -> Content
+
+    private let width: CGFloat = 128
+    private let cornerRadius: CGFloat = 18
+    /// Gap between the bevel and the accent hairline. Also subtracted from the
+    /// inner radius so the two rings stay concentric instead of the inner one
+    /// bowing away from the corners.
+    private let keyAccentInset: CGFloat = 1.5
+
+    var body: some View {
+        let capture = themeName.captureStyle
+        let material = capture.material
+        ZStack {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            material.keyTop,
+                            material.keyMiddle,
+                            material.keyBottom
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .shadow(color: material.shadow, radius: 7, y: 5)
+                // The key's edge. Drawn inside the fill so the silhouette stays
+                // exactly `cornerRadius` — a straddling stroke would round off
+                // half a point wider than the shadow it sits in.
+                .overlay {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .strokeBorder(material.keyEdgeRing, lineWidth: WatchEdgeWeight.bevel)
+                }
+                // A theme hairline just inside the bevel, concentric with it.
+                // This is the one place the key carries the signal color at
+                // rest, and it is what makes the key and the AI pill read as
+                // two members of the same set rather than two shapes.
+                .overlay {
+                    RoundedRectangle(cornerRadius: cornerRadius - keyAccentInset, style: .continuous)
+                        .strokeBorder(accent ?? capture.keyAccentEdge, lineWidth: WatchEdgeWeight.hairline)
+                        .padding(keyAccentInset)
+                }
+
+            content()
+        }
+        .frame(width: width, height: height)
+        .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+}
+
+extension TalkieKeyChassis {
+    init(height: CGFloat = 64, @ViewBuilder content: @escaping () -> Content) {
+        self.init(accent: nil, height: height, content: content)
+    }
+}
+
+/// The resting face: the Talkie signal over a record legend.
+private struct TalkieCaptureKey: View {
+    @Environment(\.watchThemeName) private var themeName
+    var keyHeight: CGFloat = 64
+
+    var body: some View {
+        let capture = themeName.captureStyle
+        TalkieKeyChassis(height: keyHeight) {
+            VStack(spacing: 4) {
+                TalkieTraceReveal(color: capture.trace)
+                    .frame(width: 86, height: 22)
+
+                HStack(spacing: 5) {
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 8.5, weight: .semibold))
+                        .foregroundStyle(Color.red.opacity(0.92))
+
+                    Text("REC")
+                        .font(.system(size: 8.5, weight: .bold, design: .monospaced))
+                        .tracking(1.35)
+                        .foregroundStyle(capture.material.keyInk.opacity(0.86))
+                }
+            }
+        }
+    }
+}
+
+/// One deliberate Talkie signal: quiet lead-in, peak, trough, recovery, rest.
+/// The asymmetry keeps it from reading as a generic waveform or equalizer.
+private struct TalkieSignalLine: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let middle = rect.midY
+        let height = rect.height
+
+        path.move(to: CGPoint(x: rect.minX, y: middle))
+        path.addLine(to: CGPoint(x: rect.minX + rect.width * 0.24, y: middle))
+        path.addCurve(
+            to: CGPoint(x: rect.minX + rect.width * 0.42, y: middle - height * 0.34),
+            control1: CGPoint(x: rect.minX + rect.width * 0.33, y: middle),
+            control2: CGPoint(x: rect.minX + rect.width * 0.35, y: middle - height * 0.34)
+        )
+        path.addCurve(
+            to: CGPoint(x: rect.minX + rect.width * 0.57, y: middle + height * 0.28),
+            control1: CGPoint(x: rect.minX + rect.width * 0.47, y: middle - height * 0.34),
+            control2: CGPoint(x: rect.minX + rect.width * 0.51, y: middle + height * 0.28)
+        )
+        path.addCurve(
+            to: CGPoint(x: rect.minX + rect.width * 0.70, y: middle - height * 0.13),
+            control1: CGPoint(x: rect.minX + rect.width * 0.62, y: middle + height * 0.28),
+            control2: CGPoint(x: rect.minX + rect.width * 0.65, y: middle - height * 0.13)
+        )
+        path.addCurve(
+            to: CGPoint(x: rect.minX + rect.width * 0.80, y: middle),
+            control1: CGPoint(x: rect.minX + rect.width * 0.74, y: middle - height * 0.13),
+            control2: CGPoint(x: rect.minX + rect.width * 0.76, y: middle)
+        )
+        path.addLine(to: CGPoint(x: rect.maxX, y: middle))
+        return path
+    }
+}
+
+/// One-shot trace reveal with a brief moving highlight. Reduce Motion keeps
+/// the same final state and substitutes a short opacity transition.
+private struct TalkieTraceReveal: View {
+    let color: Color
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var hasAnimated = false
+    @State private var revealProgress: CGFloat = 0
+    @State private var highlightProgress: CGFloat = 0
+    @State private var highlightOpacity = 0.0
+    @State private var traceOpacity = 0.0
+
+    var body: some View {
+        ZStack {
+            TalkieSignalLine()
+                .trim(from: 0, to: revealProgress)
+                .stroke(
+                    color.opacity(0.82),
+                    style: StrokeStyle(lineWidth: 2.1, lineCap: .round, lineJoin: .round)
+                )
+                .opacity(traceOpacity)
+
+            TalkieSignalLine()
+                .trim(
+                    from: max(0, highlightProgress - 0.18),
+                    to: min(1, highlightProgress)
+                )
+                .stroke(
+                    Color.white.opacity(0.84),
+                    style: StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round)
+                )
+                .shadow(color: color.opacity(0.46), radius: 2)
+                .opacity(highlightOpacity)
+        }
+        .onAppear(perform: animateOnce)
+    }
+
+    private func animateOnce() {
+        guard !hasAnimated else { return }
+        hasAnimated = true
+
+        if reduceMotion {
+            revealProgress = 1
+            withAnimation(.easeOut(duration: 0.18)) {
+                traceOpacity = 1
+            }
+            return
+        }
+
+        traceOpacity = 1
+        withAnimation(.easeOut(duration: 0.72).delay(0.08)) {
+            revealProgress = 1
+        }
+        withAnimation(.easeIn(duration: 0.12).delay(0.18)) {
+            highlightOpacity = 0.72
+        }
+        withAnimation(.easeInOut(duration: 0.68).delay(0.18)) {
+            highlightProgress = 1
+        }
+        withAnimation(.easeOut(duration: 0.20).delay(0.78)) {
+            highlightOpacity = 0
+        }
+    }
+}
+
+/// The live stop action remains unmistakably semantic and intentionally does
+/// not inherit the idle key's decorative material or load animation.
+private struct TalkieStopKey: View {
+    let audioLevel: Float
+
+    var body: some View {
+        let level = min(max(audioLevel, 0), 1)
+        ZStack {
+            Circle()
+                .stroke(Color.red.opacity(0.24 + Double(level) * 0.48), lineWidth: 1.5)
+                .frame(width: 67, height: 67)
+                .scaleEffect(1 + CGFloat(level) * 0.06)
+
+            Circle()
+                .fill(Color.red)
+                .frame(width: 60, height: 60)
+                .overlay(
+                    Circle()
+                        .stroke(Color.white.opacity(0.34), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.40), radius: 7, y: 5)
+
+            Image(systemName: "stop.fill")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(Color(watchHex: "F7FAFF"))
+        }
+        .frame(width: 70, height: 70)
+        .contentShape(Circle())
+    }
+}
+
+/// Optional explicit-AI route. Its low-contrast outline keeps it subordinate
+/// to capture while remaining an obvious second action.
 struct AIPill: View {
+    @Environment(\.watchThemeName) private var themeName
+    /// The pill is the face's secondary route, and which route that is depends
+    /// on what the key is doing. When an ask takes the key, capture has nowhere
+    /// else to live — so the pill becomes the record affordance rather than
+    /// leaving the wearer with no way to start a memo.
+    var symbol: String = "sparkles"
+    /// "Ask AI" named the machinery rather than the act, and on a face where the
+    /// sparkles already say which route this is, the "AI" was doing no work.
+    /// One verb is also the shape the eventual name slots into without a
+    /// relayout — the assistant doesn't have one yet, and this doesn't invent it.
+    var title: String = "Ask"
+    var accessibilityText: String = "Start AI conversation"
+    /// The tap target. The capsule inside it keeps its size on every watch —
+    /// only the padding around it gives way when the face is short.
+    var height: CGFloat = 44
     let action: () -> Void
 
     var body: some View {
-        let chrome = WatchTheme.current
+        let capture = themeName.captureStyle
+        let material = capture.material
         Button(action: action) {
             HStack(spacing: 4) {
-                Image(systemName: "sparkles")
+                Image(systemName: symbol)
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundColor(chrome.accent)
-                Text("ASK AI")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .tracking(1.3)
-                    .foregroundColor(chrome.panelInk)
+                Text(title)
+                    .font(.system(size: 10, weight: .medium, design: .rounded))
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
+            .foregroundStyle(material.ink.opacity(0.76))
+            .frame(width: 88, height: 32)
             .background(
                 Capsule(style: .continuous)
-                    .stroke(chrome.accent.opacity(0.5), lineWidth: chrome.hairlineWidth + 0.25)
+                    .fill(material.secondaryFill)
+                    // An even ring, not the key's bevel: this control is an
+                    // outline on the chassis, not a key raised off it. Inset
+                    // strokes keep both hairlines crisp — a centered stroke on
+                    // a translucent fill puts half its weight on the field and
+                    // reads a half-point soft.
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .strokeBorder(material.secondaryEdge, lineWidth: WatchEdgeWeight.outline)
+                    )
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .strokeBorder(capture.secondaryAccentEdge, lineWidth: WatchEdgeWeight.hairline)
+                            .padding(1)
+                    )
             )
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Force AI conversation")
+        .frame(width: 96, height: height)
+        .accessibilityLabel(accessibilityText)
     }
 }
 

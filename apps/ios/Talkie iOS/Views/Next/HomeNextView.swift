@@ -96,7 +96,26 @@ struct HomeNextView: View {
                 )
                 .frame(maxWidth: .infinity)
                 .frame(height: commandKeyboard.preferredHeight)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                // The keyboard view paints no background of its own — as a real
+                // `inputView` the system supplies the backdrop. Home hands it to
+                // a `safeAreaInset` instead, so without this the recents list
+                // scrolls visibly between the keys.
+                .background {
+                    // Extended past the home indicator so the strip below the
+                    // last key is chrome too, not a window onto the feed.
+                    theme.colors.background
+                        .ignoresSafeArea(.container, edges: .bottom)
+                }
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(theme.currentTheme.chrome.edgeFaint)
+                        .frame(height: theme.currentTheme.chrome.hairlineWidth)
+                }
+                // Move only. Fading it in as it travels makes the slab
+                // translucent for the whole flight — the feed shows through the
+                // keys and it reads as materializing rather than arriving from
+                // the bottom edge. A keyboard is a solid object; it slides.
+                .transition(.move(edge: .bottom))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

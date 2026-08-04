@@ -6,5 +6,13 @@
 	<array>
 		<string>AppIcon</string>
 	</array>
+	<!-- Answers are spoken, and speaking one takes longer than a wrist stays
+	     up. Without this watchOS suspends the app the moment the arm drops and
+	     the answer stops mid-sentence, which reads as a crash rather than a
+	     policy. The app plays audio only while an answer is actually speaking. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 </dict>
 </plist>
