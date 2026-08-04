@@ -397,6 +397,23 @@ extension AppTheme {
     }
 }
 
+// MARK: - Active Theme Mirror
+
+/// Nonisolated mirror of the live theme selection.
+///
+/// Several palettes are plain static color tables (`DesignSystem`, the Home
+/// cockpit, the terminal strip). They can't hop to the main actor to ask
+/// `ThemeManager`, and reading the persisted configuration instead leaves them
+/// one theme behind — the store only catches up after the settings write lands,
+/// so the cockpit paints the *previous* theme's accent. This is written on every
+/// theme change, so those tables see the choice at the moment it's made.
+enum ActiveTheme {
+    nonisolated(unsafe) static var current: AppTheme = {
+        let raw = TalkieAppConfigurationStore.shared.configuration.appearance.theme
+        return AppTheme(rawValue: raw) ?? .productDefault
+    }()
+}
+
 // MARK: - Theme Manager
 
 @MainActor
@@ -406,6 +423,7 @@ class ThemeManager: ObservableObject {
 
     @Published var currentTheme: AppTheme {
         didSet {
+            ActiveTheme.current = currentTheme
             appSettings.theme = currentTheme
             WatchSessionManager.shared.publishAppearanceTheme(currentTheme.rawValue)
         }

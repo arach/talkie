@@ -33,10 +33,7 @@ struct TerminalDockReadout: Equatable {
 // Shared with the failure toast (FeedbackToastNext) so a dropped voice turn
 // speaks the same phosphor language as the Message Line.
 enum TerminalStripPalette {
-    private static var activeTheme: AppTheme {
-        let raw = TalkieAppConfigurationStore.shared.configuration.appearance.theme
-        return AppTheme(rawValue: raw) ?? .scope
-    }
+    private static var activeTheme: AppTheme { ActiveTheme.current }
 
     private static var chrome: ChromeTokens { activeTheme.chrome }
 
@@ -68,6 +65,11 @@ struct TerminalMessageStrip: View {
     let text: String
     var height: CGFloat = TerminalStripMetrics.defaultHeight
     var dock: TerminalDockReadout? = nil
+
+    // The palette below is a static table, invisible to SwiftUI's dependency
+    // tracking. Without an explicit observation a theme change leaves the line
+    // painted in the outgoing theme's phosphor until `text` happens to change.
+    @ObservedObject private var themeManager = ThemeManager.shared
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: TerminalStripMetrics.corner, style: .continuous)
@@ -145,6 +147,8 @@ struct TerminalMessageStrip: View {
 private struct DockedReadout: View {
     let readout: TerminalDockReadout
 
+    @ObservedObject private var themeManager = ThemeManager.shared
+
     var body: some View {
         HStack(spacing: 6) {
             Spacer(minLength: 0)
@@ -181,6 +185,8 @@ private struct DockedReadout: View {
 /// The dark amber glass behind the terminal line — a near-black vertical
 /// gradient with a soft amber radial bloom (TERM_GLASS in the studio).
 struct TerminalGlass: View {
+    @ObservedObject private var themeManager = ThemeManager.shared
+
     var body: some View {
         ZStack {
             LinearGradient(

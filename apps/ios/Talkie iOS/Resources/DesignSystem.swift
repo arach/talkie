@@ -34,7 +34,7 @@ extension Color {
     static let warning = Color(hex: "FF9F0A")             // Apple orange
     static let transcribing = Color(hex: "5E5CE6")        // Apple purple
 
-    // Theme-aware chrome accents. Read directly from the configuration store
+    // Theme-aware chrome accents. Read the nonisolated `ActiveTheme` mirror
     // (not the @MainActor manager) so these are usable from any context.
     //
     // `active` / `memoAccent` map to the theme's lit accent — RARE color,
@@ -49,10 +49,7 @@ extension Color {
     static var action: Color { activeTheme.chrome.action }
     static var actionTint: Color { activeTheme.chrome.actionTint }
 
-    private static var activeTheme: AppTheme {
-        let raw = TalkieAppConfigurationStore.shared.configuration.appearance.theme
-        return AppTheme(rawValue: raw) ?? .scope
-    }
+    private static var activeTheme: AppTheme { ActiveTheme.current }
 
     // Surface Colors (adapts to light/dark mode)
     static let surfacePrimary = Color(hex: "FFFFFF", darkHex: "0A0A0A")
@@ -269,8 +266,12 @@ enum ScopeMobile {
 
     // Panel ink + trace — brass phosphor on warm graphite, both modes.
     static let panelInk      = Color(hex: "F0EAD8", darkHex: "F0EAD8")
-    static let panelInkFaint = Color(hex: "BBB3A4", darkHex: "BBB3A4")
-    static let panelTrace      = Color(hex: "EBA654", darkHex: "EBA654")
+    static let panelInkFaint = Color(hex: "CFC9BE", darkHex: "CFC9BE")
+    // Brightened from EBA654 (4.51:1 on panelAlt). A token tuned to land exactly
+    // on the 4.5 bar arrives at the glass under it: the terminal's scanline
+    // overlay and glow cost the rendered pair ~10%, measured off the captures.
+    // Every phosphor here clears 5.5:1 declared so it clears 4.5:1 rendered.
+    static let panelTrace      = Color(hex: "F0BE81", darkHex: "F0BE81")
     static let panelTraceFaint = panelTrace.opacity(0.08)
     static let panelEdge       = panelTrace.opacity(0.18)
 }
@@ -562,7 +563,7 @@ private let mineralChrome: ChromeTokens = {
         panelAlt: Color(hex: "263C40", darkHex: "1E3034"),
         panelInk: Color(hex: "EEF1EA"),
         panelInkFaint: Color(hex: "AAB7B2"),
-        panelAccent: Color(hex: "D99064"),
+        panelAccent: Color(hex: "E0A682"),
         panelEdge: Color(hex: "D99064").opacity(0.24),
         trace: Color(hex: "29484E", darkHex: "D67B48"),
         traceFaint: Color(hex: "29484E", darkHex: "D67B48").opacity(0.10),
@@ -593,7 +594,7 @@ private let midnightChrome: ChromeTokens = {
         panelAlt: Color(hex: "1A1B1F"),
         panelInk: Color(hex: "F7F8F8"),
         panelInkFaint: Color(hex: "9097A1"),
-        panelAccent: Color(hex: "707BD7"),
+        panelAccent: Color(hex: "828CDC"),
         panelEdge: accent.opacity(0.30),
         trace: ink.opacity(0.70),
         traceFaint: ink.opacity(0.10),
@@ -748,8 +749,8 @@ private let carbonChrome: ChromeTokens = {
         panel: Color(hex: "0A0A0A", darkHex: "101010"),
         panelAlt: Color(hex: "121212", darkHex: "181818"),
         panelInk: Color(hex: "FAFAFA"),
-        panelInkFaint: Color(hex: "8A8A8A"),
-        panelAccent: signal,
+        panelInkFaint: Color(hex: "929292"),
+        panelAccent: Color(hex: "3DE08A"),
         panelEdge: signal.opacity(0.34),
         trace: ink.opacity(0.80),
         traceFaint: ink.opacity(0.10),
