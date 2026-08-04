@@ -143,6 +143,14 @@ const STUDIES: Study[] = [
 
   // — iOS —
   {
+    slug: "theme-contrast",
+    name: "Theme Contrast",
+    kind: "Audit",
+    platform: "iOS",
+    blurb:
+      "Where the legibility sweep stands — the checkpoints that got here, plus Home and the Codex deck shot in all 10 themes × 2 modes with contrast measured off the pixels rather than off the tokens.",
+  },
+  {
     slug: "themes",
     name: "Themes",
     kind: "Articulation",
