@@ -28,6 +28,7 @@ struct HomeNextView: View {
     @ObservedObject private var deepLinkManager = DeepLinkManager.shared
     @ObservedObject private var iCloudStatus = iCloudStatusManager.shared
     @ObservedObject private var recordingSheet = RecordingSheetController.shared
+    @ObservedObject private var masthead = HomeMastheadExperiment.shared
     @StateObject private var feed: HomeFeed
     @State private var isCommandFocused = false
     @State private var commandKeyboard = HomeCommandKeyboardController()
@@ -41,10 +42,18 @@ struct HomeNextView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 12) {
-                HomeHeader()
+                if masthead.isOn {
+                    // One object where there were three. The stack's 12pt gap
+                    // still applies below it, which is what keeps this an
+                    // experiment about the top of the page rather than a
+                    // rewrite of the page.
+                    HomeMasthead(cockpit: feed.cockpit)
+                } else {
+                    HomeHeader()
 
-                HomeCockpit(model: feed.cockpit)
-                    .padding(.horizontal, 12)
+                    HomeCockpit(model: feed.cockpit)
+                        .padding(.horizontal, 12)
+                }
 
                 HomeFrequentActionsStrip(onSearch: focusSearch)
                     .padding(.horizontal, 12)
@@ -341,27 +350,115 @@ private extension Capture {
     }
 }
 
+// MARK: - Masthead (experiment)
+
+/// Home's top region as one full-bleed band — see `HomeMastheadExperiment`.
+///
+/// Everything here is subtraction. The header keeps its glyphs and loses its
+/// lozenges; the cockpit keeps its message line and its Roll and loses the
+/// bezel, the screen, and the well. What replaces all of it is a single
+/// surface, three hairlines, and a highlight at the top.
+///
+/// The highlight is *painted*, not laid on: it is a gradient between two opaque
+/// colours, the crest resolved once against the band's own fill. A translucent
+/// white wash would have been one line shorter and would have made this the
+/// only film on a theme whose entire argument is that there are none — and on
+/// Press, where nothing is allowed to be see-through, it would have been a
+/// contradiction rather than a shortcut.
+private struct HomeMasthead: View {
+    let cockpit: HomeFeed.CockpitModel
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HomeHeader(chromeless: true)
+
+            rule(theme.currentTheme.chrome.edgeFaint)
+
+            // No horizontal inset here on purpose. The rows inside carry their
+            // own, so the rule between them can run the full width like the one
+            // under the header — a division that stops short of both edges is a
+            // fourth box outline, which is the thing this is trying to remove.
+            HomeCockpit(model: cockpit, flush: true)
+                .padding(.bottom, 10)
+        }
+        .background(alignment: .top) { surface }
+        // The one division that has to carry weight. Every rule inside the band
+        // separates two rows of the same thing; this one separates the masthead
+        // from the page, so it is the full `edge` token rather than the faint
+        // one — the same reasoning that made a flat theme's rules heavier in the
+        // first place.
+        .overlay(alignment: .bottom) { rule(theme.currentTheme.chrome.edge) }
+    }
+
+    private func rule(_ color: Color) -> some View {
+        Rectangle()
+            .fill(color)
+            .frame(height: theme.currentTheme.chrome.hairlineWidth)
+    }
+
+    private var surface: some View {
+        let base = theme.colors.cardBackground
+        // A whisper of the theme's own accent, so the crest belongs to the
+        // theme rather than being a generic lightening. 7% is under the
+        // threshold where it reads as a colour and over the one where it reads
+        // as nothing.
+        let crest = theme.currentTheme.chrome.accent.flattened(0.07, over: base)
+
+        return LinearGradient(
+            stops: [
+                .init(color: crest, location: 0),
+                .init(color: base, location: 0.62),
+                .init(color: base, location: 1),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        // Run up under the status bar. Measured off the window rather than
+        // guessed at, because the number is different on every phone and a
+        // masthead that stops one point short of the top is worse than one that
+        // never tried.
+        .padding(.top, -Self.statusBarInset)
+    }
+
+    private static var statusBarInset: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }?
+            .keyWindow?.safeAreaInsets.top ?? 0
+    }
+}
+
 // MARK: - Header
 
 private struct HomeHeader: View {
+    /// Masthead experiment: drop the two lozenges around the glyphs.
+    ///
+    /// A filled, bordered, shadowed 40pt circle is how a button announces
+    /// itself when it is floating on an open page with nothing else nearby. In
+    /// a band that is already a surface, the circle is a third object drawn on
+    /// a plane that has one — and its drop shadow is the one film left on a
+    /// theme that argues against films. The glyph alone is still a target;
+    /// `contentShape` keeps it the same 40pt target it was.
+    var chromeless: Bool = false
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
         HStack {
-            DeckComplication()
+            DeckComplication(chromeless: chromeless)
             Spacer()
             Text("TALKIE")
                 .talkieType(.wordmark)
                 .foregroundStyle(theme.colors.textPrimary)
             Spacer()
             Button(action: { AppShellRouter.shared.openSettings() }) {
-                HomeHeaderButtonGlyph(systemName: "gearshape")
+                HomeHeaderButtonGlyph(systemName: "gearshape", chromeless: chromeless)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Settings")
             .accessibilityIdentifier("dock.settings")
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, HomeCockpitMetrics.mastheadInset)
         .padding(.top, 6)
         .padding(.bottom, 8)
     }
@@ -372,21 +469,28 @@ private struct HomeHeader: View {
 private struct HomeHeaderButtonGlyph: View {
     let systemName: String
     var isEnabled: Bool = true
+    var chromeless: Bool = false
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
         ZStack {
-            Circle().fill(theme.colors.cardBackground)
-            Circle().strokeBorder(
-                theme.currentTheme.chrome.edgeFaint,
-                lineWidth: theme.currentTheme.chrome.hairlineWidth
-            )
+            if !chromeless {
+                Circle().fill(theme.colors.cardBackground)
+                Circle().strokeBorder(
+                    theme.currentTheme.chrome.edgeFaint,
+                    lineWidth: theme.currentTheme.chrome.hairlineWidth
+                )
+            }
             Image(systemName: systemName)
-                .font(.system(size: 15, weight: .regular))
+                // Bare, the glyph has no lozenge behind it to separate it from
+                // the band, so it carries a little more weight itself — the
+                // same trade the type tokens make under a flat finish.
+                .font(.system(size: chromeless ? 17 : 15, weight: chromeless ? .medium : .regular))
                 .foregroundStyle(isEnabled ? theme.colors.textSecondary : theme.colors.textTertiary)
         }
         .frame(width: 40, height: 40)
-        .shadow(color: .black.opacity(0.10), radius: 4, y: 2)
+        .contentShape(Rectangle())
+        .shadow(color: .black.opacity(chromeless ? 0 : 0.10), radius: 4, y: 2)
     }
 }
 
@@ -394,12 +498,13 @@ private struct HomeHeaderButtonGlyph: View {
 /// settings button treatment; bridge state is exposed through accessibility and
 /// the Deck surface itself instead of a separate status bead.
 private struct DeckComplication: View {
+    var chromeless: Bool = false
     @State private var bridgeManager = BridgeManager.shared
     @ObservedObject private var deck = DeckMirrorStore.shared
 
     var body: some View {
         Button(action: openDeck) {
-            HomeHeaderButtonGlyph(systemName: "square.grid.3x3")
+            HomeHeaderButtonGlyph(systemName: "square.grid.3x3", chromeless: chromeless)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
@@ -446,27 +551,56 @@ private enum HomeCockpitPalette {
 
     private static var chrome: ChromeTokens { activeTheme.chrome }
 
+    /// Whether the cockpit is currently drawn with its screen removed — the
+    /// masthead experiment. Every `panel*` token below describes ink for a dark
+    /// recessed plate: on the themes whose plates stay dark in both modes those
+    /// are near-whites by design. With the plate gone they land on the page, so
+    /// the four ink tokens re-read off the page vocabulary instead. The three
+    /// plate colours are left alone — nothing draws them in this mode.
+    private static var flush: Bool { HomeMastheadExperiment.isFlush }
+
+    private static var colors: ThemeColors { activeTheme.colors }
+
     static var accent: Color { chrome.accent }
     static var accentSoft: Color { chrome.accentTint }
-    static var accentEdge: Color { chrome.panelEdge }
+    static var accentEdge: Color { flush ? chrome.edge : chrome.panelEdge }
     static var matte: Color { chrome.panelAlt }
     static var matteLow: Color { chrome.panel }
     static var screen: Color { chrome.panel }
     static var screenAlt: Color { chrome.panelAlt }
-    static var screenInk: Color { chrome.panelInk }
-    static var screenInkFaint: Color { chrome.panelInkFaint }
-    static var phosphor: Color { chrome.panelAccent }
+    static var screenInk: Color { flush ? colors.textPrimary : chrome.panelInk }
+    static var screenInkFaint: Color { flush ? colors.textSecondary : chrome.panelInkFaint }
+    static var phosphor: Color { flush ? chrome.accent : chrome.panelAccent }
 
     /// How far a lit readout is allowed to bleed. Themes that declare no halo
     /// (`glowRadius: 0`) get none here either — a glow is a film over the word,
     /// and a theme that has argued against films shouldn't sprout one in the
     /// cockpit.
-    static var glowRadius: CGFloat { chrome.glowRadius }
+    static var glowRadius: CGFloat { flush ? 0 : chrome.glowRadius }
 
     /// Gloss, lift and letterform — the same finish the Codex deck reads. The
     /// cockpit is the densest small type in the app, so it is where the films
     /// cost the most. See `DeckFinish`.
     static var finish: DeckFinish { activeTheme.finish }
+
+    /// An ink tint on the cockpit screen. The plate is always the same one
+    /// here, so unlike the deck the call sites don't have to name it — they
+    /// just stop deciding for themselves whether the result is composited.
+    static func tint(_ ink: Color, _ alpha: Double) -> Color {
+        finish.tint(ink, alpha, over: flush ? colors.cardBackground : screen)
+    }
+
+    /// The glow a lit readout gets. A flush cockpit has no screen to be lit, so
+    /// it gets none — the same trade the flush strip makes with its scanlines.
+    static var lift: Double { flush ? 0 : finish.lift }
+
+    /// The recessed track behind a small control. On a screen that is the
+    /// screen's own two-stop gradient; on the page there is nothing to recess
+    /// into, so it becomes a whisper of the page's own ink. Getting this wrong
+    /// is the same failure the bay selector already carries a note about — ink
+    /// from one family on a plate from another — so plate and ink move together.
+    static var track: Color { flush ? tint(screenInk, 0.07) : screen }
+    static var trackAlt: Color { flush ? tint(screenInk, 0.04) : screenAlt }
 }
 
 // MARK: - Command center
@@ -1214,6 +1348,16 @@ private enum HomeCockpitMetrics {
     // Message Line
     static let messageHeight: CGFloat = 32      // MSG_H
 
+    // Masthead experiment. The strip stands taller once it has no plate: a
+    // bordered 32pt box reads as a deliberate object at that height, but the
+    // same 32pt with the box removed reads as a cramped row, because the border
+    // was doing the work of saying "this much space is mine". Height has to
+    // take that job over.
+    static let flushMessageHeight: CGFloat = 40
+    /// Side inset for everything in the masthead. Matches the header's own, so
+    /// the wordmark, the message line and the Roll all start on one margin.
+    static let mastheadInset: CGFloat = 20
+
     // The Roll (CELL 12 · CGAP 3 → grid 102pt tall)
     static let rollCell: CGFloat = 12           // CELL
     static let rollGap: CGFloat = 3             // CGAP
@@ -1293,6 +1437,8 @@ private struct HomeActivityEvent: Identifiable {
 
 private struct HomeCockpit: View {
     let model: HomeFeed.CockpitModel
+    /// Masthead experiment: no bezel, no screen, laid straight onto the band.
+    var flush: Bool = false
     @ObservedObject private var parakeet = ParakeetModelManager.shared
     @ObservedObject private var theme = ThemeManager.shared
 
@@ -1328,14 +1474,19 @@ private struct HomeCockpit: View {
         } else {
             // The production cockpit retains master's latest Roll/Gauges bay.
             Button(action: open) {
-                CockpitScreen(model: model, parakeetDownloading: parakeetDownloading)
-                    .frame(maxWidth: .infinity)
-                    .bezelChassis(
-                        padding: HomeCockpitMetrics.bezelPad,
-                        corner: HomeCockpitMetrics.bezelCorner,
-                        metal: true,
-                        fill: HomeCockpitPalette.matte
-                    )
+                if flush {
+                    CockpitScreen(model: model, parakeetDownloading: parakeetDownloading, flush: true)
+                        .frame(maxWidth: .infinity)
+                } else {
+                    CockpitScreen(model: model, parakeetDownloading: parakeetDownloading)
+                        .frame(maxWidth: .infinity)
+                        .bezelChassis(
+                            padding: HomeCockpitMetrics.bezelPad,
+                            corner: HomeCockpitMetrics.bezelCorner,
+                            metal: true,
+                            fill: HomeCockpitPalette.matte
+                        )
+                }
             }
             .buttonStyle(.plain)
             .accessibilityLabel(accessibilitySummary)
@@ -1415,11 +1566,11 @@ private struct HomeActivityScreen: View {
                     HomeActivityRow(event: event, showsDivider: index < events.count - 1)
                 }
             }
-            .background(HomeCockpitPalette.screenInk.opacity(0.04))
+            .background(HomeCockpitPalette.tint(HomeCockpitPalette.screenInk, 0.04))
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(HomeCockpitPalette.phosphor.opacity(0.14), lineWidth: 1)
+                    .strokeBorder(HomeCockpitPalette.tint(HomeCockpitPalette.phosphor, 0.14), lineWidth: 1)
             }
         }
         .padding(.horizontal, 12)
@@ -1435,7 +1586,7 @@ private struct HomeActivityScreen: View {
                         endPoint: .bottom
                     )
                     RadialGradient(
-                        colors: [HomeCockpitPalette.phosphor.opacity(0.18), .clear],
+                        colors: [HomeCockpitPalette.tint(HomeCockpitPalette.phosphor, 0.18), .clear],
                         center: UnitPoint(x: 0.72, y: 0.36),
                         startRadius: 0,
                         endRadius: 140
@@ -1464,7 +1615,7 @@ private struct HomeActivityRow: View {
             Circle()
                 .fill(HomeCockpitPalette.phosphor)
                 .frame(width: 5, height: 5)
-                .shadow(color: HomeCockpitPalette.phosphor.opacity(0.65), radius: 3)
+                .shadow(color: HomeCockpitPalette.tint(HomeCockpitPalette.phosphor, 0.65), radius: 3)
 
             Text(event.title)
                 .talkieType(.preview)
@@ -1482,7 +1633,7 @@ private struct HomeActivityRow: View {
         .overlay(alignment: .bottom) {
             if showsDivider {
                 Rectangle()
-                    .fill(HomeCockpitPalette.screenInk.opacity(0.08))
+                    .fill(HomeCockpitPalette.tint(HomeCockpitPalette.screenInk, 0.08))
                     .frame(height: 0.5)
                     .padding(.leading, 52)
             }
@@ -1499,13 +1650,24 @@ private struct HomeActivityRow: View {
 private struct CockpitScreen: View {
     let model: HomeFeed.CockpitModel
     let parakeetDownloading: Bool
+    /// Give up the screen — its colour, its corners, its border — and lay the
+    /// message line and the bay directly onto the masthead's surface, divided
+    /// by a hairline instead of by a gap.
+    ///
+    /// This is the part of the experiment with something real at stake. The
+    /// dark screen is what makes the cockpit read as an instrument rather than
+    /// as a card, and giving it up is not free. What it buys is that the top of
+    /// Home becomes one plane instead of three, and a hairline between two rows
+    /// of a single surface is a quieter division than a rounded dark rectangle
+    /// inset inside a metal bezel — which is the question being asked.
+    var flush: Bool = false
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
         let hairline = max(theme.currentTheme.chrome.hairlineWidth, 0.8)
         let shape = RoundedRectangle(cornerRadius: HomeCockpitMetrics.screenCorner, style: .continuous)
 
-        VStack(spacing: HomeCockpitMetrics.stackGap) {
+        VStack(spacing: flush ? 0 : HomeCockpitMetrics.stackGap) {
             // Message Line — straight on top (no header). Its own 60s timeline
             // keeps the age / station-ident fresh with no per-frame animation.
             TimelineView(.periodic(from: .now, by: 60)) { context in
@@ -1515,9 +1677,19 @@ private struct CockpitScreen: View {
                         parakeetDownloading: parakeetDownloading,
                         now: context.date
                     ),
-                    height: HomeCockpitMetrics.messageHeight,
-                    dock: dockReadout
+                    height: flush ? HomeCockpitMetrics.flushMessageHeight : HomeCockpitMetrics.messageHeight,
+                    dock: dockReadout,
+                    flush: flush
                 )
+            }
+            // Top up each row's own inset to the masthead margin, rather than
+            // insetting the stack, so the divider below stays full width.
+            .padding(.horizontal, flush ? HomeCockpitMetrics.mastheadInset - TerminalStripMetrics.padH : 0)
+
+            if flush {
+                Rectangle()
+                    .fill(theme.currentTheme.chrome.edgeFaint)
+                    .frame(height: theme.currentTheme.chrome.hairlineWidth)
             }
 
             // The Bay — the toggled 144pt well (Roll ⁄ Gauges).
@@ -1526,10 +1698,11 @@ private struct CockpitScreen: View {
             // and bools that a theme change doesn't touch, so their bodies stay
             // cached and they keep drawing the outgoing theme's phosphor. Keying
             // the bay on the theme rebuilds the subtree instead.
-            CockpitBay(model: model)
+            CockpitBay(model: model, flush: flush)
                 .id(theme.currentTheme)
+                .padding(.horizontal, flush ? HomeCockpitMetrics.mastheadInset - HomeCockpitMetrics.bayPad : 0)
         }
-        .padding(HomeCockpitMetrics.screenPad)
+        .padding(flush ? 0 : HomeCockpitMetrics.screenPad)
         .frame(maxWidth: .infinity)
         // Three films stack here — a top-to-bottom gloss, a phosphor bloom, and a
         // left-to-right wash — and the whole cockpit's type is read through all
@@ -1538,37 +1711,41 @@ private struct CockpitScreen: View {
         // colour and drops the stack.
         .background {
             ZStack {
-                HomeCockpitPalette.screen
-                if HomeCockpitPalette.finish.isGlossy {
-                    LinearGradient(
-                        stops: [
-                            .init(color: Color.white.opacity(0.08), location: 0),
-                            .init(color: Color.white.opacity(0.02), location: 0.45),
-                            .init(color: Color.black.opacity(0.24), location: 1),
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    RadialGradient(
-                        colors: [HomeCockpitPalette.phosphor.opacity(0.22), .clear],
-                        center: UnitPoint(x: 0.5, y: 0.44),
-                        startRadius: 0,
-                        endRadius: 110
-                    )
-                    LinearGradient(
-                        colors: [
-                            HomeCockpitPalette.screenAlt.opacity(0.00),
-                            HomeCockpitPalette.screenAlt.opacity(0.45),
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
+                if !flush {
+                    HomeCockpitPalette.screen
+                    if HomeCockpitPalette.finish.isGlossy {
+                        LinearGradient(
+                            stops: [
+                                .init(color: Color.white.opacity(0.08), location: 0),
+                                .init(color: Color.white.opacity(0.02), location: 0.45),
+                                .init(color: Color.black.opacity(0.24), location: 1),
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        RadialGradient(
+                            colors: [HomeCockpitPalette.tint(HomeCockpitPalette.phosphor, 0.22), .clear],
+                            center: UnitPoint(x: 0.5, y: 0.44),
+                            startRadius: 0,
+                            endRadius: 110
+                        )
+                        LinearGradient(
+                            colors: [
+                                HomeCockpitPalette.screenAlt.opacity(0.00),
+                                HomeCockpitPalette.screenAlt.opacity(0.45),
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    }
                 }
             }
         }
-        .clipShape(shape)
+        .clipShape(flush ? AnyShape(Rectangle()) : AnyShape(shape))
         .overlay {
-            shape.strokeBorder(HomeCockpitPalette.accentEdge, lineWidth: hairline)
+            if !flush {
+                shape.strokeBorder(HomeCockpitPalette.accentEdge, lineWidth: hairline)
+            }
         }
     }
 
@@ -1611,6 +1788,11 @@ private enum CockpitBayPage: String {
 /// readout on the right (STRK n on ROLL · TODAY · 7-DAY AVG on GAUGES).
 private struct CockpitBay: View {
     let model: HomeFeed.CockpitModel
+    /// Drop the well. The bay is normally recessed into the screen by a tinted
+    /// fill and a border; flush, the masthead is already the surface and the
+    /// row above is already divided from it by a hairline, so a second frame
+    /// only says the same thing twice.
+    var flush: Bool = false
     @AppStorage("home.cockpit.bayPage") private var bayPageRaw = CockpitBayPage.roll.rawValue
 
     private var page: CockpitBayPage { CockpitBayPage(rawValue: bayPageRaw) ?? .roll }
@@ -1645,9 +1827,13 @@ private struct CockpitBay: View {
         .frame(maxWidth: .infinity)
         // White-on-dark was safe while every plate was dark. Tinting with the
         // plate's own ink instead keeps the well recessed either way.
-        .background(HomeCockpitPalette.screenInk.opacity(0.035))
-        .clipShape(shape)
-        .overlay(shape.strokeBorder(HomeCockpitPalette.screenInk.opacity(0.08), lineWidth: 1))
+        .background { if !flush { HomeCockpitPalette.tint(HomeCockpitPalette.screenInk, 0.035) } }
+        .clipShape(flush ? AnyShape(Rectangle()) : AnyShape(shape))
+        .overlay {
+            if !flush {
+                shape.strokeBorder(HomeCockpitPalette.tint(HomeCockpitPalette.screenInk, 0.08), lineWidth: 1)
+            }
+        }
     }
 
     private func toggle() {
@@ -1693,7 +1879,7 @@ private struct BaySelector: View {
             // the same place and cannot disagree.
             .background(
                 LinearGradient(
-                    colors: [HomeCockpitPalette.screen, HomeCockpitPalette.screenAlt],
+                    colors: [HomeCockpitPalette.track, HomeCockpitPalette.trackAlt],
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -1701,7 +1887,7 @@ private struct BaySelector: View {
             .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .strokeBorder(HomeCockpitPalette.phosphor.opacity(0.22), lineWidth: 1)
+                    .strokeBorder(HomeCockpitPalette.tint(HomeCockpitPalette.phosphor, 0.22), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -1724,7 +1910,7 @@ private struct BaySelector: View {
             // Capped at 3 because that is all an 8pt glyph in a 28px chip can
             // carry before the halo starts reading as the letter.
             .shadow(
-                color: on ? HomeCockpitPalette.phosphor.opacity(0.55) : .clear,
+                color: on ? HomeCockpitPalette.tint(HomeCockpitPalette.phosphor, 0.55) : .clear,
                 radius: on ? min(HomeCockpitPalette.glowRadius, 3) : 0
             )
             .padding(.horizontal, 7)
@@ -1738,7 +1924,7 @@ private struct BaySelector: View {
             .overlay {
                 if on {
                     RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .strokeBorder(HomeCockpitPalette.phosphor.opacity(0.55), lineWidth: 0.5)
+                        .strokeBorder(HomeCockpitPalette.tint(HomeCockpitPalette.phosphor, 0.55), lineWidth: 0.5)
                 }
             }
     }
@@ -1855,7 +2041,7 @@ private struct MeterLane: View {
                 .font(.system(size: 15, weight: .bold, design: .monospaced).monospacedDigit())
                 .tracking(0.3) // 0.02em at 15pt
                 .foregroundStyle(standby ? HomeCockpitPalette.screenInk : HomeCockpitPalette.phosphor)
-                .shadow(color: standby ? .clear : HomeCockpitPalette.phosphor.opacity(0.55), radius: standby ? 0 : 4)
+                .shadow(color: standby ? .clear : HomeCockpitPalette.tint(HomeCockpitPalette.phosphor, 0.55), radius: standby ? 0 : 4)
                 .lineLimit(1)
                 .frame(width: 44, alignment: .leading)
 
@@ -1872,11 +2058,11 @@ private struct MeterLane: View {
         .padding(.horizontal, 9)
         .frame(height: height)
         .frame(maxWidth: .infinity)
-        .background(Color.white.opacity(0.035))
+        .background(HomeCockpitPalette.tint(HomeCockpitPalette.screenInk, 0.035))
         .clipShape(RoundedRectangle(cornerRadius: HomeCockpitMetrics.gaugeCorner, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: HomeCockpitMetrics.gaugeCorner, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                .strokeBorder(HomeCockpitPalette.tint(HomeCockpitPalette.screenInk, 0.08), lineWidth: 1)
         )
     }
 
@@ -1913,7 +2099,7 @@ private struct SegMeter: View {
                     .overlay {
                         if standby {
                             RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+                                .strokeBorder(HomeCockpitPalette.tint(HomeCockpitPalette.screenInk, 0.10), lineWidth: 1)
                         }
                     }
                     .shadow(
@@ -1928,15 +2114,15 @@ private struct SegMeter: View {
 
     private func fill(lit: Bool, isAvg: Bool) -> Color {
         if standby { return .clear }
-        if isAvg && !lit { return HomeCockpitPalette.phosphor.opacity(0.5) }
+        if isAvg && !lit { return HomeCockpitPalette.tint(HomeCockpitPalette.phosphor, 0.5) }
         if lit { return HomeCockpitPalette.phosphor }
-        return Color.white.opacity(0.12)
+        return HomeCockpitPalette.tint(HomeCockpitPalette.screenInk, 0.12)
     }
 
     private func glow(i: Int, filled: Int, lit: Bool, isAvg: Bool) -> Color {
         if standby { return .clear }
-        if isAvg { return HomeCockpitPalette.phosphor.opacity(0.7) }
-        if lit && i == filled - 1 { return HomeCockpitPalette.phosphor.opacity(0.55) }
+        if isAvg { return HomeCockpitPalette.tint(HomeCockpitPalette.phosphor, 0.7) }
+        if lit && i == filled - 1 { return HomeCockpitPalette.tint(HomeCockpitPalette.phosphor, 0.55) }
         return .clear
     }
 }
@@ -1964,7 +2150,7 @@ private struct StrkLane: View {
                     .font(.system(size: 17, weight: .bold, design: .monospaced).monospacedDigit())
                     .foregroundStyle(standby || streak > 0 ? HomeCockpitPalette.phosphor : HomeCockpitPalette.screenInk)
                     .shadow(
-                        color: (!standby && streak > 0) ? HomeCockpitPalette.phosphor.opacity(0.5) : .clear,
+                        color: (!standby && streak > 0) ? HomeCockpitPalette.tint(HomeCockpitPalette.phosphor, 0.5) : .clear,
                         radius: (!standby && streak > 0) ? 3 : 0
                     )
                 Text(standby ? "DAY 1" : "DAY RUN")
@@ -1981,11 +2167,11 @@ private struct StrkLane: View {
         .padding(.horizontal, 9)
         .frame(height: height)
         .frame(maxWidth: .infinity)
-        .background(Color.white.opacity(0.035))
+        .background(HomeCockpitPalette.tint(HomeCockpitPalette.screenInk, 0.035))
         .clipShape(RoundedRectangle(cornerRadius: HomeCockpitMetrics.gaugeCorner, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: HomeCockpitMetrics.gaugeCorner, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                .strokeBorder(HomeCockpitPalette.tint(HomeCockpitPalette.screenInk, 0.08), lineWidth: 1)
         )
     }
 }
@@ -2029,7 +2215,7 @@ private struct Dot: View {
     private var fill: Color {
         if standby { return .clear }
         if isToday { return HomeCockpitPalette.phosphor }
-        if filled { return Color.white.opacity(0.9) }
+        if filled { return HomeCockpitPalette.tint(HomeCockpitPalette.screenInk, 0.9) }
         return .clear
     }
 
@@ -2038,15 +2224,15 @@ private struct Dot: View {
         if standby && isToday {
             Circle().strokeBorder(HomeCockpitPalette.phosphor, lineWidth: 1.5) // amber Today Seed
         } else if standby {
-            Circle().strokeBorder(Color.white.opacity(0.11), lineWidth: 1) // Ghost dot
+            Circle().strokeBorder(HomeCockpitPalette.tint(HomeCockpitPalette.screenInk, 0.11), lineWidth: 1) // Ghost dot
         } else if !filled && !isToday {
-            Circle().strokeBorder(Color.white.opacity(0.16), lineWidth: 1) // empty day
+            Circle().strokeBorder(HomeCockpitPalette.tint(HomeCockpitPalette.screenInk, 0.16), lineWidth: 1) // empty day
         }
     }
 
     private var glowColor: Color {
-        if standby && isToday { return HomeCockpitPalette.phosphor.opacity(0.7) }
-        if !standby && isToday { return HomeCockpitPalette.phosphor.opacity(0.8) }
+        if standby && isToday { return HomeCockpitPalette.tint(HomeCockpitPalette.phosphor, 0.7) }
+        if !standby && isToday { return HomeCockpitPalette.tint(HomeCockpitPalette.phosphor, 0.8) }
         return .clear
     }
 
@@ -2085,7 +2271,7 @@ private struct RollCell: View {
         } else if ghost {
             // A Ghost Cell — a faint outline sketching the grid that will fill in.
             RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .strokeBorder(HomeCockpitPalette.screenInk.opacity(0.11), lineWidth: 1)
+                .strokeBorder(HomeCockpitPalette.tint(HomeCockpitPalette.screenInk, 0.11), lineWidth: 1)
         } else if isToday && intensity == 0 {
             // Today, no capture yet — an unlit amber ring marker.
             RoundedRectangle(cornerRadius: 2, style: .continuous)
@@ -2095,27 +2281,27 @@ private struct RollCell: View {
 
     private var fill: Color {
         if ghost { return .clear }  // ghost cells are outlined only
-        if isFuture { return HomeCockpitPalette.screenInk.opacity(0.03) }
+        if isFuture { return HomeCockpitPalette.tint(HomeCockpitPalette.screenInk, 0.03) }
         if isToday && intensity > 0 { return HomeCockpitPalette.phosphor }
         if isToday { return .clear }  // ring drawn in the overlay
         if inRun { return HomeCockpitPalette.phosphor.opacity(0.7 + Double(intensity) * 0.1) }
         if intensity > 0 { return activeInk }
-        return HomeCockpitPalette.screenInk.opacity(0.05)   // empty past day
+        return HomeCockpitPalette.tint(HomeCockpitPalette.screenInk, 0.05)   // empty past day
     }
 
     // Cell ink is the plate's own ink, not a literal white — a light plate
     // needs dark cells for the same reason a dark one needs light ones.
     private var activeInk: Color {
-        if intensity >= 3 { return HomeCockpitPalette.screenInk.opacity(0.85) }
-        if intensity == 2 { return HomeCockpitPalette.screenInk.opacity(0.55) }
-        return HomeCockpitPalette.screenInk.opacity(0.30)
+        if intensity >= 3 { return HomeCockpitPalette.tint(HomeCockpitPalette.screenInk, 0.85) }
+        if intensity == 2 { return HomeCockpitPalette.tint(HomeCockpitPalette.screenInk, 0.55) }
+        return HomeCockpitPalette.tint(HomeCockpitPalette.screenInk, 0.30)
     }
 
     private var glowColor: Color {
-        if ghost && isToday { return HomeCockpitPalette.phosphor.opacity(0.7) }
+        if ghost && isToday { return HomeCockpitPalette.tint(HomeCockpitPalette.phosphor, 0.7) }
         if ghost { return .clear }
-        if isToday && intensity > 0 { return HomeCockpitPalette.phosphor.opacity(0.85) }
-        if inRun { return HomeCockpitPalette.phosphor.opacity(0.4) }
+        if isToday && intensity > 0 { return HomeCockpitPalette.tint(HomeCockpitPalette.phosphor, 0.85) }
+        if inRun { return HomeCockpitPalette.tint(HomeCockpitPalette.phosphor, 0.4) }
         return .clear
     }
 
@@ -2285,7 +2471,7 @@ private struct HomeSuggestionsStrip: View {
                                     .fill(theme.colors.cardBackground)
                                     .overlay(
                                         Capsule()
-                                            .fill(HomeCockpitPalette.accent.opacity(0.035))
+                                            .fill(HomeCockpitPalette.tint(HomeCockpitPalette.accent, 0.035))
                                     )
                                     .overlay(
                                         Capsule()
