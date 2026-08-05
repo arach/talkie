@@ -22,7 +22,10 @@ extension AppTheme {
         case .graphite: "AppIconGraphite"
         case .carbon: "AppIconCarbon"
         case .ember: "AppIconEmber"
-        case .matte: "AppIconMatte"
+        // Press is Matte's control pair and carries the identical accent, so
+        // it signals with the identical glyph rather than a byte-identical
+        // second asset catalog.
+        case .matte, .press: "AppIconMatte"
         }
     }
 }

@@ -117,6 +117,44 @@ extension Color {
             self.init(uiColor: lightColor)
         }
     }
+
+    /// This colour laid over `base` at `alpha`, resolved to a single opaque one.
+    ///
+    /// `.opacity()` is a compositing instruction: the renderer carries both
+    /// colours to the glass and blends them there, every frame, for every layer
+    /// in the stack. This does the same arithmetic once, up front, and hands
+    /// back a flat fill with nothing behind it. The pixel is the same either
+    /// way — what changes is that the result is a value you can name, measure
+    /// and reason about rather than an accident of what happens to be beneath.
+    ///
+    /// Both operands may be mode-dependent, so the blend is done once per
+    /// interface style and the result stays dynamic.
+    func flattened(_ alpha: Double, over base: Color) -> Color {
+        func blend(_ style: UIUserInterfaceStyle) -> UIColor {
+            let traits = UITraitCollection(userInterfaceStyle: style)
+            let top = UIColor(self).resolvedColor(with: traits)
+            let bottom = UIColor(base).resolvedColor(with: traits)
+
+            var tr: CGFloat = 0, tg: CGFloat = 0, tb: CGFloat = 0, ta: CGFloat = 0
+            var br: CGFloat = 0, bg: CGFloat = 0, bb: CGFloat = 0, ba: CGFloat = 0
+            top.getRed(&tr, green: &tg, blue: &tb, alpha: &ta)
+            bottom.getRed(&br, green: &bg, blue: &bb, alpha: &ba)
+
+            // The top colour's own alpha counts too — a token that was already
+            // translucent doesn't get to arrive at full strength here.
+            let a = ta * CGFloat(alpha)
+            return UIColor(
+                red: tr * a + br * (1 - a),
+                green: tg * a + bg * (1 - a),
+                blue: tb * a + bb * (1 - a),
+                alpha: 1
+            )
+        }
+
+        let light = blend(.light)
+        let dark = blend(.dark)
+        return Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? dark : light })
+    }
 }
 
 // MARK: - Typography (Tactical/Dev-Tool Oriented)
@@ -834,12 +872,80 @@ private let matteChrome: ChromeTokens = {
         panelEdge: signal.opacity(0.30),
         trace: ink.opacity(0.82),
         traceFaint: ink.opacity(0.10),
-        edgeStrong: Color(hex: "38000000", darkHex: "5CFFFFFF"),
-        edge:       Color(hex: "26000000", darkHex: "42FFFFFF"),
-        edgeFaint:  Color(hex: "1A000000", darkHex: "30FFFFFF"),
-        edgeSubtle: Color(hex: "0F000000", darkHex: "1CFFFFFF"),
+        // Heavier than they read on an instrument theme, on purpose. There the
+        // rules are one cue among several — a plate is also told apart from the
+        // page by its sheen, its gloss and the shadow it casts. Strip those and
+        // the rule is the only thing left saying where one region ends and the
+        // next begins, so it has to be a line you can actually see rather than a
+        // suggestion of one. A flat theme with faint rules doesn't read calm, it
+        // reads unfinished.
+        edgeStrong: Color(hex: "57000000", darkHex: "80FFFFFF"),
+        edge:       Color(hex: "3D000000", darkHex: "5CFFFFFF"),
+        edgeFaint:  Color(hex: "29000000", darkHex: "40FFFFFF"),
+        edgeSubtle: Color(hex: "1A000000", darkHex: "29FFFFFF"),
         glowRadius: 0,
         chromeCorner: 6,
+        eyebrowLeader: "·",
+        hairlineWidth: 1.0
+    )
+}()
+
+// Press's chrome — Matte's argument carried to the end of the sentence.
+//
+// Matte removed the layers you can see. What it left behind is the layer you
+// can't: alpha. Nearly every token above is a colour multiplied by a number,
+// which is not a colour at all but an instruction to blend against whatever
+// turns out to be underneath at draw time. On a panel that is usually the
+// panel; on a panel inside a sheet inside a scrim it is something else, and
+// the token's real value quietly changes with its surroundings.
+//
+// Here every one of those is resolved against the plate it sits on, once, at
+// launch. `0.10` stops being a blend mode and becomes a hex. Nothing in this
+// theme is see-through, so nothing about it depends on context — the same
+// token measures the same on any screen, and the numbers in the contrast
+// sweep are the numbers you actually get.
+//
+// Its partner is `DeckFinish.solid`, which does the same for the call sites
+// the palette can't reach.
+private let pressChrome: ChromeTokens = {
+    let signal = Color(hex: "1D4ED8", darkHex: "7FB0FF")
+    let ink = Color(hex: "111111", darkHex: "F5F5F5")
+    let panel = Color(hex: "EDEBE7", darkHex: "121212")
+    let panelAlt = Color(hex: "E4E1DC", darkHex: "191919")
+
+    return ChromeTokens(
+        accent: signal,
+        // Every tint below names the plate it is laid on. That is the whole
+        // discipline: a translucent token can be written without knowing where
+        // it lands, an opaque one cannot.
+        accentTint: signal.flattened(0.08, over: panel),
+        accentGlow: signal.flattened(0.18, over: panel),
+        accentStrong: signal.flattened(0.36, over: panel),
+        action: ink.flattened(0.78, over: panel),
+        actionTint: ink.flattened(0.05, over: panel),
+        panel: panel,
+        panelAlt: panelAlt,
+        panelInk: ink,
+        // Quiet, but not lighter than Matte's quiet — this paper is darker than
+        // Matte's, so the same grey would land at less contrast, not equal
+        // contrast. The pair only stays a control pair if the ink tracks the
+        // stock it's printed on.
+        panelInkFaint: Color(hex: "4F4F4F", darkHex: "A0A0A0"),
+        panelAccent: signal,
+        panelEdge: signal.flattened(0.30, over: panel),
+        trace: ink.flattened(0.82, over: panel),
+        traceFaint: ink.flattened(0.10, over: panel),
+        // The edges are the clearest case. As alpha they were black-over-
+        // anything and white-over-anything; as colours they are four rules cut
+        // into this specific paper, and they stop washing out when a sheet
+        // happens to sit behind them. The weights mirror Matte's — see the note
+        // there on why a flat theme's rules have to be lines you can see.
+        edgeStrong: ink.flattened(0.34, over: panel),
+        edge:       ink.flattened(0.24, over: panel),
+        edgeFaint:  ink.flattened(0.16, over: panel),
+        edgeSubtle: ink.flattened(0.10, over: panel),
+        glowRadius: 0,
+        chromeCorner: 4,
         eyebrowLeader: "·",
         hairlineWidth: 1.0
     )
@@ -859,6 +965,7 @@ extension AppTheme {
         case .carbon:   return carbonChrome
         case .ember:    return emberChrome
         case .matte:    return matteChrome
+        case .press:    return pressChrome
         }
     }
 }
@@ -904,9 +1011,17 @@ struct TalkieEyebrow: View {
 
     var body: some View {
         let chrome = theme.chrome
+        // The eyebrow is the most-repeated label in the app — QUICK, EXPLORE,
+        // RECENT, every section on every screen — so it was also the single
+        // biggest reason a flat theme still looked half-converted: the deck and
+        // the cockpit had moved to the text face while every section heading
+        // above them stayed in SF Mono. Two faces on one screen with no rule
+        // about which goes where reads as an unfinished migration, because it
+        // is one.
+        let finish = theme.currentTheme.finish
         Text((showLeader ? "\(chrome.eyebrowLeader) " : "") + text.uppercased())
-            .font(.system(size: 10, weight: .regular, design: .monospaced))
-            .tracking(2)
+            .font(finish.font(10, .regular))
+            .tracking(finish.tracking(2))
             .foregroundStyle(color(chrome: chrome))
     }
 

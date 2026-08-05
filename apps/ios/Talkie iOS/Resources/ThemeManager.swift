@@ -55,6 +55,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
     case carbon = "carbon"
     case ember = "ember"
     case matte = "matte"
+    case press = "press"
 
     /// Product default for new or incomplete appearance configurations.
     /// Keep this centralized so the settings facade and runtime resolver cannot drift.
@@ -75,6 +76,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .carbon: return "Carbon"
         case .ember: return "Ember"
         case .matte: return "Matte"
+        case .press: return "Press"
         }
     }
 
@@ -91,6 +93,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .carbon: return "True-black terminal · monochrome, one signal"
         case .ember: return "Warm charcoal with a single amber signal"
         case .matte: return "Ink on paper · no gloss, no lift, one blue"
+        case .press: return "Letterpress · every colour solid, no alpha anywhere"
         }
     }
 }
@@ -415,6 +418,39 @@ private let cachedMatteColors = ThemeColors(
     success: Color(hex: "15803D", darkHex: "5FD08A")
 )
 
+// Press — Matte with the last translucency taken out.
+//
+// Matte's neutrals are still assembled the usual way: the rules between rows
+// are black at 12% and white at 20%, which means their actual colour is
+// whatever happens to be behind them. That is fine until a row sits on a
+// sheet, or a sheet on a scrim, and the rule you specified once renders three
+// different greys in three places.
+//
+// Here the rules are greys. The paper is a warm stock rather than a neutral
+// one — a page has a colour, and pretending it doesn't is what makes screen
+// white feel like a lamp — and the ink is a true black rather than a soft one,
+// because there is no film left to soften it through.
+//
+// The hue is deliberately Matte's, unchanged. The two themes are a control
+// pair: same blue, same argument, and the only variable between them is
+// whether a colour is a value or an instruction.
+private let cachedPressColors = ThemeColors(
+    tableHeaderBackground: Color(hex: "EDEBE7", darkHex: "121212"),
+    tableCellBackground: Color(hex: "FFFFFF", darkHex: "161616"),
+    // Solid, not AARRGGBB. Sampled to match what Matte's alpha rules resolve
+    // to over their usual plate, so the two read the same weight side by side.
+    tableDivider: Color(hex: "D9D6D0", darkHex: "2E2E2E"),
+    tableBorder: Color(hex: "C0BCB4", darkHex: "3D3D3D"),
+    background: Color(hex: "F2F1EE", darkHex: "0A0A0A"),
+    cardBackground: Color(hex: "FFFFFF", darkHex: "161616"),
+    searchBackground: Color(hex: "E7E5E0", darkHex: "1C1C1C"),
+    textPrimary: Color(hex: "111111", darkHex: "F5F5F5"),
+    textSecondary: Color(hex: "3B3B3B", darkHex: "D0D0D0"),
+    textTertiary: Color(hex: "5C5C5C", darkHex: "9C9C9C"),
+    accent: Color(hex: "1D4ED8", darkHex: "7FB0FF"),
+    success: Color(hex: "15803D", darkHex: "5FD08A")
+)
+
 // MARK: - Theme Color Access (O(1) lookup, no parsing)
 
 extension AppTheme {
@@ -431,6 +467,7 @@ extension AppTheme {
         case .carbon: return cachedCarbonColors
         case .ember: return cachedEmberColors
         case .matte: return cachedMatteColors
+        case .press: return cachedPressColors
         }
     }
 

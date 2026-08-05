@@ -33,15 +33,33 @@ struct TalkieTypeStyle {
     let font: Font
     let tracking: CGFloat
     let textCase: Text.Case?
+    /// Size and weight, kept alongside the baked `font`, for the band tokens
+    /// that a flat theme is allowed to re-set in the text face.
+    ///
+    /// A `Font` is opaque once built — you cannot ask one what size it is or
+    /// hand it a different design — so a token that bakes `design: .monospaced`
+    /// at construction has already made the decision by the time any theme gets
+    /// a look. That is why the deck and the cockpit converted to SF Pro under a
+    /// flat finish while every section eyebrow in the app stayed mono: they set
+    /// their fonts inline, and everything routed through here could not.
+    ///
+    /// Recording the ingredients lets `talkieType` rebuild the font instead of
+    /// replaying it. Only the *label* tokens opt in. The numeral tokens
+    /// deliberately don't: mono there is doing a job — digits of equal width so
+    /// a column of timestamps lines up and a counter doesn't jitter as it counts
+    /// — and that job survives a change of finish.
+    let band: (size: CGFloat, weight: Font.Weight)?
 
     init(
         font: Font,
         tracking: CGFloat = 0,
-        textCase: Text.Case? = nil
+        textCase: Text.Case? = nil,
+        band: (size: CGFloat, weight: Font.Weight)? = nil
     ) {
         self.font = font
         self.tracking = tracking
         self.textCase = textCase
+        self.band = band
     }
 }
 
@@ -60,35 +78,40 @@ extension TalkieTypeStyle {
     /// at 10pt; tracking carries the band feel.
     static let wordmark = TalkieTypeStyle(
         font: .system(size: 12, weight: .bold, design: .monospaced),
-        tracking: 2.6
+        tracking: 2.6,
+        band: (12, .bold)
     )
 
     /// Section eyebrows: "PICK UP", "· RECENT · 4", "INSPECTOR · VOICE".
     static let channelLabel = TalkieTypeStyle(
         font: .system(size: 10, weight: .semibold, design: .monospaced),
         tracking: 2.4,
-        textCase: .uppercase
+        textCase: .uppercase,
+        band: (10, .semibold)
     )
 
     /// Smaller eyebrow for nested context.
     static let channelLabelSmall = TalkieTypeStyle(
         font: .system(size: 10, weight: .semibold, design: .monospaced),
         tracking: 1.8,
-        textCase: .uppercase
+        textCase: .uppercase,
+        band: (10, .semibold)
     )
 
     /// Tiny eyebrow under instrument readouts. Smallest mono size.
     static let channelLabelTiny = TalkieTypeStyle(
         font: .system(size: 10, weight: .semibold, design: .monospaced),
         tracking: 1.8,
-        textCase: .uppercase
+        textCase: .uppercase,
+        band: (10, .semibold)
     )
 
     /// Mono uppercase pill / chip text — "CONTINUE ›", "ALL ›", "RUN".
     static let chipLabel = TalkieTypeStyle(
         font: .system(size: 10, weight: .semibold, design: .monospaced),
         tracking: 2.0,
-        textCase: .uppercase
+        textCase: .uppercase,
+        band: (10, .semibold)
     )
 
     /// Mono meta string under a headline — e.g. "COMPOSE · 31 WORDS · 4M AGO".
@@ -97,7 +120,8 @@ extension TalkieTypeStyle {
     static let metaMono = TalkieTypeStyle(
         font: .system(size: 10, weight: .medium, design: .monospaced),
         tracking: 2.0,
-        textCase: .uppercase
+        textCase: .uppercase,
+        band: (10, .medium)
     )
 
     /// Relative time stamp in list rows ("Sun", "9:34 AM", "Yesterday").
@@ -205,9 +229,33 @@ extension View {
     /// Apply a Talkie type token. Bundles font, tracking, and case
     /// transform so callers don't reassemble them per surface.
     func talkieType(_ style: TalkieTypeStyle) -> some View {
-        self
-            .font(style.font)
-            .tracking(style.tracking)
+        modifier(TalkieTypeModifier(style: style))
+    }
+}
+
+/// Resolves a token against the active theme's finish.
+///
+/// An instrument theme gets exactly the font the token declares — nothing here
+/// changes what nine of the twelve themes render. A flat or solid theme gets the
+/// band tokens rebuilt in the text face at a whole point size and one weight
+/// heavier, which is the same treatment `DeckFinish.font` gives the deck; see
+/// the note there on why the face swap has to bring weight with it.
+///
+/// It observes `ThemeManager` because it has to: a token is a static value, so
+/// without an observation the labels keep their old face until something else
+/// happens to invalidate the view.
+private struct TalkieTypeModifier: ViewModifier {
+    let style: TalkieTypeStyle
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    func body(content: Content) -> some View {
+        let finish = theme.currentTheme.finish
+        let rebuild = finish != .instrument ? style.band : nil
+
+        content
+            .font(rebuild.map { finish.font($0.size, $0.weight) } ?? style.font)
+            .tracking(rebuild == nil ? style.tracking : finish.tracking(style.tracking))
             .textCase(style.textCase)
     }
 }

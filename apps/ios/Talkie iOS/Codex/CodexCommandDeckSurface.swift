@@ -146,7 +146,7 @@ struct CodexCommandDeckSurface: View {
                     progress: voicePlayback.voicePlaybackProgress,
                     isPlaying: voicePlayback.voicePlaybackState == .playing,
                     accent: theme.chrome.accent,
-                    inactive: utilityInkFaint.opacity(0.22),
+                    inactive: deckFinish.tint(utilityInkFaint, 0.22, over: theme.chrome.panel),
                     onSeek: voicePlayback.seekVoicePlayback,
                     onSkip: skipVoicePlayback
                 )
@@ -186,7 +186,7 @@ struct CodexCommandDeckSurface: View {
                 .fill(theme.chrome.panel.opacity(colorScheme == .dark ? 0.96 : 0.98))
                 .overlay {
                     RoundedRectangle(cornerRadius: 11, style: .continuous)
-                        .strokeBorder(utilityInkFaint.opacity(0.16), lineWidth: theme.chrome.hairlineWidth)
+                        .strokeBorder(deckFinish.tint(utilityInkFaint, 0.16, over: theme.chrome.panel), lineWidth: theme.chrome.hairlineWidth)
                 }
                 .shadow(color: Color.black.opacity((colorScheme == .dark ? 0.28 : 0.12) * deckFinish.lift), radius: 8, y: 3)
         }
@@ -325,6 +325,8 @@ struct CodexCommandDeckSurface: View {
         case .graphite, .midnight, .ember: return 10
         // Matte's caps are cards, and a card has a corner you can name.
         case .matte: return 6
+        // Press cuts tighter still — a letterpress corner is a knife edge.
+        case .press: return 4
         default: return 14
         }
     }
@@ -979,7 +981,7 @@ struct CodexCommandDeckSurface: View {
                 shape.strokeBorder(
                     canCapture
                         ? captureAccent.opacity(store.phase.isCapturing ? 0.92 : 0.55)
-                        : utilityInkFaint.opacity(0.16),
+                        : deckFinish.tint(utilityInkFaint, 0.16, over: theme.chrome.panel),
                     lineWidth: store.phase.isCapturing ? 1.5 : theme.chrome.hairlineWidth + 0.5
                 )
             }
@@ -1345,12 +1347,13 @@ private struct CodexCommandConsole: View {
                 }
 
                 if number != CodexLane.range.upperBound {
+                    // Was a hand-rolled ink alpha with its own light/dark
+                    // ternary — which is exactly what `edge` is for. Going
+                    // through the token means the rule between two lanes gets
+                    // heavier on a flat theme along with every other rule,
+                    // instead of staying at whatever number was typed here.
                     Rectangle()
-                        .fill(
-                            theme.chrome.panelInk.opacity(
-                                colorScheme == .dark ? 0.09 : 0.20
-                            )
-                        )
+                        .fill(theme.chrome.edge)
                         .frame(width: theme.chrome.hairlineWidth, height: 14)
                 }
             }
@@ -1359,7 +1362,7 @@ private struct CodexCommandConsole: View {
         .padding(.horizontal, 2)
         .background(
             RoundedRectangle(cornerRadius: max(6, theme.chrome.chromeCorner + 2), style: .continuous)
-                .fill(theme.chrome.panel.opacity(colorScheme == .dark ? 0.78 : 0.94))
+                .fill(deckFinish.tint(theme.chrome.panel, colorScheme == .dark ? 0.78 : 0.94, over: theme.chrome.panelAlt))
         )
         .overlay {
             RoundedRectangle(cornerRadius: max(6, theme.chrome.chromeCorner + 2), style: .continuous)
@@ -1495,7 +1498,7 @@ private struct CodexCommandConsole: View {
             }
             .overlay {
                 shape.stroke(
-                    isActive ? theme.colors.accent.opacity(0.78) : theme.chrome.panelInk.opacity(0.15),
+                    isActive ? theme.colors.accent.opacity(0.78) : deckFinish.tint(theme.chrome.panelInk, 0.15, over: theme.chrome.panel),
                     lineWidth: isActive ? 1 : theme.chrome.hairlineWidth
                 )
             }
@@ -1538,8 +1541,8 @@ private struct CodexCommandConsole: View {
             return (
                 "RX",
                 colorScheme == .dark
-                    ? theme.chrome.panelInkFaint.opacity(0.78)
-                    : theme.chrome.panelInk.opacity(0.82),
+                    ? deckFinish.tint(theme.chrome.panelInkFaint, 0.78, over: theme.chrome.panel)
+                    : deckFinish.tint(theme.chrome.panelInk, 0.82, over: theme.chrome.panel),
                 false
             )
         }
@@ -1547,8 +1550,8 @@ private struct CodexCommandConsole: View {
         return (
             "RDY",
             colorScheme == .dark
-                ? theme.chrome.panelInkFaint.opacity(0.50)
-                : theme.chrome.panelInk.opacity(0.70),
+                ? deckFinish.tint(theme.chrome.panelInkFaint, 0.50, over: theme.chrome.panel)
+                : deckFinish.tint(theme.chrome.panelInk, 0.70, over: theme.chrome.panel),
             false
         )
     }
@@ -1569,7 +1572,7 @@ private struct CodexCommandConsole: View {
             Text((bridge.pairedMacDisplayName ?? "MAC").uppercased())
                 .lineLimit(1)
             Text("/")
-                .foregroundStyle(consoleInkFaint.opacity(0.60))
+                .foregroundStyle(deckFinish.tint(consoleInkFaint, 0.60, over: theme.chrome.panel))
             Text("CODEX")
 
             Spacer(minLength: 8)
@@ -1597,7 +1600,7 @@ private struct CodexCommandConsole: View {
         .padding(.vertical, 6)
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(consoleInk.opacity(0.16))
+                .fill(deckFinish.tint(consoleInk, 0.16, over: theme.chrome.panel))
                 .frame(height: theme.chrome.hairlineWidth)
         }
     }
@@ -1617,11 +1620,11 @@ private struct CodexCommandConsole: View {
                         .padding(.horizontal, 6)
                         .padding(.vertical, 4)
                         .background(
-                            Capsule().fill(theme.chrome.panelInk.opacity(0.08))
+                            Capsule().fill(deckFinish.tint(theme.chrome.panelInk, 0.08, over: theme.chrome.panel))
                         )
                         .overlay {
                             Capsule().stroke(
-                                theme.chrome.panelInk.opacity(0.18),
+                                deckFinish.tint(theme.chrome.panelInk, 0.18, over: theme.chrome.panel),
                                 lineWidth: theme.chrome.hairlineWidth
                             )
                         }
@@ -1668,7 +1671,7 @@ private struct CodexCommandConsole: View {
         }
         .overlay {
             RoundedRectangle(cornerRadius: taskIdentityCornerRadius, style: .continuous)
-                .stroke(theme.chrome.panelEdge.opacity(0.78), lineWidth: theme.chrome.hairlineWidth)
+                .stroke(deckFinish.tint(theme.chrome.panelEdge, 0.78, over: theme.chrome.panel), lineWidth: theme.chrome.hairlineWidth)
         }
         .overlay {
             CodexCapturePerimeter(
@@ -1697,18 +1700,18 @@ private struct CodexCommandConsole: View {
                 .layoutPriority(2)
 
             Text("|")
-                .foregroundStyle(theme.chrome.panelInkFaint.opacity(0.46))
+                .foregroundStyle(deckFinish.tint(theme.chrome.panelInkFaint, 0.46, over: theme.chrome.panel))
                 .accessibilityHidden(true)
 
             Text(compactPath)
-                .foregroundStyle(theme.chrome.panelInkFaint.opacity(0.70))
+                .foregroundStyle(deckFinish.tint(theme.chrome.panelInkFaint, 0.70, over: theme.chrome.panel))
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .layoutPriority(1)
 
             if let branchName {
                 Text("|")
-                    .foregroundStyle(theme.chrome.panelInkFaint.opacity(0.46))
+                    .foregroundStyle(deckFinish.tint(theme.chrome.panelInkFaint, 0.46, over: theme.chrome.panel))
                     .accessibilityHidden(true)
 
                 Label(branchName, systemImage: "arrow.triangle.branch")
@@ -1725,7 +1728,7 @@ private struct CodexCommandConsole: View {
     private var taskFooter: some View {
         if let footerStatus = taskFooterStatus {
             Rectangle()
-                .fill(theme.chrome.panelInk.opacity(0.08))
+                .fill(deckFinish.tint(theme.chrome.panelInk, 0.08, over: theme.chrome.panel))
                 .frame(height: theme.chrome.hairlineWidth)
 
             HStack(spacing: 4) {
@@ -1735,7 +1738,7 @@ private struct CodexCommandConsole: View {
                     .foregroundStyle(
                         footerStatus.isFailure
                             ? deckFailureColor
-                            : theme.chrome.panelInkFaint.opacity(0.76)
+                            : deckFinish.tint(theme.chrome.panelInkFaint, 0.76, over: theme.chrome.panel)
                     )
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
@@ -1758,11 +1761,11 @@ private struct CodexCommandConsole: View {
         Button(action: store.clearSelection) {
             ZStack {
                 Circle()
-                    .fill(theme.chrome.panelInk.opacity(0.06))
+                    .fill(deckFinish.tint(theme.chrome.panelInk, 0.06, over: theme.chrome.panel))
                     .frame(width: 24, height: 24)
                     .overlay {
                         Circle().stroke(
-                            theme.chrome.panelInk.opacity(0.14),
+                            deckFinish.tint(theme.chrome.panelInk, 0.14, over: theme.chrome.panel),
                             lineWidth: theme.chrome.hairlineWidth
                         )
                     }
@@ -1840,12 +1843,12 @@ private struct CodexCommandConsole: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(theme.chrome.panelInk.opacity(0.07))
+                .fill(deckFinish.tint(theme.chrome.panelInk, 0.07, over: theme.chrome.panel))
                 .frame(height: 24)
         )
         .overlay {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .stroke(theme.chrome.panelInk.opacity(0.13), lineWidth: theme.chrome.hairlineWidth)
+                .stroke(deckFinish.tint(theme.chrome.panelInk, 0.13, over: theme.chrome.panel), lineWidth: theme.chrome.hairlineWidth)
                 .frame(height: 24)
         }
         .accessibilityElement(children: .contain)
@@ -1941,7 +1944,7 @@ private struct CodexCommandConsole: View {
 
                         CodexPipedText(
                             text: response,
-                            color: theme.chrome.panelInk.opacity(0.88)
+                            color: deckFinish.tint(theme.chrome.panelInk, 0.88, over: theme.chrome.panel)
                         )
                     }
                 }
@@ -1999,7 +2002,7 @@ private struct CodexCommandConsole: View {
 
             Text(text)
                 .font(.system(size: 10, weight: .regular))
-                .foregroundStyle(theme.chrome.panelInk.opacity(0.82))
+                .foregroundStyle(deckFinish.tint(theme.chrome.panelInk, 0.82, over: theme.chrome.panel))
                 .lineLimit(lineLimit)
         }
     }
