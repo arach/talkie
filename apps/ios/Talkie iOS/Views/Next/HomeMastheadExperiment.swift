@@ -58,3 +58,62 @@ final class HomeMastheadExperiment: ObservableObject {
         Self.isFlush = on
     }
 }
+
+/// The band itself: one painted plane running full bleed and up under the status
+/// bar, with a highlight at the top to give it somewhere to start.
+///
+/// Both Home and the deck draw this, because the experiment is one idea about
+/// where a screen begins rather than two treatments that happen to rhyme. If
+/// they diverged, the second one to be edited would be the one that stops
+/// looking like the first.
+struct MastheadSurface: View {
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        let base = theme.colors.cardBackground
+        // A whisper of the theme's own accent, so the crest belongs to the
+        // theme rather than being a generic lightening. 7% is under the
+        // threshold where it reads as a colour and over the one where it reads
+        // as nothing. Flattened rather than translucent: a gradient between two
+        // opaque colours is a painted surface, and one with alpha in it is a
+        // film over whatever happens to be behind — which on the deck is
+        // brushed metal, and would show through as a smear.
+        let crest = theme.currentTheme.chrome.accent.flattened(0.07, over: base)
+
+        LinearGradient(
+            stops: [
+                .init(color: crest, location: 0),
+                .init(color: base, location: 0.62),
+                .init(color: base, location: 1),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        // Run up under the status bar. Measured off the window rather than
+        // guessed at, because the number is different on every phone and a
+        // masthead that stops one point short of the top is worse than one that
+        // never tried.
+        .padding(.top, -Self.statusBarInset)
+    }
+
+    static var statusBarInset: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }?
+            .keyWindow?.safeAreaInsets.top ?? 0
+    }
+}
+
+/// A division inside the band. Hairline-thick, full width, no inset — an inset
+/// rule is a fourth box outline, which is the thing the band exists to remove.
+struct MastheadRule: View {
+    let color: Color
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        Rectangle()
+            .fill(color)
+            .frame(height: theme.currentTheme.chrome.hairlineWidth)
+    }
+}

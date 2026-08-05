@@ -373,7 +373,7 @@ private struct HomeMasthead: View {
         VStack(spacing: 0) {
             HomeHeader(chromeless: true)
 
-            rule(theme.currentTheme.chrome.edgeFaint)
+            MastheadRule(color: theme.currentTheme.chrome.edgeFaint)
 
             // No horizontal inset here on purpose. The rows inside carry their
             // own, so the rule between them can run the full width like the one
@@ -382,50 +382,13 @@ private struct HomeMasthead: View {
             HomeCockpit(model: cockpit, flush: true)
                 .padding(.bottom, 10)
         }
-        .background(alignment: .top) { surface }
+        .background(alignment: .top) { MastheadSurface() }
         // The one division that has to carry weight. Every rule inside the band
         // separates two rows of the same thing; this one separates the masthead
         // from the page, so it is the full `edge` token rather than the faint
         // one — the same reasoning that made a flat theme's rules heavier in the
         // first place.
-        .overlay(alignment: .bottom) { rule(theme.currentTheme.chrome.edge) }
-    }
-
-    private func rule(_ color: Color) -> some View {
-        Rectangle()
-            .fill(color)
-            .frame(height: theme.currentTheme.chrome.hairlineWidth)
-    }
-
-    private var surface: some View {
-        let base = theme.colors.cardBackground
-        // A whisper of the theme's own accent, so the crest belongs to the
-        // theme rather than being a generic lightening. 7% is under the
-        // threshold where it reads as a colour and over the one where it reads
-        // as nothing.
-        let crest = theme.currentTheme.chrome.accent.flattened(0.07, over: base)
-
-        return LinearGradient(
-            stops: [
-                .init(color: crest, location: 0),
-                .init(color: base, location: 0.62),
-                .init(color: base, location: 1),
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        // Run up under the status bar. Measured off the window rather than
-        // guessed at, because the number is different on every phone and a
-        // masthead that stops one point short of the top is worse than one that
-        // never tried.
-        .padding(.top, -Self.statusBarInset)
-    }
-
-    private static var statusBarInset: CGFloat {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first { $0.activationState == .foregroundActive }?
-            .keyWindow?.safeAreaInsets.top ?? 0
+        .overlay(alignment: .bottom) { MastheadRule(color: theme.currentTheme.chrome.edge) }
     }
 }
 

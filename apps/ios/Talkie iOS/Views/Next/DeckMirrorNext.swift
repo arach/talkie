@@ -31,6 +31,9 @@ enum DeckTreatment: String, CaseIterable {
 
 struct DeckMirrorNext: View {
     @ObservedObject private var theme = ThemeManager.shared
+    // Observed, not just read: `isFlush` is a plain static, so without this the
+    // deck keeps its old top until something else invalidates the view.
+    @ObservedObject private var masthead = HomeMastheadExperiment.shared
     @ObservedObject private var deck = DeckMirrorStore.shared
     @ObservedObject private var codexLanes = CodexLaneStore.shared
     @ObservedObject private var reachability = NetworkReachability.shared
@@ -240,11 +243,17 @@ struct DeckMirrorNext: View {
                     .font(.system(size: 13))
                     .foregroundStyle(theme.colors.textTertiary)
                     .frame(width: 44, height: 44)
-                    .background(
-                        Circle()
-                            .fill(theme.currentTheme.chrome.edgeFaint.opacity(0.5))
-                            .frame(width: 28, height: 28)
-                    )
+                    .background {
+                        // The lozenge is how a glyph says "I am a button" when
+                        // it is floating on a page. In a band it is one more
+                        // rounded rectangle inside a treatment whose entire
+                        // argument is fewer of them; the margin already says it.
+                        if !mastheadFlush {
+                            Circle()
+                                .fill(theme.currentTheme.chrome.edgeFaint.opacity(0.5))
+                                .frame(width: 28, height: 28)
+                        }
+                    }
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Close deck")
@@ -254,7 +263,19 @@ struct DeckMirrorNext: View {
         // Compress header so Codex cockpit claims vertical space.
         .padding(.top, 2)
         .padding(.bottom, 0)
+        .background(alignment: .top) {
+            if mastheadFlush { MastheadSurface() }
+        }
+        // Faint, because what it separates is two rows of the same band. The
+        // heavy one is at the bottom of the lane rail, where the band ends.
+        .overlay(alignment: .bottom) {
+            if mastheadFlush { MastheadRule(color: theme.currentTheme.chrome.edgeFaint) }
+        }
     }
+
+    /// Masthead experiment: header and lane rail become one full-bleed band.
+    /// Same flag as Home — see `HomeMastheadExperiment`.
+    private var mastheadFlush: Bool { HomeMastheadExperiment.isFlush }
 
     private var deckMenu: some View {
         Menu {
