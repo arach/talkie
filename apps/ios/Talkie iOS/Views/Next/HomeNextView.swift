@@ -1324,6 +1324,10 @@ private enum HomeCockpitMetrics {
     // The Roll (CELL 12 · CGAP 3 → grid 102pt tall)
     static let rollCell: CGFloat = 12           // CELL
     static let rollGap: CGFloat = 3             // CGAP
+    /// How far the flush Roll takes to dissolve at its leading edge. Sized in
+    /// points rather than columns so the ramp reads the same on every phone —
+    /// roughly five columns, long enough that no single cell looks half-erased.
+    static let rollFadeWidth: CGFloat = 84
 
     // The Bay (BAY_PAD 10 · BAY_LABEL_H 14 · BAY_LABEL_GAP 8 · BAY_CONTENT_H 102 → BAY_H 144)
     static let bayPad: CGFloat = 10
@@ -1763,7 +1767,7 @@ private struct CockpitBay: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: HomeCockpitMetrics.bayCorner, style: .continuous)
 
-        VStack(spacing: HomeCockpitMetrics.bayLabelGap) {
+        let content = VStack(spacing: HomeCockpitMetrics.bayLabelGap) {
             // Label row — the Bay Selector + a contextual readout.
             HStack(spacing: 8) {
                 BaySelector(page: page, onToggle: toggle)
@@ -1778,7 +1782,7 @@ private struct CockpitBay: View {
 
             // Content — both pages laid out; the chosen one lit. Fixed 102pt.
             ZStack {
-                CockpitRollPage(model: model)
+                CockpitRollPage(model: model, flush: flush)
                     .opacity(page == .roll ? 1 : 0)
                 CockpitGaugePage(model: model)
                     .opacity(page == .gauges ? 1 : 0)
@@ -1791,11 +1795,18 @@ private struct CockpitBay: View {
         // White-on-dark was safe while every plate was dark. Tinting with the
         // plate's own ink instead keeps the well recessed either way.
         .background { if !flush { HomeCockpitPalette.tint(HomeCockpitPalette.screenInk, 0.035) } }
-        .clipShape(flush ? AnyShape(Rectangle()) : AnyShape(shape))
-        .overlay {
-            if !flush {
-                shape.strokeBorder(HomeCockpitPalette.tint(HomeCockpitPalette.screenInk, 0.08), lineWidth: 1)
-            }
+
+        // Flush there is no well to clip to, and clipping anyway would cut the
+        // Roll back to the margin it is deliberately crossing on its way to the
+        // glass. Bounded, the frame and the border are the whole point.
+        if flush {
+            content
+        } else {
+            content
+                .clipShape(shape)
+                .overlay {
+                    shape.strokeBorder(HomeCockpitPalette.tint(HomeCockpitPalette.screenInk, 0.08), lineWidth: 1)
+                }
         }
     }
 
@@ -1895,12 +1906,20 @@ private struct BaySelector: View {
 
 // MARK: - The Roll page (Roll Bay)
 
-/// THE ROLL page — the 18×7 contribution calendar reseated into the Bay's well
-/// (the label + STRK readout now live on the Bay's shared label row). Cell
-/// intensity = captures that day; the trailing Streak Run lights amber and ends
-/// on the Today Marker. Standby ⇒ Ghost Cells + the amber Today Seed.
+/// THE ROLL page — the contribution calendar reseated into the Bay's well (the
+/// label + STRK readout now live on the Bay's shared label row). Cell intensity
+/// = captures that day; the trailing Streak Run lights amber and ends on the
+/// Today Marker. Standby ⇒ Ghost Cells + the amber Today Seed.
+///
+/// Two readings of the same data. In the well it is a chart: a fixed 18-week
+/// window, centred, ending where its frame ends. Flush it is a tape — today
+/// pinned to the trailing margin, history running left past the margin and
+/// dissolving into the glass. Nothing cuts it off, it just stops being visible,
+/// which is the honest shape for a record that keeps going backwards.
 private struct CockpitRollPage: View {
     let model: HomeFeed.CockpitModel
+    /// Run the map off the leading edge instead of ending it on the margin.
+    var flush: Bool = false
 
     private var days: [Int] { model.rollDays }
     private var todayIndex: Int { model.todayIndex }
@@ -1917,14 +1936,39 @@ private struct CockpitRollPage: View {
     }
 
     var body: some View {
+        if flush {
+            // Reclaim the masthead's leading margin so the oldest columns can
+            // reach the glass. The trailing edge stays on the margin the
+            // wordmark and the message line share — the map is anchored to
+            // today, and only its tail is allowed to leave.
+            GeometryReader { geo in
+                let columns = columnsFitting(geo.size.width)
+                grid(columns: columns)
+                    .mask(leadingFade(columns: columns))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+            }
+            .padding(.leading, -HomeCockpitMetrics.mastheadInset)
+            .accessibilityHidden(true)
+        } else {
+            grid(columns: HomeFeed.rollWeeksBounded)
+                .frame(maxWidth: .infinity, maxHeight: .infinity) // center the grid in the well
+                .accessibilityHidden(true)
+        }
+    }
+
+    /// The trailing `columns` weeks of the Roll, oldest→newest left→right.
+    /// Always counted back from the end so today stays in the last column
+    /// whatever the width allows.
+    private func grid(columns: Int) -> some View {
         let end = runEnd
         let runStart = end - streak + 1
+        let firstColumn = max(0, HomeFeed.rollWeeks - columns)
 
-        VStack(spacing: HomeCockpitMetrics.rollGap) {
+        return VStack(spacing: HomeCockpitMetrics.rollGap) {
             ForEach(0..<HomeFeed.rollDaysPerWeek, id: \.self) { row in
                 HStack(spacing: HomeCockpitMetrics.rollGap) {
-                    ForEach(0..<HomeFeed.rollWeeks, id: \.self) { col in
-                        let index = col * HomeFeed.rollDaysPerWeek + row
+                    ForEach(0..<columns, id: \.self) { col in
+                        let index = (firstColumn + col) * HomeFeed.rollDaysPerWeek + row
                         RollCell(
                             intensity: intensity(index),
                             isToday: index == todayIndex,
@@ -1936,8 +1980,39 @@ private struct CockpitRollPage: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity) // center the grid in the well
-        .accessibilityHidden(true)
+    }
+
+    /// How many week columns this width can hold. Derived rather than fixed so
+    /// the map is as long as the phone allows — a bigger screen shows more
+    /// history instead of the same window with more air around it.
+    private func columnsFitting(_ width: CGFloat) -> Int {
+        let pitch = HomeCockpitMetrics.rollCell + HomeCockpitMetrics.rollGap
+        // Rounded up on purpose: the leading column should be cut by the glass
+        // rather than stop politely one gap short of it. The fade has already
+        // taken that column to nothing, so what this really buys is the
+        // guarantee that there is never a sliver of margin on the left.
+        let fits = Int(((width + HomeCockpitMetrics.rollGap) / pitch).rounded(.up))
+        return max(1, min(HomeFeed.rollWeeks, fits))
+    }
+
+    /// The dissolve, measured against the grid's own width rather than the
+    /// frame's, so the ramp always lands on real cells even when the data runs
+    /// out before the screen does.
+    private func leadingFade(columns: Int) -> LinearGradient {
+        let pitch = HomeCockpitMetrics.rollCell + HomeCockpitMetrics.rollGap
+        let gridWidth = CGFloat(columns) * pitch - HomeCockpitMetrics.rollGap
+        let stop = gridWidth > 0
+            ? min(1, HomeCockpitMetrics.rollFadeWidth / gridWidth)
+            : 0
+        return LinearGradient(
+            stops: [
+                .init(color: .clear, location: 0),
+                .init(color: .black, location: stop),
+                .init(color: .black, location: 1)
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
     }
 }
 
