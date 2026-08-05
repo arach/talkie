@@ -13,7 +13,7 @@ import UIKit
 import TalkieMobileKit
 
 extension Notification.Name {
-    static let bridgeDidConnect = Notification.Name("com.jdi.talkie.bridgeDidConnect")
+    static let bridgeDidConnect = Notification.Name("to.talkie.app.bridgeDidConnect")
     static let companionShortcutSurfaceRequested = Notification.Name("to.talkie.companionShortcutSurfaceRequested")
 }
 

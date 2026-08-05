@@ -131,7 +131,7 @@ public final class TalkieLogger: @unchecked Sendable {
     private var minimumLevel: LogLevel = TalkieLogger.defaultMinimumLevel
     private var osLoggers: [LogCategory: Logger] = [:]
 
-    private let queue = DispatchQueue(label: "jdi.talkie.logger", qos: .utility)
+    private let queue = DispatchQueue(label: "to.talkie.app.logger", qos: .utility)
 
     // MARK: - Initialization
 
@@ -153,7 +153,7 @@ public final class TalkieLogger: @unchecked Sendable {
             shared.minimumLevel = minimumLevel
 
             // Create os.Logger for each category
-            let subsystem = "jdi.talkie.\(source.rawValue.lowercased())"
+            let subsystem = "to.talkie.app.\(source.rawValue.lowercased())"
             for category in [LogCategory.system, .audio, .transcription, .database, .sync, .ui, .keyboard] {
                 shared.osLoggers[category] = Logger(subsystem: subsystem, category: category.rawValue)
             }

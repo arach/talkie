@@ -89,7 +89,7 @@ public struct Capture: Codable, Identifiable, Hashable, Sendable {
 
 extension Notification.Name {
     /// Posted when captures list changes (add, delete, sync status update)
-    public static let capturesDidChange = Notification.Name("com.jdi.talkie.capturesDidChange")
+    public static let capturesDidChange = Notification.Name("to.talkie.app.capturesDidChange")
 }
 
 // MARK: - Capture Store

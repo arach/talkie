@@ -3,7 +3,7 @@
 
 SCHEME="Talkie"
 DEVICE="iPhone 16 Pro"
-BUNDLE_ID="jdi.talkie-os"
+BUNDLE_ID="to.talkie.app"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DERIVED_DATA="${DERIVED_DATA:-$SCRIPT_DIR/build/DerivedData}"
 APP_PATH="$DERIVED_DATA/Build/Products/Debug-iphonesimulator/Talkie.app"
