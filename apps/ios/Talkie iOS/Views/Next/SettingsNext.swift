@@ -929,12 +929,17 @@ struct SettingsNext: View {
         static let trailingControlWidth: CGFloat = 14
     }
 
+    /// The label side of a row. Labels never wrap — a settings label broken
+    /// mid-word ("Ma / c / B…") is worse than a value truncated at the tail,
+    /// so the label takes the space it needs and the value gives it up.
     @ViewBuilder
     private func rowLabelColumn(label: String, hint: String?) -> some View {
         HStack(alignment: .center, spacing: 6) {
             Text(label)
                 .talkieType(.fieldLabel)
                 .foregroundStyle(theme.colors.textPrimary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
 
             if let hint {
                 Text("· \(hint)")
@@ -945,6 +950,24 @@ struct SettingsNext: View {
             }
         }
         .layoutPriority(2)
+    }
+
+    /// Parks a row's trailing control in the narrow slot every row reserves —
+    /// a chevron's width, or an empty placeholder of the same size on rows
+    /// that have no control. That one shared measure is what puts every row's
+    /// value on the same column.
+    ///
+    /// The `Toggle` deliberately does NOT go through here. A switch is four
+    /// times a chevron's width, and giving it the slot would indent every
+    /// value on the panel to accommodate a control that only one row has —
+    /// the toggle has nothing to do with the other rows. It sits at the row's
+    /// trailing edge on its own terms and leaves the column alone.
+    private func trailingControlSlot<Content: View>(
+        @ViewBuilder _ content: () -> Content
+    ) -> some View {
+        content()
+            .fixedSize()
+            .frame(minWidth: InspectorRowMetrics.trailingControlWidth, alignment: .trailing)
     }
 
     private func inspectorRowDivider() -> some View {
@@ -992,6 +1015,8 @@ struct SettingsNext: View {
             Text(label)
                 .talkieType(.fieldLabel)
                 .foregroundStyle(theme.colors.textPrimary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
                 .layoutPriority(2)
 
             if let hint {
@@ -1005,6 +1030,11 @@ struct SettingsNext: View {
 
             Spacer(minLength: 8)
 
+            // No `fixedSize` on this group. It used to carry one, which quietly
+            // overrode the value's own `lineLimit(1)` + tail truncation and let
+            // a long readout ("Connected · Arachs-Mac-mini.local") take its full
+            // ideal width — the label was then squeezed to nothing and wrapped
+            // mid-word. The control keeps its own fixed size; the value gives.
             HStack(spacing: InspectorRowMetrics.trailingControlSpacing) {
                 Text(value)
                     .talkieType(.fieldValue)
@@ -1016,33 +1046,34 @@ struct SettingsNext: View {
                         alignment: .trailing
                     )
 
-                if let inlineAction {
-                    Button(action: inlineAction.action) {
-                        Text(inlineAction.label)
-                            .talkieType(.channelLabelTiny)
-                            .foregroundStyle(theme.currentTheme.chrome.accent)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .overlay(
-                                Capsule()
-                                    .strokeBorder(
-                                        theme.currentTheme.chrome.accent.opacity(0.55),
-                                        lineWidth: theme.currentTheme.chrome.hairlineWidth
-                                    )
+                trailingControlSlot {
+                    if let inlineAction {
+                        Button(action: inlineAction.action) {
+                            Text(inlineAction.label)
+                                .talkieType(.channelLabelTiny)
+                                .foregroundStyle(theme.currentTheme.chrome.accent)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .overlay(
+                                    Capsule()
+                                        .strokeBorder(
+                                            theme.currentTheme.chrome.accent.opacity(0.55),
+                                            lineWidth: theme.currentTheme.chrome.hairlineWidth
+                                        )
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(inlineAction.label) \(label)")
+                    } else {
+                        Color.clear
+                            .frame(
+                                width: InspectorRowMetrics.trailingControlWidth,
+                                height: InspectorRowMetrics.trailingControlWidth
                             )
+                            .accessibilityHidden(true)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("\(inlineAction.label) \(label)")
-                } else {
-                    Color.clear
-                        .frame(
-                            width: InspectorRowMetrics.trailingControlWidth,
-                            height: InspectorRowMetrics.trailingControlWidth
-                        )
-                        .accessibilityHidden(true)
                 }
             }
-            .fixedSize(horizontal: true, vertical: false)
         }
         .frame(height: InspectorRowMetrics.height)
         .overlay(alignment: .bottom) {
@@ -1071,7 +1102,6 @@ struct SettingsNext: View {
         } label: {
             HStack(alignment: .center, spacing: 6) {
                 rowLabelColumn(label: label, hint: hint)
-                    .layoutPriority(0)
 
                 Spacer(minLength: 8)
 
@@ -1086,13 +1116,14 @@ struct SettingsNext: View {
                             alignment: .trailing
                         )
 
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(theme.colors.textTertiary)
-                        .frame(width: 14, height: 14)
-                        .accessibilityHidden(true)
+                    trailingControlSlot {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(theme.colors.textTertiary)
+                            .frame(width: 14, height: 14)
+                            .accessibilityHidden(true)
+                    }
                 }
-                .fixedSize(horizontal: true, vertical: false)
             }
             .frame(height: InspectorRowMetrics.height)
             .overlay(alignment: .bottom) {
@@ -1113,25 +1144,38 @@ struct SettingsNext: View {
     ) -> some View {
         HStack(alignment: .center, spacing: 6) {
             rowLabelColumn(label: label, hint: hint)
-                .layoutPriority(0)
 
             Spacer(minLength: 8)
 
-            Group {
-                if secure {
-                    SecureField(placeholder, text: text)
-                } else {
-                    TextField(placeholder, text: text)
+            // The field is a value, so it lines up with the other values — the
+            // empty control lane to its right keeps its trailing edge on the
+            // same column as every chevron, toggle and RUN on the panel.
+            HStack(spacing: InspectorRowMetrics.trailingControlSpacing) {
+                Group {
+                    if secure {
+                        SecureField(placeholder, text: text)
+                    } else {
+                        TextField(placeholder, text: text)
+                    }
+                }
+                .talkieType(.fieldValue)
+                .foregroundStyle(theme.currentTheme.chrome.accent)
+                .tint(theme.currentTheme.chrome.accent)
+                .multilineTextAlignment(.trailing)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .lineLimit(1)
+                .frame(maxWidth: 150)
+
+                trailingControlSlot {
+                    Color.clear
+                        .frame(
+                            width: InspectorRowMetrics.trailingControlWidth,
+                            height: InspectorRowMetrics.trailingControlWidth
+                        )
+                        .accessibilityHidden(true)
                 }
             }
-            .talkieType(.fieldValue)
-            .foregroundStyle(theme.currentTheme.chrome.accent)
-            .tint(theme.currentTheme.chrome.accent)
-            .multilineTextAlignment(.trailing)
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-            .lineLimit(1)
-            .frame(maxWidth: 150)
         }
         .frame(height: InspectorRowMetrics.height)
         .overlay(alignment: .bottom) {
@@ -1148,7 +1192,6 @@ struct SettingsNext: View {
     ) -> some View {
         HStack(alignment: .center, spacing: 6) {
             rowLabelColumn(label: label, hint: hint)
-                .layoutPriority(0)
 
             Spacer(minLength: 8)
 
@@ -1162,13 +1205,18 @@ struct SettingsNext: View {
                         alignment: .trailing
                     )
 
+                // Not in `trailingControlSlot`. The switch is four chevrons
+                // wide, and laning it would make every other row on the panel
+                // indent its value to clear a control those rows don't have.
+                // It takes its own width at the row's trailing edge; its
+                // readout rides just inside it rather than in the shared
+                // value column, which is the honest position for it.
                 Toggle(label, isOn: isOn)
                     .labelsHidden()
                     .tint(theme.currentTheme.chrome.accent)
                     .controlSize(.mini)
                     .fixedSize()
             }
-            .fixedSize(horizontal: true, vertical: false)
         }
         .frame(height: InspectorRowMetrics.height)
         .overlay(alignment: .bottom) {
@@ -1187,12 +1235,15 @@ struct SettingsNext: View {
                 Text(label)
                     .talkieType(.fieldLabel)
                     .foregroundStyle(theme.colors.textPrimary)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(theme.colors.textTertiary)
-                    .frame(width: 14, height: 14)
-                    .accessibilityHidden(true)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                trailingControlSlot {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(theme.colors.textTertiary)
+                        .frame(width: 14, height: 14)
+                        .accessibilityHidden(true)
+                }
             }
             .frame(height: InspectorRowMetrics.height)
             .overlay(alignment: .bottom) {
@@ -1212,10 +1263,13 @@ struct SettingsNext: View {
                 Text(label)
                     .talkieType(.fieldLabel)
                     .foregroundStyle(theme.colors.textPrimary)
-                Spacer()
-                Text("RUN")
-                    .talkieType(.chipLabel)
-                    .foregroundStyle(actionColor(tone))
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                trailingControlSlot {
+                    Text("RUN")
+                        .talkieType(.chipLabel)
+                        .foregroundStyle(actionColor(tone))
+                }
             }
             .frame(height: InspectorRowMetrics.height)
             .overlay(alignment: .bottom) {
@@ -1284,11 +1338,13 @@ struct SettingsNext: View {
 
     // MARK: - Live data helpers
 
+    /// Status only. The paired Mac's name used to ride along here too, which
+    /// put the hostname on the row twice — `bridgeStatusHint` already leads
+    /// with it — and made the one value on the panel long enough that it
+    /// truncated to "Connecte…". The value answers "is it up"; the hint
+    /// answers "which one, and when did we last hear from it".
     private var bridgeStatusValue: String {
         guard bridgeManager.isPaired else { return "Not paired" }
-        if let name = bridgeManager.pairedMacDisplayName {
-            return "\(bridgeManager.status.rawValue) · \(name)"
-        }
         return bridgeManager.status.rawValue
     }
 
