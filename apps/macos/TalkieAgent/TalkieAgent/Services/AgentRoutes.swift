@@ -40,6 +40,9 @@ enum AgentRoutes {
         case ("POST", "/companion/paste-image"):
             await handleCompanionPasteImage(connection, body: request.body, context: request.context)
 
+        case ("POST", "/companion/paste-text"):
+            await handleCompanionPasteText(connection, body: request.body, context: request.context)
+
         case ("POST", "/companion/trackpad"):
             await handleCompanionTrackpad(connection, body: request.body, context: request.context)
 
@@ -147,6 +150,20 @@ enum AgentRoutes {
         let handledShortcutId: String?
         let message: String?
         let error: String?
+    }
+
+    /// Text captured somewhere other than this Mac, headed for whatever has
+    /// focus here. The companion deck's phone-mic mode is the caller: the phone
+    /// records and transcribes, and only the finished words make the trip.
+    private struct CompanionPasteTextRequest: Decodable {
+        let text: String
+        /// Target app. `nil` means the frontmost one, which is what a deck
+        /// wants — you are looking at the screen and dictating into whatever
+        /// is already in front of you.
+        let bundleID: String?
+        /// Press return after inserting. A dictated Codex instruction wants
+        /// this; a dictated sentence into an editor does not.
+        let submit: Bool?
     }
 
     private struct CompanionPasteImageRequest: Decodable {
@@ -439,6 +456,47 @@ enum AgentRoutes {
         }
 
         return NSWorkspace.shared.open(applicationURL)
+    }
+
+    private static func handleCompanionPasteText(_ connection: NWConnection, body: Data?, context: RequestContext) async {
+        guard let body, !body.isEmpty else {
+            BridgeResponse.sendError(connection, code: .badRequest, message: "Missing request body", context: context)
+            return
+        }
+
+        let request: CompanionPasteTextRequest
+        do {
+            request = try JSONDecoder().decode(CompanionPasteTextRequest.self, from: body)
+        } catch {
+            BridgeResponse.sendError(connection, code: .badRequest, message: "Invalid JSON body", context: context)
+            return
+        }
+
+        let text = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            BridgeResponse.sendError(connection, code: .badRequest, message: "text is required", context: context)
+            return
+        }
+
+        // `TextInserter` is the same path the Mac's own dictation ends on, so
+        // phone-captured text lands exactly where Mac-captured text would —
+        // including the per-app special cases (iTerm2, Terminal) it already
+        // carries. The only difference is which microphone heard it.
+        let inserted = (request.submit ?? false)
+            ? await TextInserter.shared.insertAndSubmit(text, intoAppWithBundleID: request.bundleID)
+            : await TextInserter.shared.insert(text, intoAppWithBundleID: request.bundleID)
+
+        BridgeResponse.sendJSON(
+            connection,
+            data: CompanionTriggerResponse(
+                ok: inserted,
+                handledShortcutId: "companion-paste-text",
+                message: inserted ? "Inserted \(text.count) characters" : nil,
+                error: inserted ? nil : "Could not insert text into the frontmost app"
+            ),
+            status: inserted ? 200 : 500,
+            context: context
+        )
     }
 
     private static func handleCompanionPasteImage(_ connection: NWConnection, body: Data?, context: RequestContext) async {

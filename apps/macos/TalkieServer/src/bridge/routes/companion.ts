@@ -65,6 +65,12 @@ export interface CompanionPasteImageRequest {
   autoPaste?: boolean;
 }
 
+export interface CompanionPasteTextRequest {
+  text?: string;
+  bundleID?: string;
+  submit?: boolean;
+}
+
 export interface CompanionShortcutRuntimeState {
   shortcutId: string;
   phase: "preparing" | "recording" | "processing";
@@ -508,6 +514,64 @@ async function tryAgentPasteImage(
     return proxyError(response.status, "Agent image paste failed", errorText);
   } catch (error) {
     log.debug(`Agent companion paste image unavailable, falling back to legacy companion route: ${error}`);
+    return null;
+  }
+}
+
+/// Text that was captured somewhere other than this Mac, headed for whatever
+/// has focus here. The decks' phone-mic mode is the caller: the phone records
+/// and transcribes, and only the finished words make the trip.
+///
+/// Agent-only, with no legacy fallback — unlike images, Talkie.app never had a
+/// route for this, so an agent that isn't up means the feature isn't available
+/// rather than that we should try somewhere else.
+export async function companionPasteTextRoute(
+  body: CompanionPasteTextRequest
+): Promise<CompanionTriggerResponse | Response> {
+  const text = typeof body.text === "string" ? body.text.trim() : "";
+  if (!text) {
+    return badRequest("text is required");
+  }
+
+  const agentResult = await tryAgentPasteText({
+    text,
+    bundleID: body.bundleID,
+    submit: body.submit ?? false,
+  });
+  if (agentResult) {
+    return agentResult;
+  }
+
+  return serviceUnavailable(
+    "TalkieAgent not ready",
+    "Start or restart TalkieAgent to dictate into this Mac from your companion device"
+  );
+}
+
+async function tryAgentPasteText(
+  body: CompanionPasteTextRequest
+): Promise<CompanionTriggerResponse | Response | null> {
+  try {
+    const response = await fetch(`${TALKIEAGENT_URL}/v1/agent/companion/paste-text`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (response.ok) {
+      return await response.json() as CompanionTriggerResponse;
+    }
+
+    if (response.status === 404) {
+      return null;
+    }
+
+    const errorText = await response.text().catch(() => "");
+    log.warn(`Agent companion paste text returned ${response.status}: ${errorText}`);
+    return proxyError(response.status, "Agent text paste failed", errorText);
+  } catch (error) {
+    log.debug(`Agent companion paste text unavailable: ${error}`);
     return null;
   }
 }

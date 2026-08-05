@@ -1247,6 +1247,34 @@ final class BridgeManager {
         return response
     }
 
+    /// Deliver text this phone transcribed to whatever has focus on the Mac.
+    ///
+    /// The phone-mic half of the decks' mic-source setting. Same connection
+    /// preamble as every other companion verb; the only thing that makes this
+    /// one different is that the audio never left the device.
+    func sendCompanionTextToMac(
+        _ text: String,
+        bundleID: String? = nil,
+        submit: Bool = false
+    ) async throws -> CompanionTriggerResponse {
+        guard isPaired else {
+            throw BridgeError.notConfigured
+        }
+
+        if status != .connected {
+            await connect()
+        }
+
+        guard status == .connected else {
+            throw BridgeError.connectionFailed
+        }
+
+        let response = try await client.companionPasteText(text, bundleID: bundleID, submit: submit)
+        lastSuccessfulContactAt = .now
+        updateActiveMacContactDate(.now)
+        return response
+    }
+
     func terminalAccessPayload() async throws -> SSHPrivateKeyQRCodePayload {
         guard isPaired else {
             throw BridgeError.notConfigured

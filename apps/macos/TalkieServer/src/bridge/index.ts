@@ -26,7 +26,6 @@ import { healthRoute } from "./routes/health";
 import { pathsRoute, sessionsRoute, sessionMessagesRoute } from "./routes/sessions";
 import { sessionMetadataRoute, sessionEntryRoute } from "./routes/metadata";
 import {
-  codexApprovalDecisionRoute,
   pairRoute,
   pairInfoRoute,
   pairPendingRoute,
@@ -55,8 +54,10 @@ import {
   companionActivateAppRoute,
   companionTrackpadRoute,
   companionPasteImageRoute,
+  companionPasteTextRoute,
 } from "./routes/companion";
 import {
+  codexApprovalDecisionRoute,
   codexTaskCreateRoute,
   codexTasksRoute,
   codexValidateRoute,
@@ -481,6 +482,15 @@ export const bridge = new Elysia({ name: "bridge" })
       imageBase64: t.String(),
       mimeType: t.Optional(t.String()),
       autoPaste: t.Optional(t.Boolean()),
+    }),
+  })
+  .post("/companion/paste-text", async ({ body }) => {
+    return companionPasteTextRoute(body);
+  }, {
+    body: t.Object({
+      text: t.String(),
+      bundleID: t.Optional(t.String()),
+      submit: t.Optional(t.Boolean()),
     }),
   })
   .ws("/companion/events", companionEventsSocket)
