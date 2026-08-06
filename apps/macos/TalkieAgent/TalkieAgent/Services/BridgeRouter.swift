@@ -41,7 +41,6 @@ enum RouteNamespace: String {
 
 // MARK: - Router
 
-@available(macOS 14.0, *)
 enum BridgeRouter {
 
     private static let log = Log(.system)

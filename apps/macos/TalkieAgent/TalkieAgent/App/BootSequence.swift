@@ -254,13 +254,11 @@ final class BootSequence {
 
     private func initBridgeServer() async {
         // HTTP API on :8767
-        if #available(macOS 14.0, *) {
-            do {
-                try await BridgeServer.shared.start()
-                record("BridgeServer")
-            } catch {
-                log.error("BridgeServer failed to start: \(error)")
-            }
+        do {
+            try await BridgeServer.shared.start()
+            record("BridgeServer")
+        } catch {
+            log.error("BridgeServer failed to start: \(error)")
         }
 
         // WebSocket JSON-RPC on :19823

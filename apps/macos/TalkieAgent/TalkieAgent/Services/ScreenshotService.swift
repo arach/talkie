@@ -4,7 +4,6 @@ import TalkieKit
 
 /// Service for capturing screenshots of windows and screens
 /// Requires Screen Recording permission (Privacy & Security > Screen Recording)
-@available(macOS 14.0, *)
 actor ScreenshotService {
     static let shared = ScreenshotService()
 

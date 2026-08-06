@@ -73,26 +73,24 @@ struct NotchInfo {
         var notchWidth: CGFloat = 0
         var notchCenter: CGFloat = screenFrame.midX
 
-        if #available(macOS 12.0, *) {
-            if let left = screen.auxiliaryTopLeftArea,
-               let right = screen.auxiliaryTopRightArea,
-               left.width > 0,
-               right.width > 0 {
-                var leftMaxX = left.maxX
-                var rightMinX = right.minX
-                let rawCenter = (leftMaxX + rightMinX) / 2
+        if let left = screen.auxiliaryTopLeftArea,
+           let right = screen.auxiliaryTopRightArea,
+           left.width > 0,
+           right.width > 0 {
+            var leftMaxX = left.maxX
+            var rightMinX = right.minX
+            let rawCenter = (leftMaxX + rightMinX) / 2
 
-                if abs(rawCenter - screenFrame.midX) > (screenFrame.width / 2) {
-                    leftMaxX += screenFrame.minX
-                    rightMinX += screenFrame.minX
-                }
+            if abs(rawCenter - screenFrame.midX) > (screenFrame.width / 2) {
+                leftMaxX += screenFrame.minX
+                rightMinX += screenFrame.minX
+            }
 
-                let measuredWidth = rightMinX - leftMaxX
-                if measuredWidth > 80, measuredWidth < (screenFrame.width * 0.55) {
-                    hasNotch = true
-                    notchWidth = measuredWidth
-                    notchCenter = (leftMaxX + rightMinX) / 2
-                }
+            let measuredWidth = rightMinX - leftMaxX
+            if measuredWidth > 80, measuredWidth < (screenFrame.width * 0.55) {
+                hasNotch = true
+                notchWidth = measuredWidth
+                notchCenter = (leftMaxX + rightMinX) / 2
             }
         }
 

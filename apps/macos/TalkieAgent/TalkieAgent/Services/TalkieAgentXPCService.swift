@@ -443,10 +443,6 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         }
     }
 
-    private func checkScreenRecordingPermission() -> Bool {
-        CGPreflightScreenCaptureAccess()
-    }
-
     private func screenRecordingPermissionSnapshot() -> (
         preflight: Bool,
         windowHeuristic: Bool,
@@ -464,37 +460,32 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         Task { @MainActor in
             AgentConsole.critical("[TalkieAgentXPC] listClaudeWindows requested")
 
-            if #available(macOS 14.0, *) {
-                let windows = await ScreenshotService.shared.findClaudeWindows()
+            let windows = await ScreenshotService.shared.findClaudeWindows()
 
-                let windowDicts: [[String: Any]] = windows.map { window in
-                    var dict: [String: Any] = [
-                        "windowID": window.windowID,
-                        "pid": window.pid,
-                        "appName": window.appName,
-                        "isOnScreen": window.isOnScreen
+            let windowDicts: [[String: Any]] = windows.map { window in
+                var dict: [String: Any] = [
+                    "windowID": window.windowID,
+                    "pid": window.pid,
+                    "appName": window.appName,
+                    "isOnScreen": window.isOnScreen
+                ]
+                if let bundleId = window.bundleId { dict["bundleId"] = bundleId }
+                if let title = window.title { dict["title"] = title }
+                if let bounds = window.bounds {
+                    dict["bounds"] = [
+                        "x": bounds.origin.x,
+                        "y": bounds.origin.y,
+                        "width": bounds.width,
+                        "height": bounds.height
                     ]
-                    if let bundleId = window.bundleId { dict["bundleId"] = bundleId }
-                    if let title = window.title { dict["title"] = title }
-                    if let bounds = window.bounds {
-                        dict["bounds"] = [
-                            "x": bounds.origin.x,
-                            "y": bounds.origin.y,
-                            "width": bounds.width,
-                            "height": bounds.height
-                        ]
-                    }
-                    return dict
                 }
+                return dict
+            }
 
-                if let jsonData = try? JSONSerialization.data(withJSONObject: windowDicts) {
-                    AgentConsole.critical("[TalkieAgentXPC] Found \(windows.count) Claude windows")
-                    reply(jsonData)
-                } else {
-                    reply(nil)
-                }
+            if let jsonData = try? JSONSerialization.data(withJSONObject: windowDicts) {
+                AgentConsole.critical("[TalkieAgentXPC] Found \(windows.count) Claude windows")
+                reply(jsonData)
             } else {
-                AgentConsole.critical("[TalkieAgentXPC] ScreenshotService requires macOS 14+")
                 reply(nil)
             }
         }
@@ -504,22 +495,18 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         Task { @MainActor in
             AgentConsole.critical("[TalkieAgentXPC] captureWindow requested: \(windowID)")
 
-            if #available(macOS 14.0, *) {
-                guard let image = await ScreenshotService.shared.captureWindow(windowID: CGWindowID(windowID)) else {
-                    reply(nil, "Failed to capture window - check Screen Recording permission")
-                    return
-                }
-
-                guard let jpegData = await ScreenshotService.shared.encodeAsJPEG(image, quality: 0.85) else {
-                    reply(nil, "Failed to encode image")
-                    return
-                }
-
-                AgentConsole.critical("[TalkieAgentXPC] Captured window \(windowID): \(jpegData.count) bytes")
-                reply(jpegData, nil)
-            } else {
-                reply(nil, "Requires macOS 14+")
+            guard let image = await ScreenshotService.shared.captureWindow(windowID: CGWindowID(windowID)) else {
+                reply(nil, "Failed to capture window - check Screen Recording permission")
+                return
             }
+
+            guard let jpegData = await ScreenshotService.shared.encodeAsJPEG(image, quality: 0.85) else {
+                reply(nil, "Failed to encode image")
+                return
+            }
+
+            AgentConsole.critical("[TalkieAgentXPC] Captured window \(windowID): \(jpegData.count) bytes")
+            reply(jpegData, nil)
         }
     }
 
@@ -527,25 +514,21 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         Task { @MainActor in
             AgentConsole.critical("[TalkieAgentXPC] captureMainDisplay requested: maxDimension=\(maxDimension) quality=\(quality)")
 
-            if #available(macOS 14.0, *) {
-                let requestedDimension = maxDimension > 0 ? Int(maxDimension) : nil
-                let requestedQuality = min(max(CGFloat(quality), 0.1), 1.0)
+            let requestedDimension = maxDimension > 0 ? Int(maxDimension) : nil
+            let requestedQuality = min(max(CGFloat(quality), 0.1), 1.0)
 
-                guard let image = await ScreenshotService.shared.captureMainDisplay(maxDimension: requestedDimension) else {
-                    reply(nil, "Failed to capture display - check Screen Recording permission")
-                    return
-                }
-
-                guard let jpegData = await ScreenshotService.shared.encodeAsJPEG(image, quality: requestedQuality) else {
-                    reply(nil, "Failed to encode display image")
-                    return
-                }
-
-                AgentConsole.critical("[TalkieAgentXPC] Captured main display: \(jpegData.count) bytes")
-                reply(jpegData, nil)
-            } else {
-                reply(nil, "Requires macOS 14+")
+            guard let image = await ScreenshotService.shared.captureMainDisplay(maxDimension: requestedDimension) else {
+                reply(nil, "Failed to capture display - check Screen Recording permission")
+                return
             }
+
+            guard let jpegData = await ScreenshotService.shared.encodeAsJPEG(image, quality: requestedQuality) else {
+                reply(nil, "Failed to encode display image")
+                return
+            }
+
+            AgentConsole.critical("[TalkieAgentXPC] Captured main display: \(jpegData.count) bytes")
+            reply(jpegData, nil)
         }
     }
 
@@ -553,46 +536,38 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         Task { @MainActor in
             AgentConsole.critical("[TalkieAgentXPC] captureTerminalWindows requested")
 
-            if #available(macOS 14.0, *) {
-                let terminals = await ScreenshotService.shared.captureTerminalWindows()
+            let terminals = await ScreenshotService.shared.captureTerminalWindows()
 
-                var screenshots: [[String: Any]] = []
-                for terminal in terminals {
-                    if let jpegData = await ScreenshotService.shared.encodeAsJPEG(terminal.image, quality: 0.75) {
-                        screenshots.append([
-                            "windowID": terminal.windowID,
-                            "bundleId": terminal.bundleId,
-                            "title": terminal.title,
-                            "imageBase64": jpegData.base64EncodedString()
-                        ])
-                    }
+            var screenshots: [[String: Any]] = []
+            for terminal in terminals {
+                if let jpegData = await ScreenshotService.shared.encodeAsJPEG(terminal.image, quality: 0.75) {
+                    screenshots.append([
+                        "windowID": terminal.windowID,
+                        "bundleId": terminal.bundleId,
+                        "title": terminal.title,
+                        "imageBase64": jpegData.base64EncodedString()
+                    ])
                 }
+            }
 
-                let result: [String: Any] = [
-                    "screenshots": screenshots,
-                    "count": screenshots.count
-                ]
+            let result: [String: Any] = [
+                "screenshots": screenshots,
+                "count": screenshots.count
+            ]
 
-                if let jsonData = try? JSONSerialization.data(withJSONObject: result) {
-                    AgentConsole.critical("[TalkieAgentXPC] Captured \(screenshots.count) terminal windows")
-                    reply(jsonData, nil)
-                } else {
-                    reply(nil, "Failed to encode response")
-                }
+            if let jsonData = try? JSONSerialization.data(withJSONObject: result) {
+                AgentConsole.critical("[TalkieAgentXPC] Captured \(screenshots.count) terminal windows")
+                reply(jsonData, nil)
             } else {
-                reply(nil, "Requires macOS 14+")
+                reply(nil, "Failed to encode response")
             }
         }
     }
 
     nonisolated func hasScreenRecordingPermission(reply: @escaping (Bool) -> Void) {
         Task { @MainActor in
-            if #available(macOS 14.0, *) {
-                let hasPermission = await ScreenshotService.shared.hasScreenRecordingPermission()
-                reply(hasPermission)
-            } else {
-                reply(checkScreenRecordingPermission())
-            }
+            let hasPermission = await ScreenshotService.shared.hasScreenRecordingPermission()
+            reply(hasPermission)
         }
     }
 

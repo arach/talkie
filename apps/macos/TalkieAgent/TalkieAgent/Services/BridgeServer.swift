@@ -13,7 +13,6 @@ private extension NWError {
 
 /// HTTP server for Bridge API communication
 /// Runs on port 8767, accepts connections from any interface (auth-protected)
-@available(macOS 14.0, *)
 actor BridgeServer {
     static let shared = BridgeServer()
 
