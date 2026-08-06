@@ -187,12 +187,19 @@ body {
 
 /* code */
 .preview code { font-family:var(--mono); font-size:0.88em; background:var(--soft); color:var(--ink); border-radius:4px; padding:1px 5px; }
-.preview pre { margin:14px 0 0; border-radius:10px; overflow:hidden; background:#0e0b08; border:1px solid #2c221a; box-shadow:inset 0 0 40px rgba(255,184,77,0.05); }
+/* Code stays dark — it is the one place on the page where a terminal ground
+   is the honest presentation, and it survived the retheme unchanged for that
+   reason. What did not survive is *which* dark: #0e0b08 with an amber inner
+   glow and cream type is a warm black, so on a cool theme this block was the
+   last warm object on the page and read as a leftover.
+   Mixed toward the theme's own ink instead, so it is still unmistakably a
+   terminal but belongs to whatever palette is running. */
+.preview pre { margin:14px 0 0; border-radius:10px; overflow:hidden; background:color-mix(in srgb, var(--ink) 88%, #000); border:1px solid color-mix(in srgb, var(--ink) 72%, #000); box-shadow:inset 0 0 40px color-mix(in srgb, var(--acc) 7%, transparent); }
 .preview pre .pre-dots { display:flex; align-items:center; gap:7px; padding:8px 13px; border-bottom:1px solid rgba(255,220,170,0.08); }
 .preview pre .pre-dots span { width:7px; height:7px; border-radius:50%; opacity:0.85; }
 .preview pre .pre-dots .r { background:#ff5f56; } .preview pre .pre-dots .y { background:#ffbd2e; } .preview pre .pre-dots .g { background:#27ca40; }
-.preview pre .pre-lang { margin-left:5px; font-family:var(--mono); font-size:9px; letter-spacing:0.1em; text-transform:uppercase; color:#8a7d68; }
-.preview pre code { display:block; padding:12px 15px; font-family:var(--mono); font-size:12.5px; line-height:1.6; color:#e9dfc9; background:transparent; border-radius:0; }
+.preview pre .pre-lang { margin-left:5px; font-family:var(--mono); font-size:9px; letter-spacing:0.1em; text-transform:uppercase; color:color-mix(in srgb, var(--surface) 52%, transparent); }
+.preview pre code { display:block; padding:12px 15px; font-family:var(--mono); font-size:12.5px; line-height:1.6; color:color-mix(in srgb, var(--surface) 92%, var(--acc)); background:transparent; border-radius:0; }
 
 /* tables */
 .preview table { margin:16px 0 0; width:100%; border-collapse:separate; border-spacing:0; border:1px solid var(--edge); border-radius:10px; overflow:hidden; font-size:14px; }
