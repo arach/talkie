@@ -818,9 +818,9 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = TalkieWatchWidget/TalkieWatchWidget.entitlements;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = TalkieWatchWidget/TalkieWatchWidget.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 43;
@@ -851,9 +851,9 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = TalkieWatchWidget/TalkieWatchWidget.entitlements;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = TalkieWatchWidget/TalkieWatchWidget.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 43;
@@ -1007,16 +1007,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = (
-					AppIconScope,
-					AppIconMineral,
-					AppIconMidnight,
-					AppIconTactical,
-					AppIconGhost,
-					AppIconLift,
-					AppIconGraphite,
-					AppIconCarbon,
-				);
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconScope AppIconMineral AppIconMidnight AppIconTactical AppIconGhost AppIconLift AppIconGraphite AppIconCarbon AppIconEmber AppIconMatte";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Talkie iOS/talkie.entitlements";
@@ -1063,16 +1054,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = (
-					AppIconScope,
-					AppIconMineral,
-					AppIconMidnight,
-					AppIconTactical,
-					AppIconGhost,
-					AppIconLift,
-					AppIconGraphite,
-					AppIconCarbon,
-				);
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconScope AppIconMineral AppIconMidnight AppIconTactical AppIconGhost AppIconLift AppIconGraphite AppIconCarbon AppIconEmber AppIconMatte";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Talkie iOS/talkie.release.entitlements";
@@ -1319,18 +1301,18 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = TalkieWatchApp.entitlements;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_ENTITLEMENTS = TalkieWatchApp.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 43;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
 				INFOPLIST_FILE = "TalkieWatch Watch App/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talkie needs microphone access to record voice memos";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "$(TALKIE_IOS_APP_BUNDLE_ID)";
@@ -1355,18 +1337,18 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = TalkieWatchApp.entitlements;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_ENTITLEMENTS = TalkieWatchApp.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 43;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
 				INFOPLIST_FILE = "TalkieWatch Watch App/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talkie needs microphone access to record voice memos";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "$(TALKIE_IOS_APP_BUNDLE_ID)";

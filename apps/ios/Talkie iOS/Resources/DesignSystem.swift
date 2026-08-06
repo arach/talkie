@@ -34,7 +34,7 @@ extension Color {
     static let warning = Color(hex: "FF9F0A")             // Apple orange
     static let transcribing = Color(hex: "5E5CE6")        // Apple purple
 
-    // Theme-aware chrome accents. Read directly from the configuration store
+    // Theme-aware chrome accents. Read the nonisolated `ActiveTheme` mirror
     // (not the @MainActor manager) so these are usable from any context.
     //
     // `active` / `memoAccent` map to the theme's lit accent — RARE color,
@@ -49,10 +49,7 @@ extension Color {
     static var action: Color { activeTheme.chrome.action }
     static var actionTint: Color { activeTheme.chrome.actionTint }
 
-    private static var activeTheme: AppTheme {
-        let raw = TalkieAppConfigurationStore.shared.configuration.appearance.theme
-        return AppTheme(rawValue: raw) ?? .scope
-    }
+    private static var activeTheme: AppTheme { ActiveTheme.current }
 
     // Surface Colors (adapts to light/dark mode)
     static let surfacePrimary = Color(hex: "FFFFFF", darkHex: "0A0A0A")
@@ -119,6 +116,44 @@ extension Color {
         } else {
             self.init(uiColor: lightColor)
         }
+    }
+
+    /// This colour laid over `base` at `alpha`, resolved to a single opaque one.
+    ///
+    /// `.opacity()` is a compositing instruction: the renderer carries both
+    /// colours to the glass and blends them there, every frame, for every layer
+    /// in the stack. This does the same arithmetic once, up front, and hands
+    /// back a flat fill with nothing behind it. The pixel is the same either
+    /// way — what changes is that the result is a value you can name, measure
+    /// and reason about rather than an accident of what happens to be beneath.
+    ///
+    /// Both operands may be mode-dependent, so the blend is done once per
+    /// interface style and the result stays dynamic.
+    func flattened(_ alpha: Double, over base: Color) -> Color {
+        func blend(_ style: UIUserInterfaceStyle) -> UIColor {
+            let traits = UITraitCollection(userInterfaceStyle: style)
+            let top = UIColor(self).resolvedColor(with: traits)
+            let bottom = UIColor(base).resolvedColor(with: traits)
+
+            var tr: CGFloat = 0, tg: CGFloat = 0, tb: CGFloat = 0, ta: CGFloat = 0
+            var br: CGFloat = 0, bg: CGFloat = 0, bb: CGFloat = 0, ba: CGFloat = 0
+            top.getRed(&tr, green: &tg, blue: &tb, alpha: &ta)
+            bottom.getRed(&br, green: &bg, blue: &bb, alpha: &ba)
+
+            // The top colour's own alpha counts too — a token that was already
+            // translucent doesn't get to arrive at full strength here.
+            let a = ta * CGFloat(alpha)
+            return UIColor(
+                red: tr * a + br * (1 - a),
+                green: tg * a + bg * (1 - a),
+                blue: tb * a + bb * (1 - a),
+                alpha: 1
+            )
+        }
+
+        let light = blend(.light)
+        let dark = blend(.dark)
+        return Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? dark : light })
     }
 }
 
@@ -200,12 +235,24 @@ enum TalkieAnimation {
 // All tokens flip together so any view written against ScopeMobile reads correctly in either mode.
 
 enum ScopeMobile {
-    // Surfaces: page → embedded rail → card. Paper-white with a barely-there
-    // warm uplift — mirrors the polish-branch's `#FBFAF7` "white paper" canvas.
-    // Not pure white (cold + clinical), not cream (warm + loud); paper.
-    static let canvas    = Color(hex: "FBFAF7", darkHex: "0A0907")
-    static let canvasAlt = Color(hex: "F5F3EE", darkHex: "0F0D0A")
-    static let surface   = Color(hex: "EFEDE7", darkHex: "1A1714")
+    // Surfaces: page → embedded rail → card. Paper, with enough tone in it to
+    // actually be a surface.
+    //
+    // The page was `FBFAF7` — 2% off pure white — and cards sat on it at
+    // `F8F6F1`, i.e. three points *darker*. So a raised card was rendered
+    // slightly darker than the paper it rested on, which is backwards (a
+    // raised face catches more light, not less), and the 1% separation meant
+    // the only thing distinguishing a card from the page was its shadow. On
+    // the Codex keybed that read exactly as it was: sixteen pale shapes
+    // dissolving into a pale field.
+    //
+    // The page now carries real tone and cards go near-white above it, so the
+    // relationship is right way up and the step is ~12% in luminance instead
+    // of ~3% in the wrong direction. Ink was re-checked against the new page,
+    // not assumed: primary 15.7:1, secondary 6.9:1, tertiary 4.1:1.
+    static let canvas    = Color(hex: "F2EFE7", darkHex: "0A0907")
+    static let canvasAlt = Color(hex: "EBE7DE", darkHex: "0F0D0A")
+    static let surface   = Color(hex: "E3DFD5", darkHex: "1A1714")
 
     // Ink hierarchy (primary → subtle). Slight warm bias to pair with the
     // paper canvas — still reads as neutral graphite, not brown.
@@ -239,13 +286,30 @@ enum ScopeMobile {
     // Panel — embedded "instrument bay" surface. Warm-graphite chassis (the
     // "black" half of black-and-gold) so live readouts feel like a fabricated
     // panel sitting on paper, not a paste-on UI rectangle.
-    static let panel    = Color(hex: "2A221C", darkHex: "0A0807")
-    static let panelAlt = Color(hex: "362C24", darkHex: "14110D")
+    //
+    // Graphite, not brown — and the difference is chroma, not lightness.
+    // These started near-black (`2A221C`), got lifted to `4A3E35` because the
+    // console read as a black void, and the lift is what exposed the problem:
+    // the saturation was 16% the whole time, but at L* 13 nobody can see a
+    // hue. At L* 25, spread across a full-height slab, 16% at 26° is chocolate.
+    //
+    // So the fix is on the chroma axis, not the lightness axis. Saturation
+    // drops 16% → 6% and lightness stays put: still unmistakably warm next to
+    // a cool grey, but no longer a color you would name. Desaturating darkened
+    // it slightly, which *helps* the readouts — `panelInk` goes 8.7:1 → 9.4:1
+    // and the brass `panelTrace` 4.5:1 → 4.9:1. Keep saturation under ~8% here;
+    // that, not the hex value, is the constraint.
+    static let panel    = Color(hex: "3D3A36", darkHex: "1C1917")
+    static let panelAlt = Color(hex: "4A4641", darkHex: "282523")
 
     // Panel ink + trace — brass phosphor on warm graphite, both modes.
     static let panelInk      = Color(hex: "F0EAD8", darkHex: "F0EAD8")
-    static let panelInkFaint = Color(hex: "9A8E78", darkHex: "9A8E78")
-    static let panelTrace      = Color(hex: "E89A3C", darkHex: "E89A3C")
+    static let panelInkFaint = Color(hex: "CFC9BE", darkHex: "CFC9BE")
+    // Brightened from EBA654 (4.51:1 on panelAlt). A token tuned to land exactly
+    // on the 4.5 bar arrives at the glass under it: the terminal's scanline
+    // overlay and glow cost the rendered pair ~10%, measured off the captures.
+    // Every phosphor here clears 5.5:1 declared so it clears 4.5:1 rendered.
+    static let panelTrace      = Color(hex: "F0BE81", darkHex: "F0BE81")
     static let panelTraceFaint = panelTrace.opacity(0.08)
     static let panelEdge       = panelTrace.opacity(0.18)
 }
@@ -502,7 +566,7 @@ private let porcelainChrome: ChromeTokens = {
         action: ink.opacity(0.66),
         actionTint: ink.opacity(0.055),
         panel: Color(hex: "142238", darkHex: "08111F"),
-        panelAlt: Color(hex: "1D304B", darkHex: "101D30"),
+        panelAlt: Color(hex: "1D304B", darkHex: "14233B"),
         panelInk: Color(hex: "F3F7FC"),
         panelInkFaint: Color(hex: "9DAFC4"),
         panelAccent: Color(hex: "78A6FF"),
@@ -533,12 +597,12 @@ private let mineralChrome: ChromeTokens = {
         accentStrong: accent.opacity(0.34),
         action: ink.opacity(0.68),
         actionTint: ink.opacity(0.06),
-        panel: Color(hex: "1C3034", darkHex: "0F1B1E"),
-        panelAlt: Color(hex: "263C40", darkHex: "17272A"),
+        panel: Color(hex: "1C3034", darkHex: "141F22"),
+        panelAlt: Color(hex: "263C40", darkHex: "1E3034"),
         panelInk: Color(hex: "EEF1EA"),
         panelInkFaint: Color(hex: "AAB7B2"),
-        panelAccent: Color(hex: "D27A46"),
-        panelEdge: Color(hex: "D27A46").opacity(0.24),
+        panelAccent: Color(hex: "E0A682"),
+        panelEdge: Color(hex: "D99064").opacity(0.24),
         trace: Color(hex: "29484E", darkHex: "D67B48"),
         traceFaint: Color(hex: "29484E", darkHex: "D67B48").opacity(0.10),
         edgeStrong: ink.opacity(0.26),
@@ -568,7 +632,7 @@ private let midnightChrome: ChromeTokens = {
         panelAlt: Color(hex: "1A1B1F"),
         panelInk: Color(hex: "F7F8F8"),
         panelInkFaint: Color(hex: "9097A1"),
-        panelAccent: accent,
+        panelAccent: Color(hex: "828CDC"),
         panelEdge: accent.opacity(0.30),
         trace: ink.opacity(0.70),
         traceFaint: ink.opacity(0.10),
@@ -593,8 +657,8 @@ private let tacticalChrome: ChromeTokens = {
         accentStrong: accent.opacity(0.50),
         action: ink.opacity(0.70),
         actionTint: ink.opacity(0.08),
-        panel: Color(hex: "1A1A1A", darkHex: "000000"),
-        panelAlt: Color(hex: "242424", darkHex: "0A0A0A"),
+        panel: Color(hex: "1A1A1A", darkHex: "0F0F0F"),
+        panelAlt: Color(hex: "242424", darkHex: "1E1E1E"),
         panelInk: Color(hex: "F0F0F0"),
         panelInkFaint: Color(hex: "A0A0A0"),
         panelAccent: Color(hex: "FF9020"),
@@ -622,8 +686,8 @@ private let ghostChrome: ChromeTokens = {
         accentStrong: accent.opacity(0.50),
         action: ink.opacity(0.55),
         actionTint: ink.opacity(0.05),
-        panel: Color(hex: "1E1B4B", darkHex: "0F0F23"),
-        panelAlt: Color(hex: "27244F", darkHex: "16162C"),
+        panel: Color(hex: "1E1B4B", darkHex: "16163A"),
+        panelAlt: Color(hex: "27244F", darkHex: "20203F"),
         panelInk: Color(hex: "F0F0FA"),
         panelInkFaint: Color(hex: "9CA0C4"),
         panelAccent: Color(hex: "A5B4FC"),
@@ -651,8 +715,8 @@ private let liftChrome: ChromeTokens = {
         accentStrong: accent.opacity(0.32),
         action: ink.opacity(0.55),
         actionTint: ink.opacity(0.04),
-        panel: Color(hex: "1E1B4B", darkHex: "0F0F23"),
-        panelAlt: Color(hex: "27244F", darkHex: "16162C"),
+        panel: Color(hex: "1E1B4B", darkHex: "16163A"),
+        panelAlt: Color(hex: "27244F", darkHex: "20203F"),
         panelInk: Color(hex: "F0F0FA"),
         panelInkFaint: Color(hex: "9CA0C4"),
         panelAccent: Color(hex: "A5B4FC"),
@@ -678,8 +742,8 @@ private let liftChrome: ChromeTokens = {
 // panels, flat, 6pt rounding. The one permitted pop is the universal
 // recording red, which isn't the theme accent.
 private let graphiteChrome: ChromeTokens = {
-    let accent = Color(hex: "FAFAFA")   // white — the monochrome "signal"
-    let ink = Color(hex: "EDEDED")
+    let accent = Color(hex: "0A0A0A", darkHex: "FAFAFA")   // the monochrome "signal", flipped per mode
+    let ink = Color(hex: "0A0A0A", darkHex: "EDEDED")
     return ChromeTokens(
         accent: accent,
         accentTint: accent.opacity(0.10),
@@ -691,8 +755,8 @@ private let graphiteChrome: ChromeTokens = {
         panelAlt: Color(hex: "171717"),
         panelInk: Color(hex: "EDEDED"),
         panelInkFaint: Color(hex: "8F8F8F"),
-        panelAccent: accent,
-        panelEdge: ink.opacity(0.18),
+        panelAccent: Color(hex: "FAFAFA"),   // plates stay dark in both modes, so this stays white
+        panelEdge: Color(hex: "EDEDED").opacity(0.18),
         trace: ink.opacity(0.75),
         traceFaint: ink.opacity(0.10),
         edgeStrong: ink.opacity(0.30),
@@ -720,12 +784,12 @@ private let carbonChrome: ChromeTokens = {
         accentStrong: signal.opacity(0.40),
         action: ink.opacity(0.72),
         actionTint: ink.opacity(0.06),
-        panel: Color(hex: "0A0A0A", darkHex: "000000"),
-        panelAlt: Color(hex: "121212", darkHex: "070707"),
+        panel: Color(hex: "0A0A0A", darkHex: "101010"),
+        panelAlt: Color(hex: "121212", darkHex: "181818"),
         panelInk: Color(hex: "FAFAFA"),
-        panelInkFaint: Color(hex: "8A8A8A"),
-        panelAccent: signal,
-        panelEdge: signal.opacity(0.20),
+        panelInkFaint: Color(hex: "929292"),
+        panelAccent: Color(hex: "3DE08A"),
+        panelEdge: signal.opacity(0.34),
         trace: ink.opacity(0.80),
         traceFaint: ink.opacity(0.10),
         // Mode-aware (AARRGGBB): light = black at low alpha, dark = WHITE at
@@ -743,6 +807,150 @@ private let carbonChrome: ChromeTokens = {
     )
 }()
 
+// Ember's instrument chrome — see `cachedEmberColors` for the palette rationale.
+//
+// The plates stay dark in both modes, as they do in every theme, so the panel
+// tokens are single-valued and the amber on them is the dark-side amber even
+// when the page around them is light. Corners are soft (4) rather than
+// Tactical's near-square 1: this is the same colour family read calmly.
+private let emberChrome: ChromeTokens = {
+    let signal = Color(hex: "A3671D", darkHex: "D98C2B")
+    let ink = Color(hex: "13120F", darkHex: "F4F1EA")
+    return ChromeTokens(
+        accent: signal,
+        accentTint: signal.opacity(0.10),
+        accentGlow: signal.opacity(0.22),
+        accentStrong: signal.opacity(0.40),
+        action: ink.opacity(0.72),
+        actionTint: ink.opacity(0.06),
+        panel: Color(hex: "17150F", darkHex: "121109"),
+        panelAlt: Color(hex: "211E16", darkHex: "1C1A13"),
+        panelInk: Color(hex: "F6F2E8"),
+        panelInkFaint: Color(hex: "A79E8C"),
+        panelAccent: Color(hex: "E2A046"),
+        panelEdge: Color(hex: "E2A046").opacity(0.30),
+        trace: ink.opacity(0.80),
+        traceFaint: ink.opacity(0.10),
+        edgeStrong: Color(hex: "2E000000", darkHex: "5CFFFFFF"),
+        edge:       Color(hex: "24000000", darkHex: "42FFFFFF"),
+        edgeFaint:  Color(hex: "1A000000", darkHex: "30FFFFFF"),
+        edgeSubtle: Color(hex: "0F000000", darkHex: "1CFFFFFF"),
+        glowRadius: 3,
+        chromeCorner: 4,
+        eyebrowLeader: "·",
+        hairlineWidth: 1.0
+    )
+}()
+
+// Matte's chrome — see `cachedMatteColors` for the palette rationale.
+//
+// One thing here is unlike every other theme: the panel tokens are mode-aware.
+// Everywhere else the instrument plates stay dark on a light page, because a
+// dark plate is what makes a lit readout read as lit. Matte has no readouts to
+// light — a plate is just a region of the page — so it follows the page, and a
+// light deck is genuinely light all the way down rather than a pale chassis
+// with black windows cut into it.
+//
+// `glowRadius` is 0 for the same reason `DeckFinish.flat.lift` is 0: a glow is
+// a film over the word, and this theme's whole argument is that there is
+// nothing between you and the word.
+private let matteChrome: ChromeTokens = {
+    let signal = Color(hex: "1D4ED8", darkHex: "7FB0FF")
+    let ink = Color(hex: "0D0D0D", darkHex: "F7F7F7")
+    return ChromeTokens(
+        accent: signal,
+        accentTint: signal.opacity(0.08),
+        accentGlow: signal.opacity(0.18),
+        accentStrong: signal.opacity(0.36),
+        action: ink.opacity(0.78),
+        actionTint: ink.opacity(0.05),
+        panel: Color(hex: "F0F0F0", darkHex: "151515"),
+        panelAlt: Color(hex: "E8E8E8", darkHex: "1C1C1C"),
+        panelInk: Color(hex: "0D0D0D", darkHex: "F7F7F7"),
+        panelInkFaint: Color(hex: "565656", darkHex: "A8A8A8"),
+        panelAccent: signal,
+        panelEdge: signal.opacity(0.30),
+        trace: ink.opacity(0.82),
+        traceFaint: ink.opacity(0.10),
+        // Heavier than they read on an instrument theme, on purpose. There the
+        // rules are one cue among several — a plate is also told apart from the
+        // page by its sheen, its gloss and the shadow it casts. Strip those and
+        // the rule is the only thing left saying where one region ends and the
+        // next begins, so it has to be a line you can actually see rather than a
+        // suggestion of one. A flat theme with faint rules doesn't read calm, it
+        // reads unfinished.
+        edgeStrong: Color(hex: "57000000", darkHex: "80FFFFFF"),
+        edge:       Color(hex: "3D000000", darkHex: "5CFFFFFF"),
+        edgeFaint:  Color(hex: "29000000", darkHex: "40FFFFFF"),
+        edgeSubtle: Color(hex: "1A000000", darkHex: "29FFFFFF"),
+        glowRadius: 0,
+        chromeCorner: 6,
+        eyebrowLeader: "·",
+        hairlineWidth: 1.0
+    )
+}()
+
+// Press's chrome — Matte's argument carried to the end of the sentence.
+//
+// Matte removed the layers you can see. What it left behind is the layer you
+// can't: alpha. Nearly every token above is a colour multiplied by a number,
+// which is not a colour at all but an instruction to blend against whatever
+// turns out to be underneath at draw time. On a panel that is usually the
+// panel; on a panel inside a sheet inside a scrim it is something else, and
+// the token's real value quietly changes with its surroundings.
+//
+// Here every one of those is resolved against the plate it sits on, once, at
+// launch. `0.10` stops being a blend mode and becomes a hex. Nothing in this
+// theme is see-through, so nothing about it depends on context — the same
+// token measures the same on any screen, and the numbers in the contrast
+// sweep are the numbers you actually get.
+//
+// Its partner is `DeckFinish.solid`, which does the same for the call sites
+// the palette can't reach.
+private let pressChrome: ChromeTokens = {
+    let signal = Color(hex: "1D4ED8", darkHex: "7FB0FF")
+    let ink = Color(hex: "111111", darkHex: "F5F5F5")
+    let panel = Color(hex: "EDEBE7", darkHex: "121212")
+    let panelAlt = Color(hex: "E4E1DC", darkHex: "191919")
+
+    return ChromeTokens(
+        accent: signal,
+        // Every tint below names the plate it is laid on. That is the whole
+        // discipline: a translucent token can be written without knowing where
+        // it lands, an opaque one cannot.
+        accentTint: signal.flattened(0.08, over: panel),
+        accentGlow: signal.flattened(0.18, over: panel),
+        accentStrong: signal.flattened(0.36, over: panel),
+        action: ink.flattened(0.78, over: panel),
+        actionTint: ink.flattened(0.05, over: panel),
+        panel: panel,
+        panelAlt: panelAlt,
+        panelInk: ink,
+        // Quiet, but not lighter than Matte's quiet — this paper is darker than
+        // Matte's, so the same grey would land at less contrast, not equal
+        // contrast. The pair only stays a control pair if the ink tracks the
+        // stock it's printed on.
+        panelInkFaint: Color(hex: "4F4F4F", darkHex: "A0A0A0"),
+        panelAccent: signal,
+        panelEdge: signal.flattened(0.30, over: panel),
+        trace: ink.flattened(0.82, over: panel),
+        traceFaint: ink.flattened(0.10, over: panel),
+        // The edges are the clearest case. As alpha they were black-over-
+        // anything and white-over-anything; as colours they are four rules cut
+        // into this specific paper, and they stop washing out when a sheet
+        // happens to sit behind them. The weights mirror Matte's — see the note
+        // there on why a flat theme's rules have to be lines you can see.
+        edgeStrong: ink.flattened(0.34, over: panel),
+        edge:       ink.flattened(0.24, over: panel),
+        edgeFaint:  ink.flattened(0.16, over: panel),
+        edgeSubtle: ink.flattened(0.10, over: panel),
+        glowRadius: 0,
+        chromeCorner: 4,
+        eyebrowLeader: "·",
+        hairlineWidth: 1.0
+    )
+}()
+
 extension AppTheme {
     var chrome: ChromeTokens {
         switch self {
@@ -755,6 +963,9 @@ extension AppTheme {
         case .lift:     return liftChrome
         case .graphite: return graphiteChrome
         case .carbon:   return carbonChrome
+        case .ember:    return emberChrome
+        case .matte:    return matteChrome
+        case .press:    return pressChrome
         }
     }
 }
@@ -800,9 +1011,17 @@ struct TalkieEyebrow: View {
 
     var body: some View {
         let chrome = theme.chrome
+        // The eyebrow is the most-repeated label in the app — QUICK, EXPLORE,
+        // RECENT, every section on every screen — so it was also the single
+        // biggest reason a flat theme still looked half-converted: the deck and
+        // the cockpit had moved to the text face while every section heading
+        // above them stayed in SF Mono. Two faces on one screen with no rule
+        // about which goes where reads as an unfinished migration, because it
+        // is one.
+        let finish = theme.currentTheme.finish
         Text((showLeader ? "\(chrome.eyebrowLeader) " : "") + text.uppercased())
-            .font(.system(size: 10, weight: .regular, design: .monospaced))
-            .tracking(2)
+            .font(finish.font(10, .regular))
+            .tracking(finish.tracking(2))
             .foregroundStyle(color(chrome: chrome))
     }
 

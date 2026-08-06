@@ -90,20 +90,19 @@ struct HomeNextView: View {
         .scrollIndicators(.hidden)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if isCommandFocused {
-                VStack(spacing: 0) {
-                    // The command bar scrolls with the feed, so it cannot be
-                    // relied on to stay in reach — the way out has to live on
-                    // the slab itself. Until now the only one was an
-                    // undiscoverable swipe down over the keys.
-                    HomeKeyboardDismissRow { commandKeyboard.onCollapse?() }
-
-                    HomeTalkieKeyboardHost(
-                        controller: commandKeyboard,
-                        visualStyle: theme.currentTheme == .mineral ? .mineralInstrument : .automatic
-                    )
-                    .frame(maxWidth: .infinity)
-                    .frame(height: commandKeyboard.preferredHeight)
-                }
+                HomeTalkieKeyboardHost(
+                    controller: commandKeyboard,
+                    visualStyle: theme.currentTheme == .mineral ? .mineralInstrument : .automatic
+                )
+                .frame(maxWidth: .infinity)
+                .frame(height: commandKeyboard.preferredHeight)
+                // The slab runs to the screen edge; the keys should not. The
+                // shared `CompactKeyboardView` lays out edge to edge because
+                // that is correct for the system keyboard extension, so the
+                // breathing room is added here, on the app's side of the seam,
+                // rather than in a constant both hosts read.
+                .padding(.horizontal, HomeKeyboardSlabMetrics.sideInset)
+                .padding(.top, HomeKeyboardSlabMetrics.topInset)
                 // The keyboard view paints no background of its own — as a real
                 // `inputView` the system supplies the backdrop. Home hands it to
                 // a `safeAreaInset` instead, so without this the recents list
@@ -118,6 +117,16 @@ struct HomeNextView: View {
                     Rectangle()
                         .fill(theme.currentTheme.chrome.edgeFaint)
                         .frame(height: theme.currentTheme.chrome.hairlineWidth)
+                }
+                // The way out rides above the slab on an offset, which draws
+                // but does not measure. Carried as a row in the stack it billed
+                // the feed a full 30pt of visible height for one glyph, and a
+                // `safeAreaInset` charges that to every screenful; as a lifted
+                // chip it costs nothing and shades one trailing corner instead.
+                .overlay(alignment: .topTrailing) {
+                    HomeKeyboardDismissChip { commandKeyboard.onCollapse?() }
+                        .padding(.trailing, HomeKeyboardSlabMetrics.sideInset)
+                        .offset(y: HomeKeyboardSlabMetrics.dismissLift)
                 }
                 // Move only. Fading it in as it travels makes the slab
                 // translucent for the whole flight — the feed shows through the
@@ -433,10 +442,7 @@ private struct DeckComplication: View {
 // active chrome vocabulary so Mineral reads as copper on blue-gray alloy while
 // Tactical, Scope, and the monochrome themes retain their own identities.
 private enum HomeCockpitPalette {
-    private static var activeTheme: AppTheme {
-        let raw = TalkieAppConfigurationStore.shared.configuration.appearance.theme
-        return AppTheme(rawValue: raw) ?? .scope
-    }
+    private static var activeTheme: AppTheme { ActiveTheme.current }
 
     private static var chrome: ChromeTokens { activeTheme.chrome }
 
@@ -450,6 +456,17 @@ private enum HomeCockpitPalette {
     static var screenInk: Color { chrome.panelInk }
     static var screenInkFaint: Color { chrome.panelInkFaint }
     static var phosphor: Color { chrome.panelAccent }
+
+    /// How far a lit readout is allowed to bleed. Themes that declare no halo
+    /// (`glowRadius: 0`) get none here either — a glow is a film over the word,
+    /// and a theme that has argued against films shouldn't sprout one in the
+    /// cockpit.
+    static var glowRadius: CGFloat { chrome.glowRadius }
+
+    /// Gloss, lift and letterform — the same finish the Codex deck reads. The
+    /// cockpit is the densest small type in the app, so it is where the films
+    /// cost the most. See `DeckFinish`.
+    static var finish: DeckFinish { activeTheme.finish }
 }
 
 // MARK: - Command center
@@ -504,16 +521,35 @@ private final class HomeCommandKeyboardController {
     @ObservationIgnored var onCollapse: (() -> Void)?
 }
 
-/// Home presents the Talkie keyboard as app-owned chrome, just like Compose.
-/// This keeps it visible on iPad even when a hardware keyboard is connected;
-/// UIKit's custom `inputView` presentation is intentionally bypassed.
+/// Geometry for the keyboard slab as Home hosts it — the app-side inset around
+/// the shared keys, and the lifted dismiss chip.
+private enum HomeKeyboardSlabMetrics {
+    /// Rides on top of `CompactKeyboardView`'s own 3pt gutter, which stays
+    /// small because the system extension it also serves is full-bleed.
+    static let sideInset: CGFloat = 7
+    static let topInset: CGFloat = 6
+
+    /// A 30pt capsule inside a 44pt tap target — the chip is small, the touch
+    /// area is not.
+    static let dismissCapsuleWidth: CGFloat = 52
+    static let dismissCapsuleHeight: CGFloat = 30
+    static let dismissPadV: CGFloat = 7
+    static let dismissTapHeight: CGFloat = dismissCapsuleHeight + dismissPadV * 2
+    /// Clearance between the capsule and the slab's top hairline.
+    static let dismissGap: CGFloat = 6
+    /// Negative — the chip is lifted clear of the slab so it draws over the
+    /// feed rather than pushing it. Derived so the capsule (not its tap
+    /// padding) is what sits `dismissGap` above the edge.
+    static let dismissLift: CGFloat = dismissPadV - dismissTapHeight - dismissGap
+}
+
 /// The visible way out of the keyboard.
 ///
 /// Deliberately routed through the same `onCollapse` the swipe-down gesture
 /// fires rather than flipping the focus binding directly: collapsing means
 /// resigning first responder, and having two paths that do it differently is
 /// how the field and the slab end up disagreeing about whether input is live.
-private struct HomeKeyboardDismissRow: View {
+private struct HomeKeyboardDismissChip: View {
     let onDismiss: () -> Void
     @ObservedObject private var theme = ThemeManager.shared
 
@@ -522,26 +558,46 @@ private struct HomeKeyboardDismissRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            Spacer(minLength: 0)
+        let capsule = Capsule(style: .continuous)
 
-            Button(action: onDismiss) {
-                Image(systemName: "keyboard.chevron.compact.down")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(theme.colors.textSecondary)
-                    // Wider than the glyph so the tap target clears the
-                    // 44pt minimum without the icon looking like a button.
-                    .frame(width: 44, height: 30)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Hide keyboard")
-            .accessibilityIdentifier("home.keyboard-dismiss")
+        Button(action: onDismiss) {
+            Image(systemName: "keyboard.chevron.compact.down")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(theme.colors.textSecondary)
+                .frame(
+                    width: HomeKeyboardSlabMetrics.dismissCapsuleWidth,
+                    height: HomeKeyboardSlabMetrics.dismissCapsuleHeight
+                )
+                // Opaque, and laid over the page ground first: the chip floats
+                // above whatever recents row happens to be under it, so it has
+                // to carry its own backdrop rather than borrow one.
+                .background {
+                    ZStack {
+                        capsule.fill(theme.colors.background)
+                        capsule.fill(theme.colors.cardBackground)
+                    }
+                }
+                .overlay(
+                    capsule.strokeBorder(
+                        theme.currentTheme.chrome.edgeFaint,
+                        lineWidth: theme.currentTheme.chrome.hairlineWidth
+                    )
+                )
+                .shadow(color: .black.opacity(0.18), radius: 5, y: 2)
+                // Outside the capsule, so the tap target clears 44pt without
+                // the chip growing to match.
+                .padding(.vertical, HomeKeyboardSlabMetrics.dismissPadV)
+                .contentShape(Rectangle())
         }
-        .padding(.horizontal, 6)
+        .buttonStyle(.plain)
+        .accessibilityLabel("Hide keyboard")
+        .accessibilityIdentifier("home.keyboard-dismiss")
     }
 }
 
+/// Home presents the Talkie keyboard as app-owned chrome, just like Compose.
+/// This keeps it visible on iPad even when a hardware keyboard is connected;
+/// UIKit's custom `inputView` presentation is intentionally bypassed.
 private struct HomeTalkieKeyboardHost: UIViewRepresentable {
     let controller: HomeCommandKeyboardController
     let visualStyle: KeyboardVisualStyle
@@ -627,7 +683,11 @@ private struct HomeCommandBar: View {
                         Text(mode.label)
                             .talkieType(.channelLabelTiny)
                     }
-                    .foregroundStyle(mode == .ask ? HomeCockpitPalette.accent : theme.colors.textSecondary)
+                    // The capsule carries the ASK state, not the ink. Accent-on-
+                    // accent-tint is the same hue at two lightnesses and never
+                    // clears 4.5:1 (measured 2.15:1 in tactical/light), so the
+                    // label stays at full page ink and the fill does the signalling.
+                    .foregroundStyle(mode == .ask ? theme.colors.textPrimary : theme.colors.textSecondary)
                     .padding(.horizontal, 9)
                     .frame(height: 30)
                     .background {
@@ -1343,7 +1403,7 @@ private struct HomeActivityScreen: View {
                 Spacer()
                 Text("ACTIVITY")
                     .talkieType(.channelLabelTiny)
-                    .foregroundStyle(HomeCockpitPalette.accent)
+                    .foregroundStyle(HomeCockpitPalette.phosphor)
                 Spacer()
                 Text("9:41")
                     .talkieType(.channelLabelTiny)
@@ -1355,11 +1415,11 @@ private struct HomeActivityScreen: View {
                     HomeActivityRow(event: event, showsDivider: index < events.count - 1)
                 }
             }
-            .background(Color.white.opacity(0.04))
+            .background(HomeCockpitPalette.screenInk.opacity(0.04))
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(HomeCockpitPalette.accent.opacity(0.14), lineWidth: 1)
+                    .strokeBorder(HomeCockpitPalette.phosphor.opacity(0.14), lineWidth: 1)
             }
         }
         .padding(.horizontal, 12)
@@ -1368,17 +1428,19 @@ private struct HomeActivityScreen: View {
         .background {
             ZStack {
                 HomeCockpitPalette.screen
-                LinearGradient(
-                    colors: [Color.white.opacity(0.08), Color.black.opacity(0.20)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                RadialGradient(
-                    colors: [HomeCockpitPalette.accent.opacity(0.18), .clear],
-                    center: UnitPoint(x: 0.72, y: 0.36),
-                    startRadius: 0,
-                    endRadius: 140
-                )
+                if HomeCockpitPalette.finish.isGlossy {
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.08), Color.black.opacity(0.20)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    RadialGradient(
+                        colors: [HomeCockpitPalette.phosphor.opacity(0.18), .clear],
+                        center: UnitPoint(x: 0.72, y: 0.36),
+                        startRadius: 0,
+                        endRadius: 140
+                    )
+                }
             }
         }
         .clipShape(shape)
@@ -1400,9 +1462,9 @@ private struct HomeActivityRow: View {
                 .frame(width: 34, alignment: .leading)
 
             Circle()
-                .fill(HomeCockpitPalette.accent)
+                .fill(HomeCockpitPalette.phosphor)
                 .frame(width: 5, height: 5)
-                .shadow(color: HomeCockpitPalette.accent.opacity(0.65), radius: 3)
+                .shadow(color: HomeCockpitPalette.phosphor.opacity(0.65), radius: 3)
 
             Text(event.title)
                 .talkieType(.preview)
@@ -1412,7 +1474,7 @@ private struct HomeActivityRow: View {
 
             Text(event.kind)
                 .talkieType(.channelLabelTiny)
-                .foregroundStyle(HomeCockpitPalette.accent)
+                .foregroundStyle(HomeCockpitPalette.phosphor)
                 .lineLimit(1)
         }
         .padding(.horizontal, 9)
@@ -1420,7 +1482,7 @@ private struct HomeActivityRow: View {
         .overlay(alignment: .bottom) {
             if showsDivider {
                 Rectangle()
-                    .fill(Color.white.opacity(0.08))
+                    .fill(HomeCockpitPalette.screenInk.opacity(0.08))
                     .frame(height: 0.5)
                     .padding(.leading, 52)
             }
@@ -1459,36 +1521,49 @@ private struct CockpitScreen: View {
             }
 
             // The Bay — the toggled 144pt well (Roll ⁄ Gauges).
+            // The cells below read the palette off a static table, which is
+            // invisible to SwiftUI's dependency tracking — their inputs are ints
+            // and bools that a theme change doesn't touch, so their bodies stay
+            // cached and they keep drawing the outgoing theme's phosphor. Keying
+            // the bay on the theme rebuilds the subtree instead.
             CockpitBay(model: model)
+                .id(theme.currentTheme)
         }
         .padding(HomeCockpitMetrics.screenPad)
         .frame(maxWidth: .infinity)
+        // Three films stack here — a top-to-bottom gloss, a phosphor bloom, and a
+        // left-to-right wash — and the whole cockpit's type is read through all
+        // of them. That is what makes the screen read as lit glass, and it is
+        // also why the 8pt legends look hazy. A flat theme keeps the screen
+        // colour and drops the stack.
         .background {
             ZStack {
                 HomeCockpitPalette.screen
-                LinearGradient(
-                    stops: [
-                        .init(color: Color.white.opacity(0.08), location: 0),
-                        .init(color: Color.white.opacity(0.02), location: 0.45),
-                        .init(color: Color.black.opacity(0.24), location: 1),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                RadialGradient(
-                    colors: [HomeCockpitPalette.accent.opacity(0.22), .clear],
-                    center: UnitPoint(x: 0.5, y: 0.44),
-                    startRadius: 0,
-                    endRadius: 110
-                )
-                LinearGradient(
-                    colors: [
-                        HomeCockpitPalette.screenAlt.opacity(0.00),
-                        HomeCockpitPalette.screenAlt.opacity(0.45),
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
+                if HomeCockpitPalette.finish.isGlossy {
+                    LinearGradient(
+                        stops: [
+                            .init(color: Color.white.opacity(0.08), location: 0),
+                            .init(color: Color.white.opacity(0.02), location: 0.45),
+                            .init(color: Color.black.opacity(0.24), location: 1),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    RadialGradient(
+                        colors: [HomeCockpitPalette.phosphor.opacity(0.22), .clear],
+                        center: UnitPoint(x: 0.5, y: 0.44),
+                        startRadius: 0,
+                        endRadius: 110
+                    )
+                    LinearGradient(
+                        colors: [
+                            HomeCockpitPalette.screenAlt.opacity(0.00),
+                            HomeCockpitPalette.screenAlt.opacity(0.45),
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                }
             }
         }
         .clipShape(shape)
@@ -1551,7 +1626,7 @@ private struct CockpitBay: View {
                 Text(readout)
                     .font(.system(size: 8, weight: .semibold, design: .monospaced))
                     .tracking(0.8) // 0.1em at 8pt
-                    .foregroundStyle(readoutHot ? HomeCockpitPalette.accent : HomeCockpitPalette.screenInkFaint)
+                    .foregroundStyle(readoutHot ? HomeCockpitPalette.phosphor : HomeCockpitPalette.screenInkFaint)
                     .accessibilityHidden(true)
             }
             .frame(height: HomeCockpitMetrics.bayLabelHeight)
@@ -1568,9 +1643,11 @@ private struct CockpitBay: View {
         .padding(HomeCockpitMetrics.bayPad)
         .frame(height: HomeCockpitMetrics.bayHeight)
         .frame(maxWidth: .infinity)
-        .background(Color.white.opacity(0.035))
+        // White-on-dark was safe while every plate was dark. Tinting with the
+        // plate's own ink instead keeps the well recessed either way.
+        .background(HomeCockpitPalette.screenInk.opacity(0.035))
         .clipShape(shape)
-        .overlay(shape.strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+        .overlay(shape.strokeBorder(HomeCockpitPalette.screenInk.opacity(0.08), lineWidth: 1))
     }
 
     private func toggle() {
@@ -1608,9 +1685,15 @@ private struct BaySelector: View {
             }
             .padding(1)
             .frame(height: HomeCockpitMetrics.bayLabelHeight)
+            // The track was two literal near-blacks, which was fine for as long
+            // as every theme's plates were dark. It draws `screenInk` and
+            // `phosphor` on itself, and those come from the panel family — so a
+            // theme with a light panel put dark ink on a black track and the
+            // unselected segment measured 1.04:1. Ink and plate now come from
+            // the same place and cannot disagree.
             .background(
                 LinearGradient(
-                    colors: [Color(hex: "050301"), Color(hex: "0B0704")],
+                    colors: [HomeCockpitPalette.screen, HomeCockpitPalette.screenAlt],
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -1618,7 +1701,7 @@ private struct BaySelector: View {
             .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .strokeBorder(HomeCockpitPalette.accent.opacity(0.22), lineWidth: 1)
+                    .strokeBorder(HomeCockpitPalette.phosphor.opacity(0.22), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -1633,16 +1716,29 @@ private struct BaySelector: View {
         Text(label)
             .font(.system(size: 8, weight: .bold, design: .monospaced))
             .tracking(0.96) // 0.12em at 8pt
-            .foregroundStyle(on ? HomeCockpitPalette.phosphor : HomeCockpitPalette.phosphor.opacity(0.5))
-            .shadow(color: on ? HomeCockpitPalette.accent.opacity(0.55) : .clear, radius: on ? 3 : 0)
+            // The unselected segment is still a live control, so it carries the
+            // plate's neutral ink at full strength — dimming the phosphor with
+            // alpha walks it into the near-black track (measured 2.1–3.5:1).
+            // Selected reads as *coloured*, not merely brighter.
+            .foregroundStyle(on ? HomeCockpitPalette.phosphor : HomeCockpitPalette.screenInk)
+            // Capped at 3 because that is all an 8pt glyph in a 28px chip can
+            // carry before the halo starts reading as the letter.
+            .shadow(
+                color: on ? HomeCockpitPalette.phosphor.opacity(0.55) : .clear,
+                radius: on ? min(HomeCockpitPalette.glowRadius, 3) : 0
+            )
             .padding(.horizontal, 7)
             .frame(maxHeight: .infinity)
-            .background(on ? HomeCockpitPalette.accent.opacity(0.16) : Color.clear)
+            // No wash under the lit segment. A phosphor tint behind phosphor ink
+            // walks the plate toward the word — at 0.16 it cost the selected
+            // segment ~2 points of contrast (scope/light measured 3.93:1 with it,
+            // 5.9:1 without) for an affordance the colour, the bezel and the halo
+            // already carry three times over.
             .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
             .overlay {
                 if on {
                     RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .strokeBorder(HomeCockpitPalette.accent.opacity(0.4), lineWidth: 0.5)
+                        .strokeBorder(HomeCockpitPalette.phosphor.opacity(0.55), lineWidth: 0.5)
                 }
             }
     }
@@ -1746,17 +1842,20 @@ private struct MeterLane: View {
     var body: some View {
         let pace = MeterLane.pace(todayLevel: todayLevel, avgLevel: avgLevel, standby: standby)
         HStack(spacing: 9) {
+            // Quiet on the plate is a token choice, never an alpha one: dimming
+            // the phosphor composites it toward the near-black plate (measured
+            // 2.0–3.5:1). The faint plate ink is authored to stay legible there.
             Text(caption)
                 .font(.system(size: 8, weight: .semibold, design: .monospaced))
                 .tracking(0.8) // 0.1em at 8pt
-                .foregroundStyle(HomeCockpitPalette.phosphor.opacity(0.5))
+                .foregroundStyle(HomeCockpitPalette.screenInkFaint)
                 .frame(width: 42, alignment: .leading)
 
             Text(readout)
                 .font(.system(size: 15, weight: .bold, design: .monospaced).monospacedDigit())
                 .tracking(0.3) // 0.02em at 15pt
-                .foregroundStyle(standby ? HomeCockpitPalette.phosphor.opacity(0.5) : HomeCockpitPalette.phosphor)
-                .shadow(color: standby ? .clear : HomeCockpitPalette.accent.opacity(0.55), radius: standby ? 0 : 4)
+                .foregroundStyle(standby ? HomeCockpitPalette.screenInk : HomeCockpitPalette.phosphor)
+                .shadow(color: standby ? .clear : HomeCockpitPalette.phosphor.opacity(0.55), radius: standby ? 0 : 4)
                 .lineLimit(1)
                 .frame(width: 44, alignment: .leading)
 
@@ -1766,7 +1865,7 @@ private struct MeterLane: View {
             Text(pace.text)
                 .font(.system(size: 8, weight: .semibold, design: .monospaced))
                 .tracking(0.48) // 0.06em at 8pt
-                .foregroundStyle(pace.hot ? HomeCockpitPalette.accent : HomeCockpitPalette.phosphor.opacity(0.5))
+                .foregroundStyle(pace.hot ? HomeCockpitPalette.phosphor : HomeCockpitPalette.screenInk)
                 .lineLimit(1)
                 .frame(width: 72, alignment: .trailing)
         }
@@ -1829,15 +1928,15 @@ private struct SegMeter: View {
 
     private func fill(lit: Bool, isAvg: Bool) -> Color {
         if standby { return .clear }
-        if isAvg && !lit { return HomeCockpitPalette.accent.opacity(0.5) }
-        if lit { return HomeCockpitPalette.accent }
+        if isAvg && !lit { return HomeCockpitPalette.phosphor.opacity(0.5) }
+        if lit { return HomeCockpitPalette.phosphor }
         return Color.white.opacity(0.12)
     }
 
     private func glow(i: Int, filled: Int, lit: Bool, isAvg: Bool) -> Color {
         if standby { return .clear }
-        if isAvg { return HomeCockpitPalette.accent.opacity(0.7) }
-        if lit && i == filled - 1 { return HomeCockpitPalette.accent.opacity(0.55) }
+        if isAvg { return HomeCockpitPalette.phosphor.opacity(0.7) }
+        if lit && i == filled - 1 { return HomeCockpitPalette.phosphor.opacity(0.55) }
         return .clear
     }
 }
@@ -1857,21 +1956,21 @@ private struct StrkLane: View {
             Text("STRK")
                 .font(.system(size: 8, weight: .semibold, design: .monospaced))
                 .tracking(0.8) // 0.1em at 8pt
-                .foregroundStyle(HomeCockpitPalette.phosphor.opacity(0.5))
+                .foregroundStyle(HomeCockpitPalette.screenInkFaint)
                 .frame(width: 42, alignment: .leading)
 
             HStack(alignment: .firstTextBaseline, spacing: 5) {
                 Text(standby ? "0" : "\(streak)")
                     .font(.system(size: 17, weight: .bold, design: .monospaced).monospacedDigit())
-                    .foregroundStyle(standby || streak > 0 ? HomeCockpitPalette.accent : HomeCockpitPalette.phosphor.opacity(0.5))
+                    .foregroundStyle(standby || streak > 0 ? HomeCockpitPalette.phosphor : HomeCockpitPalette.screenInk)
                     .shadow(
-                        color: (!standby && streak > 0) ? HomeCockpitPalette.accent.opacity(0.5) : .clear,
+                        color: (!standby && streak > 0) ? HomeCockpitPalette.phosphor.opacity(0.5) : .clear,
                         radius: (!standby && streak > 0) ? 3 : 0
                     )
                 Text(standby ? "DAY 1" : "DAY RUN")
                     .font(.system(size: 7, weight: .semibold, design: .monospaced))
                     .tracking(0.56) // 0.08em at 7pt
-                    .foregroundStyle(HomeCockpitPalette.phosphor.opacity(0.5))
+                    .foregroundStyle(HomeCockpitPalette.screenInkFaint)
             }
             .frame(width: 66, alignment: .leading)
 
@@ -1929,7 +2028,7 @@ private struct Dot: View {
 
     private var fill: Color {
         if standby { return .clear }
-        if isToday { return HomeCockpitPalette.accent }
+        if isToday { return HomeCockpitPalette.phosphor }
         if filled { return Color.white.opacity(0.9) }
         return .clear
     }
@@ -1937,7 +2036,7 @@ private struct Dot: View {
     @ViewBuilder
     private var stroke: some View {
         if standby && isToday {
-            Circle().strokeBorder(HomeCockpitPalette.accent, lineWidth: 1.5) // amber Today Seed
+            Circle().strokeBorder(HomeCockpitPalette.phosphor, lineWidth: 1.5) // amber Today Seed
         } else if standby {
             Circle().strokeBorder(Color.white.opacity(0.11), lineWidth: 1) // Ghost dot
         } else if !filled && !isToday {
@@ -1946,8 +2045,8 @@ private struct Dot: View {
     }
 
     private var glowColor: Color {
-        if standby && isToday { return HomeCockpitPalette.accent.opacity(0.7) }
-        if !standby && isToday { return HomeCockpitPalette.accent.opacity(0.8) }
+        if standby && isToday { return HomeCockpitPalette.phosphor.opacity(0.7) }
+        if !standby && isToday { return HomeCockpitPalette.phosphor.opacity(0.8) }
         return .clear
     }
 
@@ -1982,39 +2081,41 @@ private struct RollCell: View {
         if ghost && isToday {
             // The amber Today Seed — the "you are here" the streak grows from.
             RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .strokeBorder(HomeCockpitPalette.accent, lineWidth: 1.5)
+                .strokeBorder(HomeCockpitPalette.phosphor, lineWidth: 1.5)
         } else if ghost {
             // A Ghost Cell — a faint outline sketching the grid that will fill in.
             RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.11), lineWidth: 1)
+                .strokeBorder(HomeCockpitPalette.screenInk.opacity(0.11), lineWidth: 1)
         } else if isToday && intensity == 0 {
             // Today, no capture yet — an unlit amber ring marker.
             RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .strokeBorder(HomeCockpitPalette.accent, lineWidth: 1)
+                .strokeBorder(HomeCockpitPalette.phosphor, lineWidth: 1)
         }
     }
 
     private var fill: Color {
         if ghost { return .clear }  // ghost cells are outlined only
-        if isFuture { return Color.white.opacity(0.03) }
-        if isToday && intensity > 0 { return HomeCockpitPalette.accent }
+        if isFuture { return HomeCockpitPalette.screenInk.opacity(0.03) }
+        if isToday && intensity > 0 { return HomeCockpitPalette.phosphor }
         if isToday { return .clear }  // ring drawn in the overlay
-        if inRun { return HomeCockpitPalette.accent.opacity(0.7 + Double(intensity) * 0.1) }
+        if inRun { return HomeCockpitPalette.phosphor.opacity(0.7 + Double(intensity) * 0.1) }
         if intensity > 0 { return activeInk }
-        return Color.white.opacity(0.05)   // empty past day
+        return HomeCockpitPalette.screenInk.opacity(0.05)   // empty past day
     }
 
+    // Cell ink is the plate's own ink, not a literal white — a light plate
+    // needs dark cells for the same reason a dark one needs light ones.
     private var activeInk: Color {
-        if intensity >= 3 { return Color.white.opacity(0.85) }
-        if intensity == 2 { return Color.white.opacity(0.55) }
-        return Color.white.opacity(0.30)
+        if intensity >= 3 { return HomeCockpitPalette.screenInk.opacity(0.85) }
+        if intensity == 2 { return HomeCockpitPalette.screenInk.opacity(0.55) }
+        return HomeCockpitPalette.screenInk.opacity(0.30)
     }
 
     private var glowColor: Color {
-        if ghost && isToday { return HomeCockpitPalette.accent.opacity(0.7) }
+        if ghost && isToday { return HomeCockpitPalette.phosphor.opacity(0.7) }
         if ghost { return .clear }
-        if isToday && intensity > 0 { return HomeCockpitPalette.accent.opacity(0.85) }
-        if inRun { return HomeCockpitPalette.accent.opacity(0.4) }
+        if isToday && intensity > 0 { return HomeCockpitPalette.phosphor.opacity(0.85) }
+        if inRun { return HomeCockpitPalette.phosphor.opacity(0.4) }
         return .clear
     }
 

@@ -170,12 +170,22 @@ class DeepLinkManager: ObservableObject {
             AppLogger.app.info("Deep link: open settings")
             pendingAction = .openSettings
 
+        case "deck":
+            AppLogger.app.info("Deep link: open deck")
+            Task { @MainActor in
+                AppShellRouter.shared.openDeck()
+            }
+
         case "theme":
             if let key = components?.queryItems?.first(where: { $0.name == "key" })?.value,
                let theme = AppTheme(rawValue: key) {
-                AppLogger.app.info("Deep link: apply theme \(key)")
+                // `mode` is optional: omit it to change palette without disturbing
+                // the light/dark preference the person already chose.
+                let mode = components?.queryItems?.first(where: { $0.name == "mode" })?.value
+                    .flatMap(AppearanceMode.init(rawValue:))
+                AppLogger.app.info("Deep link: apply theme \(key) mode \(mode?.rawValue ?? "unchanged")")
                 Task { @MainActor in
-                    ThemeManager.shared.apply(theme: theme)
+                    ThemeManager.shared.apply(theme: theme, appearanceMode: mode)
                 }
             } else {
                 AppLogger.app.warning("Deep link: theme missing or invalid key")

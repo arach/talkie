@@ -49,7 +49,11 @@ struct CodexCommandDeckSurface: View {
                 onShowMapper: openMapper,
                 onCreateNewTask: openNewTask
             )
-                .frame(height: 316)
+                // Grows into whatever the keybed leaves behind — see
+                // `consoleMinHeight`. Held at a hard 316 this left a band of
+                // dead page under the last key row on anything taller than an
+                // SE, because nothing else in the stack was flexible either.
+                .frame(minHeight: consoleMinHeight, maxHeight: .infinity)
                 .animation(
                     .spring(response: 0.32, dampingFraction: 0.74),
                     value: store.selectedTask?.id
@@ -65,6 +69,7 @@ struct CodexCommandDeckSurface: View {
         .padding(.top, 0)
         .padding(.bottom, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .environment(\.deckFinish, deckFinish)
         .overlay(alignment: .bottom) {
             if voicePlayback.isVoicePlaybackActive {
                 voicePlaybackRail
@@ -124,14 +129,14 @@ struct CodexCommandDeckSurface: View {
             VStack(spacing: 3) {
                 HStack(spacing: 6) {
                     Text("VOICE")
-                        .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                        .tracking(1.0)
+                        .deckFont(8, .semibold)
+                        .deckTracking(1.0)
                         .foregroundStyle(utilityInkFaint)
 
                     Spacer(minLength: 0)
 
                     Text(playbackTimeReadout)
-                        .font(.system(size: 8, weight: .medium, design: .monospaced))
+                        .deckFont(8, .medium)
                         .monospacedDigit()
                         .foregroundStyle(utilityInkFaint)
                 }
@@ -141,7 +146,7 @@ struct CodexCommandDeckSurface: View {
                     progress: voicePlayback.voicePlaybackProgress,
                     isPlaying: voicePlayback.voicePlaybackState == .playing,
                     accent: theme.chrome.accent,
-                    inactive: utilityInkFaint.opacity(0.22),
+                    inactive: deckFinish.tint(utilityInkFaint, 0.22, over: theme.chrome.panel),
                     onSeek: voicePlayback.seekVoicePlayback,
                     onSkip: skipVoicePlayback
                 )
@@ -152,8 +157,8 @@ struct CodexCommandDeckSurface: View {
                     Image(systemName: "text.alignleft")
                         .font(.system(size: 11, weight: .semibold))
                     Text("TEXT")
-                        .font(.system(size: 7, weight: .bold, design: .monospaced))
-                        .tracking(0.7)
+                        .deckFont(7, .bold)
+                        .deckTracking(0.7)
                 }
                 .frame(width: 44, height: 44)
                 .contentShape(.rect)
@@ -181,9 +186,9 @@ struct CodexCommandDeckSurface: View {
                 .fill(theme.chrome.panel.opacity(colorScheme == .dark ? 0.96 : 0.98))
                 .overlay {
                     RoundedRectangle(cornerRadius: 11, style: .continuous)
-                        .strokeBorder(utilityInkFaint.opacity(0.16), lineWidth: theme.chrome.hairlineWidth)
+                        .strokeBorder(deckFinish.tint(utilityInkFaint, 0.16, over: theme.chrome.panel), lineWidth: theme.chrome.hairlineWidth)
                 }
-                .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.28 : 0.12), radius: 8, y: 3)
+                .shadow(color: Color.black.opacity((colorScheme == .dark ? 0.28 : 0.12) * deckFinish.lift), radius: 8, y: 3)
         }
         .padding(.horizontal, 12)
         .accessibilityElement(children: .contain)
@@ -302,20 +307,81 @@ struct CodexCommandDeckSurface: View {
     }
 
     /// Carbon: terminal monochrome — keys communicate via index + SF Symbol.
+    ///
+    /// Strictly about *captions*. Whether the surface is moulded or printed is
+    /// `deckFinish`, which used to ride along on this flag because Carbon was
+    /// the only theme that wanted both.
     private var isIconMinimalDeck: Bool {
         theme.currentTheme == .carbon
     }
+
+    /// Gloss, lift and letterform. See `DeckFinish`.
+    private var deckFinish: DeckFinish { theme.currentTheme.finish }
 
     private var keyCornerRadius: CGFloat {
         switch theme.currentTheme {
         case .carbon: return 4
         case .tactical: return 3
-        case .graphite, .midnight: return 10
+        case .graphite, .midnight, .ember: return 10
+        // Matte's caps are cards, and a card has a corner you can name.
+        case .matte: return 6
+        // Press cuts tighter still — a letterpress corner is a knife edge.
+        case .press: return 4
         default: return 14
         }
     }
 
     private var keybedRowHeight: CGFloat { 65 }
+
+    // MARK: - Shared key metrics
+    //
+    // One keypad, one metric. Every key on this bed is the same object — a
+    // keycap with a glyph and an engraved legend — so the legend is a constant,
+    // not a channel. State belongs to ink and fill; size never carries meaning
+    // here, because a grid whose type sizes wander reads as unstable and makes
+    // the eye hunt for a rule that doesn't exist.
+    //
+    // It didn't before. Four builders each picked their own caption size (9 /
+    // 8 / 7.5 / 7.5) and tracking (1.1 / 0.8 / 0.7 / 0.7), and `actionKey`'s
+    // 0.65 scale floor was actually engaging — so the keys declaring the
+    // *largest* type rendered the *smallest*. MAPPER shipped at roughly 6.3pt
+    // against OUTPUT's 7.5. The hierarchy was inverted at render time, which is
+    // why the sizing read as arbitrary: it was.
+
+    /// Height of the engraved legend's line box.
+    ///
+    /// Fixed, so the caption is a rail every key shares rather than the last
+    /// item in each key's own stack. Stacked, a 36pt instrument pushed its
+    /// caption ~6pt below the caption of a key holding a 25pt icon, and the
+    /// legends across one row never sat on a common baseline.
+    private var keyCaptionHeight: CGFloat { 11 }
+
+    /// Space above the legend that a key's glyph or instrument gets to occupy.
+    /// `keybedRowHeight` less the row's own 2pt inset, the legend rail, and the
+    /// padding on either side of it.
+    private var keyContentBandHeight: CGFloat { 37 }
+
+    private var keyTopPadding: CGFloat { 6 }
+    private var keyBottomPadding: CGFloat { 7 }
+
+    /// The engraved legend. Every caption on the keybed goes through here.
+    private func keyCaption(_ text: String) -> some View {
+        Text(text)
+            .deckFont(8.5, .semibold)
+            .deckTracking(1.0)
+            .lineLimit(1)
+            .minimumScaleFactor(0.85)
+            .frame(height: keyCaptionHeight)
+    }
+
+    /// The console's floor, not its ceiling.
+    ///
+    /// The keybed's four rows are a fixed `keybedRowHeight` each — a keypad
+    /// whose keys stretch with the screen stops reading as a keypad. That
+    /// makes the console the only part of the surface that can absorb a tall
+    /// phone's extra height, so it takes everything the keybed doesn't and the
+    /// keys settle at the bottom, in thumb reach.
+    private var consoleMinHeight: CGFloat { 316 }
 
     private var deckFailureColor: Color {
         Color(red: 0.92, green: 0.42, blue: 0.30)
@@ -344,26 +410,22 @@ struct CodexCommandDeckSurface: View {
                         .padding(.horizontal, 4)
                         .padding(.vertical, 6)
                     } else {
-                        VStack(spacing: 6) {
-                            Spacer(minLength: 0)
-                            ZStack {
-                                Circle()
-                                    .fill(utilityInk.opacity(isEnabled ? 0.055 : 0.04))
-                                Circle()
-                                    .stroke(utilityInk.opacity(isEnabled ? 0.14 : 0.10), lineWidth: 0.6)
-                                Image(systemName: icon)
-                                    .font(.system(size: 12, weight: .medium))
-                            }
-                            .frame(width: 25, height: 25)
-                            Text(label.uppercased())
-                                .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                                .tracking(1.1)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.65)
-                            Spacer(minLength: 0)
+                        VStack(spacing: 0) {
+                            // No ring around the glyph. A circle filled at 0.055
+                            // and stroked at 0.14 / 0.6pt isn't a container, it's
+                            // a smudge — and it nested a second rounded shape
+                            // inside a keycap that is already a rounded shape,
+                            // sixteen times over. The keycap is the container;
+                            // the symbol just gets big enough to carry the key.
+                            Image(systemName: icon)
+                                .font(.system(size: 15, weight: .medium))
+                                .frame(height: keyContentBandHeight)
+
+                            keyCaption(label.uppercased())
                         }
                         .padding(.horizontal, 5)
-                        .padding(.vertical, 8)
+                        .padding(.top, keyTopPadding)
+                        .padding(.bottom, keyBottomPadding)
                     }
                 }
                 .foregroundStyle(
@@ -389,52 +451,26 @@ struct CodexCommandDeckSurface: View {
             talkKeySurface
                 .allowsHitTesting(false)
 
-            Button(action: {}) {
-                Group {
-                    if isIconMinimalDeck {
-                        VStack(spacing: 3) {
-                            Spacer(minLength: 0)
-                            Image(systemName: captureIcon)
-                                .font(.system(size: 16, weight: .semibold))
-                            Text(captureTitle)
-                                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                .tracking(0.8)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.6)
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 6)
-                    } else {
-                        VStack(spacing: 0) {
-                            Spacer(minLength: 0)
-
-                            HStack(spacing: 7) {
-                                Image(systemName: captureIcon)
-                                    .font(.system(size: 12, weight: .semibold))
-                                Text(captureTitle)
-                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                    .tracking(1.2)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.72)
-                            }
-
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 8)
-                    }
-                }
-                .foregroundStyle(
-                    store.hasDispatchDestination
-                        ? captureAccent
-                        : disabledControlInk
-                )
+            // The lettering sits outside the Button on purpose. `.disabled` makes
+            // the plain style fade its own label by about half, and half of any
+            // ink over this cap lands near 3:1 on a light page — no token can
+            // buy that back, because the ink is already at full page strength.
+            // Drawing the word as a sibling layer keeps the disabled *state*
+            // intact — the button below still refuses taps and still announces
+            // itself dimmed — while the word stays a word. Unavailability shows
+            // up in the key, which goes unlit; see `talkKeySurface`.
+            captureKeyLabel
+                .foregroundStyle(utilityInk)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .offset(x: captureContentOffset)
-                .contentShape(RoundedRectangle(cornerRadius: keyCornerRadius, style: .continuous))
                 .overlay(alignment: .topLeading) { keyIndexLabel(index: 14) }
                 .overlay(alignment: .topTrailing) { trailingKeyIndexLabel(index: 15) }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+
+            Button(action: {}) {
+                Color.clear
+                    .contentShape(RoundedRectangle(cornerRadius: keyCornerRadius, style: .continuous))
             }
             .buttonStyle(.plain)
             .highPriorityGesture(captureGesture)
@@ -447,6 +483,53 @@ struct CodexCommandDeckSurface: View {
         .animation(.easeOut(duration: 0.10), value: isCaptureGestureActive)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .frame(minWidth: 44, minHeight: 44)
+    }
+
+    @ViewBuilder
+    private var captureKeyLabel: some View {
+        Group {
+                    if isIconMinimalDeck {
+                        VStack(spacing: 3) {
+                            Spacer(minLength: 0)
+                            Image(systemName: captureIcon)
+                                .font(.system(size: 16, weight: .semibold))
+                            Text(captureTitle)
+                                .deckFont(8, .bold)
+                                .deckTracking(0.8)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.6)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 6)
+                    } else {
+                        VStack(spacing: 0) {
+                            Spacer(minLength: 0)
+
+                            // TALK is the one key allowed to break the metric:
+                            // it is the only one that spans two columns and the
+                            // only one that is a verb. So it stays a horizontal
+                            // lockup one step up in size — a deliberate
+                            // exception, not more drift. Its glyph matches the
+                            // 15pt every other key now uses, and its scale floor
+                            // comes up to the shared 0.85 so it can't quietly
+                            // shrink to 7.2pt on "PROCESSING".
+                            HStack(spacing: 7) {
+                                Image(systemName: captureIcon)
+                                    .font(.system(size: 15, weight: .semibold))
+                                Text(captureTitle)
+                                    .deckFont(10, .bold)
+                                    .deckTracking(1.2)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.85)
+                            }
+
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 8)
+                    }
+        }
     }
 
     private var canCapture: Bool {
@@ -582,15 +665,15 @@ struct CodexCommandDeckSurface: View {
 
     private func audioKey(index: Int) -> some View {
         Button(action: cycleOutputRoute) {
-            VStack(spacing: 1) {
+            VStack(spacing: 0) {
                 outputRouteSelectorPlate
-                    .frame(height: 44, alignment: .bottom)
+                    .frame(height: keyContentBandHeight)
 
-                Text("OUTPUT")
-                    .font(.system(size: 7.5, weight: .semibold, design: .monospaced))
-                    .tracking(0.7)
+                keyCaption("OUTPUT")
                     .foregroundStyle(utilityInk)
             }
+                .padding(.top, keyTopPadding)
+                .padding(.bottom, keyBottomPadding)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .contentShape(RoundedRectangle(cornerRadius: keyCornerRadius, style: .continuous))
                 .background(keycapSurface(active: false, isEmpty: false))
@@ -606,15 +689,15 @@ struct CodexCommandDeckSurface: View {
 
     private func statusReadoutKey(index: Int) -> some View {
         Button(action: { showingTaskDetails = true }) {
-            VStack(spacing: 1) {
+            VStack(spacing: 0) {
                 statusInstrument
-                    .frame(height: 44, alignment: .bottom)
+                    .frame(height: keyContentBandHeight)
 
-                Text("DETAILS ›")
-                    .font(.system(size: 7.5, weight: .semibold, design: .monospaced))
-                    .tracking(0.7)
+                keyCaption("DETAILS ›")
                     .foregroundStyle(utilityInk)
             }
+                .padding(.top, keyTopPadding)
+                .padding(.bottom, keyBottomPadding)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .contentShape(RoundedRectangle(cornerRadius: keyCornerRadius, style: .continuous))
                 .background(keycapSurface(active: false, isEmpty: false))
@@ -627,16 +710,45 @@ struct CodexCommandDeckSurface: View {
         .frame(minWidth: 44, minHeight: 44)
     }
 
+    /// One line: the route that is actually selected.
+    ///
+    /// This was a permanently-displayed three-position menu — SILENT / WATCH /
+    /// IPHONE stacked — which is a settings panel wearing a keycap costume. It
+    /// needed 36pt of height in a 65pt row, so it sat on top of the key's own
+    /// index numeral and pushed its legend below every other legend in the row.
+    /// The key's job is to answer "where does audio go," and the answer is one
+    /// word; the other two routes only matter in the instant you tap, and the
+    /// tap reveals them by changing this. Cycling stays discoverable through the
+    /// accessibility hint and the fact that the plate visibly changes.
     private var outputRouteSelectorPlate: some View {
-        VStack(spacing: 0) {
-            ForEach(outputRouteOrder, id: \.rawValue) { route in
-                outputRoutePosition(route)
-            }
+        let isSilent = outputRoute == .silent
+        return HStack(spacing: 4) {
+            Circle()
+                .fill(isSilent ? .clear : theme.chrome.panelAccent)
+                .overlay {
+                    Circle()
+                        .strokeBorder(
+                            isSilent ? theme.chrome.panelInkFaint : theme.chrome.panelAccent,
+                            lineWidth: 0.7
+                        )
+                }
+                .frame(width: 4, height: 4)
+                .shadow(
+                    color: isSilent ? .clear : theme.chrome.accentGlow.opacity(0.40 * deckFinish.lift),
+                    radius: 1.5
+                )
+
+            Text(outputRoute.displayName.uppercased())
+                .deckFont(9, .bold)
+                .deckTracking(0.4)
+                .foregroundStyle(isSilent ? theme.chrome.panelInkFaint : theme.chrome.panelAccent)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .contentTransition(.opacity)
         }
-        .padding(.vertical, 2)
-        .padding(.horizontal, 4)
-        .frame(width: 56, height: 36)
-        .background(deckLEDPlateSurface(signalColor: theme.chrome.accent, isSignaled: true))
+        .padding(.horizontal, 6)
+        .frame(width: 54, height: 24)
+        .background(deckLEDPlateSurface(signalColor: theme.chrome.panelAccent, isSignaled: !isSilent))
         .animation(
             reduceMotion ? nil : .easeOut(duration: 0.15),
             value: outputRoute.rawValue
@@ -644,75 +756,35 @@ struct CodexCommandDeckSurface: View {
         .accessibilityHidden(true)
     }
 
-    private func outputRoutePosition(_ route: AIResponseSpeechRoute) -> some View {
-        let isActive = route == outputRoute
-        return HStack(spacing: 4) {
-            Circle()
-                .fill(isActive ? theme.chrome.accent : .clear)
-                .overlay {
-                    Circle()
-                        .strokeBorder(
-                            isActive ? theme.chrome.accent : utilityInkFaint.opacity(0.42),
-                            lineWidth: 0.7
-                        )
-                }
-                .frame(width: isActive ? 4 : 3.5, height: isActive ? 4 : 3.5)
-                .shadow(
-                    color: isActive ? theme.chrome.accentGlow.opacity(0.40) : .clear,
-                    radius: 1.5
-                )
-
-            Text(route.displayName.uppercased())
-                .font(.system(size: 7, weight: isActive ? .bold : .medium, design: .monospaced))
-                .tracking(0.25)
-                .foregroundStyle(isActive ? theme.chrome.accent : utilityInkFaint.opacity(0.58))
-                .lineLimit(1)
-
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 3)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background {
-            RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-                .fill(isActive ? theme.chrome.accent.opacity(0.10) : .clear)
-        }
-    }
-
-    private var outputRouteOrder: [AIResponseSpeechRoute] {
-        [.silent, .watch, .phone]
-    }
-
+    /// Lamp, then state — the same reading order as `outputRouteSelectorPlate`,
+    /// because these two are a matched pair sitting in the same row.
+    ///
+    /// The second line is gone. It printed `deckStatusLabel` at 6.5pt with a
+    /// 0.65 scale floor — roughly 4pt, below the size at which type is type —
+    /// directly under `statusInstrumentLabel`, which is nothing but an
+    /// abbreviation *of that same string*. It was the same word twice, one copy
+    /// unreadable. Present-but-illegible type is a large part of why this deck
+    /// felt off: the eye registers something it can never resolve.
     private var statusInstrument: some View {
-        HStack(spacing: 6) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(statusInstrumentLabel)
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .tracking(0.8)
-                    .foregroundStyle(statusInstrumentSignalColor)
-                    .lineLimit(1)
-                    .contentTransition(.opacity)
-
-                Text(deckStatusLabel)
-                    .font(.system(size: 6.5, weight: .medium, design: .monospaced))
-                    .tracking(0.15)
-                    .foregroundStyle(utilityInkFaint.opacity(0.66))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.65)
-                    .contentTransition(.opacity)
-            }
-
-            Spacer(minLength: 0)
-
+        HStack(spacing: 4) {
             Circle()
                 .fill(statusInstrumentSignalColor)
-                .frame(width: 4.5, height: 4.5)
+                .frame(width: 4, height: 4)
                 .shadow(
-                    color: statusInstrumentSignalColor.opacity(deckMeterIsActive ? 0.38 : 0.12),
+                    color: statusInstrumentSignalColor.opacity((deckMeterIsActive ? 0.38 : 0.12) * deckFinish.lift),
                     radius: deckMeterIsActive ? 2 : 1
                 )
+
+            Text(statusInstrumentLabel)
+                .deckFont(9, .bold)
+                .deckTracking(0.4)
+                .foregroundStyle(statusInstrumentSignalColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .contentTransition(.opacity)
         }
-        .padding(.horizontal, 7)
-        .frame(width: 56, height: 36)
+        .padding(.horizontal, 6)
+        .frame(width: 54, height: 24)
         .background(
             deckLEDPlateSurface(
                 signalColor: statusInstrumentSignalColor,
@@ -729,7 +801,9 @@ struct CodexCommandDeckSurface: View {
     private var statusInstrumentLabel: String {
         switch deckStatusLabel {
         case "READY": return "RDY"
-        case "NO TASK": return "—"
+        // Was "—", which only worked because "NO TASK" was spelled out on the
+        // second line. That line is gone, so this has to say something.
+        case "NO TASK": return "NONE"
         case "QUEUED": return "QUE"
         case "RECEIVED", "RESPONSE", "VOICE INBOUND", "SPEAKING": return "RX"
         case "ERROR": return "ERR"
@@ -737,35 +811,63 @@ struct CodexCommandDeckSurface: View {
         }
     }
 
+    /// Three ink tiers, no alpha.
+    ///
+    /// These plates are dark in every theme, so fading ink with `.opacity()`
+    /// walks it *toward* the plate and destroys the contrast — "quieter" was
+    /// being spelled in the one way that also means "unreadable." NONE and RDY
+    /// were landing at 1.6:1 and 1.9:1 against their own plate.
+    ///
+    /// So quiet is carried by *which* ink, not by how faded it is, and all
+    /// three tiers are panel-space tokens tuned for this surface rather than
+    /// page-space `accent`/`textTertiary`:
+    ///
+    ///   nothing loaded → `panelInkFaint`  (dim, still legible)
+    ///   standing by    → `panelInk`       (neutral: on, not working)
+    ///   working        → `panelAccent`    (colored: something is happening)
+    ///
+    /// Colour now means activity, which is what the lamp beside it already
+    /// meant — the two finally agree.
     private var statusInstrumentSignalColor: Color {
         if deckMeterIsFailure {
             return deckFailureColor
         }
         if deckStatusLabel == "NO TASK" {
-            return theme.chrome.panelInkFaint.opacity(0.42)
+            return theme.chrome.panelInkFaint
         }
         if deckStatusLabel == "READY" {
-            return theme.chrome.accent.opacity(0.62)
+            return theme.chrome.panelInk
         }
-        return theme.chrome.accent
+        return theme.chrome.panelAccent
     }
 
     private func deckLEDPlateSurface(signalColor: Color, isSignaled: Bool) -> some View {
         let shape = RoundedRectangle(cornerRadius: 5, style: .continuous)
         return shape
             .fill(
+                // Flat wants one colour under the word. A two-stop wash is a
+                // second thing for the eye to resolve behind 7pt type.
                 LinearGradient(
-                    colors: [theme.chrome.panelAlt, theme.chrome.panel],
+                    colors: deckFinish.isGlossy
+                        ? [theme.chrome.panelAlt, theme.chrome.panel]
+                        : [theme.chrome.panel, theme.chrome.panel],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
             )
             .overlay {
-                if !isIconMinimalDeck {
+                if deckFinish.isGlossy {
+                    // One sheen for both modes. The plate is a dark panel on a
+                    // light page and a dark panel on a dark page — the same
+                    // surface either way — so a sheen four times stronger in
+                    // light mode was washing it out and taking about a fifth of
+                    // every label's contrast with it: NONE declares 5.68:1 on
+                    // ghost and arrived at 4.5. Same class of bug as the plate
+                    // ink that branched on colorScheme.
                     shape
                         .fill(
                             LinearGradient(
-                                colors: [Color.white.opacity(colorScheme == .dark ? 0.035 : 0.16), .clear],
+                                colors: [Color.white.opacity(0.035), .clear],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -780,12 +882,12 @@ struct CodexCommandDeckSurface: View {
             }
             .compositingGroup()
             .shadow(
-                color: isIconMinimalDeck ? .clear : Color.black.opacity(colorScheme == .dark ? 0.28 : 0.10),
+                color: Color.black.opacity((colorScheme == .dark ? 0.28 : 0.10) * deckFinish.lift),
                 radius: 2,
                 y: 1
             )
             .shadow(
-                color: isSignaled ? signalColor.opacity(0.06) : .clear,
+                color: isSignaled ? signalColor.opacity(0.06 * deckFinish.lift) : .clear,
                 radius: 2,
                 y: 1
             )
@@ -816,26 +918,16 @@ struct CodexCommandDeckSurface: View {
                             .padding(.horizontal, 4)
                             .padding(.vertical, 6)
                     } else {
-                        VStack(spacing: 5) {
-                            Spacer(minLength: 0)
-                            ZStack {
-                                Circle()
-                                    .fill(utilityInk.opacity(isEnabled ? 0.055 : 0.04))
-                                Circle()
-                                    .stroke(utilityInk.opacity(isEnabled ? 0.14 : 0.10), lineWidth: 0.6)
-                                Image(systemName: direction < 0 ? "chevron.left" : "chevron.right")
-                                    .font(.system(size: 11, weight: .semibold))
-                            }
-                            .frame(width: 23, height: 23)
+                        VStack(spacing: 0) {
+                            Image(systemName: direction < 0 ? "chevron.left" : "chevron.right")
+                                .font(.system(size: 15, weight: .semibold))
+                                .frame(height: keyContentBandHeight)
 
-                            Text(number.map { "LANE \($0 < 10 ? "0\($0)" : "\($0)")" } ?? "LANE")
-                                .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                                .tracking(0.8)
-                                .lineLimit(1)
-                            Spacer(minLength: 0)
+                            keyCaption(number.map { "LANE \($0 < 10 ? "0\($0)" : "\($0)")" } ?? "LANE")
                         }
                         .padding(.horizontal, 4)
-                        .padding(.vertical, 6)
+                        .padding(.top, keyTopPadding)
+                        .padding(.bottom, keyBottomPadding)
                     }
                 }
                 .foregroundStyle(isEnabled ? utilityInk : disabledControlInk)
@@ -860,12 +952,22 @@ struct CodexCommandDeckSurface: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    /// Lit when TALK can be pressed, plain when it can't. The accent tint is a
+    /// translucent wash over the deck, so on a pale theme it lifts the face out
+    /// from under the lettering and no ink survives at 4.5:1 — ghost read 3.68.
+    /// Unlighting the key fixes that by removing the wash rather than fighting
+    /// it, and it is the better signal besides: the deck's largest key stays
+    /// dark until you give it somewhere to send a turn, then it comes on.
     private var talkKeySurface: some View {
         let shape = RoundedRectangle(cornerRadius: keyCornerRadius, style: .continuous)
         return shape
-            .fill(captureAccent.opacity(store.phase.isCapturing ? 0.30 : 0.17))
+            .fill(
+                canCapture
+                    ? AnyShapeStyle(captureAccent.opacity(store.phase.isCapturing ? 0.30 : 0.17))
+                    : AnyShapeStyle(utilityFace)
+            )
             .overlay {
-                if !isIconMinimalDeck {
+                if deckFinish.isGlossy {
                     shape.fill(
                         LinearGradient(
                             colors: [Color.white.opacity(0.10), .clear, Color.black.opacity(0.10)],
@@ -877,14 +979,16 @@ struct CodexCommandDeckSurface: View {
             }
             .overlay {
                 shape.strokeBorder(
-                    captureAccent.opacity(store.phase.isCapturing ? 0.92 : 0.55),
+                    canCapture
+                        ? captureAccent.opacity(store.phase.isCapturing ? 0.92 : 0.55)
+                        : deckFinish.tint(utilityInkFaint, 0.16, over: theme.chrome.panel),
                     lineWidth: store.phase.isCapturing ? 1.5 : theme.chrome.hairlineWidth + 0.5
                 )
             }
             .shadow(
-                color: Color.black.opacity(isIconMinimalDeck ? 0.16 : 0.28),
-                radius: isIconMinimalDeck ? 3 : 7,
-                y: isIconMinimalDeck ? 2 : 4
+                color: Color.black.opacity(0.28 * deckFinish.lift),
+                radius: 7,
+                y: 4
             )
     }
 
@@ -898,7 +1002,7 @@ struct CodexCommandDeckSurface: View {
                     : (isEmpty ? emptyKeyFace : utilityFace)
             )
             .overlay {
-                if !isEmpty && !isIconMinimalDeck {
+                if !isEmpty && deckFinish.isGlossy {
                     shape.fill(
                         LinearGradient(
                             colors: [Color.white.opacity(colorScheme == .dark ? 0.07 : 0.26), .clear, Color.black.opacity(0.035)],
@@ -912,40 +1016,54 @@ struct CodexCommandDeckSurface: View {
                 if active {
                     shape.strokeBorder(theme.chrome.accent.opacity(0.72), lineWidth: 1)
                 } else {
+                    // 0.10 was a rumour of an edge. With the page now carrying
+                    // tone, the cap has a real value step to sit on and the
+                    // border's job is to terminate it, not to invent it.
                     shape.strokeBorder(
-                        isEmpty ? theme.chrome.edgeFaint : utilityInkFaint.opacity(isIconMinimalDeck ? 0.16 : 0.10),
+                        isEmpty ? theme.chrome.edgeFaint : utilityInkFaint.opacity(deckFinish.isGlossy ? 0.15 : 0.16),
                         lineWidth: theme.chrome.hairlineWidth
                     )
                 }
             }
             .compositingGroup()
             .shadow(
-                color: isEmpty || isIconMinimalDeck ? .clear : raisedShadow,
+                color: isEmpty ? .clear : raisedShadow.opacity(deckFinish.lift),
                 radius: isEmpty ? 0 : 5,
                 y: isEmpty ? 0 : 3
             )
             .shadow(
-                color: isEmpty || isIconMinimalDeck ? .clear : Color.black.opacity(0.10),
+                color: isEmpty ? .clear : Color.black.opacity(0.10 * deckFinish.lift),
                 radius: isEmpty ? 0 : 1,
                 y: isEmpty ? 0 : 1
             )
     }
 
+    /// Tucked tighter into the corner than it was, so the instrument plates on
+    /// keys 01 and 04 clear it instead of sitting on top of it.
+    ///
+    /// Full-strength `utilityInkFaint`, not a fade of it. At 8.5pt this is
+    /// already the smallest type on the deck; the extra 0.56 alpha put it below
+    /// 4.5:1 in every theme, in both modes. These numerals are how you name a
+    /// key — they have to survive being read.
     private func keyIndexLabel(index: Int) -> some View {
         Text(index < 10 ? "0\(index)" : "\(index)")
-            .font(.system(size: 9, weight: .medium, design: .monospaced))
-            .foregroundStyle(utilityInkFaint.opacity(0.56))
-            .padding(.top, 7)
-            .padding(.leading, 8)
+            .deckFont(8.5, .medium)
+            .foregroundStyle(utilityInkFaint)
+            .padding(.top, 5)
+            .padding(.leading, 6)
             .allowsHitTesting(false)
     }
 
+    /// TALK spans two cells and the console copy names it that way — "hold the
+    /// 14–15 key". The second numeral is half of that name, so it reads at the
+    /// same strength as the first; at 0.56 alpha it was a smudge you'd never
+    /// match to the instruction.
     private func trailingKeyIndexLabel(index: Int) -> some View {
         Text("\(index)")
-            .font(.system(size: 9, weight: .medium, design: .monospaced))
-            .foregroundStyle(utilityInkFaint.opacity(0.56))
-            .padding(.top, 7)
-            .padding(.trailing, 8)
+            .deckFont(8.5, .medium)
+            .foregroundStyle(utilityInkFaint)
+            .padding(.top, 5)
+            .padding(.trailing, 6)
             .allowsHitTesting(false)
     }
 
@@ -975,9 +1093,17 @@ struct CodexCommandDeckSurface: View {
         theme.colors.textTertiary
     }
 
+    /// Full page ink, not a fade of it. A disabled button already comes back
+    /// dimmed — the plain style fades its own label — so the 0.68 here was a
+    /// second multiply on top of the first, and the two together put TALK at
+    /// 2.0:1 in every theme. The deck's first-run state is exactly this state:
+    /// nothing mapped, everything unavailable, and the largest key on the board
+    /// unreadable. WCAG exempts an inactive control, but a control you cannot
+    /// read cannot tell you what it would do once you map a lane.
     private var disabledControlInk: Color {
-        utilityInk.opacity(0.68)
+        utilityInk
     }
+
 
     private func cycleOutputRoute() {
         let next: AIResponseSpeechRoute
@@ -1107,7 +1233,7 @@ private struct VoicePlaybackWaveform: View {
 
                     if let skipFeedback {
                         Text(skipFeedback > 0 ? "+15" : "−15")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .deckFont(9, .bold)
                             .foregroundStyle(accent)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
@@ -1194,6 +1320,8 @@ private struct CodexCommandConsole: View {
     @State private var bridge = BridgeManager.shared
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.colorScheme) private var colorScheme
+    // Set once at the deck root; the console reads it for its lane keys.
+    @Environment(\.deckFinish) private var deckFinish
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -1219,12 +1347,13 @@ private struct CodexCommandConsole: View {
                 }
 
                 if number != CodexLane.range.upperBound {
+                    // Was a hand-rolled ink alpha with its own light/dark
+                    // ternary — which is exactly what `edge` is for. Going
+                    // through the token means the rule between two lanes gets
+                    // heavier on a flat theme along with every other rule,
+                    // instead of staying at whatever number was typed here.
                     Rectangle()
-                        .fill(
-                            theme.chrome.panelInk.opacity(
-                                colorScheme == .dark ? 0.09 : 0.20
-                            )
-                        )
+                        .fill(theme.chrome.edge)
                         .frame(width: theme.chrome.hairlineWidth, height: 14)
                 }
             }
@@ -1233,7 +1362,7 @@ private struct CodexCommandConsole: View {
         .padding(.horizontal, 2)
         .background(
             RoundedRectangle(cornerRadius: max(6, theme.chrome.chromeCorner + 2), style: .continuous)
-                .fill(theme.chrome.panel.opacity(colorScheme == .dark ? 0.78 : 0.94))
+                .fill(deckFinish.tint(theme.chrome.panel, colorScheme == .dark ? 0.78 : 0.94, over: theme.chrome.panelAlt))
         )
         .overlay {
             RoundedRectangle(cornerRadius: max(6, theme.chrome.chromeCorner + 2), style: .continuous)
@@ -1263,8 +1392,8 @@ private struct CodexCommandConsole: View {
                         .font(.system(size: 8, weight: .semibold))
 
                     Text("TEMP")
-                        .font(.system(size: 5.5, weight: .bold, design: .monospaced))
-                        .tracking(0.4)
+                        .deckFont(5.5, .bold)
+                        .deckTracking(0.4)
                 }
                 .foregroundStyle(theme.chrome.panelAccent)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1302,8 +1431,8 @@ private struct CodexCommandConsole: View {
 
                 VStack(spacing: 1) {
                     Text(number < 10 ? "0\(number)" : "\(number)")
-                        .font(.system(size: 8, weight: isActive ? .bold : .medium, design: .monospaced))
-                        .tracking(0.55)
+                        .deckFont(8, isActive ? .bold : .medium)
+                        .deckTracking(0.55)
 
                     if let signal = laneRailSignal(number: number, lane: lane) {
                         HStack(spacing: 2) {
@@ -1313,8 +1442,8 @@ private struct CodexCommandConsole: View {
                                 .talkieAccentGlow(radius: signal.isLive ? 2 : 0)
 
                             Text(signal.label)
-                                .font(.system(size: 5.5, weight: .semibold, design: .monospaced))
-                                .tracking(0.4)
+                                .deckFont(5.5, .semibold)
+                                .deckTracking(0.4)
                         }
                         .foregroundStyle(signal.color)
                     }
@@ -1338,16 +1467,18 @@ private struct CodexCommandConsole: View {
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 
+    /// An empty lane is still a live control — tapping it opens the mapper — so
+    /// its numeral has to survive being read. Quiet here is which ink, never how
+    /// much of it: the rail is a dark plate in both modes, so fading the ink
+    /// composites it toward the plate (measured 1.44:1 on graphite/dark). The
+    /// three plate inks already encode the three states — faint for an empty
+    /// slot, full for a mapped one, accent for the one you're steering.
     private var emptyLaneRailColor: Color {
-        colorScheme == .dark
-            ? theme.chrome.panelInkFaint.opacity(0.28)
-            : theme.chrome.panelInk.opacity(0.55)
+        theme.chrome.panelInkFaint
     }
 
     private var mappedLaneRailColor: Color {
-        colorScheme == .dark
-            ? theme.chrome.panelInkFaint.opacity(0.72)
-            : theme.chrome.panelInk.opacity(0.88)
+        theme.chrome.panelInk
     }
 
     private func laneKeySurface(isActive: Bool) -> some View {
@@ -1355,21 +1486,23 @@ private struct CodexCommandConsole: View {
         return shape
             .fill(isActive ? theme.colors.accent.opacity(0.20) : theme.chrome.panel)
             .overlay {
-                shape.fill(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.16), .clear, Color.black.opacity(0.16)],
-                        startPoint: .top,
-                        endPoint: .bottom
+                if deckFinish.isGlossy {
+                    shape.fill(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.16), .clear, Color.black.opacity(0.16)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
                     )
-                )
+                }
             }
             .overlay {
                 shape.stroke(
-                    isActive ? theme.colors.accent.opacity(0.78) : theme.chrome.panelInk.opacity(0.15),
+                    isActive ? theme.colors.accent.opacity(0.78) : deckFinish.tint(theme.chrome.panelInk, 0.15, over: theme.chrome.panel),
                     lineWidth: isActive ? 1 : theme.chrome.hairlineWidth
                 )
             }
-            .shadow(color: Color.black.opacity(0.12), radius: 3, y: 2)
+            .shadow(color: Color.black.opacity(0.12 * deckFinish.lift), radius: 3, y: 2)
     }
 
     private func laneRailSignal(
@@ -1408,8 +1541,8 @@ private struct CodexCommandConsole: View {
             return (
                 "RX",
                 colorScheme == .dark
-                    ? theme.chrome.panelInkFaint.opacity(0.78)
-                    : theme.chrome.panelInk.opacity(0.82),
+                    ? deckFinish.tint(theme.chrome.panelInkFaint, 0.78, over: theme.chrome.panel)
+                    : deckFinish.tint(theme.chrome.panelInk, 0.82, over: theme.chrome.panel),
                 false
             )
         }
@@ -1417,8 +1550,8 @@ private struct CodexCommandConsole: View {
         return (
             "RDY",
             colorScheme == .dark
-                ? theme.chrome.panelInkFaint.opacity(0.50)
-                : theme.chrome.panelInk.opacity(0.70),
+                ? deckFinish.tint(theme.chrome.panelInkFaint, 0.50, over: theme.chrome.panel)
+                : deckFinish.tint(theme.chrome.panelInk, 0.70, over: theme.chrome.panel),
             false
         )
     }
@@ -1439,7 +1572,7 @@ private struct CodexCommandConsole: View {
             Text((bridge.pairedMacDisplayName ?? "MAC").uppercased())
                 .lineLimit(1)
             Text("/")
-                .foregroundStyle(consoleInkFaint.opacity(0.60))
+                .foregroundStyle(deckFinish.tint(consoleInkFaint, 0.60, over: theme.chrome.panel))
             Text("CODEX")
 
             Spacer(minLength: 8)
@@ -1460,14 +1593,14 @@ private struct CodexCommandConsole: View {
                 Capsule().stroke(phaseColor.opacity(0.42), lineWidth: 0.6)
             )
         }
-        .font(.system(size: 9, weight: .medium, design: .monospaced))
-        .tracking(1.2)
+        .deckFont(9, .medium)
+        .deckTracking(1.2)
         .foregroundStyle(consoleInk)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(consoleInk.opacity(0.16))
+                .fill(deckFinish.tint(consoleInk, 0.16, over: theme.chrome.panel))
                 .frame(height: theme.chrome.hairlineWidth)
         }
     }
@@ -1482,16 +1615,16 @@ private struct CodexCommandConsole: View {
 
                 if store.isTemporaryTaskSelected {
                     Label("TEMP", systemImage: "desktopcomputer")
-                        .font(.system(size: 7, weight: .bold, design: .monospaced))
-                        .tracking(0.8)
+                        .deckFont(7, .bold)
+                        .deckTracking(0.8)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 4)
                         .background(
-                            Capsule().fill(theme.chrome.panelInk.opacity(0.08))
+                            Capsule().fill(deckFinish.tint(theme.chrome.panelInk, 0.08, over: theme.chrome.panel))
                         )
                         .overlay {
                             Capsule().stroke(
-                                theme.chrome.panelInk.opacity(0.18),
+                                deckFinish.tint(theme.chrome.panelInk, 0.18, over: theme.chrome.panel),
                                 lineWidth: theme.chrome.hairlineWidth
                             )
                         }
@@ -1513,12 +1646,11 @@ private struct CodexCommandConsole: View {
                     compactPath: project.compactPath,
                     branchName: nil
                 )
-            } else {
-                Text("Use NEW to create a task, or open Mapper to choose an existing channel.")
-                    .font(.system(size: 9, weight: .regular, design: .monospaced))
-                    .foregroundStyle(theme.chrome.panelInkFaint)
-                    .lineLimit(2)
             }
+            // With nothing selected this slot has no locator to show, and the
+            // conversation line below already carries the instruction. Two
+            // near-identical sentences stacked on the same empty state read as a
+            // rendering bug, so the slot simply stays empty.
 
             conversationPreview
 
@@ -1539,7 +1671,7 @@ private struct CodexCommandConsole: View {
         }
         .overlay {
             RoundedRectangle(cornerRadius: taskIdentityCornerRadius, style: .continuous)
-                .stroke(theme.chrome.panelEdge.opacity(0.78), lineWidth: theme.chrome.hairlineWidth)
+                .stroke(deckFinish.tint(theme.chrome.panelEdge, 0.78, over: theme.chrome.panel), lineWidth: theme.chrome.hairlineWidth)
         }
         .overlay {
             CodexCapturePerimeter(
@@ -1568,18 +1700,18 @@ private struct CodexCommandConsole: View {
                 .layoutPriority(2)
 
             Text("|")
-                .foregroundStyle(theme.chrome.panelInkFaint.opacity(0.46))
+                .foregroundStyle(deckFinish.tint(theme.chrome.panelInkFaint, 0.46, over: theme.chrome.panel))
                 .accessibilityHidden(true)
 
             Text(compactPath)
-                .foregroundStyle(theme.chrome.panelInkFaint.opacity(0.70))
+                .foregroundStyle(deckFinish.tint(theme.chrome.panelInkFaint, 0.70, over: theme.chrome.panel))
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .layoutPriority(1)
 
             if let branchName {
                 Text("|")
-                    .foregroundStyle(theme.chrome.panelInkFaint.opacity(0.46))
+                    .foregroundStyle(deckFinish.tint(theme.chrome.panelInkFaint, 0.46, over: theme.chrome.panel))
                     .accessibilityHidden(true)
 
                 Label(branchName, systemImage: "arrow.triangle.branch")
@@ -1587,7 +1719,7 @@ private struct CodexCommandConsole: View {
                     .truncationMode(.middle)
             }
         }
-        .font(.system(size: 8.5, weight: .regular, design: .monospaced))
+        .deckFont(8.5, .regular)
         .foregroundStyle(theme.chrome.panelInkFaint)
         .lineLimit(1)
     }
@@ -1596,17 +1728,17 @@ private struct CodexCommandConsole: View {
     private var taskFooter: some View {
         if let footerStatus = taskFooterStatus {
             Rectangle()
-                .fill(theme.chrome.panelInk.opacity(0.08))
+                .fill(deckFinish.tint(theme.chrome.panelInk, 0.08, over: theme.chrome.panel))
                 .frame(height: theme.chrome.hairlineWidth)
 
             HStack(spacing: 4) {
                 Text(footerStatus.text)
-                    .font(.system(size: 7.5, weight: .semibold, design: .monospaced))
-                    .tracking(0.35)
+                    .deckFont(7.5, .semibold)
+                    .deckTracking(0.35)
                     .foregroundStyle(
                         footerStatus.isFailure
                             ? deckFailureColor
-                            : theme.chrome.panelInkFaint.opacity(0.76)
+                            : deckFinish.tint(theme.chrome.panelInkFaint, 0.76, over: theme.chrome.panel)
                     )
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
@@ -1629,11 +1761,11 @@ private struct CodexCommandConsole: View {
         Button(action: store.clearSelection) {
             ZStack {
                 Circle()
-                    .fill(theme.chrome.panelInk.opacity(0.06))
+                    .fill(deckFinish.tint(theme.chrome.panelInk, 0.06, over: theme.chrome.panel))
                     .frame(width: 24, height: 24)
                     .overlay {
                         Circle().stroke(
-                            theme.chrome.panelInk.opacity(0.14),
+                            deckFinish.tint(theme.chrome.panelInk, 0.14, over: theme.chrome.panel),
                             lineWidth: theme.chrome.hairlineWidth
                         )
                     }
@@ -1711,12 +1843,12 @@ private struct CodexCommandConsole: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(theme.chrome.panelInk.opacity(0.07))
+                .fill(deckFinish.tint(theme.chrome.panelInk, 0.07, over: theme.chrome.panel))
                 .frame(height: 24)
         )
         .overlay {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .stroke(theme.chrome.panelInk.opacity(0.13), lineWidth: theme.chrome.hairlineWidth)
+                .stroke(deckFinish.tint(theme.chrome.panelInk, 0.13, over: theme.chrome.panel), lineWidth: theme.chrome.hairlineWidth)
                 .frame(height: 24)
         }
         .accessibilityElement(children: .contain)
@@ -1729,8 +1861,8 @@ private struct CodexCommandConsole: View {
             store.setMessageMode(mode, for: lane.number)
         } label: {
             Text(mode.label.uppercased())
-                .font(.system(size: 7.5, weight: .bold, design: .monospaced))
-                .tracking(0.6)
+                .deckFont(7.5, .bold)
+                .deckTracking(0.6)
                 .foregroundStyle(isActive ? theme.chrome.panel : theme.chrome.panelInkFaint)
                 .frame(width: 38, height: 22)
                 .background(
@@ -1805,14 +1937,14 @@ private struct CodexCommandConsole: View {
                 if let response = activity.response {
                     HStack(alignment: .firstTextBaseline, spacing: 7) {
                         Text("RX")
-                            .font(.system(size: 8, weight: .bold, design: .monospaced))
-                            .tracking(0.8)
+                            .deckFont(8, .bold)
+                            .deckTracking(0.8)
                             .foregroundStyle(theme.chrome.panelAccent)
                             .frame(width: 38, alignment: .leading)
 
                         CodexPipedText(
                             text: response,
-                            color: theme.chrome.panelInk.opacity(0.88)
+                            color: deckFinish.tint(theme.chrome.panelInk, 0.88, over: theme.chrome.panel)
                         )
                     }
                 }
@@ -1829,8 +1961,8 @@ private struct CodexCommandConsole: View {
     private func progressLine(_ update: CodexProgressUpdate, isLatest: Bool) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 7) {
             Text(update.kind == "tool" ? "SYS" : "LIVE")
-                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                .tracking(0.8)
+                .deckFont(8, .bold)
+                .deckTracking(0.8)
                 .foregroundStyle(
                     update.kind == "tool"
                         ? theme.chrome.panelInkFaint
@@ -1849,8 +1981,8 @@ private struct CodexCommandConsole: View {
 
     private func technicalLine(_ text: String, isFailure: Bool = false) -> some View {
         Text(text)
-            .font(.system(size: 9, weight: .medium, design: .monospaced))
-            .tracking(0.25)
+            .deckFont(9, .medium)
+            .deckTracking(0.25)
             .foregroundStyle(
                 isFailure
                     ? deckFailureColor
@@ -1863,14 +1995,14 @@ private struct CodexCommandConsole: View {
     private func conversationLine(label: String, text: String, lineLimit: Int) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 7) {
             Text(label)
-                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                .tracking(0.8)
+                .deckFont(8, .bold)
+                .deckTracking(0.8)
                 .foregroundStyle(theme.chrome.panelAccent)
                 .frame(width: 38, alignment: .leading)
 
             Text(text)
                 .font(.system(size: 10, weight: .regular))
-                .foregroundStyle(theme.chrome.panelInk.opacity(0.82))
+                .foregroundStyle(deckFinish.tint(theme.chrome.panelInk, 0.82, over: theme.chrome.panel))
                 .lineLimit(lineLimit)
         }
     }
@@ -2152,8 +2284,8 @@ private struct CodexWorkingSignal: View {
             Text(statusText)
                 .foregroundStyle(secondaryColor)
         }
-        .font(.system(size: 9, weight: .medium, design: .monospaced))
-        .tracking(0.25)
+        .deckFont(9, .medium)
+        .deckTracking(0.25)
         .lineLimit(1)
     }
 

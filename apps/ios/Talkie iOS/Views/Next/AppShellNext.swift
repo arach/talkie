@@ -537,6 +537,18 @@ final class AppShellRouter: ObservableObject {
         case themeContrast
         // Companion — Mac Command Deck mirror.
         case deck
+
+        /// Surfaces that live to home's left rather than ahead of it, so
+        /// they arrive from the leading edge and leave the same way.
+        ///
+        /// The deck's only door is the grid button in home's top-left
+        /// corner. Sliding in from the right made the screen travel away
+        /// from the control that summoned it — the gesture and the motion
+        /// disagreed. Reachability picked the corner; this follows it.
+        var sitsLeftOfHome: Bool {
+            if case .deck = self { return true }
+            return false
+        }
     }
 
     @Published var surface: Surface = .home
@@ -633,25 +645,26 @@ final class AppShellRouter: ObservableObject {
     }
 
     /// Home is the root. Routing TO home is a pop (backward);
-    /// routing to anything else is a push (forward).
+    /// routing to anything else is a push (forward) — unless the surface
+    /// sits to home's left, in which case the two halves swap.
     private func push(_ next: Surface) {
         if surface != next {
             navigationHistory.append(surface)
         }
-        transitionDirection = .forward
+        transitionDirection = next.sitsLeftOfHome ? .backward : .forward
         activeComposeStore = nil
         surface = next
     }
 
     func openHome() {
-        transitionDirection = .backward
+        transitionDirection = surface.sitsLeftOfHome ? .forward : .backward
         activeComposeStore = nil
         navigationHistory.removeAll()
         surface = .home
     }
 
     func goBack() {
-        transitionDirection = .backward
+        transitionDirection = surface.sitsLeftOfHome ? .forward : .backward
         activeComposeStore = nil
         surface = navigationHistory.popLast() ?? .home
     }
