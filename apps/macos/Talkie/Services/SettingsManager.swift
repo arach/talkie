@@ -12,9 +12,6 @@ import AppKit
 import CoreData
 import Observation
 import TalkieKit
-#if canImport(TermBridgeKit)
-import TermBridgeKit
-#endif
 
 private let logger = Log(.system)
 

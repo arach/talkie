@@ -193,7 +193,7 @@
 		59538D7FF8EB705D3620B9E2 /* CoreComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 128364D7894F3C7E48F7F0BA /* CoreComponents.swift */; };
 		59B2EC1EB7D88BC8C366D9FD /* LiveHistoryView.swift.disabled in Resources */ = {isa = PBXBuildFile; fileRef = 5D8DAE62024FE459C3BCE83E /* LiveHistoryView.swift.disabled */; };
 		59F341C52213699C8F4592A0 /* GroqProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 741882426A451E5DC9B3BEEA /* GroqProvider.swift */; };
-		5A8FB727E018EBC503E01329 /* TermBridgeKit in Frameworks */ = {isa = PBXBuildFile; productRef = 507115450E33C0731B9B7044 /* TermBridgeKit */; };
+		5A8FB727E018EBC503E01329 /* Termini in Frameworks */ = {isa = PBXBuildFile; productRef = 507115450E33C0731B9B7044 /* Termini */; };
 		5B130B1CA5CDC796D77500C9 /* SchemeTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F848CB165D409F9DE1643E4 /* SchemeTokens.swift */; };
 		C0A11E000000000000000208 /* ScopeAgentBayTreatments.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0A11E000000000000000108 /* ScopeAgentBayTreatments.swift */; };
 		C0A11E000000000000000207 /* ScopeBayScheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0A11E000000000000000107 /* ScopeBayScheme.swift */; };
@@ -1065,7 +1065,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				67A5249D6D764042BF21594F /* TalkieKit in Frameworks */,
-				5A8FB727E018EBC503E01329 /* TermBridgeKit in Frameworks */,
+				5A8FB727E018EBC503E01329 /* Termini in Frameworks */,
 				D0EC6C1DC965D20E26780A84 /* DebugKit in Frameworks */,
 				2829621A6E4A01B27CF56E78 /* FluidAudio in Frameworks */,
 				B93B60C64B35A0BB5C82BB98 /* GRDB in Frameworks */,
@@ -2232,7 +2232,7 @@
 			name = Talkie;
 			packageProductDependencies = (
 				46A4FF7ED5361369A679A309 /* TalkieKit */,
-				507115450E33C0731B9B7044 /* TermBridgeKit */,
+				507115450E33C0731B9B7044 /* Termini */,
 				6F3171CA8771D255AD77C856 /* DebugKit */,
 				E488AD1F887CCD0880A88457 /* FluidAudio */,
 				9CB6A32843C8E78377EA7EE1 /* GRDB */,
@@ -2269,7 +2269,7 @@
 			packageReferences = (
 				4C77F332EB0FCCF18342C18A /* XCRemoteSwiftPackageReference "FluidAudio" */,
 				8E2FBDF079FA33ECCBBEBD40 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
-				803072BAF01D48C6AB4C5D91 /* XCRemoteSwiftPackageReference "TermBridgeKit" */,
+				803072BAF01D48C6AB4C5D91 /* XCRemoteSwiftPackageReference "Termini" */,
 				AB631C6AAF1B72CD863D2AB4 /* XCLocalSwiftPackageReference "../../../packages/swift/DebugKit" */,
 				4E3C4ECEA0C3CC5BEF8F10AB /* XCLocalSwiftPackageReference "../TalkieKit" */,
 				17D43F6DE7FA7A431216F836 /* XCLocalSwiftPackageReference "../../../packages/swift/WFKit" */,
@@ -3060,12 +3060,12 @@
 				version = 0.13.6;
 			};
 		};
-		803072BAF01D48C6AB4C5D91 /* XCRemoteSwiftPackageReference "TermBridgeKit" */ = {
+		803072BAF01D48C6AB4C5D91 /* XCRemoteSwiftPackageReference "Termini" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/arach/TermBridgeKit.git";
+			repositoryURL = "https://github.com/arach/Termini.git";
 			requirement = {
 				kind = exactVersion;
-				version = 0.1.2;
+				version = 0.1.1;
 			};
 		};
 		8E2FBDF079FA33ECCBBEBD40 /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
@@ -3083,10 +3083,10 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = TalkieKit;
 		};
-		507115450E33C0731B9B7044 /* TermBridgeKit */ = {
+		507115450E33C0731B9B7044 /* Termini */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 803072BAF01D48C6AB4C5D91 /* XCRemoteSwiftPackageReference "TermBridgeKit" */;
-			productName = TermBridgeKit;
+			package = 803072BAF01D48C6AB4C5D91 /* XCRemoteSwiftPackageReference "Termini" */;
+			productName = Termini;
 		};
 		6F3171CA8771D255AD77C856 /* DebugKit */ = {
 			isa = XCSwiftPackageProductDependency;

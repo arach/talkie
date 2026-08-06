@@ -15,8 +15,8 @@ struct ManagedAgentTerminalAppearance: Equatable {
     static let `default` = ManagedAgentTerminalAppearance()
 }
 
-#if canImport(TermBridgeKit)
-import TermBridgeKit
+#if canImport(Termini)
+import Termini
 
 struct ManagedAgentTerminalView: View {
     let session: ManagedAgentConsoleSession
@@ -27,7 +27,7 @@ struct ManagedAgentTerminalView: View {
     var backgroundColor: Color = .black
     var foregroundColor: Color = .white
 
-    @State private var controller = TermBridgeKitTerminalController()
+    @State private var controller = TerminiTerminalController()
     @State private var sessionBridge = SessionBridge()
 
     private var bootSequenceKey: String {
@@ -35,7 +35,7 @@ struct ManagedAgentTerminalView: View {
     }
 
     var body: some View {
-        TermBridgeKitTerminalView(
+        TerminiTerminalView(
             controller: controller,
             showsSystemKeyboard: false,
             fontSize: appearance.fontSize
@@ -74,7 +74,7 @@ struct ManagedAgentTerminalView: View {
 @MainActor
 private final class SessionBridge: NSObject, ManagedAgentConsoleSession.Listener {
     private weak var session: ManagedAgentConsoleSession?
-    private weak var controller: TermBridgeKitTerminalController?
+    private weak var controller: TerminiTerminalController?
     private var appearance: ManagedAgentTerminalAppearance = .default
 
     /// In-flight scrollback replay. Replays feed the Ghostty surface
@@ -93,7 +93,7 @@ private final class SessionBridge: NSObject, ManagedAgentConsoleSession.Listener
     /// `Task.yield()` between slices lets the runloop turn.
     private static let replaySliceSize = 32 * 1024
 
-    func bind(session: ManagedAgentConsoleSession, controller: TermBridgeKitTerminalController) {
+    func bind(session: ManagedAgentConsoleSession, controller: TerminiTerminalController) {
         if self.session !== session {
             self.session?.detach(listener: self)
             self.session = session
@@ -117,7 +117,7 @@ private final class SessionBridge: NSObject, ManagedAgentConsoleSession.Listener
         applyAppearance(to: controller)
     }
 
-    func updateAppearance(_ appearance: ManagedAgentTerminalAppearance, controller: TermBridgeKitTerminalController? = nil) {
+    func updateAppearance(_ appearance: ManagedAgentTerminalAppearance, controller: TerminiTerminalController? = nil) {
         self.appearance = appearance
         applyAppearance(to: controller ?? self.controller)
     }
@@ -138,7 +138,7 @@ private final class SessionBridge: NSObject, ManagedAgentConsoleSession.Listener
         controller = nil
     }
 
-    private func applyAppearance(to controller: TermBridgeKitTerminalController?) {
+    private func applyAppearance(to controller: TerminiTerminalController?) {
         guard let controller else { return }
         controller.processRemoteOutput(Data(appearance.theme.applyEscapeSequence.utf8))
     }
