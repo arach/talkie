@@ -3064,8 +3064,8 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/arach/Termini.git";
 			requirement = {
-				kind = revision;
-				revision = 67665470346b8264b5b944ccdf2773820caeccb2;
+				kind = exactVersion;
+				version = 0.1.1;
 			};
 		};
 		8E2FBDF079FA33ECCBBEBD40 /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
