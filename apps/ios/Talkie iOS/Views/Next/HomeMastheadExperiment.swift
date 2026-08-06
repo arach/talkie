@@ -288,11 +288,28 @@ enum MaterialTexture {
     /// `random()`, so the grain is identical on every launch. Noise that
     /// reshuffles between launches is the one kind a person notices.
     static let brushed: Image = {
-        let size = CGSize(width: 4, height: 64)
-        let renderer = UIGraphicsImageRenderer(size: size)
-        let image = renderer.image { context in
+        // One image pixel has to land on exactly one device pixel.
+        //
+        // Tiling happens in points, so a tile rendered at 1x turns every brush
+        // line into a 3pt band on a 3x screen. That is not a fine finish, it is
+        // corduroy: measured off the first attempt, the deck read 54,54,54 then
+        // 62,62,62 — three-pixel stripes with a nine-level swing, which is
+        // visible as banding from arm's length.
+        //
+        // Rendering at the display's own scale and stepping by 1/scale of a
+        // point puts each line back on a single pixel, where a tooth belongs.
+        let scale = max(UIScreen.main.scale, 1)
+        let lines = 64
+        let size = CGSize(width: 2, height: CGFloat(lines) / scale)
+
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = scale
+        format.opaque = true
+
+        let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
             var seed: UInt64 = 0x9E3779B97F4A7C15
-            for row in 0..<Int(size.height) {
+            let step = 1 / scale
+            for row in 0..<lines {
                 seed = seed &* 6364136223846793005 &+ 1442695040888963407
                 // Centred on mid-grey so `.overlay` blending lightens and
                 // darkens in equal measure — a texture that only lightens is a
@@ -302,7 +319,7 @@ enum MaterialTexture {
                     UIColor(white: value, alpha: 1).cgColor
                 )
                 context.cgContext.fill(
-                    CGRect(x: 0, y: CGFloat(row), width: size.width, height: 1)
+                    CGRect(x: 0, y: CGFloat(row) * step, width: size.width, height: step)
                 )
             }
         }

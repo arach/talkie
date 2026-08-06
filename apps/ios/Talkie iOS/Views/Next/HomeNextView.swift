@@ -112,13 +112,15 @@ struct HomeNextView: View {
                 )
                 .padding(.horizontal, 12)
 
-                // No page margin here. A horizontally scrolling row inset by
-                // the gutter clips its own content 12pt short of the glass,
-                // which reads as the row being chopped rather than continuing.
-                // The margin moves inside, onto the scroll's content, so the
-                // first chip still starts on the page's column and the last one
-                // runs off the edge like it means it.
+                // Back on the page's margin.
+                //
+                // Running it to the glass did fix the chop, but it bought that
+                // by making one row disobey the column every other section
+                // keeps — which reads as a mistake rather than as an
+                // affordance. The chop is solved where it actually lives
+                // instead: at the cut, which now fades.
                 HomeSuggestionsStrip()
+                    .padding(.horizontal, HomeSectionMetrics.gutter)
 
                 Spacer(minLength: 80)   // breathing room for the shell voice button
             }
@@ -434,7 +436,19 @@ private struct HomeMasthead: View {
         .overlay(alignment: .bottom) {
             VStack(spacing: 0) {
                 MastheadCoatEdge(material: MastheadMaterial.current)
-                MastheadRule(color: theme.currentTheme.chrome.edge)
+
+                // The drawn rule is for the painted band only.
+                //
+                // A painted plane that stops needs a line to say it stopped —
+                // there is nothing else there. A finished one does not: it has
+                // a lit cut above and its own shade below, which is an edge
+                // with a thickness rather than a mark. Drawing the rule as well
+                // put a third horizontal thing in a band of two, and read as a
+                // divider laid across the seam instead of as the seam.
+                if MastheadMaterial.current == .painted {
+                    MastheadRule(color: theme.currentTheme.chrome.edge)
+                }
+
                 MastheadStep()
             }
             .padding(.bottom, -MastheadStep.drop)
@@ -2473,14 +2487,17 @@ private struct HomeFrequentActionsStrip: View {
             .frame(height: 56)
             // A clean framed control rail. The hairline gives it enough
             // structure without repeating the cockpit's heavy depth cues.
+            // No `hairlineEmphasis` here, and it is worth saying why, because
+            // the design system recommends applying it liberally.
+            //
+            // On a card floating in open space a lit top edge reads as the
+            // fabricated edge of a raised thing. On a full-width rail sitting
+            // directly under a full-width band, it reads as a second rule — the
+            // eye has just been given one horizontal division and this hands it
+            // another, twelve points below. Measured, it doubled the top edge
+            // from 54 to 93 against a page at 6. That is a divider, whatever it
+            // was drawn as.
             .softCard(padding: 0, corner: 12, emphasis: .faint)
-            // And a lit top edge, so the rail agrees with the light the rest of
-            // the screen is under. `softCard` draws a ring of even weight,
-            // which is what an outline looks like when nothing is lit — fine on
-            // a flat page, wrong under a console with a specular on it. This is
-            // the design system's own cue, applied where it was missing rather
-            // than invented again here.
-            .hairlineEmphasis(corner: 12)
         }
     }
 
@@ -2580,9 +2597,7 @@ private struct HomeSuggestionsStrip: View {
             Text("· EXPLORE")
                 .talkieType(.channelLabelTiny)
                 .foregroundStyle(theme.colors.textSecondary)
-                // The strip is full bleed now, so the label carries the page
-                // margin itself instead of inheriting it.
-                .padding(.leading, HomeSectionMetrics.gutter + 4)
+                .padding(.leading, 4)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -2615,22 +2630,34 @@ private struct HomeSuggestionsStrip: View {
                                             )
                                     )
                             )
-                            // Same lit top edge the action rail gets. A chip is
-                            // the smallest raised thing on the page, and the
-                            // one most often seen against the deck rather than
-                            // against a card.
-                            .hairlineEmphasis(corner: 17)
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier(suggestion.accessibilityIdentifier)
                     }
                 }
-                // The margin, applied to the content rather than the viewport.
-                // The trailing side matters as much as the leading one: without
-                // it the last chip stops flush against the glass when the row is
-                // scrolled to its end, which looks like another chop.
-                .padding(.horizontal, HomeSectionMetrics.gutter)
             }
+            // The cut, softened.
+            //
+            // A row of chips that ends on a hard vertical edge reads as
+            // damaged — the last chip looks broken rather than continued. The
+            // honest fix is not to hide the cut but to stop it being an edge:
+            // the last few points dissolve, which says "there is more" in the
+            // one vocabulary that cannot be mistaken for a border.
+            //
+            // Trailing only. A leading fade would dim the first chip while the
+            // row is at rest, which is most of the time, to solve a problem
+            // that only exists once it has been scrolled.
+            .mask(
+                LinearGradient(
+                    stops: [
+                        .init(color: .black, location: 0),
+                        .init(color: .black, location: 0.90),
+                        .init(color: .clear, location: 1.0),
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
         }
     }
 }
