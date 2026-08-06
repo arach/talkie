@@ -2438,3 +2438,58 @@ private struct StageCenteredModifier: ViewModifier {
         }
     }
 }
+
+// MARK: - Markdown Studio palette
+
+/// Translates the current `Theme` into the palette the Markdown Studio web
+/// bundle draws itself with.
+///
+/// The studio is a WKWebView living in TalkieKit, which cannot see `Theme` at
+/// all — which is why it spent its life in one hardcoded warm palette while the
+/// rest of the app changed clothes around it. TalkieKit owns the studio and the
+/// shape of its palette; this is where the app says which colours are right.
+///
+/// It lives in this file rather than beside the studio because `Talkie.xcodeproj`
+/// references sources explicitly rather than by folder, so a new file is not
+/// compiled until it is added to the project — and this belongs next to `Theme`
+/// regardless.
+extension MarkdownStudioPalette {
+    /// The studio dressed in whatever theme the rest of the app is wearing.
+    ///
+    /// Two things are deliberately *not* taken straight from the theme.
+    ///
+    /// The source pane's ink sits just inside `foreground` rather than on it:
+    /// raw markdown should read as working material beside the rendered
+    /// document, and full-strength foreground flattens the distinction the
+    /// split view exists to draw.
+    ///
+    /// The trace is derived from the accent rather than borrowed from the
+    /// theme's own, because here it marks the live dictation caret — it has to
+    /// stay legible against the accent sitting right beside it, and not every
+    /// theme guarantees that of its trace.
+    @MainActor
+    static var current: MarkdownStudioPalette {
+        let theme = Theme.current
+        let accent = theme.accent
+
+        return MarkdownStudioPalette(
+            ink: theme.foreground,
+            inkSecondary: theme.foregroundSecondary,
+            inkDim: theme.foregroundMuted,
+            inkFaint: theme.foregroundMuted.opacity(0.72),
+            sourceInk: theme.foreground.opacity(0.82),
+
+            accent: accent,
+            accentBright: accent.opacity(0.72),
+            trace: accent.opacity(0.86),
+
+            canvas: theme.surfaceBase,
+            surface: theme.background,
+            source: theme.surface1,
+            panel: theme.surface2,
+            status: theme.surface3,
+
+            edge: theme.divider
+        )
+    }
+}
