@@ -172,10 +172,10 @@ echo ""
 echo -e "${CYAN}[6/7]${NC} Pushing to origin..."
 
 if [ "$DRY_RUN" -eq 1 ]; then
-    echo "  Would run: git push origin master"
+    echo "  Would run: git push origin main"
     echo "  Would run: git push origin v$VERSION"
 else
-    git push origin master
+    git push origin main
     git push origin "v$VERSION"
     echo -e "${GREEN}✓${NC} Pushed commits and tag"
 fi
