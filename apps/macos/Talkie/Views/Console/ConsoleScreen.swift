@@ -585,16 +585,19 @@ private struct ScopeConsoleStarter: View {
     let registry: TabDefinitionRegistry
     let onLaunch: (TabDefinition) -> Void
 
-    private var presets: [(TabDefinition, String, String)] {
-        // Tuple: (template, blurb, channel pin). Pulls from
-        // TabPresets.templates rather than the registry — the registry
-        // no longer pre-seeds these, they live as static templates the
-        // picker clones on demand.
+    private var presets: [(TabDefinition, String)] {
+        // Tuple: (template, blurb). Pulls from TabPresets.templates rather
+        // than the registry — the registry no longer pre-seeds these, they
+        // live as static templates the picker clones on demand.
+        //
+        // The pin each card wears is its position in this list, so reordering
+        // or adding a preset cannot put the badge out of step with the key
+        // that launches it. It used to be a hand-written `CH-0n` per row.
         [
-            (TabPresets.claude,       "Persistent Claude Code runtime with shared workspace + tools.", "CH-01"),
-            (TabPresets.pi,           "Persistent Pi session with mounted workspace and prompt context.", "CH-02"),
-            (TabPresets.talkieShell,  "Interactive zsh session in this Console workspace.", "CH-03"),
-            (TabPresets.bridgeLogs,   "Live bridge, Talkie, and TalkieAgent logs in one terminal.", "CH-04"),
+            (TabPresets.claude,       "Persistent Claude Code runtime with shared workspace + tools."),
+            (TabPresets.pi,           "Persistent Pi session with mounted workspace and prompt context."),
+            (TabPresets.talkieShell,  "Interactive zsh session in this Console workspace."),
+            (TabPresets.bridgeLogs,   "Live bridge, Talkie, and TalkieAgent logs in one terminal."),
         ]
     }
 
@@ -621,7 +624,13 @@ private struct ScopeConsoleStarter: View {
         ) {
             VStack(spacing: 0) {
                 VStack(spacing: 22) {
+                    // Capped, so the picker rides in the upper third of a tall
+                    // window instead of being marooned in the middle of it —
+                    // two equal spacers put ~400pt of nothing above the cards
+                    // at this window height. In a short window the cap never
+                    // binds and the block centres as before.
                     Spacer(minLength: 12)
+                        .frame(maxHeight: 300)
 
                     VStack(spacing: 4) {
                         Eyebrow("New Session", color: ScopeAmber.solid)
@@ -635,11 +644,12 @@ private struct ScopeConsoleStarter: View {
                         alignment: .center,
                         spacing: 14
                     ) {
-                        ForEach(presets, id: \.0.id) { tab, blurb, channel in
+                        ForEach(Array(presets.enumerated()), id: \.element.0.id) { index, preset in
+                            let (tab, blurb) = preset
                             ScopeStarterCard(
                                 tab: tab,
                                 blurb: blurb,
-                                channel: channel,
+                                slot: index + 1,
                                 onLaunch: { onLaunch(tab) }
                             )
                         }
@@ -663,7 +673,12 @@ private struct ScopeConsoleStarter: View {
 private struct ScopeStarterCard: View {
     let tab: TabDefinition
     let blurb: String
-    let channel: String
+    /// This card's position in the picker, which is also the digit that
+    /// launches it. The badge was a decorative `CH-0n` before: it looked like
+    /// a reference you could use and was not one. Spending the same corner on
+    /// the shortcut costs no room and makes the picker keyboard-reachable
+    /// without a legend explaining that it is.
+    let slot: Int
     let onLaunch: () -> Void
 
     @State private var isHovered = false
@@ -671,7 +686,7 @@ private struct ScopeStarterCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                ChannelLabel(channel)
+                ChannelLabel("⌘\(slot)")
                 Spacer()
                 Image(systemName: tab.symbolName)
                     .font(.system(size: 14, weight: .medium))
@@ -725,11 +740,18 @@ private struct ScopeStarterCard: View {
                     .shadow(color: isHovered ? ScopeAmber.glow : .clear, radius: 4)
                 }
                 .buttonStyle(.plain)
+                .keyboardShortcut(KeyEquivalent(Character("\(slot)")), modifiers: .command)
                 .onHover { isHovered = $0 }
             }
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .topLeading)
+        // The card is the target, not just the button on it. A picker whose
+        // rows look pressable should be pressable; aiming for a 60pt button
+        // to choose between four options is work the layout was already
+        // offering to do.
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onLaunch)
         .background(
             RoundedRectangle(cornerRadius: 8)
                 .fill(ScopeCanvas.surface)
