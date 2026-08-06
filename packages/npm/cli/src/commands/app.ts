@@ -654,7 +654,7 @@ function registerWhereCommand(program: Command): void {
       const activeCli = getActiveCliPath();
       const npmGlobalBin = getNpmGlobalBin();
       const installedVersion = getInstalledVersion();
-      const dataPath = `${process.env.HOME ?? "~"}/Library/Containers/jdi.Talkie/Data/Library/Application Support/Talkie`;
+      const dataPath = `${process.env.HOME ?? "~"}/Library/Application Support/Talkie`;
 
       if (fmt.pretty) {
         console.log(`${BOLD}Talkie locations${RESET}\n`);

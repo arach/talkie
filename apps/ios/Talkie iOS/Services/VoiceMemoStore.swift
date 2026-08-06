@@ -150,5 +150,5 @@ final class VoiceMemoStore {
 }
 
 extension Notification.Name {
-    static let voiceMemosDidChange = Notification.Name("com.jdi.talkie.voiceMemosDidChange")
+    static let voiceMemosDidChange = Notification.Name("to.talkie.app.voiceMemosDidChange")
 }

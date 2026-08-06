@@ -39,7 +39,7 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.jdi.talkie</string>
+			<string>to.talkie.app</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>talkie</string>
