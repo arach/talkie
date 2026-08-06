@@ -194,6 +194,12 @@ final class HomeFeed: ObservableObject {
                 dictations: dictations,
                 captures: captures
             )
+            // The Watch's capture face carries the same fortnight the Life-in-Dots
+            // gauge does, and this is the only pass that derives it. Publishing
+            // from here rather than from a second fetch keeps one definition of
+            // "a take" across both devices; the publisher no-ops when the day is
+            // unchanged, which is most of the times Home reloads.
+            WatchSessionManager.shared.publishActivity(cockpit)
 
             entries = Self.makeEntries(
                 memos: filteredMemos,
