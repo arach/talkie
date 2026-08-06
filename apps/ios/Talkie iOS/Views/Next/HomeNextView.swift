@@ -53,13 +53,23 @@ struct HomeNextView: View {
 
     private var homeScroll: some View {
         ScrollView {
-            VStack(spacing: 12) {
+            // 12 was the gap between three objects that each had a frame of
+            // their own to sit in. Once the top became one surface the page
+            // below stopped being a stack of cards and started being a set of
+            // sections, and sections are told apart by the space around them —
+            // at 12 the divider, the action row, the ask bar and the lists all
+            // ran together into one column of chrome.
+            VStack(spacing: HomeSectionMetrics.gap) {
                 if masthead.isOn {
                     // One object where there were three. The stack's 12pt gap
                     // still applies below it, which is what keeps this an
                     // experiment about the top of the page rather than a
                     // rewrite of the page.
                     HomeMasthead(cockpit: feed.cockpit)
+                        .padding(
+                            .bottom,
+                            HomeSectionMetrics.mastheadGap - HomeSectionMetrics.gap
+                        )
                 } else {
                     HomeHeader()
 
@@ -1352,6 +1362,20 @@ private struct HomeCommandTextField: UIViewRepresentable {
 /// Studio-mirrored Console geometry. Named so studio · Swift · chat share one
 /// vocabulary; values track CockpitTwoRow.tsx exactly. The Roll grid geometry
 /// lives on HomeFeed (the data owner); these are the visual + message knobs.
+/// How the page below the masthead is spaced.
+private enum HomeSectionMetrics {
+    /// Between one section and the next.
+    static let gap: CGFloat = 20
+
+    /// Between the masthead and the first section.
+    ///
+    /// Wider, because the band overhangs: its shade falls 14pt onto the page,
+    /// and a section starting inside that shade reads as being under the
+    /// console rather than beside it. This is the shade's depth plus a normal
+    /// gap after it, which is what the gap would be if the step were an object.
+    static let mastheadGap: CGFloat = 30
+}
+
 private enum HomeCockpitMetrics {
     // Bezel + Screen (BEZEL_PAD 7 · SCREEN_PAD 10 · STACK_GAP 8 → CONSOLE_H 220)
     static let bezelPad: CGFloat = 7
@@ -2412,12 +2436,15 @@ private struct HomeFrequentActionsStrip: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
+        // No label.
+        //
+        // `RECENT` and `EXPLORE` name things that would otherwise be
+        // ambiguous — a list of items, a row of destinations. Four cells that
+        // say RECORD, COMPOSE, SCAN and SEARCH are not ambiguous, and a
+        // heading over them only says "these are the quick ones", which is a
+        // claim about the row's rank rather than its contents. It also cost a
+        // whole type register at the top of the page's most-used control.
         VStack(alignment: .leading, spacing: 8) {
-            Text("· QUICK")
-                .talkieType(.channelLabelTiny)
-                .foregroundStyle(theme.colors.textSecondary)
-                .padding(.leading, 4)
-
             HStack(spacing: 0) {
                 actionCell(label: "RECORD", icon: "waveform", accessibilityID: "dock.record") {
                     RecordingSheetController.shared.isPresented = true
