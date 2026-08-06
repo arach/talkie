@@ -201,7 +201,36 @@ class DeepLinkManager: ObservableObject {
                 Task { @MainActor in
                     HomeMastheadExperiment.shared.isOn = on
                 }
-            } else {
+            }
+            // Independent of the on/off flag above, and of each other, so any
+            // one can be set in the same tap that turns the band on or changed
+            // while it is already on without restating the rest.
+            //
+            // These stay for scripting and for setting up a device from the
+            // outside. Actually judging a finish happens in the panel behind a
+            // long press on the wordmark, because that keeps the screen — and
+            // the scroll position — while the answer changes.
+            var touched = false
+            func adopt(_ name: String, _ key: String, _ isValid: (String) -> Bool) {
+                guard let raw = components?.queryItems?.first(where: { $0.name == name })?.value?
+                    .lowercased(), isValid(raw) else { return }
+                AppLogger.app.info("Deep link: masthead \(name) \(raw)")
+                UserDefaults.standard.set(raw, forKey: key)
+                touched = true
+            }
+            adopt("finish", MastheadFinish.defaultsKey) { MastheadFinish(rawValue: $0) != nil }
+            adopt("deck", MastheadDeckGrade.defaultsKey) { MastheadDeckGrade(rawValue: $0) != nil }
+            adopt("seam", MastheadSeam.defaultsKey) { MastheadSeam(rawValue: $0) != nil }
+
+            if touched {
+                Task { @MainActor in
+                    // These are read at body evaluation rather than observed, so
+                    // something has to tell SwiftUI the answer changed.
+                    // Re-stamping the flag every masthead view already watches is
+                    // enough, and cheaper than making each one observe.
+                    HomeMastheadExperiment.shared.objectWillChange.send()
+                }
+            } else if components?.queryItems?.first(where: { $0.name == "masthead" }) == nil {
                 AppLogger.app.warning("Deep link: experiment names no known flag")
             }
 

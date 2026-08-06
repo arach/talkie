@@ -40,14 +40,40 @@ struct HomeNextView: View {
     }
 
     var body: some View {
+        ZStack {
+            // Behind the scroll, not inside it: the deck is the thing the
+            // content travels across, so it must not travel with it.
+            if masthead.isOn, MastheadDeckGrade.current.drawsDeck {
+                MastheadDeck(grade: MastheadDeckGrade.current)
+            }
+
+            homeScroll
+        }
+    }
+
+    private var homeScroll: some View {
         ScrollView {
-            VStack(spacing: 12) {
+            // 12 was the gap between three objects that each had a frame of
+            // their own to sit in. Once the top became one surface the page
+            // below stopped being a stack of cards and started being a set of
+            // sections, and sections are told apart by the space around them —
+            // at 12 the divider, the action row, the ask bar and the lists all
+            // ran together into one column of chrome.
+            VStack(spacing: HomeSectionMetrics.gap) {
                 if masthead.isOn {
                     // One object where there were three. The stack's 12pt gap
                     // still applies below it, which is what keeps this an
                     // experiment about the top of the page rather than a
                     // rewrite of the page.
-                    HomeMasthead(cockpit: feed.cockpit)
+                    HomeMasthead(
+                        cockpit: feed.cockpit,
+                        finish: MastheadFinish.current,
+                        seam: MastheadSeam.current
+                    )
+                        .padding(
+                            .bottom,
+                            HomeSectionMetrics.mastheadGap - HomeSectionMetrics.gap
+                        )
                 } else {
                     HomeHeader()
 
@@ -90,13 +116,32 @@ struct HomeNextView: View {
                 )
                 .padding(.horizontal, 12)
 
+                // Back on the page's margin.
+                //
+                // Running it to the glass did fix the chop, but it bought that
+                // by making one row disobey the column every other section
+                // keeps — which reads as a mistake rather than as an
+                // affordance. The chop is solved where it actually lives
+                // instead: at the cut, which now fades.
                 HomeSuggestionsStrip()
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, HomeSectionMetrics.gutter)
 
                 Spacer(minLength: 80)   // breathing room for the shell voice button
             }
+            // Puts the content back exactly where the safe area had it, so the
+            // only thing that actually moved is the band's background.
+            .padding(.top, masthead.isOn ? MastheadSurface.statusBarInset : 0)
         }
         .scrollIndicators(.hidden)
+        // The band pads its own surface up by the status bar height to run
+        // under the clock — and it was being clipped away every time, because a
+        // scroll view clips to its bounds and its bounds began below the status
+        // bar. The negative padding was drawing into a strip the scroll view
+        // did not own. It owns it now.
+        //
+        // Scoped to the experiment: the control has no band to bleed, and the
+        // point of a control is that it is untouched.
+        .ignoresSafeArea(edges: masthead.isOn ? .top : [])
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if isCommandFocused {
                 HomeTalkieKeyboardHost(
@@ -367,6 +412,13 @@ private extension Capture {
 /// contradiction rather than a shortcut.
 private struct HomeMasthead: View {
     let cockpit: HomeFeed.CockpitModel
+    // Passed in rather than read from the statics inside this body. The values
+    // live in `UserDefaults`, which SwiftUI cannot observe — handed down as
+    // parameters they are part of this view's identity, so changing one in the
+    // lab re-renders the band instead of leaving it showing the old finish
+    // until something else happens to invalidate it.
+    let finish: MastheadFinish
+    let seam: MastheadSeam
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
@@ -382,13 +434,28 @@ private struct HomeMasthead: View {
             HomeCockpit(model: cockpit, flush: true)
                 .padding(.bottom, 10)
         }
-        .background(alignment: .top) { MastheadSurface() }
+        .background(alignment: .top) { MastheadSurface(finish: finish) }
         // The one division that has to carry weight. Every rule inside the band
         // separates two rows of the same thing; this one separates the masthead
         // from the page, so it is the full `edge` token rather than the faint
         // one — the same reasoning that made a flat theme's rules heavier in the
         // first place.
-        .overlay(alignment: .bottom) { MastheadRule(color: theme.currentTheme.chrome.edge) }
+        //
+        // The step hangs below the band rather than inside it — negative
+        // padding takes it out of the overlay's own height, so the rule still
+        // lands exactly on the bottom edge and only the shade overhangs.
+        //
+        // The joint hangs below the band — negative padding takes its overhang
+        // out of the overlay's own height, so the band's bottom edge stays put
+        // and only the joint reaches onto the page.
+        //
+        // Which joint is a question, not an answer: a seamless butt reads as
+        // machining tight enough to hide, and a visible one reads as machining
+        // proud enough to show. See `MastheadSeam`.
+        .overlay(alignment: .bottom) {
+            MastheadJoint(finish: finish, seam: seam)
+                .padding(.bottom, -MastheadJoint.overhang(seam: seam))
+        }
     }
 }
 
@@ -405,6 +472,7 @@ private struct HomeHeader: View {
     /// `contentShape` keeps it the same 40pt target it was.
     var chromeless: Bool = false
     @ObservedObject private var theme = ThemeManager.shared
+    @State private var showsLab = false
 
     var body: some View {
         HStack {
@@ -413,9 +481,21 @@ private struct HomeHeader: View {
             Text("TALKIE")
                 .talkieType(.wordmark)
                 .foregroundStyle(theme.colors.textPrimary)
+                // The way into the masthead lab while the finish is an open
+                // question. On the wordmark because it is the one thing in the
+                // band that does nothing else, and a long press because this
+                // should be findable by someone who already knows and invisible
+                // to everyone else.
+                .contentShape(.rect)
+                .onLongPressGesture(minimumDuration: 0.6) {
+                    UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+                    showsLab = true
+                }
+                .accessibilityLabel("Talkie")
+                .accessibilityHint("Press and hold for masthead options")
             Spacer()
             Button(action: { AppShellRouter.shared.openSettings() }) {
-                HomeHeaderButtonGlyph(systemName: "gearshape", chromeless: chromeless)
+                HomeHeaderButtonGlyph(systemName: "gearshape", chromeless: chromeless, hug: .trailing)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Settings")
@@ -424,6 +504,7 @@ private struct HomeHeader: View {
         .padding(.horizontal, HomeCockpitMetrics.mastheadInset)
         .padding(.top, 6)
         .padding(.bottom, 8)
+        .sheet(isPresented: $showsLab) { MastheadExperimentPanel() }
     }
 }
 
@@ -433,10 +514,27 @@ private struct HomeHeaderButtonGlyph: View {
     let systemName: String
     var isEnabled: Bool = true
     var chromeless: Bool = false
+    /// Which edge a bare glyph sits on, if any.
+    ///
+    /// A lozenge is its own left edge: centre the glyph in the circle and the
+    /// circle sits on the margin, so the margin is the thing you see. Take the
+    /// lozenge away and the glyph is still centred in the 40pt target the
+    /// lozenge used to fill — which parks its ink about ten points inboard of
+    /// where the band's own type starts, and leaves the top-left of the page
+    /// agreeing with nothing below it.
+    ///
+    /// So bare glyphs hug their edge. The target keeps its 40pt; it simply
+    /// grows inward, which is the direction with room.
+    var hug: HorizontalEdge? = nil
     @ObservedObject private var theme = ThemeManager.shared
 
+    private var alignment: Alignment {
+        guard chromeless, let hug else { return .center }
+        return hug == .leading ? .leading : .trailing
+    }
+
     var body: some View {
-        ZStack {
+        ZStack(alignment: alignment) {
             if !chromeless {
                 Circle().fill(theme.colors.cardBackground)
                 Circle().strokeBorder(
@@ -451,7 +549,7 @@ private struct HomeHeaderButtonGlyph: View {
                 .font(.system(size: chromeless ? 17 : 15, weight: chromeless ? .medium : .regular))
                 .foregroundStyle(isEnabled ? theme.colors.textSecondary : theme.colors.textTertiary)
         }
-        .frame(width: 40, height: 40)
+        .frame(width: 40, height: 40, alignment: alignment)
         .contentShape(Rectangle())
         .shadow(color: .black.opacity(chromeless ? 0 : 0.10), radius: 4, y: 2)
     }
@@ -467,7 +565,7 @@ private struct DeckComplication: View {
 
     var body: some View {
         Button(action: openDeck) {
-            HomeHeaderButtonGlyph(systemName: "square.grid.3x3", chromeless: chromeless)
+            HomeHeaderButtonGlyph(systemName: "square.grid.3x3", chromeless: chromeless, hug: .leading)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
@@ -1300,6 +1398,23 @@ private struct HomeCommandTextField: UIViewRepresentable {
 /// Studio-mirrored Console geometry. Named so studio · Swift · chat share one
 /// vocabulary; values track CockpitTwoRow.tsx exactly. The Roll grid geometry
 /// lives on HomeFeed (the data owner); these are the visual + message knobs.
+/// How the page below the masthead is spaced.
+private enum HomeSectionMetrics {
+    /// Between one section and the next.
+    static let gap: CGFloat = 20
+
+    /// The page's side margin.
+    static let gutter: CGFloat = 12
+
+    /// Between the masthead and the first section.
+    ///
+    /// Wider, because the band overhangs: its shade falls 14pt onto the page,
+    /// and a section starting inside that shade reads as being under the
+    /// console rather than beside it. This is the shade's depth plus a normal
+    /// gap after it, which is what the gap would be if the step were an object.
+    static let mastheadGap: CGFloat = 30
+}
+
 private enum HomeCockpitMetrics {
     // Bezel + Screen (BEZEL_PAD 7 · SCREEN_PAD 10 · STACK_GAP 8 → CONSOLE_H 220)
     static let bezelPad: CGFloat = 7
@@ -1412,7 +1527,7 @@ private struct HomeCockpit: View {
     var body: some View {
         if isScreenshotMode {
             VStack(alignment: .leading, spacing: 8) {
-                Text("· TODAY")
+                Text("TODAY")
                     .talkieType(.channelLabelTiny)
                     .foregroundStyle(theme.colors.textSecondary)
                     .padding(.leading, 4)
@@ -2360,12 +2475,15 @@ private struct HomeFrequentActionsStrip: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
+        // No label.
+        //
+        // `RECENT` and `EXPLORE` name things that would otherwise be
+        // ambiguous — a list of items, a row of destinations. Four cells that
+        // say RECORD, COMPOSE, SCAN and SEARCH are not ambiguous, and a
+        // heading over them only says "these are the quick ones", which is a
+        // claim about the row's rank rather than its contents. It also cost a
+        // whole type register at the top of the page's most-used control.
         VStack(alignment: .leading, spacing: 8) {
-            Text("· QUICK")
-                .talkieType(.channelLabelTiny)
-                .foregroundStyle(theme.colors.textSecondary)
-                .padding(.leading, 4)
-
             HStack(spacing: 0) {
                 actionCell(label: "RECORD", icon: "waveform", accessibilityID: "dock.record") {
                     RecordingSheetController.shared.isPresented = true
@@ -2386,6 +2504,16 @@ private struct HomeFrequentActionsStrip: View {
             .frame(height: 56)
             // A clean framed control rail. The hairline gives it enough
             // structure without repeating the cockpit's heavy depth cues.
+            // No `hairlineEmphasis` here, and it is worth saying why, because
+            // the design system recommends applying it liberally.
+            //
+            // On a card floating in open space a lit top edge reads as the
+            // fabricated edge of a raised thing. On a full-width rail sitting
+            // directly under a full-width band, it reads as a second rule — the
+            // eye has just been given one horizontal division and this hands it
+            // another, twelve points below. Measured, it doubled the top edge
+            // from 54 to 93 against a page at 6. That is a divider, whatever it
+            // was drawn as.
             .softCard(padding: 0, corner: 12, emphasis: .faint)
         }
     }
@@ -2483,7 +2611,7 @@ private struct HomeSuggestionsStrip: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("· EXPLORE")
+            Text("EXPLORE")
                 .talkieType(.channelLabelTiny)
                 .foregroundStyle(theme.colors.textSecondary)
                 .padding(.leading, 4)
@@ -2525,6 +2653,28 @@ private struct HomeSuggestionsStrip: View {
                     }
                 }
             }
+            // The cut, softened.
+            //
+            // A row of chips that ends on a hard vertical edge reads as
+            // damaged — the last chip looks broken rather than continued. The
+            // honest fix is not to hide the cut but to stop it being an edge:
+            // the last few points dissolve, which says "there is more" in the
+            // one vocabulary that cannot be mistaken for a border.
+            //
+            // Trailing only. A leading fade would dim the first chip while the
+            // row is at rest, which is most of the time, to solve a problem
+            // that only exists once it has been scrolled.
+            .mask(
+                LinearGradient(
+                    stops: [
+                        .init(color: .black, location: 0),
+                        .init(color: .black, location: 0.90),
+                        .init(color: .clear, location: 1.0),
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
         }
     }
 }
@@ -2568,7 +2718,7 @@ private struct RecentSection: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text("· RECENT")
+                    Text("RECENT")
                         .talkieType(.channelLabel)
                         .foregroundStyle(theme.colors.textSecondary)
                     Text(totalCountLabel)
@@ -2909,7 +3059,7 @@ private struct EmptyHomeRecentState: View {
         VStack(spacing: 12) {
             FeedMessageState(
                 icon: isSearching ? "magnifyingglass" : "tray",
-                title: isSearching ? "· NO MATCHES" : "· NOTHING RECENT",
+                title: isSearching ? "NO MATCHES" : "NOTHING RECENT",
                 message: isSearching ? "Try a different search term" : "Record, dictate, compose, or scan to start your feed."
             )
 
