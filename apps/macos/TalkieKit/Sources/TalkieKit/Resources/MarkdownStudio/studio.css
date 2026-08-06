@@ -110,7 +110,19 @@ body {
 .dictate-live .pulse { width:9px; height:9px; border-radius:2px; background:#fff; box-shadow:0 0 0 4px rgba(255,255,255,0.28); animation:tk-blink 1.4s ease-in-out infinite; }
 
 /* ══ SPLIT BODY ══ */
-.split { position:relative; flex:1 1 auto; min-height:0; display:flex; align-items:stretch; }
+/* The workspace is a sheet set into the canvas, not the canvas itself.
+   Everything below the toolbar used to run to all four window edges, which
+   left the studio with no outer shape at all — panes simply stopped where the
+   window did. The toolbar stays full-bleed on purpose: chrome spans, content
+   is inset, and the gap between them is what makes the toolbar read as
+   chrome. `overflow:hidden` lets the corner radius clip the panes, the
+   revisions rail and the compare view alike, so none of them needs to know
+   it is sitting in a rounded box. */
+.split {
+  position:relative; flex:1 1 auto; min-height:0; display:flex; align-items:stretch;
+  margin:14px; border:1px solid var(--edge); border-radius:12px; overflow:hidden;
+  box-shadow:0 1px 2px rgba(0,0,0,0.03), 0 10px 28px rgba(0,0,0,0.045);
+}
 .pane { flex:1 1 0; min-width:0; display:flex; flex-direction:column; position:relative; }
 .source-pane { background:var(--source); animation:tk-rise .45s ease-out .05s both; }
 .preview-pane { background:var(--surface); animation:tk-rise .45s ease-out .1s both; }
