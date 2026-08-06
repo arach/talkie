@@ -419,8 +419,21 @@ private struct TickerRow: View {
             TimelineView(.periodic(from: .now, by: Self.caretPeriod)) { context in
                 // Stepped, not eased. A caret that fades is a pulse; a caret
                 // that snaps is a cursor.
-                let lit = Int(context.date.timeIntervalSince1970 / Self.caretPeriod) % 2 == 0
-                block.opacity(lit ? 1 : 0)
+                //
+                // The remainder is taken in `Double` rather than by converting
+                // the quotient to `Int`, and that is load-bearing rather than
+                // stylistic: the watch is arm64_32, where `Int` is 32 bits.
+                // Unix time over a sub-second period is ~3.1 billion, past
+                // Int32's 2.1 billion ceiling, and Swift's `Double` → `Int`
+                // conversion traps on overflow instead of wrapping — so the
+                // face died on first paint, every launch. No simulator can
+                // reproduce it: they run arm64, where `Int` is 64 bits and the
+                // same expression is merely large. Keeping the arithmetic in
+                // `Double` never builds the oversized integer at all.
+                let cycle = Self.caretPeriod * 2
+                let phase = context.date.timeIntervalSince1970
+                    .truncatingRemainder(dividingBy: cycle)
+                block.opacity(phase < Self.caretPeriod ? 1 : 0)
             }
         }
     }
