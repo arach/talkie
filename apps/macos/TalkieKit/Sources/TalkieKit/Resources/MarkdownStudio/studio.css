@@ -187,19 +187,29 @@ body {
 
 /* code */
 .preview code { font-family:var(--mono); font-size:0.88em; background:var(--soft); color:var(--ink); border-radius:4px; padding:1px 5px; }
-/* Code stays dark — it is the one place on the page where a terminal ground
-   is the honest presentation, and it survived the retheme unchanged for that
-   reason. What did not survive is *which* dark: #0e0b08 with an amber inner
-   glow and cream type is a warm black, so on a cool theme this block was the
-   last warm object on the page and read as a leftover.
-   Mixed toward the theme's own ink instead, so it is still unmistakably a
-   terminal but belongs to whatever palette is running. */
-.preview pre { margin:14px 0 0; border-radius:10px; overflow:hidden; background:color-mix(in srgb, var(--ink) 88%, #000); border:1px solid color-mix(in srgb, var(--ink) 72%, #000); box-shadow:inset 0 0 40px color-mix(in srgb, var(--acc) 7%, transparent); }
-.preview pre .pre-dots { display:flex; align-items:center; gap:7px; padding:8px 13px; border-bottom:1px solid rgba(255,220,170,0.08); }
-.preview pre .pre-dots span { width:7px; height:7px; border-radius:50%; opacity:0.85; }
-.preview pre .pre-dots .r { background:#ff5f56; } .preview pre .pre-dots .y { background:#ffbd2e; } .preview pre .pre-dots .g { background:#27ca40; }
-.preview pre .pre-lang { margin-left:5px; font-family:var(--mono); font-size:9px; letter-spacing:0.1em; text-transform:uppercase; color:color-mix(in srgb, var(--surface) 52%, transparent); }
-.preview pre code { display:block; padding:12px 15px; font-family:var(--mono); font-size:12.5px; line-height:1.6; color:color-mix(in srgb, var(--surface) 92%, var(--acc)); background:transparent; border-radius:0; }
+/* Code is a panel on the page, not a hole punched through it.
+   It was #0e0b08 — a warm near-black with an amber inner glow and cream type
+   — which on a pale canvas read as the one unlit object in the document and
+   pulled the eye off the prose it was meant to support.
+   Nothing here names a colour. The block is built from the theme's own
+   surfaces mixed a little toward its ink, so it lands soft against a light
+   canvas and genuinely dark against a dark one without a second palette or a
+   light/dark branch anywhere.
+   The title bar earns its keep by being a *different* surface from the body
+   rather than the same one with a line under it: two steps of ink, a hairline
+   between them, and the code sitting on the calmer of the two. */
+.preview pre { margin:14px 0 0; border-radius:10px; overflow:hidden; background:color-mix(in srgb, var(--ink) 5%, var(--source)); border:1px solid var(--edge); }
+.preview pre .pre-dots { display:flex; align-items:center; gap:7px; padding:8px 13px; background:color-mix(in srgb, var(--ink) 11%, var(--source)); border-bottom:1px solid var(--edge); }
+/* Muted to the theme rather than the literal macOS red/amber/green. Three
+   saturated dots were loud enough on a dark ground; on a soft one they were
+   the brightest thing in the document, which is not what a window control
+   cluster is for. The rhythm survives, the shouting does not. */
+.preview pre .pre-dots span { width:7px; height:7px; border-radius:50%; }
+.preview pre .pre-dots .r { background:color-mix(in srgb, var(--acc) 55%, transparent); }
+.preview pre .pre-dots .y { background:color-mix(in srgb, var(--ink) 26%, transparent); }
+.preview pre .pre-dots .g { background:color-mix(in srgb, var(--ink) 16%, transparent); }
+.preview pre .pre-lang { margin-left:5px; font-family:var(--mono); font-size:9px; letter-spacing:0.1em; text-transform:uppercase; color:var(--dim); }
+.preview pre code { display:block; padding:12px 15px; font-family:var(--mono); font-size:12.5px; line-height:1.6; color:var(--ink2); background:transparent; border-radius:0; }
 
 /* tables */
 .preview table { margin:16px 0 0; width:100%; border-collapse:separate; border-spacing:0; border:1px solid var(--edge); border-radius:10px; overflow:hidden; font-size:14px; }
