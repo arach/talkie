@@ -282,6 +282,31 @@ final class ManagedAgentPTYProcess: @unchecked Sendable {
         environment["FORCE_COLOR"] = "1"
         environment["TERM_PROGRAM"] = "Talkie"
 
+        // A console tab is a session of its own, not a continuation of whatever
+        // happened to launch Talkie. These variables name a *specific* parent
+        // Claude Code session, and the app inherits them wholesale when it is
+        // started from a terminal that is already inside one — which is easy to
+        // do by accident, since `talkie-dev build talkie --restart` does exactly
+        // that. The child then sees `CLAUDE_CODE_CHILD_SESSION`, decides it is a
+        // subagent of a session it has no relationship to, and quietly turns off
+        // transcript saving. The console is meant to be a durable home; losing
+        // its transcripts to an environment variable is not a trade it should
+        // make silently.
+        //
+        // Only identity markers are dropped. Deliberate configuration that
+        // happens to share the prefix — `CLAUDE_CODE_USE_BEDROCK`,
+        // `CLAUDE_CODE_MAX_OUTPUT_TOKENS` and friends — is somebody's setting
+        // and still belongs to the child, so this is an explicit list rather
+        // than a prefix match.
+        for marker in [
+            "CLAUDE_CODE_CHILD_SESSION",
+            "CLAUDE_CODE_SESSION_ID",
+            "CLAUDE_CODE_ENTRYPOINT",
+            "CLAUDE_CODE_EXECPATH",
+        ] {
+            environment[marker] = nil
+        }
+
         for (key, value) in extra {
             environment[key] = value
         }
