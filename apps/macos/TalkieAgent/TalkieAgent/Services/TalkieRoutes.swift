@@ -4,7 +4,6 @@ import TalkieKit
 
 /// Route handlers for `/v1/talkie/*` endpoints
 /// Placeholder — will be wired to TalkieObjectReader in Phase 2
-@available(macOS 14.0, *)
 enum TalkieRoutes {
 
     private static let log = Log(.system)

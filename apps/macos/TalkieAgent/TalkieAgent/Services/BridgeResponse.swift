@@ -94,7 +94,6 @@ enum CursorCodec {
 
 // MARK: - Response Helpers
 
-@available(macOS 14.0, *)
 enum BridgeResponse {
 
     private static let encoder: JSONEncoder = {

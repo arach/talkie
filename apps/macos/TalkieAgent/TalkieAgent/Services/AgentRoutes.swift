@@ -4,7 +4,6 @@ import Network
 import TalkieKit
 
 /// Route handlers for `/v1/agent/*` endpoints
-@available(macOS 14.0, *)
 enum AgentRoutes {
 
     private static let log = Log(.system)
