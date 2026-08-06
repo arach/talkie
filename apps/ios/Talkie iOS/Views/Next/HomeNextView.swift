@@ -112,8 +112,13 @@ struct HomeNextView: View {
                 )
                 .padding(.horizontal, 12)
 
+                // No page margin here. A horizontally scrolling row inset by
+                // the gutter clips its own content 12pt short of the glass,
+                // which reads as the row being chopped rather than continuing.
+                // The margin moves inside, onto the scroll's content, so the
+                // first chip still starts on the page's column and the last one
+                // runs off the edge like it means it.
                 HomeSuggestionsStrip()
-                    .padding(.horizontal, 12)
 
                 Spacer(minLength: 80)   // breathing room for the shell voice button
             }
@@ -1367,6 +1372,9 @@ private enum HomeSectionMetrics {
     /// Between one section and the next.
     static let gap: CGFloat = 20
 
+    /// The page's side margin.
+    static let gutter: CGFloat = 12
+
     /// Between the masthead and the first section.
     ///
     /// Wider, because the band overhangs: its shade falls 14pt onto the page,
@@ -2466,6 +2474,13 @@ private struct HomeFrequentActionsStrip: View {
             // A clean framed control rail. The hairline gives it enough
             // structure without repeating the cockpit's heavy depth cues.
             .softCard(padding: 0, corner: 12, emphasis: .faint)
+            // And a lit top edge, so the rail agrees with the light the rest of
+            // the screen is under. `softCard` draws a ring of even weight,
+            // which is what an outline looks like when nothing is lit — fine on
+            // a flat page, wrong under a console with a specular on it. This is
+            // the design system's own cue, applied where it was missing rather
+            // than invented again here.
+            .hairlineEmphasis(corner: 12)
         }
     }
 
@@ -2565,7 +2580,9 @@ private struct HomeSuggestionsStrip: View {
             Text("· EXPLORE")
                 .talkieType(.channelLabelTiny)
                 .foregroundStyle(theme.colors.textSecondary)
-                .padding(.leading, 4)
+                // The strip is full bleed now, so the label carries the page
+                // margin itself instead of inheriting it.
+                .padding(.leading, HomeSectionMetrics.gutter + 4)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -2598,11 +2615,21 @@ private struct HomeSuggestionsStrip: View {
                                             )
                                     )
                             )
+                            // Same lit top edge the action rail gets. A chip is
+                            // the smallest raised thing on the page, and the
+                            // one most often seen against the deck rather than
+                            // against a card.
+                            .hairlineEmphasis(corner: 17)
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier(suggestion.accessibilityIdentifier)
                     }
                 }
+                // The margin, applied to the content rather than the viewport.
+                // The trailing side matters as much as the leading one: without
+                // it the last chip stops flush against the glass when the row is
+                // scrolled to its end, which looks like another chop.
+                .padding(.horizontal, HomeSectionMetrics.gutter)
             }
         }
     }
