@@ -246,6 +246,153 @@ struct MastheadSurface: View {
     }
 }
 
+/// How light the machined deck is milled.
+///
+/// Local comparison only — there is no right answer to read off a spec, and
+/// the three are far enough apart that the wrong one is obvious next to the
+/// others and invisible on its own:
+///
+///     talkie://experiment?masthead=on&material=inverted&deck=silver
+enum MastheadDeckGrade: String, CaseIterable {
+    /// Dark tool steel. The console barely separates from it.
+    case graphite
+    /// The first attempt, and the middle of the range.
+    case space
+    /// Bright milled aluminium. Maximum separation from a black console, and
+    /// the one most likely to expose ink that was chosen against near-black.
+    case silver
+
+    static let defaultsKey = "experiment.home.masthead.deck"
+
+    static var current: MastheadDeckGrade {
+        guard let raw = UserDefaults.standard.string(forKey: defaultsKey),
+              let grade = MastheadDeckGrade(rawValue: raw) else { return .space }
+        return grade
+    }
+
+    /// Kept faintly blue rather than neutral all the way up. A pure grey ramp
+    /// reads as cardboard at the light end; real anodising keeps a cast.
+    var base: Color {
+        switch self {
+        case .graphite: Color(red: 0.145, green: 0.150, blue: 0.160)
+        case .space:    Color(red: 0.235, green: 0.243, blue: 0.255)
+        case .silver:   Color(red: 0.335, green: 0.345, blue: 0.360)
+        }
+    }
+}
+
+/// What happens where the console meets the deck.
+///
+///     talkie://experiment?masthead=on&material=inverted&seam=rebate
+enum MastheadSeam: String, CaseIterable {
+    /// The two materials simply meet. Reads as one machined assembly with
+    /// tolerances too tight to see — which is its own kind of expensive.
+    case seamless
+    /// A milled groove between the panels: the console's lit cut, a dark
+    /// channel, then the deck's own top edge catching light on the way out.
+    /// This is how two panels actually meet when nobody is hiding the joint.
+    case rebate
+    /// A joining strip laid over the butt — a raised extrusion spanning the
+    /// full width, lit on top and shadowed below. The most instrument-like
+    /// and the most literal: something was fastened here.
+    case rail
+
+    static let defaultsKey = "experiment.home.masthead.seam"
+
+    /// Rebate, chosen by comparison rather than by argument. Seamless reads as
+    /// tolerances too tight to see, which is a real idea — but next to a milled
+    /// groove it reads as two colours meeting, and the groove is the only one of
+    /// the three that reads as fabricated rather than rendered.
+    static var current: MastheadSeam {
+        guard let raw = UserDefaults.standard.string(forKey: defaultsKey),
+              let seam = MastheadSeam(rawValue: raw) else { return .rebate }
+        return seam
+    }
+}
+
+/// The bench the experiment is run from.
+///
+/// Deep links were fine for turning one flag on once. They are the wrong
+/// instrument for a comparison: judging a finish means flicking between two of
+/// them while looking at the same screen, and a round trip through a URL, a
+/// relaunch and a lost scroll position destroys exactly the thing being judged.
+///
+/// Reached by pressing and holding the wordmark. Deliberately not a settings
+/// row — this is scaffolding for an open question, and it should leave with the
+/// question rather than accumulate as a permanent preference nobody remembers
+/// agreeing to.
+struct MastheadExperimentPanel: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var flag = HomeMastheadExperiment.shared
+
+    @State private var material = MastheadMaterial.current
+    @State private var deck = MastheadDeckGrade.current
+    @State private var seam = MastheadSeam.current
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Toggle("Full-bleed masthead", isOn: $flag.isOn)
+                } footer: {
+                    Text("Off restores the original header and cockpit, unchanged.")
+                }
+
+                Section("Console") {
+                    picker("Finish", selection: $material, cases: MastheadMaterial.allCases)
+                }
+
+                Section {
+                    picker("Grade", selection: $deck, cases: MastheadDeckGrade.allCases)
+                } header: {
+                    Text("Deck")
+                } footer: {
+                    Text("Only the inverted finish gives the page a material of its own; "
+                         + "the other three leave it as the app background.")
+                }
+
+                Section("Joint") {
+                    picker("Seam", selection: $seam, cases: MastheadSeam.allCases)
+                }
+            }
+            .navigationTitle("Masthead lab")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        // Written on change rather than on dismiss, so the screen behind the
+        // sheet is already showing the answer by the time it is swiped away.
+        .onChange(of: material) { _, new in store(MastheadMaterial.defaultsKey, new.rawValue) }
+        .onChange(of: deck) { _, new in store(MastheadDeckGrade.defaultsKey, new.rawValue) }
+        .onChange(of: seam) { _, new in store(MastheadSeam.defaultsKey, new.rawValue) }
+    }
+
+    private func picker<T: RawRepresentable & Hashable>(
+        _ title: String,
+        selection: Binding<T>,
+        cases: [T]
+    ) -> some View where T.RawValue == String {
+        Picker(title, selection: selection) {
+            ForEach(cases, id: \.self) { value in
+                Text(value.rawValue.capitalized).tag(value)
+            }
+        }
+        .pickerStyle(.segmented)
+    }
+
+    /// These are read at body evaluation rather than observed, so something has
+    /// to tell SwiftUI the answer changed. The flag is the object every masthead
+    /// view already watches, which makes re-stamping it the cheapest true signal
+    /// available — the same path the deep link takes.
+    private func store(_ key: String, _ value: String) {
+        UserDefaults.standard.set(value, forKey: key)
+        HomeMastheadExperiment.shared.objectWillChange.send()
+    }
+}
+
 /// The deck the console is bolted to — machined space grey, brushed and matte.
 ///
 /// Only `.inverted` draws this. Every other treatment leaves the page as the
@@ -256,9 +403,11 @@ struct MastheadSurface: View {
 /// It does not scroll. A surface that scrolls is wallpaper; a deck the content
 /// travels across is a deck.
 struct MastheadDeck: View {
+    var grade: MastheadDeckGrade = MastheadDeckGrade.current
+
     var body: some View {
         ZStack {
-            Color(red: 0.235, green: 0.243, blue: 0.255)
+            grade.base
 
             // Lit from above, like everything else on this screen. Shallow —
             // machined aluminium is close to one even tone, and a strong ramp
@@ -345,6 +494,93 @@ struct MastheadCoatEdge: View {
             Rectangle()
                 .fill(Color.white.opacity(material == .laminate ? 0.11 : 0.07))
                 .frame(height: theme.currentTheme.chrome.hairlineWidth)
+        }
+    }
+}
+
+/// The joint, in whichever way it is being made this run.
+///
+/// Composed to hang below the band: everything here draws downward from the
+/// console's bottom edge, and the caller lifts it back with negative padding so
+/// only the overhang lands on the page.
+struct MastheadJoint: View {
+    let material: MastheadMaterial
+    let seam: MastheadSeam
+    @ObservedObject private var theme = ThemeManager.shared
+
+    /// The milled channel's depth, and the strip's thickness. Both small: a
+    /// joint that reads at a glance from across a room is a moulding, and this
+    /// is supposed to be machined.
+    private static let grooveDepth: CGFloat = 3
+    private static let railHeight: CGFloat = 5
+
+    var body: some View {
+        switch seam {
+        case .seamless:
+            VStack(spacing: 0) {
+                MastheadCoatEdge(material: material)
+                if material == .painted {
+                    MastheadRule(color: theme.currentTheme.chrome.edge)
+                }
+                MastheadStep()
+            }
+
+        case .rebate:
+            VStack(spacing: 0) {
+                // The console's cut, then the channel it was cut back to.
+                MastheadCoatEdge(material: material)
+
+                Rectangle()
+                    .fill(Color.black.opacity(0.55))
+                    .frame(height: Self.grooveDepth)
+
+                // The deck's own edge, coming back up out of the groove into
+                // the light. Without this the channel is just a dark line and
+                // the deck looks printed on rather than milled.
+                Rectangle()
+                    .fill(Color.white.opacity(0.13))
+                    .frame(height: theme.currentTheme.chrome.hairlineWidth)
+
+                MastheadStep()
+            }
+
+        case .rail:
+            VStack(spacing: 0) {
+                // A strip laid over the butt joint. Lit along the top, its own
+                // body slightly proud of both panels, shadow underneath — the
+                // three things that make a piece of extrusion read as a
+                // separate object rather than as a thick line.
+                Rectangle()
+                    .fill(Color.white.opacity(0.16))
+                    .frame(height: theme.currentTheme.chrome.hairlineWidth)
+
+                LinearGradient(
+                    colors: [
+                        Color(white: 0.42),
+                        Color(white: 0.30),
+                        Color(white: 0.20),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: Self.railHeight)
+                .overlay { MaterialTexture.brushed.opacity(0.5).blendMode(.overlay) }
+
+                Rectangle()
+                    .fill(Color.black.opacity(0.5))
+                    .frame(height: theme.currentTheme.chrome.hairlineWidth)
+
+                MastheadStep()
+            }
+        }
+    }
+
+    /// How far the joint hangs past the band, so the caller can lift it back.
+    static func overhang(seam: MastheadSeam) -> CGFloat {
+        switch seam {
+        case .seamless: MastheadStep.drop
+        case .rebate:   MastheadStep.drop + grooveDepth
+        case .rail:     MastheadStep.drop + railHeight
         }
     }
 }

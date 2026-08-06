@@ -44,7 +44,7 @@ struct HomeNextView: View {
             // Behind the scroll, not inside it: the deck is the thing the
             // content travels across, so it must not travel with it.
             if masthead.isOn, MastheadMaterial.current == .inverted {
-                MastheadDeck()
+                MastheadDeck(grade: MastheadDeckGrade.current)
             }
 
             homeScroll
@@ -65,7 +65,11 @@ struct HomeNextView: View {
                     // still applies below it, which is what keeps this an
                     // experiment about the top of the page rather than a
                     // rewrite of the page.
-                    HomeMasthead(cockpit: feed.cockpit)
+                    HomeMasthead(
+                        cockpit: feed.cockpit,
+                        material: MastheadMaterial.current,
+                        seam: MastheadSeam.current
+                    )
                         .padding(
                             .bottom,
                             HomeSectionMetrics.mastheadGap - HomeSectionMetrics.gap
@@ -408,6 +412,13 @@ private extension Capture {
 /// contradiction rather than a shortcut.
 private struct HomeMasthead: View {
     let cockpit: HomeFeed.CockpitModel
+    // Passed in rather than read from the statics inside this body. The values
+    // live in `UserDefaults`, which SwiftUI cannot observe — handed down as
+    // parameters they are part of this view's identity, so changing one in the
+    // lab re-renders the band instead of leaving it showing the old finish
+    // until something else happens to invalidate it.
+    let material: MastheadMaterial
+    let seam: MastheadSeam
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
@@ -423,7 +434,7 @@ private struct HomeMasthead: View {
             HomeCockpit(model: cockpit, flush: true)
                 .padding(.bottom, 10)
         }
-        .background(alignment: .top) { MastheadSurface() }
+        .background(alignment: .top) { MastheadSurface(material: material) }
         // The one division that has to carry weight. Every rule inside the band
         // separates two rows of the same thing; this one separates the masthead
         // from the page, so it is the full `edge` token rather than the faint
@@ -433,25 +444,17 @@ private struct HomeMasthead: View {
         // The step hangs below the band rather than inside it — negative
         // padding takes it out of the overlay's own height, so the rule still
         // lands exactly on the bottom edge and only the shade overhangs.
+        //
+        // The joint hangs below the band — negative padding takes its overhang
+        // out of the overlay's own height, so the band's bottom edge stays put
+        // and only the joint reaches onto the page.
+        //
+        // Which joint is a question, not an answer: a seamless butt reads as
+        // machining tight enough to hide, and a visible one reads as machining
+        // proud enough to show. See `MastheadSeam`.
         .overlay(alignment: .bottom) {
-            VStack(spacing: 0) {
-                MastheadCoatEdge(material: MastheadMaterial.current)
-
-                // The drawn rule is for the painted band only.
-                //
-                // A painted plane that stops needs a line to say it stopped —
-                // there is nothing else there. A finished one does not: it has
-                // a lit cut above and its own shade below, which is an edge
-                // with a thickness rather than a mark. Drawing the rule as well
-                // put a third horizontal thing in a band of two, and read as a
-                // divider laid across the seam instead of as the seam.
-                if MastheadMaterial.current == .painted {
-                    MastheadRule(color: theme.currentTheme.chrome.edge)
-                }
-
-                MastheadStep()
-            }
-            .padding(.bottom, -MastheadStep.drop)
+            MastheadJoint(material: material, seam: seam)
+                .padding(.bottom, -MastheadJoint.overhang(seam: seam))
         }
     }
 }
@@ -469,6 +472,7 @@ private struct HomeHeader: View {
     /// `contentShape` keeps it the same 40pt target it was.
     var chromeless: Bool = false
     @ObservedObject private var theme = ThemeManager.shared
+    @State private var showsLab = false
 
     var body: some View {
         HStack {
@@ -477,6 +481,18 @@ private struct HomeHeader: View {
             Text("TALKIE")
                 .talkieType(.wordmark)
                 .foregroundStyle(theme.colors.textPrimary)
+                // The way into the masthead lab while the finish is an open
+                // question. On the wordmark because it is the one thing in the
+                // band that does nothing else, and a long press because this
+                // should be findable by someone who already knows and invisible
+                // to everyone else.
+                .contentShape(.rect)
+                .onLongPressGesture(minimumDuration: 0.6) {
+                    UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+                    showsLab = true
+                }
+                .accessibilityLabel("Talkie")
+                .accessibilityHint("Press and hold for masthead options")
             Spacer()
             Button(action: { AppShellRouter.shared.openSettings() }) {
                 HomeHeaderButtonGlyph(systemName: "gearshape", chromeless: chromeless, hug: .trailing)
@@ -488,6 +504,7 @@ private struct HomeHeader: View {
         .padding(.horizontal, HomeCockpitMetrics.mastheadInset)
         .padding(.top, 6)
         .padding(.bottom, 8)
+        .sheet(isPresented: $showsLab) { MastheadExperimentPanel() }
     }
 }
 
@@ -1510,7 +1527,7 @@ private struct HomeCockpit: View {
     var body: some View {
         if isScreenshotMode {
             VStack(alignment: .leading, spacing: 8) {
-                Text("· TODAY")
+                Text("TODAY")
                     .talkieType(.channelLabelTiny)
                     .foregroundStyle(theme.colors.textSecondary)
                     .padding(.leading, 4)
@@ -2594,7 +2611,7 @@ private struct HomeSuggestionsStrip: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("· EXPLORE")
+            Text("EXPLORE")
                 .talkieType(.channelLabelTiny)
                 .foregroundStyle(theme.colors.textSecondary)
                 .padding(.leading, 4)
@@ -2701,7 +2718,7 @@ private struct RecentSection: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text("· RECENT")
+                    Text("RECENT")
                         .talkieType(.channelLabel)
                         .foregroundStyle(theme.colors.textSecondary)
                     Text(totalCountLabel)
@@ -3042,7 +3059,7 @@ private struct EmptyHomeRecentState: View {
         VStack(spacing: 12) {
             FeedMessageState(
                 icon: isSearching ? "magnifyingglass" : "tray",
-                title: isSearching ? "· NO MATCHES" : "· NOTHING RECENT",
+                title: isSearching ? "NO MATCHES" : "NOTHING RECENT",
                 message: isSearching ? "Try a different search term" : "Record, dictate, compose, or scan to start your feed."
             )
 
