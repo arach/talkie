@@ -201,7 +201,22 @@ class DeepLinkManager: ObservableObject {
                 Task { @MainActor in
                     HomeMastheadExperiment.shared.isOn = on
                 }
-            } else {
+            }
+            // Independent of the on/off flag above, so a finish can be chosen
+            // in the same tap that turns the band on, or changed while it is
+            // already on without restating the flag.
+            if let value = components?.queryItems?.first(where: { $0.name == "material" })?.value,
+               let material = MastheadMaterial(rawValue: value.lowercased()) {
+                AppLogger.app.info("Deep link: masthead material \(material.rawValue)")
+                UserDefaults.standard.set(material.rawValue, forKey: MastheadMaterial.defaultsKey)
+                Task { @MainActor in
+                    // The material is read at body evaluation rather than
+                    // observed, so something has to tell SwiftUI the answer
+                    // changed. Re-stamping the flag it already watches is
+                    // enough, and cheaper than making every call site observe.
+                    HomeMastheadExperiment.shared.objectWillChange.send()
+                }
+            } else if components?.queryItems?.first(where: { $0.name == "masthead" }) == nil {
                 AppLogger.app.warning("Deep link: experiment names no known flag")
             }
 

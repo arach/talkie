@@ -40,6 +40,18 @@ struct HomeNextView: View {
     }
 
     var body: some View {
+        ZStack {
+            // Behind the scroll, not inside it: the deck is the thing the
+            // content travels across, so it must not travel with it.
+            if masthead.isOn, MastheadMaterial.current == .inverted {
+                MastheadDeck()
+            }
+
+            homeScroll
+        }
+    }
+
+    private var homeScroll: some View {
         ScrollView {
             VStack(spacing: 12) {
                 if masthead.isOn {
@@ -95,8 +107,20 @@ struct HomeNextView: View {
 
                 Spacer(minLength: 80)   // breathing room for the shell voice button
             }
+            // Puts the content back exactly where the safe area had it, so the
+            // only thing that actually moved is the band's background.
+            .padding(.top, masthead.isOn ? MastheadSurface.statusBarInset : 0)
         }
         .scrollIndicators(.hidden)
+        // The band pads its own surface up by the status bar height to run
+        // under the clock — and it was being clipped away every time, because a
+        // scroll view clips to its bounds and its bounds began below the status
+        // bar. The negative padding was drawing into a strip the scroll view
+        // did not own. It owns it now.
+        //
+        // Scoped to the experiment: the control has no band to bleed, and the
+        // point of a control is that it is untouched.
+        .ignoresSafeArea(edges: masthead.isOn ? .top : [])
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if isCommandFocused {
                 HomeTalkieKeyboardHost(
@@ -388,7 +412,18 @@ private struct HomeMasthead: View {
         // from the page, so it is the full `edge` token rather than the faint
         // one — the same reasoning that made a flat theme's rules heavier in the
         // first place.
-        .overlay(alignment: .bottom) { MastheadRule(color: theme.currentTheme.chrome.edge) }
+        //
+        // The step hangs below the band rather than inside it — negative
+        // padding takes it out of the overlay's own height, so the rule still
+        // lands exactly on the bottom edge and only the shade overhangs.
+        .overlay(alignment: .bottom) {
+            VStack(spacing: 0) {
+                MastheadCoatEdge(material: MastheadMaterial.current)
+                MastheadRule(color: theme.currentTheme.chrome.edge)
+                MastheadStep()
+            }
+            .padding(.bottom, -MastheadStep.drop)
+        }
     }
 }
 
@@ -415,7 +450,7 @@ private struct HomeHeader: View {
                 .foregroundStyle(theme.colors.textPrimary)
             Spacer()
             Button(action: { AppShellRouter.shared.openSettings() }) {
-                HomeHeaderButtonGlyph(systemName: "gearshape", chromeless: chromeless)
+                HomeHeaderButtonGlyph(systemName: "gearshape", chromeless: chromeless, hug: .trailing)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Settings")
@@ -433,10 +468,27 @@ private struct HomeHeaderButtonGlyph: View {
     let systemName: String
     var isEnabled: Bool = true
     var chromeless: Bool = false
+    /// Which edge a bare glyph sits on, if any.
+    ///
+    /// A lozenge is its own left edge: centre the glyph in the circle and the
+    /// circle sits on the margin, so the margin is the thing you see. Take the
+    /// lozenge away and the glyph is still centred in the 40pt target the
+    /// lozenge used to fill — which parks its ink about ten points inboard of
+    /// where the band's own type starts, and leaves the top-left of the page
+    /// agreeing with nothing below it.
+    ///
+    /// So bare glyphs hug their edge. The target keeps its 40pt; it simply
+    /// grows inward, which is the direction with room.
+    var hug: HorizontalEdge? = nil
     @ObservedObject private var theme = ThemeManager.shared
 
+    private var alignment: Alignment {
+        guard chromeless, let hug else { return .center }
+        return hug == .leading ? .leading : .trailing
+    }
+
     var body: some View {
-        ZStack {
+        ZStack(alignment: alignment) {
             if !chromeless {
                 Circle().fill(theme.colors.cardBackground)
                 Circle().strokeBorder(
@@ -451,7 +503,7 @@ private struct HomeHeaderButtonGlyph: View {
                 .font(.system(size: chromeless ? 17 : 15, weight: chromeless ? .medium : .regular))
                 .foregroundStyle(isEnabled ? theme.colors.textSecondary : theme.colors.textTertiary)
         }
-        .frame(width: 40, height: 40)
+        .frame(width: 40, height: 40, alignment: alignment)
         .contentShape(Rectangle())
         .shadow(color: .black.opacity(chromeless ? 0 : 0.10), radius: 4, y: 2)
     }
@@ -467,7 +519,7 @@ private struct DeckComplication: View {
 
     var body: some View {
         Button(action: openDeck) {
-            HomeHeaderButtonGlyph(systemName: "square.grid.3x3", chromeless: chromeless)
+            HomeHeaderButtonGlyph(systemName: "square.grid.3x3", chromeless: chromeless, hug: .leading)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
