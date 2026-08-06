@@ -64,6 +64,26 @@ public struct TalkieMarkdownStudioWebView: NSViewRepresentable {
         let configuration = WKWebViewConfiguration()
         configuration.userContentController.add(context.coordinator, name: Coordinator.handlerName)
 
+        // Stamp the palette before the document parses, not after it loads.
+        //
+        // studio.css declares the warm manuscript palette on `:root`, so that
+        // is what paints the instant the stylesheet applies. Sending the theme
+        // on the `ready` message — which arrives after first paint — meant
+        // every open flashed cream before settling into the real theme.
+        //
+        // At .atDocumentStart `document.documentElement` already exists, and
+        // the script writes inline custom properties, which outrank the
+        // stylesheet's `:root` rule. The themed values are therefore in place
+        // before a single frame is drawn. The `ready` send stays, because it
+        // is what re-stamps the page when the theme changes under a live view.
+        configuration.userContentController.addUserScript(
+            WKUserScript(
+                source: palette.stylesheetScript(),
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: true
+            )
+        )
+
         let webView = MarkdownStudioEditingWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
         webView.setValue(false, forKey: "drawsBackground")
