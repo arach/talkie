@@ -24,7 +24,7 @@
 		54C100012F60000100000001 /* NIOCore in Frameworks */ = {isa = PBXBuildFile; productRef = 54C100072F60000100000001 /* NIOCore */; };
 		54C100022F60000100000001 /* NIOSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 54C100082F60000100000001 /* NIOSSH */; };
 		54C100032F60000100000001 /* NIOTransportServices in Frameworks */ = {isa = PBXBuildFile; productRef = 54C100092F60000100000001 /* NIOTransportServices */; };
-		54D200012F70000100000001 /* TermBridgeKit in Frameworks */ = {isa = PBXBuildFile; productRef = 54D200032F70000100000001 /* TermBridgeKit */; };
+		54D200012F70000100000001 /* Termini in Frameworks */ = {isa = PBXBuildFile; productRef = 54D200032F70000100000001 /* Termini */; };
 		5FC22816F0CCD5C0AC373F7E /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 01206C0EECEC3DE94C13391E /* Foundation.framework */; };
 /* End PBXBuildFile section */
 
@@ -243,7 +243,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				53A917A72F2C5465004170DE /* FluidAudio in Frameworks */,
-				54D200012F70000100000001 /* TermBridgeKit in Frameworks */,
+				54D200012F70000100000001 /* Termini in Frameworks */,
 				54C100012F60000100000001 /* NIOCore in Frameworks */,
 				54C100022F60000100000001 /* NIOSSH in Frameworks */,
 				54C100032F60000100000001 /* NIOTransportServices in Frameworks */,
@@ -419,7 +419,7 @@
 			packageProductDependencies = (
 				53AF32932F26B5090000561A /* TalkieMobileKit */,
 				53A917A62F2C5465004170DE /* FluidAudio */,
-				54D200032F70000100000001 /* TermBridgeKit */,
+				54D200032F70000100000001 /* Termini */,
 				54C100072F60000100000001 /* NIOCore */,
 				54C100082F60000100000001 /* NIOSSH */,
 				54C100092F60000100000001 /* NIOTransportServices */,
@@ -602,7 +602,7 @@
 			packageReferences = (
 				53AF32902F26B4640000561A /* XCLocalSwiftPackageReference "TalkieMobileKit" */,
 				53A917A52F2C52CB004170DE /* XCRemoteSwiftPackageReference "FluidAudio" */,
-				54D200022F70000100000001 /* XCRemoteSwiftPackageReference "TermBridgeKit" */,
+				54D200022F70000100000001 /* XCRemoteSwiftPackageReference "Termini" */,
 				54C100042F60000100000001 /* XCRemoteSwiftPackageReference "swift-nio" */,
 				54C100052F60000100000001 /* XCRemoteSwiftPackageReference "swift-nio-ssh" */,
 				54C100062F60000100000001 /* XCRemoteSwiftPackageReference "swift-nio-transport-services" */,
@@ -1545,12 +1545,12 @@
 				minimumVersion = 1.26.0;
 			};
 		};
-		54D200022F70000100000001 /* XCRemoteSwiftPackageReference "TermBridgeKit" */ = {
+		54D200022F70000100000001 /* XCRemoteSwiftPackageReference "Termini" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/arach/TermBridgeKit.git";
+			repositoryURL = "https://github.com/arach/Termini.git";
 			requirement = {
-				kind = exactVersion;
-				version = 0.1.2;
+				kind = revision;
+				revision = 67665470346b8264b5b944ccdf2773820caeccb2;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -1590,10 +1590,10 @@
 			package = 54C100062F60000100000001 /* XCRemoteSwiftPackageReference "swift-nio-transport-services" */;
 			productName = NIOTransportServices;
 		};
-		54D200032F70000100000001 /* TermBridgeKit */ = {
+		54D200032F70000100000001 /* Termini */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 54D200022F70000100000001 /* XCRemoteSwiftPackageReference "TermBridgeKit" */;
-			productName = TermBridgeKit;
+			package = 54D200022F70000100000001 /* XCRemoteSwiftPackageReference "Termini" */;
+			productName = Termini;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

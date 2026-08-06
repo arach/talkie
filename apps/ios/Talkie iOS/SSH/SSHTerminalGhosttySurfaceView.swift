@@ -8,8 +8,8 @@
 
 import SwiftUI
 
-#if canImport(TermBridgeKit)
-import TermBridgeKit
+#if canImport(Termini)
+import Termini
 
 struct SSHTerminalGhosttySurfaceView: View {
     let session: SSHTerminalSession
@@ -18,14 +18,14 @@ struct SSHTerminalGhosttySurfaceView: View {
     let refitRequestID: Int
     let onTerminalTap: () -> Void
 
-    @State private var controller = TermBridgeKitTerminalController()
+    @State private var controller = TerminiTerminalController()
     @State private var sessionBridge = SessionBridge()
 
     var body: some View {
         GeometryReader { proxy in
             let fontSize = preferredFontSize(for: proxy.size)
 
-            TermBridgeKitTerminalView(
+            TerminiTerminalView(
                 controller: controller,
                 showsSystemKeyboard: false,
                 fontSize: fontSize
@@ -80,10 +80,10 @@ struct SSHTerminalGhosttySurfaceView: View {
 
 private final class SessionBridge: NSObject, SSHTerminalSession.Listener {
     private weak var session: SSHTerminalSession?
-    private weak var controller: TermBridgeKitTerminalController?
+    private weak var controller: TerminiTerminalController?
 
     @MainActor
-    func bind(session: SSHTerminalSession, controller: TermBridgeKitTerminalController) {
+    func bind(session: SSHTerminalSession, controller: TerminiTerminalController) {
         if self.session !== session {
             self.session?.attach(listener: nil, replayTranscript: false)
             self.session = session
