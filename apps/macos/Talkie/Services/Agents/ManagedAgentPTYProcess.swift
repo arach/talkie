@@ -282,6 +282,10 @@ final class ManagedAgentPTYProcess: @unchecked Sendable {
         environment["FORCE_COLOR"] = "1"
         environment["TERM_PROGRAM"] = "Talkie"
 
+        for (key, value) in extra {
+            environment[key] = value
+        }
+
         // A console tab is a session of its own, not a continuation of whatever
         // happened to launch Talkie. These variables name a *specific* parent
         // Claude Code session, and the app inherits them wholesale when it is
@@ -292,6 +296,13 @@ final class ManagedAgentPTYProcess: @unchecked Sendable {
         // transcript saving. The console is meant to be a durable home; losing
         // its transcripts to an environment variable is not a trade it should
         // make silently.
+        //
+        // This runs *after* `extra`, and has to. `extra` is the tab's resolved
+        // environment, and TabEnvResolver seeds that by copying all of
+        // ProcessInfo.processInfo.environment before layering the tab's own
+        // keys on top — so scrubbing beforehand accomplishes nothing, the flood
+        // puts the marker straight back. Nothing sets these deliberately, so
+        // being the last word costs no configurability.
         //
         // Only identity markers are dropped. Deliberate configuration that
         // happens to share the prefix — `CLAUDE_CODE_USE_BEDROCK`,
@@ -305,10 +316,6 @@ final class ManagedAgentPTYProcess: @unchecked Sendable {
             "CLAUDE_CODE_EXECPATH",
         ] {
             environment[marker] = nil
-        }
-
-        for (key, value) in extra {
-            environment[key] = value
         }
 
         return environment
