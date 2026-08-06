@@ -43,7 +43,7 @@ struct HomeNextView: View {
         ZStack {
             // Behind the scroll, not inside it: the deck is the thing the
             // content travels across, so it must not travel with it.
-            if masthead.isOn, MastheadMaterial.current == .inverted {
+            if masthead.isOn, MastheadDeckGrade.current.drawsDeck {
                 MastheadDeck(grade: MastheadDeckGrade.current)
             }
 
@@ -67,7 +67,7 @@ struct HomeNextView: View {
                     // rewrite of the page.
                     HomeMasthead(
                         cockpit: feed.cockpit,
-                        material: MastheadMaterial.current,
+                        finish: MastheadFinish.current,
                         seam: MastheadSeam.current
                     )
                         .padding(
@@ -417,7 +417,7 @@ private struct HomeMasthead: View {
     // parameters they are part of this view's identity, so changing one in the
     // lab re-renders the band instead of leaving it showing the old finish
     // until something else happens to invalidate it.
-    let material: MastheadMaterial
+    let finish: MastheadFinish
     let seam: MastheadSeam
     @ObservedObject private var theme = ThemeManager.shared
 
@@ -434,7 +434,7 @@ private struct HomeMasthead: View {
             HomeCockpit(model: cockpit, flush: true)
                 .padding(.bottom, 10)
         }
-        .background(alignment: .top) { MastheadSurface(material: material) }
+        .background(alignment: .top) { MastheadSurface(finish: finish) }
         // The one division that has to carry weight. Every rule inside the band
         // separates two rows of the same thing; this one separates the masthead
         // from the page, so it is the full `edge` token rather than the faint
@@ -453,7 +453,7 @@ private struct HomeMasthead: View {
         // machining tight enough to hide, and a visible one reads as machining
         // proud enough to show. See `MastheadSeam`.
         .overlay(alignment: .bottom) {
-            MastheadJoint(material: material, seam: seam)
+            MastheadJoint(finish: finish, seam: seam)
                 .padding(.bottom, -MastheadJoint.overhang(seam: seam))
         }
     }

@@ -59,52 +59,44 @@ final class HomeMastheadExperiment: ObservableObject {
     }
 }
 
-/// What the band is made of.
+/// How the console — the band at the top — is finished.
 ///
-/// The band and the page are currently the same substance at two brightnesses,
-/// which is why the seam between them needs a rule to exist at all. A console
-/// and its instrument deck are not the same substance in any object anyone has
-/// actually held: the console is finished, and the deck is worked.
+/// This used to be called `material` and had a fourth case called `inverted`,
+/// which was a modelling mistake worth naming. Three of its cases described a
+/// surface treatment and the fourth described a whole arrangement: a gloss
+/// console *and* a deck under the page. One word was doing two jobs, so
+/// "inverted" could not be reasoned about beside the others — it was not a
+/// sibling of `laminate`, it was `gloss` plus a second decision entirely.
 ///
-/// These are the two finishes worth arguing about. Both are read from
-/// `experiment.home.masthead.material`, alongside the flag itself, so a finish
-/// can be compared against the others without a rebuild:
+/// Now there are two independent questions, which is what there always were:
+/// how the console is finished (here), and what the page below is made of
+/// (`MastheadDeckGrade`). "Inverted" is simply gloss with a deck under it.
 ///
-///     talkie://experiment?masthead=on&material=laminate
-///     talkie://experiment?masthead=on&material=anodized
-///     talkie://experiment?masthead=on&material=painted
-enum MastheadMaterial: String, CaseIterable {
-    /// What it is today — a painted plane. The control.
+///     talkie://experiment?masthead=on&finish=gloss&deck=graphite
+enum MastheadFinish: String, CaseIterable {
+    /// A painted plane. The control — what the band was before any of this.
     case painted
-    /// Print under a clear coat. Smooth, sealed, with a raking specular and a
-    /// lit edge where the coat is cut. The page below stays matte and reads as
-    /// the working surface by contrast.
+    /// Print under a clear coat: smooth and sealed, with one broad soft
+    /// specular raking from the upper left and a lit edge where the coat is cut.
     case laminate
-    /// Bead-blasted and brushed. The console is machined rather than printed:
-    /// a fine directional tooth, no specular, and a tighter crest.
+    /// Bead-blasted and brushed. Machined rather than printed — a fine
+    /// directional tooth, no specular, and a tighter crest.
     case anodized
-    /// The inversion. The console is piano black — a deep gloss with a hard
-    /// specular and a lit top edge — and the deck it sits on is machined space
-    /// grey, brushed and matte.
-    ///
-    /// The only treatment here that gives the page a material of its own
-    /// rather than leaving it as the absence of one. That is the whole point:
-    /// in every other case the two halves are the same substance at two
-    /// brightnesses, and a seam between two brightnesses always needs a rule
-    /// drawn on it to exist. Two genuinely different materials need no rule.
-    case inverted
+    /// Piano black. Almost black everywhere and very bright in one place: a
+    /// hard specular and a lit crown under the status bar.
+    case gloss
 
-    static let defaultsKey = "experiment.home.masthead.material"
+    static let defaultsKey = "experiment.home.masthead.finish"
 
-    static var current: MastheadMaterial {
+    static var current: MastheadFinish {
         guard let raw = UserDefaults.standard.string(forKey: defaultsKey),
-              let material = MastheadMaterial(rawValue: raw) else { return .laminate }
-        return material
+              let finish = MastheadFinish(rawValue: raw) else { return .gloss }
+        return finish
     }
 }
 
 /// The band itself: one plane running full bleed and up under the status bar,
-/// finished according to `MastheadMaterial`.
+/// finished according to `MastheadFinish`.
 ///
 /// Both Home and the deck draw this, because the experiment is one idea about
 /// where a screen begins rather than two treatments that happen to rhyme. If
@@ -112,10 +104,10 @@ enum MastheadMaterial: String, CaseIterable {
 /// looking like the first.
 struct MastheadSurface: View {
     @ObservedObject private var theme = ThemeManager.shared
-    var material: MastheadMaterial = MastheadMaterial.current
+    var finish: MastheadFinish = MastheadFinish.current
 
     var body: some View {
-        if material == .inverted {
+        if finish == .gloss {
             pianoBlack
         } else {
             painted
@@ -183,17 +175,17 @@ struct MastheadSurface: View {
                     // scatters — the falloff from a lit top edge is short and
                     // then it is one even tone, where a coated one carries the
                     // gradient most of the way down.
-                    .init(color: base, location: material == .anodized ? 0.34 : 0.62),
+                    .init(color: base, location: finish == .anodized ? 0.34 : 0.62),
                     .init(color: base, location: 1),
                 ],
                 startPoint: .top,
                 endPoint: .bottom
             )
 
-            switch material {
-            // `.inverted` never reaches here — it draws `pianoBlack` instead of
+            switch finish {
+            // `.gloss` never reaches here — it draws `pianoBlack` instead of
             // this whole surface — but the switch still has to say so.
-            case .painted, .inverted:
+            case .painted, .gloss:
                 EmptyView()
 
             case .laminate:
@@ -252,28 +244,35 @@ struct MastheadSurface: View {
 /// the three are far enough apart that the wrong one is obvious next to the
 /// others and invisible on its own:
 ///
-///     talkie://experiment?masthead=on&material=inverted&deck=silver
+///     talkie://experiment?masthead=on&deck=silver
 enum MastheadDeckGrade: String, CaseIterable {
-    /// Dark tool steel. The console barely separates from it.
+    /// No deck. The page stays the app's own background, which is what every
+    /// screen in the app does — this is the option, not the absence of one.
+    case off
+    /// Dark tool steel. Separates from a gloss console by a hair, so the two
+    /// read as one dark assembly caught at different angles to the light.
     case graphite
-    /// The first attempt, and the middle of the range.
+    /// The middle of the range.
     case space
-    /// Bright milled aluminium. Maximum separation from a black console, and
-    /// the one most likely to expose ink that was chosen against near-black.
+    /// Bright milled aluminium. Maximum separation, and the grade that most
+    /// exposes ink that was chosen against near-black.
     case silver
 
     static let defaultsKey = "experiment.home.masthead.deck"
 
     static var current: MastheadDeckGrade {
         guard let raw = UserDefaults.standard.string(forKey: defaultsKey),
-              let grade = MastheadDeckGrade(rawValue: raw) else { return .space }
+              let grade = MastheadDeckGrade(rawValue: raw) else { return .graphite }
         return grade
     }
+
+    var drawsDeck: Bool { self != .off }
 
     /// Kept faintly blue rather than neutral all the way up. A pure grey ramp
     /// reads as cardboard at the light end; real anodising keeps a cast.
     var base: Color {
         switch self {
+        case .off:      Color.clear
         case .graphite: Color(red: 0.145, green: 0.150, blue: 0.160)
         case .space:    Color(red: 0.235, green: 0.243, blue: 0.255)
         case .silver:   Color(red: 0.335, green: 0.345, blue: 0.360)
@@ -283,7 +282,7 @@ enum MastheadDeckGrade: String, CaseIterable {
 
 /// What happens where the console meets the deck.
 ///
-///     talkie://experiment?masthead=on&material=inverted&seam=rebate
+///     talkie://experiment?masthead=on&seam=rebate
 enum MastheadSeam: String, CaseIterable {
     /// The two materials simply meet. Reads as one machined assembly with
     /// tolerances too tight to see — which is its own kind of expensive.
@@ -325,7 +324,7 @@ struct MastheadExperimentPanel: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var flag = HomeMastheadExperiment.shared
 
-    @State private var material = MastheadMaterial.current
+    @State private var finish = MastheadFinish.current
     @State private var deck = MastheadDeckGrade.current
     @State private var seam = MastheadSeam.current
 
@@ -338,8 +337,13 @@ struct MastheadExperimentPanel: View {
                     Text("Off restores the original header and cockpit, unchanged.")
                 }
 
-                Section("Console") {
-                    picker("Finish", selection: $material, cases: MastheadMaterial.allCases)
+                Section {
+                    picker("Finish", selection: $finish, cases: MastheadFinish.allCases)
+                } header: {
+                    Text("Console")
+                } footer: {
+                    Text("How the band at the top is surfaced. Gloss is piano black; "
+                         + "painted is what it was before any of this.")
                 }
 
                 Section {
@@ -347,8 +351,8 @@ struct MastheadExperimentPanel: View {
                 } header: {
                     Text("Deck")
                 } footer: {
-                    Text("Only the inverted finish gives the page a material of its own; "
-                         + "the other three leave it as the app background.")
+                    Text("What the page below is made of. Off leaves it as the app "
+                         + "background, which is what every other screen does.")
                 }
 
                 Section("Joint") {
@@ -365,7 +369,7 @@ struct MastheadExperimentPanel: View {
         }
         // Written on change rather than on dismiss, so the screen behind the
         // sheet is already showing the answer by the time it is swiped away.
-        .onChange(of: material) { _, new in store(MastheadMaterial.defaultsKey, new.rawValue) }
+        .onChange(of: finish) { _, new in store(MastheadFinish.defaultsKey, new.rawValue) }
         .onChange(of: deck) { _, new in store(MastheadDeckGrade.defaultsKey, new.rawValue) }
         .onChange(of: seam) { _, new in store(MastheadSeam.defaultsKey, new.rawValue) }
     }
@@ -395,7 +399,7 @@ struct MastheadExperimentPanel: View {
 
 /// The deck the console is bolted to — machined space grey, brushed and matte.
 ///
-/// Only `.inverted` draws this. Every other treatment leaves the page as the
+/// Only `.gloss` draws this. Every other treatment leaves the page as the
 /// app's own background, which is the right default: giving the page a
 /// material is a claim that the whole screen is an object, and that is a much
 /// larger claim than a masthead makes.
@@ -486,13 +490,13 @@ enum MaterialTexture {
 ///
 /// Nothing here for a painted band, which has no coat to cut.
 struct MastheadCoatEdge: View {
-    let material: MastheadMaterial
+    let finish: MastheadFinish
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        if material != .painted {
+        if finish != .painted {
             Rectangle()
-                .fill(Color.white.opacity(material == .laminate ? 0.11 : 0.07))
+                .fill(Color.white.opacity(finish == .laminate ? 0.11 : 0.07))
                 .frame(height: theme.currentTheme.chrome.hairlineWidth)
         }
     }
@@ -504,7 +508,7 @@ struct MastheadCoatEdge: View {
 /// console's bottom edge, and the caller lifts it back with negative padding so
 /// only the overhang lands on the page.
 struct MastheadJoint: View {
-    let material: MastheadMaterial
+    let finish: MastheadFinish
     let seam: MastheadSeam
     @ObservedObject private var theme = ThemeManager.shared
 
@@ -518,8 +522,8 @@ struct MastheadJoint: View {
         switch seam {
         case .seamless:
             VStack(spacing: 0) {
-                MastheadCoatEdge(material: material)
-                if material == .painted {
+                MastheadCoatEdge(finish: finish)
+                if finish == .painted {
                     MastheadRule(color: theme.currentTheme.chrome.edge)
                 }
                 MastheadStep()
@@ -528,7 +532,7 @@ struct MastheadJoint: View {
         case .rebate:
             VStack(spacing: 0) {
                 // The console's cut, then the channel it was cut back to.
-                MastheadCoatEdge(material: material)
+                MastheadCoatEdge(finish: finish)
 
                 Rectangle()
                     .fill(Color.black.opacity(0.55))
