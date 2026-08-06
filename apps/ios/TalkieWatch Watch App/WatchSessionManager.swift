@@ -197,6 +197,132 @@ private struct PendingAudioTransfer: Codable, Identifiable {
     var transferCompletedAt: Date?
 }
 
+/// The trailing weeks of capture activity, as published by the phone.
+///
+/// The Watch cannot derive this. It keeps ten recent memos and nothing behind
+/// them, so an empty day inside that window is indistinguishable on the wrist
+/// from an empty day in the library — ten captures this morning would blank out
+/// every week before them. The phone owns the history and sends the roll; this
+/// is the durable copy of the last one that arrived.
+///
+/// The width is the phone's to choose (`watchActivityDays`), not this type's.
+/// The face solves its own grid against whatever length shows up, so widening
+/// the window is a one-line change on one device.
+struct WatchActivity: Codable, Equatable {
+    /// Take counts per day, oldest first, last element = the day it was sent.
+    /// Sent uncapped — the phone reports what happened and the strip clamps to
+    /// `maximumIntensity` when it draws, so a future readout that wants the real
+    /// number is not reading a value that was already rounded off for a dot.
+    var days: [Int]
+    var streak: Int
+    var todayTakes: Int
+    var todaySeconds: Double
+    /// When the phone derived it. The Watch ages the array off this rather than
+    /// trusting the last slot to still be today.
+    var updatedAt: Date
+
+    /// Brightest a single day's dot can read. The phone caps at the same value;
+    /// declared here too because the Watch draws its own scale off it and a
+    /// silent disagreement would show as a fortnight that never lights fully.
+    static let maximumIntensity = 3
+
+    /// An all-zero fortnight, for the stretch before the phone has ever answered.
+    ///
+    /// The strip draws this through the same merge path as a real payload, so the
+    /// wrist's own captures still light their own days and the plate does not
+    /// change shape the first time a real histogram lands — it just fills in
+    /// behind what was already there.
+    static func blank(width: Int, asOf now: Date) -> WatchActivity {
+        WatchActivity(
+            days: [Int](repeating: 0, count: max(0, width)),
+            streak: 0,
+            todayTakes: 0,
+            todaySeconds: 0,
+            updatedAt: now
+        )
+    }
+
+    private init(days: [Int], streak: Int, todayTakes: Int, todaySeconds: Double, updatedAt: Date) {
+        self.days = days
+        self.streak = streak
+        self.todayTakes = todayTakes
+        self.todaySeconds = todaySeconds
+        self.updatedAt = updatedAt
+    }
+
+    init?(payload: [String: Any]) {
+        guard let days = payload["days"] as? [Int] else { return nil }
+        self.days = days
+        streak = payload["streak"] as? Int ?? 0
+        todayTakes = payload["todayTakes"] as? Int ?? 0
+        todaySeconds = payload["todaySeconds"] as? Double ?? 0
+        updatedAt = Date(timeIntervalSince1970: payload["updatedAt"] as? TimeInterval ?? 0)
+    }
+
+    /// One day of the roll, after the phone's history and the wrist's own
+    /// captures have been reconciled.
+    ///
+    /// The count is uncapped for the same reason the payload's is: clamping is a
+    /// drawing decision, and a caller that wants the real number should not be
+    /// reading one that was already rounded off to fit a swatch.
+    struct Cell: Equatable {
+        var takes: Int
+        /// The wrist counted more captures on this day than the phone has
+        /// acknowledged. Not the same as "unsynced" in any durable sense — it
+        /// only means the phone has not republished since — but it is the one
+        /// thing on the roll the watch knows and the phone does not, so it is
+        /// worth drawing differently.
+        var isUnsent: Bool
+    }
+
+    /// The roll as of `now`, with anything the wrist itself knows folded in.
+    ///
+    /// Two corrections, both of which the raw payload needs before it can be
+    /// drawn honestly:
+    ///
+    /// The phone's array ends on the day it was sent, not on today. A watch that
+    /// has been out of contact for two days would otherwise draw a cell two days
+    /// stale under the marker that says "now", so the array is shifted by the
+    /// elapsed days and the vacated slots come up empty — which is exactly what
+    /// the Watch knows about them.
+    ///
+    /// Then the Watch's own recent memos are merged over the top, taking the
+    /// larger count per day. That is strictly additive: a capture spoken into
+    /// the wrist lights its day immediately instead of waiting for the phone to
+    /// reload Home and republish. Only days the Watch can still see are touched.
+    func roll(now: Date, recent: [WatchMemo], calendar: Calendar = .current) -> [Cell] {
+        let width = days.count
+        guard width > 0 else { return [] }
+
+        let today = calendar.startOfDay(for: now)
+        let sentDay = calendar.startOfDay(for: updatedAt)
+        let elapsed = calendar.dateComponents([.day], from: sentDay, to: today).day ?? 0
+
+        var published = [Int](repeating: 0, count: width)
+        if elapsed < width {
+            for slot in 0..<width {
+                let source = slot + max(0, elapsed)
+                if source < width { published[slot] = days[source] }
+            }
+        }
+
+        var local = [Int](repeating: 0, count: width)
+        for memo in recent {
+            let day = calendar.startOfDay(for: memo.timestamp)
+            guard let offset = calendar.dateComponents([.day], from: day, to: today).day,
+                  offset >= 0, offset < width else { continue }
+            local[width - 1 - offset] += 1
+        }
+
+        return (0..<width).map { slot in
+            Cell(
+                takes: max(published[slot], local[slot]),
+                isUnsent: local[slot] > published[slot]
+            )
+        }
+    }
+}
+
 // MARK: - Watch Session Manager
 
 @MainActor
@@ -220,6 +346,13 @@ final class WatchSessionManager: NSObject, ObservableObject {
     /// The answer currently speaking, if any. Drives the play/stop face of the
     /// capture key.
     @Published private(set) var playingAnswerID: UUID?
+    /// The phone's last-known capture history, drawn by the capture face's
+    /// activity strip. Durable, because application context only replays on
+    /// activation: a Watch that launched before the phone was reachable would
+    /// otherwise show an empty fortnight until it happened to reconnect.
+    @Published private(set) var activity: WatchActivity? {
+        didSet { saveActivity() }
+    }
 
     /// Whether the app is frontmost, which on this device means the wrist is up
     /// and the screen is lit. watchOS exposes no wrist-raise API; the scene
@@ -426,6 +559,7 @@ final class WatchSessionManager: NSObject, ObservableObject {
         loadSignalLedger()
         selectedCodexTaskID = UserDefaults.standard.string(forKey: selectedCodexTaskKey)
         loadCodexDispatchReceipt()
+        loadActivity()
         loadPendingAudioTransfers()
         loadAnswerAudio()
         pruneAnswerAudio()
@@ -534,6 +668,33 @@ final class WatchSessionManager: NSObject, ObservableObject {
             return
         }
         codexDispatchReceipt = receipt
+    }
+
+    private static let activityKey = "watch.activity.v1"
+
+    private func loadActivity() {
+        guard let data = UserDefaults.standard.data(forKey: Self.activityKey),
+              let stored = try? JSONDecoder().decode(WatchActivity.self, from: data) else {
+            return
+        }
+        activity = stored
+    }
+
+    private func saveActivity() {
+        guard let activity, let data = try? JSONEncoder().encode(activity) else {
+            UserDefaults.standard.removeObject(forKey: Self.activityKey)
+            return
+        }
+        UserDefaults.standard.set(data, forKey: Self.activityKey)
+    }
+
+    private func handleActivity(_ payload: [String: Any]) {
+        guard let incoming = WatchActivity(payload: payload) else { return }
+        // Application context replays the phone's last-known value on every
+        // activation, and a Watch that has been awake longer than the phone can
+        // already be holding something newer. Older wins nothing.
+        if let activity, activity.updatedAt > incoming.updatedAt { return }
+        activity = incoming
     }
 
     private func saveCodexDispatchReceipt() {
@@ -1607,6 +1768,10 @@ extension WatchSessionManager: WCSessionDelegate {
 
             if let update = applicationContext["codexDispatchUpdate"] as? [String: Any] {
                 self.handleCodexDispatchUpdate(update)
+            }
+
+            if let activity = applicationContext["activity"] as? [String: Any] {
+                self.handleActivity(activity)
             }
         }
     }

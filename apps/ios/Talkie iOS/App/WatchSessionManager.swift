@@ -31,6 +31,11 @@ final class WatchSessionManager: NSObject, ObservableObject {
     private var session: WCSession?
     private var codexSnapshotRevision: Int
     private var codexSnapshotSignature: String?
+    /// Last fortnight published to the wrist. In-memory only — a relaunched app
+    /// republishing the same histogram once costs one context write, whereas a
+    /// persisted signature that drifts out of step with what the Watch actually
+    /// holds would suppress the write that fixes it.
+    private var lastActivitySignature: String?
 
     private override init() {
         codexSnapshotRevision = UserDefaults.standard.integer(forKey: Keys.codexSnapshotRevision)
@@ -243,6 +248,84 @@ final class WatchSessionManager: NSObject, ObservableObject {
         publishAppearanceTheme(
             TalkieAppConfigurationStore.shared.configuration.appearance.theme
         )
+    }
+
+    /// How many trailing days of activity the Watch's capture face is given.
+    ///
+    /// It was a fortnight while the face drew one row of dots: a strip narrower
+    /// than a credit card sets its own limit, and fourteen was what stayed
+    /// legible across it. The face draws a wrapped contact sheet now, which buys
+    /// back the constraint — cells need no height to mean something, so the same
+    /// band holds three rows.
+    ///
+    /// Ten weeks. Six was enough for the three rows the sheet drew first, and
+    /// three rows turned out to be too few to read as a sheet at all — at that
+    /// count the grid still looks like a band of texture rather than a run of
+    /// days you can pick a week out of. Five rows is where it starts behaving
+    /// like the thing it is named after, and five rows of a legible column count
+    /// is seventy days.
+    static let watchActivityDays = 70
+
+    /// Publishes the trailing day histogram the Watch capture face reads.
+    ///
+    /// The Watch cannot derive this itself. It holds ten recent memos and
+    /// nothing older, so a day with no memo in that window is indistinguishable
+    /// on the wrist from a day with none at all — ten captures this morning
+    /// would blank out the entire fortnight behind them. The counts have to come
+    /// from the side that has the library.
+    ///
+    /// Derived from the same `CockpitModel` Home's Roll and Life-in-Dots read,
+    /// so "a take" means one thing across both devices instead of two.
+    func publishActivity(_ cockpit: HomeFeed.CockpitModel) {
+        let width = Self.watchActivityDays
+        var days = [Int](repeating: 0, count: width)
+        for slot in 0..<width {
+            let index = cockpit.todayIndex - (width - 1 - slot)
+            guard index >= 0, index < cockpit.rollDays.count else { continue }
+            days[slot] = cockpit.rollDays[index]
+        }
+
+        publishActivity(
+            days: days,
+            streak: cockpit.streak,
+            todayTakes: cockpit.todayTakes,
+            todaySeconds: cockpit.todayDurationSeconds
+        )
+    }
+
+    func publishActivity(days: [Int], streak: Int, todayTakes: Int, todaySeconds: Double) {
+        // Signature-guarded like the Codex snapshot: `reload()` runs on every
+        // Home appearance and most of those find the day unchanged, and
+        // application context is rate-limited by the system. Republishing an
+        // identical roll would spend that budget on nothing.
+        let signature = (days.map(String.init) + [
+            "\(streak)", "\(todayTakes)", "\(Int(todaySeconds.rounded()))"
+        ]).joined(separator: ",")
+        guard signature != lastActivitySignature else { return }
+
+        activateIfNeeded()
+
+        guard let session, session.activationState == .activated else {
+            log.debug("Watch activity skipped; session is not activated")
+            return
+        }
+
+        let payload: [String: Any] = [
+            "days": days,
+            "streak": streak,
+            "todayTakes": todayTakes,
+            "todaySeconds": todaySeconds,
+            "updatedAt": Date().timeIntervalSince1970,
+        ]
+
+        do {
+            var context = session.applicationContext
+            context["activity"] = payload
+            try session.updateApplicationContext(context)
+            lastActivitySignature = signature
+        } catch {
+            log.debug("Watch activity context failed: \(error.localizedDescription)")
+        }
     }
 
     /// Publishes the bounded Codex channel snapshot used by the Watch picker.

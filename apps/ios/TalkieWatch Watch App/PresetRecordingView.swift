@@ -80,6 +80,10 @@ struct PresetRecordingView: View {
                 }
             }
         }
+        // Moved out of `TalkieCaptureBackground` so the capture face could put
+        // it above its scroll. This surface does not scroll, so behind or above
+        // is the same picture — but the scrim has one home now, not two.
+        .overlay { ClockScrim() }
         .onAppear {
             WatchConsole.info(
                 "[WatchCapture] opened intent=\(preset.intent ?? "auto") reachable=\(sessionManager.isReachable)"
