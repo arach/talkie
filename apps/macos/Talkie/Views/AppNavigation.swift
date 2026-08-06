@@ -1108,7 +1108,10 @@ struct AppNavigation: View {
                         DraftsScreen()
                     }
                 case .markdownStudio:
-                    MarkdownStudioView(dictation: StudioDictationProvider())
+                    MarkdownStudioView(
+                        dictation: StudioDictationProvider(),
+                        palette: .current
+                    )
                 case .notes:
                     if SettingsManager.shared.isScopeTheme {
                         // Scope ships Notes as its own surface — a two-

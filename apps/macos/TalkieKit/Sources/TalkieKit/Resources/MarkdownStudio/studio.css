@@ -110,7 +110,19 @@ body {
 .dictate-live .pulse { width:9px; height:9px; border-radius:2px; background:#fff; box-shadow:0 0 0 4px rgba(255,255,255,0.28); animation:tk-blink 1.4s ease-in-out infinite; }
 
 /* ══ SPLIT BODY ══ */
-.split { position:relative; flex:1 1 auto; min-height:0; display:flex; align-items:stretch; }
+/* The workspace is a sheet set into the canvas, not the canvas itself.
+   Everything below the toolbar used to run to all four window edges, which
+   left the studio with no outer shape at all — panes simply stopped where the
+   window did. The toolbar stays full-bleed on purpose: chrome spans, content
+   is inset, and the gap between them is what makes the toolbar read as
+   chrome. `overflow:hidden` lets the corner radius clip the panes, the
+   revisions rail and the compare view alike, so none of them needs to know
+   it is sitting in a rounded box. */
+.split {
+  position:relative; flex:1 1 auto; min-height:0; display:flex; align-items:stretch;
+  margin:14px; border:1px solid var(--edge); border-radius:12px; overflow:hidden;
+  box-shadow:0 1px 2px rgba(0,0,0,0.03), 0 10px 28px rgba(0,0,0,0.045);
+}
 .pane { flex:1 1 0; min-width:0; display:flex; flex-direction:column; position:relative; }
 .source-pane { background:var(--source); animation:tk-rise .45s ease-out .05s both; }
 .preview-pane { background:var(--surface); animation:tk-rise .45s ease-out .1s both; }
@@ -175,12 +187,29 @@ body {
 
 /* code */
 .preview code { font-family:var(--mono); font-size:0.88em; background:var(--soft); color:var(--ink); border-radius:4px; padding:1px 5px; }
-.preview pre { margin:14px 0 0; border-radius:10px; overflow:hidden; background:#0e0b08; border:1px solid #2c221a; box-shadow:inset 0 0 40px rgba(255,184,77,0.05); }
-.preview pre .pre-dots { display:flex; align-items:center; gap:7px; padding:8px 13px; border-bottom:1px solid rgba(255,220,170,0.08); }
-.preview pre .pre-dots span { width:7px; height:7px; border-radius:50%; opacity:0.85; }
-.preview pre .pre-dots .r { background:#ff5f56; } .preview pre .pre-dots .y { background:#ffbd2e; } .preview pre .pre-dots .g { background:#27ca40; }
-.preview pre .pre-lang { margin-left:5px; font-family:var(--mono); font-size:9px; letter-spacing:0.1em; text-transform:uppercase; color:#8a7d68; }
-.preview pre code { display:block; padding:12px 15px; font-family:var(--mono); font-size:12.5px; line-height:1.6; color:#e9dfc9; background:transparent; border-radius:0; }
+/* Code is a panel on the page, not a hole punched through it.
+   It was #0e0b08 — a warm near-black with an amber inner glow and cream type
+   — which on a pale canvas read as the one unlit object in the document and
+   pulled the eye off the prose it was meant to support.
+   Nothing here names a colour. The block is built from the theme's own
+   surfaces mixed a little toward its ink, so it lands soft against a light
+   canvas and genuinely dark against a dark one without a second palette or a
+   light/dark branch anywhere.
+   The title bar earns its keep by being a *different* surface from the body
+   rather than the same one with a line under it: two steps of ink, a hairline
+   between them, and the code sitting on the calmer of the two. */
+.preview pre { margin:14px 0 0; border-radius:10px; overflow:hidden; background:color-mix(in srgb, var(--ink) 5%, var(--source)); border:1px solid var(--edge); }
+.preview pre .pre-dots { display:flex; align-items:center; gap:7px; padding:8px 13px; background:color-mix(in srgb, var(--ink) 11%, var(--source)); border-bottom:1px solid var(--edge); }
+/* Muted to the theme rather than the literal macOS red/amber/green. Three
+   saturated dots were loud enough on a dark ground; on a soft one they were
+   the brightest thing in the document, which is not what a window control
+   cluster is for. The rhythm survives, the shouting does not. */
+.preview pre .pre-dots span { width:7px; height:7px; border-radius:50%; }
+.preview pre .pre-dots .r { background:color-mix(in srgb, var(--acc) 55%, transparent); }
+.preview pre .pre-dots .y { background:color-mix(in srgb, var(--ink) 26%, transparent); }
+.preview pre .pre-dots .g { background:color-mix(in srgb, var(--ink) 16%, transparent); }
+.preview pre .pre-lang { margin-left:5px; font-family:var(--mono); font-size:9px; letter-spacing:0.1em; text-transform:uppercase; color:var(--dim); }
+.preview pre code { display:block; padding:12px 15px; font-family:var(--mono); font-size:12.5px; line-height:1.6; color:var(--ink2); background:transparent; border-radius:0; }
 
 /* tables */
 .preview table { margin:16px 0 0; width:100%; border-collapse:separate; border-spacing:0; border:1px solid var(--edge); border-radius:10px; overflow:hidden; font-size:14px; }

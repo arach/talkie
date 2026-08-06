@@ -17,14 +17,22 @@ import WebKit
 
 public struct MarkdownStudioView: View {
     private let dictation: MarkdownStudioDictating?
+    private let palette: MarkdownStudioPalette
 
-    public init(dictation: MarkdownStudioDictating? = nil) {
+    public init(
+        dictation: MarkdownStudioDictating? = nil,
+        palette: MarkdownStudioPalette = .manuscript
+    ) {
         self.dictation = dictation
+        self.palette = palette
     }
 
     public var body: some View {
-        TalkieMarkdownStudioWebView(dictation: dictation)
-            .background(Color(red: 0.957, green: 0.945, blue: 0.914)) // --canvas, avoids white flash pre-load
+        TalkieMarkdownStudioWebView(dictation: dictation, palette: palette)
+            // The page's own canvas, so the frame the web view has not painted
+            // yet matches the one it is about to. Was a hardcoded cream, which
+            // flashed the wrong colour on every theme but the warm one.
+            .background(palette.canvas)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
@@ -38,12 +46,19 @@ private final class MarkdownStudioEditingWebView: WKWebView {
 
 public struct TalkieMarkdownStudioWebView: NSViewRepresentable {
     private let dictation: MarkdownStudioDictating?
+    private let palette: MarkdownStudioPalette
 
-    public init(dictation: MarkdownStudioDictating? = nil) {
+    public init(
+        dictation: MarkdownStudioDictating? = nil,
+        palette: MarkdownStudioPalette = .manuscript
+    ) {
         self.dictation = dictation
+        self.palette = palette
     }
 
-    public func makeCoordinator() -> Coordinator { Coordinator(dictation: dictation) }
+    public func makeCoordinator() -> Coordinator {
+        Coordinator(dictation: dictation, palette: palette)
+    }
 
     public func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
@@ -66,7 +81,13 @@ public struct TalkieMarkdownStudioWebView: NSViewRepresentable {
         return webView
     }
 
-    public func updateNSView(_ webView: WKWebView, context: Context) {}
+    public func updateNSView(_ webView: WKWebView, context: Context) {
+        // Themes can change with the studio already open, and the page is a
+        // long-lived document — reloading it to repaint would cost the caret,
+        // the scroll position and the undo stack. Restamping the custom
+        // properties is enough; CSS does the rest.
+        context.coordinator.applyPalette(palette)
+    }
 
     public static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
         coordinator.teardown(webView: webView)
@@ -90,12 +111,38 @@ public struct TalkieMarkdownStudioWebView: NSViewRepresentable {
         private var dictationElapsed: TimeInterval = 0
         private var levelTimer: Timer?
 
-        init(dictation: MarkdownStudioDictating?) {
+        private var palette: MarkdownStudioPalette
+
+        init(dictation: MarkdownStudioDictating?, palette: MarkdownStudioPalette) {
             self.dictation = dictation
+            self.palette = palette
             super.init()
         }
 
         func attach(_ webView: WKWebView) { self.webView = webView }
+
+        /// Adopt a palette, stamping it on the page if one is loaded.
+        ///
+        /// Safe to call before `ready`: the value is kept and the `ready`
+        /// handler stamps it, so a theme that changes during the load does not
+        /// get lost between the two.
+        func applyPalette(_ palette: MarkdownStudioPalette) {
+            guard palette != self.palette else { return }
+            self.palette = palette
+            guard isReady else { return }
+            evaluate(palette.stylesheetScript())
+            evaluate(configureScript())
+        }
+
+        /// The CodeMirror core is configured through its own API rather than
+        /// through CSS, so the accent and source ink have to be handed over
+        /// separately from the custom properties.
+        private func configureScript() -> String {
+            "window.TalkieEditor?.configure({"
+                + "accentColor:'\(palette.accent.cssHex)',"
+                + "textColor:'\(palette.sourceInk.cssHex)',"
+                + "fontSize:13,lineHeight:1.92});"
+        }
 
         func teardown(webView: WKWebView) {
             levelTimer?.invalidate()
@@ -126,7 +173,11 @@ public struct TalkieMarkdownStudioWebView: NSViewRepresentable {
             case "ready":
                 store.load()
                 isReady = true
-                evaluate("window.TalkieEditor?.configure({accentColor:'#c47d1c',textColor:'#4a3f31',fontSize:13,lineHeight:1.92});")
+                // Palette first: it repaints the chrome the page has already
+                // laid out, and doing it before the text lands means the
+                // document is never briefly visible in the wrong colours.
+                evaluate(palette.stylesheetScript())
+                evaluate(configureScript())
                 evaluate("window.TalkieStudio?.setDocTitle(\(jsLiteral(store.title)));")
                 evaluate("window.TalkieStudio?.setDictationAvailable(\(dictation != nil ? "true" : "false"));")
                 pushRevisions()
