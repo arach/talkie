@@ -1317,25 +1317,70 @@ private struct CodexCommandConsole: View {
 
     @ObservedObject private var store = CodexLaneStore.shared
     @ObservedObject private var theme = ThemeManager.shared
+    @ObservedObject private var masthead = HomeMastheadExperiment.shared
     @State private var bridge = BridgeManager.shared
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.colorScheme) private var colorScheme
     // Set once at the deck root; the console reads it for its lane keys.
     @Environment(\.deckFinish) private var deckFinish
 
+    /// Masthead experiment: the lane rail joins the header as one band.
+    ///
+    /// The deck has the same three-objects-with-gaps top that Home had — a
+    /// floating header row, then an inset rounded rail, then the console panel —
+    /// so it gets the same answer, off the same flag. One experiment on two
+    /// surfaces, not two treatments that happen to rhyme.
+    private var flush: Bool { HomeMastheadExperiment.isFlush }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        Group {
             if dynamicTypeSize.isAccessibilitySize {
-                accessibilityLaneTransport
-                accessibilityTaskIdentity
+                VStack(alignment: .leading, spacing: 3) {
+                    accessibilityLaneTransport
+                    accessibilityTaskIdentity
+                }
+                .padding(.horizontal, 10)
+            } else if flush {
+                VStack(alignment: .leading, spacing: 0) {
+                    lanePicker
+
+                    // The division that closes the band. Everything above it is
+                    // masthead and everything below it is page, which is more
+                    // than any rule inside the band is asked to say — so it is
+                    // the full `edge` token, matching Home's.
+                    MastheadRule(color: theme.chrome.edge)
+
+                    taskIdentity
+                        .padding(.horizontal, 10)
+                        .padding(.top, 8)
+                }
             } else {
-                lanePicker
-                taskIdentity
+                VStack(alignment: .leading, spacing: 3) {
+                    lanePicker
+                    taskIdentity
+                }
+                .padding(.horizontal, 10)
             }
         }
-        .padding(.horizontal, 10)
         .dynamicTypeSize(.xSmall ... .accessibility1)
     }
+
+    /// The rail's three inks, resolved for the surface it is actually on.
+    ///
+    /// The `panel*` family is ink for a dark recessed plate — on the themes
+    /// whose plates stay dark in both modes those are near-whites by design.
+    /// Take the plate away and they land on the page as white on white, so a
+    /// flush rail reads off the page vocabulary instead. Same trade the flush
+    /// message strip makes, for the same reason.
+    private var railInk: (accent: Color, ink: Color, faint: Color) {
+        flush
+            ? (theme.chrome.accent, theme.colors.textPrimary, theme.colors.textTertiary)
+            : (theme.chrome.panelAccent, theme.chrome.panelInk, theme.chrome.panelInkFaint)
+    }
+
+    /// Glow radius for the active-lane marker. A flush rail has no screen to be
+    /// lit, so it gets none.
+    private var railGlow: CGFloat { flush ? 0 : 3 }
 
     private var lanePicker: some View {
         HStack(spacing: 0) {
@@ -1359,17 +1404,28 @@ private struct CodexCommandConsole: View {
             }
         }
         // Dense monospaced rail; full 44pt row so lane keys meet HIG.
-        .padding(.horizontal, 2)
-        .background(
-            RoundedRectangle(cornerRadius: max(6, theme.chrome.chromeCorner + 2), style: .continuous)
-                .fill(deckFinish.tint(theme.chrome.panel, colorScheme == .dark ? 0.78 : 0.94, over: theme.chrome.panelAlt))
-        )
+        // Flush: no inset, so the hairlines between lanes are the only division
+        // and the rail reads as a row of the band rather than an object in it.
+        .padding(.horizontal, flush ? 0 : 2)
+        .background {
+            if flush {
+                // The band's own base, continuing the masthead surface the
+                // header draws — by the bottom of the header its crest has
+                // already faded to exactly this, so the two meet without a seam.
+                theme.colors.cardBackground
+            } else {
+                RoundedRectangle(cornerRadius: max(6, theme.chrome.chromeCorner + 2), style: .continuous)
+                    .fill(deckFinish.tint(theme.chrome.panel, colorScheme == .dark ? 0.78 : 0.94, over: theme.chrome.panelAlt))
+            }
+        }
         .overlay {
-            RoundedRectangle(cornerRadius: max(6, theme.chrome.chromeCorner + 2), style: .continuous)
-                .stroke(
-                    theme.chrome.panelEdge.opacity(colorScheme == .dark ? 0.55 : 0.82),
-                    lineWidth: theme.chrome.hairlineWidth
-                )
+            if !flush {
+                RoundedRectangle(cornerRadius: max(6, theme.chrome.chromeCorner + 2), style: .continuous)
+                    .stroke(
+                        theme.chrome.panelEdge.opacity(colorScheme == .dark ? 0.55 : 0.82),
+                        lineWidth: theme.chrome.hairlineWidth
+                    )
+            }
         }
         .frame(height: 44)
         .contentShape(Rectangle())
@@ -1383,9 +1439,9 @@ private struct CodexCommandConsole: View {
         return Button(action: store.clearSelection) {
             ZStack(alignment: .top) {
                 Capsule()
-                    .fill(theme.chrome.panelAccent)
+                    .fill(railInk.accent)
                     .frame(width: 22, height: 2)
-                    .talkieAccentGlow(radius: 3)
+                    .talkieAccentGlow(radius: railGlow)
 
                 VStack(spacing: 1) {
                     Image(systemName: "desktopcomputer")
@@ -1395,7 +1451,7 @@ private struct CodexCommandConsole: View {
                         .deckFont(5.5, .bold)
                         .deckTracking(0.4)
                 }
-                .foregroundStyle(theme.chrome.panelAccent)
+                .foregroundStyle(railInk.accent)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .frame(maxWidth: .infinity)
@@ -1424,9 +1480,9 @@ private struct CodexCommandConsole: View {
             ZStack(alignment: .top) {
                 if isActive {
                     Capsule()
-                        .fill(theme.chrome.panelAccent)
+                        .fill(railInk.accent)
                         .frame(width: 22, height: 2)
-                        .talkieAccentGlow(radius: 3)
+                        .talkieAccentGlow(radius: railGlow)
                 }
 
                 VStack(spacing: 1) {
@@ -1451,7 +1507,7 @@ private struct CodexCommandConsole: View {
                 .foregroundStyle(
                     lane == nil
                         ? emptyLaneRailColor
-                        : (isActive ? theme.chrome.panelAccent : mappedLaneRailColor)
+                        : (isActive ? railInk.accent : mappedLaneRailColor)
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -1474,11 +1530,11 @@ private struct CodexCommandConsole: View {
     /// three plate inks already encode the three states — faint for an empty
     /// slot, full for a mapped one, accent for the one you're steering.
     private var emptyLaneRailColor: Color {
-        theme.chrome.panelInkFaint
+        railInk.faint
     }
 
     private var mappedLaneRailColor: Color {
-        theme.chrome.panelInk
+        railInk.ink
     }
 
     private func laneKeySurface(isActive: Bool) -> some View {

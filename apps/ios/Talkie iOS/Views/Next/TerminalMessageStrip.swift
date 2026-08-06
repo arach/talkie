@@ -38,7 +38,7 @@ enum TerminalStripPalette {
     private static var chrome: ChromeTokens { activeTheme.chrome }
 
     static var phosphor: Color { chrome.panelAccent }
-    static var phosphorDim: Color { chrome.panelAccent.opacity(0.5) }
+    static var phosphorDim: Color { tint(chrome.panelAccent, 0.5) }
     static var accent: Color { chrome.accent }
     static var glassTop: Color { chrome.panelAlt }
     static var glassBottom: Color { chrome.panel }
@@ -47,6 +47,53 @@ enum TerminalStripPalette {
     /// Whether this theme wants the CRT material at all. A flat theme gets the
     /// glass colour and the word, and nothing in between. See `DeckFinish`.
     static var finish: DeckFinish { activeTheme.finish }
+
+    /// A tint on the terminal glass. `glassBottom` is the plate the strip
+    /// actually sits on, so that is what a solid finish resolves against.
+    static func tint(_ ink: Color, _ alpha: Double, over plate: Color? = nil) -> Color {
+        finish.tint(ink, alpha, over: plate ?? glassBottom)
+    }
+
+    /// The ink a strip draws with, resolved for the surface it is actually on.
+    ///
+    /// A strip that carries its own glass is a lit panel, and `panelAccent` is
+    /// the phosphor for it — which on the themes whose plates stay dark in both
+    /// modes is a near-white by design (see graphite's `FAFAFA`). Take the glass
+    /// away and that same near-white lands on the page: white on white.
+    ///
+    /// So a flush strip reads its ink off `accent` instead, the token that flips
+    /// with the appearance mode and therefore already knows which side of the
+    /// page it is on. It also gives up every lit material at once — halo, bloom,
+    /// scanlines — because those describe a CRT, and a flush strip has no CRT to
+    /// describe. A scanline in particular is a dark band cutting every glyph; on
+    /// glass it is the point, and on paper it is damage.
+    static func ink(flush: Bool) -> TerminalStripInk {
+        guard flush else {
+            return TerminalStripInk(
+                ink: phosphor, dim: phosphorDim, hot: accent,
+                plate: glassBottom, lift: finish.lift
+            )
+        }
+        let colors = activeTheme.colors
+        return TerminalStripInk(
+            ink: chrome.accent,
+            dim: colors.textSecondary,
+            hot: chrome.accent,
+            plate: colors.cardBackground,
+            lift: 0
+        )
+    }
+}
+
+/// One strip's resolved colours plus how much lit material it is allowed.
+struct TerminalStripInk {
+    let ink: Color
+    let dim: Color
+    let hot: Color
+    /// What a tint on this strip resolves against under a solid finish.
+    let plate: Color
+    /// Scales every halo, bloom and scanline. Zero means "this is not a screen".
+    let lift: Double
 }
 
 enum TerminalStripMetrics {
@@ -69,6 +116,15 @@ struct TerminalMessageStrip: View {
     let text: String
     var height: CGFloat = TerminalStripMetrics.defaultHeight
     var dock: TerminalDockReadout? = nil
+    /// Drop the strip's own container — glass, corners, border — and draw the
+    /// line straight onto whatever it is sitting on.
+    ///
+    /// A strip that carries its own rounded, bordered plate is right when it
+    /// floats inside a screen inside a bezel: it needs to say where it begins.
+    /// Inside a masthead that is already one continuous surface, that plate is
+    /// a third box drawn inside two others, and the border it draws to separate
+    /// itself is the same hairline the masthead is drawing anyway.
+    var flush: Bool = false
 
     // The palette below is a static table, invisible to SwiftUI's dependency
     // tracking. Without an explicit observation a theme change leaves the line
@@ -82,6 +138,7 @@ struct TerminalMessageStrip: View {
             ? TerminalStripMetrics.dockWidth + TerminalStripMetrics.padH
             : TerminalStripMetrics.padH
         let finish = TerminalStripPalette.finish
+        let ink = TerminalStripPalette.ink(flush: flush)
 
         // The line rides in an overlay over an empty flexible slot rather than
         // sitting in the layout directly. `fixedSize()` below is what lets a long
@@ -100,12 +157,12 @@ struct TerminalMessageStrip: View {
                         .font(finish.font(TerminalStripMetrics.font, .medium))
                         .textCase(.uppercase)
                         .tracking(finish.tracking(TerminalStripMetrics.tracking))
-                        .foregroundStyle(TerminalStripPalette.phosphor)
+                        .foregroundStyle(ink.ink)
                         // Two stacked halos are what makes a phosphor line look
                         // lit. They are also two films over the word, so a flat
                         // theme takes neither.
-                        .shadow(color: TerminalStripPalette.accent.opacity(0.55 * finish.lift), radius: 4)
-                        .shadow(color: TerminalStripPalette.glowInk.opacity(0.9 * finish.lift), radius: 1)
+                        .shadow(color: TerminalStripPalette.accent.opacity(0.55 * ink.lift), radius: 4)
+                        .shadow(color: TerminalStripPalette.glowInk.opacity(0.9 * ink.lift), radius: 1)
                         .lineLimit(1)
                         .fixedSize()
 
@@ -113,9 +170,9 @@ struct TerminalMessageStrip: View {
                     // overflows the cursor is pushed past the clipped right edge
                     // (and faded out).
                     RoundedRectangle(cornerRadius: 1, style: .continuous)
-                        .fill(TerminalStripPalette.phosphor)
+                        .fill(ink.ink)
                         .frame(width: TerminalStripMetrics.font * 0.55, height: TerminalStripMetrics.font * 0.95)
-                        .shadow(color: TerminalStripPalette.accent.opacity(0.8 * finish.lift), radius: 3)
+                        .shadow(color: TerminalStripPalette.accent.opacity(0.8 * ink.lift), radius: 3)
                 }
             }
             .mask(
@@ -132,23 +189,30 @@ struct TerminalMessageStrip: View {
             // the strip while its left divider edge stays straight.
             .overlay(alignment: .trailing) {
                 if let dock {
-                    DockedReadout(readout: dock)
+                    DockedReadout(readout: dock, ink: ink)
                         .frame(width: TerminalStripMetrics.dockWidth)
                 }
             }
-            .background(TerminalGlass())
-            .clipShape(shape)
+            .background { if !flush { TerminalGlass() } }
+            .clipShape(flush ? AnyShape(Rectangle()) : AnyShape(shape))
             // Scanlines are the one film here that lands *on* the letterform
             // rather than around it — a 1-in-3pt dark band cuts every glyph at
             // 15pt. It is the whole point of a CRT and the whole problem with
             // reading one, so a flat theme gets none.
             .overlay(
                 ScanlineOverlay()
-                    .fill(Color.black.opacity(TerminalStripMetrics.scanlineOpacity * finish.lift))
+                    .fill(Color.black.opacity(TerminalStripMetrics.scanlineOpacity * ink.lift))
                     .clipShape(shape)
                     .allowsHitTesting(false)
             )
-            .overlay(shape.strokeBorder(TerminalStripPalette.accent.opacity(TerminalStripMetrics.borderOpacity), lineWidth: 1))
+            .overlay {
+                if !flush {
+                    shape.strokeBorder(
+                        TerminalStripPalette.tint(TerminalStripPalette.accent, TerminalStripMetrics.borderOpacity),
+                        lineWidth: 1
+                    )
+                }
+            }
     }
 }
 
@@ -158,6 +222,7 @@ struct TerminalMessageStrip: View {
 /// hairline-divided slot with a whisper of glass carrying a small label + value.
 private struct DockedReadout: View {
     let readout: TerminalDockReadout
+    let ink: TerminalStripInk
 
     @ObservedObject private var themeManager = ThemeManager.shared
 
@@ -168,28 +233,32 @@ private struct DockedReadout: View {
             Text(readout.label)
                 .font(finish.font(8, .semibold))
                 .tracking(finish.tracking(1.12)) // 0.14em at 8pt
-                .foregroundStyle(TerminalStripPalette.phosphorDim)
+                .foregroundStyle(ink.dim)
             Text(readout.value)
                 .font(finish.font(13, .bold).monospacedDigit())
                 .tracking(finish.tracking(0.52)) // 0.04em at 13pt
-                .foregroundStyle(readout.hot ? TerminalStripPalette.accent : TerminalStripPalette.phosphorDim)
+                .foregroundStyle(readout.hot ? ink.hot : ink.dim)
                 .shadow(
-                    color: readout.hot ? TerminalStripPalette.accent.opacity(0.5 * finish.lift) : .clear,
+                    color: readout.hot ? TerminalStripPalette.accent.opacity(0.5 * ink.lift) : .clear,
                     radius: readout.hot ? 3 : 0
                 )
         }
         .padding(.trailing, TerminalStripMetrics.padH)
         .frame(maxHeight: .infinity)
+        // The lane's wash and divider are how it says "this is a separate slot"
+        // on glass. In a masthead the slot is already implied by the margin, and
+        // one more vertical rule inside a band whose whole argument is fewer
+        // divisions would be the division that breaks it.
         .background(
             LinearGradient(
-                colors: [.clear, TerminalStripPalette.accent.opacity(0.05)],
+                colors: [.clear, TerminalStripPalette.tint(TerminalStripPalette.accent, 0.05 * ink.lift, over: ink.plate)],
                 startPoint: .leading,
                 endPoint: .trailing
             )
         )
         .overlay(alignment: .leading) {
             Rectangle()
-                .fill(TerminalStripPalette.accent.opacity(0.16))
+                .fill(TerminalStripPalette.tint(TerminalStripPalette.accent, 0.16 * ink.lift, over: ink.plate))
                 .frame(width: 1)
         }
         .accessibilityHidden(true) // the hosting surface's label already carries this fact

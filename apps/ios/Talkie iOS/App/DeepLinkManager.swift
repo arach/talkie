@@ -191,6 +191,20 @@ class DeepLinkManager: ObservableObject {
                 AppLogger.app.warning("Deep link: theme missing or invalid key")
             }
 
+        case "experiment":
+            // Design experiments, flipped from the outside so a treatment can be
+            // compared against what it replaces without a rebuild between the
+            // two looks. See `HomeMastheadExperiment`.
+            if let value = components?.queryItems?.first(where: { $0.name == "masthead" })?.value {
+                let on = ["on", "1", "true", "yes"].contains(value.lowercased())
+                AppLogger.app.info("Deep link: masthead experiment \(on ? "on" : "off")")
+                Task { @MainActor in
+                    HomeMastheadExperiment.shared.isOn = on
+                }
+            } else {
+                AppLogger.app.warning("Deep link: experiment names no known flag")
+            }
+
         case "ssh":
             let path = components?.path ?? ""
             if path == "/import-key" {

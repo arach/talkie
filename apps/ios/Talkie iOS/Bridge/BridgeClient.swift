@@ -498,6 +498,21 @@ actor BridgeClient {
         return try JSONDecoder().decode(CompanionTriggerResponse.self, from: data)
     }
 
+    /// Send words this phone heard to whatever has focus on the Mac.
+    ///
+    /// The deck's phone-mic mode: the phone records and transcribes, and only
+    /// the finished text crosses the wire. `submit` presses return afterwards,
+    /// which a dictated instruction wants and a dictated sentence does not.
+    func companionPasteText(
+        _ text: String,
+        bundleID: String? = nil,
+        submit: Bool = false
+    ) async throws -> CompanionTriggerResponse {
+        let request = CompanionPasteTextRequest(text: text, bundleID: bundleID, submit: submit)
+        let data = try await post("/companion/paste-text", body: request, timeout: 20)
+        return try JSONDecoder().decode(CompanionTriggerResponse.self, from: data)
+    }
+
     func screenStreamRequest(
         fps: Int = 2,
         maxDimension: Int = 1400,
@@ -1309,6 +1324,12 @@ struct CompanionPasteImageRequest: Codable {
     let imageBase64: String
     let mimeType: String
     let autoPaste: Bool
+}
+
+struct CompanionPasteTextRequest: Codable {
+    let text: String
+    let bundleID: String?
+    let submit: Bool
 }
 
 

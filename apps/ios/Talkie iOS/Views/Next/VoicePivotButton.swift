@@ -16,10 +16,46 @@ struct VoicePivotButton: View {
     @EnvironmentObject private var chrome: ShellChrome
     @EnvironmentObject private var router: AppShellRouter
     @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// 350ms matches iOS context-menu feel - long enough that a
     /// slow tap doesn't fire it, short enough to feel responsive.
     private let longPressThreshold: Double = 0.35
+
+    // MARK: - The resting beacon
+    //
+    // At rest the pivot was drawn with the faintest edge token and a 10% black
+    // drop shadow, which on a dark page means a dark circle on a dark page: the
+    // T is legible, but nothing about it says "press me". It was being polite
+    // at the cost of being a control. So the ring now carries the theme's own
+    // accent at a weight you can see, and every so often the button breathes
+    // once - a light coming on, not an animation running.
+    //
+    // Once on arrival, then at a slow interval. Only while resting: expanded
+    // and listening already glow continuously, and a pulse on top of that would
+    // read as a glitch.
+
+    /// The state at the top of a breath, 0...1. Drives the halo alone - the
+    /// button's geometry never moves, so nothing reflows underneath it.
+    @State private var beacon: Double = 0
+
+    private static let beaconRise: Double = 0.9
+    private static let beaconFall: Double = 1.1
+    /// Gap between breaths. Long enough that it reads as ambient rather than as
+    /// something demanding an answer.
+    private static let beaconInterval: Double = 9
+    /// A floor under the theme's glow. Themes are allowed to want no glow, but
+    /// none of them want an invisible button - this part is affordance, not
+    /// decoration, so it does not go to zero.
+    private static let beaconMinRadius: CGFloat = 9
+    /// The breath is drawn from `chrome.accent`, not `chrome.accentGlow`.
+    /// Several themes set `accentGlow` to literally zero alpha - Graphite and
+    /// Press both do, deliberately, because they want no halo anywhere in the
+    /// app - and honouring that here would mean the flattest themes, the exact
+    /// ones where the pivot is hardest to find, are the only ones that never
+    /// get the hint. A bloom of the accent at this weight reads as a light
+    /// coming on rather than as a second ring.
+    private static let beaconAlpha: Double = 0.45
 
     var body: some View {
         Button(action: handleTap) {
@@ -43,6 +79,10 @@ struct VoicePivotButton: View {
                         radius: shadowRadius,
                         x: 0, y: 2
                     )
+                    // The breath. Stacked rather than folded into `shadowColor`
+                    // so the resting drop shadow keeps lifting the button off
+                    // the page while the halo comes and goes above it.
+                    .shadow(color: beaconColor, radius: beaconRadius)
 
                 TalkiePivotGlyph(isResting: chrome.state == .resting)
                     .foregroundStyle(glyphColor)
@@ -78,6 +118,22 @@ struct VoicePivotButton: View {
         .animation(.easeOut(duration: 0.2), value: router.isComposeSurface)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityHint(accessibilityHint)
+        .task { await runBeacon() }
+    }
+
+    /// One breath on arrival, then one every `beaconInterval`. Cancelled with
+    /// the view, so it costs nothing on screens the pivot isn't on.
+    private func runBeacon() async {
+        guard !reduceMotion else { return }
+        while !Task.isCancelled {
+            if chrome.state == .resting {
+                withAnimation(.easeOut(duration: Self.beaconRise)) { beacon = 1 }
+                try? await Task.sleep(for: .seconds(Self.beaconRise))
+                withAnimation(.easeIn(duration: Self.beaconFall)) { beacon = 0 }
+                try? await Task.sleep(for: .seconds(Self.beaconFall))
+            }
+            try? await Task.sleep(for: .seconds(Self.beaconInterval))
+        }
     }
 
     // MARK: - State-derived styling
@@ -95,14 +151,30 @@ struct VoicePivotButton: View {
 
     private var buttonBorder: Color {
         switch chrome.state {
-        case .resting:   return theme.currentTheme.chrome.edgeFaint
+        // The resting ring used to be `edgeFaint`, which is the token for a
+        // division between two regions - correct for a hairline, wrong for the
+        // outline of the one thing on screen you are meant to touch. It reads
+        // as the same family as the T inside it now, so the whole control is
+        // one mark rather than a glyph sitting in a barely-there circle.
+        case .resting:   return theme.currentTheme.chrome.accent
         case .expanded:  return theme.currentTheme.chrome.accentStrong
         case .listening: return theme.currentTheme.chrome.accentStrong
         }
     }
 
-    private var buttonBorderWidth: CGFloat {
-        chrome.state == .resting ? 0.5 : 1.0
+    /// One weight in every state. Resting used to be half this, which read as a
+    /// smudge; the states are already told apart by fill, glyph and the halo
+    /// ring, so the outline doesn't need to thin out to make the point.
+    private var buttonBorderWidth: CGFloat { 1.0 }
+
+    private var beaconColor: Color {
+        guard chrome.state == .resting, beacon > 0 else { return .clear }
+        return theme.currentTheme.chrome.accent.opacity(Self.beaconAlpha * beacon)
+    }
+
+    private var beaconRadius: CGFloat {
+        let base = max(theme.currentTheme.chrome.glowRadius, Self.beaconMinRadius)
+        return base * (1 + beacon)
     }
 
     private var glyphColor: Color {

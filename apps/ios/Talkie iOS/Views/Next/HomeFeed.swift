@@ -282,8 +282,14 @@ final class HomeFeed: ObservableObject {
 
 extension HomeFeed {
     // ── The Roll geometry — mirrors the studio grid (CockpitGrid.tsx). ──
-    /// Week columns in the Roll.
-    static let rollWeeks = 18
+    /// Week columns the Roll *holds*. More than any phone can show on purpose:
+    /// the flush masthead runs the map off the leading edge and dissolves it
+    /// there, so the data has to outrun the glass rather than stop short of it.
+    /// The view decides how many of these it can actually draw.
+    static let rollWeeks = 32
+    /// Week columns the bezelled well shows — the original bounded window, kept
+    /// because a chart inside a frame should end where the frame does.
+    static let rollWeeksBounded = 18
     /// Day rows per column (Sun→Sat).
     static let rollDaysPerWeek = 7
 
@@ -664,7 +670,7 @@ private extension HomeFeed {
         // Newest-first only for the freshest-take fact (the Take Log is retired).
         let sorted = raws.sorted { $0.date > $1.date }
 
-        // The Roll — bucket each take's day into the trailing 18-week grid.
+        // The Roll — bucket each take's day into the trailing week grid.
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: now)
         let weekdayRow = calendar.component(.weekday, from: today) - 1 // 0 = Sunday

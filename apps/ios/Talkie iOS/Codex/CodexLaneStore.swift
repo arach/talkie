@@ -8,6 +8,7 @@
 //  the next message. Availability is determined by the actual submit.
 //
 
+import Combine
 import Foundation
 import UIKit
 
@@ -91,6 +92,28 @@ final class CodexLaneStore: ObservableObject {
     private var newTaskSubmissionID: UUID?
     private var pendingTurns: [CodexPendingTurn]
     private var pendingTurnTasks: [UUID: Task<Void, Never>] = [:]
+
+    // MARK: - Host-mic capture
+    //
+    // When the deck's mic source is the host, the capture control stops being a
+    // recorder and becomes a remote control: it fires the Mac's own dictation
+    // shortcut, and the transcript comes back through the same companion state
+    // pipeline the board deck reads. See `DeckMicSettings`.
+
+    /// Canonical Mac slot for "start or stop dictation" — the same one the
+    /// board deck's dictate key fires.
+    private static let hostDictationSlotID = "talkie-dictate"
+
+    private enum HostCaptureStage {
+        case none
+        /// Fired, waiting for the Mac to confirm it is actually recording.
+        case arming
+        /// The Mac is recording; the next terminal result carries the words.
+        case recording
+    }
+
+    private var hostCaptureStage: HostCaptureStage = .none
+    private var hostCaptureObserver: AnyCancellable?
 
     init(
         defaults: UserDefaults = .standard,
@@ -618,7 +641,11 @@ final class CodexLaneStore: ObservableObject {
     func handleCaptureControl() {
         switch phase {
         case .listening:
-            dictation.stop(insertTranscript: true)
+            if isHostCapturing {
+                stopHostCapture()
+            } else {
+                dictation.stop(insertTranscript: true)
+            }
         case .submitting where isTurnInFlight:
             startCapture()
         case .transcribing, .submitting, .preparingSpeech:
@@ -662,14 +689,25 @@ final class CodexLaneStore: ObservableObject {
     func endPushToTalk() {
         guard isPushToTalkHeld else { return }
         isPushToTalkHeld = false
-        dictation.stop(insertTranscript: true)
+        if isHostCapturing {
+            stopHostCapture()
+        } else {
+            dictation.stop(insertTranscript: true)
+        }
     }
 
     func cancelCapture() {
         guard isPushToTalkHeld || phase.isCapturing else { return }
         isPushToTalkHeld = false
         captureLevel = 0
-        dictation.cancel()
+        if isHostCapturing {
+            // Toggle the Mac back off, then stop listening for its transcript —
+            // a cancelled capture should not submit whatever it had heard.
+            stopHostCapture(unconditional: true)
+            endHostCapture()
+        } else {
+            dictation.cancel()
+        }
         phase = isTurnInFlight ? .submitting : .idle
         AppLogger.ai.info("Codex capture cancelled")
     }
@@ -757,8 +795,105 @@ final class CodexLaneStore: ObservableObject {
 
         failure = nil
         narrationState = .idle
-        Task { await dictation.start() }
+
+        switch DeckMicSettings.shared.source {
+        case .phone:
+            Task { await dictation.start() }
+        case .host:
+            startHostCapture()
+        }
     }
+
+    /// Ask the Mac to start dictating, and listen for what it heard.
+    ///
+    /// There is no audio path here at all — the phone is a button. The words
+    /// arrive later on `DeckMirrorStore.lastTriggerResult`, which is polled
+    /// companion state, so this sets up an observer rather than awaiting.
+    private func startHostCapture() {
+        let deck = DeckMirrorStore.shared
+        guard deck.firingSlotID == nil else { return }
+
+        hostCaptureStage = .arming
+        captureLevel = 0
+        phase = .listening
+        observeHostCapture()
+        deck.fire(slotID: Self.hostDictationSlotID)
+    }
+
+    /// Toggle the Mac's dictation off.
+    ///
+    /// `unconditional` is for cancelling, where we have already stopped
+    /// listening for the transcript but the Mac is still holding an open
+    /// microphone that somebody has to close.
+    private func stopHostCapture(unconditional: Bool = false) {
+        // `fire` refuses while another fire is in flight, and on a short
+        // push-to-talk the release can beat the start's round trip — dropping
+        // the stop there would leave the Mac recording with nothing on screen
+        // saying so. So wait for the wire to clear rather than firing into it.
+        Task { @MainActor in
+            let deck = DeckMirrorStore.shared
+            for _ in 0 ..< 40 where deck.firingSlotID != nil {
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+            guard unconditional || isHostCapturing else { return }
+            deck.fire(slotID: Self.hostDictationSlotID)
+        }
+    }
+
+    private func observeHostCapture() {
+        hostCaptureObserver = DeckMirrorStore.shared.$lastTriggerResult
+            .sink { [weak self] result in
+                MainActor.assumeIsolated {
+                    self?.handleHostCaptureResult(result)
+                }
+            }
+    }
+
+    private func handleHostCaptureResult(_ result: DeckMirrorStore.TriggerResult?) {
+        guard hostCaptureStage != .none else { return }
+        guard let result, result.slotID == Self.hostDictationSlotID else { return }
+
+        switch result.outcome {
+        case .pending:
+            return
+
+        case .running:
+            // The Mac has the microphone open. Only now is a terminal result
+            // going to be a transcript rather than an acknowledgement.
+            hostCaptureStage = .recording
+            if phase != .listening { phase = .listening }
+
+        case .succeeded:
+            // While arming, a success is the Mac saying "started", not what it
+            // heard — the transcript can only arrive after a recording phase.
+            // Submitting that ack would send "Shortcut triggered on Mac." to
+            // Codex as an instruction, which is exactly the kind of nonsense
+            // this stage machine exists to prevent.
+            guard hostCaptureStage == .recording else { return }
+            endHostCapture()
+            let transcript = result.message.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !transcript.isEmpty else {
+                phase = isTurnInFlight ? .submitting : .idle
+                return
+            }
+            phase = .transcribing
+            Task { await submit(instruction: transcript) }
+
+        case .failed:
+            endHostCapture()
+            failure = CodexLaneFailure(message: result.message, hint: nil)
+            phase = .failed(result.message)
+        }
+    }
+
+    private func endHostCapture() {
+        hostCaptureStage = .none
+        hostCaptureObserver = nil
+        captureLevel = 0
+    }
+
+    /// True while the Mac, not this phone, owns the open microphone.
+    private var isHostCapturing: Bool { hostCaptureStage != .none }
 
     private func makeDictationController() -> InlineDictationController {
         let controller = InlineDictationController()

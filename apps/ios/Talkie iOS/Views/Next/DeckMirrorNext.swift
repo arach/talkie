@@ -31,8 +31,13 @@ enum DeckTreatment: String, CaseIterable {
 
 struct DeckMirrorNext: View {
     @ObservedObject private var theme = ThemeManager.shared
+    // Observed, not just read: `isFlush` is a plain static, so without this the
+    // deck keeps its old top until something else invalidates the view.
+    @ObservedObject private var masthead = HomeMastheadExperiment.shared
     @ObservedObject private var deck = DeckMirrorStore.shared
     @ObservedObject private var codexLanes = CodexLaneStore.shared
+    @ObservedObject private var mic = DeckMicSettings.shared
+    @StateObject private var phoneMic = DeckPhoneDictation()
     @ObservedObject private var reachability = NetworkReachability.shared
     @State private var bridgeManager = BridgeManager.shared
     @State private var selectedSpaceID: String?
@@ -85,6 +90,7 @@ struct DeckMirrorNext: View {
     // `runtimeState.detail`; on completion the final result lands
     // in the same `lastTriggerResult.message`.
     private var isDictating: Bool {
+        if mic.source == .phone { return phoneMic.isActive }
         guard let result = deck.lastTriggerResult else { return false }
         guard result.slotID == dictationSlotID else { return false }
         return result.outcome == .pending || result.outcome == .running
@@ -96,11 +102,17 @@ struct DeckMirrorNext: View {
     /// final transcript reads in the same box, not as a one-line
     /// bottom echo.
     private var hasDictationResult: Bool {
-        deck.lastTriggerResult?.slotID == dictationSlotID
+        if mic.source == .phone {
+            return phoneMic.isActive || !phoneMic.transcript.isEmpty || phoneMic.errorMessage != nil
+        }
+        return deck.lastTriggerResult?.slotID == dictationSlotID
     }
 
     private var liveTranscript: String {
-        hasDictationResult ? (deck.lastTriggerResult?.message ?? "") : ""
+        if mic.source == .phone {
+            return phoneMic.errorMessage ?? phoneMic.transcript
+        }
+        return hasDictationResult ? (deck.lastTriggerResult?.message ?? "") : ""
     }
 
     /// Mac-side runtime detail for the dictation slot. Exposes the
@@ -108,6 +120,10 @@ struct DeckMirrorNext: View {
     /// signal level. Nil when the Mac isn't actively running the
     /// dictation shortcut.
     private var dictationRuntime: CompanionShortcutRuntimeState? {
+        // Phone mode has no Mac-side run to report on — the phases come off
+        // `phoneMic` instead, and a leftover runtime from an earlier host-mode
+        // dictation would otherwise narrate the wrong microphone.
+        guard mic.source == .host else { return nil }
         guard let state = deck.lastRuntimeState,
               state.shortcutId == dictationSlotID else { return nil }
         return state
@@ -233,6 +249,8 @@ struct DeckMirrorNext: View {
 
             Spacer(minLength: 0)
 
+            micMenu
+
             hostMenu
 
             Button(action: { AppShellRouter.shared.openHome() }) {
@@ -240,11 +258,17 @@ struct DeckMirrorNext: View {
                     .font(.system(size: 13))
                     .foregroundStyle(theme.colors.textTertiary)
                     .frame(width: 44, height: 44)
-                    .background(
-                        Circle()
-                            .fill(theme.currentTheme.chrome.edgeFaint.opacity(0.5))
-                            .frame(width: 28, height: 28)
-                    )
+                    .background {
+                        // The lozenge is how a glyph says "I am a button" when
+                        // it is floating on a page. In a band it is one more
+                        // rounded rectangle inside a treatment whose entire
+                        // argument is fewer of them; the margin already says it.
+                        if !mastheadFlush {
+                            Circle()
+                                .fill(theme.currentTheme.chrome.edgeFaint.opacity(0.5))
+                                .frame(width: 28, height: 28)
+                        }
+                    }
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Close deck")
@@ -254,7 +278,19 @@ struct DeckMirrorNext: View {
         // Compress header so Codex cockpit claims vertical space.
         .padding(.top, 2)
         .padding(.bottom, 0)
+        .background(alignment: .top) {
+            if mastheadFlush { MastheadSurface() }
+        }
+        // Faint, because what it separates is two rows of the same band. The
+        // heavy one is at the bottom of the lane rail, where the band ends.
+        .overlay(alignment: .bottom) {
+            if mastheadFlush { MastheadRule(color: theme.currentTheme.chrome.edgeFaint) }
+        }
     }
+
+    /// Masthead experiment: header and lane rail become one full-bleed band.
+    /// Same flag as Home — see `HomeMastheadExperiment`.
+    private var mastheadFlush: Bool { HomeMastheadExperiment.isFlush }
 
     private var deckMenu: some View {
         Menu {
@@ -291,6 +327,39 @@ struct DeckMirrorNext: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Deck, \(selectedSurfaceTitle)")
         .accessibilityHint("Choose Codex or another deck on this Mac")
+    }
+
+    /// Which microphone the dictate key opens.
+    ///
+    /// It lives in the header rather than on the key because it is a property
+    /// of the deck, not of one control: the Codex surface and the board both
+    /// dictate, and they should not be able to disagree about where the sound
+    /// is coming from. Sits beside the host chip because both answer the same
+    /// question — which machine is doing this.
+    private var micMenu: some View {
+        Menu {
+            ForEach(DeckMicSource.allCases) { source in
+                Button {
+                    mic.source = source
+                } label: {
+                    Label(
+                        source.label,
+                        systemImage: mic.source == source ? "checkmark" : source.systemImage
+                    )
+                }
+            }
+        } label: {
+            headerSelectorLabel(
+                title: mic.source.shortLabel,
+                icon: "mic",
+                tint: mic.source == .phone
+                    ? theme.chrome.accent
+                    : theme.colors.textSecondary
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Microphone, \(mic.source.label)")
+        .accessibilityHint(mic.source.explanation)
     }
 
     private var hostMenu: some View {
@@ -663,6 +732,14 @@ struct DeckMirrorNext: View {
                 return "TRANSCRIBING…"
             }
         }
+        // Phone mode narrates its own phases — the whole point of the mode is
+        // that the work is happening here, so the status line should say so.
+        switch phoneMic.phase {
+        case .recording: return "REC · IPHONE"
+        case .transcribing: return "TRANSCRIBING…"
+        case .sending: return "SENDING"
+        case .idle: break
+        }
         if isDictating { return "DICTATING" }
         if deck.firingSlotID != nil { return "SENDING" }
         if bridgeManager.status == .connected { return "LIVE" }
@@ -980,7 +1057,14 @@ struct DeckMirrorNext: View {
     /// `isDictating` state then flips automatically because we derive
     /// it from `lastTriggerResult`.
     private func toggleDictation() {
-        deck.fire(slotID: dictationSlotID)
+        switch mic.source {
+        case .host:
+            deck.fire(slotID: dictationSlotID)
+        case .phone:
+            // Same key, same two-tap contract — the difference is which
+            // microphone opens and where the transcription runs.
+            phoneMic.toggle()
+        }
     }
 
     @ViewBuilder
