@@ -94,17 +94,37 @@ jobs:
           APP_STORE_CONNECT_API_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
           APP_STORE_CONNECT_KEY_ID: ${{ vars.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ vars.APP_STORE_CONNECT_ISSUER_ID }}
+          APPLE_DEVELOPMENT_CERT_BASE64: ${{ secrets.APPLE_DEVELOPMENT_CERT_BASE64 }}
+          APPLE_DEVELOPMENT_CERT_PASSWORD: ${{ secrets.APPLE_DEVELOPMENT_CERT_PASSWORD }}
+          APPLE_DISTRIBUTION_CERT_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERT_BASE64 }}
+          APPLE_DISTRIBUTION_CERT_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         shell: bash
         run: |
           set -euo pipefail
 
+          required=(
+            TALKIE_TEAM_ID
+            TALKIE_APP_IDENTIFIER
+            APP_STORE_CONNECT_API_KEY_P8
+            APP_STORE_CONNECT_KEY_ID
+            APP_STORE_CONNECT_ISSUER_ID
+          )
+
+          # Signing assets are only needed when a binary is built. A
+          # metadata-only run touches App Store Connect and nothing else.
+          if [ "${{ inputs.upload_binary }}" = "true" ]; then
+            required+=(
+              APPLE_DEVELOPMENT_CERT_BASE64
+              APPLE_DEVELOPMENT_CERT_PASSWORD
+              APPLE_DISTRIBUTION_CERT_BASE64
+              APPLE_DISTRIBUTION_CERT_PASSWORD
+              KEYCHAIN_PASSWORD
+            )
+          fi
+
           missing=()
-          for name in \
-            TALKIE_TEAM_ID \
-            TALKIE_APP_IDENTIFIER \
-            APP_STORE_CONNECT_API_KEY_P8 \
-            APP_STORE_CONNECT_KEY_ID \
-            APP_STORE_CONNECT_ISSUER_ID; do
+          for name in "${required[@]}"; do
             if [ -z "${!name:-}" ]; then
               missing+=("$name")
             fi
@@ -131,6 +151,78 @@ jobs:
           echo "APP_STORE_CONNECT_API_KEY_PATH=$key_path" >> "$GITHUB_ENV"
           echo "APP_STORE_CONNECT_KEY_ID=$APP_STORE_CONNECT_KEY_ID" >> "$GITHUB_ENV"
           echo "APP_STORE_CONNECT_ISSUER_ID=$APP_STORE_CONNECT_ISSUER_ID" >> "$GITHUB_ENV"
+
+      # A fresh runner has an empty keychain, so automatic signing used to make
+      # Xcode mint brand new certificates on every release and abandon them:
+      # an Apple Development one for the archive, an Apple Distribution one for
+      # the export. Certificates are capped per account, so releases eventually
+      # failed outright with "Your account has reached the maximum number of
+      # certificates" — and the leftovers are unusable, since their private keys
+      # died with the runner.
+      #
+      # Importing both fixed identities — the same shape release-mac.yml already
+      # uses for Developer ID — means Xcode finds what it needs and never asks
+      # Apple for another. Both are genuinely required: `archive` signs for
+      # development (automatic signing insists on it) and `-exportArchive` then
+      # re-signs the App Store IPA with the distribution identity.
+      #
+      # Provisioning profiles are still resolved on demand, which is fine:
+      # profiles are uncapped and disposable in a way certificates are not.
+      - name: Import signing certificates
+        if: ${{ inputs.upload_binary }}
+        env:
+          DEVELOPMENT_CERT_BASE64: ${{ secrets.APPLE_DEVELOPMENT_CERT_BASE64 }}
+          DEVELOPMENT_CERT_PASSWORD: ${{ secrets.APPLE_DEVELOPMENT_CERT_PASSWORD }}
+          DISTRIBUTION_CERT_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERT_BASE64 }}
+          DISTRIBUTION_CERT_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          keychain="$RUNNER_TEMP/talkie-ios-release.keychain-db"
+          keychain_password="$(printf '%s' "$KEYCHAIN_PASSWORD" | tr -d '\r\n')"
+
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+
+          import_cert() {
+            local label="$1" base64_value="$2" password_value="$3"
+            local cert_path="$RUNNER_TEMP/$label.p12"
+
+            printf '%s' "$base64_value" | tr -d '[:space:]' | base64 -D > "$cert_path"
+            echo "$label: bytes=$(wc -c < "$cert_path" | tr -d ' ') sha256=$(shasum -a 256 "$cert_path" | cut -d ' ' -f 1)"
+
+            security import "$cert_path" \
+              -k "$keychain" \
+              -P "$(printf '%s' "$password_value" | tr -d '\r\n')" \
+              -T /usr/bin/codesign \
+              -T /usr/bin/security
+
+            rm -f "$cert_path"
+          }
+
+          import_cert apple-development "$DEVELOPMENT_CERT_BASE64" "$DEVELOPMENT_CERT_PASSWORD"
+          import_cert apple-distribution "$DISTRIBUTION_CERT_BASE64" "$DISTRIBUTION_CERT_PASSWORD"
+
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "$keychain_password" \
+            "$keychain"
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          security default-keychain -d user -s "$keychain"
+
+          # Fail here rather than 40 minutes later inside xcodebuild.
+          identities="$(security find-identity -v -p codesigning "$keychain")"
+          echo "$identities"
+          for required in "Apple Development" "Apple Distribution"; do
+            if ! printf '%s' "$identities" | grep -q "$required"; then
+              echo "No $required identity in the imported keychain" >&2
+              exit 1
+            fi
+          done
 
       - name: Prepare App Store version
         shell: bash
@@ -231,6 +323,10 @@ jobs:
           derived_data_path="$RUNNER_TEMP/Talkie-iOS-DerivedData"
           rm -rf "$archive_path" "$derived_data_path"
 
+          # -allowProvisioningUpdates stays: it still has to fetch provisioning
+          # profiles for the app and its five extensions. With both identities
+          # already in the keychain that is all it does now — no certificate is
+          # created.
           xcodebuild -project apps/ios/Talkie-iOS.xcodeproj \
             -scheme Talkie \
             -configuration Release \
