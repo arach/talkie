@@ -32,6 +32,11 @@ private enum StageDiscState {
 private struct StageDisc: View {
     let state: StageDiscState
 
+    /// Drives the active stage's ping. One `@State` on the disc rather than
+    /// on the row, so only the stage that is actually live animates.
+    @State private var ping = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         let size: CGFloat = 9
         switch state {
@@ -43,6 +48,26 @@ private struct StageDisc: View {
             // Ring + half-fill — matches the studio mock's SVG: outline
             // circle with the right semicircle filled.
             ZStack {
+                // The one moving thing on the page, and the only one that
+                // earns it: a slow ring leaving the live stage. The pipeline
+                // was four identical still discs, which described the shape
+                // of the work without ever saying it was running. Outward and
+                // non-reversing so it reads as emission rather than as a
+                // throb, and slow enough (1.9s) to notice only when looked at.
+                if !reduceMotion {
+                    Circle()
+                        .stroke(ScopeAmber.solid, lineWidth: 1)
+                        .frame(width: size, height: size)
+                        .scaleEffect(ping ? 2.1 : 1)
+                        .opacity(ping ? 0 : 0.45)
+                        .onAppear {
+                            withAnimation(
+                                .easeOut(duration: 1.9).repeatForever(autoreverses: false)
+                            ) { ping = true }
+                        }
+                        .allowsHitTesting(false)
+                }
+
                 Circle()
                     .stroke(ScopeAmber.solid, lineWidth: 1.2)
                 Path { p in
@@ -343,10 +368,17 @@ struct ScopeDraftsScreen: View {
 
     /// V2 — thin amber hairline when the next stage is reached, otherwise
     /// a faint ink hairline. No gradient, no glow.
+    ///
+    /// At 0.5pt and 0.32 opacity the unlit run was invisible on a light
+    /// ground, so the row read as four unrelated dots rather than as a
+    /// pipeline — the connector was doing none of the work it was added for.
+    /// A full point carries; the opacities stay quiet so the lit segment is
+    /// still the thing that reports progress.
     private func pipelineConnector(isLit: Bool) -> some View {
         Rectangle()
-            .fill(isLit ? ScopeAmber.solid.opacity(0.5) : ScopeInk.faint.opacity(0.32))
-            .frame(width: 32, height: 0.5)
+            .fill(isLit ? ScopeAmber.solid.opacity(0.55) : ScopeInk.faint.opacity(0.28))
+            .frame(width: 32, height: 1)
+            .animation(ScopeMotion.crossfade, value: isLit)
     }
 
     // MARK: - Editor page (V2)

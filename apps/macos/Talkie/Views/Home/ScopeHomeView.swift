@@ -45,6 +45,7 @@ struct ScopeHomeView: View {
     // light mode, the carbon electronics bay only in dark mode.
     @AppStorage("scopeAgentBay.scheme")    private var bayScheme: String = BayScheme.pearl.rawValue
     @AppStorage("scopeAgentBay.migratedAppearanceDefaultV2") private var didMigrateBayAppearanceDefault: Bool = false
+    @AppStorage("scopeAgentBay.realignedToAppearanceV3") private var didRealignBayToAppearance: Bool = false
     // Migration fallback: users with deprecated stored values
     // (graphite/pewter/ash/stone — dropped 2026-05-17) decode to nil
     // and should land on the appearance default, not the original amber.
@@ -60,7 +61,37 @@ struct ScopeHomeView: View {
         if !didMigrateBayAppearanceDefault, storedScheme.isLight != appearanceIsLight {
             return defaultBayScheme
         }
+
+        // V2 only corrected a contradiction it caught *before* it ran. A
+        // selection made under one appearance therefore outlived every later
+        // switch: picking Carbon on a dark theme and then moving to Porcelain
+        // — which forces light — left a near-black slab on a pale canvas with
+        // nothing to bring it back. That is not a bay reading as an
+        // instrument, it is a hole in the page.
+        //
+        // Realigned once per contradiction rather than on every read, so a
+        // deliberately dark bay on a light canvas stays available: it is a
+        // real look, and the picker still offers it. What is corrected is the
+        // one nobody chose — a leftover from a theme that is no longer on.
+        if storedScheme.isLight != appearanceIsLight, !didRealignBayToAppearance {
+            return defaultBayScheme
+        }
         return storedScheme
+    }
+
+    /// Runs once, the first time a stored bay contradicts the appearance the
+    /// current theme enforces. Writes the corrected value through so the
+    /// picker opens on what is actually being drawn.
+    private func realignBayIfContradictory() {
+        guard !didRealignBayToAppearance else { return }
+        guard let storedScheme = BayScheme(rawValue: bayScheme) else {
+            didRealignBayToAppearance = true
+            return
+        }
+        if storedScheme.isLight != (colorScheme != .dark) {
+            bayScheme = defaultBayScheme.rawValue
+        }
+        didRealignBayToAppearance = true
     }
 
     private var defaultBayScheme: BayScheme {
@@ -115,6 +146,7 @@ struct ScopeHomeView: View {
         .background(cmdShortcutBindings)
         .onAppear {
             migrateBayAppearanceDefaultIfNeeded()
+            realignBayIfContradictory()
             startCmdMonitor()
         }
         .onDisappear { stopCmdMonitor() }

@@ -834,6 +834,8 @@ struct RecordingTranscriptCard: View {
     @State private var toolTrayHovered = false
     @State private var copyChipHovered = false
     @State private var versionsExpanded = false
+    @State private var retranscribeHovered = false
+    @State private var versionsHovered = false
 
     private var hasTranscriptionData: Bool {
         recording.timedTranscription != nil || recording.isMemo || recording.isDictation || recording.isSelection
@@ -989,32 +991,85 @@ struct RecordingTranscriptCard: View {
                     Button("Large V3 (best quality)") { onRetranscribe("whisper:distil-whisper_distil-large-v3") }
                 }
             } label: {
-                Label(
-                    isRetranscribing ? "Retranscribing…" : "Retranscribe",
-                    systemImage: isRetranscribing ? "waveform" : "arrow.clockwise"
+                transcriptActionChip(
+                    icon: isRetranscribing ? "waveform" : "arrow.clockwise",
+                    label: isRetranscribing ? "RETRANSCRIBING…" : "RETRANSCRIBE",
+                    hovered: retranscribeHovered,
+                    showsChevron: true
                 )
             }
+            .buttonStyle(.plain)
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
             .disabled(isRetranscribing)
+            .onHover { retranscribeHovered = $0 && !isRetranscribing }
 
             if !transcriptVersions.isEmpty {
                 Button {
                     versionsExpanded.toggle()
                 } label: {
-                    Label(
-                        "Versions (\(transcriptVersions.count))",
-                        systemImage: versionsExpanded ? "chevron.up" : "clock.arrow.circlepath"
+                    transcriptActionChip(
+                        icon: versionsExpanded ? "chevron.up" : "clock.arrow.circlepath",
+                        label: "VERSIONS (\(transcriptVersions.count))",
+                        hovered: versionsHovered
                     )
                 }
                 .buttonStyle(.plain)
+                .onHover { versionsHovered = $0 }
             }
 
             Spacer()
         }
-        .font(settings.fontSMMedium)
         .padding(.vertical, Spacing.sm)
         .overlay(alignment: .bottom) {
             ThemedScopeRule(.subtle)
         }
+    }
+
+    /// Speaks the same chip language as the masthead's COPY / SHARE / EXPORT
+    /// row directly above it: 9pt tracked monospaced caps, hairline border,
+    /// background only on hover.
+    ///
+    /// These were stock `Label`s in a stock `Menu` before, which AppKit draws
+    /// as a bordered popup button — the one system-styled control in a screen
+    /// built entirely from flat chips, and the reason the row read as pasted
+    /// in from another app. The menu itself is unchanged; only its label is,
+    /// with `.menuIndicator(.hidden)` so the chevron below is ours and matches
+    /// the type around it rather than arriving at AppKit's size and weight.
+    private func transcriptActionChip(
+        icon: String,
+        label: String,
+        hovered: Bool,
+        showsChevron: Bool = false
+    ) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .regular))
+            Text(label)
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .tracking(1.6)
+            if showsChevron {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .semibold))
+                    .opacity(0.55)
+            }
+        }
+        .foregroundColor(hovered ? Theme.current.foreground : Theme.current.foregroundSecondary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 3)
+                .fill(hovered ? Theme.current.foreground.opacity(0.06) : Color.clear)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 3)
+                        .stroke(
+                            Theme.current.foreground.opacity(hovered ? 0.16 : 0.10),
+                            lineWidth: 0.5
+                        )
+                )
+        )
+        .animation(.easeOut(duration: 0.12), value: hovered)
     }
 
     private var transcriptVersionsList: some View {

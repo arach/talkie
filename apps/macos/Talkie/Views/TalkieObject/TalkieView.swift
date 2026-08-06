@@ -262,7 +262,13 @@ struct TalkieView: View {
 
                 bottomActionRow
                     .padding(.horizontal, MastheadPadding.horizontal)
-                    .padding(.top, Spacing.lg)
+                    // Tucked under the rule the row above owns, rather than
+                    // set adrift a full `lg` below it. Delete is the only
+                    // thing down here, and at the old distance it read as
+                    // orphaned in open space instead of as the closing move
+                    // on the document. Still right-aligned and still alone —
+                    // that part is deliberate for a destructive action.
+                    .padding(.top, Spacing.sm)
                     .padding(.bottom, Spacing.md)
             }
         )
