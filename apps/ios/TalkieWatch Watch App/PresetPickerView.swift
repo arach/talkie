@@ -2,9 +2,9 @@
 //  PresetPickerView.swift
 //  TalkieWatch
 //
-//  Capture surface — idle. A quiet Talkie wordmark, one wide signal key, and
-//  one subordinate AI route. The primary action reads as a control rather than
-//  a miniature watch face.
+//  Capture surface — idle. An activity plate, one wide key, and one subordinate
+//  AI route. The primary action reads as a control rather than a miniature watch
+//  face.
 //
 
 import SwiftUI
@@ -12,91 +12,169 @@ import WatchKit
 
 struct PresetPickerView: View {
     @EnvironmentObject var sessionManager: WatchSessionManager
-    @Environment(\.watchThemeName) private var themeName
     @Binding var selectedPreset: WatchPreset?
     @Binding var isRecording: Bool
     var onOpenAsks: () -> Void = {}
 
     var body: some View {
+        // Measured off the device rather than off a container.
+        //
+        // This used to read the height out of a `GeometryReader`, which was the
+        // right instrument while the face was the whole page. It is the wrong
+        // one now: inside a scroll view the vertical proposal is unbounded, so
+        // the reader reports the *content* height and the face solves its
+        // budget against a number that includes the thing below the fold.
+        //
+        // The face ignores both safe areas, which makes its height the screen's
+        // height by definition — 248pt on a 46mm, 197 on a 40mm, both exactly
+        // `screenBounds`. Asking the device is not an approximation of what the
+        // reader was measuring; it is the same number, from the source.
+        let screenHeight = WKInterfaceDevice.current().screenBounds.height
+        let metrics = CaptureFaceMetrics(availableHeight: screenHeight)
+
         ZStack {
             TalkieCaptureBackground()
 
-            GeometryReader { proxy in
-                let metrics = CaptureFaceMetrics(availableHeight: proxy.size.height)
-
+            // The crown scrolls; the face does not move until it does.
+            //
+            // The stack below is pinned to exactly one screen, so the page
+            // still opens finished — the whole argument for solving these
+            // heights was that the key must not shift when an ask starts, and a
+            // face that could drift under the crown at rest would give that
+            // back. What is under the fold is genuinely extra.
+            ScrollView {
                 VStack(spacing: 0) {
-                    if metrics.showsWordmark {
-                        Text("talkie")
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
-                            .foregroundStyle(themeName.captureStyle.material.ink.opacity(0.90))
-                            .frame(height: CaptureFaceMetrics.wordmarkHeight)
+                    face(metrics: metrics)
+                        .frame(height: screenHeight)
 
-                        Spacer()
-                            .frame(height: CaptureFaceMetrics.wordmarkGap)
+                    CaptureUnderside { preset in
+                        startCapture(preset: preset)
                     }
+                }
+            }
+            // watchOS draws a crown indicator down the right edge, which is the
+            // column the system clock already owns. One system overlay in that
+            // column is a constraint; two is a pile.
+            .scrollIndicators(.hidden)
 
-                    // The slot is always reserved, even when there is nothing to
-                    // say. An ask starting or finishing must not shove the record
-                    // key down the face — the same reason recording states swap
-                    // into a fixed-size puck instead of resizing the button.
-                    AskStrip(height: metrics.stripHeight, onOpen: onOpenAsks)
+            // Above the scroll, not behind it.
+            ClockScrim()
+        }
+        // The face starts at the glass and ends at it.
+        //
+        // The top strip exists to keep content clear of the clock, and with the
+        // navigation bar gone it was costing ~35pt to protect a corner this
+        // face already leaves empty on purpose. The bottom one is sized for a
+        // scrolling list and was holding back another ~50pt to make room for
+        // three page dots, which need `indicatorClearance` and not a point more.
+        .ignoresSafeArea(edges: [.top, .bottom])
+    }
+
+    /// Everything above the fold. Unchanged by the crown — see the note at the
+    /// scroll view.
+    @ViewBuilder
+    private func face(metrics: CaptureFaceMetrics) -> some View {
+        VStack(spacing: 0) {
+                    // The row watchOS's bar used to be. Outside the metrics
+                    // because it is not negotiable — it is the same height on
+                    // every watch, and the solver below divides what is left.
+                    //
+                    // It shares its band with watchOS's clock rather than
+                    // sitting under it. Hiding the navigation bar does not hide
+                    // the time — it promotes it to the large overlay — so the
+                    // only way that trade pays for itself is if the face uses
+                    // the band the clock is drawn in instead of starting below
+                    // it. Gear left, wordmark centre, and the right third left
+                    // deliberately empty because that is where the time lands.
+                    CaptureHeaderRow()
 
                     Spacer()
-                        .frame(height: metrics.stripGap)
+                        .frame(height: CaptureFaceMetrics.headerGap)
+
+                    // The sheet takes the top of the face and runs its roll off
+                    // both edges — the bleed is applied inside it, because the
+                    // grid is the only part that should leave the page and a
+                    // negative padding here would take the type with it.
+                    //
+                    // Either way the slot is a fixed height. An ask starting or
+                    // finishing must not shove the record key down the face —
+                    // the same reason recording states swap into a fixed-size
+                    // puck instead of resizing the button.
+                    if metrics.showsSheet {
+                        CaptureContactSheet(
+                            onOpenAsks: onOpenAsks,
+                            height: metrics.sheetHeight
+                        )
+                        .frame(height: metrics.sheetHeight)
+                    } else {
+                        // No room for a sheet on a 40mm. The status line it
+                        // would have carried goes back to being a line, and the
+                        // roll goes unsaid — it is the half of the sheet the
+                        // face can most afford to lose.
+                        AskStrip(height: metrics.stripHeight, onOpen: onOpenAsks)
+                    }
+
+                    Spacer()
+                        .frame(height: metrics.sheetGap)
 
                     // While an ask is being answered, the AI conversation *is*
                     // the subject of this face — a record key sitting where the
-                    // answer should be reads as "memo" no matter what the strip
-                    // above it says. The key swaps; the pill picks up capture.
+                    // answer should be reads as "memo" no matter what the sheet
+                    // above it says. The key swaps; the quick row picks up
+                    // capture, and gives up its own ask route while it does.
                     //
-                    // Time-driven for the same reason the strip is: an ask the
+                    // Time-driven for the same reason the sheet is: an ask the
                     // phone abandoned mid-flight has to give the key back, and
                     // nothing publishes when a phone simply goes quiet.
                     TimelineView(.periodic(from: .now, by: WatchMemo.silenceTolerance / 2)) { context in
                         let askFace = WatchAskFace.resolve(sessionManager, asOf: context.date)
+                        let askTakesKey = askFace?.takesCaptureKey ?? false
 
                         VStack(spacing: 0) {
-                            if let askFace, askFace.takesCaptureKey {
+                            if let askFace, askTakesKey {
                                 AskCaptureKey(
                                     state: askFace,
                                     keyHeight: metrics.keyHeight,
                                     onOpen: onOpenAsks
                                 )
-
-                                Spacer()
-                                    .frame(height: metrics.keyGap)
-
-                                AIPill(
-                                    symbol: "mic.fill",
-                                    title: "Record",
-                                    accessibilityText: "Start recording",
-                                    height: metrics.pillHeight
-                                ) {
-                                    startCapture(forceAI: false)
-                                }
                             } else {
                                 RecordButton(kind: .start, keyHeight: metrics.keyHeight) {
                                     startCapture(forceAI: false)
                                 }
+                            }
 
-                                Spacer()
-                                    .frame(height: metrics.keyGap)
+                            Spacer()
+                                .frame(height: metrics.keyGap)
 
-                                AIPill(height: metrics.pillHeight) {
-                                    startCapture(forceAI: true)
-                                }
+                            CaptureQuickRow(
+                                leadingKind: askTakesKey ? .record : .ask,
+                                height: metrics.quickRowHeight
+                            ) {
+                                startCapture(forceAI: !askTakesKey)
                             }
                         }
+                        // Both raised objects on one margin. The key used to be
+                        // pinned narrower than the row under it, which read as
+                        // two unrelated controls that happened to be stacked.
+                        .padding(.horizontal, CaptureFaceMetrics.bodyInset)
                     }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-            }
+
+                    Spacer()
+                        .frame(height: metrics.bottomClearance)
         }
+        // No `maxHeight` any more: the caller pins this to one screen, and an
+        // infinite maximum inside a scroll view resolves against an unbounded
+        // proposal rather than against the pin.
+        .frame(maxWidth: .infinity, alignment: .top)
     }
 
     private func startCapture(forceAI: Bool) {
+        startCapture(preset: forceAI ? .ai : .go)
+    }
+
+    private func startCapture(preset: WatchPreset) {
         WKInterfaceDevice.current().play(.click)
-        selectedPreset = forceAI ? .ai : .go
+        selectedPreset = preset
         isRecording = true
     }
 }
@@ -106,74 +184,164 @@ struct PresetPickerView: View {
 /// The capture face's vertical layout, solved against the space watchOS
 /// actually hands this page.
 ///
-/// At their comfortable sizes the wordmark, ask strip, key and pill add up to
-/// more than any watch has: the page gets 150pt on a 46mm and 123pt on a 40mm.
+/// At their comfortable sizes the sheet, key and quick row add up to more than
+/// any watch has: the page gets 150pt on a 46mm and 123pt on a 40mm.
 /// Pinning them meant the stack overflowed and spilled equally out of both ends
-/// — which put the pill's bottom within a few points of the glass on a large
+/// — which put the bottom row within a few points of the glass on a large
 /// watch and cut it off entirely on a small one. Solving for the key instead
 /// keeps the stack inside its bounds, so the inset watchOS already reserves
 /// below the page dots becomes the face's bottom margin.
 struct CaptureFaceMetrics {
-    /// Set when the wordmark can stay without starving the key. It is the first
-    /// thing given up because it is the only piece carrying no state: the Talkie
-    /// signal is drawn across the key itself, and the time and settings sit in
-    /// the bar directly above it.
-    let showsWordmark: Bool
+    /// Set when the contact sheet can stay without starving the key. It is the
+    /// first thing given up: the key is the reason the page exists, and a face
+    /// with a beautiful history and a stunted button has its priorities
+    /// backwards. On a 40mm the sheet goes — as the wordmark it replaced
+    /// already did — and the thin ask strip becomes the top of the stack.
+    let showsSheet: Bool
+    /// The sheet's slot. Scales with the watch: the two type rows inside it are
+    /// pinned, so every point of this the face can spare goes to the roll —
+    /// which is also why the sheet solves its own grid rather than declaring a
+    /// column count that would only be square at one height.
+    let sheetHeight: CGFloat
     let stripHeight: CGFloat
-    /// Strip to key.
-    let stripGap: CGFloat
+    /// Sheet to key.
+    let sheetGap: CGFloat
     let keyHeight: CGFloat
-    /// Key to pill.
+    /// Key to quick row.
     let keyGap: CGFloat
-    let pillHeight: CGFloat
+    let quickRowHeight: CGFloat
 
-    /// One 12pt rounded line.
-    static let wordmarkHeight: CGFloat = 15
-    /// Wordmark to strip. Deliberately tight — they read as one header block.
-    static let wordmarkGap: CGFloat = 3
+    /// Between the header and the sheet. Fixed, and taken off the top before
+    /// anything is solved: the wordmark needs to read as a separate register
+    /// from the live line, and a gap that shrinks under pressure is the first
+    /// thing to collapse the two back into one block.
+    static let headerGap: CGFloat = 5
+
+    /// Kept clear of the page indicator watchOS draws under a paged `TabView`.
+    ///
+    /// The face ignores the bottom safe area as well as the top, because that
+    /// inset is sized for a scrolling list and left roughly 50pt of black under
+    /// the quick row — a quarter of the page held back to protect three dots.
+    /// This is what those dots actually need, and they need less of it on a
+    /// small watch, where they sit closer to the glass.
+    let bottomClearance: CGFloat
+    ///
+    /// 19, down from 22. The dots need less than the quick row does: three
+    /// points came off here so the row could sit lower and open the channel
+    /// between itself and the key, which is the gap the eye actually reads.
+    private static let regularClearance: CGFloat = 19
+    private static let compactClearance: CGFloat = 13
+
+    /// What the sheet asks for, bounded at both ends.
+    ///
+    /// The ceiling came *down* from 58, which is the opposite of what a taller
+    /// key seemed to need — but the sheet is three rows of day cells and one
+    /// line of type, and none of those grow. Handed 58pt it did not draw bigger
+    /// days; it drew the same days in a taller box and called the leftover
+    /// padding. Sized to what the sheet actually holds, the surplus lands in
+    /// the gap below instead, which is where the reference puts it: the roll
+    /// needs a field of black under it far more than it needs a bigger box.
+    private static let sheetShare: CGFloat = 0.35
+    /// Low enough for a 40mm to keep a roll at all. The sheet's floor used to sit
+    /// above what the small watch could spare, so the whole region fell back to a
+    /// status line — trading the subject of the page for a number the ticker was
+    /// already saying. It draws fewer fortnights down here instead.
+    private static let minimumSheetHeight: CGFloat = 40
+    private static let maximumSheetHeight: CGFloat = 74
 
     /// Enough for a 9pt monospaced label and its status dot, and no more: the
     /// slot is reserved whether or not there is an ask to put in it.
     private static let stripHeight: CGFloat = 18
-    /// The 32pt capsule plus a little target around it. Short of the usual 44,
-    /// which no watch-sized face can afford, but the pill is 96pt wide.
-    private static let pillHeight: CGFloat = 36
+    /// The quick row's panel. Two cells of icon-over-label, sized so the row
+    /// reads as the key's smaller sibling rather than as a toolbar.
+    private static let quickRowHeight: CGFloat = 32
     /// Below this the key stops looking like a key and starts looking like a
-    /// bar, so the wordmark goes before the key crosses it.
-    private static let minimumKeyHeight: CGFloat = 50
-    private static let maximumKeyHeight: CGFloat = 64
-    /// The two gaps together. The key needs visible separation from the strip
-    /// above and the pill below or the three stack into one slab.
-    private static let minimumGaps: CGFloat = 14
+    /// bar, so the sheet goes before the key crosses it.
+    ///
+    /// 44, not 50. On a 40mm the old floor was what forced the roll off the face
+    /// — the budget cleared it by two points and the whole sheet went. A 44pt key
+    /// on a 162pt-wide watch is proportionally the same object a 74pt key is on a
+    /// 208pt one; it is tighter, which is what a smaller watch should look like.
+    private static let minimumKeyHeight: CGFloat = 44
+    /// 74pt is the mock's 150px. It was 64, and the face never reached even
+    /// that — with watchOS's bar in place the solver had 60pt to split between
+    /// the key and its gaps and handed the key 47. Taking the bar back is what
+    /// makes this number reachable rather than aspirational.
+    private static let maximumKeyHeight: CGFloat = 74
+    /// How much of the page's width the key and the quick row both span.
+    ///
+    /// One number for both, because they were two: the key was pinned at 128pt
+    /// while the row below it ran to the gutters, which read as a small button
+    /// centred over a wide panel rather than as a key and its smaller sibling.
+    /// Objects in the same family share a footprint; only their heights say
+    /// which one is primary.
+    static let bodyInset: CGFloat = 8
+    /// The two gaps together. The key needs visible separation from the sheet
+    /// above and the quick row below or the three stack into one slab.
+    private static let minimumGaps: CGFloat = 11
+    /// The narrowest the key-to-quick-row channel is allowed to get, whatever
+    /// the share works out to. Always less than `minimumGaps`, so honouring it
+    /// can never drive the gap above it negative.
+    private static let minimumKeyGap: CGFloat = 6
     /// The key takes this much of what is left; the rest becomes the gaps. Held
     /// constant so the face keeps the same rhythm as it scales rather than
     /// growing a fat key on large watches and thin air on small ones.
     private static let keyShare: CGFloat = 0.78
 
     init(availableHeight: CGFloat) {
-        let fixed = Self.stripHeight + Self.pillHeight
-        let header = Self.wordmarkHeight + Self.wordmarkGap
+        // A 40mm hands this page 197pt where a 46mm hands it 248.
+        let compact = availableHeight < 220
+        bottomClearance = compact ? Self.compactClearance : Self.regularClearance
 
-        // What the key and its two gaps would have to share if the wordmark
-        // stayed. The wordmark is worth keeping only while the key still clears
-        // its floor afterwards.
-        let roomWithWordmark = availableHeight - fixed - header
-        showsWordmark = roomWithWordmark - Self.minimumGaps >= Self.minimumKeyHeight
+        // The header and its gap are spent before anything is negotiated.
+        let page = availableHeight
+            - CaptureHeaderRow.height
+            - Self.headerGap
+            - bottomClearance
 
-        let room = showsWordmark ? roomWithWordmark : availableHeight - fixed
+        let sheet = min(
+            Self.maximumSheetHeight,
+            max(Self.minimumSheetHeight, page * Self.sheetShare)
+        )
+        sheetHeight = sheet
+
+        // What the key and its two gaps would have to share if the sheet stayed.
+        // The sheet is worth keeping only while the key still clears its floor
+        // afterwards; below that the face falls back to the thin strip, which is
+        // barely a third of the height.
+        let roomWithSheet = page - Self.quickRowHeight - sheet
+        showsSheet = roomWithSheet - Self.minimumGaps >= Self.minimumKeyHeight
+
+        let room = showsSheet
+            ? roomWithSheet
+            : page - Self.quickRowHeight - Self.stripHeight
         keyHeight = min(
             Self.maximumKeyHeight,
             max(Self.minimumKeyHeight, room * Self.keyShare)
         )
 
-        // Whatever the key did not take. Split so the key sits nearer the strip
-        // it belongs to than the pill it outranks.
+        // Whatever the key did not take, split roughly two thirds above the key
+        // and one third below. The big gap is not slack, it is the field the
+        // roll sits in — take it away and the sheet becomes a band with a
+        // button under it. The small one only has to say the quick row is
+        // separate from the key, not equal to it.
+        //
+        // This was 42/58 (a wide channel between the two raised things and none
+        // around the printed one), then 80/20, which overcorrected: 4pt below a
+        // 71pt key reads as the row being stuck to it. A third is enough
+        // separation to see without promoting the row to the key's equal.
+        //
+        // The floor is what makes that hold on a small watch. A third of a
+        // 40mm's slack is 4pt, and 4pt between two raised panels is not a gap,
+        // it is a seam. Below the floor the key gap stops scaling and the sheet
+        // gap pays — the field above the key has points to spare and the
+        // channel below it does not.
         let slack = max(Self.minimumGaps, room - keyHeight)
-        stripGap = slack * 0.42
-        keyGap = slack * 0.58
+        keyGap = max(Self.minimumKeyGap, slack * 0.32)
+        sheetGap = slack - keyGap
 
         stripHeight = Self.stripHeight
-        pillHeight = Self.pillHeight
+        quickRowHeight = Self.quickRowHeight
     }
 }
 
@@ -268,8 +436,48 @@ struct TalkieCaptureBackground: View {
                 startRadius: 0,
                 endRadius: 150
             )
+
         }
         .ignoresSafeArea()
+    }
+}
+
+/// The corner the system clock lands in, shaded so its numerals have something
+/// to read against.
+///
+/// watchOS draws that clock itself, in white, at a size and position no API
+/// reaches — which on a light finish is white on white. The colour is not
+/// negotiable but the field under it is, so the face gives it a ground instead.
+/// Light only: on black ceramic the numerals already have all the contrast they
+/// need, and a second dark patch up there would just look like a smudge.
+///
+/// An overlay rather than part of the background, because the capture face
+/// scrolls now. Pinned behind the content it was a ground for an empty corner;
+/// the moment the crown moved, a white key slid under the clock and took the
+/// contrast with it. The scrim belongs to the viewport, not to the page.
+struct ClockScrim: View {
+    @Environment(\.watchThemeName) private var themeName
+
+    var body: some View {
+        let material = themeName.captureStyle.material
+
+        if material == .lightMineral {
+            // Ink, not `fieldShade`. The shade token is one step down the same
+            // near-white ramp — a legible difference between two panels and
+            // nothing at all behind white numerals.
+            RadialGradient(
+                colors: [material.ink.opacity(0.52), .clear],
+                // Centred on the numerals, not on the corner. The clock sits a
+                // little below and inboard of the bezel, and a pool centred at
+                // 0,0 had already fallen off by the time it got there.
+                center: UnitPoint(x: 0.93, y: 0.11),
+                startRadius: 12,
+                endRadius: 76
+            )
+            .ignoresSafeArea()
+            // It shades; it does not intercept. The gear sits under its edge.
+            .allowsHitTesting(false)
+        }
     }
 }
 
@@ -595,12 +803,29 @@ struct TalkieKeyChassis<Content: View>: View {
     /// Overrides the theme's hairline when the key's job is not the usual one.
     /// `nil` keeps the resting accent.
     var accent: Color?
-    /// Set by the capture face, which has to fit the key between an ask strip
-    /// and a pill inside whatever height the watch gives it.
+    /// Nil takes the full width offered, which on the capture face means the
+    /// same span as the quick row beneath it — where it was 128pt, a fixed
+    /// number that made the primary action look like a small button centred over
+    /// a wide panel. A key is the biggest thing on the face; it should not be
+    /// the narrowest.
+    var width: CGFloat?
+    /// Set by the capture face, which has to fit the key between the sheet and
+    /// the quick row inside whatever height the watch gives it.
     var height: CGFloat = 64
     @ViewBuilder var content: () -> Content
 
-    private let width: CGFloat = 128
+    init(
+        accent: Color? = nil,
+        width: CGFloat? = nil,
+        height: CGFloat = 64,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.accent = accent
+        self.width = width
+        self.height = height
+        self.content = content
+    }
+
     private let cornerRadius: CGFloat = 18
     /// Gap between the bevel and the accent hairline. Also subtracted from the
     /// inner radius so the two rings stay concentric instead of the inner one
@@ -643,14 +868,9 @@ struct TalkieKeyChassis<Content: View>: View {
 
             content()
         }
-        .frame(width: width, height: height)
+        .frame(maxWidth: width ?? .infinity)
+        .frame(height: height)
         .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-    }
-}
-
-extension TalkieKeyChassis {
-    init(height: CGFloat = 64, @ViewBuilder content: @escaping () -> Content) {
-        self.init(accent: nil, height: height, content: content)
     }
 }
 
@@ -662,20 +882,28 @@ private struct TalkieCaptureKey: View {
     var body: some View {
         let capture = themeName.captureStyle
         TalkieKeyChassis(height: keyHeight) {
-            VStack(spacing: 4) {
+            VStack(spacing: 3) {
                 TalkieTraceReveal(color: capture.trace)
                     .frame(width: 86, height: 22)
 
-                HStack(spacing: 5) {
-                    Image(systemName: "mic.fill")
-                        .font(.system(size: 8.5, weight: .semibold))
-                        .foregroundStyle(Color.red.opacity(0.92))
+                // `TALK`, not `REC`. The old legend was a mic glyph in semantic
+                // red beside a three-letter state — the only hue on this face
+                // belonging to neither the material nor the trace, and a word
+                // naming what the hardware is about to do rather than what the
+                // wearer is about to do. Red is for the key that stops a running
+                // recording, where it means something.
+                Text("TALK")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .tracking(1.6)
+                    .foregroundStyle(capture.material.keyInk.opacity(0.88))
 
-                    Text("REC")
-                        .font(.system(size: 8.5, weight: .bold, design: .monospaced))
-                        .tracking(1.35)
-                        .foregroundStyle(capture.material.keyInk.opacity(0.86))
-                }
+                // Where it goes. The face's one destination, said once, in the
+                // faintest ink on the key — a key that says only what it is
+                // leaves the wearer to guess where the words end up.
+                Text("→ INBOX")
+                    .font(.system(size: 6.5, weight: .medium, design: .monospaced))
+                    .tracking(1.1)
+                    .foregroundStyle(capture.material.keyInk.opacity(0.42))
             }
         }
     }
@@ -809,64 +1037,6 @@ private struct TalkieStopKey: View {
         }
         .frame(width: 70, height: 70)
         .contentShape(Circle())
-    }
-}
-
-/// Optional explicit-AI route. Its low-contrast outline keeps it subordinate
-/// to capture while remaining an obvious second action.
-struct AIPill: View {
-    @Environment(\.watchThemeName) private var themeName
-    /// The pill is the face's secondary route, and which route that is depends
-    /// on what the key is doing. When an ask takes the key, capture has nowhere
-    /// else to live — so the pill becomes the record affordance rather than
-    /// leaving the wearer with no way to start a memo.
-    var symbol: String = "sparkles"
-    /// "Ask AI" named the machinery rather than the act, and on a face where the
-    /// sparkles already say which route this is, the "AI" was doing no work.
-    /// One verb is also the shape the eventual name slots into without a
-    /// relayout — the assistant doesn't have one yet, and this doesn't invent it.
-    var title: String = "Ask"
-    var accessibilityText: String = "Start AI conversation"
-    /// The tap target. The capsule inside it keeps its size on every watch —
-    /// only the padding around it gives way when the face is short.
-    var height: CGFloat = 44
-    let action: () -> Void
-
-    var body: some View {
-        let capture = themeName.captureStyle
-        let material = capture.material
-        Button(action: action) {
-            HStack(spacing: 4) {
-                Image(systemName: symbol)
-                    .font(.system(size: 9, weight: .semibold))
-                Text(title)
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
-            }
-            .foregroundStyle(material.ink.opacity(0.76))
-            .frame(width: 88, height: 32)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(material.secondaryFill)
-                    // An even ring, not the key's bevel: this control is an
-                    // outline on the chassis, not a key raised off it. Inset
-                    // strokes keep both hairlines crisp — a centered stroke on
-                    // a translucent fill puts half its weight on the field and
-                    // reads a half-point soft.
-                    .overlay(
-                        Capsule(style: .continuous)
-                            .strokeBorder(material.secondaryEdge, lineWidth: WatchEdgeWeight.outline)
-                    )
-                    .overlay(
-                        Capsule(style: .continuous)
-                            .strokeBorder(capture.secondaryAccentEdge, lineWidth: WatchEdgeWeight.hairline)
-                            .padding(1)
-                    )
-            )
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .frame(width: 96, height: height)
-        .accessibilityLabel(accessibilityText)
     }
 }
 

@@ -604,9 +604,20 @@ enum WatchAskFace {
 
 // MARK: - Capture-face strip
 
-/// The one line of ask state the capture face carries. Its height is reserved
-/// unconditionally so the record key never moves; at rest the slot is simply
-/// empty.
+/// The one line of state the capture face carries, and the caption under its
+/// signal field. Its height is reserved unconditionally so the record key never
+/// moves.
+///
+/// An ask in flight owns the line whenever there is one. Failing that, the line
+/// reports captures the phone has stopped acknowledging — the one thing this
+/// face cannot otherwise tell you, and the only reason a memo you spoke never
+/// turns up anywhere.
+///
+/// Silent the rest of the time, deliberately. It briefly said how long ago the
+/// last capture was, which is true, decorative, and acted on by nobody; a line
+/// that is always saying something teaches the wearer to stop reading it. The
+/// signal field above already carries recency, in a form you can take in without
+/// parsing. Empty here means nothing needs you.
 struct AskStrip: View {
     @EnvironmentObject private var sessionManager: WatchSessionManager
     @Environment(\.watchThemeName) private var themeName
@@ -640,6 +651,13 @@ struct AskStrip: View {
                     .buttonStyle(.plain)
                     .padding(.vertical, -targetInset)
                     .accessibilityLabel("\(state.spokenText). Open asks.")
+                } else if let waiting = waitingText(asOf: context.date) {
+                    // Not a button. What it names is a memo, and memos live two
+                    // pushes away under Recent rather than on the Asks page this
+                    // strip opens — a tap target that lands somewhere else is
+                    // worse than a label that stays put.
+                    waitingLabel(waiting)
+                        .frame(height: height)
                 } else {
                     Color.clear
                 }
@@ -669,6 +687,50 @@ struct AskStrip: View {
         }
     }
 
+    /// Shaped like the ask line above it, because it means the same kind of
+    /// thing: something the wearer said is not where they think it is.
+    ///
+    /// The theme's trace, not a literal orange. Trace *is* amber on every dark
+    /// finish, which is why the hardcoded colour looked right for as long as it
+    /// did — but on light mineral the theme runs blue, and a lone orange dot
+    /// there is the one mark on the face that belongs to no theme at all.
+    private func waitingLabel(_ text: String) -> some View {
+        let capture = themeName.captureStyle
+        return HStack(spacing: 5) {
+            Circle()
+                .fill(capture.trace)
+                .frame(width: 5, height: 5)
+
+            Text(text)
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .tracking(0.9)
+                .foregroundStyle(capture.material.ink.opacity(0.82))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// Memos the phone has gone quiet on, or nil when everything has landed.
+    ///
+    /// Non-asks only: an ask in this state is already the branch above, and
+    /// counting it twice would put the same capture on the line under two
+    /// different names.
+    ///
+    /// Gated on the same silence tolerance the ask face uses rather than firing
+    /// the moment a memo starts sending. A capture in flight for two seconds is
+    /// the system working; one still in flight minutes later is the phone having
+    /// stopped answering, and only the second is worth a line.
+    private func waitingText(asOf now: Date) -> String? {
+        let stranded = sessionManager.recentMemos.filter { memo in
+            guard !memo.isAsk, memo.isInFlight else { return false }
+            let heardFrom = memo.lastUpdatedAt ?? memo.timestamp
+            return now.timeIntervalSince(heardFrom) > WatchMemo.silenceTolerance
+        }
+
+        guard !stranded.isEmpty else { return nil }
+        return stranded.count == 1 ? "1 MEMO WAITING" : "\(stranded.count) MEMOS WAITING"
+    }
 }
 
 // MARK: - Capture-face key

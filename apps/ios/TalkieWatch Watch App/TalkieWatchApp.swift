@@ -159,36 +159,20 @@ struct MainWatchView: View {
             .navigationDestination(for: UUID.self) { askID in
                 AskDetailView(askId: askID)
             }
-            .toolbar {
-                if !isRecording {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        NavigationLink {
-                            WatchMoreView()
-                        } label: {
-                            let capture = themeName.captureStyle
-                            ZStack {
-                                Circle()
-                                    .fill(capture.material.secondaryFill.opacity(0.72))
-                                    .overlay {
-                                        Circle()
-                                            .strokeBorder(
-                                                capture.material.secondaryEdge.opacity(0.58),
-                                                lineWidth: 0.5
-                                            )
-                                    }
-                                    .frame(width: 31, height: 31)
-
-                                Image(systemName: "gearshape")
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundStyle(capture.material.inkFaint.opacity(0.78))
-                            }
-                            .frame(width: 44, height: 44)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Talkie settings")
-                    }
-                }
-            }
+            // The face draws its own header row and takes the height back.
+            //
+            // The clock is not part of that trade, and it is worth writing down
+            // why so nobody spends another afternoon on it: watchOS draws the
+            // time itself, at its own size, and there is no public way to change
+            // that. Hiding the bar does not remove it. Restoring the bar with an
+            // empty title does not shrink it. A single-space title does not
+            // either — all three were tried, all three render the same large
+            // overlay clock. The top-right corner belongs to the system.
+            //
+            // So the pages below claim the height and leave that corner empty on
+            // purpose, which is the only part of the arrangement this app gets a
+            // vote on.
+            .toolbar(.hidden, for: .navigationBar)
         }
         .onAppear {
             checkPendingDeepLink()
@@ -235,7 +219,9 @@ struct MainWatchView: View {
     }
 }
 
-private struct WatchMoreView: View {
+/// Reachable from the capture face's own header now that watchOS's bar — and
+/// the toolbar item that used to push this — is gone.
+struct WatchMoreView: View {
     var body: some View {
         List {
             NavigationLink {
