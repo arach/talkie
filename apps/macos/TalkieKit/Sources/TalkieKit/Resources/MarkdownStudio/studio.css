@@ -217,7 +217,12 @@ body {
 .preview th { padding:9px 14px; text-align:left; font-family:var(--mono); font-size:9.5px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--dim); border-bottom:1px solid var(--edge); }
 .preview td { padding:10px 14px; font-family:var(--sans); font-size:14px; color:var(--ink); border-bottom:1px solid var(--edge2); }
 .preview tbody tr:last-child td, .preview tr:last-child td { border-bottom:0; }
-.preview th:not(:first-child), .preview td:not(:first-child) { text-align:right; font-family:var(--mono); font-size:13px; color:var(--dim); }
+/* Right-alignment is a column property; type is a row property. Setting both
+   on one selector let the numeric columns' 13px body size leak up into their
+   headers, so "SCREEN" sat at 9.5px next to a 13px "BEFORE" — the header rule
+   read as three different kinds of label instead of one. */
+.preview th:not(:first-child), .preview td:not(:first-child) { text-align:right; }
+.preview td:not(:first-child) { font-family:var(--mono); font-size:13px; color:var(--dim); }
 .preview td:last-child { color:var(--acc); font-weight:600; }
 
 /* dictated block card */
@@ -231,7 +236,12 @@ body {
 .preview .dictation .dc-quote { margin:0; font-family:var(--serif); font-style:italic; font-size:15.5px; line-height:1.5; color:var(--ink2); }
 
 /* memo block card (prose promoted to a block — no audio) */
-.preview .memo { margin:18px 0; border:1px solid var(--edge); border-left:3px solid var(--accline); border-radius:10px; background:var(--panel); padding:12px 16px 13px; }
+/* One weight all the way around. A 3px accent stripe on the left of a rounded
+   1px border can't be drawn cleanly — CSS miters the corner, so the stripe
+   tapers into the radius and the card reads as a rounded box with a chipped
+   edge. The pen and the MEMO label already say what this is; the border's only
+   job is to close the shape. Same treatment as .dictation above. */
+.preview .memo { margin:18px 0; border:1px solid var(--edge); border-radius:10px; background:var(--panel); padding:12px 16px 13px; }
 .preview .memo .mc-top { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
 .preview .memo .mc-icon { width:22px; height:22px; border-radius:7px; background:var(--surface); border:1px solid var(--edge); display:inline-flex; align-items:center; justify-content:center; color:var(--dim); flex:0 0 auto; }
 .preview .memo .mc-label { font-family:var(--mono); font-size:9px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase; color:var(--dim); }
