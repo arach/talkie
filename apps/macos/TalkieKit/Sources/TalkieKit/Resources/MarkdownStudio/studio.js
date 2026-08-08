@@ -210,6 +210,56 @@
     quote: function () { linePrefix("> "); }, task: function () { linePrefix("- [ ] "); }
   };
 
+  // ── scroll sync ────────────────────────────────────────────────────────
+  // Split shows one document twice, so the two panes should hold the same place
+  // in it. Matching is proportional rather than line-for-line: the same text
+  // occupies different heights on each side (a memo card is taller than the
+  // three source lines that produce it), and a line map would have to be
+  // rebuilt on every keystroke to stay honest. Fraction of scrollable range is
+  // stable, costs nothing per frame, and lands within a line or two on real
+  // documents.
+  //
+  // CodeMirror scrolls its own .cm-scroller, not the .pane-body it sits in, so
+  // the source side is read off the mounted editor rather than the markup.
+  var syncSrcEl = null, syncPrevEl = null, scrollDriver = null, scrollIdle = null;
+
+  function scrollFraction(el) {
+    var range = el.scrollHeight - el.clientHeight;
+    return range > 1 ? el.scrollTop / range : 0;
+  }
+  function scrollToFraction(el, f) {
+    var range = el.scrollHeight - el.clientHeight;
+    if (range > 1) el.scrollTop = Math.round(f * range);
+  }
+  // Moving one pane fires 'scroll' on the other, which would drive the first
+  // back and fight the gesture. Whichever pane moves first owns the scroll
+  // until it goes quiet.
+  function followScroll(src, dst) {
+    src.addEventListener("scroll", function () {
+      if (scrollDriver && scrollDriver !== src) return;
+      scrollDriver = src;
+      clearTimeout(scrollIdle);
+      scrollIdle = setTimeout(function () { scrollDriver = null; }, 90);
+      scrollToFraction(dst, scrollFraction(src));
+    }, { passive: true });
+  }
+  function initScrollSync() {
+    var previewBody = $("previewPane").querySelector(".pane-body");
+    var source = $("editor").querySelector(".cm-scroller");
+    if (!source || !previewBody) return false;
+    syncSrcEl = source; syncPrevEl = previewBody;
+    followScroll(source, previewBody);
+    followScroll(previewBody, source);
+    return true;
+  }
+  // A hidden pane has no height to scroll, so it drifts while the other side is
+  // alone on screen. Coming back to split, the pane that was visible wins.
+  function resyncScroll() {
+    if (!syncSrcEl || !syncPrevEl) return;
+    var f = scrollFraction(syncPrevEl);
+    requestAnimationFrame(function () { scrollToFraction(syncSrcEl, f); });
+  }
+
   // ── view modes ─────────────────────────────────────────────────────────
   var prevMode = "split";
   function setMode(m) {
@@ -219,6 +269,7 @@
     viewSeg.querySelectorAll("button").forEach(function (b) { b.classList.toggle("active", b.dataset.mode === m); });
     try {
       window.dispatchEvent(new Event("resize"));
+      if (m === "split") resyncScroll();
       if (m === "split" || m === "source") ed().focus();
     } catch (e) { /* noop */ }
   }
@@ -651,6 +702,13 @@
       if (k === "b") fn = COMMANDS.bold; else if (k === "i") fn = COMMANDS.italic; else if (k === "k") fn = COMMANDS.link;
       if (fn) { e.preventDefault(); fn(); }
     });
+
+    // CM6 mounts its scroller asynchronously, so there is nothing to bind to at
+    // boot; keep looking until it appears, then stop.
+    (function awaitScroller(tries) {
+      if (initScrollSync() || tries <= 0) return;
+      setTimeout(function () { awaitScroller(tries - 1); }, 120);
+    })(25);
 
     // safety: if Swift set text but never forwarded, pull it directly
     [300, 900].forEach(function (d) { setTimeout(function () { try { var t = ed().getText(); if (t && t !== lastRendered) onText(t); } catch (e) { /* noop */ } }, d); });
