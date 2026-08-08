@@ -146,6 +146,20 @@ python3 scripts/fix-light-mode.py            # Apply
 ./scripts/sync-xcode-files.py          # Apply
 ```
 
+### Demo Recording
+
+**`demo-tour.sh`** - Scripted walkthrough for screen recordings
+- Visits the core screens on a fixed cadence
+- Navigates via the URL scheme, so takes are reproducible
+- Each stop carries a caption describing what it shows
+- Pair with a recorder: start recording, run this, stop recording
+
+```bash
+./scripts/demo-tour.sh            # dev build (talkie-dev://)
+./scripts/demo-tour.sh --prod     # release build (talkie://)
+./scripts/demo-tour.sh --dwell 4  # seconds to hold each screen
+```
+
 ## Workflows
 
 ### Full Light Mode Audit
