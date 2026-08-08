@@ -376,6 +376,7 @@
 		B03285D253B325AD630D1EBD /* ConsoleTabRail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C4E47EC10055C48D6D70E09 /* ConsoleTabRail.swift */; };
 		B103018064E992E4CC8280F3 /* AppleLocalProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43BC554FDA925A78896DBF2C /* AppleLocalProvider.swift */; };
 		B1232703E7E3E0C4FF246593 /* ConsoleScreenshotGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B056DA4E0FD92CED9782F9AF /* ConsoleScreenshotGenerator.swift */; };
+		A1F0C0DE00000000000000B2 /* MarketingShotGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1F0C0DE00000000000000A1 /* MarketingShotGenerator.swift */; };
 		B17A93696F26C10B248D14BC /* CameraCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94DCEF120DC220A9C9DA4F5 /* CameraCaptureService.swift */; };
 		B2D45FD680D49E959CDF36F1 /* SpeechSynthesisService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21E7CFB7BA19EE59D1A229FC /* SpeechSynthesisService.swift */; };
 		B33086CC4E3AD8DD1FC5EE13 /* TalkieServiceMonitorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 720EC90439850FC3D809A9BC /* TalkieServiceMonitorView.swift */; };
@@ -890,6 +891,7 @@
 		AF5EA139C70F8A7D81FD4D00 /* SyncHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncHistoryView.swift; sourceTree = "<group>"; };
 		B02F321BB72BAC36AB2D30AB /* WorkflowImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowImportView.swift; sourceTree = "<group>"; };
 		B056DA4E0FD92CED9782F9AF /* ConsoleScreenshotGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConsoleScreenshotGenerator.swift; sourceTree = "<group>"; };
+		A1F0C0DE00000000000000A1 /* MarketingShotGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketingShotGenerator.swift; sourceTree = "<group>"; };
 		B0D7A667503549B6652DB0E5 /* SimpleWorkflowLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleWorkflowLoader.swift; sourceTree = "<group>"; };
 		B1AE4D1C2C82119BCB3A55DE /* MemorySampler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemorySampler.swift; sourceTree = "<group>"; };
 		B27EC0A9FBD864EDFD2C8450 /* CaptureBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureBarController.swift; sourceTree = "<group>"; };
@@ -2013,6 +2015,7 @@
 			children = (
 				CEE3B188D3D0A98406055A46 /* AuditStore.swift */,
 				B056DA4E0FD92CED9782F9AF /* ConsoleScreenshotGenerator.swift */,
+				A1F0C0DE00000000000000A1 /* MarketingShotGenerator.swift */,
 				E0CEC1D425A68FF0A280F2CE /* DebugCommandHandler.swift */,
 				49BEFEDEE8EB7C8036A87ABC /* DemoKitTest.swift */,
 				E75FED0DCD51602D30AD94C8 /* DesignAuditor.swift */,
@@ -2414,6 +2417,7 @@
 				4F6BAB5AF13F753A480F9687 /* ConsolePopoutManager.swift in Sources */,
 				710DE94F20E02EE6A62FC9A3 /* ConsoleScreen.swift in Sources */,
 				B1232703E7E3E0C4FF246593 /* ConsoleScreenshotGenerator.swift in Sources */,
+				A1F0C0DE00000000000000B2 /* MarketingShotGenerator.swift in Sources */,
 				3CB4FE522E42448505422DB8 /* ConsoleSessionPool.swift in Sources */,
 				1CE0C38EF6DD14564DB091E2 /* ConsoleTabEditor.swift in Sources */,
 				B03285D253B325AD630D1EBD /* ConsoleTabRail.swift in Sources */,

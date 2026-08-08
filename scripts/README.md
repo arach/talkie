@@ -146,6 +146,24 @@ python3 scripts/fix-light-mode.py            # Apply
 ./scripts/sync-xcode-files.py          # Apply
 ```
 
+### Marketing Screenshots
+
+**`marketing-shots.sh`** - Website screenshot inventory
+- Captures every core page in every curated theme
+- Renders each screen into its own window, so runs are repeatable
+- Writes `<style>/<NN>-<page>.png` plus a `manifest.json`
+- Quits a running Talkie first so it can't race the theme switch
+- Restores your appearance settings when it finishes
+
+```bash
+./scripts/marketing-shots.sh                     # ~/Desktop/talkie-shots-<stamp>/
+./scripts/marketing-shots.sh out/shots           # explicit directory
+./scripts/marketing-shots.sh out/shots 1600 1000 # explicit size
+```
+
+Slow machines can raise the per-screen settle time with
+`TALKIE_SHOT_DELAY_SECONDS=3 ./scripts/marketing-shots.sh`.
+
 ## Workflows
 
 ### Full Light Mode Audit
