@@ -479,6 +479,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         }
 
         cliHandler.register(
+            "marketing-shots",
+            description: "Capture the core pages in every curated theme (for the website). "
+                + "Args: [output-dir] [width] [height]. Writes <style>/<NN>-<page>.png + manifest.json"
+        ) { args in
+            let outputDir: URL
+            if let path = args.first, !path.isEmpty, Double(path) == nil {
+                outputDir = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+            } else {
+                let timestamp = Date().iso8601.replacingOccurrences(of: ":", with: "-")
+                outputDir = FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent("Desktop")
+                    .appendingPathComponent("talkie-shots-\(timestamp)")
+            }
+
+            let dimensions = args.compactMap(Double.init)
+            let size = dimensions.count >= 2
+                ? CGSize(width: dimensions[0], height: dimensions[1])
+                : MarketingShotGenerator.defaultSize
+
+            let styles = MarketingShotGenerator.themes.count
+            let pages = MarketingShotGenerator.shots.count
+            let expected = styles * pages
+            TalkieConsole.info("📸 \(styles) styles × \(pages) pages at \(Int(size.width))×\(Int(size.height))")
+            TalkieConsole.info("📁 \(outputDir.path)")
+
+            let written = await MarketingShotGenerator.shared.captureAll(to: outputDir, size: size)
+
+            TalkieConsole.info("✅ Wrote \(written.count) of \(expected) shots")
+            TalkieConsole.info("📁 \(outputDir.path)")
+            exit(written.count == expected ? 0 : 1)
+        }
+
+        cliHandler.register(
             "console-loader-screenshot",
             description: "Capture the Console screen while the terminal loader is visible"
         ) { args in
